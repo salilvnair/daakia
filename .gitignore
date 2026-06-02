@@ -1,0 +1,75 @@
+.vscode-test/
+node_modules/
+dist/
+webview/dist/
+*.vsix
+.env
+images/icon-font-src/
+build_output.txt
+rough/
+.github
+.vscode
+
+
+# ── Dependencies ──
+node_modules/
+
+# ── Build output ──
+out/
+dist/
+*.vsix
+
+# ── Secrets & credentials ──
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets.json
+credentials.json
+**/auth.json
+**/vscode-extension-auth.json
+
+# ── OS files ──
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ── IDE & editor ──
+*.swp
+*.swo
+*~
+.vscode/launch.json
+.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+.idea/
+*.iml
+
+# ── Logs & dumps ──
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/tmp/
+*.heapsnapshot
+*.cpuprofile
+
+# ── Coverage & tests ──
+coverage/
+.nyc_output/
+
+# ── Misc ──
+*.tgz
+*.tar.gz
+.eslintcache
+.cache/
+
+plan

@@ -1,0 +1,848 @@
+@import "tailwindcss";
+
+@theme {
+  /* Indigo accent palette */
+  --color-primary: #6366f1;
+  --color-primary-hover: #818cf8;
+  --color-primary-light: #a5b4fc;
+  --color-primary-dark: #4f46e5;
+
+  /* Surface colors — VS Code Dark style with good contrast */
+  --color-surface: #1e1e1e;
+  --color-surface-hover: #2a2d2e;
+  --color-surface-active: #37373d;
+  --color-surface-border: #414141;
+
+  /* Panel / sidebar — slightly darker like VS Code sidebar */
+  --color-panel: #181818;
+  --color-panel-border: #333333;
+
+  /* Elevated surface (cards, modals) — brighter for pop */
+  --color-elevated: #252526;
+  --color-elevated-border: #474747;
+
+  /* Input specific — clearly visible like VS Code inputs */
+  --color-input-bg: #2d2d2d;
+  --color-input-border: #3c3c3c;
+  --color-input-hover: #333333;
+  --color-input-focus: #2d2d2d;
+
+  /* Interactive / icon hover */
+  --color-icon-hover-bg: rgba(99, 102, 241, 0.15);
+  --color-item-hover-bg: #2a2d2e;
+
+  /* Text — bright and crisp */
+  --color-text-primary: #d4d4d4;
+  --color-text-secondary: #acacac;
+  --color-text-muted: #6d6d6d;
+
+  /* Status / methods */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  /* HTTP method colors */
+  --color-method-get: #22c55e;
+  --color-method-post: #f59e0b;
+  --color-method-put: #3b82f6;
+  --color-method-patch: #a78bfa;
+  --color-method-delete: #ef4444;
+  --color-method-head: #06b6d4;
+  --color-method-options: #ec4899;
+
+  /* Sidebar accent */
+  --color-sidebar-collections: #a855f7;
+  --color-sidebar-history: #2dd4bf;
+  --color-sidebar-environments: #4ade80;
+
+  /* Protocol accent */
+  --color-protocol-rest: #6366f1;
+  --color-protocol-graphql: #E535AB;
+  --color-protocol-websocket: #4caf50;
+  --color-protocol-sse: #f59e0b;
+  --color-protocol-socketio: #14b8a6;
+  --color-protocol-mqtt: #8b5cf6;
+  --color-protocol-grpc: #00b8b5;
+  --color-protocol-soap: #f97171;
+  --color-protocol-ai: #7EACB5;
+  --color-protocol-mcp: #60a5fa;
+
+  /* Mock server */
+  --color-mock-server: #eab308;
+  --color-mock-server-muted: #d4a017;
+  --color-try-button: #6366f1;
+
+  /* Settings */
+  --color-settings: #2a9d8f;
+
+  /* Response time thresholds */
+  --color-time-fast: #22c55e;
+  --color-time-moderate: #eab308;
+  --color-time-slow: #f97316;
+  --color-time-critical: #ef4444;
+
+  /* Misc */
+  --color-muted: #6b7280;
+  --color-muted-fallback: #9ca3af;
+  --color-status-5xx: #dc2626;
+
+  /* Context menu icon colors */
+  --color-ctx-rename: #22d3ee;
+  --color-ctx-duplicate: #a78bfa;
+  --color-ctx-pin: #fbbf24;
+  --color-ctx-close: #ef4444;
+  --color-ctx-close-batch: #fb923c;
+  --color-ctx-close-saved: #4ade80;
+  --color-ctx-close-all: #f43f5e;
+}
+
+/* ─── Light theme overrides ─── */
+.vscode-light,
+[data-theme="light"] {
+  --color-primary: #4f46e5;
+  --color-primary-hover: #6366f1;
+  --color-primary-light: #818cf8;
+  --color-primary-dark: #3730a3;
+
+  --color-surface: #ffffff;
+  --color-surface-hover: #f9fafb;
+  --color-surface-active: #f3f4f6;
+  --color-surface-border: #e5e7eb;
+
+  --color-panel: #f9fafb;
+  --color-panel-border: #e5e7eb;
+
+  --color-elevated: #ffffff;
+  --color-elevated-border: #d1d5db;
+
+  --color-input-bg: rgba(0, 0, 0, 0.02);
+  --color-input-border: rgba(0, 0, 0, 0.12);
+  --color-input-hover: rgba(0, 0, 0, 0.04);
+  --color-input-focus: rgba(0, 0, 0, 0.02);
+
+  --color-icon-hover-bg: rgba(0, 0, 0, 0.06);
+  --color-item-hover-bg: rgba(0, 0, 0, 0.03);
+
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-info: #4f46e5;
+
+  --color-method-get: #16a34a;
+  --color-method-post: #d97706;
+  --color-method-put: #2563eb;
+  --color-method-patch: #7c3aed;
+  --color-method-delete: #dc2626;
+  --color-method-head: #0891b2;
+  --color-method-options: #db2777;
+
+  --color-sidebar-collections: #9333ea;
+  --color-sidebar-history: #0d9488;
+  --color-sidebar-environments: #16a34a;
+
+  --color-protocol-rest: #4f46e5;
+  --color-protocol-graphql: #c2185b;
+  --color-protocol-websocket: #2e7d32;
+  --color-protocol-sse: #d97706;
+  --color-protocol-socketio: #0d9488;
+  --color-protocol-mqtt: #7c3aed;
+  --color-protocol-grpc: #009e9a;
+  --color-protocol-soap: #e85d5d;
+  --color-protocol-ai: #880D1E;
+  --color-protocol-mcp: #475569;
+
+  --color-mock-server: #d97706;
+  --color-mock-server-muted: #92400e;
+  --color-try-button: #4f46e5;
+
+  --color-settings: #1f7a6e;
+
+  --color-time-fast: #16a34a;
+  --color-time-moderate: #d97706;
+  --color-time-slow: #c2410c;
+  --color-time-critical: #dc2626;
+
+  --color-muted: #6b7280;
+  --color-muted-fallback: #9ca3af;
+  --color-status-5xx: #991b1b;
+
+  /* Context menu icon colors */
+  --color-ctx-rename: #0891b2;
+  --color-ctx-duplicate: #7c3aed;
+  --color-ctx-pin: #d97706;
+  --color-ctx-close: #dc2626;
+  --color-ctx-close-batch: #ea580c;
+  --color-ctx-close-saved: #16a34a;
+  --color-ctx-close-all: #be123c;
+}
+
+:root {
+  --font-sans: "Inter", var(--vscode-font-family, system-ui, -apple-system, sans-serif);
+  --font-mono: "JetBrains Mono", "Fira Code", var(--vscode-editor-font-family, monospace);
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+
+  font-family: var(--font-sans);
+  font-size: var(--vscode-font-size, 13px);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background-color: var(--color-panel);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ─── Animations ─── */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Breathing / glowing animation for connected state */
+@keyframes breathing {
+  0%, 100% { opacity: 0.6; box-shadow: 0 0 4px currentColor; }
+  50% { opacity: 1; box-shadow: 0 0 12px currentColor, 0 0 24px currentColor; }
+}
+@keyframes breathingSweep {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.breathing-connected {
+  animation: breathing 2.5s ease-in-out infinite;
+}
+.breathing-sweep {
+  background: linear-gradient(90deg, transparent 0%, currentColor 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: breathingSweep 3s ease-in-out infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.breathing-btn {
+  position: relative;
+  overflow: hidden;
+  animation: breathingRedGlow 2.5s ease-in-out infinite;
+}
+.breathing-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(239,68,68,0.18) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: breathingSweep 2.5s ease-in-out infinite;
+}
+
+@keyframes breathingRedGlow {
+  0%, 100% { box-shadow: 0 0 4px rgba(239,68,68,0.15); }
+  50% { box-shadow: 0 0 12px rgba(239,68,68,0.35), 0 0 4px rgba(239,68,68,0.2); }
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Disable Tailwind v4 default focus ring ─── */
+
+*:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ─── Global input styling ─── */
+
+input[type="text"],
+input[type="password"],
+input[type="url"],
+input[type="email"],
+input[type="number"],
+textarea {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 9px 12px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius);
+  color: var(--color-text-primary);
+  transition: border-color 140ms, box-shadow 140ms, background 140ms;
+}
+
+input[type="text"]::placeholder,
+input[type="password"]::placeholder,
+textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+input[type="text"]:hover,
+input[type="password"]:hover,
+textarea:hover {
+  border-color: #505050;
+  background: var(--color-input-hover);
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-accent, var(--color-primary));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, var(--color-primary)) 25%, transparent);
+  background: var(--color-input-focus);
+}
+
+/* ─── Unified URL Bar ─── */
+
+.url-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 12px;
+  overflow: visible;
+  position: relative;
+  height: 34px;
+  flex-shrink: 0;
+}
+
+/* Uniform dropdown height inside URL bars */
+.url-bar .sd-trigger {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-input-border);
+  background: var(--color-input-bg);
+}
+.url-bar .sd-trigger:hover {
+  background: var(--color-input-hover);
+  border-color: #505050;
+}
+
+.url-bar:hover {
+}
+
+.url-bar:focus-within {
+}
+
+.url-bar-method {
+  flex-shrink: 0;
+}
+
+.url-bar-method .sd-wrap {
+  position: relative;
+}
+
+.url-bar-method .sd-trigger {
+  min-width: 72px;
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.5px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 6px;
+  background: var(--color-input-bg);
+  min-height: 36px;
+  height: 36px;
+  padding: 0 12px;
+}
+
+.mock-method .sd-trigger {
+  min-width: 64px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 6px;
+  background: var(--color-input-bg);
+  min-height: 32px;
+  height: 32px;
+  padding: 0 10px;
+}
+
+.mock-method .sd-trigger:hover {
+  background: var(--color-input-hover);
+  border-color: #505050;
+}
+
+.mock-method .sd-trigger.open {
+  background: rgba(234, 179, 8, 0.12);
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.3);
+  border-color: var(--color-mock-server);
+}
+
+.url-bar-method .sd-trigger:hover {
+  background: var(--color-input-hover);
+  border-color: #505050;
+}
+
+.url-bar-method .sd-trigger.open {
+  background: rgba(99, 102, 241, 0.12);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3);
+  border-color: var(--color-primary);
+}
+
+/* ── Highlighted Input (variable tokens) ── */
+
+.highlighted-input-wrapper {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+.highlighted-input-mirror {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 36px;
+  white-space: nowrap;
+  pointer-events: none;
+  color: transparent;
+  overflow: hidden;
+}
+
+.highlighted-input-mirror .var-highlight {
+  color: #818cf8;
+  font-weight: 500;
+  background: rgba(129, 140, 248, 0.08);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+.highlighted-input-mirror .var-escape-highlight {
+  color: #f59e0b;
+  font-weight: 500;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+.highlighted-input-mirror .placeholder-text {
+  color: var(--color-text-muted);
+}
+
+.highlighted-input {
+  width: 100%;
+  padding: 0 12px;
+  font-size: 13px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: 0;
+  color: var(--color-text-primary);
+  height: 36px;
+  min-height: unset;
+  position: relative;
+  caret-color: var(--color-text-primary);
+}
+
+.highlighted-input::placeholder {
+  color: transparent;
+}
+
+.highlighted-input:hover {
+  border-color: #505050;
+}
+
+.highlighted-input:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: var(--color-accent, var(--color-primary));
+}
+
+/* Smooth expand/collapse animation */
+.collapse-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease-out;
+}
+.collapse-wrapper.expanded {
+  grid-template-rows: 1fr;
+}
+.collapse-wrapper > .collapse-inner {
+  overflow: hidden;
+}
+
+.url-bar-input {
+  flex: 1;
+  padding: 0 12px;
+  font-size: 13px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  height: 36px;
+  min-height: unset;
+}
+
+.url-bar-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.url-bar-input:hover {
+  background: var(--color-input-hover);
+  border-color: #505050;
+}
+
+.url-bar-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, var(--color-primary)) 25%, transparent);
+  border-color: var(--color-accent, var(--color-primary));
+  background: var(--color-input-bg);
+}
+
+.url-bar-send {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 18px;
+  margin: 0;
+  height: 36px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #fff;
+  background: var(--color-primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 140ms, box-shadow 140ms, transform 80ms;
+}
+
+.url-bar-send:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  box-shadow: 0 2px 16px rgba(99, 102, 241, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.2);
+}
+
+.url-bar-send:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.url-bar-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.url-bar-send-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.url-bar-spinner {
+  width: 14px;
+  height: 14px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Progress overlay spinning circle */
+.progress-spin-ring {
+  animation: spin 1.2s linear infinite;
+  transform-origin: center center;
+}
+.progress-pulse-ring {
+  animation: progress-pulse 1.2s ease-in-out infinite;
+  transform-origin: center center;
+}
+@keyframes progress-pulse {
+  0%, 100% { opacity: 0.15; transform: scale(0.85); }
+  50% { opacity: 0.9; transform: scale(1.15); }
+}
+
+.url-bar-env {
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.url-bar-env .sd-trigger {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+@keyframes confirm-in {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes toastSlideUp {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ─── Custom scrollbar (protocol-aware, thin & colorful) ─── */
+
+/* Base scrollbar — 8px, invisible track, accent-colored thumb */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  border-radius: 99px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-accent) 75%, transparent);
+  border: 0px solid transparent;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-accent) 40%, transparent) transparent;
+}
+
+/* ─── Utility ─── */
+
+.scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+.truncate-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Monaco Find/Replace Widget ─── */
+
+.monaco-editor .find-widget {
+  top: 4px !important;
+  right: 14px !important;
+}
+
+.monaco-editor .find-widget .monaco-inputbox .input {
+  font-size: 12px;
+}
+
+/* Fix tooltip flickering on find widget action buttons */
+.monaco-editor .find-widget .button {
+  position: relative;
+}
+
+.monaco-editor .find-widget .button::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  z-index: 1;
+}
+
+/* Prevent tooltip from stealing pointer events */
+.monaco-editor .monaco-hover,
+.monaco-editor .monaco-editor-hover {
+  pointer-events: none !important;
+}
+
+/* ─── Daakia Debug Variable Hover (custom popup) ─── */
+.daakia-debug-hover {
+  position: fixed;
+  z-index: 99999;
+  min-width: 120px;
+  max-width: 320px;
+  background: var(--color-surface, #1e1e2e);
+  border: 1px solid var(--color-surface-border, #333);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  pointer-events: auto;
+}
+
+.daakia-debug-hover__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-surface-border, #333);
+}
+
+.daakia-debug-hover__name {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary, #e4e4e7);
+}
+
+.daakia-debug-hover__type {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.daakia-debug-hover__value {
+  padding: 8px 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-secondary, #a1a1aa);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ─── Monaco Breakpoint Glyph ─── */
+
+.daakia-bp-glyph {
+  cursor: pointer;
+}
+
+.daakia-bp-glyph::before {
+  content: '';
+  position: absolute;
+  left: calc(50% + 2px);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-error, #ef4444);
+}
+
+/* Disabled breakpoint (gray hollow circle) */
+.daakia-bp-glyph--disabled {
+  cursor: pointer;
+}
+
+.daakia-bp-glyph--disabled::before {
+  content: '';
+  position: absolute;
+  left: calc(50% + 2px);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--color-text-muted, #6b7280);
+  opacity: 0.6;
+}
+
+/* Conditional breakpoint (orange dot) */
+.daakia-bp-glyph--conditional {
+  cursor: pointer;
+}
+
+.daakia-bp-glyph--conditional::before {
+  content: '';
+  position: absolute;
+  left: calc(50% + 2px);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-warning, #eab308);
+}
+
+/* Hover hint (faded red dot on hover over glyph margin) */
+.daakia-bp-glyph--hover {
+  cursor: pointer;
+}
+
+.daakia-bp-glyph--hover::before {
+  content: '';
+  position: absolute;
+  left: calc(50% + 2px);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.monaco-editor .glyph-margin {
+  cursor: pointer;
+}
+
+/* Paused line — yellow highlight (VS Code-style current execution line) */
+.daakia-paused-line {
+  background: rgba(229, 195, 53, 0.12) !important;
+  border-left: 2px solid #e5c335;
+}
+
+/* Breakpoint line — light reddish background (IntelliJ-style) */
+.daakia-bp-line {
+  background: rgba(255, 82, 82, 0.06) !important;
+}
+
+.daakia-paused-line__arrow {
+  position: relative;
+}
+
+.daakia-paused-line__arrow::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23e5c335' d='M8.879 14H5C3.897 14 3 13.103 3 12V4C3 2.897 3.897 2 5 2H8.879C9.405 2 9.921 2.213 10.293 2.586L14.505 6.798C14.826 7.119 15.003 7.546 15.003 8C15.003 8.454 14.826 8.881 14.505 9.202L10.293 13.414C9.921 13.787 9.405 14 8.879 14Z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* Combined: arrow on a breakpoint line — yellow arrow with red dot inside */
+.daakia-paused-line__arrow--with-bp {
+  position: relative;
+}
+
+.daakia-paused-line__arrow--with-bp::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23e5c335' d='M8.879 14H5C3.897 14 3 13.103 3 12V4C3 2.897 3.897 2 5 2H8.879C9.405 2 9.921 2.213 10.293 2.586L14.505 6.798C14.826 7.119 15.003 7.546 15.003 8C15.003 8.454 14.826 8.881 14.505 9.202L10.293 13.414C9.921 13.787 9.405 14 8.879 14Z'/%3E%3Ccircle cx='7' cy='8' r='2' fill='%23ef4444'/%3E%3C/svg%3E");
+}
+
+/* ─── Sidebar shimmer skeleton animation ─── */
+.sidebar-shimmer {
+  animation: sidebarShimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes sidebarShimmer {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* ─── WSDL XML Syntax Highlighting ─── */
+.wsdl-tag { color: #e879f9; }
+.wsdl-attr { color: #60a5fa; }
+.wsdl-val { color: #4ade80; }
+.wsdl-proc { color: #fbbf24; opacity: 0.8; }
+.wsdl-comment { color: #6b7280; font-style: italic; }
+.wsdl-text { color: var(--color-text-primary); }

@@ -1,0 +1,280 @@
+{
+  "name": "daakia",
+  "displayName": "Daakia — API Client",
+  "description": "A modern API testing extension for VS Code with AI assistant, collections, environments, and mock servers.",
+  "version": "1.0.0",
+  "license": "MIT",
+  "publisher": "salilvnair",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/salilvnair/daakia"
+  },
+  "icon": "images/daakia-icon.png",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Testing",
+    "Other"
+  ],
+  "keywords": [
+    "api",
+    "rest",
+    "http",
+    "postman",
+    "soap",
+    "graphql",
+    "mock",
+    "copilot"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "daakia.copilot",
+        "name": "daakia",
+        "fullName": "Daakia Assistant",
+        "description": "AI-powered API assistant — build requests, debug responses, generate tests",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "request",
+            "description": "Build an API request from description"
+          },
+          {
+            "name": "mock",
+            "description": "Create a mock server endpoint"
+          },
+          {
+            "name": "test",
+            "description": "Generate test scripts for current request"
+          },
+          {
+            "name": "curl",
+            "description": "Convert a cURL command to Daakia request"
+          },
+          {
+            "name": "explain",
+            "description": "Explain an HTTP status code or header"
+          }
+        ]
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "daakia",
+          "title": "Daakia",
+          "icon": "images/daakia-side.svg"
+        }
+      ]
+    },
+    "views": {
+      "daakia": [
+        {
+          "id": "daakia.welcome",
+          "name": "Daakia",
+          "type": "webview",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "viewsWelcome": [],
+    "commands": [
+      {
+        "command": "daakia.openPanel",
+        "title": "Daakia: Open Panel",
+        "icon": "$(window)"
+      },
+      {
+        "command": "daakia.newRequest",
+        "title": "Daakia: New Request",
+        "icon": "$(add)"
+      },
+      {
+        "command": "daakia.sendRequest",
+        "title": "Daakia: Send Request",
+        "icon": "$(play)"
+      },
+      {
+        "command": "daakia.saveRequest",
+        "title": "Daakia: Save Request",
+        "icon": "$(save)"
+      },
+      {
+        "command": "daakia.closeTab",
+        "title": "Daakia: Close Tab"
+      },
+      {
+        "command": "daakia.focusUrl",
+        "title": "Daakia: Focus URL Bar"
+      },
+      {
+        "command": "daakia.importCollection",
+        "title": "Daakia: Import Collection",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "daakia.importBrunoCollection",
+        "title": "Daakia: Import Bruno Collection",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "daakia.openSettings",
+        "title": "Daakia: Open Settings",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "daakia.startMockServer",
+        "title": "Daakia: Start Mock Server"
+      },
+      {
+        "command": "daakia.stopMockServer",
+        "title": "Daakia: Stop Mock Server"
+      },
+      {
+        "command": "daakia.start",
+        "title": "Daakia: Open"
+      },
+      {
+        "command": "daakia.changeDbLocation",
+        "title": "Daakia: Change Database Location"
+      },
+      {
+        "command": "daakia.rebuildSqlite",
+        "title": "Daakia: Rebuild SQLite"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "daakia.openPanel",
+          "when": "view == daakia.welcome",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "daakia.sendRequest",
+        "key": "ctrl+enter",
+        "when": "daakia.focused"
+      },
+      {
+        "command": "daakia.newRequest",
+        "key": "ctrl+n",
+        "when": "daakia.focused"
+      },
+      {
+        "command": "daakia.saveRequest",
+        "key": "ctrl+s",
+        "when": "daakia.focused"
+      },
+      {
+        "command": "daakia.closeTab",
+        "key": "ctrl+w",
+        "when": "daakia.focused"
+      },
+      {
+        "command": "daakia.importCollection",
+        "key": "ctrl+shift+i",
+        "when": "daakia.focused"
+      },
+      {
+        "command": "daakia.focusUrl",
+        "key": "ctrl+l",
+        "when": "daakia.focused"
+      }
+    ],
+    "configuration": {
+      "title": "Daakia",
+      "properties": {
+        "daakia.dbPath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path for the Daakia SQLite database. Leave empty for default (~/.salilvnair/daakia-vsce/db/daakia.db)."
+        },
+        "daakia.requestTimeout": {
+          "type": "number",
+          "default": 30000,
+          "description": "Default request timeout in milliseconds."
+        },
+        "daakia.followRedirects": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically follow HTTP redirects."
+        },
+        "daakia.sslVerification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Verify SSL certificates for HTTPS requests."
+        },
+        "daakia.maxHistoryEntries": {
+          "type": "number",
+          "default": 500,
+          "description": "Maximum number of request history entries to keep."
+        },
+        "daakia.saveResponseInHistory": {
+          "type": "boolean",
+          "default": true,
+          "description": "Store response body in history entries."
+        }
+      }
+    },
+    "icons": {
+      "daakia-icon": {
+        "description": "Daakia icon",
+        "default": {
+          "fontPath": "./images/daakia-icons.woff",
+          "fontCharacter": "\\E001"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build:all",
+    "build:all": "npm run build:webview && npm run build:ext",
+    "build:ext": "node esbuild.js",
+    "build:webview": "cd webview-ui && node node_modules/vite/bin/vite.js build",
+    "watch": "node esbuild.js --watch",
+    "dev:webview": "cd webview-ui && node node_modules/vite/bin/vite.js",
+    "lint": "eslint src/ --ext .ts",
+    "backup": "node scripts/zip_daakia_latest.js",
+    "vscode:package": "vsce package",
+    "vscode:publish": "vsce publish",
+    "vscode:publish:patch": "vsce publish patch",
+    "vscode:publish:minor": "vsce publish minor",
+    "vscode:publish:major": "vsce publish major"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.7.15",
+    "aedes": "^1.0.2",
+    "axios": "^1.7.0",
+    "fast-xml-parser": "^5.8.0",
+    "js-yaml": "^4.1.1",
+    "mqtt": "^5.15.1",
+    "path-to-regexp": "^8.0.0",
+    "protobufjs": "^7.6.1",
+    "soap": "^1.9.3",
+    "socket.io-client": "^4.8.3",
+    "sql.js": "^1.14.1",
+    "uuid": "^10.0.0",
+    "ws": "^8.20.1"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.0.0",
+    "@types/sql.js": "^1.4.11",
+    "@types/vscode": "^1.99.0",
+    "@types/ws": "^8.18.1",
+    "archiver": "^8.0.0",
+    "esbuild": "^0.24.0",
+    "svg2ttf": "^6.1.0",
+    "svgicons2svgfont": "^15.0.1",
+    "ttf2woff": "^3.0.0",
+    "typescript": "^5.7.0",
+    "@vscode/vsce": "^3.0.0"
+  }
+}

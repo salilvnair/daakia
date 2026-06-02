@@ -1,0 +1,165 @@
+/* DebugPanel — Variables and Console panel */
+
+.debug-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-top: 1px solid var(--color-surface-border);
+  background: var(--color-surface-base);
+}
+
+.debug-panel__tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-surface-border);
+  padding: 0 4px;
+}
+
+.debug-panel__tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.debug-panel__tab:hover {
+  color: var(--color-text-primary);
+}
+
+.debug-panel__tab--active {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.debug-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 600;
+  background: var(--color-primary);
+  color: white;
+  border-radius: 7px;
+}
+
+.debug-panel__content {
+  flex: 1;
+  overflow: auto;
+  padding: 4px;
+}
+
+.debug-panel__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+/* Variables */
+.debug-panel__vars {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.debug-panel__var-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 6px;
+  font-size: 11px;
+  border-radius: 3px;
+}
+
+.debug-panel__var-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.debug-panel__var-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-family: 'Fira Code', monospace;
+  min-width: 60px;
+}
+
+.debug-panel__var-type {
+  font-size: 9px;
+  font-weight: 500;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+}
+
+.debug-panel__var-type--string { color: var(--color-success); }
+.debug-panel__var-type--number { color: var(--color-warning); }
+.debug-panel__var-type--boolean { color: var(--color-primary); }
+.debug-panel__var-type--object { color: var(--color-info); }
+
+.debug-panel__var-value {
+  flex: 1;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Console */
+.debug-panel__console {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+}
+
+.debug-panel__log {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.debug-panel__log--error {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.debug-panel__log--warn {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.debug-panel__log-level {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  min-width: 36px;
+  color: var(--color-text-muted);
+}
+
+.debug-panel__log--error .debug-panel__log-level { color: var(--color-error); }
+.debug-panel__log--warn .debug-panel__log-level { color: var(--color-warning); }
+.debug-panel__log--info .debug-panel__log-level { color: var(--color-info); }
+
+.debug-panel__log-msg {
+  flex: 1;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}

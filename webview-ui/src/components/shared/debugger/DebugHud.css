@@ -1,0 +1,102 @@
+/* DebugHud — VS Code-style floating debug toolbar */
+
+.debug-hud {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  background: var(--color-surface-overlay, #1e1e1e);
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.15);
+  backdrop-filter: blur(8px);
+  animation: debugHudSlideIn 0.2s ease-out;
+}
+
+@keyframes debugHudSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.debug-hud__drag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 20px;
+  cursor: grab;
+  opacity: 0.5;
+  margin-right: 2px;
+}
+
+.debug-hud__drag:active {
+  cursor: grabbing;
+}
+
+.debug-hud__grip {
+  display: block;
+  width: 6px;
+  height: 10px;
+  background: repeating-linear-gradient(
+    to bottom,
+    currentColor 0px,
+    currentColor 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.6;
+}
+
+.debug-hud__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.1s, opacity 0.1s;
+}
+
+.debug-hud__btn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.debug-hud__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.debug-hud__btn--active {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3);
+}
+
+.debug-hud__sep {
+  width: 1px;
+  height: 16px;
+  background: var(--color-surface-border);
+  margin: 0 3px;
+}
+
+.debug-hud__status {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-left: 6px;
+  white-space: nowrap;
+}

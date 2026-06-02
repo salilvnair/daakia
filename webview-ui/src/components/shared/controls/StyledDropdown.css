@@ -1,0 +1,205 @@
+/* ─── StyledDropdown — dark gray design system ─── */
+
+.sd-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.sd-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 12px;
+  min-height: 36px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: var(--color-text-primary, #e5e7eb);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 140ms, box-shadow 140ms, background 140ms;
+}
+
+.sd-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sd-trigger.open {
+  border-color: var(--color-primary, #6366f1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sd-val {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sd-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sd-arrow {
+  width: 12px;
+  height: 12px;
+  color: #64748b;
+  flex-shrink: 0;
+  margin-left: 6px;
+  transition: transform 140ms, color 140ms;
+}
+
+.sd-trigger.open .sd-arrow {
+  transform: rotate(180deg);
+  color: var(--color-primary, #6366f1);
+}
+
+/* ─── Menu ─── */
+
+.sd-menu {
+  position: fixed;
+  z-index: 99999;
+  min-width: 100%;
+  width: max-content;
+  max-height: min(480px, 80vh);
+  overflow-y: auto;
+  background: #1e1e1e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 5px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  animation: sd-menu-in 120ms ease-out;
+}
+
+@keyframes sd-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sd-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 100ms;
+}
+
+.sd-group-header {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sd-item:hover {
+  background: color-mix(in srgb, var(--sd-accent, rgb(99, 102, 241)) 10%, transparent);
+  color: #e5e7eb;
+}
+
+.sd-item.selected {
+  background: color-mix(in srgb, var(--sd-accent, rgb(99, 102, 241)) 15%, transparent);
+  color: #c7d2fe;
+}
+
+.sd-item-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ─── Size variants ─── */
+
+.sd-xs .sd-trigger {
+  padding: 4px 8px;
+  min-height: 24px;
+  height: 24px;
+  font-size: 11px;
+  font-weight: 400;
+  border-radius: 5px;
+  gap: 4px;
+}
+
+.sd-xs .sd-arrow {
+  width: 10px;
+  height: 10px;
+  margin-left: 2px;
+}
+
+.sd-xs .sd-menu {
+  border-radius: 7px;
+  padding: 3px;
+}
+
+.sd-xs .sd-item {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.sd-sm .sd-trigger {
+  padding: 6px 10px;
+  min-height: 28px;
+  height: 28px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.sd-sm .sd-menu {
+  border-radius: 7px;
+  padding: 3px;
+}
+
+.sd-menu-sm {
+  border-radius: 7px;
+  padding: 3px;
+}
+
+.sd-sm .sd-item {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.sd-menu-sm .sd-item {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+/* ─── Scrollbar inside menu ─── */
+
+.sd-menu::-webkit-scrollbar {
+  width: 4px;
+}
+.sd-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sd-menu::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--sd-accent, var(--color-accent, #6366f1)) 35%, transparent);
+  border-radius: 4px;
+}
+.sd-menu::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--sd-accent, var(--color-accent, #6366f1)) 55%, transparent);
+  width: 6px;
+}
