@@ -88,7 +88,7 @@ export async function handleGraphQLConnect(
     const res = await axios.post(
       endpoint,
       { query: INTROSPECTION_QUERY },
-      { headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 30000, validateStatus: () => true },
+      { headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0, validateStatus: () => true },
     );
 
     if (res.status >= 400) {
@@ -228,7 +228,7 @@ export async function handleExecuteGraphQL(
       { query, variables },
       {
         headers: reqHeaders,
-        timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 30000,
+        timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0,
         validateStatus: () => true,
         transformResponse: [(data) => data], // Keep raw string
         signal: controller.signal,

@@ -225,7 +225,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     headers,
     data,
     validateStatus: () => true, // Don't throw on non-2xx
-    timeout: params.timeout ?? 30000,
+    timeout: params.timeout || 0,
     maxRedirects: params.followRedirects === false ? 0 : 10,
     responseType: 'text',
     transformResponse: [(data) => data], // Keep raw

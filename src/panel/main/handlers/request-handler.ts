@@ -35,7 +35,7 @@ export async function handleExecuteRequest(
     const settings = getSetting<Record<string, unknown>>('general') ?? {};
     const vsConfig = vscode.workspace.getConfiguration('daakia');
 
-    msg.timeout = settings.timeout ?? vsConfig.get<number>('requestTimeout', 30000);
+    msg.timeout = settings.timeout ?? vsConfig.get<number>('requestTimeout', 0);
     msg.followRedirects = settings.followRedirects ?? vsConfig.get<boolean>('followRedirects', true);
     msg.sslVerification = settings.sslVerification ?? vsConfig.get<boolean>('sslVerification', true);
 

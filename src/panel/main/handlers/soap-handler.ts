@@ -59,7 +59,7 @@ export async function handleSoapInvoke(
     envelope,
     headers,
     attachments: (msg.attachments as { contentId: string; contentType: string; filename: string; base64Data: string }[] | undefined)?.filter(a => a.base64Data),
-    timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 300000,
+    timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0,
   };
 
   try {

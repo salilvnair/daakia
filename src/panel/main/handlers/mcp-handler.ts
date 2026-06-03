@@ -50,8 +50,8 @@ export async function handleMcpConnect(
     url: resolvedUrl || undefined,
     envVars: resolvedEnvVars,
     workingDir: settings.workingDir as string | undefined,
-    connectionTimeout: (settings.connectionTimeout as number) || 15000,
-    requestTimeout: (settings.requestTimeout as number) || 30000,
+    connectionTimeout: (settings.connectionTimeout as number) || 0,
+    requestTimeout: (settings.requestTimeout as number) || 0,
   });
 
   client.on('error', (err: Error) => {
