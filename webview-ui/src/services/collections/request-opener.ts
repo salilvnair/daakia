@@ -13,7 +13,13 @@ function deriveContentType(bodyMode: string): string {
     case 'x-www-form-urlencoded': return 'application/x-www-form-urlencoded';
     case 'binary': return 'application/octet-stream';
     case 'raw': return 'text/plain';
-    default: return 'application/json';
+    case 'graphql': return 'application/graphql';
+    case 'xml': return 'application/xml';
+    case 'html': return 'text/html';
+    case 'javascript': return 'application/javascript';
+    case 'yaml': return 'application/yaml';
+    case 'none': return 'application/json';
+    default: return 'text/plain';
   }
 }
 
