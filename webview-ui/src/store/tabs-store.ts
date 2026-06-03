@@ -330,7 +330,6 @@ export interface McpSettings {
 
 function createDefaultTab(partial?: Partial<RequestTab>): RequestTab {
   return {
-    id: partial?.id || crypto.randomUUID(),
     type: 'request',
     protocol: 'rest',
     name: 'Untitled Request',
@@ -353,6 +352,7 @@ function createDefaultTab(partial?: Partial<RequestTab>): RequestTab {
     dirty: false,
     envId: null,
     ...partial,
+    id: partial?.id || crypto.randomUUID(),
   };
 }
 
