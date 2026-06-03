@@ -2,7 +2,7 @@
   "name": "daakia",
   "displayName": "Daakia — API Client",
   "description": "A modern API testing extension for VS Code with AI assistant, collections, environments, and mock servers.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "publisher": "salilvnair",
   "repository": {
