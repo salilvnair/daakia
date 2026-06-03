@@ -123,7 +123,19 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
 
   const groups = useMemo(() => buildGroups(filtered), [filtered]);
 
-  const totalItems = (group: TopGroup) => group.subGroups.reduce((sum, sg) => sum + sg.items.length, 0);
+  const totalItems = (group: TopGroup) => {
+    let count = 0;
+    for (const sg of group.subGroups) {
+      if (sg.subGroups) {
+        for (const inner of sg.subGroups) {
+          count += inner.items.length;
+        }
+      } else {
+        count += sg.items.length;
+      }
+    }
+    return count;
+  };
 
   const renderItem = (item: HistoryItem) => {
     const timestamp = item.created_at ? formatFullTimestamp(new Date(item.created_at)) : '';
@@ -274,7 +286,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                   <div className="collapse-inner">
                     <div>
                       {group.subGroups.map((sg) => {
-                        // If sub-group has no label (Yesterday, single-date groups), render items directly
+                        // If sub-group has no label, render items directly
                         if (!sg.label) {
                           return (
                             <div key="flat" className="pl-2">
@@ -283,9 +295,66 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                           );
                         }
 
-                        // Sub-group with label (hour intervals inside Today, or dates within a year)
+                        // Sub-group with label
                         const subKey = `${group.label}::${sg.label}`;
                         const isSubCollapsed = collapsedSubGroups.has(subKey);
+
+                        // 3-level nesting: year → month → date (subGroups has subGroups)
+                        if (sg.subGroups && sg.subGroups.length > 0) {
+                          return (
+                            <div key={sg.label}>
+                              <button
+                                type="button"
+                                onClick={() => toggleSubGroup(subKey)}
+                                className="w-full flex items-center gap-1.5 pl-6 pr-3 py-1 cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                              >
+                                <ChevronRightIcon size={8} strokeWidth={2.5} className={`text-[var(--color-text-muted)] opacity-60 shrink-0 transition-transform ${isSubCollapsed ? '' : 'rotate-90'}`} />
+                                <span className="text-[10px] font-medium text-[var(--color-text-muted)] opacity-80">
+                                  {sg.label}
+                                </span>
+                                <span className="text-[9px] text-[var(--color-text-muted)] opacity-40 ml-auto">
+                                  {sg.subGroups.reduce((s, inner) => s + inner.items.length, 0)}
+                                </span>
+                              </button>
+                              <div className={`collapse-wrapper ${!isSubCollapsed ? 'expanded' : ''}`}>
+                                <div className="collapse-inner">
+                                  <div>
+                                    {sg.subGroups.map((inner) => {
+                                      const innerKey = `${subKey}::${inner.label}`;
+                                      const isInnerCollapsed = collapsedSubGroups.has(innerKey);
+                                      return (
+                                        <div key={inner.label}>
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleSubGroup(innerKey)}
+                                            className="w-full flex items-center gap-1.5 pl-10 pr-3 py-0.5 cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                                          >
+                                            <ChevronRightIcon size={7} strokeWidth={2} className={`text-[var(--color-text-muted)] opacity-50 shrink-0 transition-transform ${isInnerCollapsed ? '' : 'rotate-90'}`} />
+                                            <span className="text-[9px] text-[var(--color-text-muted)] opacity-70">
+                                              {inner.label}
+                                            </span>
+                                            <span className="text-[8px] text-[var(--color-text-muted)] opacity-35 ml-auto">
+                                              {inner.items.length}
+                                            </span>
+                                          </button>
+                                          <div className={`collapse-wrapper ${!isInnerCollapsed ? 'expanded' : ''}`}>
+                                            <div className="collapse-inner">
+                                              <div className="pl-14">
+                                                {inner.items.map(renderItem)}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // 2-level: normal sub-group (e.g., "May 31" under "May", or hour intervals under "Today")
                         return (
                           <div key={sg.label}>
                             <button

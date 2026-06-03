@@ -197,8 +197,8 @@
         },
         "daakia.requestTimeout": {
           "type": "number",
-          "default": 30000,
-          "description": "Default request timeout in milliseconds."
+          "default": 0,
+          "description": "Default request timeout in milliseconds. 0 = no timeout (infinite)."
         },
         "daakia.followRedirects": {
           "type": "boolean",

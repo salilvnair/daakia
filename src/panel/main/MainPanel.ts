@@ -828,14 +828,16 @@ export class MainPanel {
   // ────────────────── Settings (inline — too small to extract) ──────────────────
 
   private _sendSettings() {
-    const settings = getSetting<Record<string, unknown>>('general') ?? {
+    const defaults = {
       followRedirects: true,
       sslVerification: true,
-      timeout: 30000,
+      timeout: 0,
       encoding: 'enable',
       saveResponseInHistory: true,
       proxy: { mode: 'none' },
     };
+    const stored = getSetting<Record<string, unknown>>('general') ?? {};
+    const settings = { ...defaults, ...stored };
     this.postMessage({ type: 'settingsData', settings });
   }
 

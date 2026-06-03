@@ -34,7 +34,6 @@
 - [Settings](#settings)
 - [AI Panel](#ai-panel)
 - [Developer Tools](#developer-tools)
-- [Project Structure](#project-structure)
 - [Tech Stack](#tech-stack)
 - [Design Principles](#design-principles)
 - [Development Roadmap](#development-roadmap)

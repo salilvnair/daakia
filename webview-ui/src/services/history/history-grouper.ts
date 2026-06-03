@@ -16,6 +16,7 @@ interface HistoryItem {
 export interface SubGroup {
   label: string;
   items: HistoryItem[];
+  subGroups?: SubGroup[]; // 3-level: year → month → date → items
 }
 
 export interface TopGroup {
@@ -23,7 +24,8 @@ export interface TopGroup {
   subGroups: SubGroup[];
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -36,7 +38,7 @@ function isYesterday(d: Date, now: Date): boolean {
 }
 
 export function formatFullTimestamp(d: Date): string {
-  const month = MONTHS[d.getMonth()];
+  const month = MONTHS_SHORT[d.getMonth()];
   const day = d.getDate();
   const year = d.getFullYear();
   let hours = d.getHours();
@@ -50,11 +52,17 @@ export function formatFullTimestamp(d: Date): string {
 export function buildGroups(items: HistoryItem[]): TopGroup[] {
   const now = new Date();
   const result: TopGroup[] = [];
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
 
   const todayItems: HistoryItem[] = [];
   const yesterdayItems: HistoryItem[] = [];
-  const sameDateMap = new Map<string, HistoryItem[]>();
-  const yearMap = new Map<number, Map<string, HistoryItem[]>>();
+
+  // For same year, non-current-month dates: Map<monthIndex, Map<dateKey, items>>
+  const sameYearMonthMap = new Map<number, Map<string, HistoryItem[]>>();
+
+  // For past years: Map<year, Map<monthIndex, Map<dateKey, items>>>
+  const pastYearMap = new Map<number, Map<number, Map<string, HistoryItem[]>>>();
 
   for (const item of items) {
     const d = item.created_at ? new Date(item.created_at) : now;
@@ -63,21 +71,36 @@ export function buildGroups(items: HistoryItem[]): TopGroup[] {
       todayItems.push(item);
     } else if (isYesterday(d, now)) {
       yesterdayItems.push(item);
-    } else if (d.getFullYear() === now.getFullYear()) {
-      const key = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
-      if (!sameDateMap.has(key)) sameDateMap.set(key, []);
-      sameDateMap.get(key)!.push(item);
+    } else if (d.getFullYear() === currentYear) {
+      const monthIdx = d.getMonth();
+      const dateKey = `${MONTHS_SHORT[monthIdx]} ${d.getDate()}`;
+
+      if (monthIdx === currentMonth) {
+        // Same month (current month past dates): keep as flat top-level "Jun 1", "Jun 2"
+        if (!sameYearMonthMap.has(monthIdx)) sameYearMonthMap.set(monthIdx, new Map());
+        sameYearMonthMap.get(monthIdx)!.set(dateKey, sameYearMonthMap.get(monthIdx)!.get(dateKey) || []);
+        sameYearMonthMap.get(monthIdx)!.get(dateKey)!.push(item);
+      } else {
+        // Past month in current year: "May" → "May 31", "May 30" → items
+        if (!sameYearMonthMap.has(monthIdx)) sameYearMonthMap.set(monthIdx, new Map());
+        const mm = sameYearMonthMap.get(monthIdx)!;
+        if (!mm.has(dateKey)) mm.set(dateKey, []);
+        mm.get(dateKey)!.push(item);
+      }
     } else {
       const year = d.getFullYear();
-      if (!yearMap.has(year)) yearMap.set(year, new Map());
-      const dateKey = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
-      const yMap = yearMap.get(year)!;
-      if (!yMap.has(dateKey)) yMap.set(dateKey, []);
-      yMap.get(dateKey)!.push(item);
+      const monthIdx = d.getMonth();
+      const dateKey = `${MONTHS_SHORT[monthIdx]} ${d.getDate()}`;
+      if (!pastYearMap.has(year)) pastYearMap.set(year, new Map());
+      const ym = pastYearMap.get(year)!;
+      if (!ym.has(monthIdx)) ym.set(monthIdx, new Map());
+      const dm = ym.get(monthIdx)!;
+      if (!dm.has(dateKey)) dm.set(dateKey, []);
+      dm.get(dateKey)!.push(item);
     }
   }
 
-  // Today — sub-grouped by hour intervals
+  // Today — sub-grouped by hour intervals (unchanged)
   if (todayItems.length > 0) {
     const hourBuckets = new Map<string, HistoryItem[]>();
     for (const item of todayItems) {
@@ -97,22 +120,67 @@ export function buildGroups(items: HistoryItem[]): TopGroup[] {
     result.push({ label: 'Today', subGroups });
   }
 
-  // Yesterday
+  // Yesterday (unchanged)
   if (yesterdayItems.length > 0) {
     result.push({ label: 'Yesterday', subGroups: [{ label: '', items: yesterdayItems }] });
   }
 
-  // Same year older dates
-  for (const [dateLabel, dateItems] of sameDateMap) {
-    result.push({ label: dateLabel, subGroups: [{ label: '', items: dateItems }] });
+  // Same year — sorted by month descending
+  const sortedMonths = Array.from(sameYearMonthMap.keys()).sort((a, b) => b - a);
+  for (const monthIdx of sortedMonths) {
+    const dateMap = sameYearMonthMap.get(monthIdx)!;
+    const monthName = MONTHS[monthIdx];
+
+    if (monthIdx === currentMonth) {
+      // Current month → flat top-level "Jun 2", "Jun 1" (no month grouping)
+      const sortedDates = Array.from(dateMap.entries()).sort(([a], [b]) => {
+        const da = parseInt(a.split(' ')[1]);
+        const db = parseInt(b.split(' ')[1]);
+        return db - da;
+      });
+      for (const [dateLabel, dateItems] of sortedDates) {
+        result.push({ label: dateLabel, subGroups: [{ label: '', items: dateItems }] });
+      }
+    } else {
+      // Past month → top-level "May" → sub-groups "May 31", "May 30" → items
+      const dateSubGroups: SubGroup[] = [];
+      const sortedDates = Array.from(dateMap.entries()).sort(([a], [b]) => {
+        const da = parseInt(a.split(' ')[1]);
+        const db = parseInt(b.split(' ')[1]);
+        return db - da;
+      });
+      for (const [dateLabel, dateItems] of sortedDates) {
+        dateSubGroups.push({ label: dateLabel, items: dateItems });
+      }
+      result.push({ label: monthName, subGroups: dateSubGroups });
+    }
   }
 
-  // Previous years
-  const sortedYears = Array.from(yearMap.keys()).sort((a, b) => b - a);
+  // Previous years — 3-level: year → month → date → items
+  const sortedYears = Array.from(pastYearMap.keys()).sort((a, b) => b - a);
   for (const year of sortedYears) {
-    const yMap = yearMap.get(year)!;
-    const subGroups = Array.from(yMap.entries()).map(([dateLabel, items]) => ({ label: dateLabel, items }));
-    result.push({ label: String(year), subGroups });
+    const yearMonthMap = pastYearMap.get(year)!;
+    const sortedPastMonths = Array.from(yearMonthMap.keys()).sort((a, b) => b - a);
+    const yearSubGroups: SubGroup[] = [];
+
+    for (const monthIdx of sortedPastMonths) {
+      const dateMap = yearMonthMap.get(monthIdx)!;
+      const monthName = MONTHS[monthIdx];
+      const dateSubGroups: SubGroup[] = [];
+
+      const sortedDates = Array.from(dateMap.entries()).sort(([a], [b]) => {
+        const da = parseInt(a.split(' ')[1]);
+        const db = parseInt(b.split(' ')[1]);
+        return db - da;
+      });
+      for (const [dateLabel, dateItems] of sortedDates) {
+        dateSubGroups.push({ label: dateLabel, items: dateItems });
+      }
+
+      yearSubGroups.push({ label: monthName, items: [], subGroups: dateSubGroups });
+    }
+
+    result.push({ label: String(year), subGroups: yearSubGroups });
   }
 
   return result;

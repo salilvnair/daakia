@@ -123,7 +123,7 @@ function GeneralSettings() {
 function GeneralGeneralContent() {
   const [followRedirects, setFollowRedirects] = useState(true);
   const [sslVerification, setSslVerification] = useState(true);
-  const [timeout, setTimeout_] = useState(30000);
+  const [timeout, setTimeout_] = useState(0);
   const [saveResponseInHistory, setSaveResponseInHistory] = useState(true);
   const [maxHistoryEntries, setMaxHistoryEntries] = useState(500);
 
