@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { initDb, closeDb, getSqliteStatus, getCollectionTree } from './storage/db';
 import { MainPanel } from './panel/main/MainPanel';
-import { WelcomeViewProvider } from './panel/sidebar/WelcomeViewProvider';
 import { initMockServerManager, stopAllMockServers } from './mock/mock-server-manager';
 import { importPostmanCollection } from './services/postman-importer';
 import { importOpenAPISpec, isOpenAPISpec } from './services/openapi-importer';
@@ -14,7 +13,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Initialize SQLite (async — sql.js WASM) — non-blocking
   // Auto-open panel once DB is ready
-  initDb(context.extensionPath).then(() => {
+  const dbReady = initDb(context.extensionPath).then(() => {
     const dbStatus = getSqliteStatus();
     if (!dbStatus.ok) {
       console.warn('[daakia] SQLite unavailable:', dbStatus.error);
@@ -28,11 +27,22 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize Mock Server Manager
   initMockServerManager(context.extensionPath);
 
-  // ─── Sidebar welcome view ───
-  const welcomeProvider = new WelcomeViewProvider(context.extensionUri);
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('daakia.welcome', welcomeProvider),
-  );
+  // ─── Sidebar view (empty tree — just the activity bar icon, no welcome panel) ───
+  const emptyTreeProvider: vscode.TreeDataProvider<never> = {
+    getTreeItem: () => { throw new Error('no items'); },
+    getChildren: () => [],
+  };
+  const treeView = vscode.window.createTreeView('daakia.sidebar', { treeDataProvider: emptyTreeProvider });
+  // Auto-open main panel when sidebar icon is clicked, then collapse sidebar
+  treeView.onDidChangeVisibility((e) => {
+    if (e.visible) {
+      dbReady.then(() => {
+        MainPanel.createOrShow(context.extensionUri);
+        vscode.commands.executeCommand('workbench.action.closeSidebar');
+      });
+    }
+  });
+  context.subscriptions.push(treeView);
 
   // ─── Status bar item (right side, next to Copilot) ───
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);

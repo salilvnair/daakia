@@ -270,7 +270,7 @@ function BodyEditor({ tab }: { tab: ReturnType<typeof useTabsStore.getState>['ta
     : isBinaryMode ? !!tab.bodyRaw
     : false;
 
-  const editorLanguage = CONTENT_TYPE_LANG[contentType] || (bodyMode === 'json' ? 'json' : 'plaintext');
+  const editorLanguage = (CONTENT_TYPE_LANG[contentType] || (bodyMode === 'json' ? 'json' : 'plaintext')) as import('../../shared/editors/CodeEditor').CodeLanguage;
 
   const handleClearAll = () => {
     if (bodyMode === 'form-data') {
@@ -340,7 +340,7 @@ function BodyEditor({ tab }: { tab: ReturnType<typeof useTabsStore.getState>['ta
           onChange={handleContentTypeChange}
           size="sm"
         />
-        {bodyMode !== 'none' && contentType !== 'none' && (
+        {bodyMode !== 'none' && contentType !== 'none' && bodyMode !== 'form-data' && bodyMode !== 'x-www-form-urlencoded' && (
           <span className="text-[12px] text-[var(--color-text-muted)] opacity-60">Override</span>
         )}
       </div>

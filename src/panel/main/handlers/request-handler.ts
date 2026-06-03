@@ -2,6 +2,8 @@
  * Request execution handler — pre/post scripts, OAuth2, cookies, history saving.
  */
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { executeRequest } from '../../../http/request-executor';
 import { runScript, type ScriptContext } from '../../../services/script-runtime';
 import { DebugSession } from '../../../services/debugger';
@@ -15,6 +17,12 @@ import {
 
 type PostMessage = (msg: unknown) => void;
 type RefreshFn = () => void;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
+}
 
 export async function handleExecuteRequest(
   msg: Record<string, unknown>,
@@ -317,10 +325,30 @@ export async function handleExecuteRequest(
       );
     }
 
-    // Build request metadata for DevTools Network tab
-    const sentHeaders: Record<string, string> = {};
-    for (const h of (msg.headers as { key: string; value: string }[] || [])) {
-      if (h.key) sentHeaders[h.key] = h.value;
+    // Build request metadata for DevTools Network tab — use actual headers sent by executor
+    const sentHeaders: Record<string, string> = result.requestHeaders || {};
+
+    // Build request body summary for DevTools (file details for multipart, raw body otherwise)
+    let requestBodyForDevTools: string | undefined = (msg.bodyRaw as string) || undefined;
+    if (msg.bodyMode === 'form-data' && Array.isArray(msg.bodyFormData)) {
+      const formSummary = (msg.bodyFormData as any[])
+        .filter((f: any) => f.key)
+        .map((f: any) => {
+          if (f.type === 'file' && (f.filePaths?.length || f.files?.length)) {
+            const fileNames = f.files || f.filePaths?.map((p: string) => p.split(/[\\/]/).pop()) || [];
+            const mimeTypes = f.fileMimeTypes || [];
+            return fileNames.map((name: string, i: number) => {
+              const mime = mimeTypes[i] || 'application/octet-stream';
+              const filePath = f.filePaths?.[i] || '';
+              let size = '';
+              let fileExists = false;
+              try { if (filePath && fs.existsSync(filePath)) { fileExists = true; size = ` (${formatBytes(fs.statSync(filePath).size)})`; } } catch { /* ignore */ }
+              return `📎 ${f.key}: ${name} [${mime}]${size}${fileExists ? ` {${filePath}}` : ''}`;
+            }).join('\n');
+          }
+          return `${f.key}: ${f.value}`;
+        }).join('\n');
+      requestBodyForDevTools = formSummary;
     }
 
     postMessage({
@@ -329,7 +357,7 @@ export async function handleExecuteRequest(
       requestMethod: msg.method,
       requestUrl: msg.url,
       requestHeaders: sentHeaders,
-      requestBody: (msg.bodyRaw as string) || undefined,
+      requestBody: requestBodyForDevTools,
       scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
       scriptErrors: scriptErrors.length > 0 ? scriptErrors : undefined,
       testResults: allTestResults.length > 0 ? allTestResults : undefined,
@@ -370,6 +398,11 @@ export async function handleExecuteRequest(
 
     // Save to history
     const saveResponse = settings.saveResponseInHistory ?? true;
+    // Strip fileData from bodyFormData — never store binary data in DB, only file paths
+    const bodyFormDataForHistory = (msg.bodyFormData as any[])?.map((f: any) => {
+      const { fileData, ...rest } = f;
+      return rest;
+    }) || [];
     insertHistory({
       request_id: msg.tabId as string,
       method: msg.method as string,
@@ -383,10 +416,11 @@ export async function handleExecuteRequest(
         headers: msg.headers,
         body: msg.bodyRaw,
         bodyMode: msg.bodyMode,
+        bodyContentType: msg.bodyContentType,
         params: msg.params,
         authType: msg.authType,
         authData: msg.authData,
-        bodyFormData: msg.bodyFormData,
+        bodyFormData: bodyFormDataForHistory,
         bodyUrlEncoded: msg.bodyUrlEncoded,
         preRequestScript: msg.preRequestScript,
         postResponseScript: msg.postResponseScript,
@@ -423,6 +457,10 @@ export async function handleExecuteRequest(
 
     // Save failed request to history
     try {
+      const bodyFormDataForErrorHistory = (msg.bodyFormData as any[])?.map((f: any) => {
+        const { fileData, ...rest } = f;
+        return rest;
+      }) || [];
       insertHistory({
         request_id: msg.tabId as string,
         method: msg.method as string,
@@ -436,10 +474,11 @@ export async function handleExecuteRequest(
           headers: msg.headers,
           body: msg.bodyRaw,
           bodyMode: msg.bodyMode,
+          bodyContentType: msg.bodyContentType,
           params: msg.params,
           authType: msg.authType,
           authData: msg.authData,
-          bodyFormData: msg.bodyFormData,
+          bodyFormData: bodyFormDataForErrorHistory,
           bodyUrlEncoded: msg.bodyUrlEncoded,
           preRequestScript: msg.preRequestScript,
           postResponseScript: msg.postResponseScript,
@@ -612,6 +651,3 @@ export function buildResponseFilters(contentType: string): Record<string, string
   return { 'Response Files': [ext], 'All Files': ['*'] };
 }
 
-// Need fs/path for download
-import * as path from 'path';
-import * as fs from 'fs';

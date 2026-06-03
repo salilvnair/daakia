@@ -147,6 +147,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
           params: tab.params,
           bodyMode: tab.bodyMode,
           bodyRaw: tab.bodyRaw,
+          bodyContentType: tab.bodyContentType,
           bodyFormData: tab.bodyFormData,
           bodyUrlEncoded: tab.bodyUrlEncoded,
           authType: tab.authType,

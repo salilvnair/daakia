@@ -34,11 +34,12 @@ export interface RequestTimings {
  * Creates a custom HTTP agent that records socket-level timing events.
  * Returns the agent and a timings object that will be populated during the request.
  */
-export function createTimedHttpAgent(): { agent: http.Agent; getTimings: () => RequestTimings } {
+export function createTimedHttpAgent(): { agent: http.Agent; getTimings: () => RequestTimings; marks: Record<string, number> } {
   const marks: Record<string, number> = {};
 
   const agent = new http.Agent({ keepAlive: false, maxSockets: 1 });
-  const origCreateConnection = agent.createConnection.bind(agent);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const origCreateConnection: any = agent.createConnection.bind(agent);
 
   (agent as any).createConnection = (options: any, oncreate: any) => {
     marks.socketCreate = Date.now();
@@ -68,13 +69,13 @@ export function createTimedHttpAgent(): { agent: http.Agent; getTimings: () => R
     };
   };
 
-  return { agent, getTimings, marks } as any;
+  return { agent, getTimings, marks };
 }
 
 /**
  * Creates a custom HTTPS agent that records socket-level timing events including TLS.
  */
-export function createTimedHttpsAgent(rejectUnauthorized = true): { agent: https.Agent; getTimings: () => RequestTimings } {
+export function createTimedHttpsAgent(rejectUnauthorized = true): { agent: https.Agent; getTimings: () => RequestTimings; marks: Record<string, number> } {
   const marks: Record<string, number> = {};
 
   const agent = new https.Agent({ keepAlive: false, maxSockets: 1, rejectUnauthorized });
@@ -110,7 +111,7 @@ export function createTimedHttpsAgent(rejectUnauthorized = true): { agent: https
     };
   };
 
-  return { agent, getTimings, marks } as any;
+  return { agent, getTimings, marks };
 }
 
 /**

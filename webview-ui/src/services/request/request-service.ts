@@ -83,7 +83,10 @@ function buildPayload(tab: RequestTab, opts?: { downloadResponse?: boolean }) {
     bodyContentType: tab.bodyContentType || 'application/json',
     bodyFormData: tab.bodyFormData
       .filter(f => f.enabled)
-      .map(f => ({ ...f, key: resolve(f.key), value: resolve(f.value) })),
+      .map(f => {
+        const { fileExists, ...rest } = f;
+        return { ...rest, key: resolve(f.key), value: resolve(f.value) };
+      }),
     bodyUrlEncoded: resolveKV(resolve, tab.bodyUrlEncoded.filter(u => u.enabled)),
     authType: auth.authType,
     authData: auth.authData,
@@ -153,6 +156,7 @@ export function saveRequest(tab: RequestTab) {
       params: tab.params,
       bodyMode: tab.bodyMode,
       bodyRaw: tab.bodyRaw,
+      bodyContentType: tab.bodyContentType,
       bodyFormData: tab.bodyFormData,
       bodyUrlEncoded: tab.bodyUrlEncoded,
       authType: tab.authType,

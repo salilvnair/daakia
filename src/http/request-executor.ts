@@ -3,6 +3,7 @@
  * Uses axios for HTTP requests with socket-level timing instrumentation.
  */
 import axios, { AxiosRequestConfig, AxiosError } from 'axios';
+import * as fs from 'fs';
 import {
   createTimedHttpAgent, createTimedHttpsAgent,
   markTtfb, markDownloadEnd,
@@ -18,7 +19,7 @@ export interface ExecuteRequestParams {
   bodyMode: string;
   bodyRaw: string;
   bodyContentType?: string;
-  bodyFormData: { key: string; value: string }[];
+  bodyFormData: { key: string; value: string; type?: 'text' | 'file'; files?: string[]; filePaths?: string[]; fileData?: string[]; fileMimeTypes?: string[] }[];
   bodyUrlEncoded: { key: string; value: string }[];
   authType: string;
   authData: Record<string, string>;
@@ -52,6 +53,8 @@ export interface ResponseCookie {
 
 export interface ExecuteResult {
   tabId: string;
+  /** The actual headers sent in the request (including auto-added Content-Type, Authorization, etc.) */
+  requestHeaders?: Record<string, string>;
   response: {
     status: number;
     statusText: string;
@@ -121,13 +124,13 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
   if (params.bodyMode === 'json' && params.bodyRaw) {
     try {
       data = JSON.parse(params.bodyRaw);
-      if (!headers['Content-Type']) headers['Content-Type'] = params.bodyContentType || 'application/json';
     } catch {
       data = params.bodyRaw;
     }
+    if (!headers['Content-Type']) headers['Content-Type'] = params.bodyContentType || 'application/json';
   } else if (params.bodyMode === 'raw' && params.bodyRaw) {
     data = params.bodyRaw;
-    if (!headers['Content-Type'] && params.bodyContentType) headers['Content-Type'] = params.bodyContentType;
+    if (!headers['Content-Type']) headers['Content-Type'] = params.bodyContentType || 'text/plain';
   } else if (params.bodyMode === 'binary' && params.bodyRaw) {
     data = Buffer.from(params.bodyRaw, 'base64');
     if (!headers['Content-Type']) headers['Content-Type'] = params.bodyContentType || 'application/octet-stream';
@@ -139,18 +142,47 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     data = formData.toString();
     if (!headers['Content-Type']) headers['Content-Type'] = 'application/x-www-form-urlencoded';
   } else if (params.bodyMode === 'form-data') {
-    // Build multipart boundary manually or use FormData
+    // Build multipart form-data with proper file handling
     const boundary = '----DaakiaBoundary' + Date.now().toString(36);
-    let body = '';
+    const parts: Buffer[] = [];
     for (const f of params.bodyFormData) {
-      if (f.key) {
-        body += `--${boundary}\r\n`;
-        body += `Content-Disposition: form-data; name="${f.key}"\r\n\r\n`;
-        body += `${f.value}\r\n`;
+      if (!f.key) continue;
+      if (f.type === 'file') {
+        // Determine file source: fileData (base64 from fresh webview pick) or filePaths (disk read for history/collection)
+        const hasData = f.fileData && f.fileData.length > 0;
+        const hasPaths = f.filePaths && f.filePaths.length > 0;
+        const count = hasData ? f.fileData!.length : (hasPaths ? f.filePaths!.length : 0);
+
+        for (let i = 0; i < count; i++) {
+          const filename = f.files?.[i] || `file${i}`;
+          const mimeType = f.fileMimeTypes?.[i] || 'application/octet-stream';
+          let fileBuffer: Buffer;
+
+          if (hasData && f.fileData![i]) {
+            // Fresh upload: base64 data from webview FileReader
+            fileBuffer = Buffer.from(f.fileData![i], 'base64');
+          } else if (hasPaths && f.filePaths![i]) {
+            // History/collection restore: read file from disk
+            const filePath = f.filePaths![i];
+            if (!fs.existsSync(filePath)) {
+              throw new Error(`File not found: ${filePath} (for field "${f.key}")`);
+            }
+            fileBuffer = fs.readFileSync(filePath);
+          } else {
+            continue; // skip if no source
+          }
+
+          parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${f.key}"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`));
+          parts.push(fileBuffer);
+          parts.push(Buffer.from('\r\n'));
+        }
+      } else {
+        // Text field
+        parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${f.key}"\r\n\r\n${f.value}\r\n`));
       }
     }
-    body += `--${boundary}--\r\n`;
-    data = body;
+    parts.push(Buffer.from(`--${boundary}--\r\n`));
+    data = Buffer.concat(parts);
     headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
   }
 
@@ -250,6 +282,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
 
     return {
       tabId: params.tabId,
+      requestHeaders: headers,
       response: {
         status: res.status,
         statusText: res.statusText,

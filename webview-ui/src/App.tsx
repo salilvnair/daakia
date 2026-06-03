@@ -882,6 +882,20 @@ export default function App() {
           });
           break;
         }
+        case 'checkFilePathsResult': {
+          // Update form data row with file existence info
+          const { tabId: fpTabId, rowId, fileExists } = msg;
+          if (fpTabId && rowId) {
+            const tab = useTabsStore.getState().tabs.find(t => t.id === fpTabId);
+            if (tab) {
+              const updatedFormData = tab.bodyFormData.map(r =>
+                r.id === rowId ? { ...r, fileExists } : r
+              );
+              useTabsStore.getState().updateTab(fpTabId, { bodyFormData: updatedFormData });
+            }
+          }
+          break;
+        }
         // ─── Script Debugger Messages ────────────────────────────────────
         case 'scriptDebug:started': {
           const { tabId: debugTabId, phase: debugPhase } = msg;

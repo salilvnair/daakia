@@ -2,7 +2,8 @@ import { useState, useRef } from 'react';
 import { type KeyValueRow, InsertRowDivider } from './KeyValueTable';
 import { StyledDropdown } from './StyledDropdown';
 import { ConfirmDialog } from '../modals/ConfirmDialog';
-import { CheckCircleFilledIcon, TrashIcon } from '../../../icons';
+import { CheckCircleFilledIcon, TrashIcon, DownloadIcon } from '../../../icons';
+import { postMsg } from '../../../vscode';
 
 interface Props {
   rows: KeyValueRow[];
@@ -49,10 +50,48 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
     setShowClearConfirm(false);
   };
 
-  const handleFileChange = (idx: number, fileList: FileList | null) => {
+  const handleFileChange = async (idx: number, fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
-    const names = Array.from(fileList).map(f => f.name);
-    updateRow(idx, { files: names, value: names.join(', ') });
+    const files = Array.from(fileList);
+    const names = files.map(f => f.name);
+    const mimeTypes = files.map(f => f.type || 'application/octet-stream');
+    // Read files as base64 for sending via postMessage to extension
+    const base64Data: string[] = [];
+    for (const file of files) {
+      const data = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Strip data URL prefix (e.g. "data:application/pdf;base64,")
+          resolve(result.includes(',') ? result.split(',')[1] : result);
+        };
+        reader.readAsDataURL(file);
+      });
+      base64Data.push(data);
+    }
+    // Also grab Electron File.path if available (for history persistence)
+    const paths = files.map(f => (f as any).path || '');
+
+    updateRow(idx, { files: names, value: names.join(', '), fileData: base64Data, filePaths: paths, fileMimeTypes: mimeTypes, fileExists: undefined });
+  };
+
+  const downloadFile = (row: KeyValueRow) => {
+    if (row.fileData && row.fileData.length > 0 && row.files) {
+      // Fresh pick: download from base64
+      for (let i = 0; i < row.fileData.length; i++) {
+        const mime = row.fileMimeTypes?.[i] || 'application/octet-stream';
+        const blob = new Blob([Uint8Array.from(atob(row.fileData[i]), c => c.charCodeAt(0))], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = row.files[i] || 'file';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } else if (row.filePaths && row.filePaths.length > 0) {
+      // History/collection: ask extension to reveal file
+      postMsg({ type: 'openFilePath', filePath: row.filePaths[0] });
+    }
   };
 
   const lastRow = rows[rows.length - 1];
@@ -113,7 +152,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
               value={row.key}
               onChange={(e) => updateRow(idx, { key: e.target.value })}
               placeholder="Field name"
-              className="w-full h-[30px] px-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+              className="w-full h-[28px] px-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
             />
 
             {/* Type dropdown */}
@@ -131,7 +170,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
                 value={row.value}
                 onChange={(e) => updateRow(idx, { value: e.target.value })}
                 placeholder="Value"
-                className="w-full h-[30px] px-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+                className="w-full h-[28px] px-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
               />
             ) : (
               <div className="flex items-center gap-2 h-[28px]">
@@ -142,9 +181,27 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
                 >
                   Choose File
                 </button>
-                <span className="text-[12px] text-[var(--color-text-muted)] truncate flex-1">
-                  {row.files && row.files.length > 0 ? row.files.join(', ') : 'No file chosen'}
-                </span>
+                {row.files && row.files.length > 0 ? (
+                  <span className="text-[12px] truncate flex-1 flex items-center gap-1.5">
+                    {row.fileExists && row.fileExists.some(e => !e) ? (
+                      <span className="text-[#ef4444]" title="File moved or deleted — re-select to fix">⚠ {row.files.join(', ')}</span>
+                    ) : (
+                      <span className="text-[var(--color-text-muted)]">{row.files.join(', ')}</span>
+                    )}
+                    {(row.fileData || row.filePaths) && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); downloadFile(row); }}
+                        className="flex-shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] cursor-pointer transition-colors"
+                        title="Download file"
+                      >
+                        <DownloadIcon size={13} />
+                      </button>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-[12px] text-[var(--color-text-muted)] truncate flex-1">No file chosen</span>
+                )}
                 <input
                   ref={(el) => { if (el) fileInputRefs.current.set(row.id, el); }}
                   type="file"
@@ -171,16 +228,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
         ))}
       </div>
 
-      {/* Add row */}
-      {needsEmptyRow && (
-        <button
-          type="button"
-          onClick={addRow}
-          className="w-full text-left px-3 py-2 mt-2 text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-        >
-          + Add new
-        </button>
-      )}
+
 
       {/* Clear confirm */}
       {showClearConfirm && (

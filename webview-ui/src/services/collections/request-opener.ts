@@ -5,6 +5,18 @@ import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
 import type { CollectionRequest } from './tree-helpers';
 
+/** Derive bodyContentType from bodyMode for legacy saved data missing the field */
+function deriveContentType(bodyMode: string): string {
+  switch (bodyMode) {
+    case 'json': return 'application/json';
+    case 'form-data': return 'multipart/form-data';
+    case 'x-www-form-urlencoded': return 'application/x-www-form-urlencoded';
+    case 'binary': return 'application/octet-stream';
+    case 'raw': return 'text/plain';
+    default: return 'application/json';
+  }
+}
+
 interface HistoryItem {
   id: number;
   request_id?: string;
@@ -44,6 +56,7 @@ export function openCollectionRequest(req: CollectionRequest, forceNewTab = fals
     params: Array.isArray(config.params) ? config.params : [],
     bodyMode: typeof config.bodyMode === 'string' ? config.bodyMode : 'none',
     bodyRaw: typeof config.bodyRaw === 'string' ? config.bodyRaw : '',
+    bodyContentType: typeof config.bodyContentType === 'string' ? config.bodyContentType : deriveContentType(config.bodyMode || 'none'),
     bodyFormData: Array.isArray(config.bodyFormData) ? config.bodyFormData : [],
     bodyUrlEncoded: Array.isArray(config.bodyUrlEncoded) ? config.bodyUrlEncoded : [],
     authType: typeof config.authType === 'string' ? config.authType : 'none',
@@ -97,6 +110,7 @@ export function replayHistoryItem(item: HistoryItem, forceNewTab = false, protoc
     headers: (requestConfig.headers as any) || [],
     bodyRaw: (requestConfig.body as string) || (requestConfig.bodyRaw as string) || '',
     bodyMode: (requestConfig.bodyMode as any) || 'none',
+    bodyContentType: (requestConfig.bodyContentType as string) || deriveContentType((requestConfig.bodyMode as string) || 'none'),
     params: (requestConfig.params as any) || [],
     authType: (requestConfig.authType as any) || 'none',
     authData: (requestConfig.authData as any) || {},
@@ -142,4 +156,16 @@ export function replayHistoryItem(item: HistoryItem, forceNewTab = false, protoc
     } : {}),
     response,
   } as any);
+
+  // Verify file paths for form-data file uploads (history doesn't store file content)
+  verifyFormDataFilePaths(forceNewTab ? undefined : `h_${item.id}`, requestConfig.bodyFormData as any[]);
+}
+
+/** Ask extension to verify file paths exist for form-data file rows */
+function verifyFormDataFilePaths(tabId: string | undefined, formData?: any[]) {
+  if (!tabId || !formData) return;
+  const fileRows = formData.filter((f: any) => f.type === 'file' && f.filePaths?.length > 0);
+  for (const row of fileRows) {
+    postMsg({ type: 'checkFilePaths', tabId, rowId: row.id, filePaths: row.filePaths });
+  }
 }

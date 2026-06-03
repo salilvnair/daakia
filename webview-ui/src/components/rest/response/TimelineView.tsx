@@ -3,6 +3,7 @@ import type { RequestTab, ResponseData } from '../../../store/tabs-store';
 import { formatBytes } from '../../../services/response';
 import { METHOD_COLORS } from '../../../colors';
 import { CopyIcon, CheckIcon, ChevronDownIcon, InfoCircleIcon, ArrowUpRightIcon, ArrowDownLeftIcon } from '../../../icons';
+import { RequestBodyDisplay } from '../../shared/display/RequestBodyDisplay';
 import { SubRequestRow } from './SubRequestRow';
 
 type TimelineSubTab = 'request' | 'response' | 'network-logs';
@@ -157,7 +158,7 @@ function TimelineNetworkLogs({ method, url, requestHeaders, requestBody, status,
                   {formatBytes(new TextEncoder().encode(requestBody).length)}
                 </span>
               </div>
-              <pre className="text-[10px] font-mono text-[var(--color-text-primary)] whitespace-pre-wrap mt-0.5 max-h-[100px] overflow-y-auto">{requestBody}</pre>
+              <RequestBodyDisplay body={requestBody} maxHeight="100px" />
             </div>
           )}
         </div>
@@ -299,9 +300,9 @@ export function TimelineView({ tab, response }: { tab: RequestTab; response: Res
                     {formatBytes(new TextEncoder().encode(requestBody).length)}
                   </span>
                 </div>
-                <pre className="text-[11px] text-[var(--color-text-primary)] font-mono whitespace-pre-wrap bg-[var(--color-input-bg)] rounded-md p-2.5 max-h-[200px] overflow-y-auto [scrollbar-gutter:stable] leading-[18px] mx-1">
-                  {requestBody}
-                </pre>
+                <div className="mx-1">
+                  <RequestBodyDisplay body={requestBody} maxHeight="200px" />
+                </div>
               </div>
             )}
           </div>

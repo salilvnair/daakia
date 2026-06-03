@@ -149,7 +149,7 @@ export class MainPanel {
 
       // ── Request Execution ──
       case 'executeRequest':
-        handleExecuteRequest(msg, this._post, () => handleGetEnvironments(this._post), () => this._sendHistory());
+        handleExecuteRequest(msg, this._post, () => handleGetEnvironments(this._post), () => this._sendHistory((msg.protocol as string) || 'rest'));
         break;
       case 'cancelRequest':
         cancelRestRequest(msg.tabId as string);
@@ -359,6 +359,11 @@ export class MainPanel {
           vscode.env.openExternal(vscode.Uri.parse(msg.url));
         }
         break;
+      case 'openFilePath':
+        if (msg.filePath && typeof msg.filePath === 'string' && fs.existsSync(msg.filePath)) {
+          vscode.env.openExternal(vscode.Uri.file(msg.filePath));
+        }
+        break;
       case 'replSendRequest':
         this._handleReplSendRequest(msg);
         break;
@@ -374,6 +379,13 @@ export class MainPanel {
       case 'openSaveAs':
         this.postMessage({ type: 'openSaveAs', tabId: msg.tabId });
         break;
+      case 'checkFilePaths': {
+        // Verify which file paths still exist on disk (for history/collection file uploads)
+        const paths = msg.filePaths as string[] || [];
+        const exists = paths.map(p => !!p && fs.existsSync(p));
+        this._post({ type: 'checkFilePathsResult', tabId: msg.tabId, rowId: msg.rowId, fileExists: exists });
+        break;
+      }
 
       // ── History ──
       case 'getHistory':

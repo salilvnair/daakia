@@ -13,6 +13,14 @@ export interface KeyValueRow {
   type?: 'text' | 'file';
   /** For form-data file uploads: file names */
   files?: string[];
+  /** For form-data file uploads: absolute file paths (parallel to files[]) — used for disk reads */
+  filePaths?: string[];
+  /** For form-data file uploads: base64-encoded file contents (parallel to files[]) — transient, not persisted */
+  fileData?: string[];
+  /** For form-data file uploads: MIME types (parallel to files[]) */
+  fileMimeTypes?: string[];
+  /** Whether file at filePaths[i] was verified to exist (set by extension on history/collection load) */
+  fileExists?: boolean[];
 }
 
 interface Props {

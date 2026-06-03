@@ -25,6 +25,7 @@ export function exportHistoryItem(item: HistoryItem) {
     params: requestConfig.params || [],
     body: requestConfig.body || '',
     bodyMode: requestConfig.bodyMode || 'none',
+    bodyContentType: requestConfig.bodyContentType || '',
     authType: requestConfig.authType || 'none',
     authData: requestConfig.authData || {},
     status: item.status,

@@ -6,6 +6,7 @@
 import { useState, useMemo } from 'react';
 import { useDevToolsStore, type NetworkEntry } from '../../../store/devtools-store';
 import { NetworkIcon, CopyIcon, CheckIcon, ChevronDownIcon, ArrowUpRightIcon, ArrowDownLeftIcon, InfoCircleIcon } from '../../../icons';
+import { RequestBodyDisplay } from '../display/RequestBodyDisplay';
 
 type DetailTab = 'request' | 'response' | 'network-logs';
 
@@ -232,7 +233,7 @@ function NetworkLogsView({ entry }: { entry: NetworkEntry }) {
                   {formatSize(new TextEncoder().encode(entry.requestBody).length)}
                 </span>
               </div>
-              <pre className="text-[10px] font-mono text-[var(--color-text-primary)] whitespace-pre-wrap mt-0.5 max-h-[100px] overflow-y-auto">{entry.requestBody}</pre>
+              <RequestBodyDisplay body={entry.requestBody} maxHeight="100px" />
             </div>
           )}
         </div>
@@ -402,9 +403,9 @@ function DetailPanel({ entry }: { entry: NetworkEntry }) {
                     {formatSize(new TextEncoder().encode(entry.requestBody).length)}
                   </span>
                 </div>
-                <pre className="text-[11px] text-[var(--color-text-primary)] font-mono whitespace-pre-wrap bg-[var(--color-input-bg)] rounded-md p-2 max-h-[200px] overflow-y-auto [scrollbar-gutter:stable] leading-[18px] mx-2">
-                  {entry.requestBody}
-                </pre>
+                <div className="mx-2">
+                  <RequestBodyDisplay body={entry.requestBody} maxHeight="200px" />
+                </div>
               </div>
             )}
           </div>
