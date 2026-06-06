@@ -6,6 +6,24 @@ import type { AiProvider, AiProviderId } from './ai-types';
 
 export const AI_PROVIDERS: AiProvider[] = [
   {
+    id: 'copilot',
+    name: 'GitHub Copilot',
+    baseUrl: 'vscode://copilot',
+    chatEndpoint: '',
+    authType: 'none',
+    // Default models — actual list is fetched live from vscode.lm at runtime
+    models: [
+      { id: 'auto', name: 'Auto (Copilot chooses)', context: 200000, supportsVision: false, supportsTools: false },
+      { id: 'gpt-4o', name: 'GPT-4o', context: 128000, supportsVision: true, supportsTools: true },
+      { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', context: 200000, supportsVision: true, supportsTools: true },
+      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', context: 1048576, supportsVision: true, supportsTools: true },
+      { id: 'o3-mini', name: 'o3-mini', context: 200000, supportsTools: true },
+    ],
+    supportsTools: false,
+    supportsStreaming: true,
+    supportsVision: false,
+  },
+  {
     id: 'openai',
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',

@@ -3,7 +3,7 @@
  * Kept separate since webview can't import from extension host.
  */
 
-export type AiProviderId = 'openai' | 'anthropic' | 'google' | 'ollama' | 'groq' | 'together' | 'mistral' | 'xai' | 'deepseek' | 'azure-openai' | 'custom';
+export type AiProviderId = 'openai' | 'anthropic' | 'google' | 'ollama' | 'groq' | 'together' | 'mistral' | 'xai' | 'deepseek' | 'azure-openai' | 'custom' | 'copilot';
 
 export interface AiProviderModel {
   id: string;
@@ -21,6 +21,16 @@ export interface AiProviderInfo {
 }
 
 export const AI_PROVIDERS: AiProviderInfo[] = [
+  {
+    id: 'copilot', name: 'GitHub Copilot', baseUrl: 'vscode://copilot',
+    models: [
+      { id: 'auto', name: 'Auto (Copilot chooses)', context: 200000 },
+      { id: 'gpt-4o', name: 'GPT-4o', context: 128000, supportsVision: true, supportsTools: true },
+      { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', context: 200000, supportsVision: true, supportsTools: true },
+      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', context: 1048576, supportsVision: true },
+      { id: 'o3-mini', name: 'o3-mini', context: 200000, supportsTools: true },
+    ],
+  },
   {
     id: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1',
     models: [

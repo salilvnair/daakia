@@ -1,77 +1,77 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
+import { ConvEngineChat } from '@salilvnair/convengine-chat';
 import { useTabsStore } from '../../store/tabs-store';
-import { AiMessageBubble } from './AiMessageBubble';
-import { TrashIcon } from '../../icons';
+
+const SUGGESTION_CHIPS = [
+  { chipText: '📡 Build a request',   chatText: '/request GET all users from https://jsonplaceholder.typicode.com/users' },
+  { chipText: '🔧 Create a mock',     chatText: '/mock Create a mock POST /api/users that returns a created user' },
+  { chipText: '🧪 Generate tests',    chatText: '/test Write assertions for a 200 response with a users array' },
+  { chipText: '❓ Explain OAuth2',    chatText: 'How does OAuth2 work and when should I use it?' },
+  { chipText: '🔄 Convert cURL',      chatText: '/curl curl -X POST https://api.example.com/data -H "Content-Type: application/json" -d \'{"name":"test"}\'' },
+  { chipText: '🔐 GraphQL query',     chatText: '/graphql Write a GraphQL query to get all users with their id, name, and email' },
+  { chipText: '📄 SOAP request',      chatText: '/soap Generate a SOAP 1.1 envelope for a GetUserById operation with userId parameter' },
+  { chipText: '🛡️ Security scan',    chatText: '/security Scan this request for security issues: GET http://api.example.com/users?apiKey=sk-abc123' },
+  { chipText: '📋 Document endpoint', chatText: '/docs Document the POST /api/users endpoint that creates a new user with name and email' },
+];
 
 /**
- * AiConversationPanel — Shows the conversation history (messages from user + assistant).
- * Includes clear messages button.
+ * AiConversationPanel — wraps ConvEngineChat in fullscreen mode.
+ * The DaakiaVsCodeBridge (installed in App.tsx) intercepts all ConvEngine
+ * HTTP/SSE calls and routes them through the Daakia extension protocol.
  */
 export function AiConversationPanel() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const updateTab = useTabsStore(s => s.updateTab);
-  const conversation = activeTab?.aiConversation || [];
-  const streaming = activeTab?.aiStreaming || false;
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [conversation.length, streaming]);
+  const handleMessage = useCallback((text: string) => {
+    // userPrompt is tracked in the bridge; nothing extra needed here
+  }, []);
 
-  const handleClear = useCallback(() => {
-    if (!activeTab) return;
-    updateTab(activeTab.id, { aiConversation: [], aiStreaming: false });
-  }, [activeTab, updateTab]);
+  const handleResponse = useCallback((_text: string) => {
+    // Response is already stored in tab.aiConversation by the bridge
+  }, []);
 
-  if (conversation.length === 0 && !streaming) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center gap-2 text-center px-6 border-t border-[var(--color-surface-border)]">
-        <span className="text-[13px] text-[var(--color-text-muted)]">
-          No messages yet
-        </span>
-        <span className="text-[11px] text-[var(--color-text-muted)] opacity-70">
-          Configure your prompt above and click Send to start a conversation.
-        </span>
-      </div>
-    );
-  }
+  if (!activeTab) return null;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden border-t border-[var(--color-surface-border)]">
-      {/* Header with clear button */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] flex-shrink-0">
-        <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Conversation</span>
-        <button
-          type="button"
-          onClick={handleClear}
-          className="h-[24px] w-[24px] flex items-center justify-center rounded-md cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-          title="Clear conversation"
-        >
-          <TrashIcon size={12} />
-        </button>
-      </div>
-
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-auto p-3 gap-2 flex flex-col [scrollbar-gutter:stable]">
-        {conversation.map((msg) => (
-          <AiMessageBubble key={msg.id} message={msg} />
-        ))}
-
-        {/* Streaming indicator */}
-        {streaming && (
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="flex gap-1">
-              <span className="w-[5px] h-[5px] rounded-full bg-[var(--color-protocol-ai)] animate-pulse" />
-              <span className="w-[5px] h-[5px] rounded-full bg-[var(--color-protocol-ai)] animate-pulse [animation-delay:150ms]" />
-              <span className="w-[5px] h-[5px] rounded-full bg-[var(--color-protocol-ai)] animate-pulse [animation-delay:300ms]" />
-            </div>
-            <span className="text-[11px] text-[var(--color-text-muted)]">AI is thinking...</span>
-          </div>
-        )}
-      </div>
+    <div className="flex flex-col h-full overflow-hidden" style={{ minHeight: 0 }}>
+      <ConvEngineChat
+        mode="fullscreen"
+        config={{
+          apiHost: '',
+          conversationId: activeTab.id,
+          title: 'Daakia AI',
+          subtitle: 'Ask anything about APIs — build requests, mocks, tests, and more.',
+          placeholder: 'Ask AI anything…',
+          showFeedback: false,
+          showAudit: false,
+          showNewChat: true,
+          showLayoutPicker: false,
+          showMaximize: false,
+          showMinimize: false,
+          showEngineStatus: false,
+          showHeaderDot: false,
+          defaultDark: true,
+          composerShape: 'round',
+          landingChips: SUGGESTION_CHIPS,
+          stream: { enabled: true, transport: 'sse' },
+          onMessage: handleMessage,
+          onResponse: handleResponse,
+        }}
+        theme={{
+          'color-accent': 'var(--color-protocol-ai)',
+          'bg-panel': 'var(--color-panel)',
+          'bg-header': 'var(--color-surface)',
+          'border-color': 'var(--color-surface-border)',
+          'shadow-panel': 'none',
+          'bg-composer': 'var(--color-panel)',
+          'bg-composer-surface': 'var(--color-input-bg)',
+          'text-primary': 'var(--color-text-primary)',
+          'text-secondary': 'var(--color-text-muted)',
+          'text-placeholder': 'var(--color-text-muted)',
+          'bg-bubble-agent': 'color-mix(in srgb, var(--color-surface-border) 60%, var(--color-panel))',
+          'text-bubble-agent': 'var(--color-text-primary)',
+        }}
+      />
     </div>
   );
 }

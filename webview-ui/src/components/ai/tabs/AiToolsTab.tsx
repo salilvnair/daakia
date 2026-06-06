@@ -2,6 +2,7 @@ import { useCallback, useState, useRef, useEffect } from 'react';
 import { useTabsStore, type AiToolDef } from '../../../store/tabs-store';
 import { TrashIcon, PlusIcon, ChevronDownIcon } from '../../../icons';
 import { ConfirmDialog, CodeEditor } from '../../shared';
+import { ResizablePanel } from '../../shared/controls/ResizablePanel';
 
 const TOOL_SNIPPETS: { label: string; tool: AiToolDef['function'] }[] = [
   {
@@ -221,14 +222,14 @@ export function AiToolsTab() {
             className="h-[28px] px-2.5 rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
           />
 
-          <div className="rounded overflow-hidden border border-[var(--color-input-border)]">
+          <ResizablePanel id={`ai.tool.${idx}.params`} defaultHeight={120} minHeight={60} maxHeight={500}>
             <CodeEditor
               value={JSON.stringify(tool.function.parameters, null, 2)}
               onChange={(val) => handleUpdateTool(idx, 'parameters', val || '{}')}
               language="json"
-              height="120px"
+              height="100%"
             />
-          </div>
+          </ResizablePanel>
         </div>
       ))}
 

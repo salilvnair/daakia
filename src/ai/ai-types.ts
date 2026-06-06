@@ -5,7 +5,7 @@
 
 // ────────────── Provider Types ──────────────
 
-export type AiProviderId = 'openai' | 'anthropic' | 'google' | 'ollama' | 'groq' | 'together' | 'mistral' | 'xai' | 'deepseek' | 'azure-openai' | 'custom';
+export type AiProviderId = 'openai' | 'anthropic' | 'google' | 'ollama' | 'groq' | 'together' | 'mistral' | 'xai' | 'deepseek' | 'azure-openai' | 'custom' | 'copilot';
 
 export interface AiProviderModel {
   id: string;          // 'gpt-4o', 'claude-3-opus-20240229'

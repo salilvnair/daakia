@@ -579,6 +579,17 @@ export function resetPrompt(scenario: string): void {
   _scheduleSave();
 }
 
+export function getAllPrompts(): PromptRow[] {
+  if (!_db) { return []; }
+  const stmt = _db.prepare('SELECT * FROM prompt_library ORDER BY updated_at DESC');
+  const results: PromptRow[] = [];
+  while (stmt.step()) {
+    results.push(stmt.getAsObject() as unknown as PromptRow);
+  }
+  stmt.free();
+  return results;
+}
+
 // ────────────────────── Collections (dedicated table) ──────────────────────
 
 export interface CollectionRow {
@@ -1118,6 +1129,99 @@ export function getMockLogs(serverId: string, limit = 100): MockLogRow[] {
   }
   stmt.free();
   return results;
+}
+
+// ────────────────────── AI Provider Keys ──────────────────────
+
+/** Store an API key for a provider (uses KV table, collection 'ai_keys') */
+export function setAiKey(providerId: string, token: string): void {
+  upsert('ai_keys', providerId, { token });
+}
+
+/** Retrieve stored API key for a provider */
+export function getAiKey(providerId: string): string | undefined {
+  const record = findById<{ token: string }>('ai_keys', providerId);
+  return record?.token;
+}
+
+/** Delete stored API key for a provider */
+export function deleteAiKey(providerId: string): void {
+  remove('ai_keys', providerId);
+}
+
+/** Get all stored API keys as a map of providerId → token */
+export function getAllAiKeys(): Record<string, string> {
+  const all = readCollection<{ token: string }>('ai_keys');
+  return Object.fromEntries(Object.entries(all).map(([id, v]) => [id, v.token]));
+}
+
+// ────────────────────── AI Chat Sessions ──────────────────────
+
+export interface AiChatSession {
+  id: string;
+  title: string;
+  provider: string;
+  model: string;
+  messages: string; // JSON-serialized AiMessage[]
+  created_at?: string;
+  updated_at?: string;
+}
+
+export function saveAiChatSession(session: Omit<AiChatSession, 'created_at' | 'updated_at'>): void {
+  upsert('ai_chat_sessions', session.id, session);
+}
+
+export function loadAiChatSessions(limit = 50): AiChatSession[] {
+  if (!_db) { return []; }
+  const all = findAll<AiChatSession>('ai_chat_sessions');
+  return all.slice(0, limit);
+}
+
+export function deleteAiChatSession(id: string): void {
+  remove('ai_chat_sessions', id);
+}
+
+export function searchAiChatSessions(query: string): AiChatSession[] {
+  const all = findAll<AiChatSession>('ai_chat_sessions');
+  const q = query.toLowerCase();
+  return all.filter(s =>
+    s.title.toLowerCase().includes(q) ||
+    s.provider.toLowerCase().includes(q) ||
+    s.model.toLowerCase().includes(q)
+  );
+}
+
+// ────────────────────── AI Feature Flags ──────────────────────
+
+export interface AiFeatureFlags {
+  masterAgent: boolean;
+  errorDiagnosis: boolean;
+  responseExplainer: boolean;
+  headerAutocomplete: boolean;
+  bodyGenerator: boolean;
+  requestNamer: boolean;
+  scriptAutocomplete: boolean;
+  inlineAssist: boolean;
+}
+
+export const DEFAULT_AI_FEATURES: AiFeatureFlags = {
+  masterAgent: true,
+  errorDiagnosis: true,
+  responseExplainer: true,
+  headerAutocomplete: true,
+  bodyGenerator: true,
+  requestNamer: true,
+  scriptAutocomplete: true,
+  inlineAssist: true,
+};
+
+export function getAiFeatures(): AiFeatureFlags {
+  const stored = getSetting<Partial<AiFeatureFlags>>('aiFeatures');
+  return { ...DEFAULT_AI_FEATURES, ...(stored || {}) };
+}
+
+export function setAiFeatures(flags: AiFeatureFlags): void {
+  setSetting('aiFeatures', flags);
 }
 
 // ────────────────────── Table Info (Dev Tools) ──────────────────────

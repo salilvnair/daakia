@@ -1,43 +1,27 @@
 import { useState, useEffect, type JSX } from 'react';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon } from '../../icons';
+import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon } from '../../icons';
 import { LlmProviderSettings } from './LlmProviderSettings';
+import { PromptLibraryPanel } from './PromptLibraryPanel';
+import { AiFeatureSettings } from './AiFeatureSettings';
 import { useMockStore } from '../../store/mock-store';
 
-type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'devtools';
+type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'devtools';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 
 const SECTIONS: { id: SettingsSection; label: string; icon: JSX.Element }[] = [
-  {
-    id: 'general',
-    label: 'General',
-    icon: <SettingsIcon size={14} />,
-  },
-  {
-    id: 'theme',
-    label: 'Theme',
-    icon: <SunIcon size={14} />,
-  },
-  {
-    id: 'mock-server',
-    label: 'Mock Server',
-    icon: <ServerIcon size={14} />,
-  },
-  {
-    id: 'llm',
-    label: 'LLM Provider',
-    icon: <CpuIcon size={14} />,
-  },
-  {
-    id: 'devtools',
-    label: 'Developer Tools',
-    icon: <CodeBracketsIcon size={14} />,
-  },
+  { id: 'general',        label: 'General',         icon: <SettingsIcon size={14} /> },
+  { id: 'theme',          label: 'Theme',            icon: <SunIcon size={14} /> },
+  { id: 'mock-server',    label: 'Mock Server',      icon: <ServerIcon size={14} /> },
+  { id: 'llm',            label: 'LLM Provider',     icon: <CpuIcon size={14} /> },
+  { id: 'ai-features',    label: 'AI Features',      icon: <SparkleIcon size={14} /> },
+  { id: 'prompt-library', label: 'Prompt Library',   icon: <AgentIcon size={14} /> },
+  { id: 'devtools',       label: 'Developer Tools',  icon: <CodeBracketsIcon size={14} /> },
 ];
 
 export function SettingsPanel() {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
-  const current = SECTIONS.find(s => s.id === activeSection)!;
+  const current = SECTIONS.find(s => s.id === activeSection)!;;
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
@@ -73,6 +57,10 @@ export function SettingsPanel() {
           <MockServerSettings />
         ) : activeSection === 'llm' ? (
           <LlmProviderSettings />
+        ) : activeSection === 'ai-features' ? (
+          <AiFeatureSettings />
+        ) : activeSection === 'prompt-library' ? (
+          <PromptLibraryPanel />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
             <div className="flex flex-col items-center gap-2">

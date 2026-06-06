@@ -42,13 +42,15 @@ export function AppSidebar({ activeSection, onSectionChange, sidebarOpen, sideba
 
   // Protocol-aware sidebar — use store protocol (follows left rail switch)
   const isMockServer = activeTab?.type === 'mock-server';
-  const showRestSidebar = !isMockServer && (activeProtocol === 'rest' || activeTab?.type === 'settings');
-  const showGraphqlSidebar = !isMockServer && activeProtocol === 'graphql';
-  const showWebsocketSidebar = !isMockServer && activeProtocol === 'websocket';
-  const showGrpcSidebar = !isMockServer && activeProtocol === 'grpc';
-  const showSoapSidebar = !isMockServer && activeProtocol === 'soap';
-  const showAiSidebar = !isMockServer && activeProtocol === 'ai';
-  const showMcpSidebar = !isMockServer && activeProtocol === 'mcp';
+  // Never show protocol icons when settings or mock-server tab is active — they have their own full-panel UI
+  const showProtocolIcons = !settingsActive && !isMockServer;
+  const showRestSidebar = showProtocolIcons && activeProtocol === 'rest';
+  const showGraphqlSidebar = showProtocolIcons && activeProtocol === 'graphql';
+  const showWebsocketSidebar = showProtocolIcons && activeProtocol === 'websocket';
+  const showGrpcSidebar = showProtocolIcons && activeProtocol === 'grpc';
+  const showSoapSidebar = showProtocolIcons && activeProtocol === 'soap';
+  const showAiSidebar = showProtocolIcons && activeProtocol === 'ai';
+  const showMcpSidebar = showProtocolIcons && activeProtocol === 'mcp';
 
   // Determine if panel should show
   const showPanel = activeSection && (

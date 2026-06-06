@@ -1,12 +1,37 @@
-/** Schema generation from JSON response data — TS, JS, Python, Java */
+/**
+ * Schema generation from JSON response data.
+ * Static generators exist for: typescript, javascript, python-dataclass, java.
+ * All other langs use AI-powered generation (see schema-prompts.ts).
+ */
 
-export type SchemaLang = 'typescript' | 'javascript' | 'python' | 'java';
+export type SchemaLang =
+  // TypeScript
+  | 'typescript'
+  | 'typescript-zod'
+  // JSON
+  | 'json-schema'
+  // JavaScript
+  | 'javascript'
+  // Python
+  | 'python-pydantic'
+  | 'python-dataclass'
+  // JVM
+  | 'java'
+  | 'kotlin'
+  // Systems
+  | 'go'
+  | 'rust'
+  // .NET / Mobile
+  | 'csharp'
+  | 'swift';
 
 export function generateSchema(data: unknown, lang: SchemaLang): string {
   if (lang === 'typescript') return generateTsSchema(data);
   if (lang === 'javascript') return generateJsSchema(data);
-  if (lang === 'python') return generatePySchema(data);
-  return generateJavaSchema(data);
+  if (lang === 'python-dataclass') return generatePySchema(data);
+  if (lang === 'java') return generateJavaSchema(data);
+  // All other langs require AI generation
+  return `// Static generation not available for this language.\n// Switch to AI mode to generate a ${lang} schema.`;
 }
 
 // ── Shared helpers ──

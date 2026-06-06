@@ -1,5 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import '@salilvnair/convengine-chat/style.css';
+import { installDaakiaBridges } from './ai/DaakiaVsCodeBridge';
 import { installKeyboardListener } from './services/keyboard';
+
+// Install bridges before any React render so ConvEngineChat fetch/EventSource is ready
+installDaakiaBridges();
 import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
 import { TabBar } from './components/tabs/TabBar';
 import { UrlBar } from './components/rest/request/UrlBar';
@@ -28,6 +33,9 @@ import { useMockStore } from './store/mock-store';
 import { useDebugStore } from './store/debug-store';
 import { useAiProvidersStore } from './store/ai-providers-store';
 import { useSidebarDataStore } from './store/sidebar-data-store';
+import { useAiKeysStore } from './store/ai-keys-store';
+import { useAiFeaturesStore } from './store/ai-features-store';
+import { useAiHistoryStore } from './store/ai-history-store';
 import { getVsCodeApi, postMsg } from './vscode';
 import { getProtocolAccent } from './colors';
 import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, DevToolsIcon } from './icons';
@@ -1291,6 +1299,25 @@ export default function App() {
           }
           break;
         }
+
+        // ─── AI Key Status ────────────────────────────────────────────────
+        case 'aiKeys:status':
+          useAiKeysStore.getState().setKeyStatus(msg.status || {});
+          break;
+
+        // ─── AI Feature Flags ─────────────────────────────────────────────
+        case 'aiFeatures:data':
+          useAiFeaturesStore.getState().setFeatures(msg.features || {});
+          break;
+
+        // ─── AI Chat History ─────────────────────────────────────────────
+        case 'aiHistory:data':
+          useAiHistoryStore.getState().setSessions(msg.sessions || []);
+          break;
+
+        case 'aiHistory:results':
+          useAiHistoryStore.getState().setSearchResults(msg.sessions || []);
+          break;
 
         // ─── MCP Protocol Messages ────────────────────────────────────────
         case 'mcp:connected': {

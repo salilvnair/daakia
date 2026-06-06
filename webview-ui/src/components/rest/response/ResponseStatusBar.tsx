@@ -1,7 +1,20 @@
 import { formatBytes } from '../../../services/response';
+import type { ResponseData } from '../../../store/tabs-store';
+import { AiActionButton } from '../../ai/AiAssistPopover';
 
-export function ResponseStatusBar({ response }: { response: { status: number; statusText: string; time: number; size: number } }) {
+interface ResponseStatusBarProps {
+  response: ResponseData;
+  /** The method of the request that produced this response */
+  requestMethod?: string;
+  /** The URL of the request that produced this response */
+  requestUrl?: string;
+  /** Optional request body sent with the request */
+  requestBody?: string;
+}
+
+export function ResponseStatusBar({ response, requestMethod = 'GET', requestUrl = '', requestBody }: ResponseStatusBarProps) {
   const isNetworkError = response.status === 0;
+  const isError = isNetworkError || response.status >= 400;
   const statusLabel = isNetworkError ? response.statusText || 'Error' : `${response.status} ${response.statusText}`;
   const statusColor = isNetworkError
     ? 'text-[#ef4444] bg-[rgba(239,68,68,0.12)]'
@@ -27,6 +40,21 @@ export function ResponseStatusBar({ response }: { response: { status: number; st
         <span className="text-[var(--color-text-muted)]">Size:</span>
         <span className="px-1.5 py-[1px] rounded text-[10px] font-mono font-semibold bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)]">{formatBytes(response.size)}</span>
       </span>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* AI action: error diagnosis — only shown on 4xx/5xx/network errors */}
+      {isError && requestUrl && (
+        <AiActionButton
+          mode="error-diagnosis"
+          label="Ask AI why"
+          response={response}
+          requestMethod={requestMethod}
+          requestUrl={requestUrl}
+          requestBody={requestBody}
+        />
+      )}
     </div>
   );
 }

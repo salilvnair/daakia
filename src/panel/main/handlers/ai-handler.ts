@@ -6,12 +6,14 @@
 import {
   executeAiRequest, startAiRequest, cancelAiRequest, cleanupAiRequest, buildAiRequest,
 } from '../../../ai/ai-executor';
+import { executeCopilotRequest } from '../../../ai/copilot-executor';
 import { AI_PROVIDERS } from '../../../ai/ai-providers';
 import type { AiMessage, AiRequestPayload, AiSettings, AiToolDef } from '../../../ai/ai-types';
 import { DEFAULT_AI_SETTINGS } from '../../../ai/ai-types';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory } from '../../../storage/db';
 import { getAiMcpTools, callAiMcpTool } from './ai-mcp-handler';
+import { resolveProviderAuth } from '../../../services/llm/llm-provider-service';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -83,6 +85,22 @@ export async function handleAiSend(
   const mcpTools = getAiMcpTools(tabId);
   const allTools = [...tools, ...mcpTools];
 
+  // Resolve auth: inject stored API key from OS keychain if webview didn't supply one
+  const resolvedAuth = await resolveProviderAuth(
+    providerId as AiRequestPayload['provider'],
+    resolvedUrl,
+    (msg.authType as string) || 'bearer',
+    (msg.authData as Record<string, string>) || {},
+  );
+
+  // Resolve env vars in auth data (in case user put {{ENV_VAR}} in the key)
+  if (resolvedAuth.authData.token) {
+    resolvedAuth.authData.token = resolveEnvString(resolvedAuth.authData.token, vars);
+  }
+  if (resolvedAuth.authData.keyValue) {
+    resolvedAuth.authData.keyValue = resolveEnvString(resolvedAuth.authData.keyValue as string, vars);
+  }
+
   const payload: AiRequestPayload = {
     tabId,
     provider: providerId as AiRequestPayload['provider'],
@@ -92,19 +110,21 @@ export async function handleAiSend(
     messages,
     tools: allTools.length ? allTools : undefined,
     settings,
-    authType: (msg.authType as string) || 'bearer',
-    authData: (msg.authData as Record<string, string>) || {},
+    authType: resolvedAuth.authType,
+    authData: resolvedAuth.authData,
   };
 
-  // Resolve auth token from env
-  if (payload.authData.token) {
-    payload.authData.token = resolveEnvString(payload.authData.token, vars);
-  }
-  if (payload.authData.keyValue) {
-    payload.authData.keyValue = resolveEnvString(payload.authData.keyValue, vars);
-  }
-
   const signal = startAiRequest(tabId);
+
+  // Hard timeout — fire ai:error if the request hangs with no response at all
+  const REQUEST_TIMEOUT_MS = 60_000;
+  const timeoutId = setTimeout(() => {
+    if (!signal.aborted) {
+      cancelAiRequest(tabId);
+      cleanupAiRequest(tabId);
+      postMessage({ type: 'ai:error', tabId, message: 'Request timed out after 60 seconds. Check your provider URL and API key.', code: 'TIMEOUT' });
+    }
+  }, REQUEST_TIMEOUT_MS);
 
   // Send request debug info to webview DevTools BEFORE execution
   postMessage({
@@ -127,6 +147,31 @@ export async function handleAiSend(
     },
   });
 
+  // GitHub Copilot — route through VS Code Language Model API (no HTTP)
+  if (providerId === 'copilot') {
+    executeCopilotRequest({
+      payload,
+      signal,
+      onChunk: (chunk) => { clearTimeout(timeoutId); postMessage({ type: 'ai:chunk', ...chunk }); },
+      onComplete: (result) => {
+        clearTimeout(timeoutId);
+        cleanupAiRequest(tabId);
+        postMessage({ type: 'ai:complete', ...result });
+        try {
+          insertHistory({ protocol: 'ai', method: 'COPILOT', url: 'vscode://copilot', status: 200, response_time: result.duration, request_data: JSON.stringify({ aiProvider: 'copilot', aiModel: resolvedModel, aiUserPrompt: userPrompt }), response_data: JSON.stringify({ content: result.message.content.slice(0, 500) }) });
+          trimHistory(500);
+          refreshHistory?.();
+        } catch { /* ignore */ }
+      },
+      onError: (error) => {
+        clearTimeout(timeoutId);
+        cleanupAiRequest(tabId);
+        postMessage({ type: 'ai:error', ...error });
+      },
+    });
+    return;
+  }
+
   executeAiRequest({
     payload,
     signal,
@@ -134,6 +179,7 @@ export async function handleAiSend(
       postMessage({ type: 'ai:chunk', ...chunk });
     },
     onComplete: async (result) => {
+      clearTimeout(timeoutId);
       // Check if the AI response contains tool_calls that need MCP execution
       if (result.message.toolCalls?.length && mcpTools.length > 0) {
         // Execute MCP tool calls and continue the conversation
@@ -174,6 +220,7 @@ export async function handleAiSend(
       } catch { /* ignore history errors */ }
     },
     onError: (error) => {
+      clearTimeout(timeoutId);
       cleanupAiRequest(tabId);
       console.error('[AI Handler Error]', tabId, error.message, error.code);
       if (error.diagnostics) {

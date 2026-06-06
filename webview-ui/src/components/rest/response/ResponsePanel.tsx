@@ -10,6 +10,7 @@ import { HeadersView } from './HeadersView';
 import { CookiesView } from './CookiesView';
 import { TimelineView } from './TimelineView';
 import { DataSchemaModal } from './DataSchemaModal';
+import { AiActionButton } from '../../ai/AiAssistPopover';
 
 type ResponseView = 'json' | 'raw' | 'headers' | 'cookies' | 'timeline' | 'tests';
 
@@ -69,13 +70,23 @@ export function ResponsePanel() {
     (response.scriptErrors && response.scriptErrors.length > 0) ||
     (response.testResults && response.testResults.length > 0);
 
+  // Request context for AI actions
+  const requestMethod = tab.method || 'GET';
+  const requestUrl = tab.url || '';
+  const requestBody = tab.bodyRaw || undefined;
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[var(--color-panel)]">
-      {/* Response status bar */}
-      <ResponseStatusBar response={response} />
+      {/* Response status bar — includes "Ask AI why" on errors */}
+      <ResponseStatusBar
+        response={response}
+        requestMethod={requestMethod}
+        requestUrl={requestUrl}
+        requestBody={requestBody}
+      />
 
-      {/* Response tabs */}
-      <div className="flex items-center justify-between px-3 pt-2 border-b border-[var(--color-surface-border)]">
+      {/* Response tabs + AI toolbar buttons */}
+      <div className="flex items-center justify-between px-3 pt-2 pb-0 border-b border-[var(--color-surface-border)]">
         <PillTabs
           tabs={[
             { id: 'json', label: 'JSON' },
@@ -90,6 +101,24 @@ export function ResponsePanel() {
           size="sm"
           variant="underline"
         />
+
+        {/* AI inline actions — always visible when there is a response */}
+        <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
+          <AiActionButton
+            mode="explain"
+            label="Explain"
+            response={response}
+            requestMethod={requestMethod}
+            requestUrl={requestUrl}
+          />
+          <AiActionButton
+            mode="follow-up"
+            label="Follow-ups"
+            response={response}
+            requestMethod={requestMethod}
+            requestUrl={requestUrl}
+          />
+        </div>
       </div>
 
       {/* Response content */}

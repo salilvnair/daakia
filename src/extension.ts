@@ -8,9 +8,14 @@ import { importOpenAPISpec, isOpenAPISpec } from './services/openapi-importer';
 import { importHarFile, isHarFile } from './services/har-importer';
 import { importBrunoCollection } from './services/bruno-importer';
 import { WelcomeViewProvider } from './panel/sidebar/WelcomeViewProvider';
+import { createDaakiaChatHandler } from './panel/chat/chat-handler';
+import { initSecretStore } from './services/secret-store';
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log('[daakia] Activating...');
+
+  // Initialize OS keychain secret store (macOS Keychain / Windows Credential Manager / libsecret)
+  initSecretStore(context.secrets);
 
   // Initialize SQLite (async — sql.js WASM) — non-blocking
   // Auto-open panel once DB is ready
@@ -27,6 +32,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Initialize Mock Server Manager
   initMockServerManager(context.extensionPath);
+
+  // ─── @daakia Chat Participant ───
+  const chatHandler = createDaakiaChatHandler({ extensionUri: context.extensionUri });
+  const participant = vscode.chat.createChatParticipant('daakia.copilot', chatHandler);
+  participant.iconPath = vscode.Uri.joinPath(context.extensionUri, 'images', 'daakia-icon.png');
+  participant.followupProvider = {
+    provideFollowups(result: vscode.ChatResult): vscode.ChatFollowup[] {
+      const meta = result.metadata as Record<string, unknown>;
+      const followups = meta?.daakia_followups;
+      return Array.isArray(followups) ? followups : [];
+    },
+  };
+  context.subscriptions.push(participant);
 
   // ─── Sidebar view — register WelcomeViewProvider for daakia.welcome ───
   const welcomeProvider = new WelcomeViewProvider(context.extensionUri, dbReady);

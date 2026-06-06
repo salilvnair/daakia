@@ -5,7 +5,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies } from '../../storage/db';
+import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt } from '../../storage/db';
+import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
+import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
 // Handler imports
 import { handleExecuteRequest, handleGetOAuth2Token } from './handlers/request-handler';
 import { cancelRestRequest } from '../../http/request-executor';
@@ -112,6 +114,10 @@ export class MainPanel {
     handleGetUiState(this._post);
     handleGetWorkspaceSnapshot(this._post);
     this._sendSettings();
+    // AI init state — keys come from OS keychain (async)
+    this._refreshKeyStatus();
+    this._post({ type: 'aiFeatures:data', features: getAiFeatures() });
+    this._sendAiProviders();
   }
 
   public dispose() {
@@ -291,6 +297,15 @@ export class MainPanel {
       case 'ai:cancel':
         handleAiCancel(msg, this._post);
         break;
+      case 'copilot:models': {
+        const { getCopilotModels } = require('../../ai/copilot-executor');
+        getCopilotModels().then((models: Array<{ id: string; name: string; family: string }>) => {
+          this._post({ type: 'copilot:models', models });
+        }).catch(() => {
+          this._post({ type: 'copilot:models', models: [] });
+        });
+        break;
+      }
       case 'ai:mcp:connect':
         handleAiMcpConnect(msg, this._post);
         break;
@@ -520,6 +535,80 @@ export class MainPanel {
       case 'aiProviders:save':
         this._saveAiProviders(msg);
         break;
+
+      // ── AI Keys (OS keychain via SecretStorage) ──
+      case 'aiKeys:save': {
+        const { providerId, token } = msg as { providerId: string; token: string };
+        if (providerId && token) {
+          storeApiKey(providerId, token).then(() => {
+            this._refreshKeyStatus();
+          }).catch((err) => {
+            console.error('[aiKeys:save] SecretStorage error:', err);
+          });
+        }
+        break;
+      }
+      case 'aiKeys:delete': {
+        const { providerId } = msg as { providerId: string };
+        if (providerId) {
+          deleteApiKey(providerId).then(() => {
+            this._refreshKeyStatus();
+          }).catch((err) => {
+            console.error('[aiKeys:delete] SecretStorage error:', err);
+          });
+        }
+        break;
+      }
+      case 'aiKeys:load':
+        this._refreshKeyStatus();
+        break;
+
+      // ── AI Chat History ──
+      case 'aiHistory:save': {
+        const session = msg as unknown as Parameters<typeof saveAiChatSession>[0];
+        saveAiChatSession(session);
+        break;
+      }
+      case 'aiHistory:load':
+        this._post({ type: 'aiHistory:data', sessions: loadAiChatSessions() });
+        break;
+      case 'aiHistory:delete': {
+        const { id } = msg as { id: string };
+        if (id) deleteAiChatSession(id);
+        break;
+      }
+      case 'aiHistory:search': {
+        const { query } = msg as { query: string };
+        this._post({ type: 'aiHistory:results', sessions: searchAiChatSessions(query || '') });
+        break;
+      }
+
+      // ── AI Feature Flags ──
+      case 'aiFeatures:load':
+        this._post({ type: 'aiFeatures:data', features: getAiFeatures() });
+        break;
+      case 'aiFeatures:save': {
+        const { features } = msg as { features: Parameters<typeof setAiFeatures>[0] };
+        if (features) setAiFeatures(features);
+        break;
+      }
+
+      // ── Prompt Library ──
+      case 'promptLibrary:load':
+        this._post({ type: 'promptLibrary:data', prompts: getAllPrompts() });
+        break;
+      case 'promptLibrary:save': {
+        const { scenario, prompt } = msg as { scenario: string; prompt: Parameters<typeof upsertPrompt>[1] };
+        if (scenario && prompt) upsertPrompt(scenario, prompt);
+        this._post({ type: 'promptLibrary:data', prompts: getAllPrompts() });
+        break;
+      }
+      case 'promptLibrary:reset': {
+        const { scenario } = msg as { scenario: string };
+        if (scenario) resetPrompt(scenario);
+        this._post({ type: 'promptLibrary:data', prompts: getAllPrompts() });
+        break;
+      }
 
       // ── UI State ──
       case 'saveUiState':
@@ -865,6 +954,16 @@ export class MainPanel {
   private _saveAiProviders(msg: Record<string, unknown>) {
     const providers = msg.providers as unknown[];
     setSetting('aiProviders', providers);
+  }
+
+  private _refreshKeyStatus() {
+    const { AI_PROVIDERS } = require('../../ai/ai-providers');
+    const providerIds = (AI_PROVIDERS as { id: string }[]).map(p => p.id);
+    getAllKeyStatus(providerIds).then((status) => {
+      this._post({ type: 'aiKeys:status', status });
+    }).catch(() => {
+      this._post({ type: 'aiKeys:status', status: {} });
+    });
   }
 
   // ────────────────── HTML ──────────────────
