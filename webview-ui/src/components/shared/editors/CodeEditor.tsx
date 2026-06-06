@@ -59,6 +59,22 @@ const EXT_MAP: Record<CodeLanguage, string> = {
   text: '.txt',
 };
 
+/** Simple XML formatter — adds proper indentation */
+function formatXml(xml: string): string {
+  const INDENT = '  ';
+  let depth = 0;
+  let result = '';
+  const tokens = xml.replace(/>\s*</g, '><').split(/(?<=>)(?=<)/);
+  for (const token of tokens) {
+    const isClosing = /^<\//.test(token);
+    const isSelfClosing = /\/>$/.test(token) || /^<!/.test(token) || /^<\?/.test(token);
+    if (isClosing) depth = Math.max(0, depth - 1);
+    result += INDENT.repeat(depth) + token.trim() + '\n';
+    if (!isClosing && !isSelfClosing && /^<[^/!?]/.test(token)) depth++;
+  }
+  return result.trimEnd();
+}
+
 export function CodeEditor({
   value,
   onChange,
@@ -213,6 +229,32 @@ export function CodeEditor({
         const model = ed.getModel();
         if (model) {
           ed.setSelection(model.getFullModelRange());
+        }
+      },
+    });
+
+    // Format Document — Shift+Alt+F (works for JSON, JS; custom for XML)
+    editor.addAction({
+      id: 'daakia.format.document',
+      label: 'Format Document',
+      keybindings: [KM.Shift | KM.Alt | KC.KeyF],
+      contextMenuGroupId: 'modification',
+      contextMenuOrder: 1.5,
+      run: async (ed) => {
+        const model = ed.getModel();
+        if (!model) return;
+        const langId = model.getLanguageId();
+        if (langId === 'xml' || langId === 'html') {
+          // Simple XML/HTML indent formatter
+          try {
+            const raw = model.getValue();
+            const formatted = formatXml(raw);
+            if (formatted !== raw) {
+              ed.executeEdits('daakia.format', [{ range: model.getFullModelRange(), text: formatted }]);
+            }
+          } catch { /* malformed XML — leave as is */ }
+        } else {
+          await ed.getAction('editor.action.formatDocument')?.run();
         }
       },
     });

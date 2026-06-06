@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { postMsg } from '../../../vscode';
 import { useTabsStore, type RequestTab } from '../../../store/tabs-store';
 import { getDisplayMethod } from '../../../services/request/request-service';
-import { CloseIcon, SparkleIcon, PlusIcon, FolderIcon, ChevronRightIcon, CheckCircleFilledIcon } from '../../../icons';
+import { CloseIcon, SparkleIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, TrashIcon, MoreVerticalIcon, RenameIcon, CopyIcon, ChevronRightIcon, CheckCircleFilledIcon } from '../../../icons';
+import { ContextMenu, ConfirmDialog, type ContextMenuItem } from '../index';
 
 const PROTOCOL_ACCENT: Record<string, string> = {
   rest: 'var(--color-primary)',
@@ -41,8 +42,17 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
   const [inlineCreateMode, setInlineCreateMode] = useState(false);
   const [inlineCreateName, setInlineCreateName] = useState('');
   const [inlineCreateParentId, setInlineCreateParentId] = useState<string | null>(null);
+  // Rename state
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  // Delete confirm
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; hasContents: boolean } | null>(null);
+  // Context menu
+  const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: ContextMenuItem[]; targetId: string; targetName: string } | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const inlineRef = useRef<HTMLInputElement>(null);
+  const renameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -51,6 +61,9 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
     setExpandedIds(new Set());
     setSearchQuery('');
     setInlineCreateMode(false);
+    setRenamingId(null);
+    setDeleteTarget(null);
+    setContextMenu(null);
     postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' });
 
     const handler = (event: MessageEvent) => {
@@ -76,6 +89,85 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
       setTimeout(() => inlineRef.current?.focus(), 30);
     }
   }, [inlineCreateMode]);
+
+  useEffect(() => {
+    if (renamingId) {
+      setTimeout(() => { renameRef.current?.focus(); renameRef.current?.select(); }, 30);
+    }
+  }, [renamingId]);
+
+  // Count total requests (including nested) inside a folder
+  const countContents = (node: CollectionTreeNode): number => {
+    let count = node.requests.length;
+    for (const child of node.children) count += countContents(child);
+    return count;
+  };
+
+  const findNode = (nodes: CollectionTreeNode[], id: string): CollectionTreeNode | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      const found = findNode(n.children, id);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  const openFolderContextMenu = useCallback((e: React.MouseEvent, nodeId: string, nodeName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const items: ContextMenuItem[] = [
+      { id: 'new-folder', label: 'New Folder', shortcut: 'F', icon: <FolderIcon size={13} />, iconColor: 'var(--color-warning)' },
+      { id: 'sep1', label: '', separator: true },
+      { id: 'rename', label: 'Rename', shortcut: 'N', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' },
+      { id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' },
+      { id: 'sep2', label: '', separator: true },
+      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} /> },
+    ];
+    setContextMenu({ position: { x: e.clientX, y: e.clientY }, items, targetId: nodeId, targetName: nodeName });
+  }, []);
+
+  const handleContextMenuSelect = useCallback((actionId: string) => {
+    if (!contextMenu) return;
+    const { targetId, targetName } = contextMenu;
+    switch (actionId) {
+      case 'new-folder':
+        setInlineCreateMode(true);
+        setInlineCreateName('');
+        setInlineCreateParentId(targetId);
+        setExpandedIds(prev => { const next = new Set(prev); next.add(targetId); return next; });
+        break;
+      case 'rename':
+        setRenamingId(targetId);
+        setRenameValue(targetName);
+        break;
+      case 'duplicate':
+        postMsg({ type: 'duplicateCollection', id: targetId, protocol: tab?.protocol || 'rest' });
+        setTimeout(() => postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' }), 100);
+        break;
+      case 'delete': {
+        const node = findNode(tree, targetId);
+        const hasContents = node ? countContents(node) > 0 : false;
+        setDeleteTarget({ id: targetId, name: targetName, hasContents });
+        break;
+      }
+    }
+    setContextMenu(null);
+  }, [contextMenu, tree, tab]);
+
+  const handleRename = () => {
+    if (!renamingId || !renameValue.trim()) { setRenamingId(null); return; }
+    postMsg({ type: 'renameCollection', id: renamingId, name: renameValue.trim(), protocol: tab?.protocol || 'rest' });
+    setRenamingId(null);
+    setTimeout(() => postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' }), 100);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    postMsg({ type: 'deleteCollection', id: deleteTarget.id, protocol: tab?.protocol || 'rest' });
+    if (selectedId === deleteTarget.id) setSelectedId(null);
+    setDeleteTarget(null);
+    setTimeout(() => postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' }), 100);
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
@@ -121,18 +213,53 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
       type: 'createFolder',
       id: newId,
       name: inlineCreateName.trim(),
-      parentId: inlineCreateParentId,
+      parentId: inlineCreateParentId, // null = root level
       protocol: tab?.protocol || 'rest',
     });
+    // Auto-expand parent so the new subfolder is visible
+    if (inlineCreateParentId) {
+      setExpandedIds(prev => { const next = new Set(prev); next.add(inlineCreateParentId!); return next; });
+    }
     setInlineCreateMode(false);
     setInlineCreateName('');
     setSelectedId(newId);
+    // Re-fetch collections to show the new folder
+    postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' });
   };
 
   const handleSave = () => {
     if (!tab || !name.trim() || !selectedId) return;
 
     const requestId = crypto.randomUUID();
+
+    // Build protocol-specific data payload
+    let data: Record<string, unknown> = {
+      headers: tab.headers,
+      params: tab.params,
+      bodyMode: tab.bodyMode,
+      bodyRaw: tab.bodyRaw,
+      bodyContentType: tab.bodyContentType,
+      bodyFormData: tab.bodyFormData,
+      bodyUrlEncoded: tab.bodyUrlEncoded,
+      authType: tab.authType,
+      authData: tab.authData,
+      variables: tab.variables,
+      preRequestScript: tab.preRequestScript,
+      postResponseScript: tab.postResponseScript,
+    };
+
+    if (tab.protocol === 'ai') {
+      data = { ...data, aiProvider: tab.aiProvider, aiModel: tab.aiModel, aiSystemPrompts: tab.aiSystemPrompts, aiUserPrompt: tab.aiUserPrompt, aiTools: tab.aiTools, aiSettings: tab.aiSettings, mcpServerConfigs: (tab as any).mcpServerConfigs };
+    } else if (tab.protocol === 'mcp') {
+      data = { ...data, mcpTransport: tab.mcpTransport, mcpCommand: tab.mcpCommand, mcpArgs: (tab as any).mcpArgs, mcpEnvVars: tab.mcpEnvVars, mcpSettings: tab.mcpSettings };
+    } else if (tab.protocol === 'graphql') {
+      data = { ...data, bodyRaw: tab.bodyRaw, gql_variables: tab.authData?.['gql_variables'] };
+    } else if (tab.protocol === 'grpc') {
+      data = { ...data, grpcMethod: tab.grpcMethod, grpcMessage: tab.grpcMessage, grpcMetadata: tab.grpcMetadata, grpcTls: tab.grpcTls, grpcProtoFile: tab.grpcProtoFile, preRequestScript: tab.preRequestScript, postResponseScript: tab.postResponseScript };
+    } else if (tab.protocol === 'soap') {
+      data = { ...data, soapVersion: tab.soapVersion, soapAction: tab.soapAction, soapOperation: tab.soapOperation, soapService: tab.soapService, soapEnvelope: tab.soapEnvelope, soapWsSecurity: tab.soapWsSecurity, soapAssertions: tab.soapAssertions, soapAttachments: tab.soapAttachments };
+    }
+
     postMsg({
       type: 'saveRequestToCollection',
       collectionId: selectedId,
@@ -142,17 +269,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
         name: name.trim(),
         method: getDisplayMethod(tab),
         url: tab.url,
-        data: JSON.stringify({
-          headers: tab.headers,
-          params: tab.params,
-          bodyMode: tab.bodyMode,
-          bodyRaw: tab.bodyRaw,
-          bodyContentType: tab.bodyContentType,
-          bodyFormData: tab.bodyFormData,
-          bodyUrlEncoded: tab.bodyUrlEncoded,
-          authType: tab.authType,
-          authData: tab.authData,
-        }),
+        data: JSON.stringify(data),
       },
     });
 
@@ -167,7 +284,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
 
   if (!open || !tab) return null;
 
-  return createPortal(
+  const modal = createPortal(
     <div
       className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50"
 
@@ -179,7 +296,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
           <button
             type="button"
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-[#ef4444] hover:text-[#dc2626] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors"
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--color-error)] hover:opacity-80 hover:bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)] cursor-pointer transition-colors"
           >
             <CloseIcon size={14} />
           </button>
@@ -234,11 +351,10 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
               <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)]">
                 <button
                   type="button"
-                  onClick={() => { setInlineCreateMode(true); setInlineCreateName(''); setInlineCreateParentId(selectedId); }}
+                  onClick={() => { setInlineCreateMode(true); setInlineCreateName(''); setInlineCreateParentId(null); }}
                   className="flex items-center gap-1.5 text-[12px] text-[var(--modal-accent)] hover:opacity-80 cursor-pointer"
                 >
-                  <PlusIcon size={12} />
-                  <span>New Folder</span>
+                  <span>+ New</span>
                 </button>
               </div>
 
@@ -253,7 +369,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
                     onChange={(e) => setInlineCreateName(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleInlineCreate(); if (e.key === 'Escape') setInlineCreateMode(false); }}
                     onBlur={() => { if (!inlineCreateName.trim()) setInlineCreateMode(false); }}
-                    placeholder="Folder name"
+                    placeholder={inlineCreateParentId ? 'Subfolder name…' : 'Folder name…'}
                     className="flex-1 h-[26px] px-2 text-[12px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--modal-accent)]"
                   />
                   <button type="button" onClick={handleInlineCreate} disabled={!inlineCreateName.trim()} className="h-[26px] px-2 text-[11px] rounded text-white cursor-pointer disabled:opacity-40" style={{ backgroundColor: accent }}>Create</button>
@@ -277,8 +393,16 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
                       depth={0}
                       selectedId={selectedId}
                       expandedIds={expandedIds}
+                      renamingId={renamingId}
+                      renameValue={renameValue}
+                      renameRef={renameRef}
                       onSelect={setSelectedId}
                       onToggleExpand={toggleExpand}
+                      onAddSubfolder={(parentId) => { setInlineCreateMode(true); setInlineCreateName(''); setInlineCreateParentId(parentId); }}
+                      onOpenContextMenu={openFolderContextMenu}
+                      onRenameChange={setRenameValue}
+                      onRenameCommit={handleRename}
+                      onRenameCancel={() => setRenamingId(null)}
                     />
                   ))
                 )}
@@ -310,29 +434,67 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
     </div>,
     document.body
   );
+
+  return (
+    <>
+      {modal}
+      {/* Folder context menu */}
+      {contextMenu && (
+        <ContextMenu
+          items={contextMenu.items}
+          position={contextMenu.position}
+          onSelect={handleContextMenuSelect}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+      {/* Delete confirm */}
+      {deleteTarget && (
+        <ConfirmDialog
+          title={`Delete "${deleteTarget.name}"?`}
+          message={deleteTarget.hasContents
+            ? `This folder contains requests. Deleting it will also delete all requests inside. This cannot be undone.`
+            : `Delete this folder? This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </>
+  );
 }
 
 // ────────── Tree node for Save modal ──────────
 
 function SaveTreeNode({
-  node, depth, selectedId, expandedIds, onSelect, onToggleExpand,
+  node, depth, selectedId, expandedIds, renamingId, renameValue, renameRef,
+  onSelect, onToggleExpand, onAddSubfolder, onOpenContextMenu, onRenameChange, onRenameCommit, onRenameCancel,
 }: {
   node: CollectionTreeNode;
   depth: number;
   selectedId: string | null;
   expandedIds: Set<string>;
+  renamingId: string | null;
+  renameValue: string;
+  renameRef: React.RefObject<HTMLInputElement>;
   onSelect: (id: string) => void;
   onToggleExpand: (id: string) => void;
+  onAddSubfolder: (parentId: string) => void;
+  onOpenContextMenu: (e: React.MouseEvent, nodeId: string, nodeName: string) => void;
+  onRenameChange: (v: string) => void;
+  onRenameCommit: () => void;
+  onRenameCancel: () => void;
 }) {
   const isExpanded = expandedIds.has(node.id);
   const isSelected = selectedId === node.id;
   const hasChildren = node.children.length > 0;
+  const isRenaming = renamingId === node.id;
 
   return (
-    <div className="mb-2.5 pt-[2px]">
+    <div className="mb-0.5 pt-[2px]">
       <div
-        onClick={() => onSelect(node.id)}
-        className={`flex items-center gap-1.5 px-2 py-2 cursor-pointer transition-colors rounded-md mx-1 ${
+        onClick={() => !isRenaming && onSelect(node.id)}
+        className={`group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer transition-colors rounded-md mx-1 ${
           isSelected ? 'bg-[var(--color-item-hover-bg)]' : 'hover:bg-[var(--color-item-hover-bg)]'
         }`}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
@@ -353,17 +515,56 @@ function SaveTreeNode({
           <span className="w-4 shrink-0" />
         )}
 
-        {/* Selection indicator */}
+        {/* Selection indicator / folder icon */}
         {isSelected ? (
           <CheckCircleFilledIcon size={16} checked className="shrink-0 text-[var(--color-success)]" />
+        ) : isExpanded ? (
+          <FolderOpenIcon size={14} className="text-[var(--color-text-muted)] shrink-0" />
         ) : (
           <FolderIcon size={14} className="text-[var(--color-text-muted)] shrink-0" />
         )}
 
-        {/* Name */}
-        <span className={`flex-1 text-[12px] truncate ${isSelected ? 'text-[var(--color-success)] font-medium' : 'text-[var(--color-text-primary)]'}`}>
-          {node.name}
-        </span>
+        {/* Name or rename input */}
+        {isRenaming ? (
+          <input
+            ref={renameRef}
+            type="text"
+            value={renameValue}
+            onChange={(e) => onRenameChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onRenameCommit(); } if (e.key === 'Escape') { e.stopPropagation(); onRenameCancel(); } }}
+            onBlur={onRenameCommit}
+            onClick={(e) => e.stopPropagation()}
+            className="flex-1 h-[22px] px-1.5 text-[12px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--modal-accent)]"
+          />
+        ) : (
+          <span className={`flex-1 text-[12px] truncate ${isSelected ? 'text-[var(--color-success)] font-medium' : 'text-[var(--color-text-primary)]'}`}>
+            {node.name}
+          </span>
+        )}
+
+        {/* Hover action buttons */}
+        {!isRenaming && (
+          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0">
+            {/* + Subfolder */}
+            <button
+              type="button"
+              title="New subfolder"
+              onClick={(e) => { e.stopPropagation(); onAddSubfolder(node.id); }}
+              className="flex items-center justify-center w-5 h-5 rounded text-[var(--color-text-muted)] hover:text-[var(--modal-accent)] hover:bg-[color-mix(in_srgb,var(--modal-accent)_12%,transparent)] cursor-pointer"
+            >
+              <FolderPlusIcon size={12} />
+            </button>
+            {/* ··· context menu */}
+            <button
+              type="button"
+              title="More options"
+              onClick={(e) => { e.stopPropagation(); onOpenContextMenu(e, node.id, node.name); }}
+              className="flex items-center justify-center w-5 h-5 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)] cursor-pointer"
+            >
+              <MoreVerticalIcon size={12} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Children */}
@@ -376,8 +577,16 @@ function SaveTreeNode({
               depth={depth + 1}
               selectedId={selectedId}
               expandedIds={expandedIds}
+              renamingId={renamingId}
+              renameValue={renameValue}
+              renameRef={renameRef}
               onSelect={onSelect}
               onToggleExpand={onToggleExpand}
+              onAddSubfolder={onAddSubfolder}
+              onOpenContextMenu={onOpenContextMenu}
+              onRenameChange={onRenameChange}
+              onRenameCommit={onRenameCommit}
+              onRenameCancel={onRenameCancel}
             />
           ))}
         </div>

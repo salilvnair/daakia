@@ -14,6 +14,7 @@ const connections = new Map<string, Socket>();
 export function handleSocketIOConnect(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
+  refreshHistory?: () => void,
 ) {
   const tabId = msg.tabId as string;
   const envId = msg.envId as string | undefined;
@@ -65,15 +66,18 @@ export function handleSocketIOConnect(
           url,
           protocol: 'websocket',
           request_data: JSON.stringify({
+            authType: (msg.authType as string) || 'none',
             authData: {
               rt_protocol: 'socketio',
               sio_namespace: resolvedNamespace || '/',
+              ...((msg.authData as Record<string, unknown>) || {}),
             },
             headers: headers || [],
           }),
         });
         const maxHistory = parseInt(getSetting('maxHistoryEntries') || '100', 10);
         trimHistory(maxHistory);
+        if (refreshHistory) refreshHistory();
       } catch { /* ignore history errors */ }
     });
 

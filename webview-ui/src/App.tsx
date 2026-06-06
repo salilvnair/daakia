@@ -27,6 +27,7 @@ import { useDevToolsStore } from './store/devtools-store';
 import { useMockStore } from './store/mock-store';
 import { useDebugStore } from './store/debug-store';
 import { useAiProvidersStore } from './store/ai-providers-store';
+import { useSidebarDataStore } from './store/sidebar-data-store';
 import { getVsCodeApi, postMsg } from './vscode';
 import { getProtocolAccent } from './colors';
 import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, DevToolsIcon } from './icons';
@@ -198,9 +199,18 @@ export default function App() {
 
   // Remap sidebar section when protocol changes so icons match active protocol
   const prevProtocolRef = useRef(activeProtocol);
+  // Tracks protocols we've already auto-opened the sidebar for (first-visit only).
+  // Initialized with the current protocol so the initial render never auto-opens.
+  const autoOpenedProtocols = useRef<Set<string>>(new Set([activeProtocol]));
   useEffect(() => {
     if (prevProtocolRef.current === activeProtocol) return;
     prevProtocolRef.current = activeProtocol;
+    // Auto-open sidebar on the FIRST visit to each protocol.
+    // If user manually closes it afterwards, we won't re-open (protocol stays in set).
+    if (!autoOpenedProtocols.current.has(activeProtocol)) {
+      autoOpenedProtocols.current.add(activeProtocol);
+      setSidebarOpen(true);
+    }
     // Map current section to equivalent in new protocol
     if (activeProtocol === 'rest') {
       if (sidebarSection?.startsWith('gql-') || sidebarSection?.startsWith('ws-')) {
@@ -262,6 +272,7 @@ export default function App() {
   const debugDisabledBps = useDebugStore(s => s.disabledBreakpoints);
   const debugConditions = useDebugStore(s => s.conditions);
   const anyMockRunning = useMockStore(s => s.servers.some(srv => srv.running));
+  const mockIconGlow = useMockStore(s => s.mockIconGlow);
 
   useEffect(() => {
     if (activeTab?.response) {
@@ -967,8 +978,11 @@ export default function App() {
           break;
         }
         case 'historyData': {
+          // Always sync store cache so HistoryPanel reflects latest data even if not mounted
+          const historyProtocol = (msg.protocol as string) || 'rest';
+          const historyEntries = (msg.entries ?? []) as any[];
+          useSidebarDataStore.getState().setHistory(historyProtocol, historyEntries);
           // Feed history URLs into suggestions store, tagged by protocol
-          const historyEntries = msg.entries ?? [];
           const restUrls: string[] = [];
           const grpcUrls: string[] = [];
           const gqlUrls: string[] = [];
@@ -1001,6 +1015,9 @@ export default function App() {
           break;
         }
         case 'collectionsData': {
+          // Always sync store cache so panel reflects latest data even if not mounted
+          const collectionsProtocol = (msg.protocol as string) || 'rest';
+          useSidebarDataStore.getState().setCollections(collectionsProtocol, (msg.collections ?? []) as any);
           // Extract all request URLs from collection tree, tagged by protocol
           const extractTaggedUrls = (nodes: { children?: any[]; requests?: { url?: string; method?: string; protocol?: string }[] }[]) => {
             const rest: string[] = [];
@@ -1056,6 +1073,9 @@ export default function App() {
             const tabsStore = useTabsStore.getState();
             // Only restore if app started with no tabs (fresh load)
             if (tabsStore.tabs.length === 0) {
+              // Mark the restored protocol as already auto-opened so the protocol-change
+              // effect doesn't override the saved sidebarOpen state from the snapshot.
+              if (snapshot.activeProtocol) autoOpenedProtocols.current.add(snapshot.activeProtocol);
               tabsStore.hydrateSnapshot(snapshot.tabs as any[], snapshot.activeTabId || '', snapshot.activeProtocol as any || 'rest');
               if (snapshot.sidebarSection) setSidebarSection(snapshot.sidebarSection as SidebarSection);
               if (snapshot.sidebarOpen !== undefined) setSidebarOpen(snapshot.sidebarOpen);
@@ -1659,7 +1679,7 @@ export default function App() {
           accentColor="var(--color-mock-server)"
           onClick={() => useTabsStore.getState().openMockServerTab()}
           title="Mock Server"
-          className={anyMockRunning ? 'breathing-connected' : ''}
+          className={anyMockRunning && mockIconGlow ? 'breathing-connected' : ''}
         >
           <ServerIcon size={16} strokeWidth={1.8} />
         </ProtocolIcon>

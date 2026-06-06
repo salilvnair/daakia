@@ -69,6 +69,49 @@ export function openCollectionRequest(req: CollectionRequest, forceNewTab = fals
     authData: config.authData && typeof config.authData === 'object' ? config.authData : {},
     preRequestScript: typeof config.preRequestScript === 'string' ? config.preRequestScript : '',
     postResponseScript: typeof config.postResponseScript === 'string' ? config.postResponseScript : (typeof config.testScript === 'string' ? config.testScript : ''),
+    variables: Array.isArray(config.variables) ? config.variables : [],
+    // GraphQL
+    ...(protocol === 'graphql' ? {
+      bodyRaw: config.bodyRaw || '',
+      authData: { ...((config.authData as any) || {}), gql_variables: (config.gql_variables as string) || '' },
+    } : {}),
+    // gRPC
+    ...(protocol === 'grpc' ? {
+      grpcMethod: (config.grpcMethod as string) || '',
+      grpcMessage: (config.grpcMessage as string) || '{}',
+      grpcMetadata: Array.isArray(config.grpcMetadata) ? config.grpcMetadata : [],
+      grpcTls: (config.grpcTls as boolean) ?? false,
+      grpcProtoFile: (config.grpcProtoFile as string) || undefined,
+    } : {}),
+    // SOAP
+    ...(protocol === 'soap' ? {
+      soapVersion: (config.soapVersion as string) || '1.1',
+      soapAction: (config.soapAction as string) || '',
+      soapOperation: (config.soapOperation as string) || '',
+      soapService: (config.soapService as string) || '',
+      soapEnvelope: (config.soapEnvelope as string) || '',
+      soapWsSecurity: (config.soapWsSecurity as any) || undefined,
+      soapAssertions: Array.isArray(config.soapAssertions) ? config.soapAssertions : [],
+      soapAttachments: Array.isArray(config.soapAttachments) ? config.soapAttachments : [],
+    } : {}),
+    // AI
+    ...(protocol === 'ai' ? {
+      aiProvider: (config.aiProvider as string) || '',
+      aiModel: (config.aiModel as string) || '',
+      aiSystemPrompts: Array.isArray(config.aiSystemPrompts) ? config.aiSystemPrompts : [],
+      aiUserPrompt: (config.aiUserPrompt as string) || '',
+      aiTools: Array.isArray(config.aiTools) ? config.aiTools : [],
+      aiSettings: (config.aiSettings as any) || undefined,
+      mcpServerConfigs: Array.isArray(config.mcpServerConfigs) ? config.mcpServerConfigs : [],
+    } : {}),
+    // MCP
+    ...(protocol === 'mcp' ? {
+      mcpTransport: (config.mcpTransport as string) || 'stdio',
+      mcpCommand: (config.mcpCommand as string) || '',
+      mcpArgs: Array.isArray(config.mcpArgs) ? config.mcpArgs : [],
+      mcpEnvVars: (config.mcpEnvVars as Record<string, string>) || {},
+      mcpSettings: (config.mcpSettings as any) || undefined,
+    } : {}),
   } as any);
 
   // Pre-load collection properties for variable resolution
@@ -122,8 +165,17 @@ export function replayHistoryItem(item: HistoryItem, forceNewTab = false, protoc
     authData: (requestConfig.authData as any) || {},
     bodyFormData: (requestConfig.bodyFormData as any) || [],
     bodyUrlEncoded: (requestConfig.bodyUrlEncoded as any) || [],
+    variables: (requestConfig.variables as any) || [],
     preRequestScript: (requestConfig.preRequestScript as string) || '',
     postResponseScript: (requestConfig.postResponseScript as string) || '',
+    // GraphQL — merge gql_variables (stored top-level) back into authData
+    ...(protocol === 'graphql' ? {
+      bodyRaw: (requestConfig.bodyRaw as string) || (requestConfig.body as string) || '',
+      authData: {
+        ...((requestConfig.authData as any) || {}),
+        gql_variables: (requestConfig.gql_variables as string) || (requestConfig.authData as any)?.gql_variables || '',
+      },
+    } : {}),
     // SOAP-specific fields
     ...(protocol === 'soap' ? {
       soapVersion: (requestConfig.soapVersion as string) || '1.1',
@@ -131,6 +183,9 @@ export function replayHistoryItem(item: HistoryItem, forceNewTab = false, protoc
       soapOperation: (requestConfig.soapOperation as string) || '',
       soapService: (requestConfig.soapService as string) || '',
       soapEnvelope: (requestConfig.envelope as string) || '',
+      soapWsSecurity: (requestConfig.wsSecurity as any) || undefined,
+      soapAssertions: (requestConfig.assertions as any[]) || [],
+      soapAttachments: (requestConfig.attachments as any[]) || [],
     } : {}),
     // gRPC-specific fields
     ...(protocol === 'grpc' ? {

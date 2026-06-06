@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
-import { CodeEditor, KeyValueTable, AuthEditor } from '../shared';
+import { CodeEditor, KeyValueTable, AuthEditor, ScriptsEditor } from '../shared';
 import { postMsg } from '../../vscode';
 import { PlayIcon, CopyIcon, WrapLinesIcon, WandIcon, PlusIcon } from '../../icons';
 import { setGraphQLSchema, setActiveGraphQLTab } from '../../services/graphql-completion';
@@ -9,7 +9,7 @@ import { formatGraphQLQuery } from '../../services/graphql-formatter';
 import { GraphQLSubscription } from './GraphQLSubscription';
 import { GraphQLQueryTabs, initMultiQuery } from './GraphQLQueryTabs';
 
-type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'subscription';
+type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'scripts' | 'subscription';
 
 /**
  * GraphQL Editor — Query (with Run/Save toolbar), Variables, Headers (shared KVT), Authorization (shared AuthEditor).
@@ -53,7 +53,12 @@ export function GraphQLEditor() {
       query: activeTab.bodyRaw,
       variables: activeTab.authData?.['gql_variables'] || '',
       headers: activeTab.headers.filter(h => h.enabled && h.key),
+      authType: activeTab.authType,
+      authData: activeTab.authData,
       envId: activeTab.envId,
+      collectionId: activeTab.collectionId,
+      preRequestScript: activeTab.preRequestScript || '',
+      postResponseScript: activeTab.postResponseScript || '',
     });
   }, [activeTab, updateTab]);
 
@@ -84,7 +89,7 @@ export function GraphQLEditor() {
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Sub-tabs */}
       <div className="flex items-center border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] px-2">
-        {(['query', 'variables', 'headers', 'authorization', 'subscription'] as EditorTab[]).map(tab => (
+        {(['query', 'variables', 'headers', 'authorization', 'scripts', 'subscription'] as EditorTab[]).map(tab => (
           <button
             key={tab}
             type="button"
@@ -100,7 +105,7 @@ export function GraphQLEditor() {
               <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ backgroundColor: 'color-mix(in srgb, #E535AB 15%, transparent)', color: '#E535AB' }}>
                 {headersCount}
               </span>
-            ) : (tab === 'query' && query.trim()) || (tab === 'variables' && variablesJson !== '{}') || (tab === 'authorization' && hasAuth) ? (
+            ) : (tab === 'query' && query.trim()) || (tab === 'variables' && variablesJson !== '{}') || (tab === 'authorization' && hasAuth) || (tab === 'scripts' && (activeTab.preRequestScript?.trim() || activeTab.postResponseScript?.trim())) ? (
               <span className="ml-1 w-1.5 h-1.5 inline-block rounded-full relative -top-[1px] bg-[var(--color-protocol-graphql)]" />
             ) : null}
           </button>
@@ -203,9 +208,21 @@ export function GraphQLEditor() {
           <div className="h-full overflow-y-auto [scrollbar-gutter:stable] px-3 py-2">
             <AuthEditor
               authType={activeTab.authType}
-              authData={activeTab.authData}
+              authData={activeTab.authData as Record<string, string>}
               onAuthTypeChange={(v) => updateTab(activeTab.id, { authType: v as typeof activeTab.authType })}
-              onAuthDataChange={(data) => updateTab(activeTab.id, { authData: data })}
+              onAuthDataChange={(data) => updateTab(activeTab.id, { authData: data as any })}
+              accentColor="var(--color-protocol-graphql)"
+            />
+          </div>
+        )}
+
+        {activeSubTab === 'scripts' && (
+          <div className="flex-1 min-h-0">
+            <ScriptsEditor
+              preRequestScript={activeTab.preRequestScript || ''}
+              postResponseScript={activeTab.postResponseScript || ''}
+              onPreRequestScriptChange={(val) => updateTab(activeTab.id, { preRequestScript: val, dirty: true })}
+              onPostResponseScriptChange={(val) => updateTab(activeTab.id, { postResponseScript: val, dirty: true })}
               accentColor="var(--color-protocol-graphql)"
             />
           </div>

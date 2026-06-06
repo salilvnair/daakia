@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { PillTabs, KeyValueTable, CodeEditor, AuthEditor, ScriptsEditor } from '../shared';
@@ -54,6 +54,19 @@ export function SoapRequestConfig() {
 
   if (!activeTab) return null;
 
+  // Add dot/badge indicators
+  const tabsWithBadges = useMemo(() => tabs.map(t => {
+    switch (t.id) {
+      case 'headers': return { ...t, badge: (activeTab.headers || []).filter(h => h.enabled && h.key).length };
+      case 'wssecurity': return { ...t, dot: !!activeTab.soapWsSecurity };
+      case 'auth': return { ...t, dot: activeTab.authType !== 'none' };
+      case 'assertions': return { ...t, badge: (activeTab.soapAssertions || []).length };
+      case 'attachments': return { ...t, badge: (activeTab.soapAttachments || []).filter(a => a.enabled).length };
+      case 'scripts': return { ...t, dot: !!(activeTab.preRequestScript?.trim()) || !!(activeTab.postResponseScript?.trim()) };
+      default: return t;
+    }
+  }), [activeTab]);
+
   const handleHeadersChange = (rows: KeyValueRow[]) => {
     updateTab(activeTab.id, { headers: rows, dirty: true });
   };
@@ -63,7 +76,7 @@ export function SoapRequestConfig() {
       {/* Sub-tabs */}
       <div className="px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
         <PillTabs
-          tabs={tabs}
+          tabs={tabsWithBadges}
           activeTab={activeSubTab}
           onChange={setActiveSubTab}
           size="sm"

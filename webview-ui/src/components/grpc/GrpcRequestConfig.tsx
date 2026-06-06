@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { PillTabs, KeyValueTable, CodeEditor, AuthEditor, ScriptsEditor } from '../shared';
 import type { PillTab, KeyValueRow } from '../shared';
@@ -25,6 +25,17 @@ export function GrpcRequestConfig() {
 
   if (!activeTab) return null;
 
+  // Add dot/badge indicators
+  const tabsWithBadges = useMemo(() => tabs.map(t => {
+    switch (t.id) {
+      case 'message': return { ...t, dot: !!(activeTab.grpcMessage) };
+      case 'metadata': return { ...t, badge: (activeTab.grpcMetadata || []).filter(m => m.enabled && m.key).length };
+      case 'auth': return { ...t, dot: activeTab.authType !== 'none' };
+      case 'scripts': return { ...t, dot: !!(activeTab.preRequestScript?.trim()) || !!(activeTab.postResponseScript?.trim()) };
+      default: return t;
+    }
+  }), [activeTab]);
+
   const handleMetadataChange = (rows: KeyValueRow[]) => {
     updateTab(activeTab.id, { grpcMetadata: rows, dirty: true });
   };
@@ -34,7 +45,7 @@ export function GrpcRequestConfig() {
       {/* Sub-tabs */}
       <div className="px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
         <PillTabs
-          tabs={tabs}
+          tabs={tabsWithBadges}
           activeTab={activeSubTab}
           onChange={setActiveSubTab}
           size="sm"
@@ -77,8 +88,8 @@ export function GrpcRequestConfig() {
             <AuthEditor
               authType={activeTab.authType}
               authData={activeTab.authData}
-              onAuthTypeChange={(t) => updateTab(activeTab.id, { authType: t, dirty: true })}
-              onAuthDataChange={(d) => updateTab(activeTab.id, { authData: d, dirty: true })}
+              onAuthTypeChange={(t) => { updateTab(activeTab.id, { authType: t } as any); }}
+              onAuthDataChange={(d) => { updateTab(activeTab.id, { authData: d } as any); }}
               accentColor={ACCENT}
             />
           </div>

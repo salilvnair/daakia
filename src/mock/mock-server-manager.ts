@@ -126,16 +126,28 @@ export async function startMockServer(config: MockServerConfig): Promise<{ port:
     });
   } else if (protocol === 'socketio') {
     server = http.createServer((_req, res) => {
-      // Handle Engine.IO polling transport handshake
+      // Handle Engine.IO transport negotiation
       if (_req.url?.startsWith('/socket.io/')) {
         const url = new URL(_req.url, `http://localhost`);
         const transport = url.searchParams.get('transport');
+
+        // CORS headers for all Socket.IO requests
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+
         if (transport === 'polling') {
           // Return Engine.IO open packet to satisfy polling handshake, then client upgrades to WS
           const sid = crypto.randomUUID().replace(/-/g, '').slice(0, 20);
           const payload = JSON.stringify({ sid, upgrades: ['websocket'], pingInterval: 25000, pingTimeout: 20000, maxPayload: 1000000 });
-          res.writeHead(200, { 'Content-Type': 'text/plain; charset=UTF-8', 'Access-Control-Allow-Origin': '*' });
+          res.writeHead(200, { 'Content-Type': 'text/plain; charset=UTF-8' });
           res.end(`0${payload}`);
+          return;
+        }
+        if (transport === 'websocket') {
+          // WebSocket transport — the upgrade will be handled by the WebSocketServer
+          // Return 200 with empty body; browser/WS client proceeds with upgrade
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end('');
           return;
         }
         res.writeHead(400, { 'Content-Type': 'text/plain' });

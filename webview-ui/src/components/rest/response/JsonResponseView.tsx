@@ -1,9 +1,9 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
-import { CodeEditor } from '../../shared';
+import { CodeEditor, CopyButton } from '../../shared';
 import { useClickOutside } from '../../../hooks/useClickOutside';
 import { applyJqFilter, formatBody, getResponseLanguage, downloadBlob, getExtensionForContentType } from '../../../services/response';
-import { WrapLinesIcon, FilterIcon, DownloadIcon, CopyIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, HelpCircleIcon, SparkleIcon, CloseCircleIcon } from '../../../icons';
+import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, HelpCircleIcon, SparkleIcon, CloseCircleIcon } from '../../../icons';
 import { ToolbarBtn } from './ToolbarBtn';
 
 interface JsonViewProps {
@@ -54,10 +54,6 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
     downloadBlob(response.body, `response.${ext}`, response.contentType || 'text/plain');
   }, [response.body, response.contentType]);
 
-  const handleCopyAll = useCallback(() => {
-    navigator.clipboard.writeText(formattedBody);
-  }, [formattedBody]);
-
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Toolbar: label + icons */}
@@ -82,9 +78,7 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
           </ToolbarBtn>
 
           {/* Copy */}
-          <ToolbarBtn title="Copy response" onClick={handleCopyAll}>
-            <CopyIcon size={14} />
-          </ToolbarBtn>
+          <CopyButton text={formattedBody} size={14} title="Copy response" className="w-7 h-7" />
 
           {/* More menu */}
           <div className="relative" ref={moreMenuRef}>

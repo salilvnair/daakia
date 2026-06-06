@@ -2,6 +2,7 @@ import { useState, useEffect, type JSX } from 'react';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon } from '../../icons';
 import { LlmProviderSettings } from './LlmProviderSettings';
+import { useMockStore } from '../../store/mock-store';
 
 type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'devtools';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
@@ -452,6 +453,8 @@ function SettingToggle({ title, description, value, onChange }: { title: string;
 function MockServerSettings() {
   const [portMin, setPortMin] = useState(8000);
   const [portMax, setPortMax] = useState(9000);
+  const mockIconGlow = useMockStore(s => s.mockIconGlow);
+  const setMockIconGlow = useMockStore(s => s.setMockIconGlow);
   const [saved, setSaved] = useState(false);
 
   // Listen for port range updates from extension
@@ -518,6 +521,14 @@ function MockServerSettings() {
               {saved && <span className="text-[11px] text-[#22c55e]">Saved!</span>}
             </div>
           </div>
+
+          {/* Mock Server Icon Glow */}
+          <SettingToggle
+            title="Mock Server Icon Glow"
+            description="Show breathing/pulsing animation on the Mock Server sidebar icon when a server is running"
+            value={mockIconGlow}
+            onChange={(v) => setMockIconGlow(v)}
+          />
 
           {/* Storage info */}
           <div>

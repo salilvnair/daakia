@@ -31,6 +31,7 @@ const activeStreamControllers = new Map<string, {
 export async function handleGrpcInvoke(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
+  refreshHistory?: () => void,
 ) {
   const tabId = msg.tabId as string;
   const envId = msg.envId as string | undefined;
@@ -92,7 +93,11 @@ export async function handleGrpcInvoke(
         grpcTls: tls,
         grpcProtoFile: protoFile,
         rpcType,
-      });
+        authType: msg.authType || 'none',
+        authData: msg.authData || {},
+        preRequestScript: msg.preRequestScript || '',
+        postResponseScript: msg.postResponseScript || '',
+      }, refreshHistory);
     } else if (rpcType === 'server_streaming') {
       postMessage({ type: 'grpc:streamStatus', tabId, status: 'streaming' });
       const ctrl = executeGrpcServerStream(params, (event) => {
@@ -140,7 +145,11 @@ export async function handleGrpcInvoke(
       grpcTls: tls,
       grpcProtoFile: protoFile,
       rpcType,
-    });
+      authType: msg.authType || 'none',
+      authData: msg.authData || {},
+      preRequestScript: msg.preRequestScript || '',
+      postResponseScript: msg.postResponseScript || '',
+    }, refreshHistory);
   }
 }
 
@@ -253,7 +262,7 @@ function handleStreamEvent(event: GrpcStreamEvent, postMessage: PostMessage) {
   }
 }
 
-function saveGrpcHistory(tabId: string, endpoint: string, method: string, status: number, statusText: string, time: number, requestData?: Record<string, unknown>) {
+function saveGrpcHistory(tabId: string, endpoint: string, method: string, status: number, statusText: string, time: number, requestData?: Record<string, unknown>, refreshHistory?: () => void) {
   try {
     insertHistory({
       request_id: tabId,
@@ -267,6 +276,7 @@ function saveGrpcHistory(tabId: string, endpoint: string, method: string, status
       request_data: requestData ? JSON.stringify(requestData) : undefined,
     });
     trimHistory(500);
+    if (refreshHistory) refreshHistory();
   } catch {
     // Non-critical: don't fail the request if history save fails
   }

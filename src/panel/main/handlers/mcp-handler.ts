@@ -154,6 +154,8 @@ export async function handleMcpCallTool(
           mcpTransport: msg.transport || 'stdio',
           mcpCommand: msg.command || '',
           mcpArgs: msg.mcpArgs || [],
+          mcpEnvVars: msg.envVars || {},
+          mcpSettings: msg.settings || {},
           mcpServerConfigs: msg.mcpServerConfigs || [],
         }),
         response_data: JSON.stringify(result).slice(0, 4000),

@@ -7,11 +7,22 @@ import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ContextMenu, ImportExportIcon, type CollectionProperties, type ContextMenuItem } from '../../shared';
 import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
-import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon } from '../../../icons';
+import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../../icons';
 import { InfoPopup } from '../../shared/display/InfoPopup';
 import { SidebarSkeleton } from '../../shared/display/SidebarSkeleton';
 
 // ────────────── Main Component ──────────────
+
+function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
+  const size = 20;
+  if (protocol === 'graphql') return <ProtocolGraphQLBadge size={size} />;
+  if (protocol === 'grpc') return <ProtocolGrpcBadge size={size} />;
+  if (protocol === 'soap') return <ProtocolSoapBadge size={size} />;
+  if (protocol === 'ai') return <ProtocolAiBadge size={size} />;
+  if (protocol === 'mcp') return <ProtocolMcpBadge size={size} />;
+  if (protocol === 'websocket' || protocol === 'sse' || protocol === 'mqtt' || protocol === 'socketio') return <ProtocolRealtimeBadge size={size} />;
+  return <ProtocolRestBadge size={size} />;
+}
 
 export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const cachedTree = useSidebarDataStore(s => s.getCollections(protocol));
@@ -423,6 +434,9 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
     <div className="flex flex-col h-full">
       {/* Header label */}
       <div className="px-4 py-3 border-b border-[var(--color-surface-border)] text-[13px] text-[var(--color-text-secondary)] flex items-center gap-2">
+        <span className="flex-shrink-0" style={{ color: getProtocolAccent(protocol as any) }}>
+          <ProtocolHeaderIcon protocol={protocol} />
+        </span>
         <span>Collections</span>
       </div>
 

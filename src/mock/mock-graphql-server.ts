@@ -1,15 +1,16 @@
 /**
- * GraphQL Mock Server - handles introspection, queries, mutations.
+ * GraphQL Mock Server - handles introspection, queries, mutations, AND subscriptions over WebSocket.
  * Supports full schema introspection so the Daakia GraphQL client can display Schema/Documentation panels.
  */
 import * as http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import type { MockServerConfig, GraphQLMockOperation, MockLogEntry } from './mock-types';
 import { buildIntrospectionResponse } from './mock-graphql-schema';
 
 export type LogCallback = (entry: MockLogEntry) => void;
 
 export function createGraphQLServer(config: MockServerConfig, getConfig: () => MockServerConfig, onLog?: LogCallback): http.Server {
-  return http.createServer((req, res) => {
+  const server = http.createServer((req, res) => {
     const startTime = Date.now();
 
     // CORS
@@ -43,7 +44,7 @@ export function createGraphQLServer(config: MockServerConfig, getConfig: () => M
 
     if (req.method !== 'POST') {
       res.writeHead(405, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ errors: [{ message: 'Method not allowed. Use POST for GraphQL.' }] }));
+      res.end(JSON.stringify({ errors: [{ message: 'Method not allowed. Use POST for GraphQL queries/mutations.' }] }));
       return;
     }
 
@@ -120,6 +121,133 @@ export function createGraphQLServer(config: MockServerConfig, getConfig: () => M
       }
     });
   });
+
+  // ─── WebSocket Subscription Support (graphql-ws protocol) ───
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (request, socket, head) => {
+    // Only handle WebSocket upgrades on /graphql path
+    const url = new URL(request.url || '/', `http://localhost`);
+    if (url.pathname === '/graphql') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
+
+  let clientCounter = 0;
+
+  wss.on('connection', (ws: WebSocket) => {
+    const clientId = `gql-sub-${++clientCounter}`;
+
+    // Log connection
+    onLog?.({
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      serverId: config.id,
+      direction: 'incoming',
+      protocol: 'graphql',
+      event: 'subscription_connect',
+      clientId,
+    });
+
+    // Don't send connection_ack immediately — wait for connection_init from client
+
+    ws.on('message', (rawData: Buffer) => {
+      let msg: any;
+      try { msg = JSON.parse(rawData.toString()); } catch { return; }
+
+      if (msg.type === 'connection_init') {
+        // graphql-ws protocol: respond to connection_init with connection_ack
+        ws.send(JSON.stringify({ type: 'connection_ack' }));
+      } else if (msg.type === 'subscribe') {
+        const subId = msg.id;
+        const payload = msg.payload || {};
+        const subQuery = payload.query || '';
+        const subVars = payload.variables || {};
+
+        // Log subscription
+        onLog?.({
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          serverId: config.id,
+          direction: 'incoming',
+          protocol: 'graphql',
+          event: 'subscribe',
+          clientId,
+          body: JSON.stringify({ query: subQuery, variables: subVars }),
+        });
+
+        // Send next message with mock data
+        const currentConfig = getConfig();
+        const operations = currentConfig.graphqlOperations || [];
+        const opNameMatch = subQuery.match(/subscription\s+(\w+)/);
+        const opName = opNameMatch?.[1] || '';
+        const match = operations.find(op => op.enabled && op.operationType === 'subscription' && op.operationName === opName);
+
+        const responseData = match?.response
+          ? (typeof match.response === 'string' ? JSON.parse(match.response) : match.response)
+          : { data: { [opName || 'subscriptionResult']: { message: 'Mock subscription data' } } };
+
+        // graphql-ws `next` payload must match HTTP response shape: { data: {...} }
+        // If responseData already has a `data` key, use it directly as payload, otherwise wrap it
+        const wsPayload = responseData && typeof responseData === 'object' && 'data' in responseData
+          ? responseData
+          : { data: responseData };
+
+        ws.send(JSON.stringify({
+          id: subId,
+          type: 'next',
+          payload: wsPayload,
+        }));
+
+        // Send complete after a short delay
+        setTimeout(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ id: subId, type: 'complete' }));
+          }
+        }, match?.delay || 0);
+
+        // Log response
+        onLog?.({
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          serverId: config.id,
+          direction: 'outgoing',
+          protocol: 'graphql',
+          event: 'subscription_data',
+          clientId,
+          responseBody: JSON.stringify(responseData),
+        });
+      } else if (msg.type === 'complete') {
+        onLog?.({
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          serverId: config.id,
+          direction: 'incoming',
+          protocol: 'graphql',
+          event: 'complete',
+          clientId,
+        });
+      }
+    });
+
+    ws.on('close', () => {
+      onLog?.({
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        serverId: config.id,
+        direction: 'incoming',
+        protocol: 'graphql',
+        event: 'subscription_disconnect',
+        clientId,
+      });
+    });
+  });
+
+  return server;
 }
 
 function handleGraphQLQuery(

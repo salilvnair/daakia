@@ -23,6 +23,7 @@ export { SqliteBanner } from './display/SqliteBanner';
 export { ImportExportIcon } from './display/ImportExportIcon';
 export { ScriptResultsView } from './display/ScriptResultsView';
 export { RequestProgressOverlay } from './display/RequestProgressOverlay';
+export { CopyButton } from './display/CopyButton';
 
 // ─── Editors ───
 export { CodeEditor } from './editors/CodeEditor';

@@ -73,6 +73,12 @@ export function SoapUrlBar() {
       soapService: activeTab.soapService || '',
       envelope,
       headers: (activeTab.headers || []).filter(h => h.enabled && h.key),
+      authType: activeTab.authType,
+      authData: activeTab.authData,
+      wsSecurity: activeTab.soapWsSecurity,
+      assertions: activeTab.soapAssertions,
+      preRequestScript: activeTab.preRequestScript,
+      postResponseScript: activeTab.postResponseScript,
       ...(enabledAttachments.length > 0 ? { attachments: enabledAttachments } : {}),
     });
 

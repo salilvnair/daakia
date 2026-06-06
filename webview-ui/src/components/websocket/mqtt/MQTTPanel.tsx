@@ -282,6 +282,11 @@ export function MQTTPanel() {
       lastWillMessage: lastWillMessage || undefined,
       lastWillQos,
       lastWillRetain,
+      subscriptions,
+      pubTopic,
+      pubPayload,
+      pubQos,
+      pubRetain,
       envId: activeTab.envId,
     });
   }, [activeTab, clientId, username, password, keepAlive, cleanSession, lastWillTopic, lastWillMessage, lastWillQos, lastWillRetain]);

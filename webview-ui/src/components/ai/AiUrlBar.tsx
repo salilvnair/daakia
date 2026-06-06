@@ -90,6 +90,7 @@ export function AiUrlBar() {
       conversation: activeTab.aiConversation || [],
       tools: activeTab.aiTools || [],
       settings: activeTab.aiSettings || {},
+      mcpServerConfigs: activeTab.mcpServerConfigs || [],
       authType: activeTab.authType,
       authData: activeTab.authData,
       envId: activeTab.envId,

@@ -170,7 +170,7 @@ export function SocketIOPanel() {
     if (!url) return;
     setConnState('connecting');
     setError(null);
-    postMsg({ type: 'socketio:connect', tabId: activeTab.id, url, namespace, headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [], envId: activeTab.envId });
+    postMsg({ type: 'socketio:connect', tabId: activeTab.id, url, namespace, headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [], authType: activeTab.authType, authData: activeTab.authData, envId: activeTab.envId });
   }, [activeTab, namespace]);
 
   const handleDisconnect = useCallback(() => {

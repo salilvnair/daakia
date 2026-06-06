@@ -7,6 +7,7 @@ import { importPostmanCollection } from './services/postman-importer';
 import { importOpenAPISpec, isOpenAPISpec } from './services/openapi-importer';
 import { importHarFile, isHarFile } from './services/har-importer';
 import { importBrunoCollection } from './services/bruno-importer';
+import { WelcomeViewProvider } from './panel/sidebar/WelcomeViewProvider';
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log('[daakia] Activating...');
@@ -27,22 +28,11 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize Mock Server Manager
   initMockServerManager(context.extensionPath);
 
-  // ─── Sidebar view (empty tree — just the activity bar icon, no welcome panel) ───
-  const emptyTreeProvider: vscode.TreeDataProvider<never> = {
-    getTreeItem: () => { throw new Error('no items'); },
-    getChildren: () => [],
-  };
-  const treeView = vscode.window.createTreeView('daakia.sidebar', { treeDataProvider: emptyTreeProvider });
-  // Auto-open main panel when sidebar icon is clicked, then collapse sidebar
-  treeView.onDidChangeVisibility((e) => {
-    if (e.visible) {
-      dbReady.then(() => {
-        MainPanel.createOrShow(context.extensionUri);
-        vscode.commands.executeCommand('workbench.action.closeSidebar');
-      });
-    }
-  });
-  context.subscriptions.push(treeView);
+  // ─── Sidebar view — register WelcomeViewProvider for daakia.welcome ───
+  const welcomeProvider = new WelcomeViewProvider(context.extensionUri, dbReady);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(WelcomeViewProvider.viewType, welcomeProvider)
+  );
 
   // ─── Status bar item (right side, next to Copilot) ───
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);

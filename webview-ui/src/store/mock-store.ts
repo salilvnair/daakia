@@ -26,6 +26,10 @@ interface MockStoreState {
   addServer: (server: MockServer) => void;
   removeServer: (id: string) => void;
   clearServers: () => void;
+
+  // B7: Mock server icon glow toggle
+  mockIconGlow: boolean;
+  setMockIconGlow: (v: boolean) => void;
 }
 
 export const useMockStore = create<MockStoreState>((set, get) => ({
@@ -50,4 +54,8 @@ export const useMockStore = create<MockStoreState>((set, get) => ({
   addServer: (server) => set((s) => ({ servers: [...s.servers, server] })),
   removeServer: (id) => set((s) => ({ servers: s.servers.filter(srv => srv.id !== id) })),
   clearServers: () => set({ servers: [], serversLoaded: true }),
+
+  // B7: Mock server icon glow toggle (default: enabled)
+  mockIconGlow: true,
+  setMockIconGlow: (v) => set({ mockIconGlow: v }),
 }));

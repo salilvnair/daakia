@@ -94,6 +94,7 @@ function buildPayload(tab: RequestTab, opts?: { downloadResponse?: boolean }) {
     postResponseScripts: scripts.postResponseScripts,
     preRequestScript: tab.preRequestScript,
     postResponseScript: tab.postResponseScript,
+    variables: tab.variables,
     collectionId: tab.collectionId,
     // Debugger breakpoints — when present, extension uses async debug session
     // Filter out disabled breakpoints so they don't trigger pauses
@@ -135,6 +136,8 @@ export function getDisplayMethod(tab: RequestTab): string {
   if (tab.protocol === 'graphql') return 'GQL';
   if (tab.protocol === 'ai') return 'AI';
   if (tab.protocol === 'mcp') return 'MCP';
+  if (tab.protocol === 'soap') return 'SOAP';
+  if (tab.protocol === 'grpc') return 'GRPC';
   if (tab.protocol === 'websocket') {
     const rt = tab.authData?.['rt_protocol'] || 'websocket';
     switch (rt) {
@@ -161,6 +164,9 @@ export function saveRequest(tab: RequestTab) {
       bodyUrlEncoded: tab.bodyUrlEncoded,
       authType: tab.authType,
       authData: tab.authData,
+      variables: tab.variables,
+      preRequestScript: tab.preRequestScript,
+      postResponseScript: tab.postResponseScript,
     };
 
     if (tab.protocol === 'ai') {
@@ -169,16 +175,48 @@ export function saveRequest(tab: RequestTab) {
         aiProvider: tab.aiProvider,
         aiModel: tab.aiModel,
         aiSystemPrompts: tab.aiSystemPrompts,
+        aiUserPrompt: tab.aiUserPrompt,
         aiTools: tab.aiTools,
         aiSettings: tab.aiSettings,
+        mcpServerConfigs: (tab as any).mcpServerConfigs,
       };
     } else if (tab.protocol === 'mcp') {
       data = {
         ...data,
         mcpTransport: tab.mcpTransport,
         mcpCommand: tab.mcpCommand,
+        mcpArgs: (tab as any).mcpArgs,
         mcpEnvVars: tab.mcpEnvVars,
         mcpSettings: tab.mcpSettings,
+      };
+    } else if (tab.protocol === 'graphql') {
+      data = {
+        ...data,
+        bodyRaw: tab.bodyRaw,
+        gql_variables: tab.authData?.['gql_variables'],
+      };
+    } else if (tab.protocol === 'grpc') {
+      data = {
+        ...data,
+        grpcMethod: tab.grpcMethod,
+        grpcMessage: tab.grpcMessage,
+        grpcMetadata: tab.grpcMetadata,
+        grpcTls: tab.grpcTls,
+        grpcProtoFile: tab.grpcProtoFile,
+        preRequestScript: tab.preRequestScript,
+        postResponseScript: tab.postResponseScript,
+      };
+    } else if (tab.protocol === 'soap') {
+      data = {
+        ...data,
+        soapVersion: tab.soapVersion,
+        soapAction: tab.soapAction,
+        soapOperation: tab.soapOperation,
+        soapService: tab.soapService,
+        soapEnvelope: tab.soapEnvelope,
+        soapWsSecurity: tab.soapWsSecurity,
+        soapAssertions: tab.soapAssertions,
+        soapAttachments: tab.soapAttachments,
       };
     }
 
@@ -194,6 +232,10 @@ export function saveRequest(tab: RequestTab) {
         data: JSON.stringify(data),
       },
     });
+
+    // Force refresh collections sidebar after save
+    postMsg({ type: 'getCollections', protocol: tab.protocol || 'rest' });
+
     return true; // saved in-place
   }
   postMsg({ type: 'openSaveAs', tabId: tab.id });

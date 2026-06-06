@@ -42,10 +42,13 @@ export function createSocketIOServer(server: http.Server, config: MockServerConf
     if (!serverClients.has(config.id)) serverClients.set(config.id, []);
     serverClients.get(config.id)!.push({ id: clientId, ws });
 
-    // Engine.IO open handshake
-    ws.send(JSON.stringify({
-      type: 'open',
-      data: { sid: socketId, upgrades: [], pingInterval: 25000, pingTimeout: 20000 }
+    // Engine.IO open handshake (v4: 0-prefixed JSON packet)
+    ws.send('0' + JSON.stringify({
+      sid: socketId,
+      upgrades: [],
+      pingInterval: 25000,
+      pingTimeout: 20000,
+      maxPayload: 1000000,
     }));
 
     // Socket.IO connect acknowledgement (namespace /)

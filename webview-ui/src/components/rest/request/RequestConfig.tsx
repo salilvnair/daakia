@@ -4,8 +4,61 @@ import { useUiStateStore } from '../../../store/ui-state-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { PillTabs, KeyValueTable, FormDataTable, CodeEditor, StyledDropdown, ConfirmDialog, AuthEditor, ScriptsEditor, type PillTab } from '../../shared';
-import { TrashIcon, BulkEditIcon, PlusIcon, SparkleIcon, WandIcon, FileUploadIcon } from '../../../icons';
+import { TrashIcon, BulkEditIcon, PlusIcon, SparkleIcon, WandIcon, FileUploadIcon, LockIcon, CookieIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
+
+// ── Computed auth header rows (Task 7) ──────────────────────────────────────
+function computeAuthRows(authType: string, authData: Record<string, string>): { key: string; value: string }[] {
+  if (authType === 'bearer' && authData.token) {
+    return [{ key: 'Authorization', value: `Bearer ${authData.token}` }];
+  }
+  if (authType === 'basic' && authData.username) {
+    const encoded = btoa(`${authData.username}:${authData.password || ''}`);
+    return [{ key: 'Authorization', value: `Basic ${encoded}` }];
+  }
+  if (authType === 'api-key' && authData.apiKeyName && (!authData.addTo || authData.addTo === 'header')) {
+    return [{ key: authData.apiKeyName, value: authData.apiKeyValue || '' }];
+  }
+  if (authType === 'oauth2' && authData.accessToken) {
+    return [{ key: 'Authorization', value: `Bearer ${authData.accessToken}` }];
+  }
+  return [];
+}
+
+// ── Read-only computed header row (auth or cookie) ───────────────────────────
+function ComputedHeaderRow({
+  icon, headerKey, headerValue, badge, badgeColor, onDelete, deleteTitle,
+}: {
+  icon: React.ReactNode;
+  headerKey: string;
+  headerValue: string;
+  badge: string;
+  badgeColor: string;
+  onDelete?: () => void;
+  deleteTitle?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-[rgba(255,255,255,0.03)] border border-dashed border-[rgba(255,255,255,0.1)] mb-1 group">
+      <span className="text-[var(--color-text-muted)] opacity-50 flex-shrink-0">{icon}</span>
+      <span className="text-[12px] font-mono text-[var(--color-text-muted)] w-[160px] flex-shrink-0 truncate">{headerKey}</span>
+      <span className="text-[12px] font-mono text-[var(--color-text-muted)] flex-1 truncate opacity-70">{headerValue}</span>
+      <span
+        className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+        style={{ background: `${badgeColor}22`, color: badgeColor }}
+      >{badge}</span>
+      {onDelete && (
+        <button
+          type="button"
+          title={deleteTitle || 'Remove'}
+          onClick={onDelete}
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-all flex-shrink-0"
+        >
+          <TrashIcon size={11} />
+        </button>
+      )}
+    </div>
+  );
+}
 
 const CONFIG_TABS: PillTab[] = [
   { id: 'params', label: 'Params' },
@@ -22,6 +75,8 @@ export function RequestConfig() {
   const storedSection = useUiStateStore(s => s.prefs[`rest.subtab.${activeTabId}`]);
   const [activeSection, setActiveSectionLocal] = useState(storedSection || 'params');
   const [oauth2Loading, setOauth2Loading] = useState(false);
+  // Task 8: cookie jar rows for the current URL's domain
+  const [cookieJarRows, setCookieJarRows] = useState<{ key: string; value: string }[]>([]);
 
   // Sync from store when tab changes
   useEffect(() => {
@@ -36,6 +91,35 @@ export function RequestConfig() {
 
   // Scroll position persistence
   const scrollRef = useScrollRestore(`requestConfig.${activeTabId}.${activeSection}`, [activeTabId, activeSection]);
+
+  // Task 8: fetch cookies for current URL's domain when on headers tab or URL changes
+  useEffect(() => {
+    if (activeSection !== 'headers') return;
+    const rawUrl = tab?.url?.trim();
+    if (!rawUrl) { setCookieJarRows([]); return; }
+    try {
+      const u = new URL(rawUrl.match(/^https?:\/\//) ? rawUrl : 'http://' + rawUrl);
+      postMsg({ type: 'getCookiesForDomain', domain: u.hostname });
+    } catch { setCookieJarRows([]); }
+  }, [activeSection, tab?.url, activeTabId]);
+
+  // Task 8: listen for cookiesForDomain response
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data;
+      if (msg.type === 'cookiesForDomain') {
+        const cookies = (msg.cookies as { name: string; value: string }[]) || [];
+        if (cookies.length > 0) {
+          const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+          setCookieJarRows([{ key: 'Cookie', value: cookieStr }]);
+        } else {
+          setCookieJarRows([]);
+        }
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   // Listen for OAuth2 token result
   useEffect(() => {
@@ -116,14 +200,40 @@ export function RequestConfig() {
         )}
 
         {activeSection === 'headers' && (
-          <KeyValueTable
-            rows={tab.headers}
-            onChange={(rows) => updateTab(tab.id, { headers: rows })}
-            placeholder={{ key: 'Header', value: 'Value' }}
-            autocompleteKeys
-            maskSensitive
-            label="Header List"
-          />
+          <>
+            {/* Task 7: Auth-derived computed headers */}
+            {computeAuthRows(tab.authType, tab.authData).map((row, i) => (
+              <ComputedHeaderRow
+                key={`auth-${i}`}
+                icon={<LockIcon size={13} />}
+                headerKey={row.key}
+                headerValue={row.value}
+                badge="auth"
+                badgeColor="var(--color-primary)"
+                onDelete={() => updateTab(tab.id, { authType: 'none' as typeof tab.authType, authData: {} })}
+                deleteTitle="Clear auth (sets auth type to None)"
+              />
+            ))}
+            {/* Task 8: Cookie jar computed header */}
+            {cookieJarRows.map((row, i) => (
+              <ComputedHeaderRow
+                key={`cookie-${i}`}
+                icon={<CookieIcon size={13} />}
+                headerKey={row.key}
+                headerValue={row.value}
+                badge="cookie jar"
+                badgeColor="var(--color-warning)"
+              />
+            ))}
+            <KeyValueTable
+              rows={tab.headers}
+              onChange={(rows) => updateTab(tab.id, { headers: rows })}
+              placeholder={{ key: 'Header', value: 'Value' }}
+              autocompleteKeys
+              maskSensitive
+              label="Header List"
+            />
+          </>
         )}
 
         {activeSection === 'body' && (
@@ -206,6 +316,25 @@ const CONTENT_TYPE_LANG: Record<string, string> = {
   'application/javascript': 'javascript',
   'application/graphql': 'graphql',
   'application/yaml': 'yaml',
+};
+
+/** Content type → placeholder text shown when editor is empty (Task 9) */
+const CONTENT_TYPE_PLACEHOLDER: Record<string, string> = {
+  'application/json': '{\n  "key": "value"\n}',
+  'application/ld+json': '{\n  "@context": "https://schema.org",\n  "@type": "Thing",\n  "name": "value"\n}',
+  'application/hal+json': '{\n  "_links": {\n    "self": { "href": "/resource/1" }\n  },\n  "key": "value"\n}',
+  'application/vnd.api+json': '{\n  "data": {\n    "type": "articles",\n    "id": "1",\n    "attributes": {\n      "title": "value"\n    }\n  }\n}',
+  'application/xml': '<?xml version="1.0" encoding="UTF-8"?>\n<root>\n  <element>value</element>\n</root>',
+  'text/xml': '<root>\n  <element>value</element>\n</root>',
+  'application/soap+xml': '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">\n  <soapenv:Header/>\n  <soapenv:Body>\n    <!-- Your operation here -->\n  </soapenv:Body>\n</soapenv:Envelope>',
+  'text/html': '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <title>Document</title>\n</head>\n<body>\n  \n</body>\n</html>',
+  'text/plain': 'Plain text content here',
+  'text/css': '/* CSS Styles */\nbody {\n  margin: 0;\n  padding: 0;\n}',
+  'text/csv': 'column1,column2,column3\nvalue1,value2,value3',
+  'text/markdown': '# Title\n\n> Blockquote\n\nContent here',
+  'application/javascript': '// JavaScript code\nconst data = {};\nconsole.log(data);',
+  'application/graphql': '{\n  # Your GraphQL query\n  query {\n    field\n  }\n}',
+  'application/yaml': '# YAML content\nkey: value\nlist:\n  - item1\n  - item2',
 };
 
 /** Grouped content type options for dropdown */
@@ -449,7 +578,7 @@ function BodyEditor({ tab }: { tab: ReturnType<typeof useTabsStore.getState>['ta
             value={tab.bodyRaw}
             onChange={(val) => updateTab(tab.id, { bodyRaw: val })}
             language={editorLanguage}
-            placeholder={editorLanguage === 'json' ? '{\n  "key": "value"\n}' : 'Raw Request Body'}
+            placeholder={CONTENT_TYPE_PLACEHOLDER[contentType] ?? 'Raw Request Body'}
             height="100%"
           />
         </div>

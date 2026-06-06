@@ -1,15 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { getProtocolAccent } from '../../colors';
-import { MethodBadge, ConfirmDialog, StyledDropdown, type DropdownOption } from '../shared';
+import { MethodBadge, ConfirmDialog, StyledDropdown, ContextMenu, type ContextMenuItem, type DropdownOption } from '../shared';
 import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon } from '../../icons';
 
-interface ContextMenu {
+interface TabContextMenuState {
   tabId: string;
   x: number;
   y: number;
+  items: ContextMenuItem[];
 }
 
 interface TabBarProps {
@@ -27,7 +27,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
   const [confirmCloseRightId, setConfirmCloseRightId] = useState<string | null>(null);
   const [confirmCloseLeftId, setConfirmCloseLeftId] = useState<string | null>(null);
   const [confirmCloseAll, setConfirmCloseAll] = useState(false);
-  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
+  const [contextMenu, setContextMenu] = useState<TabContextMenuState | null>(null);
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -77,17 +77,72 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
   // Context menu actions
   const handleContextMenu = (e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
-    setContextMenu({ tabId, x: e.clientX, y: e.clientY });
+    const tab = tabs.find(t => t.id === tabId);
+    const tabIdx = tabs.findIndex(t => t.id === tabId);
+    const isRequest = tab?.type === 'request';
+    const isPinned = tab?.pinned;
+    const hasTabsToRight = tabIdx < tabs.length - 1;
+    const hasTabsToLeft = tabIdx > 0;
+    const hasMultipleTabs = tabs.length >= 2;
+    const hasDirtyTabs = tabs.some(t => t.dirty && !t.pinned);
+    const items: ContextMenuItem[] = [];
+    if (isRequest) items.push({ id: 'rename', label: 'Rename', shortcut: 'R', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' });
+    items.push({ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' });
+    if (isRequest) items.push({ id: isPinned ? 'unpin' : 'pin', label: isPinned ? 'Unpin' : 'Pin', shortcut: isPinned ? 'U' : 'P', icon: <span className="text-[13px]">{isPinned ? '📍' : '📌'}</span>, iconColor: 'var(--color-ctx-pin)' });
+    items.push({ id: 'sep1', label: '', separator: true });
+    if (!isPinned) items.push({ id: 'close', label: 'Close', shortcut: 'W', icon: <CloseCircleIcon size={13} />, iconColor: 'var(--color-ctx-close)' });
+    if (hasMultipleTabs) items.push({ id: 'close-others', label: 'Close Others', shortcut: 'O', icon: <CloseSquareIcon size={13} />, iconColor: 'var(--color-ctx-close-batch)' });
+    if (hasTabsToRight) items.push({ id: 'close-right', label: 'Close to the Right', icon: <ArrowToRightIcon size={13} />, iconColor: 'var(--color-ctx-close-batch)' });
+    if (hasTabsToLeft) items.push({ id: 'close-left', label: 'Close to the Left', icon: <ArrowToLeftIcon size={13} />, iconColor: 'var(--color-ctx-close-batch)' });
+    if (hasDirtyTabs) items.push({ id: 'close-saved', label: 'Close Saved', shortcut: 'S', icon: <SaveCheckIcon size={13} />, iconColor: 'var(--color-ctx-close-saved)' });
+    if (hasMultipleTabs) items.push({ id: 'close-all', label: 'Close All', shortcut: 'A', icon: <CloseAllIcon size={13} />, iconColor: 'var(--color-ctx-close-all)', danger: true });
+    setContextMenu({ tabId, x: e.clientX, y: e.clientY, items });
   };
 
-  const closeContextMenu = () => setContextMenu(null);
+  const handleContextMenuSelect = (actionId: string) => {
+    if (!contextMenu) return;
+    const { tabId } = contextMenu;
+    const tabIdx = tabs.findIndex(t => t.id === tabId);
+    switch (actionId) {
+      case 'rename': startRename(tabId); break;
+      case 'duplicate': duplicateTab(tabId); break;
+      case 'pin': pinTab(tabId); break;
+      case 'unpin': unpinTab(tabId); break;
+      case 'close': handleClose(tabId); break;
+      case 'close-others': {
+        const others = tabs.filter(t => t.id !== tabId && !t.pinned);
+        if (others.some(t => t.dirty)) setConfirmCloseOthersId(tabId);
+        else closeOtherTabs(tabId);
+        break;
+      }
+      case 'close-right': {
+        const rightTabs = tabs.slice(tabIdx + 1).filter(t => !t.pinned);
+        if (rightTabs.some(t => t.dirty)) setConfirmCloseRightId(tabId);
+        else closeTabsToRight(tabId);
+        break;
+      }
+      case 'close-left': {
+        const leftTabs = tabs.slice(0, tabIdx).filter(t => !t.pinned);
+        if (leftTabs.some(t => t.dirty)) setConfirmCloseLeftId(tabId);
+        else closeTabsToLeft(tabId);
+        break;
+      }
+      case 'close-saved': closeSavedTabs(); break;
+      case 'close-all': {
+        const closeable = tabs.filter(t => !t.pinned);
+        if (closeable.some(t => t.dirty)) setConfirmCloseAll(true);
+        else closeAllTabs();
+        break;
+      }
+    }
+    setContextMenu(null);
+  };
 
   const startRename = (tabId: string) => {
     const tab = tabs.find(t => t.id === tabId);
     if (!tab) return;
     setRenamingTabId(tabId);
     setRenameValue(tab.name);
-    closeContextMenu();
   };
 
   const finishRename = () => {
@@ -104,90 +159,17 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     }
   }, [renamingTabId]);
 
-  // Close context menu on outside click
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handler = () => closeContextMenu();
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, [contextMenu]);
+  // Close context menu on outside click — handled by shared ContextMenu component
 
-  // Global keyboard shortcuts for tab actions
+  // Global keyboard shortcuts for tab navigation (non-conflicting with VS Code)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Read fresh state inside handler to avoid stale closures
-      const store = useTabsStore.getState();
-      const currentTabs = store.tabs;
-      const currentActiveId = store.activeTabId;
-
-      // Ctrl+W — Close active tab (if not pinned)
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'w') {
-        e.preventDefault();
-        const tab = currentTabs.find(t => t.id === currentActiveId);
-        if (tab && !tab.pinned) handleClose(tab.id);
-      }
-      // Ctrl+D — Duplicate active tab
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'd') {
-        e.preventDefault();
-        if (currentActiveId) store.duplicateTab(currentActiveId);
-      }
-      // Ctrl+Shift+W — Close other tabs
-      if (e.ctrlKey && e.shiftKey && !e.altKey && e.key === 'W') {
-        e.preventDefault();
-        if (currentActiveId) {
-          const others = currentTabs.filter(t => t.id !== currentActiveId && !t.pinned);
-          if (others.some(t => t.dirty)) {
-            setConfirmCloseOthersId(currentActiveId);
-          } else {
-            store.closeOtherTabs(currentActiveId);
-          }
-        }
-      }
-      // Ctrl+Alt+R — Close to the Right
-      if (e.ctrlKey && e.altKey && e.key === 'r') {
-        e.preventDefault();
-        if (currentActiveId) {
-          const idx = currentTabs.findIndex(t => t.id === currentActiveId);
-          const rightTabs = currentTabs.slice(idx + 1).filter(t => !t.pinned);
-          if (rightTabs.some(t => t.dirty)) {
-            setConfirmCloseRightId(currentActiveId);
-          } else {
-            store.closeTabsToRight(currentActiveId);
-          }
-        }
-      }
-      // Ctrl+Alt+L — Close to the Left
-      if (e.ctrlKey && e.altKey && e.key === 'l') {
-        e.preventDefault();
-        if (currentActiveId) {
-          const idx = currentTabs.findIndex(t => t.id === currentActiveId);
-          const leftTabs = currentTabs.slice(0, idx).filter(t => !t.pinned);
-          if (leftTabs.some(t => t.dirty)) {
-            setConfirmCloseLeftId(currentActiveId);
-          } else {
-            store.closeTabsToLeft(currentActiveId);
-          }
-        }
-      }
-      // Ctrl+Alt+S — Close Saved
-      if (e.ctrlKey && e.altKey && e.key === 's') {
-        e.preventDefault();
-        store.closeSavedTabs();
-      }
-      // Ctrl+Alt+A — Close All
-      if (e.ctrlKey && e.altKey && e.key === 'a') {
-        e.preventDefault();
-        const closeable = currentTabs.filter(t => !t.pinned);
-        if (closeable.some(t => t.dirty)) {
-          setConfirmCloseAll(true);
-        } else {
-          store.closeAllTabs();
-        }
-      }
+      // Only handle if no context menu is open (context menu handles its own keys)
+      if (contextMenu) return;
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, []); // Empty deps — handler reads fresh state via getState()
+  }, [contextMenu]);
 
   // Drag and drop
   const handleDragStart = (e: React.DragEvent, idx: number) => {
@@ -459,156 +441,15 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
       />
     )}
 
-    {/* Right-click context menu */}
-    {contextMenu && createPortal(
-      <div
-        className="fixed z-[99999] min-w-[200px] bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-lg shadow-xl py-1 animate-[fadeSlideIn_120ms_ease-out]"
-        style={{ top: contextMenu.y, left: contextMenu.x }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {(() => {
-          const tab = tabs.find(t => t.id === contextMenu.tabId);
-          const isRequest = tab?.type === 'request';
-          const isPinned = tab?.pinned;
-          const tabIdx = tabs.findIndex(t => t.id === contextMenu.tabId);
-          const hasTabsToRight = tabIdx < tabs.length - 1;
-          const hasTabsToLeft = tabIdx > 0;
-          const hasMultipleTabs = tabs.length >= 2;
-          const hasDirtyTabs = tabs.some(t => t.dirty && !t.pinned);
-          return (
-            <>
-              {isRequest && (
-                <ContextMenuItem
-                  icon={<RenameIcon size={14} />}
-                  iconColor="var(--color-ctx-rename)"
-                  label="Rename"
-                  shortcut="Ctrl+R"
-                  onClick={() => startRename(contextMenu.tabId)}
-                />
-              )}
-              <ContextMenuItem
-                icon={<CopyIcon size={14} />}
-                iconColor="var(--color-ctx-duplicate)"
-                label="Duplicate"
-                shortcut="Ctrl+D"
-                onClick={() => { duplicateTab(contextMenu.tabId); closeContextMenu(); }}
-              />
-              {isRequest && (
-                <ContextMenuItem
-                  icon={isPinned ? <span className="text-[14px]">📍</span> : <span className="text-[14px]">📌</span>}
-                  iconColor="var(--color-ctx-pin)"
-                  label={isPinned ? 'Unpin' : 'Pin'}
-                  shortcut={isPinned ? 'Ctrl+U' : 'Ctrl+P'}
-                  onClick={() => { isPinned ? unpinTab(contextMenu.tabId) : pinTab(contextMenu.tabId); closeContextMenu(); }}
-                />
-              )}
-              <div className="h-px bg-[var(--color-surface-border)] my-1" />
-              {!isPinned && (
-                <ContextMenuItem
-                  icon={<CloseCircleIcon size={14} />}
-                  iconColor="var(--color-ctx-close)"
-                  label="Close"
-                  shortcut="Ctrl+W"
-                  onClick={() => { handleClose(contextMenu.tabId); closeContextMenu(); }}
-                />
-              )}
-              {hasMultipleTabs && (
-                <ContextMenuItem
-                  icon={<CloseSquareIcon size={14} />}
-                  iconColor="var(--color-ctx-close-batch)"
-                  label="Close Others"
-                  shortcut="Ctrl+Shift+W"
-                  onClick={() => {
-                    const others = tabs.filter(t => t.id !== contextMenu.tabId && !t.pinned);
-                    if (others.some(t => t.dirty)) {
-                      setConfirmCloseOthersId(contextMenu.tabId);
-                    } else {
-                      closeOtherTabs(contextMenu.tabId);
-                    }
-                    closeContextMenu();
-                  }}
-                />
-              )}
-              {hasTabsToRight && (
-                <ContextMenuItem
-                  icon={<ArrowToRightIcon size={14} />}
-                  iconColor="var(--color-ctx-close-batch)"
-                  label="Close to the Right"
-                  shortcut="Ctrl+Alt+R"
-                  onClick={() => {
-                    const rightTabs = tabs.slice(tabIdx + 1).filter(t => !t.pinned);
-                    if (rightTabs.some(t => t.dirty)) {
-                      setConfirmCloseRightId(contextMenu.tabId);
-                    } else {
-                      closeTabsToRight(contextMenu.tabId);
-                    }
-                    closeContextMenu();
-                  }}
-                />
-              )}
-              {hasTabsToLeft && (
-                <ContextMenuItem
-                  icon={<ArrowToLeftIcon size={14} />}
-                  iconColor="var(--color-ctx-close-batch)"
-                  label="Close to the Left"
-                  shortcut="Ctrl+Alt+L"
-                  onClick={() => {
-                    const leftTabs = tabs.slice(0, tabIdx).filter(t => !t.pinned);
-                    if (leftTabs.some(t => t.dirty)) {
-                      setConfirmCloseLeftId(contextMenu.tabId);
-                    } else {
-                      closeTabsToLeft(contextMenu.tabId);
-                    }
-                    closeContextMenu();
-                  }}
-                />
-              )}
-              {hasDirtyTabs && (
-                <ContextMenuItem
-                  icon={<SaveCheckIcon size={14} />}
-                  iconColor="var(--color-ctx-close-saved)"
-                  label="Close Saved"
-                  shortcut="Ctrl+Alt+S"
-                  onClick={() => { closeSavedTabs(); closeContextMenu(); }}
-                />
-              )}
-              {hasMultipleTabs && (
-                <ContextMenuItem
-                  icon={<CloseAllIcon size={14} />}
-                  iconColor="var(--color-ctx-close-all)"
-                  label="Close All"
-                  shortcut="Ctrl+Alt+A"
-                  onClick={() => {
-                    const closeable = tabs.filter(t => !t.pinned);
-                    if (closeable.some(t => t.dirty)) {
-                      setConfirmCloseAll(true);
-                    } else {
-                      closeAllTabs();
-                    }
-                    closeContextMenu();
-                  }}
-                />
-              )}
-            </>
-          );
-        })()}
-      </div>,
-      document.body
+    {/* Right-click context menu — shared ContextMenu component with single-letter shortcuts */}
+    {contextMenu && (
+      <ContextMenu
+        items={contextMenu.items}
+        position={{ x: contextMenu.x, y: contextMenu.y }}
+        onSelect={handleContextMenuSelect}
+        onClose={() => setContextMenu(null)}
+      />
     )}
     </>
-  );
-}
-
-function ContextMenuItem({ icon, iconColor, label, shortcut, onClick }: { icon: React.ReactNode; iconColor?: string; label: string; shortcut?: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      className="flex items-center gap-3 w-full px-3 py-[6px] text-left text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)] cursor-pointer transition-colors"
-      onClick={onClick}
-    >
-      <span className="flex-shrink-0" style={{ color: iconColor || 'var(--color-text-muted)' }}>{icon}</span>
-      <span className="flex-1">{label}</span>
-      {shortcut && <span className="text-[11px] text-[var(--color-text-muted)] bg-[var(--color-panel)] rounded px-1.5 py-0.5 font-mono">{shortcut}</span>}
-    </button>
   );
 }

@@ -401,6 +401,20 @@ export function GlobeIcon(props: IconProps) {
   );
 }
 
+export function CookieIcon(props: IconProps) {
+  const { size = 20, ...rest } = props;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...rest}>
+      <path d="M12 2a10 10 0 1010 10" />
+      <path d="M12 2a10 10 0 0010 10" strokeDasharray="2 4" />
+      <circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="14" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="15" r="1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 /** REST/API icon — gear cog with circular sync arrows (API lifecycle). */
 export function RestApiIcon(props: IconProps) {
   const { size = 20, ...rest } = props;

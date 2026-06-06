@@ -15,6 +15,7 @@ const connections = new Map<string, http.ClientRequest>();
 export function handleSseConnect(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
+  refreshHistory?: () => void,
 ) {
   const tabId = msg.tabId as string;
   const envId = msg.envId as string | undefined;
@@ -75,6 +76,7 @@ export function handleSseConnect(
           });
           const maxHistory = parseInt(getSetting('maxHistoryEntries') || '100', 10);
           trimHistory(maxHistory);
+          if (refreshHistory) refreshHistory();
         } catch { /* ignore history errors */ }
 
         // Parse SSE stream

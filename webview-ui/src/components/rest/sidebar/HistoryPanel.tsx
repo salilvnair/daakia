@@ -6,8 +6,31 @@ import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { ConfirmDialog, ContextMenu, type ContextMenuItem } from '../../shared';
 import { buildGroups, formatFullTimestamp, exportHistoryItem, type TopGroup } from '../../../services/history';
 import { replayHistoryItem } from '../../../services/collections';
-import { METHOD_COLORS } from '../../../colors';
-import { MoreVerticalIcon, ClockIcon, ChevronRightIcon, ExternalLinkIcon, PlusSquareIcon, DownloadIcon, TrashIcon, SaveIcon } from '../../../icons';
+import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
+import { MoreVerticalIcon, ClockIcon, ChevronRightIcon, ExternalLinkIcon, PlusSquareIcon, DownloadIcon, TrashIcon, SaveIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../../icons';
+
+function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
+  const size = 20;
+  if (protocol === 'graphql') return <ProtocolGraphQLBadge size={size} />;
+  if (protocol === 'grpc') return <ProtocolGrpcBadge size={size} />;
+  if (protocol === 'soap') return <ProtocolSoapBadge size={size} />;
+  if (protocol === 'ai') return <ProtocolAiBadge size={size} />;
+  if (protocol === 'mcp') return <ProtocolMcpBadge size={size} />;
+  if (protocol === 'websocket' || protocol === 'sse' || protocol === 'mqtt' || protocol === 'socketio') return <ProtocolRealtimeBadge size={size} />;
+  return <ProtocolRestBadge size={size} />;
+}
+
+const PROTOCOL_LABEL_MAP: Record<string, string> = {
+  graphql: 'GQL',
+  websocket: 'WS',
+  grpc: 'gRPC',
+  soap: 'SOAP',
+  ai: 'AI',
+  mcp: 'MCP',
+  sse: 'SSE',
+  mqtt: 'MQTT',
+  socketio: 'Socket.IO',
+};
 import { SidebarSkeleton } from '../../shared/display/SidebarSkeleton';
 
 interface HistoryItem {
@@ -222,6 +245,9 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
     <div className="flex flex-col h-full">
       {/* Header label */}
       <div className="px-4 py-3 border-b border-[var(--color-surface-border)] text-[13px] text-[var(--color-text-secondary)] flex items-center gap-2">
+        <span className="flex-shrink-0" style={{ color: getProtocolAccent(protocol as any) }}>
+          <ProtocolHeaderIcon protocol={protocol} />
+        </span>
         <span>History</span>
       </div>
 

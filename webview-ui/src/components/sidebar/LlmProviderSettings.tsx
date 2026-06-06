@@ -122,7 +122,7 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
         }
 
         {/* Toggle — stop propagation so click doesn't toggle expand */}
-        <div onClick={e => e.stopPropagation()}>
+        <div onClick={e => e.stopPropagation()} className="mt-0.5">
           <MiniToggle value={provider.enabled} onChange={() => toggleProvider(provider.id)} />
         </div>
 

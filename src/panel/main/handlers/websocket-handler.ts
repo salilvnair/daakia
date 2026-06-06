@@ -13,6 +13,7 @@ const connections = new Map<string, WebSocket>();
 export function handleWsConnect(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
+  refreshHistory?: () => void,
 ) {
   const tabId = msg.tabId as string;
   const envId = msg.envId as string | undefined;
@@ -61,6 +62,7 @@ export function handleWsConnect(
         });
         const maxHistory = parseInt(getSetting('maxHistoryEntries') || '100', 10);
         trimHistory(maxHistory);
+        if (refreshHistory) refreshHistory();
       } catch { /* ignore history errors */ }
     });
 

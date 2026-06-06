@@ -15,6 +15,7 @@ const connections = new Map<string, MqttClient>();
 export function handleMqttConnect(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
+  refreshHistory?: () => void,
 ) {
   const tabId = msg.tabId as string;
   const envId = msg.envId as string | undefined;
@@ -79,17 +80,24 @@ export function handleMqttConnect(
               rt_protocol: 'mqtt',
               mqtt_clientId: clientId,
               mqtt_username: username || '',
+              mqtt_password: password || '',
               mqtt_keepAlive: String(keepAlive),
               mqtt_cleanSession: String(cleanSession),
               mqtt_lastWillTopic: lastWillTopic || '',
               mqtt_lastWillMessage: lastWillMessage || '',
               mqtt_lastWillQos: String(lastWillQos),
               mqtt_lastWillRetain: String(lastWillRetain),
+              mqtt_subscriptions: JSON.stringify(subscriptions || []),
+              mqtt_pubTopic: (msg.pubTopic as string) || '',
+              mqtt_pubPayload: (msg.pubPayload as string) || '',
+              mqtt_pubQos: String(msg.pubQos ?? 0),
+              mqtt_pubRetain: String(msg.pubRetain ?? false),
             },
           }),
         });
         const maxHistory = parseInt(getSetting('maxHistoryEntries') || '100', 10);
         trimHistory(maxHistory);
+        if (refreshHistory) refreshHistory();
       } catch { /* ignore history errors */ }
     });
 

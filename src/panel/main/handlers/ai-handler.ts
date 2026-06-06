@@ -39,6 +39,7 @@ export async function handleAiSend(
   const userPrompt = (msg.userPrompt as string) || '';
   const conversation = (msg.conversation as AiMessage[]) || [];
   const tools = (msg.tools as AiToolDef[]) || [];
+  const mcpServerConfigs = (msg.mcpServerConfigs as any[]) || [];
   const rawSettings = (msg.settings as Partial<AiSettings>) || {};
 
   const settings: AiSettings = { ...DEFAULT_AI_SETTINGS, ...rawSettings };
@@ -148,7 +149,7 @@ export async function handleAiSend(
         insertHistory({
           protocol: 'ai',
           method: providerId.toUpperCase(),
-          url: `${resolvedUrl} → ${resolvedModel}`,
+          url: resolvedUrl,
           status: 200,
           response_time: result.duration,
           request_data: JSON.stringify({
@@ -158,7 +159,10 @@ export async function handleAiSend(
             aiUserPrompt: userPrompt,
             aiTools: tools,
             aiSettings: settings,
+            mcpServerConfigs: mcpServerConfigs,
             aiConversation: conversation.slice(-5),
+            authType: msg.authType,
+            authData: msg.authData,
           }),
           response_data: JSON.stringify({
             content: result.message.content.slice(0, 500),
@@ -182,10 +186,10 @@ export async function handleAiSend(
         insertHistory({
           protocol: 'ai',
           method: providerId.toUpperCase(),
-          url: `${resolvedUrl} → ${resolvedModel}`,
+          url: resolvedUrl,
           status: parseInt(error.code || '0') || 0,
           response_time: 0,
-          request_data: JSON.stringify({ provider: providerId, model: resolvedModel }),
+          request_data: JSON.stringify({ aiProvider: providerId, aiModel: model, aiSystemPrompts: systemPrompts, aiUserPrompt: userPrompt, aiTools: tools, aiSettings: settings, mcpServerConfigs: mcpServerConfigs, authType: msg.authType, authData: msg.authData }),
           response_data: JSON.stringify({ error: error.message, diagnostics: error.diagnostics }),
         });
         trimHistory(500);

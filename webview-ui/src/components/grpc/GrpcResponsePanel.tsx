@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import type { GrpcStreamMessage } from '../../store/tabs-store';
-import { PillTabs, CodeEditor, RequestProgressOverlay } from '../shared';
+import { PillTabs, CodeEditor, RequestProgressOverlay, CopyButton } from '../shared';
 import { ScriptResultsView } from '../shared/display/ScriptResultsView';
 import { cancelRequest } from '../../services/request';
 import type { PillTab } from '../shared';
@@ -87,7 +87,12 @@ export function GrpcResponsePanel() {
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
         {activeSubTab === 'body' && response && (
-          <div className="h-full">
+          <div className="h-full flex flex-col min-h-0">
+            <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--color-surface-border)] flex-shrink-0">
+              <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Response Body</span>
+              <CopyButton text={response.body || ''} size={14} />
+            </div>
+            <div className="flex-1 min-h-0">
             <CodeEditor
               value={response.body || ''}
               onChange={() => {}}
@@ -95,6 +100,7 @@ export function GrpcResponsePanel() {
               readOnly
               className="h-full"
             />
+            </div>
           </div>
         )}
 

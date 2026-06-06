@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { PillTabs, CodeEditor, RequestProgressOverlay } from '../shared';
+import { PillTabs, CodeEditor, RequestProgressOverlay, CopyButton } from '../shared';
 import { ScriptResultsView } from '../shared/display/ScriptResultsView';
 import { cancelRequest } from '../../services/request';
 import type { PillTab } from '../shared';
@@ -97,6 +97,10 @@ export function SoapResponsePanel() {
                 <span className="font-semibold">Error: </span>{response.statusText}
               </div>
             )}
+            <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--color-surface-border)]">
+              <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Response Body</span>
+              <CopyButton text={response.body || ''} size={14} />
+            </div>
             <div className="flex-1 min-h-0">
               <CodeEditor
                 value={response.body || ''}
@@ -111,14 +115,25 @@ export function SoapResponsePanel() {
 
         {activeSubTab === 'headers' && (
           <div className="p-3 space-y-1">
-            {response.headers?.map((h, i) => (
-              <div key={i} className="flex items-center gap-2 text-[11px] font-mono">
-                <span className="text-[var(--color-text-secondary)] font-semibold">{h.key}:</span>
-                <span className="text-[var(--color-text-primary)]">{h.value}</span>
-              </div>
-            )) || (
-              <p className="text-[11px] text-[var(--color-text-muted)]">No response headers</p>
-            )}
+            {(() => {
+              const hdrs = (response as any).headers;
+              if (Array.isArray(hdrs)) {
+                return hdrs.map((entry: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-2 text-[11px] font-mono">
+                    <span className="text-[var(--color-text-secondary)] font-semibold">{entry.key}:</span>
+                    <span className="text-[var(--color-text-primary)]">{entry.value}</span>
+                  </div>
+                ));
+              }
+              return Object.entries(hdrs || {}).length > 0
+                ? Object.entries(hdrs).map(([key, val]) => (
+                    <div key={key} className="flex items-center gap-2 text-[11px] font-mono">
+                      <span className="text-[var(--color-text-secondary)] font-semibold">{key}:</span>
+                      <span className="text-[var(--color-text-primary)]">{val}</span>
+                    </div>
+                  ))
+                : <p className="text-[11px] text-[var(--color-text-muted)]">No response headers</p>;
+            })()}
           </div>
         )}
 

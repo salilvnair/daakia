@@ -159,7 +159,7 @@ export function SSEPanel() {
     if (!url) return;
     setConnState('connecting');
     setError(null);
-    postMsg({ type: 'sse:connect', tabId: activeTab.id, url, eventType, envId: activeTab.envId });
+    postMsg({ type: 'sse:connect', tabId: activeTab.id, url, eventType, headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [], envId: activeTab.envId });
   }, [activeTab, eventType]);
 
   const handleDisconnect = useCallback(() => {

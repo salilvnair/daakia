@@ -105,6 +105,13 @@ export async function handleSoapInvoke(
           soapService: msg.soapService || '',
           envelope,
           headers: rawHeaders,
+          authType: msg.authType || 'none',
+          authData: msg.authData || {},
+          wsSecurity: msg.wsSecurity || null,
+          assertions: msg.assertions || [],
+          attachments: (msg.attachments as any[])?.map(a => ({ contentId: a.contentId, contentType: a.contentType, filename: a.filename })) || [],
+          preRequestScript: msg.preRequestScript || '',
+          postResponseScript: msg.postResponseScript || '',
         }),
         response_data: JSON.stringify({
           headers: result.headers,
@@ -169,6 +176,13 @@ export async function handleSoapInvoke(
           soapService: msg.soapService || '',
           envelope,
           headers: rawHeaders,
+          authType: msg.authType || 'none',
+          authData: msg.authData || {},
+          wsSecurity: msg.wsSecurity || null,
+          assertions: msg.assertions || [],
+          attachments: (msg.attachments as any[])?.map(a => ({ contentId: a.contentId, contentType: a.contentType, filename: a.filename })) || [],
+          preRequestScript: msg.preRequestScript || '',
+          postResponseScript: msg.postResponseScript || '',
         }),
       });
       trimHistory(500);

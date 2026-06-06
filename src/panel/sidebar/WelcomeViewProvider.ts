@@ -3,13 +3,27 @@ import * as vscode from 'vscode';
 export class WelcomeViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'daakia.welcome';
 
-  constructor(private readonly _extensionUri: vscode.Uri) {}
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    private readonly _dbReady: Promise<void>,
+  ) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
     webviewView.webview.options = { enableScripts: true };
     webviewView.webview.html = this._getHtml();
 
-    // Only open main panel on explicit user interaction (click the sidebar button)
+    // Auto-open main panel when sidebar first becomes visible
+    webviewView.onDidChangeVisibility(() => {
+      if (webviewView.visible) {
+        this._dbReady.then(() => {
+          vscode.commands.executeCommand('daakia.openPanel');
+          // Collapse sidebar so Daakia takes the full editor area
+          vscode.commands.executeCommand('workbench.action.closeSidebar');
+        });
+      }
+    });
+
+    // Also handle explicit button click from webview HTML
     webviewView.webview.onDidReceiveMessage((msg) => {
       if (msg.command === 'openPanel') {
         vscode.commands.executeCommand('daakia.openPanel');

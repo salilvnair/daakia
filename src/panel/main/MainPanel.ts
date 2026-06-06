@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting } from '../../storage/db';
+import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies } from '../../storage/db';
 // Handler imports
 import { handleExecuteRequest, handleGetOAuth2Token } from './handlers/request-handler';
 import { cancelRestRequest } from '../../http/request-executor';
@@ -164,7 +164,7 @@ export class MainPanel {
         handleGraphQLConnect(msg, this._post);
         break;
       case 'executeGraphQL':
-        handleExecuteGraphQL(msg, this._post);
+        handleExecuteGraphQL(msg, this._post, () => this._sendHistory('graphql'));
         break;
       case 'gql:subscribe':
         handleGraphQLSubscribe(msg, this._post);
@@ -175,7 +175,7 @@ export class MainPanel {
 
       // ── WebSocket Client ──
       case 'ws:connect':
-        handleWsConnect(msg, this._post);
+        handleWsConnect(msg, this._post, () => this._sendHistory('websocket'));
         break;
       case 'ws:disconnect':
         handleWsDisconnect(msg, this._post);
@@ -186,7 +186,7 @@ export class MainPanel {
 
       // ── SSE Client ──
       case 'sse:connect':
-        handleSseConnect(msg, this._post);
+        handleSseConnect(msg, this._post, () => this._sendHistory('websocket'));
         break;
       case 'sse:disconnect':
         handleSseDisconnect(msg);
@@ -194,7 +194,7 @@ export class MainPanel {
 
       // ── Socket.IO Client ──
       case 'socketio:connect':
-        handleSocketIOConnect(msg, this._post);
+        handleSocketIOConnect(msg, this._post, () => this._sendHistory('websocket'));
         break;
       case 'socketio:disconnect':
         handleSocketIODisconnect(msg, this._post);
@@ -205,7 +205,7 @@ export class MainPanel {
 
       // ── MQTT Client ──
       case 'mqtt:connect':
-        handleMqttConnect(msg, this._post);
+        handleMqttConnect(msg, this._post, () => this._sendHistory('websocket'));
         break;
       case 'mqtt:disconnect':
         handleMqttDisconnect(msg);
@@ -222,7 +222,7 @@ export class MainPanel {
 
       // ── gRPC Client ──
       case 'grpc:invoke':
-        handleGrpcInvoke(msg, this._post);
+        handleGrpcInvoke(msg, this._post, () => this._sendHistory('grpc'));
         break;
       case 'grpc:cancel':
         handleGrpcCancel(msg, this._post);
@@ -349,6 +349,14 @@ export class MainPanel {
       case 'mockServer:updateGrpcMethods':
         handleUpdateMockGrpcMethods(msg);
         break;
+
+      // ── Cookie Jar ──
+      case 'getCookiesForDomain': {
+        const domain = msg.domain as string;
+        const cookies = domain ? getCookies(domain) : [];
+        this._post({ type: 'cookiesForDomain', domain, cookies });
+        break;
+      }
 
       // ── Utility ──
       case 'rebuildSqlite':

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import { CodeEditor } from '../../shared';
+import { CodeEditor, CopyButton } from '../../shared';
 import { downloadBlob } from '../../../services/response';
-import { WrapLinesIcon, DownloadIcon, CopyIcon } from '../../../icons';
+import { WrapLinesIcon, DownloadIcon } from '../../../icons';
 import { ToolbarBtn } from './ToolbarBtn';
 
 export function RawResponseView({ response, wrapLines, setWrapLines }: { response: { body: string; contentType: string }; wrapLines: boolean; setWrapLines: (v: boolean) => void }) {
@@ -21,9 +21,7 @@ export function RawResponseView({ response, wrapLines, setWrapLines }: { respons
           <ToolbarBtn title="Download" onClick={handleDownload}>
             <DownloadIcon size={14} />
           </ToolbarBtn>
-          <ToolbarBtn title="Copy" onClick={() => navigator.clipboard.writeText(response.body)}>
-            <CopyIcon size={14} />
-          </ToolbarBtn>
+          <CopyButton text={response.body} size={14} className="w-7 h-7" />
         </div>
       </div>
 

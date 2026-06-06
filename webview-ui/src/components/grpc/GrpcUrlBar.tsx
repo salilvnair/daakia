@@ -97,6 +97,10 @@ export function GrpcUrlBar() {
       tls: activeTab.grpcTls ?? false,
       protoFile: activeTab.grpcProtoFile,
       rpcType,
+      authType: activeTab.authType,
+      authData: activeTab.authData,
+      preRequestScript: activeTab.preRequestScript || '',
+      postResponseScript: activeTab.postResponseScript || '',
     });
 
     updateTab(activeTab.id, { loading: true, grpcStreamMessages: [], grpcStreamStatus: 'idle' });

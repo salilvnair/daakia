@@ -1,5 +1,5 @@
 import { useTabsStore } from '../../store/tabs-store';
-import { CodeEditor, RequestProgressOverlay } from '../shared';
+import { CodeEditor, RequestProgressOverlay, CopyButton } from '../shared';
 import { cancelRequest } from '../../services/request';
 
 /**
@@ -69,6 +69,7 @@ export function GraphQLResponse() {
       {/* Response header + body */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)]">
         <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Response</span>
+        <CopyButton text={response.body ? formatJson(response.body) : ''} size={14} />
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         <CodeEditor
