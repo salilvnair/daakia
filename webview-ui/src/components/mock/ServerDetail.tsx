@@ -7,7 +7,7 @@ import { MOCK_PROTOCOL_COLORS, getMockProtocolBg, getMockProtocolLabel } from '.
 import { TrashIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from '../../icons';
 import type { MockServer, MockRoute } from './mock-types';
 import { openTryTab } from './mock-try-handler';
-import { RestRoutesConfig, GraphQLConfig, WebSocketConfig, SSEConfig, SocketIOConfig, MQTTConfig, GrpcConfig, SoapConfig } from './configs';
+import { RestRoutesConfig, GraphQLConfig, WebSocketConfig, SSEConfig, SocketIOConfig, MQTTConfig, GrpcConfig, SoapConfig, AiMockConfig, McpMockConfig } from './configs';
 import { postMsg } from '../../vscode';
 
 interface ServerDetailProps {
@@ -16,18 +16,19 @@ interface ServerDetailProps {
   onToggleRunning: () => void;
   onDelete: () => void;
   onAddRoute: () => void;
+  onAddGeneratedRoutes?: (routes: Partial<MockRoute>[]) => void;
   onUpdateRoute: (routeId: string, patch: Partial<MockRoute>) => void;
   onDeleteRoute: (routeId: string) => void;
   editingRoute: string | null;
   onEditRoute: (id: string | null) => void;
 }
 
-export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAddRoute, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute }: ServerDetailProps) {
+export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAddRoute, onAddGeneratedRoutes, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute }: ServerDetailProps) {
   const [urlCopied, setUrlCopied] = useState(false);
   const [wsdlCopied, setWsdlCopied] = useState(false);
 
   const serverUrl = server.running && server.port
-    ? `${server.protocol === 'websocket' || server.protocol === 'socketio' || server.protocol === 'mqtt' ? 'ws' : 'http'}://localhost:${server.port}${server.protocol === 'graphql' ? '/graphql' : server.protocol === 'socketio' ? '/socket.io/' : ''}`
+    ? `${server.protocol === 'websocket' || server.protocol === 'socketio' || server.protocol === 'mqtt' ? 'ws' : 'http'}://localhost:${server.port}${server.protocol === 'graphql' ? '/graphql' : server.protocol === 'socketio' ? '/socket.io/' : server.protocol === 'ai' ? '/v1' : server.protocol === 'mcp' ? '/mcp' : ''}`
     : '';
 
   const hasOAuthRoute = server.routes?.some(r => r.path?.includes('/oauth/authorize'));
@@ -145,13 +146,14 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         )}
       </div>
 
-      {/* Description */}
-      <input
-        type="text"
+      {/* Description — multiline textarea so users can paste full context (user stories, JSON structures, etc.) for AI generation */}
+      <textarea
         value={server.description}
         onChange={(e) => onUpdate({ description: e.target.value })}
-        placeholder="Description (optional)"
-        className="w-full h-[32px] px-2.5 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+        placeholder="Description (optional) — paste user stories, JSON request/response examples, or any context to guide AI route generation"
+        rows={3}
+        className="w-full px-2.5 py-2 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] resize-y leading-relaxed min-h-[60px]"
+        style={{ fontFamily: 'inherit' }}
       />
 
       {/* Protocol-specific content */}
@@ -160,6 +162,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
           server={server}
           onUpdate={onUpdate}
           onAddRoute={onAddRoute}
+          onAddGeneratedRoutes={onAddGeneratedRoutes}
           onUpdateRoute={onUpdateRoute}
           onDeleteRoute={onDeleteRoute}
           editingRoute={editingRoute}
@@ -193,6 +196,14 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
 
       {server.protocol === 'soap' && (
         <SoapConfig server={server} onUpdate={onUpdate} />
+      )}
+
+      {server.protocol === 'ai' && (
+        <AiMockConfig server={server} onUpdate={onUpdate} />
+      )}
+
+      {server.protocol === 'mcp' && (
+        <McpMockConfig server={server} onUpdate={onUpdate} />
       )}
     </div>
   );

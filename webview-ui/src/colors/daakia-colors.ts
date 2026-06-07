@@ -78,6 +78,24 @@ export const palette = {
   white: { light: '#ffffff', dark: '#ffffff' },
 } as const;
 
+// ─── AI Provider Brand Colors (fixed — not theme-dependent) ──────────────────
+// These are official brand colors from each provider.
+// Import and use in LlmProviderSettings / provider cards to avoid hardcoded hex.
+export const PROVIDER_BRAND_COLORS = {
+  'daakia-mock':  '#eab308',
+  copilot:        '#8957E5',
+  openai:         '#10a37f',
+  anthropic:      '#D97757',
+  google:         '#3186FF',
+  deepseek:       '#4D6BFE',
+  xai:            '#8E8EA0',
+  groq:           '#F55036',
+  together:       '#EF2CC1',
+  mistral:        '#FF8205',
+  ollama:         '#74AA9C',
+  'azure-openai': '#9A2884',
+} as const;
+
 // ─── Computed Color Values (call these at render time for theme-awareness) ───
 
 /** Get all colors resolved for current theme */
@@ -228,7 +246,7 @@ export function methodBg(method: string): string {
 
 // ─── Mock Server Protocol Colors ─────────────────────────────────────────────
 
-export type MockServerProtocol = 'rest' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc' | 'soap';
+export type MockServerProtocol = 'rest' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
 export const MOCK_PROTOCOL_COLORS: Record<MockServerProtocol, string> = {
   rest: palette.protocolRest.dark,
@@ -239,6 +257,8 @@ export const MOCK_PROTOCOL_COLORS: Record<MockServerProtocol, string> = {
   mqtt: '#8b5cf6',
   grpc: '#00b8b5',
   soap: '#f97171',
+  ai: '#a855f7',
+  mcp: '#6366f1',
 };
 
 export function getMockProtocolColor(protocol: MockServerProtocol): string {
@@ -250,6 +270,8 @@ export function getMockProtocolColor(protocol: MockServerProtocol): string {
     case 'mqtt': return 'var(--color-protocol-mqtt)';
     case 'grpc': return 'var(--color-protocol-grpc)';
     case 'soap': return 'var(--color-protocol-soap)';
+    case 'ai': return '#a855f7';
+    case 'mcp': return '#6366f1';
     default: return themed(palette.protocolRest);
   }
 }
@@ -267,6 +289,8 @@ export function getMockProtocolLabel(protocol: MockServerProtocol): string {
     case 'mqtt': return 'MQTT';
     case 'grpc': return 'gRPC';
     case 'soap': return 'SOAP';
+    case 'ai': return 'AI';
+    case 'mcp': return 'MCP';
     default: return 'REST';
   }
 }

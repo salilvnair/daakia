@@ -17,7 +17,7 @@ function FeatureToggleRow({ featureKey }: { featureKey: keyof AiFeatureFlags }) 
   const enabled = features[featureKey];
 
   return (
-    <div className="flex items-start gap-3 py-2.5 border-b border-[rgba(255,255,255,0.06)] last:border-b-0">
+    <div className="flex items-start gap-4 py-2.5 border-b border-[rgba(255,255,255,0.06)] last:border-b-0 max-w-[500px]">
       <div className="flex-1 min-w-0 pt-0.5">
         <div className="flex items-center gap-1.5">
           <SparkleIcon size={11} style={{ color: enabled ? ACCENT : 'var(--color-text-muted)', opacity: enabled ? 1 : 0.4 }} />
@@ -48,14 +48,16 @@ export function AiFeatureSettings() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-0 px-4 pt-3 pb-0 border-b border-[var(--color-surface-border)]">
-        <span className="px-3 py-2 text-[12px] border-b-2 font-medium" style={{ borderColor: ACCENT, color: ACCENT }}>
-          AI Features
-        </span>
+      <div className="border-b border-[var(--color-surface-border)] pt-3">
+        <div className="flex items-center gap-0 px-5">
+          <span className="px-3 py-2 text-[12px] border-b-2 font-medium" style={{ borderColor: ACCENT, color: ACCENT }}>
+            AI Features
+          </span>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-4">
-        <div className="flex flex-col gap-4 max-w-[600px]">
+      <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-5 py-4">
+        <div className="flex flex-col gap-4">
           <div>
             <p className="text-[13px] font-medium text-[var(--color-text-primary)]">AI-Powered Features</p>
             <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">

@@ -6,6 +6,7 @@ import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../i
 import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
 import { WEBSOCKET_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
+import { MockAiGenerateButton } from '../MockAiGeneratePopover';
 
 const WS_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -85,14 +86,13 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
             onChange={applySample}
             accentColor="var(--color-mock-server)"
           />
-          <button
-            type="button"
-            onClick={() => {/* TODO: AI generate */}}
-            className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-protocol-ws)] border border-[rgba(76,175,80,0.2)] hover:bg-[rgba(76,175,80,0.08)] cursor-pointer transition-colors opacity-50"
-            title="Coming soon"
-          >
-            ✨ Generate with AI
-          </button>
+          <MockAiGenerateButton
+            templateKey="mock.websocket.generate"
+            title="WebSocket Handlers"
+            serverName={server.name}
+            serverContext={handlers.length > 0 ? handlers.map((h: any) => `${h.type || 'message'}: ${h.name || h.matchPattern || ''}`).join('\n') : undefined}
+            accentVar="var(--color-protocol-ws)"
+          />
         </div>
       </div>
       <div className="flex items-center gap-1">

@@ -6,6 +6,7 @@ import { useToastStore } from '../../../store/toast-store';
 import { PillTabs, KeyValueTable, FormDataTable, CodeEditor, StyledDropdown, ConfirmDialog, AuthEditor, ScriptsEditor, type PillTab } from '../../shared';
 import { TrashIcon, BulkEditIcon, PlusIcon, SparkleIcon, WandIcon, FileUploadIcon, LockIcon, CookieIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
+import { AiHeaderSuggest } from '../../ai/AiHeaderSuggest';
 
 // ── Computed auth header rows (Task 7) ──────────────────────────────────────
 function computeAuthRows(authType: string, authData: Record<string, string>): { key: string; value: string }[] {
@@ -225,6 +226,20 @@ export function RequestConfig() {
                 badgeColor="var(--color-warning)"
               />
             ))}
+            <AiHeaderSuggest
+              tabId={tab.id}
+              method={tab.method}
+              url={tab.url}
+              bodyContentType={tab.bodyContentType}
+              authType={tab.authType}
+              existingHeaders={tab.headers}
+              onAddHeader={(key, value) => {
+                // Insert before the last empty row, or append
+                const rows = tab.headers.filter(r => r.key || r.value);
+                const newRow = { id: crypto.randomUUID(), key, value, description: '', enabled: true };
+                updateTab(tab.id, { headers: [...rows, newRow] });
+              }}
+            />
             <KeyValueTable
               rows={tab.headers}
               onChange={(rows) => updateTab(tab.id, { headers: rows })}

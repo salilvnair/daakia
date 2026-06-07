@@ -6,6 +6,7 @@ import { SOAP_MOCK_SAMPLES } from '../samples/soap';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import type { MockServer, SoapMockOperation } from '../mock-types';
+import { MockAiGenerateButton } from '../MockAiGeneratePopover';
 
 const ACCENT = 'var(--color-mock-server)';
 
@@ -203,14 +204,15 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
             size="sm"
             accentColor={ACCENT}
           />
-          <button
-            type="button"
-            onClick={() => {/* TODO: AI generate */}}
-            className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.2)] hover:bg-[rgba(234,179,8,0.08)] cursor-pointer transition-colors opacity-50"
-            title="Coming soon"
-          >
-            ✨ Generate with AI
-          </button>
+          <MockAiGenerateButton
+            templateKey="mock.soap.generate"
+            title="SOAP Operations"
+            serverName={server.name}
+            serverContext={(server.soapOperations || []).length > 0
+              ? (server.soapOperations || []).map((op: SoapMockOperation) => op.soapAction || op.operationName || '').join('\n')
+              : undefined}
+            accentVar="var(--color-protocol-soap)"
+          />
           <button
             type="button"
             onClick={addService}

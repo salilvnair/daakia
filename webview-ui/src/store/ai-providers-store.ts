@@ -23,9 +23,13 @@ export interface AiProviderConfig {
 interface AiProvidersStoreState {
   providers: AiProviderConfig[];
   loaded: boolean;
+  /** ID of the provider used by default for all AI requests and new AI tabs */
+  defaultProviderId: string;
+  /** Model ID used by default when opening a new AI tab with the default provider */
+  defaultModelId: string;
 
   // Init from extension host or seed defaults
-  setProviders: (providers: AiProviderConfig[]) => void;
+  setProviders: (providers: AiProviderConfig[], defaultProviderId?: string, defaultModelId?: string) => void;
   seedDefaults: () => void;
 
   // Provider CRUD
@@ -33,6 +37,9 @@ interface AiProvidersStoreState {
   updateProvider: (id: string, patch: Partial<Omit<AiProviderConfig, 'models'>>) => void;
   removeProvider: (id: string) => void;
   toggleProvider: (id: string) => void;
+
+  // Default selection — drives AI tab init and all agentic LLM calls
+  setDefaultProvider: (providerId: string, modelId: string) => void;
 
   // Model CRUD
   addModel: (providerId: string, model: AiModelConfig) => void;
@@ -45,8 +52,8 @@ interface AiProvidersStoreState {
   getEnabledModels: (providerId: string) => AiModelConfig[];
 }
 
-function persist(providers: AiProviderConfig[]) {
-  postMsg({ type: 'aiProviders:save', providers });
+function persist(providers: AiProviderConfig[], defaultProviderId: string, defaultModelId: string) {
+  postMsg({ type: 'aiProviders:save', providers, defaultProviderId, defaultModelId });
 }
 
 function buildDefaults(): AiProviderConfig[] {
@@ -66,33 +73,43 @@ function buildDefaults(): AiProviderConfig[] {
 export const useAiProvidersStore = create<AiProvidersStoreState>((set, get) => ({
   providers: [],
   loaded: false,
+  defaultProviderId: 'copilot',
+  defaultModelId: 'auto',
 
-  setProviders: (providers) => set({ providers, loaded: true }),
+  setProviders: (providers, defaultProviderId = 'copilot', defaultModelId = 'auto') =>
+    set({ providers, loaded: true, defaultProviderId, defaultModelId }),
 
   seedDefaults: () => {
     const defaults = buildDefaults();
-    set({ providers: defaults, loaded: true });
-    persist(defaults);
+    set({ providers: defaults, loaded: true, defaultProviderId: 'copilot', defaultModelId: 'auto' });
+    persist(defaults, 'copilot', 'auto');
+  },
+
+  setDefaultProvider: (providerId, modelId) => {
+    set({ defaultProviderId: providerId, defaultModelId: modelId });
+    const { providers } = get();
+    persist(providers, providerId, modelId);
   },
 
   addProvider: (provider) => {
     const next = [...get().providers, provider];
     set({ providers: next });
-    persist(next);
+    const { defaultProviderId, defaultModelId } = get();
+    persist(next, defaultProviderId, defaultModelId);
   },
 
   updateProvider: (id, patch) => {
-    const next = get().providers.map(p =>
-      p.id === id ? { ...p, ...patch } : p
-    );
+    const next = get().providers.map(p => p.id === id ? { ...p, ...patch } : p);
     set({ providers: next });
-    persist(next);
+    const { defaultProviderId, defaultModelId } = get();
+    persist(next, defaultProviderId, defaultModelId);
   },
 
   removeProvider: (id) => {
     const next = get().providers.filter(p => p.id !== id);
     set({ providers: next });
-    persist(next);
+    const { defaultProviderId, defaultModelId } = get();
+    persist(next, defaultProviderId, defaultModelId);
   },
 
   toggleProvider: (id) => {
@@ -100,7 +117,8 @@ export const useAiProvidersStore = create<AiProvidersStoreState>((set, get) => (
       p.id === id ? { ...p, enabled: !p.enabled } : p
     );
     set({ providers: next });
-    persist(next);
+    const { defaultProviderId, defaultModelId } = get();
+    persist(next, defaultProviderId, defaultModelId);
   },
 
   addModel: (providerId, model) => {
@@ -108,7 +126,8 @@ export const useAiProvidersStore = create<AiProvidersStoreState>((set, get) => (
       p.id === providerId ? { ...p, models: [...p.models, model] } : p
     );
     set({ providers: next });
-    persist(next);
+    const { defaultProviderId, defaultModelId } = get();
+    persist(next, defaultProviderId, defaultModelId);
   },
 
   updateModel: (providerId, modelId, patch) => {
@@ -118,7 +137,8 @@ export const useAiProvidersStore = create<AiProvidersStoreState>((set, get) => (
         : p
     );
     set({ providers: next });
-    persist(next);
+    const { defaultProviderId, defaultModelId } = get();
+    persist(next, defaultProviderId, defaultModelId);
   },
 
   removeModel: (providerId, modelId) => {
@@ -128,7 +148,8 @@ export const useAiProvidersStore = create<AiProvidersStoreState>((set, get) => (
         : p
     );
     set({ providers: next });
-    persist(next);
+    const { defaultProviderId, defaultModelId } = get();
+    persist(next, defaultProviderId, defaultModelId);
   },
 
   toggleModel: (providerId, modelId) => {
@@ -138,7 +159,8 @@ export const useAiProvidersStore = create<AiProvidersStoreState>((set, get) => (
         : p
     );
     set({ providers: next });
-    persist(next);
+    const { defaultProviderId, defaultModelId } = get();
+    persist(next, defaultProviderId, defaultModelId);
   },
 
   getEnabledProviders: () => get().providers.filter(p => p.enabled),

@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
+import { useUiStateStore } from '../../store/ui-state-store';
 import type { GrpcStreamMessage } from '../../store/tabs-store';
 import { PillTabs, CodeEditor, RequestProgressOverlay, CopyButton } from '../shared';
 import { ScriptResultsView } from '../shared/display/ScriptResultsView';
 import { cancelRequest } from '../../services/request';
 import type { PillTab } from '../shared';
-import { ArrowUpIcon, ArrowDownIcon } from '../../icons';
+import { ArrowUpIcon, ArrowDownIcon, SparkleIcon } from '../../icons';
+import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
+import { DataSchemaModal } from '../rest/response/DataSchemaModal';
 
 const ACCENT = 'var(--color-protocol-grpc)';
 
@@ -22,7 +25,15 @@ const responseTabs: PillTab[] = [
  */
 export function GrpcResponsePanel() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const [activeSubTab, setActiveSubTab] = useState('body');
+  const activeTabId = useTabsStore(s => s.activeTabId);
+  const storedSubTab = useUiStateStore(s => s.prefs[`grpc.response.subtab.${activeTabId}`]);
+  const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'body');
+  const [showSchema, setShowSchema] = useState(false);
+  const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
+  const setActiveSubTab = (tab: string) => {
+    setActiveSubTabLocal(tab);
+    if (activeTabId) useUiStateStore.getState().setPref(`grpc.response.subtab.${activeTabId}`, tab);
+  };
 
   if (!activeTab) return null;
 
@@ -72,7 +83,7 @@ export function GrpcResponsePanel() {
         </div>
       )}
 
-      {/* Sub-tabs */}
+      {/* Sub-tabs + AI actions */}
       <div className="flex items-center justify-between px-3 pt-2 border-b border-[var(--color-surface-border)]">
         <PillTabs
           tabs={responseTabs}
@@ -82,6 +93,42 @@ export function GrpcResponsePanel() {
           variant="underline"
           accentColor="var(--color-protocol-grpc)"
         />
+        {response && activeSubTab === 'body' && (
+          <div className="flex items-center gap-1.5 pb-1.5">
+            <AiActionButton
+              mode="explain"
+              label="Explain"
+              response={response}
+              requestMethod="gRPC"
+              requestUrl={activeTab.url || ''}
+              open={activePopup === 'explain'}
+              onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
+            />
+            <AiActionButton
+              mode="follow-up"
+              label="Follow-ups"
+              response={response}
+              requestMethod="gRPC"
+              requestUrl={activeTab.url || ''}
+              open={activePopup === 'follow-up'}
+              onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
+            />
+            <button
+              type="button"
+              onClick={() => setShowSchema(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
+              style={{
+                color: 'var(--color-protocol-ai)',
+                borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+                backgroundColor: 'transparent',
+              }}
+              title="Generate Data Schema"
+            >
+              <SparkleIcon size={10} />
+              Schema
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -128,6 +175,9 @@ export function GrpcResponsePanel() {
           <ScriptResultsView response={response} />
         )}
       </div>
+      {showSchema && response && (
+        <DataSchemaModal body={response.body || ''} onClose={() => setShowSchema(false)} />
+      )}
     </div>
   );
 }

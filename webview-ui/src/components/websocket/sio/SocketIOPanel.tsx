@@ -256,7 +256,7 @@ export function SocketIOPanel() {
             <ConnectIcon size={12} /> Connect
           </button>
         ) : (
-          <button type="button" onClick={handleDisconnect} className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[rgba(239,68,68,0.12)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.2)] cursor-pointer transition-colors flex items-center gap-1.5 flex-shrink-0 breathing-btn">
+          <button type="button" onClick={handleDisconnect} className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[rgba(239,68,68,0.12)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.2)] cursor-pointer transition-colors flex items-center gap-1.5 flex-shrink-0">
             <DisconnectIcon size={12} /> Disconnect
           </button>
         )}

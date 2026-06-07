@@ -8,7 +8,7 @@ import { useUiStateStore } from '../../store/ui-state-store';
 import { useMockStore } from '../../store/mock-store';
 import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
 import { MOCK_PROTOCOL_COLORS, getMockProtocolBg, getMockProtocolLabel } from '../../colors';
-import { ServerIcon, WebSocketIcon, SSEIcon, SocketIOIcon, MQTTIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolGrpcBadge, ProtocolSoapBadge } from '../../icons';
+import { ServerIcon, WebSocketIcon, SSEIcon, SocketIOIcon, MQTTIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../icons';
 import { ServerList } from './ServerList';
 import { ServerDetail } from './ServerDetail';
 import { MockLogPanel } from './MockLogPanel';
@@ -91,6 +91,8 @@ export function MockServerPanel() {
             grpcMethods: c.grpcMethods || [],
             grpcProtoFile: c.grpcProtoFile || '',
             soapOperations: c.soapOperations || [],
+            aiScenarios: c.aiScenarios || [],
+            mcpTools: c.mcpTools || [],
             running: false,
             createdAt: c.createdAt || Date.now(),
           }));
@@ -152,6 +154,8 @@ export function MockServerPanel() {
           grpcMethods: s.grpcMethods,
           grpcProtoFile: s.grpcProtoFile,
           soapOperations: s.soapOperations,
+          aiScenarios: s.aiScenarios,
+          mcpTools: s.mcpTools,
         })),
       });
     }, 500);
@@ -239,6 +243,8 @@ export function MockServerPanel() {
           socketioHandlers: server.socketioHandlers, mqttTopics: server.mqttTopics,
           grpcMethods: server.grpcMethods, grpcProtoFile: server.grpcProtoFile,
           soapOperations: server.soapOperations,
+          aiScenarios: server.aiScenarios,
+          mcpTools: server.mcpTools,
         },
       });
     }
@@ -273,6 +279,24 @@ export function MockServerPanel() {
 
   const deleteRoute = useCallback((serverId: string, routeId: string) => {
     setServers(prev => prev.map(s => s.id === serverId ? { ...s, routes: s.routes.filter(r => r.id !== routeId) } : s));
+    persistConfigs();
+    const server = serversRef.current.find(s => s.id === serverId);
+    if (server?.running) {
+      setTimeout(() => {
+        const updated = serversRef.current.find(s => s.id === serverId);
+        if (updated) postMsg({ type: 'mockServer:updateRoutes', id: serverId, routes: updated.routes });
+      }, 50);
+    }
+  }, [persistConfigs]);
+
+  /** Add one or more AI-generated routes to the server, each pre-filled with the parsed route data */
+  const addGeneratedRoutes = useCallback((serverId: string, patches: Partial<MockRoute>[]) => {
+    const newRoutes: MockRoute[] = patches.map(p => ({
+      ...createDefaultRoute(),
+      ...p,
+      id: crypto.randomUUID(),
+    }));
+    setServers(prev => prev.map(s => s.id === serverId ? { ...s, routes: [...s.routes, ...newRoutes] } : s));
     persistConfigs();
     const server = serversRef.current.find(s => s.id === serverId);
     if (server?.running) {
@@ -364,6 +388,7 @@ export function MockServerPanel() {
                 onToggleRunning={() => toggleRunning(activeServer.id)}
                 onDelete={() => setDeleteConfirm({ id: activeServer.id, name: activeServer.name, running: activeServer.running, port: activeServer.port })}
                 onAddRoute={() => addRoute(activeServer.id)}
+                onAddGeneratedRoutes={(patches) => addGeneratedRoutes(activeServer.id, patches)}
                 onUpdateRoute={(routeId, patch) => updateRoute(activeServer.id, routeId, patch)}
                 onDeleteRoute={(routeId) => deleteRoute(activeServer.id, routeId)}
                 editingRoute={editingRoute}
@@ -428,6 +453,8 @@ export function MockServerPanel() {
                     { value: 'mqtt', label: 'MQTT', icon: <MQTTIcon size={12} style={{ color: MOCK_PROTOCOL_COLORS.mqtt }} />, color: MOCK_PROTOCOL_COLORS.mqtt },
                     { value: 'grpc', label: 'gRPC', icon: <ProtocolGrpcBadge size={14} />, color: MOCK_PROTOCOL_COLORS.grpc },
                     { value: 'soap', label: 'SOAP', icon: <ProtocolSoapBadge size={14} />, color: MOCK_PROTOCOL_COLORS.soap },
+                    { value: 'ai', label: 'AI', icon: <ProtocolAiBadge size={14} />, color: MOCK_PROTOCOL_COLORS.ai },
+                    { value: 'mcp', label: 'MCP', icon: <ProtocolMcpBadge size={14} />, color: MOCK_PROTOCOL_COLORS.mcp },
                   ]}
                   value={newServerProtocol}
                   onChange={(v) => setNewServerProtocol(v as MockServerProtocol)}

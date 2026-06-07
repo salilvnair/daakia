@@ -542,6 +542,25 @@ export function getAuditEntries(limit = 50): CeAuditEntry[] {
   return results;
 }
 
+export function deleteAuditEntry(auditId: number): void {
+  if (!_db) { return; }
+  _db.run('DELETE FROM ce_audit WHERE audit_id = ?', [auditId]);
+  _scheduleSave();
+}
+
+export function deleteAuditEntries(auditIds: number[]): void {
+  if (!_db || !auditIds.length) { return; }
+  const placeholders = auditIds.map(() => '?').join(',');
+  _db.run(`DELETE FROM ce_audit WHERE audit_id IN (${placeholders})`, auditIds);
+  _scheduleSave();
+}
+
+export function clearAuditEntries(): void {
+  if (!_db) { return; }
+  _db.run('DELETE FROM ce_audit');
+  _scheduleSave();
+}
+
 // ────────────────────── Prompt Library ──────────────────────
 
 export interface PromptRow {
@@ -1222,6 +1241,37 @@ export function getAiFeatures(): AiFeatureFlags {
 
 export function setAiFeatures(flags: AiFeatureFlags): void {
   setSetting('aiFeatures', flags);
+}
+
+// ────────────────────── AI Prompt Templates ──────────────────────
+
+export function getAiPromptTemplates(): Record<string, string> {
+  return getSetting<Record<string, string>>('aiPromptTemplates') ?? {};
+}
+
+export function setAiPromptTemplates(templates: Record<string, string>): void {
+  setSetting('aiPromptTemplates', templates);
+}
+
+// ────────────────────── Daakia AI Conversation ──────────────────────
+
+export interface AiConversationMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+}
+
+export function saveAiConversation(messages: AiConversationMessage[]): void {
+  setSetting('aiConversation', messages);
+}
+
+export function loadAiConversation(): AiConversationMessage[] {
+  return getSetting<AiConversationMessage[]>('aiConversation') ?? [];
+}
+
+export function clearAiConversation(): void {
+  setSetting('aiConversation', []);
 }
 
 // ────────────────────── Table Info (Dev Tools) ──────────────────────

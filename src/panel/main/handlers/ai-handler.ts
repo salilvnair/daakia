@@ -11,9 +11,9 @@ import { AI_PROVIDERS } from '../../../ai/ai-providers';
 import type { AiMessage, AiRequestPayload, AiSettings, AiToolDef } from '../../../ai/ai-types';
 import { DEFAULT_AI_SETTINGS } from '../../../ai/ai-types';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
-import { insertHistory, trimHistory } from '../../../storage/db';
+import { insertHistory, trimHistory, getSetting, insertAudit } from '../../../storage/db';
 import { getAiMcpTools, callAiMcpTool } from './ai-mcp-handler';
-import { resolveProviderAuth } from '../../../services/llm/llm-provider-service';
+import { resolveProviderAuth, autoResolveProvider, resolveProviderConfig } from '../../../services/llm/llm-provider-service';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -26,15 +26,41 @@ export async function handleAiSend(
   refreshHistory?: () => void,
 ) {
   const tabId = msg.tabId as string;
-  const providerId = msg.provider as string || 'openai';
-  const model = msg.model as string || '';
+  // Use stored default provider — user sets this in LLM Provider settings (falls back to copilot)
+  const storedDefaultProvider = getSetting<string>('aiDefaultProvider') ?? 'copilot';
+  const requestedProvider = (msg.provider as string) || storedDefaultProvider;
+  const requestedModel = msg.model as string || '';
   const baseUrl = msg.baseUrl as string || '';
   const envId = msg.envId as string | undefined;
 
   // Resolve env vars
   const vars = loadEnvVars(envId);
   const resolvedUrl = resolveEnvString(baseUrl, vars);
-  const resolvedModel = resolveEnvString(model, vars);
+  const resolvedModel = resolveEnvString(requestedModel, vars);
+
+  // Auto-resolve: if requested provider has no key, fall back to Copilot → first keyed provider
+  let providerId = requestedProvider;
+  let effectiveModel = resolvedModel;
+  let routeToCopilot = requestedProvider === 'copilot';
+  let resolvedBaseUrl = resolvedUrl;
+  try {
+    const resolved = await autoResolveProvider(requestedProvider, resolvedModel);
+    providerId = resolved.providerId;
+    effectiveModel = resolved.model || resolvedModel;
+    routeToCopilot = resolved.routeToCopilot;
+    // Use autoResolve's baseUrl (e.g. daakia-mock user-configured URL), else fall back to
+    // webview-supplied URL. If still empty, resolveProviderConfig reads user/registry config.
+    resolvedBaseUrl = resolvedUrl || resolved.baseUrl || resolveProviderConfig(providerId).baseUrl;
+  } catch (err) {
+    // No provider available at all — surface a helpful error immediately
+    postMessage({
+      type: 'ai:error',
+      tabId,
+      message: err instanceof Error ? err.message : 'No AI provider configured',
+      code: '503',
+    });
+    return;
+  }
 
   // Build messages array from conversation + system prompts + user prompt
   const systemPrompts = (msg.systemPrompts as string[]) || [];
@@ -85,12 +111,12 @@ export async function handleAiSend(
   const mcpTools = getAiMcpTools(tabId);
   const allTools = [...tools, ...mcpTools];
 
-  // Resolve auth: inject stored API key from OS keychain if webview didn't supply one
+  // Resolve auth: always inject from OS keychain (webview never sends LLM credentials)
   const resolvedAuth = await resolveProviderAuth(
     providerId as AiRequestPayload['provider'],
     resolvedUrl,
-    (msg.authType as string) || 'bearer',
-    (msg.authData as Record<string, string>) || {},
+    undefined,  // let resolveProviderAuth pick the correct authType per provider
+    {},         // always empty — webview never sends LLM keys
   );
 
   // Resolve env vars in auth data (in case user put {{ENV_VAR}} in the key)
@@ -104,8 +130,8 @@ export async function handleAiSend(
   const payload: AiRequestPayload = {
     tabId,
     provider: providerId as AiRequestPayload['provider'],
-    model: resolvedModel,
-    baseUrl: resolvedUrl,
+    model: effectiveModel,
+    baseUrl: resolvedBaseUrl,
     chatEndpoint,
     messages,
     tools: allTools.length ? allTools : undefined,
@@ -134,7 +160,7 @@ export async function handleAiSend(
     data: {
       provider: providerId,
       model: resolvedModel,
-      baseUrl: resolvedUrl,
+      baseUrl: resolvedBaseUrl,
       chatEndpoint,
       messageCount: messages.length,
       systemPrompts: systemPrompts.map(s => s.slice(0, 200)),
@@ -148,7 +174,7 @@ export async function handleAiSend(
   });
 
   // GitHub Copilot — route through VS Code Language Model API (no HTTP)
-  if (providerId === 'copilot') {
+  if (routeToCopilot) {
     executeCopilotRequest({
       payload,
       signal,
@@ -162,11 +188,37 @@ export async function handleAiSend(
           trimHistory(500);
           refreshHistory?.();
         } catch { /* ignore */ }
+        try {
+          insertAudit({
+            conversation_id: tabId,
+            stage: 'DAAKIA_AI',
+            model: 'copilot',
+            system_prompt: systemPrompts.join('\n\n').slice(0, 4000),
+            user_prompt: userPrompt.slice(0, 4000),
+            request_payload: JSON.stringify({ provider: 'copilot', messageCount: messages.length }),
+            response_payload: result.message.content.slice(0, 8000),
+            headers: JSON.stringify({ provider: 'copilot' }),
+            meta: JSON.stringify({ tokens: result.tokens, duration_ms: result.duration }),
+            duration_ms: result.duration,
+          });
+        } catch { /* ignore audit errors */ }
       },
       onError: (error) => {
         clearTimeout(timeoutId);
         cleanupAiRequest(tabId);
         postMessage({ type: 'ai:error', ...error });
+        try {
+          insertAudit({
+            conversation_id: tabId,
+            stage: 'DAAKIA_AI',
+            model: 'copilot',
+            system_prompt: systemPrompts.join('\n\n').slice(0, 4000),
+            user_prompt: userPrompt.slice(0, 4000),
+            request_payload: JSON.stringify({ provider: 'copilot', messageCount: messages.length }),
+            error: error.message,
+            duration_ms: 0,
+          });
+        } catch { /* ignore audit errors */ }
       },
     });
     return;
@@ -200,7 +252,7 @@ export async function handleAiSend(
           response_time: result.duration,
           request_data: JSON.stringify({
             aiProvider: providerId,
-            aiModel: model,
+            aiModel: effectiveModel,
             aiSystemPrompts: systemPrompts,
             aiUserPrompt: userPrompt,
             aiTools: tools,
@@ -218,6 +270,29 @@ export async function handleAiSend(
         trimHistory(500);
         refreshHistory?.();
       } catch { /* ignore history errors */ }
+
+      // Save to AI audit log
+      try {
+        insertAudit({
+          conversation_id: tabId,
+          stage: 'DAAKIA_AI',
+          model: effectiveModel,
+          system_prompt: systemPrompts.join('\n\n').slice(0, 4000),
+          user_prompt: userPrompt.slice(0, 4000),
+          request_payload: JSON.stringify({
+            provider: providerId,
+            model: effectiveModel,
+            baseUrl: resolvedBaseUrl,
+            messageCount: messages.length,
+            toolCount: allTools.length,
+            settings,
+          }),
+          response_payload: result.message.content.slice(0, 8000),
+          headers: JSON.stringify({ provider: providerId, baseUrl: resolvedBaseUrl }),
+          meta: JSON.stringify({ tokens: result.tokens, duration_ms: result.duration }),
+          duration_ms: result.duration,
+        });
+      } catch { /* ignore audit errors */ }
     },
     onError: (error) => {
       clearTimeout(timeoutId);
@@ -236,12 +311,34 @@ export async function handleAiSend(
           url: resolvedUrl,
           status: parseInt(error.code || '0') || 0,
           response_time: 0,
-          request_data: JSON.stringify({ aiProvider: providerId, aiModel: model, aiSystemPrompts: systemPrompts, aiUserPrompt: userPrompt, aiTools: tools, aiSettings: settings, mcpServerConfigs: mcpServerConfigs, authType: msg.authType, authData: msg.authData }),
+          request_data: JSON.stringify({ aiProvider: providerId, aiModel: effectiveModel, aiSystemPrompts: systemPrompts, aiUserPrompt: userPrompt, aiTools: tools, aiSettings: settings, mcpServerConfigs: mcpServerConfigs }),
           response_data: JSON.stringify({ error: error.message, diagnostics: error.diagnostics }),
         });
         trimHistory(500);
         refreshHistory?.();
       } catch { /* ignore */ }
+
+      // Save error to AI audit log
+      try {
+        insertAudit({
+          conversation_id: tabId,
+          stage: 'DAAKIA_AI',
+          model: effectiveModel,
+          system_prompt: systemPrompts.join('\n\n').slice(0, 4000),
+          user_prompt: userPrompt.slice(0, 4000),
+          request_payload: JSON.stringify({
+            provider: providerId,
+            model: effectiveModel,
+            baseUrl: resolvedBaseUrl,
+            messageCount: messages.length,
+            settings,
+          }),
+          error: error.message,
+          headers: JSON.stringify({ provider: providerId, baseUrl: resolvedBaseUrl, code: error.code }),
+          meta: JSON.stringify({ diagnostics: error.diagnostics }),
+          duration_ms: 0,
+        });
+      } catch { /* ignore audit errors */ }
     },
   });
 }

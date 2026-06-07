@@ -12,7 +12,7 @@ import { AiConversationPanel } from './AiConversationPanel';
 export function AiPanel() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
 
-  // Vertical split state
+  // Vertical split state — default 50/50
   const storedSplit = useUiStateStore(s => s.panelHeights['split.ai.main']);
   const [splitPercent, setSplitPercent] = useState(storedSplit ?? 50);
   const [isDragging, setIsDragging] = useState(false);

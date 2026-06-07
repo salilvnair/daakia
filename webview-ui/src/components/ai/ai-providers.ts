@@ -3,7 +3,7 @@
  * Kept separate since webview can't import from extension host.
  */
 
-export type AiProviderId = 'openai' | 'anthropic' | 'google' | 'ollama' | 'groq' | 'together' | 'mistral' | 'xai' | 'deepseek' | 'azure-openai' | 'custom' | 'copilot';
+export type AiProviderId = 'openai' | 'anthropic' | 'google' | 'ollama' | 'groq' | 'together' | 'mistral' | 'xai' | 'deepseek' | 'azure-openai' | 'custom' | 'copilot' | 'daakia-mock';
 
 export interface AiProviderModel {
   id: string;
@@ -21,6 +21,14 @@ export interface AiProviderInfo {
 }
 
 export const AI_PROVIDERS: AiProviderInfo[] = [
+  {
+    // DaakiaAI Mock — OpenAI-compatible mock AI server, no API key needed
+    // baseUrl is configured by the user in LLM Provider settings
+    id: 'daakia-mock', name: 'DaakiaAI (Mock)', baseUrl: '',
+    models: [
+      { id: 'mock1-model', name: 'Mock Model 1', context: 32000 },
+    ],
+  },
   {
     id: 'copilot', name: 'GitHub Copilot', baseUrl: 'vscode://copilot',
     models: [

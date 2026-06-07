@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { formatBytes } from '../../../services/response';
 import type { ResponseData } from '../../../store/tabs-store';
 import { AiActionButton } from '../../ai/AiAssistPopover';
@@ -13,6 +14,7 @@ interface ResponseStatusBarProps {
 }
 
 export function ResponseStatusBar({ response, requestMethod = 'GET', requestUrl = '', requestBody }: ResponseStatusBarProps) {
+  const [aiOpen, setAiOpen] = useState(false);
   const isNetworkError = response.status === 0;
   const isError = isNetworkError || response.status >= 400;
   const statusLabel = isNetworkError ? response.statusText || 'Error' : `${response.status} ${response.statusText}`;
@@ -53,6 +55,8 @@ export function ResponseStatusBar({ response, requestMethod = 'GET', requestUrl 
           requestMethod={requestMethod}
           requestUrl={requestUrl}
           requestBody={requestBody}
+          open={aiOpen}
+          onOpen={() => setAiOpen(p => !p)}
         />
       )}
     </div>

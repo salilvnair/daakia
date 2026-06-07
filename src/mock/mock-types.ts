@@ -3,7 +3,26 @@
  */
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
-export type MockServerProtocol = 'rest' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc' | 'soap';
+export type MockServerProtocol = 'rest' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc' | 'soap' | 'ai' | 'mcp';
+
+export interface AiMockScenario {
+  id: string;
+  name: string;
+  keywords: string[];  // keywords in user message to match this scenario
+  response: string;    // assistant reply text
+  delay: number;
+  enabled: boolean;
+}
+
+export interface McpMockTool {
+  id: string;
+  name: string;        // tool name (snake_case)
+  description: string;
+  inputSchema: string; // JSON Schema for input as string
+  response: string;    // JSON response when called
+  delay: number;
+  enabled: boolean;
+}
 
 export interface MockRoute {
   id: string;
@@ -125,6 +144,8 @@ export interface MockServerConfig {
   grpcProtoFile?: string;
   soapOperations?: SoapMockOperation[];
   soapWsdl?: string; // WSDL content to serve at ?wsdl
+  aiScenarios?: AiMockScenario[];
+  mcpTools?: McpMockTool[];
   port?: number;
 }
 

@@ -6,6 +6,7 @@ import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../i
 import { CodeEditor, StyledDropdown, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
 import { GRAPHQL_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
+import { MockAiGenerateButton } from '../MockAiGeneratePopover';
 
 const GRAPHQL_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -63,14 +64,13 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
             onChange={applySample}
             accentColor="var(--color-mock-server)"
           />
-          <button
-            type="button"
-            onClick={() => {/* TODO: AI generate */}}
-            className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-protocol-graphql)] border border-[rgba(229,53,171,0.2)] hover:bg-[rgba(229,53,171,0.08)] cursor-pointer transition-colors opacity-50"
-            title="Coming soon"
-          >
-            ✨ Generate with AI
-          </button>
+          <MockAiGenerateButton
+            templateKey="mock.graphql.generate"
+            title="GraphQL Schema"
+            serverName={server.name}
+            serverContext={server.graphqlSchema || undefined}
+            accentVar="var(--color-protocol-graphql)"
+          />
         </div>
       </div>
       <p className="text-[10px] text-[var(--color-text-muted)]">

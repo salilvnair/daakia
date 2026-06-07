@@ -1,7 +1,26 @@
 /**
  * Mock Server types shared across all mock UI components.
  */
-export type MockServerProtocol = 'rest' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc' | 'soap';
+export type MockServerProtocol = 'rest' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc' | 'soap' | 'ai' | 'mcp';
+
+export interface AiMockScenario {
+  id: string;
+  name: string;
+  keywords: string[];
+  response: string;
+  delay: number;
+  enabled: boolean;
+}
+
+export interface McpMockTool {
+  id: string;
+  name: string;
+  description: string;
+  inputSchema: string;
+  response: string;
+  delay: number;
+  enabled: boolean;
+}
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
 export interface MockRoute {
@@ -44,6 +63,8 @@ export interface MockServer {
   grpcProtoFile?: string;
   soapOperations?: SoapMockOperation[];
   soapWsdl?: string;
+  aiScenarios?: AiMockScenario[];
+  mcpTools?: McpMockTool[];
   running: boolean;
   createdAt: number;
 }
@@ -199,6 +220,29 @@ export function createDefaultMQTTTopic(): MQTTMockTopic {
   };
 }
 
+export function createDefaultAiScenario(): AiMockScenario {
+  return {
+    id: crypto.randomUUID(),
+    name: 'Custom Scenario',
+    keywords: ['custom', 'example'],
+    response: 'This is a custom mock AI response. Edit the keywords to match your use case and update this response.',
+    delay: 300,
+    enabled: true,
+  };
+}
+
+export function createDefaultMcpTool(): McpMockTool {
+  return {
+    id: crypto.randomUUID(),
+    name: 'my_tool',
+    description: 'A custom MCP tool. Describe what it does here.',
+    inputSchema: JSON.stringify({ type: 'object', properties: { input: { type: 'string', description: 'Tool input' } }, required: ['input'] }),
+    response: JSON.stringify({ result: 'Tool executed successfully', data: { input: '(echoed from request)' } }),
+    delay: 200,
+    enabled: true,
+  };
+}
+
 export function createDefaultServer(name: string, protocol: MockServerProtocol = 'rest'): MockServer {
   return {
     id: crypto.randomUUID(),
@@ -210,6 +254,8 @@ export function createDefaultServer(name: string, protocol: MockServerProtocol =
     sseEvents: protocol === 'sse' ? [createDefaultSSEEvent()] : [],
     socketioHandlers: protocol === 'socketio' ? [createDefaultSocketIOHandler()] : [],
     mqttTopics: protocol === 'mqtt' ? [createDefaultMQTTTopic()] : [],
+    aiScenarios: protocol === 'ai' ? [] : [],  // empty = use 15 built-in defaults on server
+    mcpTools: protocol === 'mcp' ? [] : [],   // empty = use 15 built-in defaults on server
     running: false,
     createdAt: Date.now(),
   };

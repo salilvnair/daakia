@@ -6,6 +6,7 @@ import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../i
 import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, DurationInput, type DropdownOption } from '../../shared';
 import { MQTT_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
+import { MockAiGenerateButton } from '../MockAiGeneratePopover';
 
 const MQTT_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -85,14 +86,15 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
             onChange={applySample}
             accentColor="var(--color-mock-server)"
           />
-          <button
-            type="button"
-            onClick={() => {/* TODO: AI generate */}}
-            className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-protocol-mqtt)] border border-[rgba(139,92,246,0.2)] hover:bg-[rgba(139,92,246,0.08)] cursor-pointer transition-colors opacity-50"
-            title="Coming soon"
-          >
-            ✨ Generate with AI
-          </button>
+          <MockAiGenerateButton
+            templateKey="mock.mqtt.generate"
+            title="MQTT Topics"
+            serverName={server.name}
+            serverContext={(server.mqttTopics || []).length > 0
+              ? (server.mqttTopics || []).map((t: any) => t.topic || '').join('\n')
+              : undefined}
+            accentVar="var(--color-protocol-mqtt)"
+          />
           <button type="button" onClick={addTopic} className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.25)] hover:bg-[rgba(234,179,8,0.1)] cursor-pointer transition-colors">
             + Add Topic
           </button>

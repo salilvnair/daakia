@@ -6,6 +6,7 @@ import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../i
 import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, DurationInput, type DropdownOption } from '../../shared';
 import { SSE_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
+import { MockAiGenerateButton } from '../MockAiGeneratePopover';
 
 const SSE_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -85,14 +86,13 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
             onChange={applySample}
             accentColor="var(--color-mock-server)"
           />
-          <button
-            type="button"
-            onClick={() => {/* TODO: AI generate */}}
-            className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-protocol-sse)] border border-[rgba(245,158,11,0.2)] hover:bg-[rgba(245,158,11,0.08)] cursor-pointer transition-colors opacity-50"
-            title="Coming soon"
-          >
-            ✨ Generate with AI
-          </button>
+          <MockAiGenerateButton
+            templateKey="mock.sse.generate"
+            title="SSE Events"
+            serverName={server.name}
+            serverContext={events.length > 0 ? events.map(e => e.name).join('\n') : undefined}
+            accentVar="var(--color-protocol-sse)"
+          />
         </div>
       </div>
       <button type="button" onClick={addEvent} className="self-start h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-protocol-sse)] border border-[rgba(245,158,11,0.2)] hover:bg-[rgba(245,158,11,0.08)] cursor-pointer transition-colors">+ Add Event</button>

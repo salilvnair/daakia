@@ -5,6 +5,7 @@ import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, GrpcUnaryIcon, GrpcS
 import { GRPC_SAMPLES } from '../samples/grpc';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import type { MockServer, GrpcMockMethod } from '../mock-types';
+import { MockAiGenerateButton } from '../MockAiGeneratePopover';
 
 const ACCENT = 'var(--color-mock-server)';
 
@@ -204,14 +205,14 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
             size="sm"
             accentColor={ACCENT}
           />
-          <button
-            type="button"
-            onClick={() => {/* TODO: AI generate */}}
-            className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.2)] hover:bg-[rgba(234,179,8,0.08)] cursor-pointer transition-colors opacity-50"
-            title="Coming soon"
-          >
-            ✨ Generate with AI
-          </button>
+          <MockAiGenerateButton
+            templateKey="mock.grpc.generate"
+            title="gRPC Services"
+            serverName={server.name}
+            serverContext={(server.grpcMethods || []).length > 0
+              ? (server.grpcMethods || []).map((m: GrpcMockMethod) => `${m.service}/${m.method} (${m.type})`).join('\n')
+              : undefined}
+          />
           <button
             type="button"
             onClick={addService}

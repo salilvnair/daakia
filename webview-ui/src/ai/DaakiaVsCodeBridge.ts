@@ -18,6 +18,8 @@
 
 import { getVsCodeApi } from '../vscode';
 import { useTabsStore } from '../store/tabs-store';
+import { useAiProvidersStore } from '../store/ai-providers-store';
+import { useAiConversationStore } from '../store/ai-conversation-store';
 
 const CE_MESSAGE_PATH = '/api/v1/conversation/message';
 const CE_STREAM_PATH = '/api/v1/conversation/stream/';
@@ -105,8 +107,8 @@ function handleExtensionMessage(evt: MessageEvent) {
   if (!pending) return;
 
   if (msg.type === 'ai:chunk') {
-    // Accumulate streaming tokens for the final response
-    const text = msg.text as string ?? '';
+    // Accumulate streaming tokens — executor sends 'delta', bridge also accepts 'text' as fallback
+    const text = (msg.delta as string) || (msg.text as string) || '';
     if (text) pending.accumulated += text;
   }
 
@@ -117,24 +119,15 @@ function handleExtensionMessage(evt: MessageEvent) {
     const msgObj = msg.message as Record<string, unknown> | undefined;
     const content = pending.accumulated || (msgObj?.content as string) || '';
 
-    // Store assistant response in tab history for next request context
-    const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
-    if (tab) {
-      const lastMsg = (tab.aiConversation ?? []).at(-1);
-      const assistantMsg = {
-        id: crypto.randomUUID(),
-        role: 'assistant' as const,
-        content,
-        timestamp: Date.now(),
-      };
-      useTabsStore.getState().updateTab(tabId, {
-        aiConversation: [...(tab.aiConversation ?? []), assistantMsg],
-        aiStreaming: false,
-        loading: false,
-      });
-    }
+    // For daakia-ai tabs, conversation is managed by useAiConversationStore (global, persisted).
+    // App.tsx's ai:complete handler also fires and calls finalizeAssistantMessage — skip here to avoid double.
+    // For other tab types, App.tsx handles it too. Bridge just resolves the pending fetch promise.
 
-    pending.resolve({ payload: { value: content } });
+    // Wrap plain text in a JSON envelope so ConvEngineChat's tryParseJsonObject
+    // succeeds → payload = { type: 'text', rawText: content }.
+    // DaakiaMdRendererComponent reads payload.rawText to feed MdViewer.
+    const wrapped = JSON.stringify({ type: 'text', rawText: content });
+    pending.resolve({ payload: { value: wrapped } });
   }
 
   if (msg.type === 'ai:error') {
@@ -190,7 +183,12 @@ export function installDaakiaBridges() {
 
     // Clear history on new chat
     if (reset) {
-      useTabsStore.getState().updateTab(tabId, { aiConversation: [] });
+      const resetTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+      if (resetTab?.type === 'daakia-ai') {
+        useAiConversationStore.getState().clearMessages();
+      } else {
+        useTabsStore.getState().updateTab(tabId, { aiConversation: [] });
+      }
     }
 
     return new Promise<Response>((resolve, reject) => {
@@ -221,33 +219,52 @@ export function installDaakiaBridges() {
         loading: true,
       });
 
-      // Store user message in history
+      // Store user message and read conversation history
       const userMsg = {
         id: crypto.randomUUID(),
         role: 'user' as const,
         content: message,
         timestamp: Date.now(),
       };
-      const currentHistory = tab.aiConversation ?? [];
-      useTabsStore.getState().updateTab(tabId, {
-        aiConversation: [...currentHistory, userMsg],
-      });
+      let currentHistory: typeof userMsg[];
+      if (tab.type === 'daakia-ai') {
+        // Global persisted conversation store for Daakia AI tab
+        currentHistory = useAiConversationStore.getState().messages as typeof userMsg[];
+        useAiConversationStore.getState().addUserMessage(userMsg);
+        useAiConversationStore.getState().setStreaming(true);
+      } else {
+        currentHistory = tab.aiConversation ?? [];
+        useTabsStore.getState().updateTab(tabId, {
+          aiConversation: [...currentHistory, userMsg],
+        });
+      }
+
+      // Resolve active AI provider from store — fall back to first enabled provider.
+      // Never use tab.authType/authData (those are REST request auth, not LLM credentials).
+      // Never use tab.url as baseUrl (that's the REST endpoint URL).
+      // The extension always injects the real LLM credentials from OS keychain.
+      const providerStore = useAiProvidersStore.getState();
+      // Use tab's explicit provider if user manually set it, otherwise fall back to store default
+      const resolvedProvider = tab.aiProvider || providerStore.defaultProviderId || providerStore.providers.find(p => p.enabled)?.id || 'openai';
+      const resolvedModel = tab.aiModel
+        || providerStore.defaultModelId
+        || providerStore.providers.find(p => p.id === resolvedProvider)?.models.find(m => m.enabled)?.id
+        || '';
 
       // Send to extension via Daakia protocol
       getVsCodeApi().postMessage({
         type: 'ai:send',
         tabId,
-        provider: tab.aiProvider ?? 'openai',
-        model: tab.aiModel ?? '',
-        baseUrl: tab.url ?? '',
+        provider: resolvedProvider,
+        model: resolvedModel,
+        baseUrl: '',           // extension resolves base URL from provider registry + user settings
         systemPrompts: tab.aiSystemPrompts ?? [],
         userPrompt: message,
         conversation: currentHistory,  // history BEFORE the current message
         tools: tab.aiTools ?? [],
         settings: tab.aiSettings ?? {},
         mcpServerConfigs: tab.mcpServerConfigs ?? [],
-        authType: tab.authType,
-        authData: tab.authData,
+        // NO authType / authData — extension injects from OS keychain
         envId: tab.envId,
       });
     });

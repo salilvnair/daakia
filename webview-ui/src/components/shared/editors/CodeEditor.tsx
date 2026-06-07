@@ -124,6 +124,19 @@ export function CodeEditor({
     };
   }, []);
 
+  // Explicit value sync for readOnly editors — @monaco-editor/react's internal
+  // value-update effect can silently drop updates when the editor mounts with
+  // value='' and the parent later sets a non-empty value (e.g. AI streaming).
+  // Belt-and-suspenders: directly push the value into the model whenever it changes.
+  useEffect(() => {
+    if (!readOnly) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+    const model = editor.getModel();
+    if (!model || model.getValue() === value) return;
+    model.setValue(value);
+  }, [value, readOnly]);
+
   // Navigate to line when breakpoint is clicked in RunAndDebugPanel
   const navigateLine = useDebugStore(s => s.navigateLine);
   useEffect(() => {

@@ -10,6 +10,7 @@
  * Used by ai-handler.ts to automatically fill in auth credentials
  * so the webview never needs to store sensitive keys.
  */
+import * as vscode from 'vscode';
 import { AI_PROVIDERS, getProvider } from '../../ai/ai-providers';
 import { getSetting } from '../../storage/db';
 import { retrieveApiKey, getAllKeyStatus } from '../secret-store';
@@ -61,6 +62,7 @@ export async function resolveProviderAuth(
         authData: { keyName: 'api-key', keyValue: storedToken },
       };
     case 'ollama':
+    case 'daakia-mock':
       return { authType: 'none', authData: {} };
     default:
       return {
@@ -110,4 +112,110 @@ export function resolveProviderConfig(providerId: AiProviderId | string, overrid
 export async function getProviderKeyStatus(): Promise<Record<string, boolean>> {
   const ids = AI_PROVIDERS.map(p => p.id);
   return getAllKeyStatus(ids);
+}
+
+// ─── Auto Provider Resolution ───
+
+export interface ResolvedProvider {
+  /** Final provider id to use */
+  providerId: string;
+  /** Model to use — may differ from requested if auto-selected */
+  model: string;
+  /** True when routing should go through VS Code LM API (Copilot) */
+  routeToCopilot: boolean;
+  /** Base URL — '' means use registry default */
+  baseUrl: string;
+}
+
+/**
+ * Auto-resolve the best available AI provider when the user hasn't explicitly
+ * configured one, or when the configured provider has no API key.
+ *
+ * Priority order:
+ *   1. Copilot explicitly requested → use VS Code LM API
+ *   2. Requested provider has a stored key → use as-is
+ *   3. Any Copilot model available via VS Code LM API → auto-use Copilot
+ *   4. First provider (non-copilot) with a stored API key → use that
+ *   5. Nothing available → throw with a helpful error message
+ */
+export async function autoResolveProvider(
+  requestedId: string,
+  requestedModel: string,
+): Promise<ResolvedProvider> {
+  // 1. Copilot explicitly requested — always route via LM API
+  if (requestedId === 'copilot') {
+    return {
+      providerId: 'copilot',
+      model: requestedModel || 'auto',
+      routeToCopilot: true,
+      baseUrl: '',
+    };
+  }
+
+  // 1b. DaakiaAI Mock — no API key needed, routes to user-configured mock AI server URL
+  if (requestedId === 'daakia-mock') {
+    const config = resolveProviderConfig('daakia-mock');
+    return {
+      providerId: 'daakia-mock',
+      model: requestedModel || 'mock1-model',
+      routeToCopilot: false,
+      baseUrl: config.baseUrl,
+    };
+  }
+
+  // 2. Requested provider has a stored key → use it
+  try {
+    const stored = await retrieveApiKey(requestedId);
+    if (stored && stored.length > 0) {
+      const defaultModel = requestedModel
+        || AI_PROVIDERS.find(p => p.id === requestedId)?.models[0]?.id
+        || '';
+      return {
+        providerId: requestedId,
+        model: defaultModel,
+        routeToCopilot: false,
+        baseUrl: '',
+      };
+    }
+  } catch { /* keychain unavailable — continue */ }
+
+  // 3. Try VS Code Copilot LM API — works without any API key
+  try {
+    const copilotModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+    if (copilotModels.length > 0) {
+      return {
+        providerId: 'copilot',
+        model: 'auto',
+        routeToCopilot: true,
+        baseUrl: '',
+      };
+    }
+  } catch { /* VS Code LM API not available */ }
+
+  // 4. Scan all providers for a stored key
+  const scanOrder: string[] = ['openai', 'anthropic', 'google', 'groq', 'mistral', 'together', 'xai', 'deepseek', 'ollama', 'custom'];
+  for (const id of scanOrder) {
+    if (id === requestedId) continue; // already tried above
+    try {
+      const stored = await retrieveApiKey(id);
+      if (stored && stored.length > 0) {
+        const defaultModel = requestedModel
+          || AI_PROVIDERS.find(p => p.id === id)?.models[0]?.id
+          || '';
+        return {
+          providerId: id,
+          model: defaultModel,
+          routeToCopilot: false,
+          baseUrl: '',
+        };
+      }
+    } catch { /* continue */ }
+  }
+
+  // 5. Nothing configured
+  throw new Error(
+    `No AI provider configured. To get started:\n` +
+    `• Open Settings → AI → add an API key for any provider, OR\n` +
+    `• Install GitHub Copilot in VS Code (no API key needed)`,
+  );
 }

@@ -15,12 +15,20 @@ import { useTabsStore } from '../../../store/tabs-store';
 import { generateSchema, downloadBlob, SCHEMA_LANG_META, LANG_GROUP_ORDER, GROUP_BADGE_COLORS, buildSchemaPrompt, type SchemaLang } from '../../../services/response';
 import { WrapLinesIcon, DownloadIcon, CopyIcon, CloseIcon, SparkleIcon } from '../../../icons';
 import { ToolbarBtn } from './ToolbarBtn';
-import { postMsg } from '../../../vscode';
+import { useAiStream } from '../../../hooks/useAiStream';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const AI_ACCENT = 'var(--color-protocol-ai)';
 const MAX_JSON_CHARS = 3000; // truncate response body for the AI prompt
+
+// ─── Schema cache (module-level — survives modal open/close within a session) ─
+
+const schemaCache = new Map<string, string>();
+
+function getBodyFingerprint(body: string): string {
+  return `${body.length}:${body.slice(0, 150)}`;
+}
 
 // ─── Build dropdown options with group headers ────────────────────────────────
 
@@ -65,21 +73,20 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
   const [lang, setLang] = useState<SchemaLang>('typescript');
   const [aiMode, setAiMode] = useState(true);
   const [wrapLines, setWrapLines] = useState(false);
-
-  // AI streaming state
-  const [aiCode, setAiCode] = useState('');
-  const [aiStreaming, setAiStreaming] = useState(false);
-  const [aiError, setAiError] = useState('');
   const [generationMs, setGenerationMs] = useState(0);
-
   const generationStartRef = useRef(0);
-  const popoverIdRef = useRef('');
+  // Holds cached schema so we can display it without re-generating
+  const [overrideCode, setOverrideCode] = useState('');
 
-  // Provider info
+  // Provider info — used only for the display label ("Generated via X")
   const providers = useAiProvidersStore(s => s.providers);
+  const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const providerId = activeTab?.aiProvider || providers.find(p => p.enabled)?.id || 'openai';
+  const providerId = activeTab?.aiProvider || defaultProviderId || providers.find(p => p.enabled)?.id || 'openai';
   const model = activeTab?.aiModel || providers.find(p => p.id === providerId)?.models.find(m => m.enabled)?.id || '';
+
+  // ── Centralized AI stream (via useAiStream hook) ───────────────────────────
+  const { text: aiCode, streaming: aiStreaming, error: aiError, trigger: triggerAi, reset: resetAi } = useAiStream();
 
   const meta = SCHEMA_LANG_META[lang];
 
@@ -99,72 +106,41 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
   const triggerAiGeneration = useCallback(() => {
     if (!aiMode) return;
 
-    // Reset state
-    setAiCode('');
-    setAiError('');
-    setAiStreaming(true);
     generationStartRef.current = Date.now();
+    setGenerationMs(0);
 
-    // Unique ID for this generation run — isolates responses from real AI tab
-    const pid = `ai-schema-${Date.now()}`;
-    popoverIdRef.current = pid;
-
-    // Build truncated JSON preview for the prompt
     const jsonPreview = body.length > MAX_JSON_CHARS
       ? body.slice(0, MAX_JSON_CHARS) + '\n// ... (truncated)'
       : body;
 
-    const prompt = buildSchemaPrompt(lang, jsonPreview);
-
-    postMsg({
-      type: 'ai:send',
-      tabId: pid,
-      provider: providerId,
-      model,
-      baseUrl: activeTab?.url || '',
+    triggerAi(buildSchemaPrompt(lang, jsonPreview), {
       systemPrompts: ['You are a precise code generation assistant. Output only code — no explanations, no markdown code fences, no preamble.'],
-      userPrompt: prompt,
-      conversation: [],
-      tools: [],
-      settings: { temperature: 0.2, maxTokens: 1500, stream: true, topP: 1, stopSequences: [], responseFormat: 'text', frequencyPenalty: 0, presencePenalty: 0, seed: null },
-      mcpServerConfigs: [],
-      authType: activeTab?.authType,
-      authData: activeTab?.authData,
-      envId: activeTab?.envId,
+      settings: { temperature: 0.2, maxTokens: 1500 },
     });
-  }, [aiMode, body, lang, providerId, model, activeTab]);
+  }, [aiMode, body, lang, triggerAi]);
 
-  // ── Message listener for AI responses ─────────────────────────────────────
-
+  // Record generation time when streaming ends; save result to cache
   useEffect(() => {
-    const handler = (evt: MessageEvent) => {
-      const msg = evt.data as Record<string, unknown>;
-      if (!msg || msg.tabId !== popoverIdRef.current) return;
-
-      if (msg.type === 'ai:chunk') {
-        const delta = (msg.delta as string) || (msg.text as string) || '';
-        setAiCode(prev => prev + delta);
-      }
-      if (msg.type === 'ai:complete') {
-        const msgPayload = msg.message as Record<string, unknown> | undefined;
-        const content = (msgPayload?.content as string) || '';
-        if (content) setAiCode(prev => prev || content);
-        setAiStreaming(false);
-        setGenerationMs(Date.now() - generationStartRef.current);
-      }
-      if (msg.type === 'ai:error') {
-        setAiError((msg.message as string) || 'AI generation failed');
-        setAiStreaming(false);
-      }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, []);
+    if (!aiStreaming && generationStartRef.current > 0 && aiCode) {
+      setGenerationMs(Date.now() - generationStartRef.current);
+      schemaCache.set(`${lang}:${getBodyFingerprint(body)}`, aiCode);
+    }
+  }, [aiStreaming, aiCode, lang, body]);
 
   // ── Auto-generate on open and when lang/mode changes ──────────────────────
+  // Checks the module-level cache first — skips generation if body + lang hit.
 
   useEffect(() => {
-    if (aiMode) triggerAiGeneration();
+    if (!aiMode) { resetAi(); setOverrideCode(''); return; }
+    const key = `${lang}:${getBodyFingerprint(body)}`;
+    const cached = schemaCache.get(key);
+    if (cached) {
+      resetAi();
+      setOverrideCode(cached);
+    } else {
+      setOverrideCode('');
+      triggerAiGeneration();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang, aiMode]);
 
@@ -178,9 +154,18 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
     }
   };
 
+  // ── Regenerate — clears cache for current key then triggers generation ──────
+
+  const handleRegenerate = useCallback(() => {
+    const key = `${lang}:${getBodyFingerprint(body)}`;
+    schemaCache.delete(key);
+    setOverrideCode('');
+    triggerAiGeneration();
+  }, [lang, body, triggerAiGeneration]);
+
   // ── Derived display values ─────────────────────────────────────────────────
 
-  const displayCode = aiMode ? aiCode : staticCode;
+  const displayCode = aiMode ? (aiCode || overrideCode) : staticCode;
   const editorLang = meta.editorLang;
   const isGenerating = aiMode && aiStreaming;
 
@@ -236,7 +221,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
           >
             <button
               type="button"
-              onClick={() => setAiMode(true)}
+              onClick={() => { resetAi(); setAiMode(true); }}
               className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-all"
               style={{
                 backgroundColor: aiMode ? `color-mix(in srgb, ${AI_ACCENT} 12%, transparent)` : 'transparent',
@@ -250,6 +235,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
               type="button"
               onClick={() => {
                 if (!meta.hasStatic) return; // can't use static for this lang
+                resetAi();
                 setAiMode(false);
               }}
               className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-all"
@@ -269,7 +255,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
           {aiMode && (
             <button
               type="button"
-              onClick={triggerAiGeneration}
+              onClick={handleRegenerate}
               disabled={isGenerating}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition-all border"
               style={{
@@ -299,6 +285,9 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
                 <span className="text-[10px]" style={{ color: AI_ACCENT }}>Generating with {providerLabel}…</span>
               </div>
             )}
+            {!isGenerating && !aiError && aiMode && overrideCode && !aiCode && (
+              <span className="text-[10px] text-[var(--color-text-muted)]">Cached · Regenerate to refresh</span>
+            )}
             {!isGenerating && !aiError && aiMode && aiCode && (
               <span className="text-[10px] text-[var(--color-text-muted)]">
                 Generated in {(generationMs / 1000).toFixed(1)}s via {providerLabel}
@@ -313,7 +302,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
         </div>
 
         {/* ── Code area ───────────────────────────────────────────────────────── */}
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex flex-col">
           {/* Toolbar */}
           <div className="flex items-center justify-between px-5 py-2">
             <span className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-1.5">
@@ -345,8 +334,9 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
             </div>
           </div>
 
-          {/* Editor */}
-          <div className="flex-1 min-h-[400px] max-h-[560px] relative">
+          {/* Editor — explicit 480px height so Monaco resolves height: 100% correctly
+                (flex-1 without a definite ancestor height would give Monaco 0px) */}
+          <div className="relative" style={{ height: 480 }}>
             {/* Empty / loading state overlay */}
             {aiMode && !aiCode && isGenerating && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 bg-[var(--color-panel)]">
@@ -382,7 +372,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
               value={displayCode}
               language={editorLang}
               readOnly
-              height="100%"
+              height="480px"
               wordWrap={wrapLines}
             />
           </div>

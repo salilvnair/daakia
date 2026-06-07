@@ -205,6 +205,20 @@ export const AI_PROVIDERS: AiProvider[] = [
     supportsStreaming: true,
     supportsVision: false,
   },
+  {
+    id: 'daakia-mock',
+    name: 'DaakiaAI (Mock)',
+    // baseUrl is configured by user — points to their running Daakia AI mock server
+    baseUrl: '',
+    chatEndpoint: '/chat/completions',
+    authType: 'none',
+    models: [
+      { id: 'mock1-model', name: 'Mock Model 1', context: 32000 },
+    ],
+    supportsTools: false,
+    supportsStreaming: true,
+    supportsVision: false,
+  },
 ];
 
 /** Get provider config by ID */

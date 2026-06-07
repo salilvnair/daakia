@@ -6,3 +6,5 @@ export { SocketIOConfig } from './SocketIOConfig';
 export { MQTTConfig } from './MQTTConfig';
 export { GrpcConfig } from './GrpcConfig';
 export { SoapConfig } from './SoapConfig';
+export { AiMockConfig } from './AiMockConfig';
+export { McpMockConfig } from './McpMockConfig';

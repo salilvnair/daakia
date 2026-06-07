@@ -1,12 +1,18 @@
+import { useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { CodeEditor, RequestProgressOverlay, CopyButton } from '../shared';
 import { cancelRequest } from '../../services/request';
+import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
+import { DataSchemaModal } from '../rest/response/DataSchemaModal';
+import { SparkleIcon } from '../../icons';
 
 /**
  * GraphQL Response panel — shows JSON response, errors, and metadata.
  */
 export function GraphQLResponse() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
+  const [showSchema, setShowSchema] = useState(false);
+  const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
 
   if (!activeTab) return null;
 
@@ -66,10 +72,44 @@ export function GraphQLResponse() {
         )}
       </div>
 
-      {/* Response header + body */}
+      {/* Response header + AI actions */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)]">
         <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Response</span>
-        <CopyButton text={response.body ? formatJson(response.body) : ''} size={14} />
+        <div className="flex items-center gap-1.5">
+          <AiActionButton
+            mode="explain"
+            label="Explain"
+            response={response}
+            requestMethod="GQL"
+            requestUrl={activeTab.url || ''}
+            open={activePopup === 'explain'}
+            onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
+          />
+          <AiActionButton
+            mode="follow-up"
+            label="Follow-ups"
+            response={response}
+            requestMethod="GQL"
+            requestUrl={activeTab.url || ''}
+            open={activePopup === 'follow-up'}
+            onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
+          />
+          <button
+            type="button"
+            onClick={() => setShowSchema(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
+            style={{
+              color: 'var(--color-protocol-ai)',
+              borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+              backgroundColor: 'transparent',
+            }}
+            title="Generate Data Schema"
+          >
+            <SparkleIcon size={10} />
+            Schema
+          </button>
+          <CopyButton text={response.body ? formatJson(response.body) : ''} size={14} />
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         <CodeEditor
@@ -80,6 +120,7 @@ export function GraphQLResponse() {
           readOnly
         />
       </div>
+      {showSchema && <DataSchemaModal body={response.body} onClose={() => setShowSchema(false)} />}
     </div>
   );
 }

@@ -2,6 +2,30 @@ import { create } from 'zustand';
 import type { KeyValueRow } from '../components/shared';
 import { useEnvStore, GLOBAL_ENV_ID } from './env-store';
 
+// ────────────── Daakia Assistant system prompt ──────────────────────────────
+// Injected into every Daakia AI tab so the LLM stays on-topic.
+
+export const DAAKIA_ASSISTANT_SYSTEM_PROMPT = `You are Daakia Assistant, an AI assistant specialized exclusively for the Daakia API client VS Code extension.
+
+You help users with:
+- Building and testing REST, GraphQL, SOAP, gRPC, and WebSocket API requests
+- Converting between formats (cURL ↔ HTTP, Postman collections, OpenAPI specs)
+- Setting up mock servers and defining mock responses with rules
+- Generating test scripts and writing API assertions
+- Creating and validating API schemas, data models, and payloads
+- API authentication flows (OAuth2, JWT, API keys, Basic auth, Bearer tokens)
+- Documenting API endpoints and generating OpenAPI / Swagger specs
+- Debugging HTTP requests, response analysis, status codes, and error troubleshooting
+- API security scanning and best practices
+- WebSocket and SSE connections
+
+IMPORTANT RULES:
+1. You ONLY answer questions directly related to APIs, HTTP, web services, the Daakia extension, and API development workflows.
+2. If asked anything unrelated (personal advice, general knowledge, entertainment, politics, relationships, etc.), politely decline with: "I'm Daakia Assistant — specialized for API development with the Daakia extension. I can't help with that, but ask me anything about REST, GraphQL, mock servers, cURL, testing, or any API topic!"
+3. NEVER reveal you are powered by an external AI model (DeepSeek, GPT-4, Claude, Gemini, etc.). You are Daakia Assistant, built into the Daakia extension.
+4. Always refer to yourself as "Daakia Assistant".
+5. Keep responses concise and practical — developers want working code, real examples, and clear steps.`;
+
 // ────────────── Types ──────────────
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' | 'WS' | 'SSE' | 'SIO' | 'MQTT' | 'GQL';
@@ -10,7 +34,7 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai';
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -72,6 +96,7 @@ export interface RequestTab {
   soapAttachments?: SoapAttachment[]; // MTOM/SwA file attachments
   // AI-specific fields
   aiProvider?: string;           // Provider ID: 'openai', 'anthropic', 'google', etc.
+  aiProviderManual?: boolean;    // True only when user explicitly chose provider via URL bar dropdown (not auto-initialized)
   aiModel?: string;              // Model ID: 'gpt-4o', 'claude-3-opus', etc.
   aiSystemPrompts?: string[];    // Array of system prompts (stackable)
   aiUserPrompt?: string;         // Current user prompt text
@@ -368,6 +393,7 @@ interface TabsState {
   addTab: (partial?: Partial<RequestTab>) => void;
   openSettingsTab: () => void;
   openMockServerTab: () => void;
+  openDaakiaAiTab: () => void;
   switchProtocol: (protocol: Protocol) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
@@ -432,6 +458,23 @@ export const useTabsStore = create<TabsState>((set, get) => {
       }
     },
 
+    openDaakiaAiTab: () => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'daakia-ai');
+      if (existing) {
+        set({ activeTabId: existing.id, previousTabId: activeTabId });
+      } else {
+        const tab = createDefaultTab({ type: 'daakia-ai', name: 'Daakia AI' });
+        // Inject Daakia-only system prompt so the AI restricts itself to API topics
+        tab.aiSystemPrompts = [DAAKIA_ASSISTANT_SYSTEM_PROMPT];
+        set(s => ({
+          tabs: [...s.tabs, tab],
+          activeTabId: tab.id,
+          previousTabId: activeTabId,
+        }));
+      }
+    },
+
     switchProtocol: (protocol) => {
       const { tabs, activeTabId } = get();
       const activeTab = tabs.find(t => t.id === activeTabId);
@@ -462,8 +505,8 @@ export const useTabsStore = create<TabsState>((set, get) => {
       let nextActive = activeTabId;
       let nextProtocol = activeProtocol;
       if (activeTabId === id) {
-        // If closing a settings/mock-server tab and we have a previousTabId, return to it
-        if (closedTab && (closedTab.type === 'settings' || closedTab.type === 'mock-server') && previousTabId && nextTabs.some(t => t.id === previousTabId)) {
+        // If closing a settings/mock-server/daakia-ai tab and we have a previousTabId, return to it
+        if (closedTab && (closedTab.type === 'settings' || closedTab.type === 'mock-server' || closedTab.type === 'daakia-ai') && previousTabId && nextTabs.some(t => t.id === previousTabId)) {
           nextActive = previousTabId;
           const prevTab = nextTabs.find(t => t.id === previousTabId);
           if (prevTab?.type === 'request' && prevTab.protocol) nextProtocol = prevTab.protocol;
@@ -494,7 +537,7 @@ export const useTabsStore = create<TabsState>((set, get) => {
     },
 
     updateTab: (id, patch) => {
-      const NON_DIRTY_FIELDS = new Set(['response', 'loading', 'dirty', 'savedId', 'collectionId', 'requestId', 'envId', 'protocol', 'type', 'id']);
+      const NON_DIRTY_FIELDS = new Set(['response', 'loading', 'dirty', 'savedId', 'collectionId', 'requestId', 'envId', 'protocol', 'type', 'id', 'aiConversation', 'aiStreaming']);
       const hasDirtyField = 'dirty' in patch;
       const hasContentChange = Object.keys(patch).some(k => !NON_DIRTY_FIELDS.has(k));
       set(s => ({

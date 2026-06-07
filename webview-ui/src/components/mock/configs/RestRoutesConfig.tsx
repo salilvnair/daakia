@@ -6,6 +6,7 @@ import { StyledDropdown, type DropdownOption } from '../../shared';
 import { RouteCard } from '../RouteCard';
 import { REST_SAMPLES } from '../samples';
 import type { MockServer, MockRoute } from '../mock-types';
+import { MockAiGenerateButton } from '../MockAiGeneratePopover';
 
 const REST_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -16,13 +17,14 @@ interface RestRoutesConfigProps {
   server: MockServer;
   onUpdate: (patch: Partial<MockServer>) => void;
   onAddRoute: () => void;
+  onAddGeneratedRoutes?: (routes: Partial<MockRoute>[]) => void;
   onUpdateRoute: (routeId: string, patch: Partial<MockRoute>) => void;
   onDeleteRoute: (routeId: string) => void;
   editingRoute: string | null;
   onEditRoute: (id: string | null) => void;
 }
 
-export function RestRoutesConfig({ server, onUpdate, onAddRoute, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute }: RestRoutesConfigProps) {
+export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedRoutes, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute }: RestRoutesConfigProps) {
   const [selectedSample, setSelectedSample] = useState('');
 
   const applySample = (sampleId: string) => {
@@ -37,6 +39,18 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onUpdateRoute, 
     onUpdate({ routes, description: sample.description });
   };
 
+  // Build AI context: description (user's full text context) + existing routes
+  const buildAiContext = () => {
+    const parts: string[] = [];
+    if (server.description?.trim()) {
+      parts.push(`Server description:\n${server.description.trim()}`);
+    }
+    if (server.routes.length > 0) {
+      parts.push(`Existing routes:\n${server.routes.map(r => `${r.method} ${r.path}`).join('\n')}`);
+    }
+    return parts.length > 0 ? parts.join('\n\n') : undefined;
+  };
+
   return (
     <>
       <div className="flex items-center justify-between">
@@ -49,14 +63,13 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onUpdateRoute, 
             onChange={applySample}
             accentColor="var(--color-mock-server)"
           />
-          <button
-            type="button"
-            onClick={() => {/* TODO: AI generate */}}
-            className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.2)] hover:bg-[rgba(234,179,8,0.08)] cursor-pointer transition-colors opacity-50"
-            title="Coming soon"
-          >
-            ✨ Generate with AI
-          </button>
+          <MockAiGenerateButton
+            templateKey="mock.rest.generate"
+            title="REST Routes"
+            serverName={server.name}
+            serverContext={buildAiContext()}
+            onAddGeneratedRoutes={onAddGeneratedRoutes}
+          />
           <button
             type="button"
             onClick={onAddRoute}

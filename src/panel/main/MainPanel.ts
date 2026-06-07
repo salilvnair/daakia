@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt } from '../../storage/db';
+import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries } from '../../storage/db';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
 // Handler imports
@@ -583,6 +583,45 @@ export class MainPanel {
         break;
       }
 
+      // ── Daakia AI Conversation (persistent, survives tab close/reopen) ──
+      case 'aiConversation:load':
+        this._post({ type: 'aiConversation:data', messages: loadAiConversation() });
+        break;
+      case 'aiConversation:save': {
+        const { messages } = msg as { messages: AiConversationMessage[] };
+        if (Array.isArray(messages)) {
+          // Trim to maxAiChatMessages from general settings (default 200)
+          const general = getSetting<Record<string, unknown>>('general') ?? {};
+          const maxAiChat = (general.maxAiChatMessages as number) ?? 200;
+          const trimmed = maxAiChat > 0 ? messages.slice(-maxAiChat) : messages;
+          saveAiConversation(trimmed);
+        }
+        break;
+      }
+      case 'aiConversation:clear':
+        clearAiConversation();
+        break;
+
+      // ── AI Audit ──
+      case 'aiAudit:load': {
+        const limit = (msg as { limit?: number }).limit ?? 100;
+        this._post({ type: 'aiAudit:data', entries: getAuditEntries(limit) });
+        break;
+      }
+      case 'aiAudit:delete': {
+        const { auditId } = msg as { auditId: number };
+        if (auditId != null) deleteAuditEntry(auditId);
+        break;
+      }
+      case 'aiAudit:deleteMany': {
+        const { auditIds } = msg as { auditIds: number[] };
+        if (Array.isArray(auditIds) && auditIds.length > 0) deleteAuditEntries(auditIds);
+        break;
+      }
+      case 'aiAudit:clear':
+        clearAuditEntries();
+        break;
+
       // ── AI Feature Flags ──
       case 'aiFeatures:load':
         this._post({ type: 'aiFeatures:data', features: getAiFeatures() });
@@ -607,6 +646,16 @@ export class MainPanel {
         const { scenario } = msg as { scenario: string };
         if (scenario) resetPrompt(scenario);
         this._post({ type: 'promptLibrary:data', prompts: getAllPrompts() });
+        break;
+      }
+
+      // ── AI Prompt Templates ──
+      case 'aiPromptTemplates:load':
+        this._post({ type: 'aiPromptTemplates:data', templates: getAiPromptTemplates() });
+        break;
+      case 'aiPromptTemplates:save': {
+        const { templates: tpls } = msg as { templates: Record<string, string> };
+        if (tpls && typeof tpls === 'object') setAiPromptTemplates(tpls);
         break;
       }
 
@@ -948,12 +997,16 @@ export class MainPanel {
 
   private _sendAiProviders() {
     const providers = getSetting<unknown[]>('aiProviders');
-    this.postMessage({ type: 'aiProviders:data', providers: providers ?? null });
+    const defaultProviderId = getSetting<string>('aiDefaultProvider') ?? 'copilot';
+    const defaultModelId = getSetting<string>('aiDefaultModel') ?? 'auto';
+    this.postMessage({ type: 'aiProviders:data', providers: providers ?? null, defaultProviderId, defaultModelId });
   }
 
   private _saveAiProviders(msg: Record<string, unknown>) {
     const providers = msg.providers as unknown[];
     setSetting('aiProviders', providers);
+    if (msg.defaultProviderId) { setSetting('aiDefaultProvider', msg.defaultProviderId as string); }
+    if (msg.defaultModelId) { setSetting('aiDefaultModel', msg.defaultModelId as string); }
   }
 
   private _refreshKeyStatus() {

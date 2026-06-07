@@ -10,7 +10,7 @@ import { HeadersView } from './HeadersView';
 import { CookiesView } from './CookiesView';
 import { TimelineView } from './TimelineView';
 import { DataSchemaModal } from './DataSchemaModal';
-import { AiActionButton } from '../../ai/AiAssistPopover';
+import { AiActionButton, type AssistMode } from '../../ai/AiAssistPopover';
 
 type ResponseView = 'json' | 'raw' | 'headers' | 'cookies' | 'timeline' | 'tests';
 
@@ -24,6 +24,7 @@ export function ResponsePanel() {
   const [showFilter, setShowFilter] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showSchema, setShowSchema] = useState(false);
+  const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -110,6 +111,8 @@ export function ResponsePanel() {
             response={response}
             requestMethod={requestMethod}
             requestUrl={requestUrl}
+            open={activePopup === 'explain'}
+            onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
           />
           <AiActionButton
             mode="follow-up"
@@ -117,6 +120,8 @@ export function ResponsePanel() {
             response={response}
             requestMethod={requestMethod}
             requestUrl={requestUrl}
+            open={activePopup === 'follow-up'}
+            onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
           />
         </div>
       </div>

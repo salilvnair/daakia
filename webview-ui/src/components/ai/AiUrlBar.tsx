@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
+import { useDevToolsStore } from '../../store/devtools-store';
 import { StyledDropdown, SplitButton, type DropdownOption, type SplitButtonItem } from '../shared';
 import { ProtocolAiBadge, SendIcon, SaveIcon } from '../../icons';
 import { postMsg } from '../../vscode';
@@ -18,26 +19,47 @@ export function AiUrlBar() {
   const updateTab = useTabsStore(s => s.updateTab);
   const providers = useAiProvidersStore(s => s.providers);
 
-  const provider = activeTab?.aiProvider || 'openai';
-  const model = activeTab?.aiModel || '';
+  const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
+  const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
+
+  const provider = activeTab?.aiProvider || defaultProviderId;
+  const model = activeTab?.aiModel || (activeTab?.aiProvider ? '' : defaultModelId);
   const url = activeTab?.url || '';
   const loading = activeTab?.aiStreaming || activeTab?.loading || false;
 
-  // Auto-initialize defaults for fresh AI tabs
+  // Sync provider/model from store defaults.
+  // Runs on: tab change, providers list change, or default provider/model change.
+  // Only skips update when the user has manually chosen a provider via the dropdown
+  // (aiProviderManual=true). Auto-initialized tabs always follow the stored default.
   useEffect(() => {
     if (!activeTab) return;
-    if (!activeTab.aiProvider) {
-      const first = providers.find(p => p.enabled) || providers[0];
-      if (first) {
-        const firstModel = first.models.find(m => m.enabled) || first.models[0];
+    // If user explicitly set a provider via dropdown, never auto-override it
+    if (activeTab.aiProviderManual) return;
+
+    const defProvider = providers.find(p => p.id === defaultProviderId && p.enabled)
+      ?? providers.find(p => p.enabled)
+      ?? providers[0];
+    if (defProvider) {
+      const defModel = defProvider.id === defaultProviderId
+        ? (defaultModelId || defProvider.models.find(m => m.enabled)?.id || '')
+        : (defProvider.models.find(m => m.enabled)?.id || '');
+      // Sync provider, model, and base URL if any of them drifted from the default
+      // (catches: new tab before providers loaded, Settings baseUrl change, first render)
+      const expectedUrl = defProvider.baseUrl || '';
+      if (
+        activeTab.aiProvider !== defProvider.id ||
+        activeTab.aiModel !== defModel ||
+        activeTab.url !== expectedUrl
+      ) {
         updateTab(activeTab.id, {
-          aiProvider: first.id,
-          aiModel: firstModel?.id || '',
-          url: first.baseUrl || '',
+          aiProvider: defProvider.id,
+          aiModel: defModel,
+          url: expectedUrl,
         });
       }
     }
-  }, [activeTab, updateTab, providers]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab?.id, activeTab?.aiProviderManual, providers, defaultProviderId, defaultModelId]);
 
   const providerOptions: DropdownOption[] = useMemo(() =>
     providers.filter(p => p.enabled).map(p => ({ value: p.id, label: p.name })),
@@ -58,6 +80,7 @@ export function AiUrlBar() {
     const defaultUrl = info?.baseUrl || '';
     updateTab(activeTab.id, {
       aiProvider: val,
+      aiProviderManual: true,  // user explicitly chose — stop auto-following defaults
       aiModel: defaultModel,
       url: defaultUrl,
       dirty: true,
@@ -79,21 +102,46 @@ export function AiUrlBar() {
     const userPrompt = activeTab.aiUserPrompt?.trim();
     if (!userPrompt && (!activeTab.aiConversation || activeTab.aiConversation.length === 0)) return;
 
-    postMsg({
+    const aiPayload = {
       type: 'ai:send',
       tabId: activeTab.id,
-      provider: activeTab.aiProvider || 'openai',
-      model: activeTab.aiModel || '',
-      baseUrl: activeTab.url || '',
+      provider: provider,
+      model: model,
+      baseUrl: '',
       systemPrompts: activeTab.aiSystemPrompts || [],
       userPrompt: userPrompt || '',
       conversation: activeTab.aiConversation || [],
       tools: activeTab.aiTools || [],
       settings: activeTab.aiSettings || {},
       mcpServerConfigs: activeTab.mcpServerConfigs || [],
-      authType: activeTab.authType,
-      authData: activeTab.authData,
       envId: activeTab.envId,
+    };
+    postMsg(aiPayload);
+
+    // ── DevTools: God-level AI request audit log ──────────────────────────
+    const providerInfo = useAiProvidersStore.getState().providers.find(p => p.id === provider);
+    const modelInfo = providerInfo?.models.find(m => m.id === model);
+    useDevToolsStore.getState().addLog({
+      level: 'info',
+      args: [
+        `📡 AI Request Sent → ${provider}/${model}`,
+        {
+          provider,
+          providerName: providerInfo?.name || provider,
+          model,
+          modelName: modelInfo?.name || model,
+          systemPrompts: activeTab.aiSystemPrompts || [],
+          userPrompt: userPrompt || '',
+          conversationLength: (activeTab.aiConversation || []).length,
+          tools: (activeTab.aiTools || []).map((t: { name?: string; type?: string }) => t.name || t.type),
+          mcpServers: (activeTab.mcpServerConfigs || []).length,
+          settings: activeTab.aiSettings || {},
+          sentAt: new Date().toISOString(),
+        },
+      ],
+      timestamp: Date.now(),
+      requestName: `AI ${provider}/${model}`,
+      scriptPhase: 'ai',
     });
 
     // Add user message to conversation and clear prompt
@@ -151,14 +199,16 @@ export function AiUrlBar() {
         )}
       </div>
 
-      {/* URL input — flex-1 takes remaining space */}
-      <input
-        type="text"
-        value={url}
-        onChange={handleUrlChange}
-        placeholder="API base URL"
-        className="url-bar-input ml-1"
-      />
+      {/* URL input — only show for non-Copilot providers that use a real HTTP base URL */}
+      {provider !== 'copilot' && (
+        <input
+          type="text"
+          value={url}
+          onChange={handleUrlChange}
+          placeholder="API base URL"
+          className="url-bar-input ml-1"
+        />
+      )}
 
       {/* Send button */}
       <button

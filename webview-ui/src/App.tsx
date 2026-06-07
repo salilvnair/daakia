@@ -21,6 +21,7 @@ import { WebSocketPanel } from './components/websocket';
 import { GrpcPanel } from './components/grpc';
 import { SoapPanel } from './components/soap';
 import { AiPanel } from './components/ai/AiPanel';
+import { DaakiaAiPanel } from './components/ai/DaakiaAiPanel';
 import { McpPanel } from './components/mcp/McpPanel';
 import { useTabsStore } from './store/tabs-store';
 import { useToastStore } from './store/toast-store';
@@ -36,6 +37,8 @@ import { useSidebarDataStore } from './store/sidebar-data-store';
 import { useAiKeysStore } from './store/ai-keys-store';
 import { useAiFeaturesStore } from './store/ai-features-store';
 import { useAiHistoryStore } from './store/ai-history-store';
+import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_DEFAULTS } from './store/ai-prompt-templates-store';
+import { useAiConversationStore } from './store/ai-conversation-store';
 import { getVsCodeApi, postMsg } from './vscode';
 import { getProtocolAccent } from './colors';
 import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, DevToolsIcon } from './icons';
@@ -190,9 +193,45 @@ function logProtocolMessage(msg: Record<string, unknown>) {
   // ── SOAP response (uses responseData with protocol hint)
   // (handled by the general responseData case above)
 
-  // ── Mock server events
+  // ── Mock server lifecycle events
   if (type === 'mockServerLog') {
     console.log('%c🎭 Mock Server', 'color:#f59e0b;font-weight:bold', msg.entry);
+  }
+  if (type === 'mockServer:started') {
+    console.group(`%c🟢 Mock Server Started`, 'color:#22c55e;font-weight:bold;font-size:12px');
+    console.log('%cServer ID:', 'font-weight:bold', msg.id);
+    console.log('%cPort:', 'font-weight:bold', msg.port);
+    console.log('%cProtocol:', 'font-weight:bold', msg.protocol || 'rest');
+    console.log('%cTimestamp:', 'font-weight:bold', new Date().toISOString());
+    console.groupEnd();
+  }
+  if (type === 'mockServer:stopped') {
+    console.group(`%c🔴 Mock Server Stopped`, 'color:#f59e0b;font-weight:bold;font-size:12px');
+    console.log('%cServer ID:', 'font-weight:bold', msg.id);
+    console.log('%cTimestamp:', 'font-weight:bold', new Date().toISOString());
+    console.groupEnd();
+  }
+  if (type === 'mockServer:error') {
+    console.group(`%c🚨 Mock Server Error`, 'color:#ef4444;font-weight:bold;font-size:12px');
+    console.error('%cServer ID:', 'font-weight:bold', msg.id);
+    console.error('%cError:', 'font-weight:bold', msg.error);
+    if ((msg.error as string)?.includes('\n')) {
+      console.error('%cStack:', 'font-weight:bold', msg.error);
+    }
+    console.groupEnd();
+  }
+
+  // ── Settings changes (audit trail)
+  if (type === 'saveAiProviders' || type === 'aiProviders:save') {
+    console.group('%c⚙️ Settings Changed — AI Providers', 'color:#8b5cf6;font-weight:bold;font-size:11px');
+    console.log('%cProviders:', 'font-weight:bold', msg.providers);
+    console.log('%cDefault Provider:', 'font-weight:bold', msg.defaultProviderId);
+    console.log('%cDefault Model:', 'font-weight:bold', msg.defaultModelId);
+    console.log('%cTimestamp:', 'font-weight:bold', new Date().toISOString());
+    console.groupEnd();
+  }
+  if (type === 'saveSetting' || type === 'saveSettings') {
+    console.log(`%c⚙️ Setting Saved: ${msg.key || msg.section || ''}`, 'color:#8b5cf6;font-weight:bold', { key: msg.key, value: msg.value, section: msg.section });
   }
 }
 
@@ -204,6 +243,17 @@ export default function App() {
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
   const protocolAccent = getProtocolAccent(activeProtocol);
+
+  // Expose devtools store reference for vscode.ts settings audit interceptor
+  // This runs once on mount and gives the interceptor access to addLog
+  useEffect(() => {
+    (window as any).__devtoolsStoreRef = useDevToolsStore;
+    (window as any).__tabsStore = useTabsStore;
+    return () => {
+      delete (window as any).__devtoolsStoreRef;
+      delete (window as any).__tabsStore;
+    };
+  }, []);
 
   // Remap sidebar section when protocol changes so icons match active protocol
   const prevProtocolRef = useRef(activeProtocol);
@@ -280,6 +330,7 @@ export default function App() {
   const debugDisabledBps = useDebugStore(s => s.disabledBreakpoints);
   const debugConditions = useDebugStore(s => s.conditions);
   const anyMockRunning = useMockStore(s => s.servers.some(srv => srv.running));
+  const mockRunningCount = useMockStore(s => s.servers.filter(srv => srv.running).length);
   const mockIconGlow = useMockStore(s => s.mockIconGlow);
 
   useEffect(() => {
@@ -310,6 +361,7 @@ export default function App() {
     const tabProtocol = activeTab?.protocol || activeProtocol;
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
+      : activeTab?.type === 'daakia-ai' ? 'var(--color-protocol-ai)'
       : map[tabProtocol] || map.rest;
     document.documentElement.style.setProperty('--color-accent', accent);
   }, [activeProtocol, activeTab?.type, activeTab?.protocol]);
@@ -457,6 +509,12 @@ export default function App() {
       switch (msg.type) {
         case 'init': {
           setSqliteStatus({ ok: msg.sqliteOk, error: msg.sqliteError });
+          // Load persisted Daakia AI conversation on startup
+          useAiConversationStore.getState().loadFromDb();
+          break;
+        }
+        case 'aiConversation:data': {
+          useAiConversationStore.getState().setMessages(msg.messages || []);
           break;
         }
         case 'responseData': {
@@ -1102,13 +1160,74 @@ export default function App() {
         }
         case 'mockServer:log': {
           useMockStore.getState().addLog(msg.entry);
-          // Also push to DevTools console for visibility
-          const entry = msg.entry as { direction?: string; protocol?: string; event?: string; body?: string; clientId?: string; path?: string };
-          const dir = entry.direction === 'incoming' ? '⬇' : '⬆';
+          // God-level DevTools logging for mock server traffic
+          const entry = msg.entry as {
+            direction?: string; protocol?: string; event?: string;
+            body?: string; clientId?: string; path?: string;
+            method?: string; statusCode?: number; responseTime?: number;
+            error?: string; serverId?: string; serverName?: string;
+          };
+          const dir = entry.direction === 'incoming' ? '⬇' : entry.direction === 'outgoing' ? '⬆' : '↔';
           const proto = (entry.protocol || 'mock').toUpperCase();
+          const isError = !!entry.error || (entry.statusCode !== undefined && entry.statusCode >= 400);
+          useDevToolsStore.getState().addLog({
+            level: isError ? 'error' : 'info',
+            args: [
+              `[Mock ${proto}] ${dir} ${entry.event || entry.method || ''} ${entry.path || ''}`,
+              ...(entry.statusCode !== undefined ? [`→ ${entry.statusCode}`] : []),
+              ...(entry.responseTime !== undefined ? [`${entry.responseTime}ms`] : []),
+              ...(entry.body ? [entry.body.slice(0, 500)] : []),
+              ...(entry.clientId ? [`client:${entry.clientId}`] : []),
+              ...(entry.error ? [`ERROR: ${entry.error}`] : []),
+            ].filter(Boolean),
+            timestamp: Date.now(),
+            requestName: entry.serverName ? `Mock/${entry.serverName}` : 'Mock Server',
+            scriptPhase: 'mock',
+          });
+          break;
+        }
+
+        // ─── Mock Server Lifecycle (global handler — mirrored from MockServerPanel local listener) ───
+        case 'mockServer:started': {
+          const { id: startedId, port: startedPort, name: startedName, protocol: startedProto } = msg as { id: string; port: number; name?: string; protocol?: string };
+          // Update the store so running count badge is accurate
+          useMockStore.getState().updateServer(startedId, { running: true, port: startedPort } as any);
           useDevToolsStore.getState().addLog({
             level: 'info',
-            args: [`[Mock ${proto}] ${dir} ${entry.event || ''}`, entry.body || entry.path || '', entry.clientId ? `(${entry.clientId})` : ''],
+            args: [
+              `🟢 Mock Server Started`,
+              startedName ? `"${startedName}"` : startedId,
+              `port ${startedPort}`,
+              startedProto ? `protocol: ${startedProto.toUpperCase()}` : '',
+            ].filter(Boolean),
+            timestamp: Date.now(),
+            requestName: `Mock Server`,
+            scriptPhase: 'mock',
+          });
+          break;
+        }
+        case 'mockServer:stopped': {
+          const { id: stoppedId, name: stoppedName } = msg as { id: string; name?: string };
+          useMockStore.getState().updateServer(stoppedId, { running: false, port: null } as any);
+          useDevToolsStore.getState().addLog({
+            level: 'info',
+            args: [`🔴 Mock Server Stopped`, stoppedName ? `"${stoppedName}"` : stoppedId],
+            timestamp: Date.now(),
+            requestName: `Mock Server`,
+            scriptPhase: 'mock',
+          });
+          break;
+        }
+        case 'mockServer:error': {
+          const { id: errId, error: mockErr, name: errName } = msg as { id: string; error: string; name?: string };
+          useMockStore.getState().updateServer(errId, { running: false } as any);
+          useDevToolsStore.getState().addLog({
+            level: 'error',
+            args: [
+              `🚨 Mock Server Error`,
+              errName ? `"${errName}"` : errId,
+              mockErr,
+            ].filter(Boolean),
             timestamp: Date.now(),
             requestName: `Mock Server`,
             scriptPhase: 'mock',
@@ -1120,7 +1239,10 @@ export default function App() {
         case 'ai:chunk': {
           const { tabId, delta } = msg;
           const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
-          if (tab) {
+          if (tab?.type === 'daakia-ai') {
+            // Global conversation store for Daakia AI tab — persisted, survives close/reopen
+            useAiConversationStore.getState().appendAssistantChunk(delta || '');
+          } else if (tab) {
             const conv = [...(tab.aiConversation || [])];
             const lastMsg = conv[conv.length - 1];
             if (lastMsg && lastMsg.role === 'assistant') {
@@ -1166,7 +1288,10 @@ export default function App() {
           });
 
           const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
-          if (tab) {
+          if (tab?.type === 'daakia-ai') {
+            useAiConversationStore.getState().finalizeAssistantMessage(aiMsg);
+            useTabsStore.getState().updateTab(tabId, { aiStreaming: false, loading: false });
+          } else if (tab) {
             const conv = [...(tab.aiConversation || [])];
             const lastMsg = conv[conv.length - 1];
             if (lastMsg && lastMsg.role === 'assistant') {
@@ -1249,7 +1374,11 @@ export default function App() {
           }
 
           const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
-          if (tab) {
+          if (tab?.type === 'daakia-ai') {
+            const errorDetail = code ? `[${code}] ${errMsg}` : errMsg;
+            useAiConversationStore.getState().addErrorMessage(`❌ Error: ${errorDetail}`);
+            useTabsStore.getState().updateTab(tabId, { aiStreaming: false, loading: false });
+          } else if (tab) {
             const conv = [...(tab.aiConversation || [])];
             const errorDetail = code ? `[${code}] ${errMsg}` : errMsg;
             conv.push({
@@ -1309,6 +1438,13 @@ export default function App() {
         case 'aiFeatures:data':
           useAiFeaturesStore.getState().setFeatures(msg.features || {});
           break;
+
+        // ─── AI Prompt Templates ──────────────────────────────────────────
+        case 'aiPromptTemplates:data': {
+          const merged = { ...AI_PROMPT_TEMPLATE_DEFAULTS, ...(msg.templates || {}) };
+          useAiPromptTemplatesStore.getState().setTemplates(merged as any);
+          break;
+        }
 
         // ─── AI Chat History ─────────────────────────────────────────────
         case 'aiHistory:data':
@@ -1452,9 +1588,13 @@ export default function App() {
 
         // ─── AI Providers Config ──────────────────────────────────────────
         case 'aiProviders:data': {
-          const { providers } = msg;
+          const { providers, defaultProviderId, defaultModelId } = msg;
           if (providers && Array.isArray(providers) && providers.length > 0) {
-            useAiProvidersStore.getState().setProviders(providers as any);
+            useAiProvidersStore.getState().setProviders(
+              providers as any,
+              (defaultProviderId as string) || 'copilot',
+              (defaultModelId as string) || 'auto',
+            );
           } else {
             useAiProvidersStore.getState().seedDefaults();
           }
@@ -1575,6 +1715,7 @@ export default function App() {
     getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'graphql' });
     getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'websocket' });
     getVsCodeApi().postMessage({ type: 'aiProviders:load' });
+    getVsCodeApi().postMessage({ type: 'aiPromptTemplates:load' });
     return () => window.removeEventListener('message', handler);
   }, []);
 
@@ -1588,6 +1729,39 @@ export default function App() {
       });
     });
     return unsubscribe;
+  }, []);
+
+  // ─── Settings Audit Trail → DevTools ─────────────────────────────────────
+  // Logs any AI provider changes to DevTools console so the user can see what changed
+  useEffect(() => {
+    let prevProviders = useAiProvidersStore.getState().providers;
+    let prevDefaultProviderId = useAiProvidersStore.getState().defaultProviderId;
+    let prevDefaultModelId = useAiProvidersStore.getState().defaultModelId;
+
+    const unsub = useAiProvidersStore.subscribe((state) => {
+      const changed: string[] = [];
+      if (state.defaultProviderId !== prevDefaultProviderId) changed.push(`Default Provider: ${prevDefaultProviderId} → ${state.defaultProviderId}`);
+      if (state.defaultModelId !== prevDefaultModelId) changed.push(`Default Model: ${prevDefaultModelId} → ${state.defaultModelId}`);
+      if (state.providers !== prevProviders) changed.push(`Providers list updated (${state.providers.length} providers)`);
+
+      if (changed.length > 0) {
+        useDevToolsStore.getState().addLog({
+          level: 'info',
+          args: [
+            `⚙️ [Settings Audit] AI Providers Changed`,
+            ...changed,
+            { providers: state.providers.map(p => ({ id: p.id, name: p.name, enabled: p.enabled, models: p.models.map(m => m.id) })), defaultProviderId: state.defaultProviderId, defaultModelId: state.defaultModelId, changedAt: new Date().toISOString() },
+          ],
+          timestamp: Date.now(),
+          requestName: 'Settings',
+          scriptPhase: 'settings',
+        });
+      }
+      prevProviders = state.providers;
+      prevDefaultProviderId = state.defaultProviderId;
+      prevDefaultModelId = state.defaultModelId;
+    });
+    return unsub;
   }, []);
 
   // Save workspace snapshot on state changes (debounced)
@@ -1619,6 +1793,7 @@ export default function App() {
   const tabProtocol = activeTab?.protocol || activeProtocol;
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
+    : activeTab?.type === 'daakia-ai' ? 'var(--color-protocol-ai)'
     : tabProtocol === 'graphql' ? 'var(--color-protocol-graphql)'
     : tabProtocol === 'websocket' ? 'var(--color-protocol-websocket)'
     : tabProtocol === 'grpc' ? 'var(--color-protocol-grpc)'
@@ -1699,17 +1874,39 @@ export default function App() {
         {/* Spacer pushes bottom icons down */}
         <div className="flex-1" />
 
-        {/* Mock Server icon — bg stays while tab is open */}
-        <ProtocolIcon
-          active={activeTab?.type === 'mock-server'}
-          open={tabs.some(t => t.type === 'mock-server')}
-          accentColor="var(--color-mock-server)"
-          onClick={() => useTabsStore.getState().openMockServerTab()}
-          title="Mock Server"
-          className={anyMockRunning && mockIconGlow ? 'breathing-connected' : ''}
-        >
-          <ServerIcon size={16} strokeWidth={1.8} />
-        </ProtocolIcon>
+        {/* Mock Server icon — bg stays while tab is open, iOS badge when servers running */}
+        <div className="relative">
+          <ProtocolIcon
+            active={activeTab?.type === 'mock-server'}
+            open={tabs.some(t => t.type === 'mock-server')}
+            accentColor="var(--color-mock-server)"
+            onClick={() => useTabsStore.getState().openMockServerTab()}
+            title={anyMockRunning ? `Mock Server (${mockRunningCount} running)` : 'Mock Server'}
+            className={anyMockRunning && mockIconGlow ? 'mock-server-running' : ''}
+          >
+            <ServerIcon size={16} strokeWidth={1.8} />
+          </ProtocolIcon>
+          {/* iOS-style red badge showing running server count */}
+          {anyMockRunning && mockRunningCount > 0 && (
+            <span
+              className="absolute top-0 right-0 mock-badge-enter flex items-center justify-center font-bold pointer-events-none"
+              style={{
+                minWidth: 15,
+                height: 15,
+                borderRadius: 8,
+                fontSize: 9,
+                lineHeight: 1,
+                backgroundColor: '#ef4444',
+                color: '#fff',
+                border: '1.5px solid var(--color-panel)',
+                padding: '0 3px',
+                transform: 'translate(20%, -20%)',
+              }}
+            >
+              {mockRunningCount > 99 ? '99+' : mockRunningCount}
+            </span>
+          )}
+        </div>
 
         {/* DevTools toggle */}
         <ProtocolIcon
@@ -1730,11 +1927,24 @@ export default function App() {
         {/* Tab bar */}
         <TabBar requestAccentColor={protocolAccent} onEnvironmentsClick={() => setSidebarSection('environments')} />
 
+        {/* DaakiaAiPanel — always mounted when a daakia-ai tab exists so ConvEngineChat
+            never loses its internal state across tab switches. Hidden via display:none when
+            a different tab is active; shown via display:flex when daakia-ai is active. */}
+        {tabs.some(t => t.type === 'daakia-ai') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'daakia-ai' ? 'flex' : 'none' }}
+          >
+            <DaakiaAiPanel />
+          </div>
+        )}
+
         {activeTab?.type === 'settings' ? (
           <SettingsPanel />
         ) : activeTab?.type === 'mock-server' ? (
           <MockServerPanel />
-        ) : (activeTab?.protocol || activeProtocol) === 'rest' ? (
+        ) : activeTab?.type === 'daakia-ai' ? null
+        : (activeTab?.protocol || activeProtocol) === 'rest' ? (
           !activeTab ? (
             <EmptyState protocol="rest" onNewTab={() => useTabsStore.getState().addTab()} />
           ) : (

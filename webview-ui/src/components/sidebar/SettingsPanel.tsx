@@ -4,9 +4,11 @@ import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIc
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { PromptLibraryPanel } from './PromptLibraryPanel';
 import { AiFeatureSettings } from './AiFeatureSettings';
+import { AiAuditPanel } from './AiAuditPanel';
 import { useMockStore } from '../../store/mock-store';
+import { useUiStateStore } from '../../store/ui-state-store';
 
-type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'devtools';
+type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 
 const SECTIONS: { id: SettingsSection; label: string; icon: JSX.Element }[] = [
@@ -16,12 +18,20 @@ const SECTIONS: { id: SettingsSection; label: string; icon: JSX.Element }[] = [
   { id: 'llm',            label: 'LLM Provider',     icon: <CpuIcon size={14} /> },
   { id: 'ai-features',    label: 'AI Features',      icon: <SparkleIcon size={14} /> },
   { id: 'prompt-library', label: 'Prompt Library',   icon: <AgentIcon size={14} /> },
+  { id: 'ai-audit',       label: 'AI Audit',         icon: <SparkleIcon size={14} /> },
   { id: 'devtools',       label: 'Developer Tools',  icon: <CodeBracketsIcon size={14} /> },
 ];
 
 export function SettingsPanel() {
-  const [activeSection, setActiveSection] = useState<SettingsSection>('general');
-  const current = SECTIONS.find(s => s.id === activeSection)!;;
+  const storedSection = useUiStateStore(s => s.prefs['settings.section']) as SettingsSection | undefined;
+  // Guard: if stored section was removed (e.g. 'ai-templates'), fall back to 'general'
+  const validStored = storedSection && SECTIONS.some(s => s.id === storedSection) ? storedSection : 'general';
+  const [activeSection, setActiveSectionLocal] = useState<SettingsSection>(validStored);
+  const setActiveSection = (section: SettingsSection) => {
+    setActiveSectionLocal(section);
+    useUiStateStore.getState().setPref('settings.section', section);
+  };
+  const current = SECTIONS.find(s => s.id === activeSection) ?? SECTIONS[0];
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
@@ -61,6 +71,8 @@ export function SettingsPanel() {
           <AiFeatureSettings />
         ) : activeSection === 'prompt-library' ? (
           <PromptLibraryPanel />
+        ) : activeSection === 'ai-audit' ? (
+          <AiAuditPanel />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
             <div className="flex flex-col items-center gap-2">
@@ -77,30 +89,37 @@ export function SettingsPanel() {
 // ────────── General Settings with subtabs ──────────
 
 function GeneralSettings() {
-  const [subtab, setSubtab] = useState<GeneralSubtab>('general');
+  const storedSubtab = useUiStateStore(s => s.prefs['settings.general.subtab']) as GeneralSubtab | undefined;
+  const [subtab, setSubtabLocal] = useState<GeneralSubtab>(storedSubtab || 'general');
+  const setSubtab = (tab: GeneralSubtab) => {
+    setSubtabLocal(tab);
+    useUiStateStore.getState().setPref('settings.general.subtab', tab);
+  };
 
   return (
     <div className="flex flex-col h-full">
       {/* Subtab bar */}
-      <div className="flex items-center gap-0 px-4 pt-3 pb-0 border-b border-[var(--color-surface-border)]">
-        {(['general', 'encoding', 'proxy'] as const).map(tab => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setSubtab(tab)}
-            className={`px-3 py-2 text-[12px] border-b-2 cursor-pointer transition-colors capitalize ${
-              subtab === tab
-                ? 'border-[var(--color-settings)] text-[var(--color-settings)] font-medium'
-                : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="border-b border-[var(--color-surface-border)] pt-3">
+        <div className="flex items-center gap-0 px-5">
+          {(['general', 'encoding', 'proxy'] as const).map(tab => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setSubtab(tab)}
+              className={`px-3 py-2 text-[12px] border-b-2 cursor-pointer transition-colors capitalize ${
+                subtab === tab
+                  ? 'border-[var(--color-settings)] text-[var(--color-settings)] font-medium'
+                  : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
         {subtab === 'general' ? <GeneralGeneralContent /> : subtab === 'encoding' ? <EncodingContent /> : <ProxyContent />}
       </div>
     </div>
@@ -115,6 +134,7 @@ function GeneralGeneralContent() {
   const [timeout, setTimeout_] = useState(0);
   const [saveResponseInHistory, setSaveResponseInHistory] = useState(true);
   const [maxHistoryEntries, setMaxHistoryEntries] = useState(500);
+  const [maxAiChatMessages, setMaxAiChatMessages] = useState(200);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -125,6 +145,7 @@ function GeneralGeneralContent() {
         if (msg.settings.timeout !== undefined) setTimeout_(msg.settings.timeout);
         if (msg.settings.saveResponseInHistory !== undefined) setSaveResponseInHistory(msg.settings.saveResponseInHistory);
         if (msg.settings.maxHistoryEntries !== undefined) setMaxHistoryEntries(msg.settings.maxHistoryEntries);
+        if (msg.settings.maxAiChatMessages !== undefined) setMaxAiChatMessages(msg.settings.maxAiChatMessages);
       }
     };
     window.addEventListener('message', handler);
@@ -133,12 +154,12 @@ function GeneralGeneralContent() {
   }, []);
 
   const save = (patch: Record<string, unknown>) => {
-    const settings = { followRedirects, sslVerification, timeout, saveResponseInHistory, maxHistoryEntries, ...patch };
+    const settings = { followRedirects, sslVerification, timeout, saveResponseInHistory, maxHistoryEntries, maxAiChatMessages, ...patch };
     postMsg({ type: 'saveSettings', settings });
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[480px]">
+    <div className="flex flex-col gap-6">
       {/* Follow Redirects */}
       <SettingToggle
         title="Follow Redirects"
@@ -188,6 +209,20 @@ function GeneralGeneralContent() {
           className="w-[120px] h-[28px] px-2.5 py-1 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
         />
       </div>
+
+      {/* Maximum AI Chat Messages */}
+      <div>
+        <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Maximum AI Chat Messages</p>
+        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">Max messages retained in the Daakia AI conversation (oldest trimmed automatically)</p>
+        <input
+          type="number"
+          min={10}
+          max={2000}
+          value={maxAiChatMessages}
+          onChange={(e) => { const v = Math.max(10, parseInt(e.target.value) || 200); setMaxAiChatMessages(v); save({ maxAiChatMessages: v }); }}
+          className="w-[120px] h-[28px] px-2.5 py-1 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+        />
+      </div>
     </div>
   );
 }
@@ -215,7 +250,7 @@ function EncodingContent() {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[480px]">
+    <div className="flex flex-col gap-6">
       {/* Query Parameters Encoding */}
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Query Parameters Encoding</p>
@@ -304,7 +339,7 @@ function ProxyContent() {
   const inputCls = "w-full h-[28px] px-2.5 py-1 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]";
 
   return (
-    <div className="flex flex-col gap-6 max-w-[480px]">
+    <div className="flex flex-col gap-6">
       {/* Proxy Mode */}
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Proxy Configuration</p>
@@ -416,8 +451,8 @@ function ProxyContent() {
 
 function SettingToggle({ title, description, value, onChange }: { title: string; description: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between">
-      <div>
+    <div className="flex items-center gap-4 max-w-[500px]">
+      <div className="flex-1 min-w-0">
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">{title}</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{description}</p>
       </div>
@@ -472,13 +507,15 @@ function MockServerSettings() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-0 px-4 pt-3 pb-0 border-b border-[var(--color-surface-border)]">
-        <span className="px-3 py-2 text-[12px] border-b-2 border-[var(--color-primary)] text-[var(--color-primary)] font-medium">
-          Configuration
-        </span>
+      <div className="border-b border-[var(--color-surface-border)] pt-3">
+        <div className="flex items-center gap-0 px-5">
+          <span className="px-3 py-2 text-[12px] border-b-2 border-[var(--color-primary)] text-[var(--color-primary)] font-medium">
+            Configuration
+          </span>
+        </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="flex flex-col gap-6 max-w-[480px]">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex flex-col gap-6">
           {/* Port Range */}
           <div>
             <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Port Range</p>
@@ -506,7 +543,7 @@ function MockServerSettings() {
               >
                 Save
               </button>
-              {saved && <span className="text-[11px] text-[#22c55e]">Saved!</span>}
+              {saved && <span className="text-[11px] text-[var(--color-success)]">Saved!</span>}
             </div>
           </div>
 

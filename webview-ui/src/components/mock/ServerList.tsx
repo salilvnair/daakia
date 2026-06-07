@@ -157,6 +157,8 @@ function getProtocolBadge(protocol: MockServerProtocol): string {
     case 'mqtt': return 'MQTT';
     case 'grpc': return 'gRPC';
     case 'soap': return 'SOAP';
+    case 'ai': return 'AI';
+    case 'mcp': return 'MCP';
     default: return 'REST';
   }
 }

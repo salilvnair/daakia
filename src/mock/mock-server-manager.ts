@@ -17,9 +17,11 @@ import { createSocketIOServer, cleanupSocketIOClients } from './mock-socketio-se
 import { createMQTTBroker, cleanupMQTTBroker } from './mock-mqtt-server';
 import { createGrpcServer, cleanupGrpcServer } from './mock-grpc-server';
 import { createSoapServer } from './mock-soap-server';
+import { createAiServer } from './mock-ai-server';
+import { createMcpServer } from './mock-mcp-server';
 
 // Re-export types for external consumers
-export type { MockServerConfig, MockRoute, GraphQLMockOperation, WebSocketMockHandler, SSEMockEvent, SocketIOMockHandler, MQTTMockTopic, MockLogEntry, HttpMethod, MockServerProtocol } from './mock-types';
+export type { MockServerConfig, MockRoute, GraphQLMockOperation, WebSocketMockHandler, SSEMockEvent, SocketIOMockHandler, MQTTMockTopic, MockLogEntry, HttpMethod, MockServerProtocol, AiMockScenario, McpMockTool } from './mock-types';
 
 // ---------- Internal State ----------
 
@@ -165,6 +167,10 @@ export async function startMockServer(config: MockServerConfig): Promise<{ port:
     server = await createGrpcServer(config, getConfig, _logCallback, port);
   } else if (protocol === 'soap') {
     server = createSoapServer(config, getConfig, _logCallback);
+  } else if (protocol === 'ai') {
+    server = createAiServer(config, _logCallback);
+  } else if (protocol === 'mcp') {
+    server = createMcpServer(config, _logCallback);
   } else {
     server = createHttpServer(config, getConfig, _logCallback);
   }

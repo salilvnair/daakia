@@ -108,7 +108,7 @@ export function McpUrlBar() {
       <button
         type="button"
         onClick={handleConnect}
-        className={`url-bar-send cursor-pointer ${connected ? 'breathing-btn' : ''}`}
+        className="url-bar-send cursor-pointer"
         style={{ backgroundColor: connected || loading ? 'var(--color-error)' : 'var(--color-protocol-mcp)' }}
       >
         {connected ? <DisconnectIcon size={13} /> : <ConnectIcon size={13} />}

@@ -24,6 +24,8 @@ export { ImportExportIcon } from './display/ImportExportIcon';
 export { ScriptResultsView } from './display/ScriptResultsView';
 export { RequestProgressOverlay } from './display/RequestProgressOverlay';
 export { CopyButton } from './display/CopyButton';
+export { MdViewer } from './display/MdViewer';
+export type { MdViewerProps } from './display/MdViewer';
 
 // ─── Editors ───
 export { CodeEditor } from './editors/CodeEditor';
@@ -34,7 +36,7 @@ export { ScriptsEditor } from './editors/ScriptsEditor';
 
 // ─── Menus ───
 export { ContextMenu } from './menus/ContextMenu';
-export type { ContextMenuItem } from './menus/ContextMenu';
+export type { ContextMenuItem, ContextMenuSubItem } from './menus/ContextMenu';
 export { RightClickMenu } from './menus/RightClickMenu';
 
 // ─── Modals ───

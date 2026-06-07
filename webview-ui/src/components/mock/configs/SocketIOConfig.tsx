@@ -6,6 +6,7 @@ import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../i
 import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
 import { SOCKETIO_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
+import { MockAiGenerateButton } from '../MockAiGeneratePopover';
 
 const SOCKETIO_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -87,14 +88,15 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
             onChange={applySample}
             accentColor="var(--color-mock-server)"
           />
-          <button
-            type="button"
-            onClick={() => {/* TODO: AI generate */}}
-            className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-protocol-socketio)] border border-[rgba(156,163,175,0.3)] hover:bg-[rgba(156,163,175,0.08)] cursor-pointer transition-colors opacity-50"
-            title="Coming soon"
-          >
-            ✨ Generate with AI
-          </button>
+          <MockAiGenerateButton
+            templateKey="mock.socketio.generate"
+            title="Socket.IO Events"
+            serverName={server.name}
+            serverContext={(server.socketioHandlers || []).length > 0
+              ? (server.socketioHandlers || []).map((h: any) => h.event || '').join('\n')
+              : undefined}
+            accentVar="var(--color-protocol-socketio)"
+          />
           <button type="button" onClick={addHandler} className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.25)] hover:bg-[rgba(234,179,8,0.1)] cursor-pointer transition-colors">
             + Add Handler
           </button>
