@@ -173,9 +173,14 @@ export function EnvironmentsPanel() {
     const items: ContextMenuItem[] = [
       { id: 'import-postman', label: 'Import from Postman', shortcut: 'P', icon: <FolderImportIcon size={14} /> },
       { id: 'import-insomnia', label: 'Import from Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} /> },
-      { id: 'import-json', label: 'Import JSON', shortcut: 'J', icon: <FolderImportIcon size={14} /> },
+      { id: 'import-json', label: 'Import Daakia JSON', shortcut: 'J', icon: <FolderImportIcon size={14} /> },
+      { id: 'import-dotenv', label: 'Import .env file', shortcut: '.', icon: <FolderImportIcon size={14} /> },
       { id: 'sep1', label: '', separator: true },
-      { id: 'export-json', label: 'Export as JSON', shortcut: 'E', icon: <FolderExportIcon size={14} /> },
+      { id: 'export-json', label: 'Export as Daakia JSON', shortcut: 'E', icon: <FolderExportIcon size={14} /> },
+      { id: 'export-postman', label: 'Export as Postman', shortcut: 'M', icon: <FolderExportIcon size={14} /> },
+      { id: 'export-bruno', label: 'Export as Bruno .env', shortcut: 'B', icon: <FolderExportIcon size={14} /> },
+      { id: 'export-insomnia', label: 'Export as Insomnia', shortcut: 'N', icon: <FolderExportIcon size={14} /> },
+      { id: 'export-httpie', label: 'Export as HTTPie session', shortcut: 'H', icon: <FolderExportIcon size={14} /> },
     ];
     setContextMenu({ position: { x: rect.right - 220, y: rect.bottom + 6 }, items, targetId: '', kind: 'importExport' });
   };
@@ -213,10 +218,15 @@ export function EnvironmentsPanel() {
 
     if (kind === 'importExport') {
       switch (actionId) {
-        case 'import-postman': postMsg({ type: 'importEnvironmentsPostman' }); break;
+        case 'import-postman':  postMsg({ type: 'importEnvironmentsPostman' }); break;
         case 'import-insomnia': postMsg({ type: 'importEnvironmentsInsomnia' }); break;
-        case 'import-json': postMsg({ type: 'importEnvironmentsJson' }); break;
-        case 'export-json': exportAll(); break;
+        case 'import-json':     postMsg({ type: 'importEnvironmentsJson' }); break;
+        case 'import-dotenv':   postMsg({ type: 'importEnvironmentsDotEnv' }); break;
+        case 'export-json':     exportAll(); break;
+        case 'export-postman':  postMsg({ type: 'exportEnvironmentsPostman', environments, activeEnvId }); break;
+        case 'export-bruno':    postMsg({ type: 'exportEnvironmentsBruno', environments, activeEnvId }); break;
+        case 'export-insomnia': postMsg({ type: 'exportEnvironmentsInsomnia', environments, activeEnvId }); break;
+        case 'export-httpie':   postMsg({ type: 'exportEnvironmentsHttpie', environments, activeEnvId }); break;
       }
     } else if (kind === 'more') {
       if (actionId === 'delete-all') setShowDeleteAllConfirm(true);

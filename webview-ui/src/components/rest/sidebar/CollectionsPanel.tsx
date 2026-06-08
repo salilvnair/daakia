@@ -4,12 +4,20 @@ import { useTabsStore } from '../../../store/tabs-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
+import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ContextMenu, ImportExportIcon, type CollectionProperties, type ContextMenuItem } from '../../shared';
 import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
-import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../../icons';
+import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon } from '../../../icons';
 import { InfoPopup } from '../../shared/display/InfoPopup';
 import { SidebarSkeleton } from '../../shared/display/SidebarSkeleton';
+import { AiEnvExtractModal } from '../../ai/AiEnvExtractModal';
+import { AiCollectionOrganizerModal } from '../../ai/AiCollectionOrganizerModal';
+import { AiApiFlowBuilderModal } from '../../ai/AiApiFlowBuilderModal';
+import { AiChangelogModal } from '../../ai/AiChangelogModal';
+import { AiAgentWorkflowModal } from '../../ai/AiAgentWorkflowModal';
+import { AiApiDiscoveryModal } from '../../ai/AiApiDiscoveryModal';
+import { AiReverseEngineerModal } from '../../ai/AiReverseEngineerModal';
 
 // ────────────── Main Component ──────────────
 
@@ -31,6 +39,14 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [tree, setTree] = useState<CollectionTreeNode[]>(cachedTree);
   const [search, setSearch] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // AI NL Search state
+  const [aiSearchActive, setAiSearchActive] = useState(false);
+  const [aiSearching, setAiSearching] = useState(false);
+  const [aiSearchResultIds, setAiSearchResultIds] = useState<string[]>([]);
+  const aiSearchReqIdRef = useRef('');
+  const aiSearchAccRef = useRef('');
+  const resolveTemplate = useAiPromptTemplatesStore(s => s.resolve);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -64,6 +80,15 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [propertiesTarget, setPropertiesTarget] = useState<{ id: string; name: string; properties: CollectionProperties } | null>(null);
   const propertiesRequestedRef = useRef(false);
   const [headerMenu, setHeaderMenu] = useState<{ kind: 'importExport' | 'more'; x: number; y: number } | null>(null);
+
+  // AI Environment Extractor modal state
+  const [envExtractNode, setEnvExtractNode] = useState<CollectionTreeNode | null>(null);
+  const [organizeNode, setOrganizeNode] = useState<CollectionTreeNode | null>(null);
+  const [showFlowBuilder, setShowFlowBuilder] = useState(false);
+  const [changelogNode, setChangelogNode] = useState<CollectionTreeNode | null>(null);
+  const [agentWorkflowNode, setAgentWorkflowNode] = useState<CollectionTreeNode | null>(null);
+  const [showDiscovery, setShowDiscovery] = useState(false);
+  const [showReverseEngineer, setShowReverseEngineer] = useState(false);
 
   // Scroll position persistence
   const scrollRef = useScrollRestore(`collections.${protocol}`);
@@ -121,6 +146,103 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
 
   // Helper to include protocol in all collection messages
   const postCollMsg = (msg: Record<string, unknown>) => postMsg({ ...msg, protocol });
+
+  // ── AI NL Search ──────────────────────────────────────────────────────────
+
+  /** Flatten all requests from the entire tree for the AI context */
+  const getAllRequests = useCallback((nodes: CollectionTreeNode[]): { id: string; method: string; name: string; url: string }[] => {
+    const result: { id: string; method: string; name: string; url: string }[] = [];
+    const walk = (n: CollectionTreeNode) => {
+      n.requests.forEach(r => result.push({ id: r.id, method: r.method || 'GET', name: r.name || '', url: r.url || '' }));
+      n.children.forEach(walk);
+    };
+    nodes.forEach(walk);
+    return result;
+  }, []);
+
+  // Listen for AI search stream
+  useEffect(() => {
+    const handler = (evt: MessageEvent) => {
+      const msg = evt.data as Record<string, unknown>;
+      if (!msg || msg.tabId !== aiSearchReqIdRef.current) return;
+
+      if (msg.type === 'ai:chunk') {
+        const delta = (msg.delta as string) || (msg.text as string) || '';
+        aiSearchAccRef.current += delta;
+      }
+      if (msg.type === 'ai:complete') {
+        const msgPayload = msg.message as Record<string, unknown> | undefined;
+        const content = aiSearchAccRef.current || (msgPayload?.content as string) || '';
+        const stripped = content.replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/im, '').trim();
+        try {
+          const ids = JSON.parse(stripped) as string[];
+          setAiSearchResultIds(Array.isArray(ids) ? ids : []);
+        } catch {
+          setAiSearchResultIds([]);
+        }
+        setAiSearching(false);
+        aiSearchAccRef.current = '';
+      }
+      if (msg.type === 'ai:error') {
+        setAiSearching(false);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const handleAiSearch = useCallback(() => {
+    const query = search.trim();
+    if (!query) return;
+
+    const allRequests = getAllRequests(tree);
+    if (allRequests.length === 0) return;
+
+    setAiSearching(true);
+    setAiSearchActive(true);
+    setAiSearchResultIds([]);
+    aiSearchAccRef.current = '';
+
+    const pid = `ai-nl-search-${Date.now()}`;
+    aiSearchReqIdRef.current = pid;
+
+    const requestsText = allRequests
+      .map(r => `${r.id} | ${r.method} | ${r.name} | ${r.url}`)
+      .join('\n');
+
+    const systemPrompt = resolveTemplate('rest.collection.search.system');
+    const userPrompt = resolveTemplate('rest.collection.search', { query, requests: requestsText });
+
+    postMsg({
+      type: 'ai:send',
+      tabId: pid,
+      provider: '', model: '', baseUrl: '',
+      stage: 'rest.collection.search',
+      systemPrompts: [systemPrompt],
+      userPrompt,
+      conversation: [],
+      tools: [],
+      settings: {
+        temperature: 0.1,
+        maxTokens: 256,
+        stream: true,
+        topP: 1,
+        stopSequences: [],
+        responseFormat: 'text',
+        frequencyPenalty: 0,
+        presencePenalty: 0,
+        seed: null,
+      },
+      mcpServerConfigs: [],
+    });
+  }, [search, tree, getAllRequests, resolveTemplate]);
+
+  const clearAiSearch = useCallback(() => {
+    setAiSearchActive(false);
+    setAiSearching(false);
+    setAiSearchResultIds([]);
+    aiSearchAccRef.current = '';
+  }, []);
 
   // ── Actions ──
 
@@ -342,7 +464,18 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       { id: 'sep3', label: '', separator: true },
       { id: 'rename', label: 'Rename', shortcut: 'N', icon: <RenameIcon />, iconColor: 'var(--color-ctx-rename)' },
       { id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon />, iconColor: 'var(--color-ctx-duplicate)' },
-      { id: 'export', label: 'Export', disabled: true, shortcut: 'X', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
+      { id: 'sep3b', label: '', separator: true },
+      { id: 'ai-extract-env', label: 'Extract Variables with AI', shortcut: 'V', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)', disabled: !hasAnyRequests(node) },
+      { id: 'ai-organize', label: 'Organize with AI', shortcut: 'O', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-warning)', disabled: !hasAnyRequests(node) },
+      { id: 'ai-flow-builder', label: 'Build API Flow with AI', shortcut: 'F', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-primary)' },
+      { id: 'ai-agent-workflow', label: 'Test with AI Agent', shortcut: 'T', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)', disabled: !hasAnyRequests(node) },
+      { id: 'ai-changelog', label: 'Generate Changelog with AI', shortcut: 'C', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-warning)', disabled: !hasAnyRequests(node) },
+      { id: 'sep3c', label: '', separator: true },
+      { id: 'export-daakia', label: 'Export as Daakia JSON', shortcut: 'J', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
+      { id: 'export-postman', label: 'Export as Postman', shortcut: 'M', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
+      { id: 'export-insomnia', label: 'Export as Insomnia', shortcut: 'I', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
+      { id: 'export-bruno', label: 'Export as Bruno (.bru)', shortcut: 'B', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
+      { id: 'export-httpie', label: 'Export as HTTPie', shortcut: 'H', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
       { id: 'properties', label: 'Properties', shortcut: 'P', icon: <SettingsIcon />, iconColor: 'var(--color-text-muted)' },
       { id: 'sep4', label: '', separator: true },
       { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon /> },
@@ -408,6 +541,45 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           postCollMsg({ type: 'duplicateRequest', id: targetId });
         }
         break;
+      case 'ai-extract-env': {
+        const node = findNodeById(tree, targetId);
+        if (node) setEnvExtractNode(node);
+        break;
+      }
+      case 'ai-organize': {
+        const node = findNodeById(tree, targetId);
+        if (node) setOrganizeNode(node);
+        break;
+      }
+      case 'ai-flow-builder': {
+        setShowFlowBuilder(true);
+        break;
+      }
+      case 'ai-agent-workflow': {
+        const node = findNodeById(tree, targetId);
+        if (node) setAgentWorkflowNode(node);
+        break;
+      }
+      case 'ai-changelog': {
+        const node = findNodeById(tree, targetId);
+        if (node) setChangelogNode(node);
+        break;
+      }
+      case 'export-daakia':
+        postMsg({ type: 'exportCollectionDaakia', collectionId: targetId });
+        break;
+      case 'export-postman':
+        postMsg({ type: 'exportCollectionPostman', collectionId: targetId });
+        break;
+      case 'export-insomnia':
+        postMsg({ type: 'exportCollectionInsomnia', collectionId: targetId });
+        break;
+      case 'export-bruno':
+        postMsg({ type: 'exportCollectionBruno', collectionId: targetId });
+        break;
+      case 'export-httpie':
+        postMsg({ type: 'exportCollectionHttpie', collectionId: targetId });
+        break;
       case 'open':
         // For requests, find and open
         const req = findRequestById(tree, targetId);
@@ -421,7 +593,22 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
     setContextMenu(null);
   }, [contextMenu, tree]);
 
-  const filteredTree = filterTree(tree, search);
+  // When AI search is active, filter tree to show only matched request IDs
+  const filteredTree = aiSearchActive && aiSearchResultIds.length > 0
+    ? (() => {
+        const matchSet = new Set(aiSearchResultIds);
+        const filterToIds = (nodes: CollectionTreeNode[]): CollectionTreeNode[] =>
+          nodes.reduce<CollectionTreeNode[]>((acc, node) => {
+            const matchedRequests = node.requests.filter(r => matchSet.has(r.id));
+            const filteredChildren = filterToIds(node.children);
+            if (matchedRequests.length > 0 || filteredChildren.length > 0) {
+              acc.push({ ...node, requests: matchedRequests, children: filteredChildren });
+            }
+            return acc;
+          }, []);
+        return filterToIds(tree);
+      })()
+    : filterTree(tree, search);
 
   // Auto-expand when searching
   useEffect(() => {
@@ -429,6 +616,13 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       setExpandedIds(collectAllIds(filteredTree));
     }
   }, [search]);
+
+  // Auto-expand when AI search returns results
+  useEffect(() => {
+    if (aiSearchActive && aiSearchResultIds.length > 0) {
+      setExpandedIds(collectAllIds(filteredTree));
+    }
+  }, [aiSearchResultIds, aiSearchActive]);
 
   return (
     <div className="flex flex-col h-full">
@@ -441,25 +635,82 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       </div>
 
       {/* Search */}
-      <div className="px-3 py-2 border-b border-[var(--color-surface-border)]">
-        <input
-          type="text"
-          placeholder="Search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full h-[32px] px-3 text-[12px] rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
-        />
-      </div>
-
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-surface-border)]">
+      <div className="px-3 py-2 border-b border-[var(--color-surface-border)] flex items-center gap-1.5">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder={aiSearchActive ? 'AI search results' : 'Search'}
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); if (aiSearchActive) clearAiSearch(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && search.trim()) handleAiSearch(); }}
+            className="w-full h-[32px] px-3 pr-7 text-[12px] rounded-md bg-[var(--color-input-bg)] border text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none transition-colors"
+            style={{
+              borderColor: aiSearchActive ? 'color-mix(in srgb, var(--color-primary) 50%, var(--color-input-border))' : 'var(--color-input-border)',
+            }}
+          />
+          {/* AI badge or clear button */}
+          {aiSearchActive && (
+            <button
+              type="button"
+              onClick={clearAiSearch}
+              title="Clear AI search"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              <CloseCircleIcon size={13} />
+            </button>
+          )}
+        </div>
+        {/* AI Search trigger button */}
         <button
           type="button"
-          onClick={openNewCollection}
-          className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)] hover:text-white cursor-pointer"
+          onClick={() => search.trim() ? handleAiSearch() : undefined}
+          disabled={aiSearching || !search.trim()}
+          title={aiSearching ? 'Searching…' : 'Search with AI (natural language)'}
+          className="flex-shrink-0 w-[30px] h-[32px] flex items-center justify-center rounded-md cursor-pointer transition-all disabled:opacity-40"
+          style={{
+            backgroundColor: aiSearchActive
+              ? `color-mix(in srgb, var(--color-primary) 15%, transparent)`
+              : `color-mix(in srgb, var(--color-text-muted) 8%, transparent)`,
+            color: aiSearchActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            border: `1px solid ${aiSearchActive ? 'color-mix(in srgb, var(--color-primary) 30%, transparent)' : 'var(--color-input-border)'}`,
+          }}
         >
-          <PlusIcon size={14} />
-          <span>New</span>
+          <SparkleIcon size={13} className={aiSearching ? 'animate-pulse' : ''} />
         </button>
+      </div>
+      {/* AI search status hint */}
+      {aiSearchActive && (
+        <div className="px-3 py-1 text-[10px] flex items-center gap-1" style={{ color: 'var(--color-primary)', backgroundColor: 'color-mix(in srgb, var(--color-primary) 5%, transparent)' }}>
+          <SparkleIcon size={10} />
+          {aiSearching
+            ? 'Searching across all requests…'
+            : `${aiSearchResultIds.length} result${aiSearchResultIds.length !== 1 ? 's' : ''} for "${search}"`}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-surface-border)]">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={openNewCollection}
+            className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)] hover:text-white cursor-pointer"
+          >
+            <PlusIcon size={14} />
+            <span>New</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowDiscovery(true)}
+            title="AI API Discovery — probe a base URL to discover endpoints"
+            className="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors"
+            style={{ color: 'var(--color-protocol-ai)' }}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--color-protocol-ai) 12%, transparent)')}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '')}
+          >
+            <SparkleIcon size={12} />
+          </button>
+        </div>
 
         <div className="flex items-center gap-1.5 relative">
           <InfoPopup
@@ -509,6 +760,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
                 { id: 'import-bruno', label: 'Import from Bruno', shortcut: 'B', icon: <FolderImportIcon size={14} />, iconColor: '#eab308' },
                 { id: 'import-insomnia', label: 'Import from Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} />, iconColor: '#a78bfa' },
                 { id: 'import-har', label: 'Import from HAR', shortcut: 'H', icon: <FolderImportIcon size={14} />, iconColor: '#06b6d4' },
+                { id: 'ai-reverse-engineer', label: 'Reverse Engineer (AI)', shortcut: 'R', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' },
                 { id: 'sep1', label: '', separator: true },
                 { id: 'export-json', label: 'Export as JSON', shortcut: 'E', icon: <FolderExportIcon size={14} />, iconColor: '#3b82f6' },
               ]}
@@ -517,6 +769,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
                 else if (id === 'import-bruno') postMsg({ type: 'importBrunoRequest' });
                 else if (id === 'import-insomnia') addToast({ type: 'info', message: 'Collection import from Insomnia is not implemented yet.' });
                 else if (id === 'export-json') addToast({ type: 'info', message: 'Collection export as JSON is not implemented yet.' });
+                else if (id === 'ai-reverse-engineer') setShowReverseEngineer(true);
                 setHeaderMenu(null);
               }}
               onClose={() => setHeaderMenu(null)}
@@ -649,6 +902,57 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           danger
           onConfirm={handleDeleteAllCollections}
           onCancel={() => setShowDeleteAllConfirm(false)}
+        />
+      )}
+
+      {envExtractNode && (
+        <AiEnvExtractModal
+          collectionNode={envExtractNode}
+          onClose={() => setEnvExtractNode(null)}
+        />
+      )}
+
+      {organizeNode && (
+        <AiCollectionOrganizerModal
+          collectionNode={organizeNode}
+          protocol={protocol}
+          onClose={() => setOrganizeNode(null)}
+          onApplied={() => setOrganizeNode(null)}
+        />
+      )}
+
+      {showFlowBuilder && (
+        <AiApiFlowBuilderModal
+          protocol={protocol}
+          onClose={() => setShowFlowBuilder(false)}
+        />
+      )}
+
+      {changelogNode && (
+        <AiChangelogModal
+          collectionNode={changelogNode}
+          onClose={() => setChangelogNode(null)}
+        />
+      )}
+
+      {agentWorkflowNode && (
+        <AiAgentWorkflowModal
+          collectionId={agentWorkflowNode.id}
+          collectionName={agentWorkflowNode.name}
+          protocol={protocol}
+          onClose={() => setAgentWorkflowNode(null)}
+        />
+      )}
+
+      {showDiscovery && (
+        <AiApiDiscoveryModal
+          onClose={() => setShowDiscovery(false)}
+        />
+      )}
+
+      {showReverseEngineer && (
+        <AiReverseEngineerModal
+          onClose={() => setShowReverseEngineer(false)}
         />
       )}
     </div>

@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { postMsg } from '../../../vscode';
 import { Checkbox } from '../controls/Checkbox';
 import { METHOD_COLORS } from '../../../colors';
-import { CloseIcon, PlayIcon } from '../../../icons';
+import { CloseIcon, PlayIcon, SparkleIcon } from '../../../icons';
+import { AiPerformanceInsightsModal } from '../../ai/AiPerformanceInsightsModal';
 
 interface RunCollectionModalProps {
   open: boolean;
@@ -34,6 +35,7 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
   const [results, setResults] = useState<RequestResult[]>([]);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [summary, setSummary] = useState<{ total: number; passed: number; failed: number; duration: number } | null>(null);
+  const [showInsights, setShowInsights] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -88,7 +90,9 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
 
   if (!open) return null;
 
-  return createPortal(
+  return (
+    <>
+    {createPortal(
     <div
       className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50"
     >
@@ -161,11 +165,26 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
                     ))}
                   </div>
                   {summary && (
-                    <div className="flex items-center gap-4 pt-2 text-[12px]">
+                    <div className="flex items-center gap-3 pt-2 text-[12px] flex-wrap">
                       <span className="text-[var(--color-text-secondary)]">Total: {summary.total}</span>
                       <span className="text-[var(--color-success)]">Passed: {summary.passed}</span>
                       <span className="text-[var(--color-error)]">Failed: {summary.failed}</span>
                       <span className="text-[var(--color-text-muted)]">{summary.duration}ms</span>
+                      {results.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowInsights(true)}
+                          className="ml-auto flex items-center gap-1.5 h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer transition-all"
+                          style={{
+                            backgroundColor: 'color-mix(in srgb, var(--color-warning) 12%, transparent)',
+                            color: 'var(--color-warning)',
+                            border: '1px solid color-mix(in srgb, var(--color-warning) 25%, transparent)',
+                          }}
+                        >
+                          <SparkleIcon size={11} />
+                          AI Insights
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -211,6 +230,15 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
       </div>
     </div>,
     document.body
+    )}
+    {showInsights && (
+      <AiPerformanceInsightsModal
+        collectionName={collectionName}
+        results={results}
+        onClose={() => setShowInsights(false)}
+      />
+    )}
+    </>
   );
 }
 

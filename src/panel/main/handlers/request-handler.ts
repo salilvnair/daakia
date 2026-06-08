@@ -184,6 +184,19 @@ export async function handleExecuteRequest(
         postMessage,
         refreshEnvironments,
       );
+
+      // Sync header mutations from pre-request scripts back to msg.headers so
+      // executeRequest() picks them up. headersObj is the same reference that
+      // dk.request.headers proxy mutates, so it reflects all .set()/.delete() calls.
+      msg.headers = Object.entries(headersObj).map(([key, value]) => ({ key, value }));
+
+      // Sync url/method/body mutations (scripts can reassign dk.request.url etc.)
+      if (scriptCtx.request.url !== (msg.url as string)) {
+        msg.url = scriptCtx.request.url;
+      }
+      if (scriptCtx.request.method !== (msg.method as string)) {
+        msg.method = scriptCtx.request.method;
+      }
     }
 
     // Send progress: pre-request script done, rendering request

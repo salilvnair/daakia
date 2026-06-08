@@ -17,6 +17,9 @@ import {
   handleExportEnvironmentsJson, handleImportEnvironmentsJson,
   handleImportEnvironmentsPostman, handleImportEnvironmentsInsomnia,
   handleImportEnvironmentsGist, handleExportEnvironmentsGist,
+  handleImportEnvironmentsDotEnv,
+  handleExportEnvironmentsPostman, handleExportEnvironmentsBruno,
+  handleExportEnvironmentsInsomnia, handleExportEnvironmentsHttpie,
 } from './handlers/environment-handler';
 import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
@@ -28,6 +31,11 @@ import {
   handleDuplicateRequest, handleReorderCollections, handleMoveRequest,
   handleReorderRequests, handleRunCollection, handleStopCollectionRun,
 } from './handlers/collection-handler';
+import {
+  handleExportCollectionDaakia, handleExportCollectionPostman,
+  handleExportCollectionBruno, handleExportCollectionInsomnia,
+  handleExportCollectionHttpie,
+} from '../../services/collection-exporter';
 import {
   handleStartMockServer, handleStopMockServer, handleUpdateMockRoutes,
   handleSaveMockConfigs, handleGetMockServerState, handleSetMockPortRange,
@@ -43,6 +51,8 @@ import { handleMqttConnect, handleMqttDisconnect, handleMqttSubscribe, handleMqt
 import { handleGrpcInvoke, handleGrpcCancel, handleGrpcStreamSend, handleGrpcStreamEnd, handleGrpcReflect, handleGrpcLoadProto, cleanupAllGrpcStreams } from './handlers/grpc-handler';
 import { handleSoapInvoke, handleSoapCancel, handleLoadWsdl, handleLoadWsdlContent, handleGenerateEnvelope, handleExtractFields, handleGenerateSecurity, handleInjectSecurity, handleImportSoapUiProject } from './handlers/soap-handler';
 import { handleAiSend, handleAiCancel } from './handlers/ai-handler';
+import { handleAiDiscovery } from './handlers/ai-discovery-handler';
+import { handleAiFuzz } from './handlers/ai-fuzz-handler';
 import { handleMcpConnect, handleMcpDisconnect, handleMcpCallTool, handleMcpGetPrompt, handleMcpReadResource, cleanupAllMcpClients } from './handlers/mcp-handler';
 import { handleAiMcpConnect, handleAiMcpDisconnect, cleanupAiMcpClients } from './handlers/ai-mcp-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from './handlers/ui-state-handler';
@@ -297,6 +307,12 @@ export class MainPanel {
       case 'ai:cancel':
         handleAiCancel(msg, this._post);
         break;
+      case 'ai:discovery:start':
+        handleAiDiscovery(msg, this._post);
+        break;
+      case 'fuzz:run':
+        handleAiFuzz(msg, this._post);
+        break;
       case 'copilot:models': {
         const { getCopilotModels } = require('../../ai/copilot-executor');
         getCopilotModels().then((models: Array<{ id: string; name: string; family: string }>) => {
@@ -328,6 +344,9 @@ export class MainPanel {
         break;
       case 'mcp:readResource':
         handleMcpReadResource(msg, this._post);
+        break;
+      case 'mcp:showServerConfig':
+        this._showMcpServerConfig();
         break;
 
       // ── Mock Server ──
@@ -448,6 +467,21 @@ export class MainPanel {
       case 'exportEnvironmentsGist':
         handleExportEnvironmentsGist(msg, this._post);
         break;
+      case 'importEnvironmentsDotEnv':
+        handleImportEnvironmentsDotEnv(this._post);
+        break;
+      case 'exportEnvironmentsPostman':
+        handleExportEnvironmentsPostman(msg, this._post);
+        break;
+      case 'exportEnvironmentsBruno':
+        handleExportEnvironmentsBruno(msg, this._post);
+        break;
+      case 'exportEnvironmentsInsomnia':
+        handleExportEnvironmentsInsomnia(msg, this._post);
+        break;
+      case 'exportEnvironmentsHttpie':
+        handleExportEnvironmentsHttpie(msg, this._post);
+        break;
 
       // ── Collections ──
       case 'getCollections':
@@ -512,6 +546,21 @@ export class MainPanel {
         break;
       case 'reorderRequests':
         handleReorderRequests(msg, this._post);
+        break;
+      case 'exportCollectionDaakia':
+        handleExportCollectionDaakia(msg, this._post);
+        break;
+      case 'exportCollectionPostman':
+        handleExportCollectionPostman(msg, this._post);
+        break;
+      case 'exportCollectionBruno':
+        handleExportCollectionBruno(msg, this._post);
+        break;
+      case 'exportCollectionInsomnia':
+        handleExportCollectionInsomnia(msg, this._post);
+        break;
+      case 'exportCollectionHttpie':
+        handleExportCollectionHttpie(msg, this._post);
         break;
       case 'runCollection':
         handleRunCollection(msg, this._post);
@@ -677,8 +726,53 @@ export class MainPanel {
         this._sendPerformanceData();
         break;
 
+      case 'fetchUrl': {
+        const { reqId, url: fetchUrlTarget } = message as { reqId: string; url: string };
+        this._fetchExternalUrl(reqId, fetchUrlTarget);
+        break;
+      }
+
       default:
         break;
+    }
+  }
+
+  // ─────────────────── External URL Fetch (proxy for webview) ──────────────────
+
+  private async _fetchExternalUrl(reqId: string, url: string): Promise<void> {
+    try {
+      const https = await import('https');
+      const http = await import('http');
+      const urlModule = await import('url');
+
+      const parsed = new urlModule.URL(url);
+      const lib = parsed.protocol === 'https:' ? https : http;
+
+      const content = await new Promise<string>((resolve, reject) => {
+        const req = lib.get(url, {
+          headers: {
+            'Accept': 'application/json,application/yaml,text/yaml,text/plain,*/*',
+            'User-Agent': 'Daakia/1.0',
+          },
+          timeout: 15000,
+        }, (res: any) => {
+          let data = '';
+          res.on('data', (chunk: any) => { data += chunk; });
+          res.on('end', () => {
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(data);
+            } else {
+              reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+            }
+          });
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+      });
+
+      this.postMessage({ type: 'fetchUrlResult', reqId, content, error: null });
+    } catch (err: any) {
+      this.postMessage({ type: 'fetchUrlResult', reqId, content: null, error: err?.message || 'Fetch failed' });
     }
   }
 
@@ -698,6 +792,42 @@ export class MainPanel {
         uptime: uptimeSeconds,
         processId: process.pid,
       },
+    });
+  }
+
+  // ────────────────── MCP Server Config ──────────────────
+
+  private _showMcpServerConfig(): void {
+    const extensionPath = this._extensionUri.fsPath;
+    const serverPath = path.join(extensionPath, 'dist', 'daakia-mcp-server.js');
+
+    const configJson = JSON.stringify({
+      mcpServers: {
+        daakia: {
+          command: 'node',
+          args: [serverPath],
+        },
+      },
+    }, null, 2);
+
+    const message = [
+      'Add to your Claude Desktop config (~/.config/claude/claude_desktop_config.json):',
+      '',
+      configJson,
+      '',
+      'Or for Cursor/other clients, add under "mcpServers":',
+      `  "daakia": { "command": "node", "args": ["${serverPath}"] }`,
+    ].join('\n');
+
+    void vscode.window.showInformationMessage(
+      'Daakia MCP Server Config',
+      { modal: true, detail: message },
+      'Copy Config',
+    ).then(selection => {
+      if (selection === 'Copy Config') {
+        void vscode.env.clipboard.writeText(configJson);
+        void vscode.window.showInformationMessage('Daakia MCP config copied to clipboard!');
+      }
     });
   }
 

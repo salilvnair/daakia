@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTabsStore, type HttpMethod } from '../../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { useDebugStore } from '../../../store/debug-store';
@@ -7,7 +7,8 @@ import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 import { postMsg } from '../../../vscode';
 import { sendRequest, sendAndDownloadRequest, cancelRequest, saveRequest } from '../../../services/request';
 import { METHOD_COLORS } from '../../../colors';
-import { SaveIcon, SendIcon, DownloadIcon, CopyIcon, CodeIcon, RefreshIcon, StopSquareIcon } from '../../../icons';
+import { SaveIcon, SendIcon, DownloadIcon, CopyIcon, CodeIcon, RefreshIcon, StopSquareIcon, SparkleIcon } from '../../../icons';
+import { AiPreflightPopover, countPreflightIssues } from '../../ai/AiPreflightPopover';
 
 const METHOD_OPTIONS: DropdownOption[] = [
   { value: 'GET', label: 'GET', color: METHOD_COLORS.GET },
@@ -20,12 +21,15 @@ const METHOD_OPTIONS: DropdownOption[] = [
 ];
 
 export function UrlBar() {
-  const { tabs, activeTabId, updateTab } = useTabsStore();
+  const { tabs, activeTabId, updateTab, openDaakiaAiTab } = useTabsStore();
   const urlSuggestions = useUrlSuggestionsStore(s => s.byProtocol.rest);
   const mockSuggestions = useMockSuggestions('rest');
   const [showImportCurl, setShowImportCurl] = useState(false);
   const [showGenerateCode, setShowGenerateCode] = useState(false);
+  const [showPreflight, setShowPreflight] = useState(false);
   const tab = tabs.find(t => t.id === activeTabId);
+
+  const preflightCounts = useMemo(() => tab ? countPreflightIssues(tab) : { errors: 0, warnings: 0 }, [tab]);
 
   if (!tab) return null;
 
@@ -131,6 +135,62 @@ export function UrlBar() {
         suggestions={urlSuggestions}
         mockServers={mockSuggestions}
       />
+
+      {/* Pre-flight check button */}
+      {tab.url.trim() && (
+        <div className="relative flex-shrink-0">
+          <button
+            type="button"
+            title="AI Pre-flight Check — review this request for issues"
+            onClick={() => setShowPreflight(p => !p)}
+            className="h-[36px] px-2.5 flex items-center gap-1 rounded-md border cursor-pointer transition-all hover:opacity-90 text-[11px] font-medium"
+            style={{
+              borderColor: preflightCounts.errors > 0
+                ? '#ef444450'
+                : preflightCounts.warnings > 0
+                  ? '#f59e0b50'
+                  : 'var(--color-surface-border)',
+              backgroundColor: preflightCounts.errors > 0
+                ? '#ef444412'
+                : preflightCounts.warnings > 0
+                  ? '#f59e0b12'
+                  : 'transparent',
+              color: preflightCounts.errors > 0
+                ? '#ef4444'
+                : preflightCounts.warnings > 0
+                  ? '#f59e0b'
+                  : 'var(--color-text-muted)',
+            }}
+          >
+            {preflightCounts.errors > 0 || preflightCounts.warnings > 0 ? (
+              <>
+                <span>⚠</span>
+                <span>{preflightCounts.errors + preflightCounts.warnings}</span>
+              </>
+            ) : (
+              <span>✓</span>
+            )}
+          </button>
+          {showPreflight && (
+            <AiPreflightPopover tab={tab} onClose={() => setShowPreflight(false)} />
+          )}
+        </div>
+      )}
+
+      {/* AI Sparkle — opens Daakia AI tab with current request as context */}
+      <button
+        type="button"
+        title="Ask Daakia AI about this request"
+        onClick={openDaakiaAiTab}
+        className="flex-shrink-0 h-[36px] w-[36px] flex items-center justify-center rounded-md border cursor-pointer transition-all hover:opacity-90"
+        style={{
+          borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 35%, var(--color-surface-border))',
+          backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, var(--color-panel))',
+          color: 'var(--color-protocol-ai)',
+        }}
+      >
+        <SparkleIcon size={14} />
+      </button>
 
       {/* Send / Cancel */}
       {tab.loading ? (

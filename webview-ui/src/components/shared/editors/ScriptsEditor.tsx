@@ -5,6 +5,9 @@ import { SnippetsPanel } from './SnippetsPanel';
 import { useDebugStore } from '../../../store/debug-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { ContextMenu } from '../menus/ContextMenu';
+import { useAiScriptAutocomplete, type AiAutocompleteMode } from '../../../hooks/useAiScriptAutocomplete';
+import { SparkleIcon } from '../../../icons';
+import { AiContractTestGenerator, type AiContractTestHandle } from '../../ai/AiContractTestGenerator';
 
 interface ScriptsEditorProps {
   preRequestScript: string;
@@ -22,6 +25,14 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
   const [showSnippets, setShowSnippets] = useState(!snippetsClosed);
   const [snippetsWidth, setSnippetsWidth] = useState(220);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  // AI Scripting Autocomplete
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiMode, setAiMode] = useState<AiAutocompleteMode>('on-demand');
+  const { handleEditorMount } = useAiScriptAutocomplete({ enabled: aiEnabled, mode: aiMode });
+
+  // AI Contract Test Generator
+  const contractTestRef = useRef<AiContractTestHandle>(null);
 
   // Context menu state
   const [ctxMenu, setCtxMenu] = useState<{ line: number; pos: { x: number; y: number } } | null>(null);
@@ -129,23 +140,66 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
           variant="underline"
           accentColor={accentColor}
         />
-        <button
-          type="button"
-          onClick={() => {
-            const newVal = !showSnippets;
-            setShowSnippets(newVal);
-            if (!newVal) snippetsClosed = true;
-            else snippetsClosed = false;
-          }}
-          className={`px-2 py-1 mr-2 text-[10px] font-medium rounded cursor-pointer transition-colors ${
-            showSnippets
-              ? 'text-[var(--color-text-primary)]'
-              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-          }`}
-          style={showSnippets ? { backgroundColor: accentColor ? `color-mix(in srgb, ${accentColor} 15%, transparent)` : 'rgba(99,102,241,0.15)', color: accentColor || 'var(--color-primary)' } : undefined}
-        >
-          Snippets
-        </button>
+        <div className="flex items-center gap-1 mr-2">
+          {/* AI Contract Test — post-response only */}
+          {activeScript === 'post-response' && (
+            <button
+              type="button"
+              title="Generate contract tests with AI"
+              onClick={() => contractTestRef.current?.open()}
+              className="flex items-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+              style={{ color: 'var(--color-success)' }}
+            >
+              <SparkleIcon size={10} />
+              <span>Tests</span>
+            </button>
+          )}
+          {/* AI Autocomplete toggle */}
+          <button
+            type="button"
+            title={aiEnabled ? 'AI autocomplete ON — click to disable' : 'AI autocomplete OFF — click to enable (Ctrl+Alt+Space)'}
+            onClick={() => setAiEnabled(e => !e)}
+            className={`flex items-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded cursor-pointer transition-colors ${
+              aiEnabled
+                ? 'text-[var(--color-text-primary)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
+            }`}
+            style={aiEnabled ? { backgroundColor: 'color-mix(in srgb, #a78bfa 18%, transparent)', color: '#a78bfa' } : undefined}
+          >
+            <SparkleIcon size={10} />
+            <span>AI</span>
+          </button>
+          {/* Mode toggle — only visible when AI is enabled */}
+          {aiEnabled && (
+            <button
+              type="button"
+              title={aiMode === 'on-demand' ? 'On-demand mode (Ctrl+Alt+Space) — click for auto' : 'Auto mode (triggers after idle) — click for on-demand'}
+              onClick={() => setAiMode(m => m === 'on-demand' ? 'on-type' : 'on-demand')}
+              className="px-1.5 py-1 text-[9px] font-medium rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+              style={{ backgroundColor: 'color-mix(in srgb, #a78bfa 8%, transparent)', color: '#a78bfa' }}
+            >
+              {aiMode === 'on-demand' ? '⌃⌥Space' : 'auto'}
+            </button>
+          )}
+          {/* Snippets toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              const newVal = !showSnippets;
+              setShowSnippets(newVal);
+              if (!newVal) snippetsClosed = true;
+              else snippetsClosed = false;
+            }}
+            className={`px-2 py-1 text-[10px] font-medium rounded cursor-pointer transition-colors ${
+              showSnippets
+                ? 'text-[var(--color-text-primary)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
+            }`}
+            style={showSnippets ? { backgroundColor: accentColor ? `color-mix(in srgb, ${accentColor} 15%, transparent)` : 'rgba(99,102,241,0.15)', color: accentColor || 'var(--color-primary)' } : undefined}
+          >
+            Snippets
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-1 min-h-[200px] gap-0">
@@ -172,6 +226,7 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
               pausedLine={currentPausedLine}
               onToggleBreakpoint={handleToggleBreakpoint}
               onGlyphContextMenu={handleGlyphContextMenu}
+              onEditorMount={handleEditorMount(currentPhase)}
             />
           {/* Conditional breakpoint inline input */}
           {condInput && (
@@ -213,6 +268,16 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
           </>
         )}
       </div>
+
+      {/* AI Contract Test Generator modal */}
+      <AiContractTestGenerator
+        ref={contractTestRef}
+        tabId={activeTabId}
+        onApply={(script) => {
+          const current = postResponseScript;
+          onPostResponseScriptChange(current ? current + '\n\n' + script : script);
+        }}
+      />
 
       {/* Glyph margin context menu */}
       {ctxMenu && (

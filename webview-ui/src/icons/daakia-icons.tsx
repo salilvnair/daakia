@@ -2102,6 +2102,20 @@ export function GeneralAssistantIcon(props: IconProps) {
   );
 }
 
+/** DiceIcon — cube die representing random data generation */
+export function DiceIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="2" y="2" width="20" height="20" rx="3" />
+      <circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="17" cy="7" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="7" cy="17" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="17" cy="17" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 /** DaakiaAI Mock provider brand icon — server rack on dark background with amber status dots */
 export function DaakiaMockProviderIcon({ size = 22 }: { size?: number }) {
   return (

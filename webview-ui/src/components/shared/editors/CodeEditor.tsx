@@ -34,6 +34,8 @@ interface Props {
   onToggleBreakpoint?: (line: number) => void;
   /** Callback when user right-clicks glyph margin */
   onGlyphContextMenu?: (line: number, pos: { x: number; y: number }) => void;
+  /** Optional callback to receive editor + monaco instances after mount (e.g. for AI autocomplete) */
+  onEditorMount?: (editor: any, monaco: any) => void;
 }
 
 const LANG_MAP: Record<CodeLanguage, string> = {
@@ -94,6 +96,7 @@ export function CodeEditor({
   pausedLine,
   onToggleBreakpoint,
   onGlyphContextMenu,
+  onEditorMount,
 }: Props) {
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
@@ -471,6 +474,9 @@ export function CodeEditor({
     if (!value && placeholder) {
       editor.updateOptions({ placeholder });
     }
+
+    // Notify parent with editor + monaco instances (used by AI autocomplete)
+    onEditorMount?.(editor, monacoInstance);
   };
 
   return (

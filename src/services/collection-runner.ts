@@ -336,15 +336,19 @@ export async function runCollection(
 
     // ── Execute HTTP request ──
     let execResult: ExecuteResult;
-    const resolvedUrl = resolveVariables(request.url, envVars, colVars, globalVars);
+    // Use scriptCtx.request.url/method in case pre-scripts mutated them via dk.request.url = …
+    const resolvedUrl = resolveVariables(scriptCtx.request.url, envVars, colVars, globalVars);
     try {
       const params: ExecuteRequestParams = {
         tabId: `runner-${request.id}`,
-        method: request.method || 'GET',
+        method: scriptCtx.request.method || 'GET',
         url: resolvedUrl,
-        headers: ((reqData.headers as { key: string; value: string; enabled?: boolean }[]) || [])
-          .filter((h: { key: string; enabled?: boolean }) => h.key && h.enabled !== false)
-          .map((h: { key: string; value: string }) => ({ key: h.key, value: resolveVariables(h.value, envVars, colVars, globalVars) })),
+        // Use headersObj (the live reference that dk.request.headers proxy mutates) so
+        // any .set()/.delete()/.add() calls from pre-scripts are reflected in the actual request.
+        headers: Object.entries(headersObj).map(([key, value]) => ({
+          key,
+          value: resolveVariables(value, envVars, colVars, globalVars),
+        })),
         params: ((reqData.params as { key: string; value: string; enabled?: boolean }[]) || [])
           .filter((p: { key: string; enabled?: boolean }) => p.key && p.enabled !== false)
           .map((p: { key: string; value: string }) => ({ key: p.key, value: resolveVariables(p.value, envVars, colVars, globalVars) })),

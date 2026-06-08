@@ -7,6 +7,8 @@ import { importPostmanCollection } from './services/postman-importer';
 import { importOpenAPISpec, isOpenAPISpec } from './services/openapi-importer';
 import { importHarFile, isHarFile } from './services/har-importer';
 import { importBrunoCollection } from './services/bruno-importer';
+import { importThunderClientCollection, isThunderClientCollection } from './services/thunder-importer';
+import { importHttpieCollection, isHttpieFile } from './services/httpie-importer';
 import { WelcomeViewProvider } from './panel/sidebar/WelcomeViewProvider';
 import { createDaakiaChatHandler } from './panel/chat/chat-handler';
 import { initSecretStore } from './services/secret-store';
@@ -131,7 +133,11 @@ export async function activate(context: vscode.ExtensionContext) {
             ? importHarFile(content)
             : isOpenAPISpec(content)
               ? importOpenAPISpec(content)
-              : importPostmanCollection(content);
+              : isThunderClientCollection(content)
+                ? importThunderClientCollection(content)
+                : isHttpieFile(content)
+                  ? importHttpieCollection(content)
+                  : importPostmanCollection(content);
           MainPanel.createOrShow(context.extensionUri);
           if (result.success) {
             MainPanel.currentPanel?.postMessage({ type: 'collectionsData', collections: getCollectionTree() });

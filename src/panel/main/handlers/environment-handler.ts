@@ -214,6 +214,215 @@ export async function handleImportEnvironmentsGist(msg: Record<string, unknown>,
   }
 }
 
+// ─── Import: .env file ────────────────────────────────────────────────────────
+
+/**
+ * 6B.2 — Import .env file (KEY=VALUE pairs).
+ * Lines starting with # are comments. Blank lines are skipped.
+ * Quoted values (single or double) are stripped.
+ */
+export async function handleImportEnvironmentsDotEnv(postMessage: PostMessage) {
+  const uris = await vscode.window.showOpenDialog({
+    canSelectMany: true,
+    filters: { 'Env Files': ['env'], 'All Files': ['*'] },
+    title: 'Import .env file(s) as environment(s)',
+  });
+  if (!uris?.length) return;
+
+  const environments: { id: string; name: string; variables: { id: string; key: string; initialValue: string; currentValue: string; isSecret: boolean }[] }[] = [];
+
+  for (const uri of uris) {
+    try {
+      const raw = fs.readFileSync(uri.fsPath, 'utf8');
+      const vars: { id: string; key: string; initialValue: string; currentValue: string; isSecret: boolean }[] = [];
+      for (const line of raw.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx === -1) continue;
+        const key = trimmed.slice(0, eqIdx).trim();
+        let value = trimmed.slice(eqIdx + 1).trim();
+        // Strip surrounding quotes
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.slice(1, -1);
+        }
+        if (key) {
+          vars.push({ id: crypto.randomUUID(), key, initialValue: value, currentValue: value, isSecret: false });
+        }
+      }
+      if (vars.length > 0) {
+        const name = path.basename(uri.fsPath).replace(/^\./, '').replace(/\.env$/, '') || 'Imported';
+        environments.push({ id: crypto.randomUUID(), name, variables: vars });
+      }
+    } catch { /* skip malformed */ }
+  }
+
+  if (environments.length > 0) {
+    postMessage({ type: 'environmentsImported', environments, activeEnvId: null, merge: true });
+  } else {
+    postMessage({ type: 'toast', toastType: 'error', message: 'No valid KEY=VALUE pairs found in selected file(s).' });
+  }
+}
+
+// ─── Export: Postman Environment ──────────────────────────────────────────────
+
+/**
+ * 5.4.13 — Export environment(s) as Postman environment JSON.
+ * Format: { id, name, values: [{key, value, enabled, type}], _postman_variable_scope }
+ */
+export async function handleExportEnvironmentsPostman(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const environments = msg.environments as { id: string; name: string; variables: { key: string; initialValue: string; isSecret?: boolean }[] }[];
+  if (!environments?.length) return;
+
+  const isSingle = environments.length === 1;
+  const defaultName = isSingle ? `${environments[0].name}.postman_environment.json` : 'daakia-environments.postman_environment.json';
+
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: 'Export as Postman environment',
+    defaultUri: vscode.Uri.file(defaultName),
+    filters: { 'JSON Files': ['json'] },
+  });
+  if (!uri) return;
+
+  const toPostman = (env: typeof environments[0]) => ({
+    id: env.id,
+    name: env.name,
+    values: env.variables.map(v => ({
+      key: v.key,
+      value: v.initialValue,
+      enabled: true,
+      type: v.isSecret ? 'secret' : 'default',
+    })),
+    _postman_variable_scope: 'environment',
+    _postman_exported_at: new Date().toISOString(),
+    _postman_exported_using: 'Daakia/1.0',
+  });
+
+  const content = isSingle
+    ? JSON.stringify(toPostman(environments[0]), null, 2)
+    : JSON.stringify(environments.map(toPostman), null, 2);
+
+  fs.writeFileSync(uri.fsPath, content, 'utf8');
+  postMessage({ type: 'environmentExported', message: `Exported as Postman environment to ${path.basename(uri.fsPath)}` });
+}
+
+// ─── Export: Bruno Environment ────────────────────────────────────────────────
+
+/**
+ * 5.4.14 — Export environment(s) as Bruno .env files (dotenv-style).
+ * Variables marked as secret get a # secret annotation.
+ */
+export async function handleExportEnvironmentsBruno(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const environments = msg.environments as { id: string; name: string; variables: { key: string; initialValue: string; isSecret?: boolean }[] }[];
+  if (!environments?.length) return;
+
+  const isSingle = environments.length === 1;
+  const defaultName = isSingle ? `${environments[0].name}.env` : 'daakia-environments.env';
+
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: 'Export as Bruno .env',
+    defaultUri: vscode.Uri.file(defaultName),
+    filters: { 'Env Files': ['env'], 'Text Files': ['txt'] },
+  });
+  if (!uri) return;
+
+  const toBruno = (env: typeof environments[0]) => {
+    const lines = [`# Bruno Environment: ${env.name}`, ''];
+    for (const v of env.variables) {
+      if (v.isSecret) lines.push(`# secret`);
+      lines.push(`${v.key}=${v.initialValue}`);
+    }
+    return lines.join('\n');
+  };
+
+  const content = environments.map(toBruno).join('\n\n# ---\n\n');
+  fs.writeFileSync(uri.fsPath, content, 'utf8');
+  postMessage({ type: 'environmentExported', message: `Exported as Bruno .env to ${path.basename(uri.fsPath)}` });
+}
+
+// ─── Export: Insomnia Environment ─────────────────────────────────────────────
+
+/**
+ * 5.4.15 — Export environment(s) as Insomnia environment JSON sub-documents.
+ */
+export async function handleExportEnvironmentsInsomnia(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const environments = msg.environments as { id: string; name: string; variables: { key: string; initialValue: string; isSecret?: boolean }[] }[];
+  if (!environments?.length) return;
+
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: 'Export as Insomnia environment',
+    defaultUri: vscode.Uri.file('daakia-environments.json'),
+    filters: { 'JSON Files': ['json'] },
+  });
+  if (!uri) return;
+
+  const toInsomnia = (env: typeof environments[0]) => ({
+    _id: env.id,
+    _type: 'environment',
+    parentId: '__BASE_ENVIRONMENT_ID__',
+    name: env.name,
+    data: Object.fromEntries(env.variables.map(v => [v.key, v.initialValue])),
+    dataPropertyOrder: null,
+    color: null,
+    isPrivate: env.variables.some(v => v.isSecret),
+    metaSortKey: Date.now(),
+  });
+
+  const doc = {
+    _type: 'export',
+    __export_format: 4,
+    __export_date: new Date().toISOString(),
+    __export_source: 'daakia',
+    resources: environments.map(toInsomnia),
+  };
+
+  fs.writeFileSync(uri.fsPath, JSON.stringify(doc, null, 2), 'utf8');
+  postMessage({ type: 'environmentExported', message: `Exported as Insomnia environment to ${path.basename(uri.fsPath)}` });
+}
+
+// ─── Export: HTTPie Environment ───────────────────────────────────────────────
+
+/**
+ * 5.4.16 — Export environment(s) as HTTPie session JSON.
+ * Variables map to custom headers (X-Env-*) and meta.
+ */
+export async function handleExportEnvironmentsHttpie(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const environments = msg.environments as { id: string; name: string; variables: { key: string; initialValue: string; isSecret?: boolean }[] }[];
+  if (!environments?.length) return;
+
+  const isSingle = environments.length === 1;
+  const defaultName = isSingle ? `${environments[0].name}.json` : 'daakia-environments.json';
+
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: 'Export as HTTPie session',
+    defaultUri: vscode.Uri.file(defaultName),
+    filters: { 'JSON Files': ['json'] },
+  });
+  if (!uri) return;
+
+  // HTTPie named session format — variables stored as meta/env section
+  const toHttpie = (env: typeof environments[0]) => ({
+    __version__: '2',
+    __meta__: {
+      about: `HTTPie session exported from Daakia — ${env.name}`,
+      help: 'https://httpie.io/docs/desktop/sessions',
+    },
+    auth: { type: null, username: null, password: null },
+    cookies: {},
+    headers: {},
+    env: Object.fromEntries(env.variables.map(v => [v.key, v.initialValue])),
+  });
+
+  const content = isSingle
+    ? JSON.stringify(toHttpie(environments[0]), null, 2)
+    : JSON.stringify(Object.fromEntries(environments.map(e => [e.name, toHttpie(e)])), null, 2);
+
+  fs.writeFileSync(uri.fsPath, content, 'utf8');
+  postMessage({ type: 'environmentExported', message: `Exported as HTTPie session to ${path.basename(uri.fsPath)}` });
+}
+
+// ─── Gist (existing) ──────────────────────────────────────────────────────────
+
 export async function handleExportEnvironmentsGist(msg: Record<string, unknown>, postMessage: PostMessage) {
   const environments = msg.environments as unknown[];
   const activeEnvId = msg.activeEnvId as string | null;

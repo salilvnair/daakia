@@ -246,7 +246,7 @@ export async function handleAiSend(
       // Check if the AI response contains tool_calls that need MCP execution
       if (result.message.toolCalls?.length && mcpTools.length > 0) {
         // Execute MCP tool calls and continue the conversation
-        await handleMcpToolCallLoop(tabId, payload, result, postMessage, refreshHistory);
+        await handleMcpToolCallLoop(tabId, payload, result, postMessage);
         return;
       }
 
@@ -330,7 +330,6 @@ async function handleMcpToolCallLoop(
   payload: AiRequestPayload,
   result: { message: AiMessage; tokens?: { prompt: number; completion: number; total: number }; duration: number },
   postMessage: PostMessage,
-  refreshHistory?: () => void,
   depth = 0,
 ) {
   const MAX_TOOL_LOOPS = 10; // Safety limit to prevent infinite loops
@@ -391,7 +390,7 @@ async function handleMcpToolCallLoop(
     onComplete: async (followUpResult) => {
       // Recurse if more tool calls
       if (followUpResult.message.toolCalls?.length) {
-        await handleMcpToolCallLoop(tabId, followUpPayload, followUpResult, postMessage, refreshHistory, depth + 1);
+        await handleMcpToolCallLoop(tabId, followUpPayload, followUpResult, postMessage, depth + 1);
         return;
       }
       cleanupAiRequest(tabId);

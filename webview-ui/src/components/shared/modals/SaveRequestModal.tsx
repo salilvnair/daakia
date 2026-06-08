@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { postMsg } from '../../../vscode';
 import { useTabsStore, type RequestTab } from '../../../store/tabs-store';
 import { getDisplayMethod } from '../../../services/request/request-service';
+import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { CloseIcon, SparkleIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, TrashIcon, MoreVerticalIcon, RenameIcon, CopyIcon, ChevronRightIcon, CheckCircleFilledIcon } from '../../../icons';
 import { ContextMenu, ConfirmDialog, type ContextMenuItem } from '../index';
 
@@ -50,6 +51,11 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
   // Context menu
   const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: ContextMenuItem[]; targetId: string; targetName: string } | null>(null);
 
+  const [aiNaming, setAiNaming] = useState(false);
+  const aiNameReqIdRef = useRef('');
+  const aiNameAccRef = useRef('');
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const inlineRef = useRef<HTMLInputElement>(null);
   const renameRef = useRef<HTMLInputElement>(null);
@@ -95,6 +101,31 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
       setTimeout(() => { renameRef.current?.focus(); renameRef.current?.select(); }, 30);
     }
   }, [renamingId]);
+
+  // AI name streaming handler
+  useEffect(() => {
+    const handler = (evt: MessageEvent) => {
+      const msg = evt.data as Record<string, unknown>;
+      if (!msg || msg.tabId !== aiNameReqIdRef.current) return;
+      if (msg.type === 'ai:chunk') {
+        const delta = (msg.delta as string) || (msg.text as string) || '';
+        aiNameAccRef.current += delta;
+        setName(aiNameAccRef.current.replace(/^["']|["']$/g, '').trim());
+      }
+      if (msg.type === 'ai:complete') {
+        const clean = aiNameAccRef.current.replace(/^["']|["']$/g, '').trim().slice(0, 60);
+        setName(clean || name);
+        setAiNaming(false);
+      }
+      if (msg.type === 'ai:error') {
+        setAiNaming(false);
+        // Silently fall back — name stays as is (heuristic already set)
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Count total requests (including nested) inside a folder
   const countContents = (node: CollectionTreeNode): number => {
@@ -318,16 +349,51 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
               />
               <button
                 type="button"
-                title="Generate name from request"
+                title={aiNaming ? 'Generating name…' : 'AI: Suggest a name for this request'}
+                disabled={aiNaming}
                 onClick={() => {
-                  const url = tab.url || '';
+                  // Heuristic fallback (immediate while AI loads)
+                  const url = tab?.url || '';
                   const parts = url.replace(/https?:\/\//, '').split('/').filter(Boolean);
                   const endpoint = parts.length > 1 ? parts.slice(1).join(' ') : parts[0] || 'request';
-                  setName(`${getDisplayMethod(tab)} ${endpoint}`.slice(0, 60));
+                  const heuristic = `${getDisplayMethod(tab!)} ${endpoint}`.slice(0, 60);
+                  setName(heuristic);
+
+                  // AI-powered suggestion
+                  const pid = `ai-name-${Date.now()}`;
+                  aiNameReqIdRef.current = pid;
+                  aiNameAccRef.current = '';
+                  setAiNaming(true);
+
+                  const bodyPreview = tab?.bodyRaw?.slice(0, 120) || '';
+                  const userPrompt = resolve('rest.request.name', {
+                    method: getDisplayMethod(tab!),
+                    url: tab?.url || '(no URL)',
+                    bodyPreview: bodyPreview || '(empty)',
+                  });
+
+                  postMsg({
+                    type: 'ai:send',
+                    tabId: pid,
+                    provider: '', model: '', baseUrl: '',
+                    stage: 'rest.request.name',
+                    systemPrompts: ['You are a concise HTTP request naming assistant. Return only the name — nothing else.'],
+                    userPrompt,
+                    conversation: [],
+                    tools: [],
+                    settings: { temperature: 0.3, maxTokens: 32, stream: true, topP: 1, stopSequences: ['\n'], responseFormat: 'text', frequencyPenalty: 0, presencePenalty: 0, seed: null },
+                    mcpServerConfigs: [],
+                  });
                 }}
-                className="flex items-center justify-center w-[32px] h-[32px] rounded-lg border border-[var(--color-input-border)] text-[var(--color-text-muted)] hover:text-[var(--modal-accent)] hover:border-[var(--modal-accent)] cursor-pointer transition-colors"
+                className="flex items-center justify-center w-[32px] h-[32px] rounded-lg border border-[var(--color-input-border)] cursor-pointer transition-all disabled:opacity-50"
+                style={{
+                  color: aiNaming ? accent : 'var(--color-text-muted)',
+                  borderColor: aiNaming ? accent : 'var(--color-input-border)',
+                }}
+                onMouseEnter={e => { if (!aiNaming) (e.currentTarget as HTMLElement).style.color = accent; }}
+                onMouseLeave={e => { if (!aiNaming) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'; }}
               >
-                <SparkleIcon size={16} />
+                <SparkleIcon size={16} className={aiNaming ? 'animate-pulse' : ''} />
               </button>
             </div>
           </div>

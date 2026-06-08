@@ -361,9 +361,23 @@ export function MockAiGeneratePopover({
   const [parsedItems, setParsedItems] = useState<ParsedGenericItem[]>(initialItems);
   const [detectedSdl, setDetectedSdl] = useState<string | null>(initialSdl);
   const [sdlCopied, setSdlCopied] = useState(false);
-  const [streaming, setStreaming] = useState(!cached);   // no streaming if cache hit
+  const [streaming, setStreaming] = useState(false);  // don't auto-start
   const [error, setError] = useState('');
   const [fetchKey, setFetchKey] = useState(0);
+
+  // ── Natural language description (4.4.1) ─────────────────────────────────
+  const [description, setDescription] = useState('');
+  /** Idle = waiting for user to describe what to generate (first run only; not shown on cache hit) */
+  const [isIdle, setIsIdle] = useState(!cached);
+
+  // ── URL / Spec mode (4.4.2) ──────────────────────────────────────────────
+  const [idleMode, setIdleMode] = useState<'describe' | 'url-spec'>('describe');
+  const [specUrl, setSpecUrl] = useState('');
+  const [specPaste, setSpecPaste] = useState('');
+  const [urlInputMode, setUrlInputMode] = useState<'url' | 'paste'>('url');
+  const [specFetching, setSpecFetching] = useState(false);
+  const [specError, setSpecError] = useState('');
+  const fetchReqIdRef = useRef('');
   // REST route tracking
   const [addedAll, setAddedAll] = useState(false);
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
@@ -371,10 +385,10 @@ export function MockAiGeneratePopover({
   const [addedAllItems, setAddedAllItems] = useState(false);
   const [addedItemIds, setAddedItemIds] = useState<Set<number>>(new Set());
 
-  // ── AI request — only fires when fetchKey changes AND no cache ──────────────
+  // ── AI request — only fires when fetchKey > 0 (user clicked Generate) ────────
   useEffect(() => {
-    // If there's cached text (fetchKey=0 = first mount, cache hit) skip the request
-    if (fetchKey === 0 && generateCache.has(cacheKey)) return;
+    // Don't fire on mount — wait for user to click Generate
+    if (fetchKey === 0) return;
 
     setText('');
     setParsedRoutes([]);
@@ -389,7 +403,11 @@ export function MockAiGeneratePopover({
     setAddedItemIds(new Set());
     accumulatedRef.current = '';
 
-    const prompt = resolve(templateKey, { serverName, context: serverContext });
+    // Include natural language description if provided
+    const fullContext = description.trim()
+      ? `User description: ${description.trim()}\n\nExisting context: ${serverContext}`
+      : serverContext;
+    const prompt = resolve(templateKey, { serverName, context: fullContext });
     // System prompt is stored in Prompt Library under the matching .system key
     // e.g. 'mock.rest.generate' → 'mock.rest.system'
     const systemKey = templateKey.replace('.generate', '.system') as AiPromptTemplateKey;
@@ -474,6 +492,83 @@ export function MockAiGeneratePopover({
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
+  // ── fetchUrlResult listener (4.4.2) ──────────────────────────────────────
+  useEffect(() => {
+    const handler = (evt: MessageEvent) => {
+      const msg = evt.data as Record<string, unknown>;
+      if (!msg || msg.type !== 'fetchUrlResult') return;
+      if (msg.reqId !== fetchReqIdRef.current) return;
+
+      setSpecFetching(false);
+      if (msg.error) {
+        setSpecError(`Could not fetch spec: ${msg.error}`);
+        return;
+      }
+      const content = (msg.content as string) || '';
+      // Use fetched spec as the generation context
+      triggerGenerateWithContext(
+        `OpenAPI/Swagger spec fetched from ${specUrl}:\n\n${content.slice(0, 8000)}`
+      );
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [specUrl]);
+
+  const triggerGenerateWithContext = useCallback((ctx: string) => {
+    generateCache.delete(cacheKey);
+    accumulatedRef.current = '';
+    setText('');
+    setParsedRoutes([]);
+    setParsedItems([]);
+    setDetectedSdl(null);
+    setSdlCopied(false);
+    setError('');
+    setAddedAll(false);
+    setAddedIds(new Set());
+    setAddedAllItems(false);
+    setAddedItemIds(new Set());
+    setIsIdle(false);
+    setStreaming(true);
+    // Encode context into description so the useEffect picks it up
+    setDescription(ctx);
+    setFetchKey(k => k + 1);
+  }, [cacheKey]);
+
+  const handleFetchAndGenerate = useCallback(() => {
+    setSpecError('');
+    if (urlInputMode === 'url') {
+      if (!specUrl.trim()) { setSpecError('Enter an OpenAPI spec URL.'); return; }
+      setSpecFetching(true);
+      const reqId = `spec-fetch-${Date.now()}`;
+      fetchReqIdRef.current = reqId;
+      postMsg({ type: 'fetchUrl', reqId, url: specUrl.trim() });
+    } else {
+      // Paste mode
+      if (!specPaste.trim()) { setSpecError('Paste your OpenAPI spec or JSON sample.'); return; }
+      triggerGenerateWithContext(`User-pasted spec / JSON sample:\n\n${specPaste.slice(0, 8000)}`);
+    }
+  }, [urlInputMode, specUrl, specPaste, triggerGenerateWithContext]);
+
+  /** Triggered by the "Generate" button in idle state — starts AI generation */
+  const handleGenerate = useCallback(() => {
+    generateCache.delete(cacheKey);
+    accumulatedRef.current = '';
+    setText('');
+    setParsedRoutes([]);
+    setParsedItems([]);
+    setDetectedSdl(null);
+    setSdlCopied(false);
+    setError('');
+    setAddedAll(false);
+    setAddedIds(new Set());
+    setAddedAllItems(false);
+    setAddedItemIds(new Set());
+    setIsIdle(false);
+    setStreaming(true);
+    setFetchKey(k => k + 1);
+  }, [cacheKey]);
+
   const handleRegenerate = useCallback(() => {
     generateCache.delete(cacheKey);
     accumulatedRef.current = '';
@@ -487,6 +582,7 @@ export function MockAiGeneratePopover({
     setAddedIds(new Set());
     setAddedAllItems(false);
     setAddedItemIds(new Set());
+    setStreaming(true);
     setFetchKey(k => k + 1);
   }, [cacheKey]);
 
@@ -618,15 +714,26 @@ export function MockAiGeneratePopover({
 
           {/* Regenerate (header shortcut) — only when done */}
           {!streaming && !error && text && (
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              title="Regenerate"
-              className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors opacity-50 hover:opacity-100"
-              style={{ color: ACCENT }}
-            >
-              <RefreshIcon size={10} />
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setIsIdle(true)}
+                title="Refine description & regenerate"
+                className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors opacity-50 hover:opacity-100"
+                style={{ color: ACCENT }}
+              >
+                Refine
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                title="Regenerate"
+                className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors opacity-50 hover:opacity-100"
+                style={{ color: ACCENT }}
+              >
+                <RefreshIcon size={10} />
+              </button>
+            </>
           )}
 
           <button
@@ -637,6 +744,130 @@ export function MockAiGeneratePopover({
             <CloseIcon size={12} />
           </button>
         </div>
+
+        {/* ── Idle state: natural language OR URL/Spec (4.4.1 + 4.4.2) ─── */}
+        {isIdle && (
+          <div className="px-4 py-4 flex flex-col gap-3 flex-shrink-0">
+            {/* Mode tabs */}
+            <div className="flex gap-1 border-b" style={{ borderColor: `color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))` }}>
+              {(['describe', 'url-spec'] as const).map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setIdleMode(m)}
+                  className="px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-colors rounded-t"
+                  style={idleMode === m
+                    ? { color: ACCENT, borderBottom: `2px solid ${ACCENT}`, marginBottom: '-1px' }
+                    : { color: 'var(--color-text-muted)' }}
+                >
+                  {m === 'describe' ? '✏️ Describe' : '📄 URL / Spec'}
+                </button>
+              ))}
+            </div>
+
+            {idleMode === 'describe' && (
+              <div>
+                <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
+                  Describe what you want to generate{' '}
+                  <span className="text-[10px] font-normal italic" style={{ color: 'var(--color-text-muted)' }}>(optional — uses server name "{serverName}" if empty)</span>
+                </label>
+                <textarea
+                  autoFocus
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGenerate(); }}
+                  placeholder={`Examples:\n• "Todo API with CRUD: create, read, update, delete, mark complete"\n• "User auth with JWT login, refresh token, logout, profile"\n• "E-commerce with products, orders, cart, checkout"`}
+                  rows={5}
+                  className="w-full px-3 py-2 rounded-lg text-[12px] font-mono resize-none outline-none"
+                  style={{
+                    backgroundColor: 'var(--color-input-bg)',
+                    borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-input-border))`,
+                    border: '1px solid',
+                    color: 'var(--color-text-primary)',
+                  }}
+                />
+                <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-muted)' }}>⌘↵ to generate</p>
+              </div>
+            )}
+
+            {idleMode === 'url-spec' && (
+              <div className="flex flex-col gap-2">
+                {/* URL vs Paste sub-toggle */}
+                <div className="flex gap-2">
+                  {(['url', 'paste'] as const).map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => { setUrlInputMode(m); setSpecError(''); }}
+                      className="px-2.5 py-1 text-[10px] rounded cursor-pointer transition-colors border"
+                      style={urlInputMode === m
+                        ? { backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)`, color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)` }
+                        : { color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)' }}
+                    >
+                      {m === 'url' ? '🔗 URL' : '📋 Paste Spec'}
+                    </button>
+                  ))}
+                </div>
+                {urlInputMode === 'url' && (
+                  <input
+                    autoFocus
+                    type="url"
+                    value={specUrl}
+                    onChange={e => { setSpecUrl(e.target.value); setSpecError(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleFetchAndGenerate(); }}
+                    placeholder="https://petstore.swagger.io/v2/swagger.json"
+                    className="w-full px-3 py-2 rounded-lg text-[12px] font-mono outline-none"
+                    style={{
+                      backgroundColor: 'var(--color-input-bg)',
+                      border: '1px solid',
+                      borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-input-border))`,
+                      color: 'var(--color-text-primary)',
+                    }}
+                  />
+                )}
+                {urlInputMode === 'paste' && (
+                  <textarea
+                    autoFocus
+                    value={specPaste}
+                    onChange={e => { setSpecPaste(e.target.value); setSpecError(''); }}
+                    placeholder={`Paste OpenAPI JSON/YAML or a sample JSON response:\n{\n  "openapi": "3.0.0",\n  "info": {...},\n  "paths": {...}\n}`}
+                    rows={6}
+                    className="w-full px-3 py-2 rounded-lg text-[12px] font-mono resize-none outline-none"
+                    style={{
+                      backgroundColor: 'var(--color-input-bg)',
+                      border: '1px solid',
+                      borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-input-border))`,
+                      color: 'var(--color-text-primary)',
+                    }}
+                  />
+                )}
+                {specError && (
+                  <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{specError}</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={idleMode === 'describe' ? handleGenerate : handleFetchAndGenerate}
+                disabled={specFetching}
+                className="h-[30px] px-4 text-[12px] font-medium rounded-lg text-white cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: ACCENT }}
+              >
+                {specFetching ? 'Fetching spec…' : '✨ Generate'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-[30px] px-3 text-[12px] rounded-lg cursor-pointer transition-colors"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Thinking placeholder */}
         {streaming && !text && !error && (

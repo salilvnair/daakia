@@ -168,7 +168,54 @@ export type AiPromptTemplateKey =
   | 'mock.mqtt.system'
   // ── REST — Headers Suggest ──
   | 'rest.headers.suggest.generate'
-  | 'rest.headers.suggest.system';
+  | 'rest.headers.suggest.system'
+  // ── REST — Body Generate ──
+  | 'rest.body.generate'
+  | 'rest.body.generate.system'
+  // ── REST — Environment Extractor ──
+  | 'rest.env.extract'
+  | 'rest.env.extract.system'
+  // ── Data Generator ──
+  | 'data.generate'
+  | 'data.generate.system'
+  // ── Request Namer ──
+  | 'rest.request.name'
+  // ── Collection Organizer ──
+  | 'rest.collection.organize'
+  | 'rest.collection.organize.system'
+  // ── cURL Explainer ─────────────────────────────────────────────────────────
+  | 'rest.curl.explain'
+  | 'rest.curl.explain.system'
+  // ── Script Autocomplete ────────────────────────────────────────────────────
+  | 'rest.script.autocomplete'
+  | 'rest.script.autocomplete.system'
+  // ── Contract Testing ───────────────────────────────────────────────────────
+  | 'rest.contract.test'
+  | 'rest.contract.test.system'
+  // ── Response Diff ──────────────────────────────────────────────────────────
+  | 'rest.response.diff'
+  | 'rest.response.diff.system'
+  // ── Schema Validator ───────────────────────────────────────────────────────
+  | 'rest.schema.validate'
+  | 'rest.schema.validate.system'
+  // ── Code to Request ────────────────────────────────────────────────────────
+  | 'rest.code.import'
+  | 'rest.code.import.system'
+  // ── Performance Insights ───────────────────────────────────────────────────
+  | 'rest.performance.insights'
+  | 'rest.performance.insights.system'
+  // ── Natural Language Search ────────────────────────────────────────────────
+  | 'rest.collection.search'
+  | 'rest.collection.search.system'
+  // ── Changelog Generator ────────────────────────────────────────────────────
+  | 'rest.changelog.generate'
+  | 'rest.changelog.generate.system'
+  // ── API Flow Builder ───────────────────────────────────────────────────────
+  | 'rest.api.flow'
+  | 'rest.api.flow.system'
+  // ── AI Agent Workflow ──────────────────────────────────────────────────────
+  | 'rest.agent.workflow'
+  | 'rest.agent.workflow.system';
 
 // ─── Default templates ────────────────────────────────────────────────────────
 
@@ -226,6 +273,84 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `Suggest HTTP request headers for this API call.\n\nRequest context:\n- Method: {method}\n- URL: {url}\n- Body Content-Type: {contentType}\n- Auth: {authType}\n- Headers already set: {existing}\n\nReturn ONLY a JSON array. No markdown, no explanation, no code fences. Example format:\n[{"key":"Accept","value":"application/json","reason":"Specify expected response format"},{"key":"X-Request-ID","value":"{{$random.uuid}}","reason":"Correlation ID for distributed tracing"}]\n\nRules:\n- Suggest 3 to 6 headers\n- Skip any header already in the "Headers already set" list\n- Skip Content-Type if it is already set or if method is GET/HEAD\n- Skip Authorization if auth is already configured\n- Tailor suggestions to the URL pattern and method (e.g. pagination headers for GET lists, idempotency keys for POST)\n- Use Daakia variable syntax {{$random.uuid}} for dynamic IDs\n- Keep reason to one short sentence`,
   'rest.headers.suggest.system':
     `You are a precise HTTP header suggestion assistant. Always return valid JSON arrays only — never explanatory text, never markdown fences, never partial output. If you cannot suggest headers, return an empty array [].`,
+  // ── REST — Body Generate ──────────────────────────────────────────────────
+  'rest.body.generate':
+    `Generate a realistic HTTP request body for this API call.\n\nRequest context:\n- Method: {method}\n- URL: {url}\n- Content-Type: {contentType}\n- User description: {description}\n\nReturn ONLY the raw request body. No explanation, no markdown fences, no preamble.\n\nFormat rules by Content-Type:\n- application/json or json: Return a valid JSON object with realistic field names and values\n- application/xml or text/xml: Return a valid XML document\n- application/x-www-form-urlencoded: Return URL-encoded key=value pairs (e.g. name=Alice&age=30)\n- text/plain: Return plain text matching the description\n- Default (unknown): Return a JSON object\n\nField values must be realistic — use real-looking names, emails, UUIDs, timestamps, amounts. Never use "string", "number", "value" as values.`,
+  'rest.body.generate.system':
+    `You are a precise HTTP request body generator. Return only the raw body content — no explanation, no markdown code fences, no preamble text. Output must be valid and directly usable as a request body. Generate realistic, production-looking values.`,
+  // ── Collection Organizer ──────────────────────────────────────────────────
+  'rest.collection.organize':
+    `Suggest a folder structure for this API collection.\n\nCollection: {collectionName}\n\nRequests (id | method | name | url):\n{requests}\n\nReturn ONLY a JSON object. No markdown, no explanation, no code fences.\n\nFormat:\n{"folders":[{"name":"FolderName","requestIds":["id1","id2"]}],"uncategorized":["id3"]}\n\nRules:\n- Group requests by REST resource (e.g. /users → "Users", /auth → "Auth", /products → "Products")\n- Each folder name should be a short noun phrase (2-3 words max), Title Case\n- Do NOT create a folder with only 1 request unless it's a well-known resource (Auth, Health, etc.)\n- Put requests that don't fit any group in "uncategorized" array\n- Use the exact request IDs provided — do not invent or modify them\n- Return at least 2 folders, at most 10 folders\n- All request IDs must appear exactly once (either in a folder or uncategorized)`,
+  'rest.collection.organize.system':
+    `You are a precise REST API collection organizer. Analyze URL patterns to group requests into logical folders. Return only valid JSON — never explanatory text, never markdown fences. Ensure every request ID appears exactly once in the output.`,
+  // ── Request Namer ─────────────────────────────────────────────────────────
+  'rest.request.name':
+    `Suggest a short, descriptive name for this HTTP request.\n\nMethod: {method}\nURL: {url}\nBody preview: {bodyPreview}\n\nReturn ONLY the name — no quotes, no explanation, no punctuation at the end. Max 60 characters.\n\nGood examples:\n- "Create User"\n- "Get Order by ID"\n- "Update Product Price"\n- "Delete Session"\n- "Search Products"\n- "Refresh Access Token"\n\nRules:\n- Start with an action verb (Get, Create, Update, Delete, List, Search, Upload, Send, etc.)\n- Be specific about the resource and operation\n- Use title case\n- Do NOT include the HTTP method in the name (it's already shown in the UI)\n- Do NOT include the base URL or domain`,
+  // ── Data Generator ───────────────────────────────────────────────────────
+  'data.generate':
+    `Generate {count} realistic test data records of type: {dataType}.\n\n{customDescription}\n\nOutput format: {format}\n\nRules:\n- Return ONLY the raw data — no explanation, no markdown fences\n- JSON array format: [{...}, {...}] — valid, complete JSON\n- CSV format: first row is headers, subsequent rows are data\n- All values must be realistic and production-looking:\n  - Names: diverse, international names\n  - Emails: realistic domains (gmail.com, outlook.com, company.com)\n  - Phone numbers: valid formats with country code\n  - Addresses: real street name patterns with city/state/zip\n  - UUIDs: proper v4 format (xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx)\n  - Dates: ISO 8601 format (2024-03-15T14:22:00Z)\n  - Credit cards: Luhn-valid FAKE numbers (start with 4111 for Visa test numbers)\n  - Prices/amounts: realistic decimal values\n- Never use placeholder text like "string", "example", "test", "foo"\n- Vary values realistically — not the same city for every record`,
+  'data.generate.system':
+    `You are a precise test data generator. Return only the raw data output — no explanation, no markdown code fences, no preamble. Output must be valid and directly usable. All values must look production-realistic. For credit cards always use well-known test numbers (Visa: 4111111111111111, MC: 5500005555555559).`,
+  // ── Contract Testing ─────────────────────────────────────────────────────
+  'rest.contract.test':
+    `Generate a complete set of dk.* contract test assertions for this API response.\n\nEndpoint: {method} {url}\nStatus: {status}\nResponse body:\n\`\`\`json\n{responseBody}\n\`\`\`\n\n{schemaContext}\n\nGenerate a post-response test script using the dk.test() and dk.expect() API. Include:\n1. Status code assertion\n2. Response time assertion (< 2000ms)\n3. Field presence assertions for all required fields\n4. Type assertions for key fields\n5. Value/range assertions where appropriate\n6. Schema compliance if schema is provided\n\nReturn ONLY the JavaScript code — no explanation, no markdown fences.`,
+  'rest.contract.test.system':
+    `You are an expert API contract test generator. Generate concise, comprehensive dk.* test scripts for Daakia. Return ONLY valid JavaScript — no explanation, no code fences. Use dk.test(), dk.expect(), dk.response.json(), dk.response.status, dk.response.time. Keep each test atomic and descriptive.`,
+  // ── Response Diff ────────────────────────────────────────────────────────
+  'rest.response.diff':
+    `Compare these two API responses and explain what changed.\n\nResponse A ({labelA}):\n\`\`\`json\n{responseA}\n\`\`\`\n\nResponse B ({labelB}):\n\`\`\`json\n{responseB}\n\`\`\`\n\nProvide a concise analysis:\n1. What fields were added or removed?\n2. What values changed significantly?\n3. What might have caused these changes?\n4. Are there any potential issues or regressions to watch for?`,
+  'rest.response.diff.system':
+    `You are an API response diff analyst. Compare two API responses and provide a clear, actionable analysis of what changed. Focus on semantic changes that matter to developers — not just structural diffs. Be concise and specific.`,
+  // ── Schema Validator ─────────────────────────────────────────────────────
+  'rest.schema.validate':
+    `Validate this API response against the provided schema and explain any mismatches.\n\nEndpoint: {method} {url}\nStatus: {status}\nResponse body:\n\`\`\`json\n{responseBody}\n\`\`\`\n\nSchema / Spec:\n\`\`\`\n{schema}\n\`\`\`\n\nFor each field in the response:\n1. Does it match the schema type and format?\n2. Are required fields present?\n3. Are there unexpected extra fields?\n4. Are there value constraint violations?\n\nBe specific about which fields fail and why.`,
+  'rest.schema.validate.system':
+    `You are an API schema validation expert. Analyze API responses against JSON Schema or OpenAPI specs. Be precise about violations — specify field path, expected type/value, actual type/value. Provide actionable suggestions for fixing each violation.`,
+  // ── Code to Request ──────────────────────────────────────────────────────
+  'rest.code.import':
+    `Extract a Daakia HTTP request configuration from this code snippet.\n\nCode:\n\`\`\`\n{code}\n\`\`\`\n\nExtract and return ONLY a JSON object with this exact structure:\n{\n  "method": "GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS",\n  "url": "the full URL or template",\n  "headers": [{"key": "...", "value": "..."}],\n  "bodyMode": "raw|form-data|urlencoded|none",\n  "bodyRaw": "body content as string (if applicable)",\n  "bodyFormData": [{"key": "...", "value": "..."}],\n  "bodyUrlEncoded": [{"key": "...", "value": "..."}],\n  "name": "descriptive request name"\n}\n\nRules:\n- Detect fetch(), axios, requests, got, node-fetch, XMLHttpRequest\n- Preserve all headers\n- For JSON bodies: stringify as raw with Content-Type application/json\n- Return ONLY valid JSON — no explanation, no fences`,
+  'rest.code.import.system':
+    `You are an HTTP request extractor. Parse code written in any language (JavaScript fetch/axios, Python requests, curl, etc.) and extract the HTTP request configuration. Return ONLY valid JSON matching the specified schema. Never include explanation or markdown.`,
+  // ── Performance Insights ─────────────────────────────────────────────────
+  'rest.performance.insights':
+    `Analyze these API request performance metrics and suggest optimizations.\n\nCollection: {collectionName}\nRun metrics:\n{metrics}\n\nProvide:\n1. Summary of overall performance (p50, p90, p99 response times)\n2. Slowest endpoints and likely causes\n3. Specific optimization suggestions (caching, pagination, field filtering, batching)\n4. Any suspicious patterns (timeouts, high variance, etc.)\n5. Priority order for fixes (most impactful first)`,
+  'rest.performance.insights.system':
+    `You are an API performance analyst. Analyze collection run metrics and provide actionable optimization recommendations. Be specific about which endpoints are slow, why they might be slow, and concrete suggestions to fix them.`,
+  // ── Natural Language Search ──────────────────────────────────────────────
+  'rest.collection.search':
+    `Given these API requests, find the ones that best match this natural language query.\n\nQuery: {query}\n\nRequests (id | method | name | url):\n{requests}\n\nReturn ONLY a JSON array of request IDs that match, ordered by relevance (most relevant first). Max 10 results.\nFormat: ["id1", "id2", "id3"]\n\nRules:\n- Match by intent (e.g. "create order" matches POST /orders)\n- Match by name keywords\n- Match by URL path segments\n- Return [] if nothing matches`,
+  'rest.collection.search.system':
+    `You are a semantic API search engine. Match natural language queries to HTTP requests by understanding intent, not just keywords. Return only valid JSON arrays of IDs. Never include explanation.`,
+  // ── Changelog Generator ──────────────────────────────────────────────────
+  'rest.changelog.generate':
+    `Compare these two versions of an API collection and generate a human-readable changelog.\n\nPrevious version:\n{previousCollection}\n\nCurrent version:\n{currentCollection}\n\nGenerate a structured changelog:\n## Breaking Changes\n- List removed endpoints or changed response schemas\n\n## New Endpoints\n- List new routes\n\n## Modified Endpoints\n- List changes to existing routes (new params, changed responses, etc.)\n\n## Removed Endpoints\n- List deleted routes\n\nKeep each item concise. Use endpoint names or paths.`,
+  'rest.changelog.generate.system':
+    `You are an API changelog expert. Compare collections and generate a clear, developer-friendly changelog. Use standard changelog conventions (Breaking Changes, New, Modified, Removed). Be specific about HTTP methods and paths.`,
+  // ── API Flow Builder ─────────────────────────────────────────────────────
+  'rest.api.flow':
+    `Generate a step-by-step API request chain for this workflow.\n\nWorkflow: {description}\nBase URL: {baseUrl}\n\nReturn ONLY a JSON object with this structure:\n{\n  "name": "Workflow name (short, descriptive)",\n  "description": "One-line summary of the workflow",\n  "steps": [\n    {\n      "step": 1,\n      "name": "Step name",\n      "method": "GET|POST|PUT|PATCH|DELETE",\n      "url": "{{baseUrl}}/path",\n      "headers": [{"key": "Content-Type", "value": "application/json", "enabled": true}],\n      "bodyMode": "raw|none|form-data|x-www-form-urlencoded",\n      "bodyRaw": "JSON or text body string, empty string if not applicable",\n      "variableExtractions": [\n        {"variable": "variableName", "path": "$.field.path", "description": "What this variable stores"}\n      ],\n      "description": "What this step does and why"\n    }\n  ]\n}\n\nRules:\n- Use {{baseUrl}} for the base URL prefix\n- Use {{variableName}} in subsequent steps when referencing extracted values (e.g. {{authToken}}, {{userId}})\n- variableExtractions: use JSONPath ($.field) to specify where to extract values from the response\n- For auth flows: extract token in step 1, use {{token}} in Authorization header for steps 2+\n- For CRUD flows: extract created resource ID in POST step, use it in GET/PUT/DELETE steps\n- bodyRaw for JSON: stringify JSON object as a string\n- Return ONLY valid JSON — no explanation, no markdown fences`,
+  'rest.api.flow.system':
+    `You are an API workflow architect. Given a natural language description, generate a complete, ordered request chain that implements the workflow. Use chained variables ({{variableName}}) to pass data between steps. Always use JSONPath for variable extraction. Return ONLY valid JSON — never include markdown, explanations, or code fences.`,
+  // ── AI Agent Workflow ────────────────────────────────────────────────────
+  'rest.agent.workflow':
+    `You are an AI testing agent. A collection of API requests was just executed. Analyze the results and provide actionable diagnostics.\n\nCollection: {collectionName}\nEnvironment: {environment}\n\nTest Results:\n{results}\n\nFor each FAILED request, diagnose the root cause and suggest a specific fix.\nFor PASSED requests, flag anything unusual (unexpected status codes, slow responses, suspicious patterns).\n\nFormat your response as:\n\n## Test Summary\n<Brief overall assessment — pass rate, critical issues, overall API health>\n\n## Failed Request Analysis\n<For each failure:>\n### {METHOD} {endpoint} — Status {statusCode}\n- **Root Cause**: <likely cause>\n- **Fix**: <specific, actionable fix — include example if helpful>\n- **Category**: Auth / Data / Server / Config / Network\n\n## Performance Notes\n<Note any requests that took over 2 seconds or had unusually large/small responses>\n\n## Recommendations\n<2–5 overall recommendations to improve test reliability, API design, or error handling>`,
+  'rest.agent.workflow.system':
+    `You are a senior API testing agent embedded in Daakia API Client. When given collection run results, analyze them as a QA expert would: diagnose failures with precision, suggest concrete fixes (with code examples when helpful), and flag performance or design concerns. Be concise but actionable. Use markdown for structure. Never hallucinate request details — only reference what's in the results.`,
+  // ── Script Autocomplete ──────────────────────────────────────────────────
+  'rest.script.autocomplete':
+    `Complete the following JavaScript code snippet used in an API testing script.\n\nFull script context:\n\`\`\`javascript\n{surroundingCode}\n\`\`\`\n\nComplete starting from this cursor position (code up to cursor):\n\`\`\`javascript\n{codePrefix}\n\`\`\`\n\nAvailable dk.* API:\n{dkContext}\n\nReturn ONLY the completion text — the exact characters to insert at the cursor. Do NOT repeat the prefix. Do NOT wrap in code fences. Keep it to one line or a short logical block (max 5 lines). If nothing useful can be completed, return empty string.`,
+  'rest.script.autocomplete.system':
+    `You are an expert JavaScript inline autocomplete assistant for API testing scripts in Daakia. You complete code at the cursor position. Rules:\n1. Return ONLY the completion text — characters to insert at cursor, never repeat what's already there\n2. Keep suggestions short: one line or a compact logical block (max 5 lines)\n3. Prefer dk.* API calls when the context suggests checking response data or setting variables\n4. Understand common patterns: dk.response.json(), dk.expect(), dk.env.set(), dk.globals\n5. Never add markdown, backticks, or explanations — raw JavaScript only\n6. If nothing useful can be completed, return an empty string`,
+  // ── cURL Explainer ───────────────────────────────────────────────────────
+  'rest.curl.explain':
+    `Explain this cURL command in plain English. Break it down component by component.\n\n\`\`\`\n{curlCommand}\n\`\`\`\n\nFor each part of the command (URL, method, headers, body, flags), write a short bullet point explaining what it does and why it matters. Use simple, non-technical language where possible. Start with a one-line summary of what the whole command does.`,
+  'rest.curl.explain.system':
+    `You are a cURL expert and API educator. When given a cURL command, return a clear, concise breakdown:\n1. One-line summary of what the command does\n2. Bullet list — one bullet per meaningful component (--request, --url, --header, --data, --user, --cert, etc.)\n3. For each bullet: component name in backticks, then a plain-English explanation\n4. Keep each explanation to 1-2 sentences max\n5. If you spot potential issues (missing auth, insecure flags, etc.) add a brief ⚠️ note at the end\nNever use jargon without explaining it. Format in plain text or minimal markdown.`,
+  // ── REST — Environment Extractor ─────────────────────────────────────────
+  'rest.env.extract':
+    `Analyze these API collection requests and identify hardcoded values that should be environment variables.\n\nCollection: {collectionName}\nRequests:\n{requests}\n\nReturn ONLY a JSON array. No markdown, no explanation, no code fences. Each object has:\n- name: short camelCase variable name (e.g. baseUrl, apiKey, userId)\n- value: the actual hardcoded value found in the requests\n- reason: one sentence explaining what it is and why it should be a variable\n- occurrences: number of requests where this value appears\n\nExample:\n[{"name":"baseUrl","value":"https://api.example.com","reason":"Base URL repeated in every request endpoint","occurrences":8},{"name":"apiKey","value":"sk-abc123","reason":"API key hardcoded in Authorization header","occurrences":3}]\n\nRules:\n- Only suggest values that appear in multiple requests OR are sensitive (keys, tokens, passwords)\n- Base URL / hostname: always suggest if repeated\n- API keys, tokens, passwords: always suggest even if seen once\n- IDs or resource-specific values that appear only once: skip\n- Keep name concise — max 3 words camelCase\n- Keep reason to one short sentence`,
+  'rest.env.extract.system':
+    `You are a precise REST API environment variable extraction assistant. Analyze request URLs, headers, and body data to identify hardcoded values that should be parameterized as {{variables}}. Always return valid JSON arrays only — never explanatory text, never markdown fences, never partial output.`,
 };
 
 // ─── Labels for UI ────────────────────────────────────────────────────────────
@@ -247,6 +372,37 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'mock.mqtt.generate':      { label: 'MQTT',      description: 'System + user prompts for MQTT topic generation' },
   'rest.headers.suggest.generate': { label: 'Suggest Headers',          description: 'User prompt sent when "Suggest headers" AI button is clicked on the Headers tab' },
   'rest.headers.suggest.system':   { label: 'Suggest Headers — System', description: 'Behavioral rules for the AI header suggestion assistant (format: JSON array only)' },
+  'rest.body.generate':        { label: 'Generate Body',          description: 'User prompt sent when the ✨ AI body generate button is clicked in the Body tab' },
+  'rest.body.generate.system': { label: 'Generate Body — System', description: 'Behavioral rules for the AI body generator (format: raw body only, no fences)' },
+  'rest.env.extract':          { label: 'Extract Variables',          description: 'User prompt sent when "Extract Variables with AI" is chosen in the collection context menu' },
+  'rest.env.extract.system':   { label: 'Extract Variables — System', description: 'Behavioral rules for the AI environment extractor (format: JSON array only)' },
+  'data.generate':        { label: 'Generate Test Data',          description: 'User prompt sent when generating test data fixtures with AI' },
+  'data.generate.system': { label: 'Generate Test Data — System', description: 'Behavioral rules for the AI data generator (format: raw JSON array only)' },
+  'rest.request.name':    { label: 'Request Namer',              description: 'Prompt for AI-suggested request names in Save As modal' },
+  'rest.collection.organize':        { label: 'Organize Collection',          description: 'Prompt for AI-suggested folder structure for flat collections' },
+  'rest.collection.organize.system': { label: 'Organize Collection — System', description: 'Behavioral rules for the collection organizer (format: JSON only)' },
+  'rest.curl.explain':               { label: 'cURL Explainer',                description: 'Prompt for AI-powered plain-English breakdown of cURL commands' },
+  'rest.curl.explain.system':        { label: 'cURL Explainer — System',       description: 'Behavioral rules for the cURL explainer (component-by-component format)' },
+  'rest.script.autocomplete':        { label: 'Script Autocomplete',           description: 'Prompt for AI inline code completion in pre/post-request script editors' },
+  'rest.script.autocomplete.system': { label: 'Script Autocomplete — System',  description: 'Behavioral rules for AI script autocomplete (return completion text only)' },
+  'rest.contract.test':        { label: 'Contract Test Generator',       description: 'Generates dk.* contract test assertions from response + schema' },
+  'rest.contract.test.system': { label: 'Contract Test Generator — System', description: 'Behavioral rules for contract test generator (JavaScript only)' },
+  'rest.response.diff':        { label: 'Response Diff Analyzer',        description: 'Explains what changed between two API responses' },
+  'rest.response.diff.system': { label: 'Response Diff — System',        description: 'Behavioral rules for response diff analyzer' },
+  'rest.schema.validate':        { label: 'Schema Validator',             description: 'Validates response against JSON Schema/OpenAPI spec and explains mismatches' },
+  'rest.schema.validate.system': { label: 'Schema Validator — System',   description: 'Behavioral rules for schema validator' },
+  'rest.code.import':        { label: 'Code to Request',                  description: 'Extracts HTTP request config from fetch/axios/requests code' },
+  'rest.code.import.system': { label: 'Code to Request — System',        description: 'Behavioral rules for code importer (return JSON only)' },
+  'rest.performance.insights':        { label: 'Performance Insights',   description: 'Analyzes collection run metrics and suggests optimizations' },
+  'rest.performance.insights.system': { label: 'Performance Insights — System', description: 'Behavioral rules for performance analyst' },
+  'rest.collection.search':        { label: 'Natural Language Search',    description: 'Finds requests matching a natural language query' },
+  'rest.collection.search.system': { label: 'NL Search — System',        description: 'Behavioral rules for NL collection search (return JSON ID array only)' },
+  'rest.changelog.generate':        { label: 'Changelog Generator',       description: 'Compares collection versions and generates human-readable changelog' },
+  'rest.changelog.generate.system': { label: 'Changelog Generator — System', description: 'Behavioral rules for changelog generator' },
+  'rest.api.flow':        { label: 'API Flow Builder',        description: 'Generates a chained request workflow from a natural language description' },
+  'rest.api.flow.system': { label: 'API Flow Builder — System', description: 'Behavioral rules for API flow builder (JSON only, chained variables)' },
+  'rest.agent.workflow':        { label: 'AI Agent Workflow',        description: 'Runs a collection, diagnoses failures, and suggests fixes' },
+  'rest.agent.workflow.system': { label: 'AI Agent Workflow — System', description: 'Behavioral rules for the AI testing agent (diagnosis, fixes, recommendations)' },
   'mock.rest.system':        { label: 'REST — System',       description: 'AI behavioral rules for REST route generation (format, limits, JSON completeness)' },
   'mock.graphql.system':     { label: 'GraphQL — System',   description: 'AI behavioral rules for GraphQL schema generation' },
   'mock.grpc.system':        { label: 'gRPC — System',      description: 'AI behavioral rules for gRPC service definition generation' },
@@ -276,6 +432,37 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'mock.mqtt.generate':      ['{serverName}', '{context}'],
   'rest.headers.suggest.generate': ['{method}', '{url}', '{contentType}', '{authType}', '{existing}'],
   'rest.headers.suggest.system':   [],
+  'rest.body.generate':        ['{method}', '{url}', '{contentType}', '{description}'],
+  'rest.body.generate.system': [],
+  'rest.env.extract':          ['{collectionName}', '{requests}'],
+  'rest.env.extract.system':   [],
+  'data.generate':        ['{dataType}', '{count}', '{format}', '{customDescription}'],
+  'data.generate.system': [],
+  'rest.request.name':    ['{method}', '{url}', '{bodyPreview}'],
+  'rest.collection.organize':        ['{collectionName}', '{requests}'],
+  'rest.collection.organize.system': [],
+  'rest.curl.explain':               ['{curlCommand}'],
+  'rest.curl.explain.system':        [],
+  'rest.script.autocomplete':        ['{codePrefix}', '{surroundingCode}', '{dkContext}'],
+  'rest.script.autocomplete.system': [],
+  'rest.contract.test':        ['{method}', '{url}', '{status}', '{responseBody}', '{schemaContext}'],
+  'rest.contract.test.system': [],
+  'rest.response.diff':        ['{labelA}', '{responseA}', '{labelB}', '{responseB}'],
+  'rest.response.diff.system': [],
+  'rest.schema.validate':        ['{method}', '{url}', '{status}', '{responseBody}', '{schema}'],
+  'rest.schema.validate.system': [],
+  'rest.code.import':        ['{code}'],
+  'rest.code.import.system': [],
+  'rest.performance.insights':        ['{collectionName}', '{metrics}'],
+  'rest.performance.insights.system': [],
+  'rest.collection.search':        ['{query}', '{requests}'],
+  'rest.collection.search.system': [],
+  'rest.changelog.generate':        ['{previousCollection}', '{currentCollection}'],
+  'rest.changelog.generate.system': [],
+  'rest.api.flow':        ['{description}', '{baseUrl}'],
+  'rest.api.flow.system': [],
+  'rest.agent.workflow':        ['{collectionName}', '{environment}', '{results}'],
+  'rest.agent.workflow.system': [],
   'mock.rest.system':        [],
   'mock.graphql.system':     [],
   'mock.grpc.system':        [],
@@ -321,6 +508,96 @@ export const AI_TEMPLATE_CATEGORIES: {
     kind: 'mock',
     keys: ['rest.headers.suggest.generate'],
   },
+  {
+    id: 'body-generate',
+    label: 'REST — Body',
+    kind: 'mock',
+    keys: ['rest.body.generate'],
+  },
+  {
+    id: 'env-extract',
+    label: 'REST — Env Extractor',
+    kind: 'mock',
+    keys: ['rest.env.extract'],
+  },
+  {
+    id: 'data-generate',
+    label: 'Data Generator',
+    kind: 'mock',
+    keys: ['data.generate'],
+  },
+  {
+    id: 'collection-organize',
+    label: 'Collection Organizer',
+    kind: 'mock',
+    keys: ['rest.collection.organize'],
+  },
+  {
+    id: 'curl-explain',
+    label: 'cURL Explainer',
+    kind: 'mock',
+    keys: ['rest.curl.explain'],
+  },
+  {
+    id: 'script-autocomplete',
+    label: 'Script Autocomplete',
+    kind: 'mock',
+    keys: ['rest.script.autocomplete'],
+  },
+  {
+    id: 'contract-test',
+    label: 'Contract Test Generator',
+    kind: 'mock',
+    keys: ['rest.contract.test'],
+  },
+  {
+    id: 'response-diff',
+    label: 'Response Diff Analyzer',
+    kind: 'mock',
+    keys: ['rest.response.diff'],
+  },
+  {
+    id: 'schema-validate',
+    label: 'Schema Validator',
+    kind: 'mock',
+    keys: ['rest.schema.validate'],
+  },
+  {
+    id: 'code-import',
+    label: 'Code to Request',
+    kind: 'mock',
+    keys: ['rest.code.import'],
+  },
+  {
+    id: 'performance-insights',
+    label: 'Performance Insights',
+    kind: 'mock',
+    keys: ['rest.performance.insights'],
+  },
+  {
+    id: 'collection-search',
+    label: 'NL Collection Search',
+    kind: 'mock',
+    keys: ['rest.collection.search'],
+  },
+  {
+    id: 'changelog-generate',
+    label: 'Changelog Generator',
+    kind: 'mock',
+    keys: ['rest.changelog.generate'],
+  },
+  {
+    id: 'api-flow-builder',
+    label: 'API Flow Builder',
+    kind: 'mock',
+    keys: ['rest.api.flow'],
+  },
+  {
+    id: 'agent-workflow',
+    label: 'AI Agent Workflow',
+    kind: 'mock',
+    keys: ['rest.agent.workflow'],
+  },
 ];
 
 export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
@@ -340,6 +617,37 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'mock.mqtt.generate':      '#06b6d4',
   'rest.headers.suggest.generate': '#a855f7',
   'rest.headers.suggest.system':   '#a855f7',
+  'rest.body.generate':        '#f59e0b',
+  'rest.body.generate.system': '#f59e0b',
+  'rest.env.extract':          '#22c55e',
+  'rest.env.extract.system':   '#22c55e',
+  'data.generate':        '#0ea5e9',
+  'data.generate.system': '#0ea5e9',
+  'rest.request.name':    '#a855f7',
+  'rest.collection.organize':        '#f97316',
+  'rest.collection.organize.system': '#f97316',
+  'rest.curl.explain':               '#06b6d4',
+  'rest.curl.explain.system':        '#06b6d4',
+  'rest.script.autocomplete':        '#a78bfa',
+  'rest.script.autocomplete.system': '#a78bfa',
+  'rest.contract.test':        '#10b981',
+  'rest.contract.test.system': '#10b981',
+  'rest.response.diff':        '#f59e0b',
+  'rest.response.diff.system': '#f59e0b',
+  'rest.schema.validate':        '#06b6d4',
+  'rest.schema.validate.system': '#06b6d4',
+  'rest.code.import':        '#8b5cf6',
+  'rest.code.import.system': '#8b5cf6',
+  'rest.performance.insights':        '#ef4444',
+  'rest.performance.insights.system': '#ef4444',
+  'rest.collection.search':        '#3b82f6',
+  'rest.collection.search.system': '#3b82f6',
+  'rest.changelog.generate':        '#f97316',
+  'rest.changelog.generate.system': '#f97316',
+  'rest.api.flow':        '#8b5cf6',
+  'rest.api.flow.system': '#8b5cf6',
+  'rest.agent.workflow':        '#10b981',
+  'rest.agent.workflow.system': '#10b981',
   'mock.rest.system':        '#3b82f6',
   'mock.graphql.system':     '#ec4899',
   'mock.grpc.system':        '#f97316',

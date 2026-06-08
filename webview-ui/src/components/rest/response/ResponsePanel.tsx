@@ -11,6 +11,7 @@ import { CookiesView } from './CookiesView';
 import { TimelineView } from './TimelineView';
 import { DataSchemaModal } from './DataSchemaModal';
 import { AiActionButton, type AssistMode } from '../../ai/AiAssistPopover';
+import { AiNaturalAssertPopover } from '../../ai/AiNaturalAssertPopover';
 
 type ResponseView = 'json' | 'raw' | 'headers' | 'cookies' | 'timeline' | 'tests';
 
@@ -25,6 +26,7 @@ export function ResponsePanel() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
+  const [showNaturalAssert, setShowNaturalAssert] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,7 +114,7 @@ export function ResponsePanel() {
             requestMethod={requestMethod}
             requestUrl={requestUrl}
             open={activePopup === 'explain'}
-            onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
+            onOpen={() => { setActivePopup(p => p === 'explain' ? null : 'explain'); setShowNaturalAssert(false); }}
           />
           <AiActionButton
             mode="follow-up"
@@ -121,8 +123,32 @@ export function ResponsePanel() {
             requestMethod={requestMethod}
             requestUrl={requestUrl}
             open={activePopup === 'follow-up'}
-            onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
+            onOpen={() => { setActivePopup(p => p === 'follow-up' ? null : 'follow-up'); setShowNaturalAssert(false); }}
           />
+          {/* AI Natural Language Assertions (4.6.3) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => { setShowNaturalAssert(p => !p); setActivePopup(null); }}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
+              style={{
+                color: 'var(--color-protocol-ai)',
+                borderColor: showNaturalAssert ? 'var(--color-protocol-ai)' : 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+                backgroundColor: showNaturalAssert ? 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)' : 'transparent',
+              }}
+              title="Write test assertions in plain English"
+            >
+              ✦ Assert
+            </button>
+            {showNaturalAssert && (
+              <AiNaturalAssertPopover
+                response={{ body: response.body, status: response.status, contentType: response.contentType }}
+                requestMethod={requestMethod}
+                requestUrl={requestUrl}
+                onClose={() => setShowNaturalAssert(false)}
+              />
+            )}
+          </div>
         </div>
       </div>
 

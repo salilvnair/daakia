@@ -4,9 +4,12 @@ import { useUiStateStore } from '../../../store/ui-state-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { PillTabs, KeyValueTable, FormDataTable, CodeEditor, StyledDropdown, ConfirmDialog, AuthEditor, ScriptsEditor, type PillTab } from '../../shared';
-import { TrashIcon, BulkEditIcon, PlusIcon, SparkleIcon, WandIcon, FileUploadIcon, LockIcon, CookieIcon } from '../../../icons';
+import { TrashIcon, BulkEditIcon, PlusIcon, SparkleIcon, WandIcon, FileUploadIcon, LockIcon, CookieIcon, DiceIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
 import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../../ai/AiHeaderSuggest';
+import { AiBodyGenerate, type AiBodyGenerateHandle } from '../../ai/AiBodyGenerate';
+import { AiDataGeneratorModal } from '../../ai/AiDataGeneratorModal';
+import { AiRequestFuzzerModal } from '../../ai/AiRequestFuzzerModal';
 
 // ── Computed auth header rows (Task 7) ──────────────────────────────────────
 function computeAuthRows(authType: string, authData: Record<string, string>): { key: string; value: string }[] {
@@ -78,6 +81,9 @@ export function RequestConfig() {
   const [oauth2Loading, setOauth2Loading] = useState(false);
   const [aiHeaderLoading, setAiHeaderLoading] = useState(false);
   const aiHeaderSuggestRef = useRef<AiHeaderSuggestHandle>(null);
+  const aiBodyGenerateRef = useRef<AiBodyGenerateHandle>(null);
+  const [showDataGenerator, setShowDataGenerator] = useState(false);
+  const [showFuzzer, setShowFuzzer] = useState(false);
   // Task 8: cookie jar rows for the current URL's domain
   const [cookieJarRows, setCookieJarRows] = useState<{ key: string; value: string }[]>([]);
 
@@ -181,14 +187,29 @@ export function RequestConfig() {
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-[var(--color-surface)]">
       {/* Section tabs */}
-      <div className="px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
-        <PillTabs
-          tabs={tabsWithBadges}
-          activeTab={activeSection}
-          onChange={setActiveSection}
-          size="sm"
-          variant="underline"
-        />
+      <div className="flex items-center px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
+        <div className="flex-1">
+          <PillTabs
+            tabs={tabsWithBadges}
+            activeTab={activeSection}
+            onChange={setActiveSection}
+            size="sm"
+            variant="underline"
+          />
+        </div>
+        {/* AI Fuzzer trigger — only visible on Body tab */}
+        {activeSection === 'body' && tab.bodyRaw?.trim() && (
+          <button
+            type="button"
+            onClick={() => setShowFuzzer(true)}
+            title="AI Request Fuzzer — generate edge-case payloads"
+            className="flex-shrink-0 h-[22px] px-2 mb-1 text-[10px] font-medium rounded cursor-pointer hover:opacity-90 transition-opacity flex items-center gap-1"
+            style={{ backgroundColor: '#ef444418', color: '#ef4444', border: '1px solid #ef444440' }}
+          >
+            <SparkleIcon size={9} />
+            Fuzz
+          </button>
+        )}
       </div>
 
       {/* Section content */}
@@ -569,11 +590,26 @@ function BodyEditor({ tab }: { tab: ReturnType<typeof useTabsStore.getState>['ta
                 )}
                 <button
                   type="button"
-                  onClick={() => addToast({ type: 'info', message: 'AI body generation coming soon!' })}
-                  className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] cursor-pointer transition-colors"
-                  title="Generate with AI"
+                  onClick={() => aiBodyGenerateRef.current?.open()}
+                  className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
+                  style={{
+                    color: aiBodyGenerateRef.current?.loading
+                      ? 'var(--color-protocol-ai)'
+                      : 'var(--color-text-muted)',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-protocol-ai)')}
+                  onMouseLeave={e => { if (!aiBodyGenerateRef.current?.loading) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+                  title="Generate body with AI"
                 >
                   <SparkleIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDataGenerator(true)}
+                  className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-info)] hover:bg-[rgba(14,165,233,0.08)] cursor-pointer transition-colors"
+                  title="Generate test data with AI"
+                >
+                  <DiceIcon size={14} />
                 </button>
                 <button
                   type="button"
@@ -603,6 +639,18 @@ function BodyEditor({ tab }: { tab: ReturnType<typeof useTabsStore.getState>['ta
             {binaryFileName || 'No file chosen'}
           </span>
         </div>
+      )}
+
+      {/* AI Body Generator panel */}
+      {isCodeMode && !bulkEdit && tab && (
+        <AiBodyGenerate
+          ref={aiBodyGenerateRef}
+          tabId={tab.id}
+          method={tab.method || 'GET'}
+          url={tab.url || ''}
+          contentType={contentType}
+          onApply={(body) => updateTab(tab.id, { bodyRaw: body })}
+        />
       )}
 
       {/* Code editor (json, raw, xml, html, plain) */}
@@ -691,6 +739,20 @@ function BodyEditor({ tab }: { tab: ReturnType<typeof useTabsStore.getState>['ta
           e.target.value = '';
         }}
       />
+
+      {/* AI Data Generator Modal */}
+      {showDataGenerator && tab && (
+        <AiDataGeneratorModal
+          tabId={tab.id}
+          onApply={(data) => updateTab(tab.id, { bodyRaw: data })}
+          onClose={() => setShowDataGenerator(false)}
+        />
+      )}
+      {showFuzzer && (
+        <AiRequestFuzzerModal
+          onClose={() => setShowFuzzer(false)}
+        />
+      )}
     </div>
   );
 }

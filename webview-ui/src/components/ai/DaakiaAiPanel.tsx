@@ -6,16 +6,20 @@
  * - Daakia-only system prompt (no off-topic questions)
  * - MdViewer-powered response rendering (markdown, code blocks, tables)
  * - ConvEngineChat fullscreen mode (no URL bar, no request config)
+ * - AI Conversation Context (4.5.4): auto-injects current tab state into system prompt
  *
  * E6.71 — Daakia AI dedicated tab
  * E6.72 — Hero banner, Daakia-only persona, MdViewer renderer
  */
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect, useState } from 'react';
 import { ConvEngineChat } from '@salilvnair/convengine-chat';
-import { useTabsStore, DAAKIA_ASSISTANT_SYSTEM_PROMPT } from '../../store/tabs-store';
+import { useTabsStore, DAAKIA_ASSISTANT_SYSTEM_PROMPT, type ResponseData } from '../../store/tabs-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
-import { GeneralAssistantIcon, SparkleIcon } from '../../icons';
+import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
+import { GeneralAssistantIcon, SparkleIcon, CloseCircleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
+import { postMsg } from '../../vscode';
+import { AiPendingActions, parseDaakiaActions, type DaakiaAction } from './AiPendingActions';
 
 // ─── Suggestion chips ─────────────────────────────────────────────────────────
 
@@ -66,6 +70,103 @@ const DAAKIA_RENDERER_PROVIDERS = [
     hideBubble: false,
   },
 ];
+
+// ─── Context helpers ──────────────────────────────────────────────────────────
+
+/** Build a system prompt context block from a request tab */
+function buildContextBlock(
+  method: string,
+  url: string,
+  response: ResponseData | null,
+  envName: string | null,
+  envVarCount: number,
+): string {
+  if (!url) return '';
+
+  const lines: string[] = [
+    '## Current API Context (auto-injected)',
+    'The user is actively working with this request in their editor:',
+    `- Method: ${method}`,
+    `- URL: ${url}`,
+  ];
+
+  if (response) {
+    const statusLine = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+    const timeStr = response.time ? ` (${response.time}ms)` : '';
+    lines.push(`- Last Response: ${statusLine}${timeStr}`);
+  } else {
+    lines.push('- Last Response: None yet');
+  }
+
+  if (envName && envName !== 'Global') {
+    lines.push(`- Active Environment: ${envName}${envVarCount > 0 ? ` (${envVarCount} variables)` : ''}`);
+  }
+
+  lines.push('', 'When the user asks about "this request", "my API", "the response", etc., refer to the context above.');
+  return lines.join('\n');
+}
+
+/** Compact context indicator shown below the hero banner */
+function AiContextBar({
+  method,
+  url,
+  response,
+  envName,
+  onDismiss,
+}: {
+  method: string;
+  url: string;
+  response: ResponseData | null;
+  envName: string | null;
+  onDismiss: () => void;
+}) {
+  const statusColor = response
+    ? response.status < 300 ? 'var(--color-success)'
+    : response.status < 400 ? 'var(--color-warning)'
+    : 'var(--color-error)'
+    : 'var(--color-text-muted)';
+
+  const truncatedUrl = url.length > 45 ? url.slice(0, 42) + '…' : url;
+
+  return (
+    <div
+      className="flex items-center gap-1.5 px-3 py-1 text-[10.5px] border-b overflow-hidden"
+      style={{
+        borderColor: 'var(--color-surface-border)',
+        backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 6%, var(--color-panel))',
+      }}
+    >
+      <span className="flex-shrink-0 opacity-60" style={{ color: 'var(--color-protocol-ai)' }}>
+        Context:
+      </span>
+      <span className="font-mono font-bold flex-shrink-0" style={{ color: 'var(--color-protocol-ai)', fontSize: '10px' }}>
+        {method}
+      </span>
+      <span className="truncate flex-1 font-mono" style={{ color: 'var(--color-text-secondary)', fontSize: '10px' }}>
+        {truncatedUrl}
+      </span>
+      {response && (
+        <span className="flex-shrink-0 font-semibold" style={{ color: statusColor, fontSize: '10px' }}>
+          {response.status}
+        </span>
+      )}
+      {envName && envName !== 'Global' && (
+        <span className="flex-shrink-0 px-1.5 py-px rounded text-[9px]" style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 15%, transparent)', color: 'var(--color-protocol-ai)' }}>
+          {envName}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="flex-shrink-0 cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
+        style={{ color: 'var(--color-text-muted)' }}
+        title="Dismiss context"
+      >
+        <CloseCircleIcon size={11} />
+      </button>
+    </div>
+  );
+}
 
 // ─── Hero banner ──────────────────────────────────────────────────────────────
 
@@ -141,24 +242,91 @@ export function DaakiaAiPanel() {
   const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
   const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
 
+  // ── AI Conversation Context (4.5.4) ──────────────────────────────────────
+  // Find the most recent non-AI tab that has a URL (provides "current context")
+  const allTabs = useTabsStore(s => s.tabs);
+  const contextTab = useMemo(() => {
+    return allTabs
+      .filter(t => t.type !== 'daakia-ai' && t.url && t.url.trim().length > 0)
+      .slice(-1)[0] ?? null;
+  }, [allTabs]);
+
+  const environments = useEnvStore(s => s.environments);
+  const activeEnvId = useEnvStore(s => s.activeEnvId);
+
+  // Resolve env for the context tab (fall back to global active env)
+  const contextEnv = useMemo(() => {
+    const envId = contextTab?.envId ?? activeEnvId;
+    if (!envId || envId === GLOBAL_ENV_ID) {
+      return environments.find(e => e.isGlobal) ?? null;
+    }
+    return environments.find(e => e.id === envId) ?? null;
+  }, [contextTab, environments, activeEnvId]);
+
+  // Whether context bar is shown (user can dismiss it)
+  const [contextDismissed, setContextDismissed] = useState(false);
+  const showContextBar = !contextDismissed && !!contextTab?.url;
+
   // Guard: re-inject system prompts if the tab was loaded from persisted state
   // without them (tabs-store rehydration doesn't re-run openDaakiaAiTab logic).
+  // Also inject context block as second system prompt.
   useEffect(() => {
     if (!activeTab || activeTab.type !== 'daakia-ai') return;
-    const hasPrompt = (activeTab.aiSystemPrompts ?? []).some(
-      p => p.includes('Daakia Assistant'),
-    );
-    if (!hasPrompt) {
-      updateTab(activeTab.id, { aiSystemPrompts: [DAAKIA_ASSISTANT_SYSTEM_PROMPT] });
+
+    const basePrompt = DAAKIA_ASSISTANT_SYSTEM_PROMPT;
+    const contextBlock = showContextBar && contextTab
+      ? buildContextBlock(
+          contextTab.method,
+          contextTab.url,
+          contextTab.response,
+          contextEnv?.name ?? null,
+          contextEnv?.variables?.length ?? 0,
+        )
+      : '';
+
+    const newPrompts = contextBlock
+      ? [basePrompt, contextBlock]
+      : [basePrompt];
+
+    const currentPrompts = activeTab.aiSystemPrompts ?? [];
+    const needsUpdate =
+      currentPrompts.length !== newPrompts.length ||
+      currentPrompts[0] !== newPrompts[0] ||
+      currentPrompts[1] !== newPrompts[1];
+
+    if (needsUpdate) {
+      updateTab(activeTab.id, { aiSystemPrompts: newPrompts });
     }
-  }, [activeTab?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab?.id, showContextBar, contextTab?.url, contextTab?.response?.status, contextEnv?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── AI Suggestion Chips (4.5.5) ──────────────────────────────────────────
+  const [showChips, setShowChips] = useState(false);
+
+  // ── AI Actions from Chat (4.5.6) ─────────────────────────────────────────
+  const [pendingActions, setPendingActions] = useState<DaakiaAction[]>([]);
 
   const handleMessage = useCallback((_text: string) => {
-    // handled by the bridge
+    // Hide chips + clear pending actions while waiting for next AI response
+    setShowChips(false);
+    setPendingActions([]);
   }, []);
 
-  const handleResponse = useCallback((_text: string) => {
-    // handled by the bridge
+  const handleResponse = useCallback((text: string) => {
+    // Parse action commands embedded in the AI response
+    const actions = parseDaakiaActions(text);
+    if (actions.length > 0) {
+      setPendingActions(actions);
+    }
+    // Show action chips after each AI response
+    setShowChips(true);
+  }, []);
+
+  const handleDismissAction = useCallback((index: number) => {
+    setPendingActions(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleDismissAllActions = useCallback(() => {
+    setPendingActions([]);
   }, []);
 
   // Use a stable conversationId so closing/reopening the Daakia AI tab preserves the
@@ -204,18 +372,127 @@ export function DaakiaAiPanel() {
     'text-bubble-agent': 'var(--color-text-primary)',
   }), []);
 
+  // Quick-action chips shown after each AI response
+  const handleChipAction = useCallback((action: string) => {
+    setShowChips(false);
+    if (!contextTab) return;
+    switch (action) {
+      case 'run':
+        postMsg({
+          type: 'executeRequest',
+          tabId: contextTab.id,
+          method: contextTab.method,
+          url: contextTab.url,
+          headers: contextTab.headers,
+          bodyMode: contextTab.bodyMode,
+          bodyRaw: contextTab.bodyRaw,
+          bodyFormData: contextTab.bodyFormData,
+          bodyUrlEncoded: contextTab.bodyUrlEncoded,
+          authType: contextTab.authType,
+          authData: contextTab.authData,
+          envId: contextTab.envId,
+          protocol: contextTab.protocol,
+        });
+        break;
+      case 'save':
+        postMsg({ type: 'openSaveAs', tabId: contextTab.id });
+        break;
+      case 'copy-url':
+        navigator.clipboard.writeText(contextTab.url).catch(() => {});
+        break;
+      case 'switch-tab':
+        useTabsStore.getState().setActiveTab(contextTab.id);
+        break;
+    }
+  }, [contextTab]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ minHeight: 0 }}>
       {/* Colorful hero banner */}
       <DaakiaAiHero />
 
+      {/* Context bar — shows current tab context when a non-AI tab is active */}
+      {showContextBar && contextTab && (
+        <AiContextBar
+          method={contextTab.method}
+          url={contextTab.url}
+          response={contextTab.response}
+          envName={contextEnv?.name ?? null}
+          onDismiss={() => setContextDismissed(true)}
+        />
+      )}
+
+      {/* Pending AI actions — applied directly to the context tab or environment */}
+      {pendingActions.length > 0 && (
+        <AiPendingActions
+          actions={pendingActions}
+          contextTab={contextTab}
+          onDismiss={handleDismissAction}
+          onDismissAll={handleDismissAllActions}
+        />
+      )}
+
       {/* Full-screen chat — fills remaining height */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden relative">
         <ConvEngineChat
           mode="fullscreen"
           config={chatConfig}
           theme={chatTheme}
         />
+
+        {/* Suggestion chips — float above the composer after each response */}
+        {showChips && (
+          <div
+            className="absolute bottom-[72px] left-0 right-0 flex items-center gap-1.5 px-3 py-1.5 flex-wrap pointer-events-none"
+            style={{ zIndex: 10 }}
+          >
+            {contextTab?.url && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleChipAction('run')}
+                  className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
+                  style={{ borderColor: 'var(--color-protocol-ai)', color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, var(--color-panel))' }}
+                >
+                  ▶ Run request
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChipAction('save')}
+                  className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
+                  style={{ borderColor: 'var(--color-protocol-ai)', color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, var(--color-panel))' }}
+                >
+                  💾 Save to collection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChipAction('copy-url')}
+                  className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
+                  style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-panel)' }}
+                >
+                  📋 Copy URL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChipAction('switch-tab')}
+                  className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
+                  style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-panel)' }}
+                >
+                  🔍 Switch to tab
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowChips(false)}
+              className="pointer-events-auto h-[24px] w-[24px] flex items-center justify-center rounded-full border cursor-pointer hover:opacity-70 transition-opacity ml-auto"
+              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-muted)', backgroundColor: 'var(--color-panel)' }}
+              title="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

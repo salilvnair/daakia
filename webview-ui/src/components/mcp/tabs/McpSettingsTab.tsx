@@ -1,8 +1,10 @@
 import { useCallback } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
+import { postMsg } from '../../../vscode';
 
 /**
  * McpSettingsTab — Working directory, timeouts, auto-reconnect, max retries.
+ * Also exposes "Daakia as MCP Server" setup card.
  */
 export function McpSettingsTab() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
@@ -26,7 +28,7 @@ export function McpSettingsTab() {
   if (!activeTab) return null;
 
   return (
-    <div className="flex flex-col px-4 py-3 gap-2.5 overflow-auto">
+    <div className="flex flex-col px-4 py-3 gap-4 overflow-auto">
       {/* Connection Timeout */}
       <div className="flex items-center">
         <span className="text-[12px] text-[var(--color-text-muted)] w-[140px] flex-shrink-0">Connection Timeout</span>
@@ -104,6 +106,30 @@ export function McpSettingsTab() {
           placeholder="Leave blank for workspace root"
           className="flex-1 max-w-[300px] h-[28px] px-2.5 text-[12px] rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
         />
+      </div>
+
+      {/* ── Daakia as MCP Server ── */}
+      <div
+        className="mt-2 rounded-lg p-3 border"
+        style={{ borderColor: 'var(--color-protocol-mcp)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-mcp) 5%, var(--color-surface-bg))' }}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-protocol-mcp)' }}>
+            Expose Daakia as MCP Server
+          </span>
+        </div>
+        <p className="text-[11px] mb-2.5" style={{ color: 'var(--color-text-muted)' }}>
+          External AI clients (Claude Desktop, Cursor) can use Daakia as an MCP tool server.
+          Tools: <code className="text-[10.5px] px-0.5">send_request</code> · <code className="text-[10.5px] px-0.5">get_collections</code> · <code className="text-[10.5px] px-0.5">run_collection</code>
+        </p>
+        <button
+          type="button"
+          onClick={() => postMsg({ type: 'mcp:showServerConfig' })}
+          className="h-[26px] px-3 text-[11px] font-medium rounded cursor-pointer hover:opacity-90 transition-opacity text-white"
+          style={{ backgroundColor: 'var(--color-protocol-mcp)' }}
+        >
+          Show Setup Config
+        </button>
       </div>
     </div>
   );

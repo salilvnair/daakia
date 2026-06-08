@@ -109,9 +109,59 @@ export const requestProvider: ScriptProvider = {
       }
     };
 
+    // Build a Headers-like Proxy so scripts can use both indexing AND methods:
+    //   dk.request.headers["Authorization"]       — direct key access
+    //   dk.request.headers.set("Authorization", …) — Headers API style
+    //   dk.request.headers.get("Authorization")
+    //   dk.request.headers.has("Authorization")
+    //   dk.request.headers.delete("Authorization")
+    //   dk.request.headers.add({ key: "…", value: "…" }) — Postman-compat
+    //   dk.request.headers.upsert({ key: "…", value: "…" })
+    //   dk.request.headers.remove("…")
+    //   dk.request.headers.each((k, v) => { … })
+    //
+    // All mutations write through to scriptContext.request.headers so the
+    // request-handler can read them back after script execution.
+    const rawHeaders = scriptContext.request.headers;
+    const headersProxy = new Proxy(rawHeaders, {
+      get(target, prop, receiver) {
+        if (typeof prop === 'symbol') return Reflect.get(target, prop, receiver);
+        switch (prop) {
+          case 'set':    return (k: string, v: string)                      => { target[k] = v; };
+          case 'get':    return (k: string)                                  => target[k];
+          case 'has':    return (k: string)                                  => k in target;
+          case 'delete':
+          case 'remove': return (k: string)                                  => { delete target[k]; return true; };
+          case 'add':
+          case 'upsert': return (entry: { key: string; value: string } | string, val?: string) => {
+            if (typeof entry === 'string') { target[entry] = val ?? ''; }
+            else { target[entry.key] = entry.value; }
+          };
+          case 'each': return (fn: (k: string, v: string) => void) => {
+            for (const [k, v] of Object.entries(target)) fn(k, v);
+          };
+          case 'toObject': return () => ({ ...target });
+          default: return Reflect.get(target, prop, receiver);
+        }
+      },
+    });
+
+    // dk.request — mutable (not frozen) so scripts can modify url/method/body too.
+    // The underlying scriptContext.request fields are live references; mutations are
+    // visible to the handler after runScript() returns.
+    const requestProxy = {
+      get method() { return scriptContext.request.method; },
+      set method(v: string) { scriptContext.request.method = v; },
+      get url() { return scriptContext.request.url; },
+      set url(v: string) { scriptContext.request.url = v; },
+      get body() { return scriptContext.request.body; },
+      set body(v: string) { scriptContext.request.body = v; },
+      headers: headersProxy,
+    };
+
     return {
       dk: {
-        request: Object.freeze({ ...scriptContext.request }),
+        request: requestProxy,
         response: responseObj,
         sendRequest,
       },

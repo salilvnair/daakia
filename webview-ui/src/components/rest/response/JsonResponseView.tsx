@@ -5,6 +5,8 @@ import { useClickOutside } from '../../../hooks/useClickOutside';
 import { applyJqFilter, formatBody, getResponseLanguage, downloadBlob, getExtensionForContentType } from '../../../services/response';
 import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, HelpCircleIcon, SparkleIcon, CloseCircleIcon } from '../../../icons';
 import { ToolbarBtn } from './ToolbarBtn';
+import { AiResponseDiffModal } from '../../ai/AiResponseDiffModal';
+import { AiSchemaValidatorModal } from '../../ai/AiSchemaValidatorModal';
 
 interface JsonViewProps {
   response: { body: string; contentType: string };
@@ -26,6 +28,12 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
   const [filterError, setFilterError] = useState<string | null>(null);
   const [showJqHelp, setShowJqHelp] = useState(false);
   const jqHelpRef = useRef<HTMLDivElement>(null);
+
+  // AI Diff + Schema Validator state
+  const [showDiff, setShowDiff] = useState(false);
+  const [showSchemaVal, setShowSchemaVal] = useState(false);
+
+  const tab = useTabsStore(s => s.tabs.find(t => t.id === tabId));
 
   // Click-outside for jq help popup
   useClickOutside(jqHelpRef, () => setShowJqHelp(false), showJqHelp);
@@ -95,6 +103,26 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
                   >
                     <SparkleIcon size={14} />
                     Generate Data Schema
+                  </button>
+                )}
+                {hasBody && (
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
+                    onClick={() => { setShowMoreMenu(false); setShowDiff(true); }}
+                  >
+                    <SparkleIcon size={14} style={{ color: 'var(--color-warning)' }} />
+                    Compare with AI
+                  </button>
+                )}
+                {hasBody && (
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
+                    onClick={() => { setShowMoreMenu(false); setShowSchemaVal(true); }}
+                  >
+                    <SparkleIcon size={14} style={{ color: 'var(--color-info)' }} />
+                    Validate Schema with AI
                   </button>
                 )}
                 <button
@@ -212,6 +240,27 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
           wordWrap={wrapLines}
         />
       </div>
+
+      {/* AI Diff Modal */}
+      {showDiff && (
+        <AiResponseDiffModal
+          currentResponseBody={response.body || ''}
+          method={tab?.method}
+          url={tab?.url}
+          onClose={() => setShowDiff(false)}
+        />
+      )}
+
+      {/* AI Schema Validator Modal */}
+      {showSchemaVal && (
+        <AiSchemaValidatorModal
+          responseBody={response.body || ''}
+          method={tab?.method}
+          url={tab?.url}
+          status={String((tab?.response as any)?.status || '')}
+          onClose={() => setShowSchemaVal(false)}
+        />
+      )}
     </div>
   );
 }

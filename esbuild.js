@@ -50,6 +50,7 @@ const esbuildProblemMatcherPlugin = {
 };
 
 async function main() {
+  // ── Extension bundle ──────────────────────────────────────────────────────
   const ctx = await esbuild.context({
     entryPoints: ['src/extension.ts'],
     bundle: true,
@@ -64,11 +65,30 @@ async function main() {
     plugins: [esbuildProblemMatcherPlugin],
   });
 
+  // ── Daakia MCP Server bundle (standalone STDIO process) ───────────────────
+  // External AI clients (Claude Desktop, Cursor) spawn this as a subprocess.
+  // 'vscode' is NOT bundled — this runs outside VS Code.
+  const mcpCtx = await esbuild.context({
+    entryPoints: ['src/mcp/daakia-mcp-server.ts'],
+    bundle: true,
+    format: 'cjs',
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: 'node',
+    outfile: 'dist/daakia-mcp-server.js',
+    // No external: ['vscode'] — this doesn't use VS Code APIs
+    logLevel: 'silent',
+  });
+
   if (watch) {
     await ctx.watch();
+    await mcpCtx.watch();
   } else {
     await ctx.rebuild();
     await ctx.dispose();
+    await mcpCtx.rebuild();
+    await mcpCtx.dispose();
   }
 }
 
