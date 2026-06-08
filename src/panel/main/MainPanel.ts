@@ -50,7 +50,11 @@ import { handleSocketIOConnect, handleSocketIODisconnect, handleSocketIOEmit, cl
 import { handleMqttConnect, handleMqttDisconnect, handleMqttSubscribe, handleMqttUnsubscribe, handleMqttPublish, cleanupAllMqttConnections } from './handlers/mqtt-handler';
 import { handleGrpcInvoke, handleGrpcCancel, handleGrpcStreamSend, handleGrpcStreamEnd, handleGrpcReflect, handleGrpcLoadProto, cleanupAllGrpcStreams } from './handlers/grpc-handler';
 import { handleSoapInvoke, handleSoapCancel, handleLoadWsdl, handleLoadWsdlContent, handleGenerateEnvelope, handleExtractFields, handleGenerateSecurity, handleInjectSecurity, handleImportSoapUiProject } from './handlers/soap-handler';
-import { handleAiSend, handleAiCancel } from './handlers/ai-handler';
+import {
+  handleAiSend, handleAiCancel,
+  handleAiSaveConversation, handleAiLoadConversations, handleAiLoadConversation,
+  handleAiDeleteConversation, handleAiClearConversations,
+} from './handlers/ai-handler';
 import { handleAiDiscovery } from './handlers/ai-discovery-handler';
 import { handleAiFuzz } from './handlers/ai-fuzz-handler';
 import { handleMcpConnect, handleMcpDisconnect, handleMcpCallTool, handleMcpGetPrompt, handleMcpReadResource, cleanupAllMcpClients } from './handlers/mcp-handler';
@@ -306,6 +310,21 @@ export class MainPanel {
         break;
       case 'ai:cancel':
         handleAiCancel(msg, this._post);
+        break;
+      case 'ai:saveConversation':
+        handleAiSaveConversation(msg, this._post);
+        break;
+      case 'ai:loadConversations':
+        handleAiLoadConversations(msg, this._post);
+        break;
+      case 'ai:loadConversation':
+        handleAiLoadConversation(msg, this._post);
+        break;
+      case 'ai:deleteConversation':
+        handleAiDeleteConversation(msg, this._post);
+        break;
+      case 'ai:clearConversations':
+        handleAiClearConversations(msg, this._post);
         break;
       case 'ai:discovery:start':
         handleAiDiscovery(msg, this._post);

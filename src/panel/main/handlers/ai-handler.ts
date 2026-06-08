@@ -11,7 +11,11 @@ import { AI_PROVIDERS } from '../../../ai/ai-providers';
 import type { AiMessage, AiRequestPayload, AiSettings, AiToolDef } from '../../../ai/ai-types';
 import { DEFAULT_AI_SETTINGS } from '../../../ai/ai-types';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
-import { getSetting, insertAudit } from '../../../storage/db';
+import {
+  getSetting, insertAudit,
+  upsertAiConversation, getAiConversations, getAiConversationById,
+  deleteAiConversation, clearAiConversations,
+} from '../../../storage/db';
 import { getAiMcpTools, callAiMcpTool } from './ai-mcp-handler';
 import { resolveProviderAuth, autoResolveProvider, resolveProviderConfig } from '../../../services/llm/llm-provider-service';
 
@@ -414,4 +418,89 @@ export function handleAiCancel(msg: Record<string, unknown>, postMessage: PostMe
   const tabId = msg.tabId as string;
   cancelAiRequest(tabId);
   postMessage({ type: 'ai:cancelled', tabId });
+}
+
+/**
+ * Handle ai:saveConversation — persist a full conversation to SQLite.
+ * msg: { id, title, provider, model, messages: AiMessage[], tokenTotal? }
+ */
+export function handleAiSaveConversation(msg: Record<string, unknown>, postMessage: PostMessage) {
+  try {
+    const id = (msg.id as string) || crypto.randomUUID();
+    const messages = msg.messages as AiMessage[];
+    const tokenTotal = (msg.tokenTotal as number) || messages.reduce((sum, m) => sum + (m.tokens?.total || 0), 0);
+
+    // Auto-generate title from first user message if not provided
+    let title = (msg.title as string) || 'Untitled Conversation';
+    if (!msg.title) {
+      const firstUser = messages.find(m => m.role === 'user');
+      if (firstUser?.content) {
+        title = firstUser.content.trim().slice(0, 60) + (firstUser.content.length > 60 ? '…' : '');
+      }
+    }
+
+    upsertAiConversation({
+      id,
+      title,
+      provider: (msg.provider as string) || '',
+      model: (msg.model as string) || '',
+      messages: JSON.stringify(messages),
+      message_count: messages.length,
+      token_total: tokenTotal,
+    });
+
+    postMessage({ type: 'ai:conversationSaved', id, title });
+  } catch (err) {
+    postMessage({ type: 'ai:conversationSaveError', error: (err as Error).message });
+  }
+}
+
+/**
+ * Handle ai:loadConversations — fetch conversation list (no messages content, metadata only).
+ * msg: { limit? }
+ */
+export function handleAiLoadConversations(_msg: Record<string, unknown>, postMessage: PostMessage) {
+  try {
+    const rows = getAiConversations(50);
+    postMessage({ type: 'ai:conversations', conversations: rows });
+  } catch (err) {
+    postMessage({ type: 'ai:conversations', conversations: [], error: (err as Error).message });
+  }
+}
+
+/**
+ * Handle ai:loadConversation — fetch a single conversation with full messages.
+ * msg: { id }
+ */
+export function handleAiLoadConversation(msg: Record<string, unknown>, postMessage: PostMessage) {
+  try {
+    const id = msg.id as string;
+    const row = getAiConversationById(id);
+    if (!row) {
+      postMessage({ type: 'ai:conversation', conversation: null, error: 'Not found' });
+      return;
+    }
+    const messages = JSON.parse(row.messages || '[]') as AiMessage[];
+    postMessage({ type: 'ai:conversation', conversation: { ...row, messages } });
+  } catch (err) {
+    postMessage({ type: 'ai:conversation', conversation: null, error: (err as Error).message });
+  }
+}
+
+/**
+ * Handle ai:deleteConversation — delete a saved conversation.
+ * msg: { id }
+ */
+export function handleAiDeleteConversation(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const id = msg.id as string;
+  deleteAiConversation(id);
+  postMessage({ type: 'ai:conversationDeleted', id });
+}
+
+/**
+ * Handle ai:clearConversations — delete all saved conversations.
+ */
+export function handleAiClearConversations(_msg: Record<string, unknown>, postMessage: PostMessage) {
+  clearAiConversations();
+  postMessage({ type: 'ai:conversationsCleared' });
 }

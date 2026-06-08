@@ -2,7 +2,7 @@
  * ServerDetail — Thin orchestrator for the mock server detail panel.
  * Delegates protocol-specific config to ./configs/ and Try logic to ./mock-try-handler.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MOCK_PROTOCOL_COLORS, getMockProtocolBg, getMockProtocolLabel } from '../../colors';
 import { TrashIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from '../../icons';
 import type { MockServer, MockRoute } from './mock-types';
@@ -15,9 +15,33 @@ import { ImportPanel } from './wiremock/ImportPanel';
 import { ExportPanel } from './wiremock/ExportPanel';
 import { ChaosPanel } from './wiremock/ChaosPanel';
 import { MockApiCatalog } from './wiremock/MockApiCatalog';
-import type { MockRoute } from './mock-types';
-
 type ServerTab = 'routes' | 'state' | 'traffic' | 'import' | 'export' | 'chaos' | 'catalog';
+
+// All protocols that get the full WireMock tab bar.
+// 'ai' and 'mcp' keep their own standalone layout — they are fundamentally different.
+const TABBED_PROTOCOLS = new Set(['rest', 'graphql', 'grpc', 'soap', 'websocket', 'sse', 'socketio', 'mqtt']);
+
+// Label for the first "Config / Routes" tab per protocol
+function configTabLabel(protocol: string): string {
+  if (protocol === 'rest')      return 'Routes';
+  if (protocol === 'graphql')   return 'Schema';
+  if (protocol === 'grpc')      return 'Services';
+  if (protocol === 'soap')      return 'WSDL';
+  return 'Config'; // websocket / sse / socketio / mqtt
+}
+
+// All tabbed protocols now get all 7 tabs — Import/Export/Catalog are protocol-aware.
+function serverTabs(protocol: string): { id: ServerTab; label: string }[] {
+  return [
+    { id: 'routes',  label: configTabLabel(protocol) },
+    { id: 'state',   label: 'State Machine' },
+    { id: 'traffic', label: 'Traffic' },
+    { id: 'chaos',   label: '⚡ Chaos' },
+    { id: 'import',  label: 'Import' },
+    { id: 'export',  label: 'Export' },
+    { id: 'catalog', label: '📚 Catalog' },
+  ];
+}
 
 interface ServerDetailProps {
   server: MockServer;
@@ -36,6 +60,13 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
   const [urlCopied, setUrlCopied] = useState(false);
   const [wsdlCopied, setWsdlCopied] = useState(false);
   const [serverTab, setServerTab] = useState<ServerTab>('routes');
+
+  // Reset to 'routes' if switching to a non-tabbed protocol
+  useEffect(() => {
+    if (!TABBED_PROTOCOLS.has(server.protocol ?? '')) {
+      setServerTab('routes');
+    }
+  }, [server.protocol]);
 
   const serverUrl = server.running && server.port
     ? `${server.protocol === 'websocket' || server.protocol === 'socketio' || server.protocol === 'mqtt' ? 'ws' : 'http'}://localhost:${server.port}${server.protocol === 'graphql' ? '/graphql' : server.protocol === 'socketio' ? '/socket.io/' : server.protocol === 'ai' ? '/v1' : server.protocol === 'mcp' ? '/mcp' : ''}`
@@ -166,23 +197,15 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         style={{ fontFamily: 'inherit' }}
       />
 
-      {/* WireMock server-level tab bar (REST only) */}
-      {server.protocol === 'rest' && (
-        <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.07)] -mx-4 px-4 flex-wrap">
-          {([
-            { id: 'routes',  label: 'Routes' },
-            { id: 'state',   label: 'State Machine' },
-            { id: 'traffic', label: 'Traffic' },
-            { id: 'import',  label: 'Import' },
-            { id: 'export',  label: 'Export' },
-            { id: 'chaos',   label: '⚡ Chaos' },
-            { id: 'catalog', label: '📚 Catalog' },
-          ] as { id: ServerTab; label: string }[]).map(t => (
+      {/* ── Tab bar — shown for all tabbed protocols ─────────────────────── */}
+      {TABBED_PROTOCOLS.has(server.protocol ?? '') && (
+        <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.07)] -mx-4 px-4 overflow-x-auto">
+          {serverTabs(server.protocol ?? 'rest').map(t => (
             <button
               key={t.id}
               type="button"
               onClick={() => setServerTab(t.id)}
-              className="h-[30px] px-3 text-[10px] font-medium cursor-pointer transition-colors flex-shrink-0"
+              className="h-[30px] px-3 text-[10px] font-medium cursor-pointer transition-colors flex-shrink-0 whitespace-nowrap"
               style={{
                 borderBottom: serverTab === t.id ? '2px solid var(--color-mock-server)' : '2px solid transparent',
                 color: serverTab === t.id ? 'var(--color-mock-server)' : 'var(--color-text-muted)',
@@ -195,9 +218,9 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         </div>
       )}
 
-      {/* Protocol-specific content */}
-      {server.protocol === 'rest' && serverTab === 'routes' && (
-        <RestRoutesConfig
+      {/* ── Protocol config tab ──────────────────────────────────────────── */}
+      {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'routes' && (
+        <ProtocolConfig
           server={server}
           onUpdate={onUpdate}
           onAddRoute={onAddRoute}
@@ -209,14 +232,15 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         />
       )}
 
-      {server.protocol === 'rest' && serverTab === 'state' && (
+      {/* ── Shared WireMock tabs (all tabbed protocols) ──────────────────── */}
+      {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'state' && (
         <StateMachineEditor
           config={server.stateMachine}
           onUpdate={cfg => onUpdate({ stateMachine: cfg })}
         />
       )}
 
-      {server.protocol === 'rest' && serverTab === 'traffic' && (
+      {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'traffic' && (
         <TrafficInspectorPanel
           server={server}
           onUpdate={onUpdate}
@@ -237,59 +261,44 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         />
       )}
 
-      {server.protocol === 'rest' && serverTab === 'import' && (
+      {/* Import — protocol-aware */}
+      {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'import' && (
         <ImportPanel
-          onImport={routes => onUpdate({ routes: [...(server.routes ?? []), ...routes] })}
-        />
-      )}
-
-      {server.protocol === 'rest' && serverTab === 'export' && (
-        <ExportPanel
-          server={server}
-          onExport={format => {
-            postMsg({ type: 'exportMockServer', serverId: server.id, format });
+          protocol={server.protocol}
+          onImport={(routes, raw) => {
+            if (routes.length > 0) onUpdate({ routes: [...(server.routes ?? []), ...routes] });
+            // raw (SDL / .proto / WSDL / event JSON) stored in server description as reference
+            if (raw) onUpdate({ description: (server.description ? server.description + '\n\n' : '') + raw });
           }}
         />
       )}
 
-      {server.protocol === 'rest' && serverTab === 'chaos' && (
-        <ChaosPanel server={server} onUpdate={onUpdate} />
-      )}
-
-      {server.protocol === 'rest' && serverTab === 'catalog' && (
-        <MockApiCatalog
-          onAddRoutes={routes => onUpdate({ routes: [...(server.routes ?? []), ...routes] })}
+      {/* Export — protocol-aware */}
+      {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'export' && (
+        <ExportPanel
+          protocol={server.protocol}
+          server={server}
+          onExport={format => postMsg({ type: 'exportMockServer', serverId: server.id, format })}
         />
       )}
 
-      {server.protocol === 'graphql' && (
-        <GraphQLConfig server={server} onUpdate={onUpdate} />
+      {/* Chaos — universal */}
+      {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'chaos' && (
+        <ChaosPanel server={server} onUpdate={onUpdate} />
       )}
 
-      {server.protocol === 'websocket' && (
-        <WebSocketConfig server={server} onUpdate={onUpdate} />
+      {/* Catalog — protocol-aware */}
+      {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'catalog' && (
+        <MockApiCatalog
+          protocol={server.protocol}
+          onAddRoutes={(routes, raw) => {
+            if (routes.length > 0) onUpdate({ routes: [...(server.routes ?? []), ...routes] });
+            if (raw) onUpdate({ description: (server.description ? server.description + '\n\n' : '') + raw });
+          }}
+        />
       )}
 
-      {server.protocol === 'sse' && (
-        <SSEConfig server={server} onUpdate={onUpdate} />
-      )}
-
-      {server.protocol === 'socketio' && (
-        <SocketIOConfig server={server} onUpdate={onUpdate} />
-      )}
-
-      {server.protocol === 'mqtt' && (
-        <MQTTConfig server={server} onUpdate={onUpdate} />
-      )}
-
-      {server.protocol === 'grpc' && (
-        <GrpcConfig server={server} onUpdate={onUpdate} />
-      )}
-
-      {server.protocol === 'soap' && (
-        <SoapConfig server={server} onUpdate={onUpdate} />
-      )}
-
+      {/* ── Non-tabbed protocols (AI / MCP keep their own standalone layout) */}
       {server.protocol === 'ai' && (
         <AiMockConfig server={server} onUpdate={onUpdate} />
       )}
@@ -299,4 +308,44 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
       )}
     </div>
   );
+}
+
+// ─── ProtocolConfig — routes/config tab content per protocol ──────────────────
+
+interface ProtocolConfigProps {
+  server: MockServer;
+  onUpdate: (patch: Partial<MockServer>) => void;
+  onAddRoute: () => void;
+  onAddGeneratedRoutes?: (routes: Partial<MockRoute>[]) => void;
+  onUpdateRoute: (routeId: string, patch: Partial<MockRoute>) => void;
+  onDeleteRoute: (routeId: string) => void;
+  editingRoute: string | null;
+  onEditRoute: (id: string | null) => void;
+}
+
+function ProtocolConfig({ server, onUpdate, onAddRoute, onAddGeneratedRoutes, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute }: ProtocolConfigProps) {
+  const p = server.protocol ?? 'rest';
+
+  if (p === 'rest') {
+    return (
+      <RestRoutesConfig
+        server={server}
+        onUpdate={onUpdate}
+        onAddRoute={onAddRoute}
+        onAddGeneratedRoutes={onAddGeneratedRoutes}
+        onUpdateRoute={onUpdateRoute}
+        onDeleteRoute={onDeleteRoute}
+        editingRoute={editingRoute}
+        onEditRoute={onEditRoute}
+      />
+    );
+  }
+  if (p === 'graphql') return <GraphQLConfig server={server} onUpdate={onUpdate} />;
+  if (p === 'grpc')    return <GrpcConfig    server={server} onUpdate={onUpdate} />;
+  if (p === 'soap')    return <SoapConfig    server={server} onUpdate={onUpdate} />;
+  if (p === 'websocket') return <WebSocketConfig server={server} onUpdate={onUpdate} />;
+  if (p === 'sse')       return <SSEConfig      server={server} onUpdate={onUpdate} />;
+  if (p === 'socketio')  return <SocketIOConfig  server={server} onUpdate={onUpdate} />;
+  if (p === 'mqtt')      return <MQTTConfig      server={server} onUpdate={onUpdate} />;
+  return null;
 }

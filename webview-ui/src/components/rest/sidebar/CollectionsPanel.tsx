@@ -18,6 +18,16 @@ import { AiChangelogModal } from '../../ai/AiChangelogModal';
 import { AiAgentWorkflowModal } from '../../ai/AiAgentWorkflowModal';
 import { AiApiDiscoveryModal } from '../../ai/AiApiDiscoveryModal';
 import { AiReverseEngineerModal } from '../../ai/AiReverseEngineerModal';
+import { AiApiDependencyGraph } from '../../ai/AiApiDependencyGraph';
+import { AiConversationToCollectionModal } from '../../ai/AiConversationToCollectionModal';
+import { AiSdkGeneratorModal } from '../../ai/AiSdkGeneratorModal';
+import { AiComplianceCheckerModal } from '../../ai/AiComplianceCheckerModal';
+import { AiScenarioGeneratorModal } from '../../ai/AiScenarioGeneratorModal';
+import { AiApiRegressionDetector } from '../../ai/AiApiRegressionDetector';
+import { AiMultiRequestOptimizer } from '../../ai/AiMultiRequestOptimizer';
+import { AiRequestFromScreenshotModal } from '../../ai/AiRequestFromScreenshotModal';
+import { AiRequestFromLogsModal } from '../../ai/AiRequestFromLogsModal';
+import { InsomniaImportModal } from '../../power/InsomniaImportModal';
 
 // ────────────── Main Component ──────────────
 
@@ -89,6 +99,17 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [agentWorkflowNode, setAgentWorkflowNode] = useState<CollectionTreeNode | null>(null);
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [showReverseEngineer, setShowReverseEngineer] = useState(false);
+  // New AI/Power modal states
+  const [dependencyGraphNode, setDependencyGraphNode] = useState<CollectionTreeNode | null>(null);
+  const [showConversationToCollection, setShowConversationToCollection] = useState(false);
+  const [sdkGeneratorNode, setSdkGeneratorNode] = useState<CollectionTreeNode | null>(null);
+  const [complianceNode, setComplianceNode] = useState<CollectionTreeNode | null>(null);
+  const [showScenarioGenerator, setShowScenarioGenerator] = useState(false);
+  const [regressionNode, setRegressionNode] = useState<CollectionTreeNode | null>(null);
+  const [optimizerNode, setOptimizerNode] = useState<CollectionTreeNode | null>(null);
+  const [showScreenshotImport, setShowScreenshotImport] = useState(false);
+  const [showLogsImport, setShowLogsImport] = useState(false);
+  const [showInsomniaImport, setShowInsomniaImport] = useState(false);
 
   // Scroll position persistence
   const scrollRef = useScrollRestore(`collections.${protocol}`);
@@ -470,6 +491,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       { id: 'ai-flow-builder', label: 'Build API Flow with AI', shortcut: 'F', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-primary)' },
       { id: 'ai-agent-workflow', label: 'Test with AI Agent', shortcut: 'T', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)', disabled: !hasAnyRequests(node) },
       { id: 'ai-changelog', label: 'Generate Changelog with AI', shortcut: 'C', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-warning)', disabled: !hasAnyRequests(node) },
+      { id: 'ai-dependency-graph', label: 'API Dependency Graph (AI)', shortcut: 'G', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-info)', disabled: !hasAnyRequests(node) },
+      { id: 'ai-compliance', label: 'Check Compliance (AI)', shortcut: 'L', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-error)', disabled: !hasAnyRequests(node) },
+      { id: 'ai-sdk-generator', label: 'Generate SDK (AI)', shortcut: 'K', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)', disabled: !hasAnyRequests(node) },
+      { id: 'ai-optimizer', label: 'Optimize Requests (AI)', shortcut: 'Z', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-warning)', disabled: !hasAnyRequests(node) },
+      { id: 'ai-regression', label: 'Regression Detector (AI)', shortcut: 'E', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-error)', disabled: !hasAnyRequests(node) },
       { id: 'sep3c', label: '', separator: true },
       { id: 'export-daakia', label: 'Export as Daakia JSON', shortcut: 'J', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
       { id: 'export-postman', label: 'Export as Postman', shortcut: 'M', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
@@ -563,6 +589,31 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       case 'ai-changelog': {
         const node = findNodeById(tree, targetId);
         if (node) setChangelogNode(node);
+        break;
+      }
+      case 'ai-dependency-graph': {
+        const node = findNodeById(tree, targetId);
+        if (node) setDependencyGraphNode(node);
+        break;
+      }
+      case 'ai-compliance': {
+        const node = findNodeById(tree, targetId);
+        if (node) setComplianceNode(node);
+        break;
+      }
+      case 'ai-sdk-generator': {
+        const node = findNodeById(tree, targetId);
+        if (node) setSdkGeneratorNode(node);
+        break;
+      }
+      case 'ai-optimizer': {
+        const node = findNodeById(tree, targetId);
+        if (node) setOptimizerNode(node);
+        break;
+      }
+      case 'ai-regression': {
+        const node = findNodeById(tree, targetId);
+        if (node) setRegressionNode(node);
         break;
       }
       case 'export-daakia':
@@ -760,6 +811,10 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
                 { id: 'import-bruno', label: 'Import from Bruno', shortcut: 'B', icon: <FolderImportIcon size={14} />, iconColor: '#eab308' },
                 { id: 'import-insomnia', label: 'Import from Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} />, iconColor: '#a78bfa' },
                 { id: 'import-har', label: 'Import from HAR', shortcut: 'H', icon: <FolderImportIcon size={14} />, iconColor: '#06b6d4' },
+                { id: 'import-screenshot', label: 'Import from Screenshot (AI)', shortcut: 'S', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' },
+                { id: 'import-logs', label: 'Import from Server Logs (AI)', shortcut: 'L', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' },
+                { id: 'ai-conversation', label: 'Describe Workflow (AI)', shortcut: 'W', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' },
+                { id: 'ai-scenario', label: 'Generate Scenario (AI)', shortcut: 'G', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)' },
                 { id: 'ai-reverse-engineer', label: 'Reverse Engineer (AI)', shortcut: 'R', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' },
                 { id: 'sep1', label: '', separator: true },
                 { id: 'export-json', label: 'Export as JSON', shortcut: 'E', icon: <FolderExportIcon size={14} />, iconColor: '#3b82f6' },
@@ -767,7 +822,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
               onSelect={(id) => {
                 if (id === 'import-postman' || id === 'import-openapi' || id === 'import-har') postMsg({ type: 'importCollectionRequest' });
                 else if (id === 'import-bruno') postMsg({ type: 'importBrunoRequest' });
-                else if (id === 'import-insomnia') addToast({ type: 'info', message: 'Collection import from Insomnia is not implemented yet.' });
+                else if (id === 'import-insomnia') setShowInsomniaImport(true);
+                else if (id === 'import-screenshot') setShowScreenshotImport(true);
+                else if (id === 'import-logs') setShowLogsImport(true);
+                else if (id === 'ai-conversation') setShowConversationToCollection(true);
+                else if (id === 'ai-scenario') setShowScenarioGenerator(true);
                 else if (id === 'export-json') addToast({ type: 'info', message: 'Collection export as JSON is not implemented yet.' });
                 else if (id === 'ai-reverse-engineer') setShowReverseEngineer(true);
                 setHeaderMenu(null);
@@ -953,6 +1012,66 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       {showReverseEngineer && (
         <AiReverseEngineerModal
           onClose={() => setShowReverseEngineer(false)}
+        />
+      )}
+
+      {dependencyGraphNode && (
+        <AiApiDependencyGraph
+          onClose={() => setDependencyGraphNode(null)}
+        />
+      )}
+
+      {showConversationToCollection && (
+        <AiConversationToCollectionModal
+          onClose={() => setShowConversationToCollection(false)}
+        />
+      )}
+
+      {sdkGeneratorNode && (
+        <AiSdkGeneratorModal
+          onClose={() => setSdkGeneratorNode(null)}
+        />
+      )}
+
+      {complianceNode && (
+        <AiComplianceCheckerModal
+          onClose={() => setComplianceNode(null)}
+        />
+      )}
+
+      {showScenarioGenerator && (
+        <AiScenarioGeneratorModal
+          onClose={() => setShowScenarioGenerator(false)}
+        />
+      )}
+
+      {regressionNode && (
+        <AiApiRegressionDetector
+          onClose={() => setRegressionNode(null)}
+        />
+      )}
+
+      {optimizerNode && (
+        <AiMultiRequestOptimizer
+          onClose={() => setOptimizerNode(null)}
+        />
+      )}
+
+      {showScreenshotImport && (
+        <AiRequestFromScreenshotModal
+          onClose={() => setShowScreenshotImport(false)}
+        />
+      )}
+
+      {showLogsImport && (
+        <AiRequestFromLogsModal
+          onClose={() => setShowLogsImport(false)}
+        />
+      )}
+
+      {showInsomniaImport && (
+        <InsomniaImportModal
+          onClose={() => setShowInsomniaImport(false)}
         />
       )}
     </div>

@@ -9,6 +9,7 @@ import { sendRequest, sendAndDownloadRequest, cancelRequest, saveRequest } from 
 import { METHOD_COLORS } from '../../../colors';
 import { SaveIcon, SendIcon, DownloadIcon, CopyIcon, CodeIcon, RefreshIcon, StopSquareIcon, SparkleIcon } from '../../../icons';
 import { AiPreflightPopover, countPreflightIssues } from '../../ai/AiPreflightPopover';
+import { AiRequestPatternStatus } from '../../ai/AiRequestPatternStatus';
 
 const METHOD_OPTIONS: DropdownOption[] = [
   { value: 'GET', label: 'GET', color: METHOD_COLORS.GET },
@@ -175,6 +176,11 @@ export function UrlBar() {
             <AiPreflightPopover tab={tab} onClose={() => setShowPreflight(false)} />
           )}
         </div>
+      )}
+
+      {/* Pattern baseline status indicator (4.6.6) */}
+      {tab.url.trim() && (
+        <AiRequestPatternStatus method={tab.method || 'GET'} url={tab.url} />
       )}
 
       {/* AI Sparkle — opens Daakia AI tab with current request as context */}

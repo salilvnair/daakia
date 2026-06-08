@@ -171,6 +171,50 @@ function CopyCodeButton({ text }: { text: string }) {
   );
 }
 
+// ─── Token Badge ───
+
+function TokenBadge({ tokens }: { tokens: { prompt: number; completion: number; total: number } }) {
+  const [showBreakdown, setShowBreakdown] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setShowBreakdown(p => !p)}
+        className="text-[9px] px-1.5 py-0.5 rounded-full font-mono cursor-pointer transition-all hover:brightness-110"
+        style={{
+          backgroundColor: showBreakdown
+            ? 'color-mix(in srgb, var(--color-protocol-ai) 20%, transparent)'
+            : 'color-mix(in srgb, var(--color-protocol-ai) 12%, transparent)',
+          color: 'var(--color-protocol-ai)',
+        }}
+        title="Click to see token breakdown"
+      >
+        {tokens.total.toLocaleString()} tok
+      </button>
+      {showBreakdown && (
+        <div
+          className="absolute top-full mt-1 left-0 z-50 rounded-lg border shadow-lg p-2.5 flex flex-col gap-1.5 min-w-[160px]"
+          style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}
+        >
+          <p className="text-[10px] font-semibold mb-0.5" style={{ color: 'var(--color-text-primary)' }}>Token Usage</p>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>↑ Prompt</span>
+            <span className="text-[9.5px] font-mono" style={{ color: 'var(--color-text-secondary)' }}>{tokens.prompt.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>↓ Completion</span>
+            <span className="text-[9.5px] font-mono" style={{ color: 'var(--color-text-secondary)' }}>{tokens.completion.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 border-t pt-1.5" style={{ borderColor: 'var(--color-surface-border)' }}>
+            <span className="text-[9.5px] font-semibold" style={{ color: 'var(--color-protocol-ai)' }}>= Total</span>
+            <span className="text-[9.5px] font-mono font-semibold" style={{ color: 'var(--color-protocol-ai)' }}>{tokens.total.toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Message Bubble ───
 
 export function AiMessageBubble({ message }: Props) {
@@ -201,9 +245,7 @@ export function AiMessageBubble({ message }: Props) {
           {message.timestamp > 0 && ` · ${formatTime(message.timestamp)}`}
         </span>
         {message.tokens && (
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full font-mono" style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 12%, transparent)', color: 'var(--color-protocol-ai)' }}>
-            {message.tokens.total} tokens
-          </span>
+          <TokenBadge tokens={message.tokens} />
         )}
         {/* Copy button — only for assistant messages */}
         {isAssistant && (

@@ -9,9 +9,19 @@ import { DaakiaWikiPanel } from './wiki/DaakiaWikiPanel';
 import { DaakiaViewPage } from '../../pages/wiki/daakia-view/DaakiaViewPage';
 import { useMockStore } from '../../store/mock-store';
 import { useUiStateStore } from '../../store/ui-state-store';
+import { CookieManager } from '../power/CookieManager';
+import { ProxySettings } from '../power/ProxySettings';
+import { ClientCertificates } from '../power/ClientCertificates';
+import { ApiMonitor } from '../power/ApiMonitor';
+import { RequestInterceptorPanel } from '../power/RequestInterceptorPanel';
+import { GrpcClientPanel } from '../power/GrpcClientPanel';
+import { ResponseDiffModal } from '../power/ResponseDiffModal';
+import { BulkUrlTester } from '../power/BulkUrlTester';
+import { LoadTester } from '../power/LoadTester';
 
-type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'wiki' | 'wiki-new';
+type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'wiki' | 'wiki-new' | 'power-features';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
+type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'grpc' | 'diff' | 'bulk' | 'load';
 
 const SECTIONS: { id: SettingsSection; label: string; icon: JSX.Element }[] = [
   { id: 'general',        label: 'General',         icon: <SettingsIcon size={14} /> },
@@ -24,6 +34,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: JSX.Element }[] = [
   { id: 'devtools',       label: 'Developer Tools',  icon: <CodeBracketsIcon size={14} /> },
   { id: 'wiki',           label: 'Daakia Wiki',       icon: <DocumentIcon size={14} /> },
   { id: 'wiki-new',       label: 'Wiki New',          icon: <SparkleIcon size={14} /> },
+  { id: 'power-features', label: 'Power Features',    icon: <CodeBracketsIcon size={14} /> },
 ];
 
 export function SettingsPanel() {
@@ -100,6 +111,8 @@ export function SettingsPanel() {
           <DaakiaViewPage />
         ) : activeSection === 'wiki' ? (
           <DaakiaWikiPanel />
+        ) : activeSection === 'power-features' ? (
+          <PowerFeaturesPanel />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
             <div className="flex flex-col items-center gap-2">
@@ -602,6 +615,81 @@ function MockServerSettings() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ────────── Power Features Panel ──────────
+
+const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string }[] = [
+  { id: 'cookies',     label: 'Cookie Manager',      description: 'View, edit, and delete cookies across all domains' },
+  { id: 'proxy',       label: 'Proxy Settings',       description: 'Configure HTTP/HTTPS/SOCKS proxy for all requests' },
+  { id: 'certs',       label: 'Client Certificates',  description: 'mTLS client certificate configuration per domain' },
+  { id: 'monitor',     label: 'API Monitor',          description: 'Schedule periodic health checks with VS Code alerts' },
+  { id: 'interceptor', label: 'Request Interceptor',  description: 'Capture browser traffic via built-in proxy' },
+  { id: 'grpc',        label: 'gRPC Client',          description: 'Load .proto, browse services, send unary/streaming' },
+  { id: 'diff',        label: 'Response Diff',        description: 'Compare two responses side-by-side with highlighting' },
+  { id: 'bulk',        label: 'Bulk URL Tester',      description: 'Test multiple URLs at once, get summary table' },
+  { id: 'load',        label: 'Load Tester',          description: 'Concurrent load testing with p50/p95/p99 metrics' },
+];
+
+function PowerFeaturesPanel() {
+  const [subtab, setSubtab] = useState<PowerSubtab>('cookies');
+  // Panel-open states for "panel-style" tools
+  const [showCookies, setShowCookies] = useState(false);
+  const [showProxy, setShowProxy] = useState(false);
+  const [showCerts, setShowCerts] = useState(false);
+  const [showMonitor, setShowMonitor] = useState(false);
+  const [showInterceptor, setShowInterceptor] = useState(false);
+  const [showGrpc, setShowGrpc] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [showLoad, setShowLoad] = useState(false);
+
+  const openTool = (id: PowerSubtab) => {
+    setSubtab(id);
+    if (id === 'cookies') setShowCookies(true);
+    else if (id === 'proxy') setShowProxy(true);
+    else if (id === 'certs') setShowCerts(true);
+    else if (id === 'monitor') setShowMonitor(true);
+    else if (id === 'interceptor') setShowInterceptor(true);
+    else if (id === 'grpc') setShowGrpc(true);
+    else if (id === 'diff') setShowDiff(true);
+    else if (id === 'bulk') setShowBulk(true);
+    else if (id === 'load') setShowLoad(true);
+  };
+
+  return (
+    <div className="px-5 py-4 flex flex-col gap-3">
+      <div>
+        <p className="text-[14px] font-semibold text-[var(--color-text-primary)]">Power Features</p>
+        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">Advanced tools — click any card to open</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {POWER_SUBTABS.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => openTool(t.id)}
+            className="text-left p-3 rounded-xl border cursor-pointer transition-colors hover:border-[var(--color-settings)]"
+            style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}
+          >
+            <p className="text-[12px] font-semibold text-[var(--color-text-primary)]">{t.label}</p>
+            <p className="text-[10.5px] mt-0.5 text-[var(--color-text-muted)]">{t.description}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Modals */}
+      {showCookies && <CookieManager onClose={() => setShowCookies(false)} />}
+      {showProxy && <ProxySettings onClose={() => setShowProxy(false)} />}
+      {showCerts && <ClientCertificates onClose={() => setShowCerts(false)} />}
+      {showMonitor && <ApiMonitor onClose={() => setShowMonitor(false)} />}
+      {showInterceptor && <RequestInterceptorPanel onClose={() => setShowInterceptor(false)} />}
+      {showGrpc && <GrpcClientPanel onClose={() => setShowGrpc(false)} />}
+      {showDiff && <ResponseDiffModal onClose={() => setShowDiff(false)} />}
+      {showBulk && <BulkUrlTester onClose={() => setShowBulk(false)} />}
+      {showLoad && <LoadTester onClose={() => setShowLoad(false)} />}
     </div>
   );
 }

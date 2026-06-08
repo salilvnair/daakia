@@ -1423,6 +1423,60 @@ export default function App() {
           }
           break;
         }
+        case 'ai:toolCalls': {
+          // Backend executed MCP tools — append assistant message (with toolCalls) to conversation
+          const { tabId: tcTabId, message: tcMsg } = msg;
+          const tcTab = useTabsStore.getState().tabs.find(t => t.id === tcTabId);
+          if (tcTab && tcTab.type !== 'daakia-ai') {
+            const conv = [...(tcTab.aiConversation || [])];
+            const last = conv[conv.length - 1];
+            if (last && last.role === 'assistant') {
+              conv[conv.length - 1] = { ...tcMsg, id: last.id };
+            } else {
+              conv.push(tcMsg);
+            }
+            useTabsStore.getState().updateTab(tcTabId, { aiConversation: conv });
+          }
+          break;
+        }
+        case 'ai:toolResult': {
+          // Backend MCP tool result — append tool role message to conversation
+          const { tabId: trTabId, message: trMsg } = msg;
+          const trTab = useTabsStore.getState().tabs.find(t => t.id === trTabId);
+          if (trTab && trTab.type !== 'daakia-ai') {
+            const conv = [...(trTab.aiConversation || []), trMsg];
+            useTabsStore.getState().updateTab(trTabId, { aiConversation: conv });
+          }
+          break;
+        }
+        case 'ai:toolExecuting': {
+          // Backend is executing an MCP tool — just log for now
+          const { tabId: teTabId, toolName, toolCallId } = msg;
+          console.log('%c🔧 AI Tool Executing', 'color:#f59e0b;font-weight:bold', { tabId: teTabId, toolName, toolCallId });
+          break;
+        }
+        case 'ai:conversations': {
+          // Conversation list loaded — forward to AiHistoryPanel via store or custom event
+          window.dispatchEvent(new CustomEvent('ai:conversations', { detail: msg }));
+          break;
+        }
+        case 'ai:conversation': {
+          // Single conversation loaded (with messages)
+          window.dispatchEvent(new CustomEvent('ai:conversation', { detail: msg }));
+          break;
+        }
+        case 'ai:conversationSaved': {
+          window.dispatchEvent(new CustomEvent('ai:conversationSaved', { detail: msg }));
+          break;
+        }
+        case 'ai:conversationDeleted': {
+          window.dispatchEvent(new CustomEvent('ai:conversationDeleted', { detail: msg }));
+          break;
+        }
+        case 'ai:conversationsCleared': {
+          window.dispatchEvent(new CustomEvent('ai:conversationsCleared', { detail: msg }));
+          break;
+        }
         case 'ai:cancelled': {
           const { tabId } = msg;
           console.log('%c⛔ AI Request Cancelled', 'color:#6b7280;font-weight:bold', { tabId });

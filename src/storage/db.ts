@@ -302,6 +302,20 @@ function _createSchema(db: SqlJsDatabase): void {
       created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     )
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id           TEXT    PRIMARY KEY,
+      title        TEXT    NOT NULL DEFAULT 'Untitled Conversation',
+      provider     TEXT    NOT NULL DEFAULT '',
+      model        TEXT    NOT NULL DEFAULT '',
+      messages     TEXT    NOT NULL DEFAULT '[]',
+      message_count INTEGER NOT NULL DEFAULT 0,
+      token_total  INTEGER NOT NULL DEFAULT 0,
+      created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )
+  `);
 }
 
 // ────────────────────── Migrations ──────────────────────
@@ -1323,5 +1337,75 @@ export function deleteRows(tableName: string, ids: number[]): void {
   if (!validTables.includes(tableName)) { return; }
   const placeholders = ids.map(() => '?').join(',');
   _db.run(`DELETE FROM "${tableName}" WHERE id IN (${placeholders})`, ids);
+  _scheduleSave();
+}
+
+// ────────────────────── AI Conversations ──────────────────────
+
+export interface AiConversationRow {
+  id: string;
+  title: string;
+  provider: string;
+  model: string;
+  messages: string; // JSON stringified AiMessage[]
+  message_count: number;
+  token_total: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function upsertAiConversation(row: Omit<AiConversationRow, 'created_at' | 'updated_at'>): void {
+  if (!_db) { return; }
+  _db.run(
+    `INSERT INTO ai_conversations (id, title, provider, model, messages, message_count, token_total, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     ON CONFLICT(id) DO UPDATE SET
+       title         = excluded.title,
+       provider      = excluded.provider,
+       model         = excluded.model,
+       messages      = excluded.messages,
+       message_count = excluded.message_count,
+       token_total   = excluded.token_total,
+       updated_at    = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
+    [row.id, row.title, row.provider, row.model, row.messages, row.message_count, row.token_total]
+  );
+  _scheduleSave();
+}
+
+export function getAiConversations(limit = 50): AiConversationRow[] {
+  if (!_db) { return []; }
+  const stmt = _db.prepare(
+    `SELECT id, title, provider, model, message_count, token_total, created_at, updated_at
+     FROM ai_conversations ORDER BY updated_at DESC LIMIT ?`
+  );
+  stmt.bind([limit]);
+  const rows: AiConversationRow[] = [];
+  while (stmt.step()) {
+    const r = stmt.getAsObject() as unknown as AiConversationRow;
+    r.messages = '[]'; // don't send full messages in list — loaded on demand
+    rows.push(r);
+  }
+  stmt.free();
+  return rows;
+}
+
+export function getAiConversationById(id: string): AiConversationRow | null {
+  if (!_db) { return null; }
+  const stmt = _db.prepare('SELECT * FROM ai_conversations WHERE id = ?');
+  stmt.bind([id]);
+  const row = stmt.step() ? (stmt.getAsObject() as unknown as AiConversationRow) : null;
+  stmt.free();
+  return row;
+}
+
+export function deleteAiConversation(id: string): void {
+  if (!_db) { return; }
+  _db.run('DELETE FROM ai_conversations WHERE id = ?', [id]);
+  _scheduleSave();
+}
+
+export function clearAiConversations(): void {
+  if (!_db) { return; }
+  _db.run('DELETE FROM ai_conversations');
   _scheduleSave();
 }

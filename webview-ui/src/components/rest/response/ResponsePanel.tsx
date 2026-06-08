@@ -12,6 +12,11 @@ import { TimelineView } from './TimelineView';
 import { DataSchemaModal } from './DataSchemaModal';
 import { AiActionButton, type AssistMode } from '../../ai/AiAssistPopover';
 import { AiNaturalAssertPopover } from '../../ai/AiNaturalAssertPopover';
+import { AiResponseToTypescript } from '../../ai/AiResponseToTypescript';
+import { AiSemanticValidatorModal } from '../../ai/AiSemanticValidatorModal';
+import { AiResponseTransformer } from '../../ai/AiResponseTransformer';
+import { AiSmartRetryAdvisor } from '../../ai/AiSmartRetryAdvisor';
+import { AiResponsePatternLearning } from '../../ai/AiResponsePatternLearning';
 
 type ResponseView = 'json' | 'raw' | 'headers' | 'cookies' | 'timeline' | 'tests';
 
@@ -27,6 +32,9 @@ export function ResponsePanel() {
   const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
   const [showNaturalAssert, setShowNaturalAssert] = useState(false);
+  const [showTsGen, setShowTsGen] = useState(false);
+  const [showSemanticVal, setShowSemanticVal] = useState(false);
+  const [showTransformer, setShowTransformer] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -149,6 +157,54 @@ export function ResponsePanel() {
               />
             )}
           </div>
+          {/* AI Response → TypeScript (4.6.8) */}
+          <button
+            type="button"
+            onClick={() => { setShowTsGen(true); setActivePopup(null); setShowNaturalAssert(false); }}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
+            style={{
+              color: 'var(--color-protocol-ai)',
+              borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+            }}
+            title="Generate TypeScript interfaces from response"
+          >
+            ✦ TS
+          </button>
+          {/* AI Semantic Validator (4.6.15) */}
+          <button
+            type="button"
+            onClick={() => { setShowSemanticVal(true); setActivePopup(null); setShowNaturalAssert(false); }}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
+            style={{
+              color: 'var(--color-protocol-ai)',
+              borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+            }}
+            title="AI semantic validation (age: -5 is wrong, email without @ is suspicious)"
+          >
+            ✦ Semantic
+          </button>
+          {/* AI Response Transformer (4.6.18) */}
+          <button
+            type="button"
+            onClick={() => { setShowTransformer(true); setActivePopup(null); setShowNaturalAssert(false); }}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
+            style={{
+              color: 'var(--color-protocol-ai)',
+              borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+            }}
+            title="Transform response: JSON→CSV, extract emails, reshape"
+          >
+            ✦ Transform
+          </button>
+          {/* AI Pattern Learning (4.6.6) — inline record/anomaly for successful responses */}
+          <div className="relative">
+            <AiResponsePatternLearning
+              responseBody={response.body || ''}
+              method={requestMethod}
+              url={requestUrl}
+              status={response.status}
+            />
+          </div>
         </div>
       </div>
 
@@ -193,9 +249,53 @@ export function ResponsePanel() {
 
       </div>
 
+      {/* AI Smart Retry Advisor (4.6.17) — shown below status bar for error responses */}
+      {response.status >= 400 && (
+        <div className="px-3 pt-1.5 pb-0.5">
+          <AiSmartRetryAdvisor
+            status={response.status}
+            responseBody={response.body || ''}
+            method={requestMethod}
+            url={requestUrl}
+          />
+        </div>
+      )}
+
       {/* Data Schema Modal */}
       {showSchema && response && (
         <DataSchemaModal body={response.body} onClose={() => setShowSchema(false)} />
+      )}
+
+      {/* AI Response → TypeScript Modal (4.6.8) */}
+      {showTsGen && (
+        <AiResponseToTypescript
+          responseBody={response.body || ''}
+          method={requestMethod}
+          url={requestUrl}
+          onClose={() => setShowTsGen(false)}
+        />
+      )}
+
+      {/* AI Semantic Validator Modal (4.6.15) */}
+      {showSemanticVal && (
+        <AiSemanticValidatorModal
+          responseBody={response.body || ''}
+          method={requestMethod}
+          url={requestUrl}
+          status={String(response.status)}
+          onClose={() => setShowSemanticVal(false)}
+        />
+      )}
+
+      {/* AI Response Transformer Modal (4.6.18) */}
+      {showTransformer && (
+        <AiResponseTransformer
+          responseBody={response.body || ''}
+          contentType={response.contentType}
+          method={requestMethod}
+          url={requestUrl}
+          onClose={() => setShowTransformer(false)}
+        />
       )}
     </div>
   );
