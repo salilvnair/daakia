@@ -550,19 +550,47 @@ export default function App() {
           // Push network entry to DevTools Network tab
           if (response) {
             const reqTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+            // Parse request cookies from Cookie header
+            const rawCookieHeader = (msg.requestHeaders || {})['Cookie'] || (msg.requestHeaders || {})['cookie'] || '';
+            const parsedRequestCookies = rawCookieHeader
+              ? rawCookieHeader.split(';').map((c: string) => {
+                  const eqIdx = c.indexOf('=');
+                  return eqIdx > 0
+                    ? { name: c.slice(0, eqIdx).trim(), value: c.slice(eqIdx + 1).trim() }
+                    : { name: c.trim(), value: '' };
+                }).filter((c: { name: string; value: string }) => c.name)
+              : undefined;
+            // Capture response cookies (from cookies array or Set-Cookie headers)
+            const responseCookiesArr = (response.cookies || []).map((c: any) => ({
+              name: c.name || c.key || '',
+              value: c.value || '',
+              domain: c.domain,
+              path: c.path,
+              httpOnly: c.httpOnly,
+              secure: c.secure,
+              sameSite: c.sameSite,
+              expires: c.expires,
+            })).filter((c: { name: string; value: string }) => c.name);
+            // Detect blob content types
+            const ct = (response.contentType || 'text/plain').toLowerCase();
+            const isBlobContent = ct.startsWith('image/') || ct.startsWith('audio/') || ct.startsWith('video/') || ct === 'application/pdf' || ct === 'application/octet-stream' || ct.includes('zip') || ct.includes('binary');
             useDevToolsStore.getState().addNetworkEntry({
               timestamp: Date.now(),
               method: msg.requestMethod || reqTab?.method || 'GET',
               url: msg.requestUrl || reqTab?.url || '',
               requestHeaders: msg.requestHeaders || {},
               requestBody: msg.requestBody || undefined,
+              requestCookies: parsedRequestCookies,
               status: response.status,
               statusText: response.statusText,
               responseHeaders: response.headers || {},
               responseBody: response.body || undefined,
+              responseCookies: responseCookiesArr.length > 0 ? responseCookiesArr : undefined,
               duration: response.time || 0,
               size: response.size || 0,
               contentType: response.contentType || 'text/plain',
+              isBlob: isBlobContent && !!response.body,
+              blobMimeType: isBlobContent ? ct : undefined,
             });
             // Log failed requests with real error detail to DevTools console
             if (response.status === 0 && response.errorDetail) {

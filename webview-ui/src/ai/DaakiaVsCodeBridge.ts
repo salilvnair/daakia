@@ -38,7 +38,12 @@ class DaakiaEventSource {
 
   constructor(url: string) {
     // Extract tabId from: /api/v1/conversation/stream/{tabId}
-    const tabId = url.split('/').pop() ?? '';
+    // Resolve stable 'daakia-ai-panel' alias → actual daakia-ai tab UUID
+    let tabId = url.split('/').pop() ?? '';
+    if (tabId === 'daakia-ai-panel') {
+      const daakiaAiTab = useTabsStore.getState().tabs.find(t => t.type === 'daakia-ai');
+      if (daakiaAiTab) tabId = daakiaAiTab.id;
+    }
 
     this._msgHandler = (evt: MessageEvent) => {
       if (this._closed) return;
@@ -175,7 +180,12 @@ export function installDaakiaBridges() {
       return originalFetch(input, init);
     }
 
-    const tabId = (body.conversationId as string) ?? '';
+    // Resolve stable 'daakia-ai-panel' alias → actual daakia-ai tab UUID
+    let tabId = (body.conversationId as string) ?? '';
+    if (tabId === 'daakia-ai-panel') {
+      const daakiaAiTab = useTabsStore.getState().tabs.find(t => t.type === 'daakia-ai');
+      if (daakiaAiTab) tabId = daakiaAiTab.id;
+    }
     const message = (body.message as string) ?? '';
     const reset = (body.reset as boolean) ?? false;
 

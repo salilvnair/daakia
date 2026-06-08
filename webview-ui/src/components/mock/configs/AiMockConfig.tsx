@@ -10,6 +10,7 @@ import { useState, useCallback } from 'react';
 import type { MockServer, AiMockScenario } from '../mock-types';
 import { createDefaultAiScenario } from '../mock-types';
 import { PlusIcon, TrashIcon, SparkleIcon, CloseIcon } from '../../../icons';
+import { ConfirmDialog } from '../../shared';
 
 interface Props {
   server: MockServer;
@@ -17,7 +18,7 @@ interface Props {
 }
 
 const AI_COLOR = 'var(--color-protocol-ai)';
-const CHIP_STYLE = { backgroundColor: 'rgba(168,85,247,0.12)', color: 'var(--color-protocol-ai)', border: '1px solid rgba(168,85,247,0.22)' };
+const CHIP_STYLE = { backgroundColor: 'rgba(168,85,247,0.25)', color: '#d8b4fe', border: '1px solid rgba(168,85,247,0.55)' };
 
 // ─── Compact built-in scenario metadata (display only) ───────────────────────
 // Full responses are served by the extension host's mock-ai-server.ts.
@@ -244,6 +245,8 @@ export function AiMockConfig({ server, onUpdate }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   /** Whether we're composing a brand-new custom scenario */
   const [addingNew, setAddingNew] = useState(false);
+  /** Confirm delete-all custom scenarios */
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
   /** The blank template for a new scenario */
   const [newDraft] = useState<AiMockScenario>(() => createDefaultAiScenario());
 
@@ -371,17 +374,47 @@ export function AiMockConfig({ server, onUpdate }: Props) {
         </div>
       )}
 
-      {/* ── Add custom scenario button ── */}
+      {/* ── Add custom scenario + Delete All row ── */}
       {!addingNew && (
-        <button
-          type="button"
-          onClick={() => { setAddingNew(true); setEditingId(null); }}
-          className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors self-start"
-          style={{ backgroundColor: 'rgba(168,85,247,0.1)', color: AI_COLOR, border: '1px solid rgba(168,85,247,0.25)' }}
-        >
-          <PlusIcon size={12} />
-          Add Custom Scenario
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => { setAddingNew(true); setEditingId(null); }}
+            className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors border"
+            style={{ color: AI_COLOR, borderColor: `color-mix(in srgb, ${AI_COLOR} 30%, transparent)`, background: 'transparent' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${AI_COLOR} 10%, transparent)`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <PlusIcon size={12} />
+            Add Custom Scenario
+          </button>
+          {scenarios.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAll(true)}
+              title="Delete All Custom Scenarios"
+              className="flex items-center gap-1 h-[30px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              <TrashIcon size={11} />
+              Delete All
+            </button>
+          )}
+        </div>
+      )}
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Custom Scenarios"
+          message={`Are you sure you want to delete all ${scenarios.length} custom scenarios? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            onUpdate({ aiScenarios: [] });
+            setShowDeleteAll(false);
+            setEditingId(null);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
+        />
       )}
     </div>
   );

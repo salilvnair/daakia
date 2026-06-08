@@ -46,7 +46,12 @@ const SUGGESTION_CHIPS = [
  */
 function DaakiaMdRendererComponent({ payload }: { payload: unknown }) {
   const text = (payload as { rawText?: string } | null)?.rawText ?? '';
-  return <MdViewer content={text} />;
+  // Wrap in compact class to reduce paragraph/heading spacing in chat bubble context
+  return (
+    <div className="daakia-chat-md">
+      <MdViewer content={text} />
+    </div>
+  );
 }
 
 const DAAKIA_RENDERER_PROVIDERS = [
@@ -156,8 +161,10 @@ export function DaakiaAiPanel() {
     // handled by the bridge
   }, []);
 
-  // Use the active tab ID as conversationId so chat history is preserved per tab
-  const conversationId = activeTab?.id || `daakia-ai-${defaultProviderId}-${defaultModelId}`;
+  // Use a stable conversationId so closing/reopening the Daakia AI tab preserves the
+  // conversation. Only the "New Chat" button (showNewChat: true) should reset it.
+  // Using per-tab IDs was wrong: each tab open created a fresh session.
+  const conversationId = 'daakia-ai-panel';
 
   const chatConfig = useMemo(() => ({
     apiHost: '',

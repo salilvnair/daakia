@@ -32,7 +32,11 @@ const PL_DEFAULT_W = 255;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ActiveItem = { kind: 'agent'; scenario: AgentScenario } | { kind: 'template'; key: AiPromptTemplateKey } | null;
+type ActiveItem =
+  | { kind: 'agent'; scenario: AgentScenario }
+  | { kind: 'template'; key: AiPromptTemplateKey }
+  | { kind: 'mock'; key: AiPromptTemplateKey }    // key = .generate key; system = key.replace('.generate', '.system')
+  | null;
 interface PromptRow { scenario: string; system_prompt: string; user_prompt?: string; agent_name?: string; updated_at?: string; }
 interface AgentEntry { scenario: AgentScenario; systemPrompt: string; userPrompt: string; agentName: string; isCustomized: boolean; variables: ScenarioVarMap; updatedAt: string | null; }
 interface VarPill { pill: string; insert: string; title: string; }
@@ -138,6 +142,10 @@ export function PromptLibraryPanel() {
     if (active.kind === 'agent') {
       const e = entries.find(x => x.scenario === active.scenario);
       setEditA(e?.systemPrompt ?? ''); setEditB(e?.userPrompt ?? '');
+    } else if (active.kind === 'mock') {
+      const systemKey = active.key.replace('.generate', '.system') as AiPromptTemplateKey;
+      setEditA(templates[systemKey] ?? AI_PROMPT_TEMPLATE_DEFAULTS[systemKey] ?? '');
+      setEditB(templates[active.key] ?? AI_PROMPT_TEMPLATE_DEFAULTS[active.key] ?? '');
     } else {
       setEditA(templates[active.key] ?? AI_PROMPT_TEMPLATE_DEFAULTS[active.key] ?? ''); setEditB('');
     }
@@ -156,6 +164,12 @@ export function PromptLibraryPanel() {
     if (active.kind === 'template') {
       setTemplate(active.key, editA); setDirty(false); return;
     }
+    if (active.kind === 'mock') {
+      const sysKey = active.key.replace('.generate', '.system') as AiPromptTemplateKey;
+      setTemplate(sysKey, editA);
+      setTemplate(active.key, editB);
+      setDirty(false); return;
+    }
     const entry = entries.find(e => e.scenario === active.scenario);
     if (!entry) return;
     postMsg({ type: 'promptLibrary:save', scenario: active.scenario, prompt: { scenario: active.scenario, system_prompt: editA, user_prompt: editB, agent_name: entry.agentName } });
@@ -172,6 +186,12 @@ export function PromptLibraryPanel() {
     if (!active) return;
     if (active.kind === 'template') {
       resetTemplate(active.key); setEditA(AI_PROMPT_TEMPLATE_DEFAULTS[active.key] ?? ''); setDirty(false);
+    } else if (active.kind === 'mock') {
+      const sysKey = active.key.replace('.generate', '.system') as AiPromptTemplateKey;
+      resetTemplate(sysKey); resetTemplate(active.key);
+      setEditA(AI_PROMPT_TEMPLATE_DEFAULTS[sysKey] ?? '');
+      setEditB(AI_PROMPT_TEMPLATE_DEFAULTS[active.key] ?? '');
+      setDirty(false);
     } else {
       setResetConfirm(active.scenario);
     }
@@ -204,18 +224,39 @@ export function PromptLibraryPanel() {
       (editA + '\n' + editB).replace(/\{\{([^}]+)\}\}/g, (_, k) => { if (!(k in known)) extra[k] = { description: 'Custom variable', source: 'prompt' }; return k; });
       return Object.entries({ ...known, ...extra }).map(([k, v]) => ({ pill: `{{${k}}}`, insert: `{{${k}}}`, title: `${v.description}\nSource: ${v.source}` }));
     }
+    if (active.kind === 'mock') {
+      // System tab has no runtime vars; User tab has {serverName} and {context}
+      if (editRole === 'a') return [];
+      return AI_PROMPT_TEMPLATE_VARIABLES[active.key].map(v => ({ pill: v, insert: v, title: `Variable: ${v}` }));
+    }
     return AI_PROMPT_TEMPLATE_VARIABLES[active.key].map(v => ({ pill: v, insert: v, title: `Variable: ${v}` }));
-  }, [active, editA, editB]);
+  }, [active, editA, editB, editRole]);
 
   // ── Editor header info ──
   const isAgent = active?.kind === 'agent';
   const isTpl = active?.kind === 'template';
-  const editorColor = isAgent ? SCENARIO_COLORS[active!.scenario] : isTpl ? AI_TEMPLATE_COLORS[(active as {key: AiPromptTemplateKey}).key] : ACCENT;
-  const editorLabel = isAgent ? (entries.find(e => e.scenario === (active as {scenario: AgentScenario}).scenario)?.agentName ?? '') : isTpl ? AI_PROMPT_TEMPLATE_LABELS[(active as {key: AiPromptTemplateKey}).key].label : '';
-  const editorDesc = isAgent ? SCENARIO_DESCRIPTIONS[(active as {scenario: AgentScenario}).scenario] : isTpl ? AI_PROMPT_TEMPLATE_LABELS[(active as {key: AiPromptTemplateKey}).key].description : '';
+  const isMock = active?.kind === 'mock';
+  const activeKey = (active as { key?: AiPromptTemplateKey })?.key;
+  const mockSystemKey = isMock && activeKey ? (activeKey.replace('.generate', '.system') as AiPromptTemplateKey) : null;
+
+  const editorColor = isAgent ? SCENARIO_COLORS[active!.scenario]
+    : (isTpl || isMock) ? AI_TEMPLATE_COLORS[activeKey!]
+    : ACCENT;
+  const editorLabel = isAgent ? (entries.find(e => e.scenario === (active as {scenario: AgentScenario}).scenario)?.agentName ?? '')
+    : (isTpl || isMock) ? AI_PROMPT_TEMPLATE_LABELS[activeKey!].label
+    : '';
+  const editorDesc = isAgent ? SCENARIO_DESCRIPTIONS[(active as {scenario: AgentScenario}).scenario]
+    : (isTpl || isMock) ? AI_PROMPT_TEMPLATE_LABELS[activeKey!].description
+    : '';
   const isCustomized = isAgent
     ? (entries.find(e => e.scenario === (active as {scenario: AgentScenario}).scenario)?.isCustomized ?? false)
-    : isTpl ? ((templates[(active as {key: AiPromptTemplateKey}).key] ?? '') !== (AI_PROMPT_TEMPLATE_DEFAULTS[(active as {key: AiPromptTemplateKey}).key] ?? '')) : false;
+    : isMock && mockSystemKey
+    ? (
+        (templates[activeKey!] ?? '') !== (AI_PROMPT_TEMPLATE_DEFAULTS[activeKey!] ?? '') ||
+        (templates[mockSystemKey] ?? '') !== (AI_PROMPT_TEMPLATE_DEFAULTS[mockSystemKey] ?? '')
+      )
+    : isTpl ? ((templates[activeKey!] ?? '') !== (AI_PROMPT_TEMPLATE_DEFAULTS[activeKey!] ?? ''))
+    : false;
   const updatedAt = isAgent ? (entries.find(e => e.scenario === (active as {scenario: AgentScenario}).scenario)?.updatedAt ?? null) : null;
 
   if (loading) return (
@@ -339,16 +380,28 @@ export function PromptLibraryPanel() {
                       {isOpen && cat.keys.map(key => {
                         const { label, description } = AI_PROMPT_TEMPLATE_LABELS[key];
                         const color = AI_TEMPLATE_COLORS[key];
-                        const isAct = active?.kind === 'template' && active.key === key;
+                        const isMockCat = cat.kind === 'mock';
+                        const isAct = isMockCat
+                          ? (active?.kind === 'mock' && active.key === key)
+                          : (active?.kind === 'template' && active.key === key);
+                        // For mock: badge if either system or user prompt is customized
+                        const sysKey = isMockCat ? (key.replace('.generate', '.system') as AiPromptTemplateKey) : null;
+                        const isItemCustomized = isMockCat
+                          ? (
+                            (templates[key] ?? '') !== (AI_PROMPT_TEMPLATE_DEFAULTS[key] ?? '') ||
+                            (sysKey && (templates[sysKey] ?? '') !== (AI_PROMPT_TEMPLATE_DEFAULTS[sysKey] ?? ''))
+                          )
+                          : (templates[key] ?? '') !== (AI_PROMPT_TEMPLATE_DEFAULTS[key] ?? '');
                         return (
-                          <button key={key} type="button" onClick={() => setActive({ kind: 'template', key })}
+                          <button key={key} type="button"
+                            onClick={() => setActive(isMockCat ? { kind: 'mock', key } : { kind: 'template', key })}
                             className={`w-full flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors text-left ${isAct ? 'bg-[rgba(139,92,246,0.12)]' : 'hover:bg-[rgba(255,255,255,0.04)]'}`}
                           >
-                            <div className="w-[22px] h-[22px] rounded-md flex items-center justify-center flex-shrink-0 text-white text-[11px]" style={{ backgroundColor: color }}>✦</div>
+                            <div className="w-[22px] h-[22px] rounded-md flex items-center justify-center flex-shrink-0 text-white text-[11px]" style={{ backgroundColor: color }}>{isMockCat ? label.slice(0, 2) : '✦'}</div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1">
                                 <span className="text-[11px] font-medium truncate" style={{ color: isAct ? color : 'var(--color-text-primary)' }}>{label}</span>
-                                {(templates[key] ?? '') !== (AI_PROMPT_TEMPLATE_DEFAULTS[key] ?? '') && <span className="text-[8px] px-1 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ backgroundColor: `${color}22`, color }}>CUSTOM</span>}
+                                {isItemCustomized && <span className="text-[8px] px-1 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ backgroundColor: `${color}22`, color }}>CUSTOM</span>}
                               </div>
                               <p className="text-[10px] text-[var(--color-text-muted)] truncate leading-tight">{description}</p>
                             </div>
@@ -383,7 +436,7 @@ export function PromptLibraryPanel() {
 
         {/* ── Editor pane ──────────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-          {(isAgent || isTpl) ? (
+          {(isAgent || isTpl || isMock) ? (
             <>
               {/* Header */}
               <div className="flex-shrink-0 flex items-start gap-3 px-4 py-3 border-b border-[var(--color-surface-border)]">
@@ -422,10 +475,10 @@ export function PromptLibraryPanel() {
                 </div>
               )}
 
-              {/* Tabs: System/User for agents, single Template tab for AI keys */}
+              {/* Tabs: System/User for agents + mock; single Template tab for diagnostics */}
               <div className="flex-shrink-0 flex items-center justify-between px-4 border-b border-[var(--color-surface-border)]">
                 <div className="flex items-center">
-                  {isAgent ? (
+                  {(isAgent || isMock) ? (
                     (['a','b'] as const).map(role => (
                       <button key={role} type="button"
                         onClick={() => { setEditRole(role); updateDecos(role === 'b' ? editB : editA); }}
@@ -453,7 +506,7 @@ export function PromptLibraryPanel() {
                   <div className="h-full overflow-auto p-4 [scrollbar-gutter:stable]"><PromptPreview text={currentText} /></div>
                 ) : (
                   <Editor
-                    key={`${isAgent ? (active as {scenario:string}).scenario : (active as {key:string}).key}-${editRole}`}
+                    key={`${isAgent ? (active as {scenario:string}).scenario : (active as {key:string}).key}-${editRole}-${active?.kind}`}
                     height="100%" language="plaintext" theme="daakia-dark" value={currentText}
                     onChange={val => {
                       const v = val ?? '';

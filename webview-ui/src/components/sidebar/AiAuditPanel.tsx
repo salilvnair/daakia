@@ -26,14 +26,15 @@ interface CeAuditEntry {
 }
 
 // ─── Detail tabs ──────────────────────────────────────────────────────────────
+// System Prompt + User Prompt are convenience views derived from request_payload.messages[].
+// Request + Response are the full actual payloads sent/received from the AI API.
+// Full Audit is one combined object — the single source of truth from the DB.
 
 const DETAIL_TABS = [
   { id: 'systemPrompt', label: 'System Prompt' },
   { id: 'userPrompt',   label: 'User Prompt' },
   { id: 'request',      label: 'Request' },
   { id: 'response',     label: 'Response' },
-  { id: 'headers',      label: 'Headers' },
-  { id: 'meta',         label: 'Meta' },
   { id: 'full',         label: 'Full Audit' },
 ] as const;
 type DetailTab = (typeof DETAIL_TABS)[number]['id'];
@@ -91,29 +92,45 @@ function AuditContent({ value }: { value: string | null | undefined }) {
 function EntryDetail({ entry, onBack }: { entry: CeAuditEntry; onBack: () => void }) {
   const [activeTab, setActiveTab] = useState<DetailTab>('systemPrompt');
 
-  const fullAudit = JSON.stringify({
+  // ── Parse the two source-of-truth fields from DB ──────────────────────────
+  type AiMessage = { role: string; content: string; id?: string; timestamp?: number };
+  let request: Record<string, unknown> | null = null;
+  let response: Record<string, unknown> | null = null;
+  try { request = JSON.parse(entry.request_payload ?? ''); } catch { /* non-JSON or null */ }
+  try { response = JSON.parse(entry.response_payload ?? ''); } catch { /* non-JSON or null */ }
+
+  // ── Derive system prompt + user prompt from request.messages[] ────────────
+  // These are convenience views — the real data is in request_payload.
+  const messages: AiMessage[] = Array.isArray(request?.messages) ? (request!.messages as AiMessage[]) : [];
+  const systemMessages = messages.filter(m => m.role === 'system');
+  const userMessages   = messages.filter(m => m.role === 'user');
+  const systemPromptText = systemMessages.length
+    ? systemMessages.map(m => m.content).join('\n\n---\n\n')
+    : null;
+  const userPromptText = userMessages.length
+    ? userMessages[userMessages.length - 1].content
+    : null;
+
+  // ── Full Audit = ONE combined object, built from request + response + metadata ──
+  const fullAuditObj = {
     audit_id:        entry.audit_id,
     conversation_id: entry.conversation_id,
     stage:           entry.stage,
     model:           entry.model,
     duration_ms:     entry.duration_ms,
+    error:           entry.error ?? null,
     created_at:      entry.created_at,
-    error:           entry.error,
-    system_prompt:   entry.system_prompt,
-    user_prompt:     entry.user_prompt,
-    request:         entry.request_payload,
-    response:        entry.response_payload,
-    headers:         entry.headers,
-    meta:            entry.meta,
-  }, null, 2);
+    request,
+    response,
+  };
+  const fullAudit = JSON.stringify(fullAuditObj, null, 2);
 
+  // ── Tab content — no duplicated DB columns; UI derives from the full payload ──
   const tabValues: Record<DetailTab, string | null | undefined> = {
-    systemPrompt: entry.system_prompt,
-    userPrompt:   entry.user_prompt,
-    request:      entry.request_payload,
-    response:     entry.response_payload,
-    headers:      entry.headers,
-    meta:         entry.meta,
+    systemPrompt: systemPromptText,
+    userPrompt:   userPromptText,
+    request:      entry.request_payload,    // full actual request JSON
+    response:     entry.response_payload,   // full actual response JSON
     full:         fullAudit,
   };
 
@@ -428,7 +445,13 @@ export function AiAuditPanel() {
                     <td className="px-2 py-1.5 whitespace-nowrap" onClick={ev => ev.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <CopyBtn
-                          text={JSON.stringify(e, null, 2)}
+                          text={JSON.stringify({
+                            audit_id: e.audit_id, conversation_id: e.conversation_id,
+                            stage: e.stage, model: e.model, duration_ms: e.duration_ms,
+                            error: e.error ?? null, created_at: e.created_at,
+                            request: (() => { try { return JSON.parse(e.request_payload ?? ''); } catch { return e.request_payload; } })(),
+                            response: (() => { try { return JSON.parse(e.response_payload ?? ''); } catch { return e.response_payload; } })(),
+                          }, null, 2)}
                         />
                         <button
                           type="button"
@@ -447,38 +470,24 @@ export function AiAuditPanel() {
             </tbody>
           </table>
 
-          {/* Multi-select HUD */}
+          {/* Multiselect HUD — ditto dmcr_copilot pill pattern */}
           {selected.size > 0 && (
-            <div
-              className="sticky bottom-4 mx-4 flex items-center gap-2 px-3 py-2 rounded-lg border shadow-lg"
-              style={{
-                background: 'var(--color-panel)',
-                borderColor: 'var(--color-surface-border)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
-              }}
-            >
-              <span className="text-[11.5px] font-medium text-[var(--color-text-primary)]">
-                {selected.size} selected
-              </span>
-              <div className="flex-1" />
+            <div className="bs-multiselect-hud">
+              <span className="bs-multiselect-hud-count">{selected.size} selected</span>
+              <div className="bs-multiselect-hud-divider" />
               <button
                 type="button"
+                className="bs-multiselect-hud-btn bs-multiselect-hud-btn-danger"
                 onClick={() => setDeleteConfirm(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] cursor-pointer transition-colors border"
-                style={{
-                  color: 'var(--color-error)',
-                  borderColor: 'color-mix(in srgb, var(--color-error) 30%, transparent)',
-                  background: 'color-mix(in srgb, var(--color-error) 8%, transparent)',
-                }}
               >
-                <TrashIcon size={10} />
-                Delete {selected.size}
+                <TrashIcon size={11} />
+                Delete
               </button>
+              <div className="bs-multiselect-hud-divider" />
               <button
                 type="button"
+                className="bs-multiselect-hud-btn bs-multiselect-hud-btn-muted"
                 onClick={() => setSelected(new Set())}
-                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] cursor-pointer transition-colors"
-                style={{ color: 'var(--color-text-muted)' }}
               >
                 × Deselect
               </button>

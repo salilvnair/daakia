@@ -6,7 +6,8 @@ import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../i
 import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
 import { SOCKETIO_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
-import { MockAiGenerateButton } from '../MockAiGeneratePopover';
+import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import type { SocketIOMockHandler } from '../mock-types';
 
 const SOCKETIO_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -23,6 +24,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const ioUrl = server.running && server.port ? `http://localhost:${server.port}` : '';
 
@@ -76,6 +78,24 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
     onUpdate({ socketioHandlers: handlers.filter(h => h.id !== id) });
   };
 
+  const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
+    const newHandlers: SocketIOMockHandler[] = items.map(item => {
+      const d = item.data as { listenEvent?: string; emitEvent?: string; response?: string; type?: string };
+      const eventType = (['connection', 'message', 'disconnect'].includes(d.type || '') ? d.type : 'message') as 'connection' | 'message' | 'disconnect';
+      return {
+        id: crypto.randomUUID(),
+        event: eventType,
+        listenEvent: d.listenEvent || item.name || 'message',
+        emitEvent: d.emitEvent || '',
+        response: d.response || '{"ack":true}',
+        delay: 0,
+        enabled: true,
+        broadcast: false,
+      };
+    });
+    onUpdate({ socketioHandlers: [...handlers, ...newHandlers] });
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -86,20 +106,39 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
             options={SOCKETIO_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
-            accentColor="var(--color-mock-server)"
+            accentColor="var(--color-protocol-socketio)"
           />
           <MockAiGenerateButton
             templateKey="mock.socketio.generate"
             title="Socket.IO Events"
             serverName={server.name}
-            serverContext={(server.socketioHandlers || []).length > 0
-              ? (server.socketioHandlers || []).map((h: any) => h.event || '').join('\n')
-              : undefined}
+            serverContext={[
+              server.description?.trim() ? `Server description (MANDATORY — use strictly as primary context):\n${server.description.trim()}` : '',
+              handlers.length > 0 ? `Existing handlers:\n${handlers.map((h: any) => h.listenEvent || h.event || '').join(', ')}` : '',
+            ].filter(Boolean).join('\n\n') || undefined}
             accentVar="var(--color-protocol-socketio)"
+            onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <button type="button" onClick={addHandler} className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.25)] hover:bg-[rgba(234,179,8,0.1)] cursor-pointer transition-colors">
+          <button
+            type="button"
+            onClick={addHandler}
+            className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
+            style={{ color: 'var(--color-protocol-socketio)', borderColor: 'color-mix(in srgb, var(--color-protocol-socketio) 30%, transparent)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-socketio) 10%, transparent)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
             + Add Handler
           </button>
+          {handlers.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAll(true)}
+              title="Delete All Handlers"
+              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              <TrashIcon size={12} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -219,6 +258,20 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
             setDeleteConfirmId(null);
           }}
           onCancel={() => setDeleteConfirmId(null)}
+        />
+      )}
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Handlers"
+          message={`Are you sure you want to delete all ${handlers.length} Socket.IO handlers? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            onUpdate({ socketioHandlers: [] });
+            setShowDeleteAll(false);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
         />
       )}
     </div>

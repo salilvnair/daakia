@@ -19,6 +19,18 @@ export interface ConsoleLogEntry {
   scriptPhase?: string;
 }
 
+/** A cookie entry (request or response) */
+export interface CookieEntry {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+  httpOnly?: boolean;
+  secure?: boolean;
+  sameSite?: string;
+  expires?: string;
+}
+
 /** A single network request/response captured by DevTools */
 export interface NetworkEntry {
   id: string;
@@ -28,11 +40,15 @@ export interface NetworkEntry {
   url: string;
   requestHeaders: Record<string, string>;
   requestBody?: string;
+  /** Cookies sent with the request (parsed from Cookie header or explicit) */
+  requestCookies?: CookieEntry[];
   /** Response metadata */
   status: number;
   statusText: string;
   responseHeaders: Record<string, string>;
   responseBody?: string;
+  /** Cookies received in the response (from Set-Cookie headers or explicit) */
+  responseCookies?: CookieEntry[];
   /** Duration in ms */
   duration: number;
   /** Response size in bytes */
@@ -41,6 +57,10 @@ export interface NetworkEntry {
   contentType: string;
   /** Protocol identifier for proper status interpretation */
   protocol?: 'http' | 'grpc' | 'graphql' | 'websocket' | 'soap';
+  /** True when the response body is binary/blob content (base64 encoded in responseBody) */
+  isBlob?: boolean;
+  /** Original MIME type for blob responses */
+  blobMimeType?: string;
 }
 
 export type DevToolsTab = 'console' | 'network' | 'performance';

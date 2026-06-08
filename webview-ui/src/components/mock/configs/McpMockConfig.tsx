@@ -10,6 +10,7 @@ import { useState, useCallback } from 'react';
 import type { MockServer, McpMockTool } from '../mock-types';
 import { createDefaultMcpTool } from '../mock-types';
 import { PlusIcon, TrashIcon, CloseIcon } from '../../../icons';
+import { ConfirmDialog } from '../../shared';
 
 interface Props {
   server: MockServer;
@@ -216,6 +217,7 @@ export function McpMockConfig({ server, onUpdate }: Props) {
   const [expandedBuiltIn, setExpandedBuiltIn] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [addingNew, setAddingNew] = useState(false);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const toggleBuiltIn = (name: string) => {
     setExpandedBuiltIn(prev => (prev === name ? null : name));
@@ -357,17 +359,45 @@ export function McpMockConfig({ server, onUpdate }: Props) {
         </div>
       )}
 
-      {/* Add button */}
+      {/* Add button row */}
       {!addingNew && (
-        <button
-          type="button"
-          onClick={() => { setAddingNew(true); setEditingId(null); }}
-          className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors self-start"
-          style={{ backgroundColor: 'rgba(99,102,241,0.1)', color: MCP_COLOR, border: '1px solid rgba(99,102,241,0.25)' }}
-        >
-          <PlusIcon size={12} />
-          Add Custom Tool
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => { setAddingNew(true); setEditingId(null); }}
+            className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors self-start border"
+            style={{ color: MCP_COLOR, borderColor: `color-mix(in srgb, ${MCP_COLOR} 30%, transparent)`, background: 'transparent' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${MCP_COLOR} 10%, transparent)`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <PlusIcon size={12} />
+            Add Custom Tool
+          </button>
+          {tools.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAll(true)}
+              title="Delete All Custom Tools"
+              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              <TrashIcon size={12} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Custom Tools"
+          message={`Are you sure you want to delete all ${tools.length} custom MCP tools? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            onUpdate({ mcpTools: [] });
+            setShowDeleteAll(false);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
+        />
       )}
     </div>
   );

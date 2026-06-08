@@ -6,7 +6,8 @@ import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../i
 import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, DurationInput, type DropdownOption } from '../../shared';
 import { SSE_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
-import { MockAiGenerateButton } from '../MockAiGeneratePopover';
+import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import type { SSEMockEvent } from '../mock-types';
 
 const SSE_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -23,6 +24,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const sseUrl = server.running && server.port ? `http://localhost:${server.port}` : '';
 
@@ -74,6 +76,22 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
     onUpdate({ sseEvents: events.filter(e => e.id !== id) });
   };
 
+  const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
+    const newEvents: SSEMockEvent[] = items.map(item => {
+      const d = item.data as { eventName?: string; data?: string; intervalMs?: number };
+      return {
+        id: crypto.randomUUID(),
+        eventName: d.eventName || item.name || 'message',
+        data: d.data || '{"hello":"world"}',
+        intervalMs: d.intervalMs ?? 5000,
+        delay: 0,
+        repeat: true,
+        enabled: true,
+      };
+    });
+    onUpdate({ sseEvents: [...events, ...newEvents] });
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -84,18 +102,39 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
             options={SSE_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
-            accentColor="var(--color-mock-server)"
+            accentColor="var(--color-protocol-sse)"
           />
           <MockAiGenerateButton
             templateKey="mock.sse.generate"
             title="SSE Events"
             serverName={server.name}
-            serverContext={events.length > 0 ? events.map(e => e.name).join('\n') : undefined}
+            serverContext={[
+              server.description?.trim() ? `Server description (MANDATORY — use strictly as primary context):\n${server.description.trim()}` : '',
+              events.length > 0 ? `Existing events:\n${events.map(e => e.eventName).join(', ')}` : '',
+            ].filter(Boolean).join('\n\n') || undefined}
             accentVar="var(--color-protocol-sse)"
+            onAddGeneratedItems={handleAddGeneratedItems}
           />
+          <button
+            type="button"
+            onClick={addEvent}
+            className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
+            style={{ color: 'var(--color-protocol-sse)', borderColor: 'color-mix(in srgb, var(--color-protocol-sse) 30%, transparent)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-sse) 10%, transparent)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >+ Add Event</button>
+          {events.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAll(true)}
+              title="Delete All Events"
+              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              <TrashIcon size={12} />
+            </button>
+          )}
         </div>
       </div>
-      <button type="button" onClick={addEvent} className="self-start h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-protocol-sse)] border border-[rgba(245,158,11,0.2)] hover:bg-[rgba(245,158,11,0.08)] cursor-pointer transition-colors">+ Add Event</button>
 
       <p className="text-[10px] text-[var(--color-text-muted)]">
         Configure SSE events to stream to connected clients. Set interval for repeated events or 0 for one-shot.
@@ -208,6 +247,20 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
             setDeleteConfirmId(null);
           }}
           onCancel={() => setDeleteConfirmId(null)}
+        />
+      )}
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Events"
+          message={`Are you sure you want to delete all ${events.length} SSE events? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            onUpdate({ sseEvents: [] });
+            setShowDeleteAll(false);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
         />
       )}
     </div>

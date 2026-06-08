@@ -1,12 +1,12 @@
 /**
  * WebSocketConfig — WebSocket handler config for mock server.
  */
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
 import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
 import { WEBSOCKET_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
-import { MockAiGenerateButton } from '../MockAiGeneratePopover';
+import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 
 const WS_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -23,6 +23,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const wsUrl = server.running && server.port ? `ws://localhost:${server.port}` : '';
 
@@ -74,6 +75,33 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
     onUpdate({ wsHandlers: handlers.filter(h => h.id !== id) });
   };
 
+  // ── AI-generated handler items → WebSocketMockHandler ─────────────────────
+  const TYPE_MAP: Record<string, 'connection' | 'message' | 'disconnect'> = {
+    connect: 'connection',
+    connection: 'connection',
+    message: 'message',
+    disconnect: 'disconnect',
+  };
+
+  const handleAddGeneratedItems = useCallback((items: ParsedGenericItem[]) => {
+    const newHandlers = items.map((item) => {
+      const raw = item.data as Record<string, unknown>;
+      const typeKey = ((raw.type as string) || 'message').toLowerCase();
+      const event = TYPE_MAP[typeKey] || 'message';
+      return {
+        id: crypto.randomUUID(),
+        event,
+        matchPattern: (raw.matchPattern as string) || (event === 'message' ? '*' : ''),
+        response: (raw.response as string) || '{}',
+        delay: 0,
+        enabled: true,
+        broadcast: false,
+      };
+    });
+    onUpdate({ wsHandlers: [...handlers, ...newHandlers] });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handlers, onUpdate]);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -84,21 +112,56 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
             options={WS_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
-            accentColor="var(--color-mock-server)"
+            accentColor="var(--color-protocol-websocket)"
           />
           <MockAiGenerateButton
             templateKey="mock.websocket.generate"
             title="WebSocket Handlers"
             serverName={server.name}
-            serverContext={handlers.length > 0 ? handlers.map((h: any) => `${h.type || 'message'}: ${h.name || h.matchPattern || ''}`).join('\n') : undefined}
-            accentVar="var(--color-protocol-ws)"
+            serverContext={[
+              server.description?.trim() ? `Server description (MANDATORY — use strictly as primary context):\n${server.description.trim()}` : '',
+              handlers.length > 0 ? `Existing handlers:\n${handlers.map((h) => `${h.event}: ${h.matchPattern || ''}`).join(', ')}` : '',
+            ].filter(Boolean).join('\n\n') || undefined}
+            accentVar="var(--color-protocol-websocket)"
+            onAddGeneratedItems={handleAddGeneratedItems}
           />
         </div>
       </div>
       <div className="flex items-center gap-1">
-        <button type="button" onClick={() => addHandler('connection')} className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-success)] border border-[rgba(34,197,94,0.2)] hover:bg-[rgba(34,197,94,0.08)] cursor-pointer transition-colors">+ On Connect</button>
-        <button type="button" onClick={() => addHandler('message')} className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.2)] hover:bg-[rgba(234,179,8,0.08)] cursor-pointer transition-colors">+ On Message</button>
-        <button type="button" onClick={() => addHandler('disconnect')} className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-error)] border border-[rgba(239,68,68,0.2)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors">+ On Disconnect</button>
+        <button
+          type="button"
+          onClick={() => addHandler('connection')}
+          className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
+          style={{ color: 'var(--color-protocol-websocket)', borderColor: 'color-mix(in srgb, var(--color-protocol-websocket) 30%, transparent)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-websocket) 10%, transparent)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        >+ On Connect</button>
+        <button
+          type="button"
+          onClick={() => addHandler('message')}
+          className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
+          style={{ color: 'var(--color-protocol-websocket)', borderColor: 'color-mix(in srgb, var(--color-protocol-websocket) 30%, transparent)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-websocket) 10%, transparent)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        >+ On Message</button>
+        <button
+          type="button"
+          onClick={() => addHandler('disconnect')}
+          className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
+          style={{ color: 'var(--color-protocol-websocket)', borderColor: 'color-mix(in srgb, var(--color-protocol-websocket) 30%, transparent)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-websocket) 10%, transparent)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        >+ On Disconnect</button>
+        {handlers.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowDeleteAll(true)}
+            title="Delete All Handlers"
+            className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+          >
+            <TrashIcon size={12} />
+          </button>
+        )}
       </div>
 
       <p className="text-[10px] text-[var(--color-text-muted)]">
@@ -204,6 +267,20 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
             setDeleteConfirmId(null);
           }}
           onCancel={() => setDeleteConfirmId(null)}
+        />
+      )}
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Handlers"
+          message={`Are you sure you want to delete all ${handlers.length} WebSocket handlers? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            onUpdate({ wsHandlers: [] });
+            setShowDeleteAll(false);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
         />
       )}
     </div>

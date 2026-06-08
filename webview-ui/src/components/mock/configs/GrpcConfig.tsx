@@ -5,9 +5,9 @@ import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, GrpcUnaryIcon, GrpcS
 import { GRPC_SAMPLES } from '../samples/grpc';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import type { MockServer, GrpcMockMethod } from '../mock-types';
-import { MockAiGenerateButton } from '../MockAiGeneratePopover';
+import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 
-const ACCENT = 'var(--color-mock-server)';
+const ACCENT = 'var(--color-protocol-grpc)';
 
 const RPC_TYPE_OPTIONS: DropdownOption[] = [
   { value: 'unary', label: 'Unary' },
@@ -67,6 +67,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
   });
   const [expandedMethodId, setExpandedMethodId] = useState<string | null>(storedMethodId || null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'service' | 'method'; id: string; label: string } | null>(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const methods: GrpcMethodRow[] = (server.grpcMethods || []).map(m => ({
     id: m.id,
@@ -133,6 +134,24 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
   const removeService = (serviceName: string) => {
     update(methods.filter(m => m.service !== serviceName));
     setDeleteConfirm(null);
+  };
+
+  const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
+    const newMethods: GrpcMethodRow[] = [];
+    for (const item of items) {
+      const svc = item.data as { service?: string; methods?: Array<{ method?: string; type?: string; response?: string }> };
+      const svcName = svc.service || item.name || 'NewService';
+      const svcMethods = Array.isArray(svc.methods) ? svc.methods : [];
+      if (svcMethods.length === 0) {
+        newMethods.push({ id: crypto.randomUUID(), service: svcName, method: 'NewMethod', type: 'unary', response: '{}', enabled: true, delay: 0, statusCode: 0, serviceEnabled: true });
+      } else {
+        for (const m of svcMethods) {
+          const methodType = (['unary', 'server_streaming', 'client_streaming', 'bidi_streaming'].includes(m.type || '') ? m.type : 'unary') as GrpcMethodRow['type'];
+          newMethods.push({ id: crypto.randomUUID(), service: svcName, method: m.method || 'NewMethod', type: methodType, response: m.response || '{}', enabled: true, delay: 0, statusCode: 0, serviceEnabled: true });
+        }
+      }
+    }
+    update([...methods, ...newMethods]);
   };
 
   const updateMethod = (id: string, patch: Partial<GrpcMethodRow>) => {
@@ -209,20 +228,33 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
             templateKey="mock.grpc.generate"
             title="gRPC Services"
             serverName={server.name}
-            serverContext={(server.grpcMethods || []).length > 0
-              ? (server.grpcMethods || []).map((m: GrpcMockMethod) => `${m.service}/${m.method} (${m.type})`).join('\n')
-              : undefined}
+            serverContext={[
+              server.description?.trim() ? `Server description (MANDATORY — use strictly as primary context):\n${server.description.trim()}` : '',
+              (server.grpcMethods || []).length > 0 ? `Existing methods:\n${(server.grpcMethods || []).map((m: GrpcMockMethod) => `${m.service}/${m.method} (${m.type})`).join(', ')}` : '',
+            ].filter(Boolean).join('\n\n') || undefined}
+            accentVar={ACCENT}
+            onAddGeneratedItems={handleAddGeneratedItems}
           />
           <button
             type="button"
             onClick={addService}
-            className="h-[28px] px-2.5 text-[11px] rounded-md cursor-pointer transition-colors border border-[color-mix(in_srgb,var(--color-mock-server)_30%,transparent)]"
-            style={{ color: ACCENT, background: 'transparent' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-mock-server) 10%, transparent)'; }}
+            className="h-[28px] px-2.5 text-[11px] rounded-md cursor-pointer transition-colors border"
+            style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)`, background: 'transparent' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 10%, transparent)`; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             + Add Service
           </button>
+          {serviceGroups.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAll(true)}
+              title="Delete All Services"
+              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              <TrashIcon size={12} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -324,9 +356,9 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                     <button
                       type="button"
                       onClick={() => addMethodToService(group.service)}
-                      className="h-[26px] px-2 text-[10px] rounded-md cursor-pointer transition-colors self-start border border-dashed border-[color-mix(in_srgb,var(--color-mock-server)_35%,transparent)]"
-                      style={{ color: ACCENT, background: 'transparent' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-mock-server) 8%, transparent)'; }}
+                      className="h-[26px] px-2 text-[10px] rounded-md cursor-pointer transition-colors self-start border border-dashed"
+                      style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: 'transparent' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                     >
                       + Add Method
@@ -353,6 +385,20 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
             else removeMethod(deleteConfirm.id);
           }}
           onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Services"
+          message={`Are you sure you want to delete all ${serviceGroups.length} service${serviceGroups.length !== 1 ? 's' : ''} and their methods? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            update([]);
+            setShowDeleteAll(false);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
         />
       )}
     </div>

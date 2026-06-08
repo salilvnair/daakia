@@ -483,13 +483,14 @@ export const useTabsStore = create<TabsState>((set, get) => {
         set({ activeProtocol: protocol });
         return;
       }
-      // Find existing request tabs for this protocol — switch to last one
+      // Find existing request tabs for this protocol — switch to first one
       const protocolTabs = tabs.filter(t => t.type === 'request' && t.protocol === protocol);
       if (protocolTabs.length > 0) {
-        set({ activeProtocol: protocol, activeTabId: protocolTabs[protocolTabs.length - 1].id });
+        set({ activeProtocol: protocol, activeTabId: protocolTabs[0].id });
       } else {
-        // No tabs for this protocol — just change sidebar context, keep current tab active
+        // No tabs for this protocol — open a new tab of that protocol
         set({ activeProtocol: protocol });
+        get().addTab({ protocol });
       }
     },
 

@@ -6,7 +6,8 @@ import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../i
 import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, DurationInput, type DropdownOption } from '../../shared';
 import { MQTT_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
-import { MockAiGenerateButton } from '../MockAiGeneratePopover';
+import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import type { MQTTMockTopic } from '../mock-types';
 
 const MQTT_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -23,6 +24,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const mqttUrl = server.running && server.port ? `ws://localhost:${server.port}` : '';
 
@@ -74,6 +76,23 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
     onUpdate({ mqttTopics: topics.filter(t => t.id !== id) });
   };
 
+  const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
+    const newTopics: MQTTMockTopic[] = items.map(item => {
+      const d = item.data as { topic?: string; payload?: string; qos?: number; intervalMs?: number };
+      const qos = ([0, 1, 2].includes(d.qos ?? 0) ? d.qos : 0) as 0 | 1 | 2;
+      return {
+        id: crypto.randomUUID(),
+        topic: d.topic || item.name || 'topic/default',
+        qos,
+        retain: false,
+        payload: d.payload || '{"hello":"world"}',
+        intervalMs: d.intervalMs ?? 5000,
+        enabled: true,
+      };
+    });
+    onUpdate({ mqttTopics: [...topics, ...newTopics] });
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -84,20 +103,39 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
             options={MQTT_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
-            accentColor="var(--color-mock-server)"
+            accentColor="var(--color-protocol-mqtt)"
           />
           <MockAiGenerateButton
             templateKey="mock.mqtt.generate"
             title="MQTT Topics"
             serverName={server.name}
-            serverContext={(server.mqttTopics || []).length > 0
-              ? (server.mqttTopics || []).map((t: any) => t.topic || '').join('\n')
-              : undefined}
+            serverContext={[
+              server.description?.trim() ? `Server description (MANDATORY — use strictly as primary context):\n${server.description.trim()}` : '',
+              topics.length > 0 ? `Existing topics:\n${topics.map(t => t.topic || '').join(', ')}` : '',
+            ].filter(Boolean).join('\n\n') || undefined}
             accentVar="var(--color-protocol-mqtt)"
+            onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <button type="button" onClick={addTopic} className="h-[28px] px-2.5 text-[10px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.25)] hover:bg-[rgba(234,179,8,0.1)] cursor-pointer transition-colors">
+          <button
+            type="button"
+            onClick={addTopic}
+            className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
+            style={{ color: 'var(--color-protocol-mqtt)', borderColor: 'color-mix(in srgb, var(--color-protocol-mqtt) 30%, transparent)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-mqtt) 10%, transparent)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
             + Add Topic
           </button>
+          {topics.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAll(true)}
+              title="Delete All Topics"
+              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              <TrashIcon size={12} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -217,6 +255,20 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
             setDeleteConfirmId(null);
           }}
           onCancel={() => setDeleteConfirmId(null)}
+        />
+      )}
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Topics"
+          message={`Are you sure you want to delete all ${topics.length} MQTT topics? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            onUpdate({ mqttTopics: [] });
+            setShowDeleteAll(false);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
         />
       )}
     </div>

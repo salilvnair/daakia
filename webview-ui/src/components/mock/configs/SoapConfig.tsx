@@ -6,9 +6,9 @@ import { SOAP_MOCK_SAMPLES } from '../samples/soap';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import type { MockServer, SoapMockOperation } from '../mock-types';
-import { MockAiGenerateButton } from '../MockAiGeneratePopover';
+import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 
-const ACCENT = 'var(--color-mock-server)';
+const ACCENT = 'var(--color-protocol-soap)';
 
 const RESPONSE_TYPE_OPTIONS: DropdownOption[] = [
   { value: 'static', label: 'Static XML' },
@@ -67,6 +67,7 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
   const [expandedOpId, setExpandedOpId] = useState<string | null>(storedOpId || null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'service' | 'operation'; id: string; label: string } | null>(null);
   const [copiedService, setCopiedService] = useState<string | null>(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const operations: OperationRow[] = (server.soapOperations || []).map(op => ({
     id: op.id,
@@ -128,6 +129,23 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
   const removeOperation = (id: string) => {
     update(operations.filter(op => op.id !== id));
     setDeleteConfirm(null);
+  };
+
+  const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
+    const newOps: SoapMockOperation[] = [];
+    for (const item of items) {
+      const svc = item.data as { service?: string; operations?: Array<{ operation?: string; soapAction?: string; response?: string }> };
+      const svcName = svc.service || item.name || 'NewService';
+      const ops = Array.isArray(svc.operations) ? svc.operations : [];
+      if (ops.length === 0) {
+        newOps.push({ id: crypto.randomUUID(), service: svcName, operation: 'NewOperation', soapAction: `http://example.com/${svcName}/NewOperation`, responseType: 'static', response: `<Response><message>OK</message></Response>`, delay: 0, enabled: true });
+      } else {
+        for (const op of ops) {
+          newOps.push({ id: crypto.randomUUID(), service: svcName, operation: op.operation || 'NewOperation', soapAction: op.soapAction || `http://example.com/${svcName}/${op.operation || 'NewOperation'}`, responseType: 'static', response: op.response || `<Response><message>OK</message></Response>`, delay: 0, enabled: true });
+        }
+      }
+    }
+    update([...operations, ...newOps]);
   };
 
   const removeService = (serviceName: string) => {
@@ -208,21 +226,33 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
             templateKey="mock.soap.generate"
             title="SOAP Operations"
             serverName={server.name}
-            serverContext={(server.soapOperations || []).length > 0
-              ? (server.soapOperations || []).map((op: SoapMockOperation) => op.soapAction || op.operationName || '').join('\n')
-              : undefined}
+            serverContext={[
+              server.description?.trim() ? `Server description (MANDATORY — use strictly as primary context):\n${server.description.trim()}` : '',
+              (server.soapOperations || []).length > 0 ? `Existing operations:\n${(server.soapOperations || []).map((op: SoapMockOperation) => op.soapAction || op.operation || '').join(', ')}` : '',
+            ].filter(Boolean).join('\n\n') || undefined}
             accentVar="var(--color-protocol-soap)"
+            onAddGeneratedItems={handleAddGeneratedItems}
           />
           <button
             type="button"
             onClick={addService}
-            className="h-[28px] px-2.5 text-[11px] rounded-md cursor-pointer transition-colors border border-[color-mix(in_srgb,var(--color-mock-server)_30%,transparent)]"
-            style={{ color: ACCENT, background: 'transparent' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-mock-server) 10%, transparent)'; }}
+            className="h-[28px] px-2.5 text-[11px] rounded-md cursor-pointer transition-colors border"
+            style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)`, background: 'transparent' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 10%, transparent)`; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             + Add Service
           </button>
+          {serviceGroups.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAll(true)}
+              title="Delete All Services"
+              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              <TrashIcon size={12} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -369,9 +399,9 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
                     <button
                       type="button"
                       onClick={() => addOperationToService(group.service)}
-                      className="h-[26px] px-2 text-[10px] rounded-md cursor-pointer transition-colors self-start border border-dashed border-[color-mix(in_srgb,var(--color-mock-server)_35%,transparent)]"
-                      style={{ color: ACCENT, background: 'transparent' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-mock-server) 8%, transparent)'; }}
+                      className="h-[26px] px-2 text-[10px] rounded-md cursor-pointer transition-colors self-start border border-dashed"
+                      style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: 'transparent' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                     >
                       + Add Operation
@@ -398,6 +428,20 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
             else removeOperation(deleteConfirm.id);
           }}
           onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Services"
+          message={`Are you sure you want to delete all ${serviceGroups.length} service${serviceGroups.length !== 1 ? 's' : ''} and their operations? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            update([]);
+            setShowDeleteAll(false);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
         />
       )}
     </div>

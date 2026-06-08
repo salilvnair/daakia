@@ -2,7 +2,8 @@
  * RestRoutesConfig — REST route management for mock server.
  */
 import { useState } from 'react';
-import { StyledDropdown, type DropdownOption } from '../../shared';
+import { StyledDropdown, ConfirmDialog, type DropdownOption } from '../../shared';
+import { TrashIcon } from '../../../icons';
 import { RouteCard } from '../RouteCard';
 import { REST_SAMPLES } from '../samples';
 import type { MockServer, MockRoute } from '../mock-types';
@@ -12,6 +13,8 @@ const REST_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
   ...REST_SAMPLES.map(s => ({ value: s.id, label: s.label })),
 ];
+
+const REST_COLOR = 'var(--color-protocol-rest)';
 
 interface RestRoutesConfigProps {
   server: MockServer;
@@ -26,6 +29,7 @@ interface RestRoutesConfigProps {
 
 export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedRoutes, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute }: RestRoutesConfigProps) {
   const [selectedSample, setSelectedSample] = useState('');
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const applySample = (sampleId: string) => {
     if (!sampleId) return;
@@ -61,22 +65,36 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
             options={REST_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
-            accentColor="var(--color-mock-server)"
+            accentColor={REST_COLOR}
           />
           <MockAiGenerateButton
             templateKey="mock.rest.generate"
             title="REST Routes"
             serverName={server.name}
             serverContext={buildAiContext()}
+            accentVar={REST_COLOR}
             onAddGeneratedRoutes={onAddGeneratedRoutes}
           />
           <button
             type="button"
             onClick={onAddRoute}
-            className="h-[28px] px-2.5 text-[11px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.25)] hover:bg-[rgba(234,179,8,0.1)] cursor-pointer transition-colors"
+            className="h-[28px] px-2.5 text-[11px] rounded-md cursor-pointer transition-colors border"
+            style={{ color: REST_COLOR, borderColor: `color-mix(in srgb, ${REST_COLOR} 30%, transparent)` }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${REST_COLOR} 10%, transparent)`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             + Add Route
           </button>
+          {server.routes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAll(true)}
+              title="Delete All Routes"
+              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              <TrashIcon size={12} />
+            </button>
+          )}
         </div>
       </div>
       <div className="flex flex-col gap-2">
@@ -92,6 +110,20 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
           />
         ))}
       </div>
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Routes"
+          message={`Are you sure you want to delete all ${server.routes.length} routes? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            onUpdate({ routes: [] });
+            setShowDeleteAll(false);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
+        />
+      )}
     </>
   );
 }

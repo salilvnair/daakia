@@ -4,8 +4,10 @@
  * Features:
  * - Module-level response cache: never re-generates unless user clicks Regenerate
  * - Centered modal overlay (850px wide, up to 700px tall — 70% larger than original)
- * - Per-route "+ Add Route" buttons after generation completes
- * - "+ Add All Generated Routes" button in footer
+ * - Per-route "+ Add Route" buttons after generation completes (REST)
+ * - Protocol-aware item parsing for GQL, SOAP, gRPC, SSE, SIO, MQTT
+ * - "+ Add All Generated [Items]" button in footer, individual "+ Add [Item]" per row
+ * - Copy SDL button for GraphQL responses
  * - Description field in context so AI knows what to build
  *
  * Shared by all mock protocols (REST, GraphQL, gRPC, SOAP, SSE, WebSocket, Socket.IO, MQTT).
@@ -15,7 +17,7 @@ import { createPortal } from 'react-dom';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore, type AiPromptTemplateKey } from '../../store/ai-prompt-templates-store';
-import { SparkleIcon, CloseIcon, RefreshIcon, PlusIcon } from '../../icons';
+import { SparkleIcon, CloseIcon, RefreshIcon, PlusIcon, CopyIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import type { MockRoute, HttpMethod } from './mock-types';
@@ -28,11 +30,13 @@ const ACCENT = 'var(--color-mock-server)';
 interface CachedResult {
   text: string;
   routes: ParsedRoute[];
+  items?: ParsedGenericItem[];
+  sdl?: string | null;
 }
 
 const generateCache = new Map<string, CachedResult>();
 
-// ─── Route parser ─────────────────────────────────────────────────────────────
+// ─── Route parser (REST) ──────────────────────────────────────────────────────
 
 interface ParsedRoute {
   name: string;
@@ -157,6 +161,123 @@ function parseRoutesFromText(text: string): ParsedRoute[] {
   return routes;
 }
 
+// ─── Generic item types (non-REST protocols) ──────────────────────────────────
+
+export interface ParsedGenericItem {
+  name: string;
+  detail?: string;
+  data: unknown;
+}
+
+interface ProtocolFlavor {
+  codeBlockName: string;
+  sdlBlockName?: string;
+  itemLabel: string;
+  itemLabelPlural: string;
+  parseItem: (raw: Record<string, unknown>) => ParsedGenericItem;
+  /** Optional per-item add-button label. Defaults to "Add {itemLabel}" */
+  addButtonLabel?: (item: ParsedGenericItem) => string;
+}
+
+const PROTOCOL_FLAVORS: Record<string, ProtocolFlavor> = {
+  'mock.graphql.generate': {
+    codeBlockName: 'graphql_operations',
+    sdlBlockName: 'graphql_sdl',
+    itemLabel: 'Operation',
+    itemLabelPlural: 'Operations',
+    parseItem: (raw) => ({
+      name: (raw.operationName as string) || 'Unknown',
+      detail: (raw.operationType as string) || 'query',
+      data: raw,
+    }),
+  },
+  'mock.soap.generate': {
+    codeBlockName: 'soap_services',
+    itemLabel: 'Service',
+    itemLabelPlural: 'Services',
+    parseItem: (raw) => {
+      const ops = Array.isArray(raw.operations) ? raw.operations.length : 0;
+      return { name: (raw.service as string) || 'Unknown', detail: `${ops} op${ops !== 1 ? 's' : ''}`, data: raw };
+    },
+  },
+  'mock.grpc.generate': {
+    codeBlockName: 'grpc_services',
+    itemLabel: 'Service',
+    itemLabelPlural: 'Services',
+    parseItem: (raw) => {
+      const methods = Array.isArray(raw.methods) ? raw.methods.length : 0;
+      return { name: (raw.service as string) || 'Unknown', detail: `${methods} method${methods !== 1 ? 's' : ''}`, data: raw };
+    },
+  },
+  'mock.sse.generate': {
+    codeBlockName: 'sse_events',
+    itemLabel: 'Event',
+    itemLabelPlural: 'Events',
+    parseItem: (raw) => ({
+      name: (raw.eventName as string) || 'Unknown',
+      detail: raw.intervalMs ? `${(raw.intervalMs as number) / 1000}s` : undefined,
+      data: raw,
+    }),
+  },
+  'mock.socketio.generate': {
+    codeBlockName: 'sio_handlers',
+    itemLabel: 'Handler',
+    itemLabelPlural: 'Handlers',
+    parseItem: (raw) => ({
+      name: (raw.listenEvent as string) || 'Unknown',
+      detail: raw.emitEvent ? `→ ${raw.emitEvent as string}` : (raw.type as string) || undefined,
+      data: raw,
+    }),
+  },
+  'mock.mqtt.generate': {
+    codeBlockName: 'mqtt_topics',
+    itemLabel: 'Topic',
+    itemLabelPlural: 'Topics',
+    parseItem: (raw) => ({
+      name: (raw.topic as string) || 'Unknown',
+      detail: raw.intervalMs ? `${(raw.intervalMs as number) / 1000}s` : undefined,
+      data: raw,
+    }),
+  },
+  'mock.websocket.generate': {
+    codeBlockName: 'websocket_handlers',
+    itemLabel: 'Handler',
+    itemLabelPlural: 'Handlers',
+    parseItem: (raw) => {
+      const type = ((raw.type as string) || 'message').toLowerCase();
+      const labelMap: Record<string, string> = {
+        connect: 'On Connect',
+        message: 'On Message',
+        disconnect: 'On Disconnect',
+      };
+      return {
+        name: labelMap[type] || (raw.name as string) || 'On Message',
+        detail: (raw.matchPattern as string) || undefined,
+        data: raw,
+      };
+    },
+    addButtonLabel: (item) => `+ ${item.name}`,
+  },
+};
+
+function parseGenericItemsFromText(text: string, flavor: ProtocolFlavor): ParsedGenericItem[] {
+  const re = new RegExp('```' + flavor.codeBlockName + '\\n?([\\s\\S]*?)\\n?```', 'i');
+  const m = text.match(re);
+  if (!m) return [];
+  try {
+    const parsed: unknown = JSON.parse(m[1].trim());
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object')
+      .map(r => flavor.parseItem(r));
+  } catch { return []; }
+}
+
+function parseSdlFromText(text: string): string | null {
+  const m = text.match(/```graphql_sdl\n?([\s\S]*?)\n?```/i);
+  return m ? m[1].trim() : null;
+}
+
 // ─── Method badge colors ──────────────────────────────────────────────────────
 
 const METHOD_COLORS: Record<HttpMethod, string> = {
@@ -177,11 +298,13 @@ interface MockAiGeneratePopoverProps {
   title: string;
   /** Passed into {serverName} placeholder */
   serverName: string;
-  /** Passed into {context} placeholder — description + existing routes summary */
+  /** Passed into {context} placeholder — description + existing items summary */
   serverContext?: string;
   onClose: () => void;
   /** Only wired for REST — adds parsed routes directly to the server */
   onAddGeneratedRoutes?: (routes: Partial<MockRoute>[]) => void;
+  /** For non-REST protocols — adds parsed generic items (GQL/SOAP/gRPC/SSE/SIO/MQTT) */
+  onAddGeneratedItems?: (items: ParsedGenericItem[]) => void;
 }
 
 export function MockAiGeneratePopover({
@@ -191,6 +314,7 @@ export function MockAiGeneratePopover({
   serverContext = 'None configured yet.',
   onClose,
   onAddGeneratedRoutes,
+  onAddGeneratedItems,
 }: MockAiGeneratePopoverProps) {
   const popoverId = useRef(`mock-ai-${Date.now()}`).current;
   const cacheKey = `${templateKey}:${serverName}`;
@@ -207,27 +331,45 @@ export function MockAiGeneratePopover({
 
   const { resolve } = useAiPromptTemplatesStore();
 
+  // Detect protocol flavor (for non-REST protocols)
+  const flavor = PROTOCOL_FLAVORS[templateKey];
+
   // Check cache on mount — if hit, skip AI call entirely
   const cached = generateCache.get(cacheKey);
 
   // Re-parse routes from cached text if routes were not previously extracted
-  // (handles cache entries from before parser improvements)
   const initialRoutes = cached?.routes?.length
     ? cached.routes
     : cached?.text ? parseRoutesFromText(cached.text) : [];
 
-  // Update cache with freshly parsed routes if we had to re-parse
+  // Re-parse items from cached text if needed
+  const initialItems = cached?.items?.length
+    ? cached.items
+    : cached?.text && flavor ? parseGenericItemsFromText(cached.text, flavor) : [];
+
+  const initialSdl = cached?.sdl !== undefined
+    ? cached.sdl
+    : cached?.text && flavor?.sdlBlockName ? parseSdlFromText(cached.text) : null;
+
+  // Update cache with freshly parsed data if we had to re-parse
   if (cached && !cached.routes?.length && initialRoutes.length > 0) {
     generateCache.set(cacheKey, { ...cached, routes: initialRoutes });
   }
 
   const [text, setText] = useState(cached?.text || '');
   const [parsedRoutes, setParsedRoutes] = useState<ParsedRoute[]>(initialRoutes);
+  const [parsedItems, setParsedItems] = useState<ParsedGenericItem[]>(initialItems);
+  const [detectedSdl, setDetectedSdl] = useState<string | null>(initialSdl);
+  const [sdlCopied, setSdlCopied] = useState(false);
   const [streaming, setStreaming] = useState(!cached);   // no streaming if cache hit
   const [error, setError] = useState('');
   const [fetchKey, setFetchKey] = useState(0);
+  // REST route tracking
   const [addedAll, setAddedAll] = useState(false);
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
+  // Generic item tracking
+  const [addedAllItems, setAddedAllItems] = useState(false);
+  const [addedItemIds, setAddedItemIds] = useState<Set<number>>(new Set());
 
   // ── AI request — only fires when fetchKey changes AND no cache ──────────────
   useEffect(() => {
@@ -236,13 +378,22 @@ export function MockAiGeneratePopover({
 
     setText('');
     setParsedRoutes([]);
+    setParsedItems([]);
+    setDetectedSdl(null);
+    setSdlCopied(false);
     setStreaming(true);
     setError('');
     setAddedAll(false);
     setAddedIds(new Set());
+    setAddedAllItems(false);
+    setAddedItemIds(new Set());
     accumulatedRef.current = '';
 
     const prompt = resolve(templateKey, { serverName, context: serverContext });
+    // System prompt is stored in Prompt Library under the matching .system key
+    // e.g. 'mock.rest.generate' → 'mock.rest.system'
+    const systemKey = templateKey.replace('.generate', '.system') as AiPromptTemplateKey;
+    const systemPrompt = resolve(systemKey, {});
 
     const handler = (evt: MessageEvent) => {
       const msg = evt.data as Record<string, unknown>;
@@ -261,7 +412,17 @@ export function MockAiGeneratePopover({
         setStreaming(false);
         const routes = parseRoutesFromText(final);
         setParsedRoutes(routes);
-        generateCache.set(cacheKey, { text: final, routes });
+        let items: ParsedGenericItem[] = [];
+        let sdl: string | null = null;
+        if (flavor) {
+          items = parseGenericItemsFromText(final, flavor);
+          setParsedItems(items);
+          if (flavor.sdlBlockName) {
+            sdl = parseSdlFromText(final);
+            setDetectedSdl(sdl);
+          }
+        }
+        generateCache.set(cacheKey, { text: final, routes, items, sdl });
       }
       if (msg.type === 'ai:error') {
         setError((msg.message as string) || 'AI request failed');
@@ -277,9 +438,7 @@ export function MockAiGeneratePopover({
       provider,
       model,
       baseUrl: '',
-      systemPrompts: [
-        'You are a mock API generator with deep knowledge of real-world API design. You think like a senior backend engineer — you pick sensible resource names, use realistic IDs (UUIDs, slugs, domain-specific codes), generate real-looking timestamps and values, and make data that feels like it came from a production system.\n\nWhen generating routes, lead with a brief genuine explanation of your design: what resources you\'re creating, why these endpoints, what the data model looks like. Be specific to the domain, not generic.\n\nCRITICAL LIMITS — follow these strictly to avoid cut-off output:\n1. Generate at most 6 routes per call. If the user asks for more, generate 6 representative ones and note what was omitted.\n2. Keep each "body" object flat or at most one level deep — no deeply nested objects. Max 5 fields per body.\n3. The ```routes JSON block MUST be 100% complete and valid JSON before you finish responding. Never leave the JSON array open.\n4. Every item needs "method", "path", "statusCode", "name", "description", and "body" (a realistic JSON object). Invalid JSON or missing fields silently drops that route.\n5. Write descriptions in 10 words or fewer.',
-      ],
+      systemPrompts: [systemPrompt],
       userPrompt: prompt,
       conversation: [],
       tools: [],
@@ -319,11 +478,18 @@ export function MockAiGeneratePopover({
     accumulatedRef.current = '';
     setText('');
     setParsedRoutes([]);
+    setParsedItems([]);
+    setDetectedSdl(null);
+    setSdlCopied(false);
     setError('');
     setAddedAll(false);
     setAddedIds(new Set());
+    setAddedAllItems(false);
+    setAddedItemIds(new Set());
     setFetchKey(k => k + 1);
   }, [cacheKey]);
+
+  // ── REST route handlers ─────────────────────────────────────────────────────
 
   const handleAddOne = useCallback((route: ParsedRoute, idx: number) => {
     if (!onAddGeneratedRoutes) return;
@@ -353,6 +519,29 @@ export function MockAiGeneratePopover({
     setAddedAll(true);
     setAddedIds(new Set(parsedRoutes.map((_, i) => i)));
   }, [onAddGeneratedRoutes, parsedRoutes]);
+
+  // ── Generic item handlers ───────────────────────────────────────────────────
+
+  const handleAddOneItem = useCallback((item: ParsedGenericItem, idx: number) => {
+    if (!onAddGeneratedItems) return;
+    onAddGeneratedItems([item]);
+    setAddedItemIds(prev => new Set(prev).add(idx));
+  }, [onAddGeneratedItems]);
+
+  const handleAddAllItems = useCallback(() => {
+    if (!onAddGeneratedItems || parsedItems.length === 0) return;
+    onAddGeneratedItems(parsedItems);
+    setAddedAllItems(true);
+    setAddedItemIds(new Set(parsedItems.map((_, i) => i)));
+  }, [onAddGeneratedItems, parsedItems]);
+
+  const handleCopySdl = useCallback(() => {
+    if (!detectedSdl) return;
+    navigator.clipboard.writeText(detectedSdl).then(() => {
+      setSdlCopied(true);
+      setTimeout(() => setSdlCopied(false), 2000);
+    });
+  }, [detectedSdl]);
 
   const modal = (
     <div
@@ -446,7 +635,7 @@ export function MockAiGeneratePopover({
           </div>
         )}
 
-        {/* Scrollable content area — markdown only, routes are fixed below */}
+        {/* Scrollable content area — markdown only, items are fixed below */}
         {text && (
           <div ref={scrollRef} className="flex-1 overflow-auto" style={{ minHeight: 0 }}>
             <div className="px-4 py-3">
@@ -461,7 +650,7 @@ export function MockAiGeneratePopover({
           </div>
         )}
 
-        {/* ── Detected Routes — fixed bottom section, never scrolls away ─────── */}
+        {/* ── Detected REST Routes — fixed bottom section ─────────────────────── */}
         {!streaming && parsedRoutes.length > 0 && onAddGeneratedRoutes && text && (
           <div
             className="flex-shrink-0 border-t flex flex-col"
@@ -471,7 +660,7 @@ export function MockAiGeneratePopover({
               backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface))`,
             }}
           >
-            {/* Header — sticky within this section */}
+            {/* Header */}
             <div
               className="flex items-center gap-2 px-3 py-2 border-b text-[10.5px] font-semibold flex-shrink-0"
               style={{
@@ -484,7 +673,7 @@ export function MockAiGeneratePopover({
               Detected Routes ({parsedRoutes.length}) — click to add individually or use "Add All" below
             </div>
 
-            {/* Route cards — scrollable within the fixed section */}
+            {/* Route cards */}
             <div className="overflow-y-auto divide-y [scrollbar-gutter:stable]" style={{ borderColor: 'var(--color-surface-border)' }}>
               {parsedRoutes.map((route, idx) => {
                 const isAdded = addedIds.has(idx);
@@ -538,6 +727,79 @@ export function MockAiGeneratePopover({
           </div>
         )}
 
+        {/* ── Detected Generic Items (non-REST protocols) — fixed bottom section ─ */}
+        {!streaming && parsedItems.length > 0 && onAddGeneratedItems && text && flavor && (
+          <div
+            className="flex-shrink-0 border-t flex flex-col"
+            style={{
+              maxHeight: 224,
+              borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
+              backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface))`,
+            }}
+          >
+            {/* Header */}
+            <div
+              className="flex items-center gap-2 px-3 py-2 border-b text-[10.5px] font-semibold flex-shrink-0"
+              style={{
+                backgroundColor: `color-mix(in srgb, ${ACCENT} 7%, var(--color-surface))`,
+                borderColor: `color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))`,
+                color: ACCENT,
+              }}
+            >
+              <SparkleIcon size={10} style={{ color: ACCENT }} />
+              Detected {flavor.itemLabelPlural} ({parsedItems.length}) — click to add individually or use "Add All" below
+            </div>
+
+            {/* Item rows */}
+            <div className="overflow-y-auto divide-y [scrollbar-gutter:stable]" style={{ borderColor: 'var(--color-surface-border)' }}>
+              {parsedItems.map((item, idx) => {
+                const isAdded = addedItemIds.has(idx);
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-3 px-3 py-2"
+                    style={{ backgroundColor: isAdded ? 'color-mix(in srgb, var(--color-success) 5%, transparent)' : 'transparent' }}
+                  >
+                    {item.detail && (
+                      <span
+                        className="text-[9px] font-mono px-1.5 py-0.5 rounded flex-shrink-0"
+                        style={{
+                          color: ACCENT,
+                          backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
+                        }}
+                      >
+                        {item.detail}
+                      </span>
+                    )}
+                    <span className="font-mono text-[11px] text-[var(--color-text-primary)] flex-1 truncate">
+                      {item.name}
+                    </span>
+                    {isAdded ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded flex-shrink-0" style={{ color: 'var(--color-success)' }}>
+                        ✓ Added
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleAddOneItem(item, idx)}
+                        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors flex-shrink-0 border"
+                        style={{
+                          color: ACCENT,
+                          borderColor: `color-mix(in srgb, ${ACCENT} 25%, transparent)`,
+                          backgroundColor: `color-mix(in srgb, ${ACCENT} 5%, transparent)`,
+                        }}
+                      >
+                        <PlusIcon size={9} />
+                        {flavor.addButtonLabel ? flavor.addButtonLabel(item) : `Add ${flavor.itemLabel}`}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Footer — after streaming completes */}
         {!streaming && !error && text && (
           <div
@@ -556,7 +818,26 @@ export function MockAiGeneratePopover({
 
             <div className="flex-1" />
 
-            {/* Add all generated routes button — REST only */}
+            {/* Copy SDL — GraphQL only */}
+            {detectedSdl && (
+              <button
+                type="button"
+                onClick={handleCopySdl}
+                className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors font-medium"
+                style={{
+                  backgroundColor: sdlCopied
+                    ? 'color-mix(in srgb, var(--color-success) 12%, transparent)'
+                    : 'color-mix(in srgb, var(--color-protocol-graphql, #ec4899) 10%, transparent)',
+                  color: sdlCopied ? 'var(--color-success)' : 'var(--color-protocol-graphql, #ec4899)',
+                  border: `1px solid ${sdlCopied ? 'color-mix(in srgb, var(--color-success) 30%, transparent)' : 'color-mix(in srgb, var(--color-protocol-graphql, #ec4899) 30%, transparent)'}`,
+                }}
+              >
+                {sdlCopied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+                {sdlCopied ? 'SDL Copied!' : 'Copy SDL'}
+              </button>
+            )}
+
+            {/* Add all generated REST routes */}
             {onAddGeneratedRoutes && parsedRoutes.length > 0 && (
               <button
                 type="button"
@@ -573,6 +854,28 @@ export function MockAiGeneratePopover({
               >
                 <PlusIcon size={11} />
                 {addedAll ? `✓ All ${parsedRoutes.length} Routes Added` : `Add All Generated Routes (${parsedRoutes.length})`}
+              </button>
+            )}
+
+            {/* Add all generated items (non-REST protocols) */}
+            {onAddGeneratedItems && parsedItems.length > 0 && flavor && (
+              <button
+                type="button"
+                onClick={handleAddAllItems}
+                disabled={addedAllItems}
+                className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: addedAllItems
+                    ? 'color-mix(in srgb, var(--color-success) 12%, transparent)'
+                    : `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+                  color: addedAllItems ? 'var(--color-success)' : ACCENT,
+                  border: `1px solid ${addedAllItems ? 'color-mix(in srgb, var(--color-success) 30%, transparent)' : `color-mix(in srgb, ${ACCENT} 30%, transparent)`}`,
+                }}
+              >
+                <PlusIcon size={11} />
+                {addedAllItems
+                  ? `✓ All ${parsedItems.length} ${flavor.itemLabelPlural} Added`
+                  : `Add All ${flavor.itemLabelPlural} (${parsedItems.length})`}
               </button>
             )}
           </div>
@@ -595,6 +898,8 @@ interface MockAiGenerateButtonProps {
   accentVar?: string;
   /** Only for REST — adds parsed routes to the server */
   onAddGeneratedRoutes?: (routes: Partial<MockRoute>[]) => void;
+  /** For non-REST protocols — adds parsed generic items */
+  onAddGeneratedItems?: (items: ParsedGenericItem[]) => void;
 }
 
 export function MockAiGenerateButton({
@@ -604,6 +909,7 @@ export function MockAiGenerateButton({
   serverContext,
   accentVar = ACCENT,
   onAddGeneratedRoutes,
+  onAddGeneratedItems,
 }: MockAiGenerateButtonProps) {
   const [open, setOpen] = useState(false);
 
@@ -631,6 +937,7 @@ export function MockAiGenerateButton({
           serverContext={serverContext}
           onClose={() => setOpen(false)}
           onAddGeneratedRoutes={onAddGeneratedRoutes}
+          onAddGeneratedItems={onAddGeneratedItems}
         />
       )}
     </>

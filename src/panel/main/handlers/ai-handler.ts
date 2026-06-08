@@ -193,12 +193,20 @@ export async function handleAiSend(
             conversation_id: tabId,
             stage: 'DAAKIA_AI',
             model: 'copilot',
-            system_prompt: systemPrompts.join('\n\n').slice(0, 4000),
-            user_prompt: userPrompt.slice(0, 4000),
-            request_payload: JSON.stringify({ provider: 'copilot', messageCount: messages.length }),
-            response_payload: result.message.content.slice(0, 8000),
-            headers: JSON.stringify({ provider: 'copilot' }),
-            meta: JSON.stringify({ tokens: result.tokens, duration_ms: result.duration }),
+            // Full actual request — system prompts + conversation + user prompt are all in messages[]
+            request_payload: JSON.stringify({
+              provider: 'copilot',
+              model: 'copilot',
+              messages,         // complete message array (system + history + user)
+              tools: allTools.length ? allTools : [],
+              settings,
+            }),
+            // Full actual response
+            response_payload: JSON.stringify({
+              message: result.message,
+              tokens: result.tokens,
+              duration: result.duration,
+            }),
             duration_ms: result.duration,
           });
         } catch { /* ignore audit errors */ }
@@ -212,9 +220,13 @@ export async function handleAiSend(
             conversation_id: tabId,
             stage: 'DAAKIA_AI',
             model: 'copilot',
-            system_prompt: systemPrompts.join('\n\n').slice(0, 4000),
-            user_prompt: userPrompt.slice(0, 4000),
-            request_payload: JSON.stringify({ provider: 'copilot', messageCount: messages.length }),
+            request_payload: JSON.stringify({
+              provider: 'copilot',
+              model: 'copilot',
+              messages,
+              tools: allTools.length ? allTools : [],
+              settings,
+            }),
             error: error.message,
             duration_ms: 0,
           });
@@ -271,25 +283,30 @@ export async function handleAiSend(
         refreshHistory?.();
       } catch { /* ignore history errors */ }
 
-      // Save to AI audit log
+      // Save to AI audit log — full actual request + full actual response, no duplication
       try {
         insertAudit({
           conversation_id: tabId,
           stage: 'DAAKIA_AI',
           model: effectiveModel,
-          system_prompt: systemPrompts.join('\n\n').slice(0, 4000),
-          user_prompt: userPrompt.slice(0, 4000),
+          // Full actual request sent to the AI API
+          // messages[] contains all system prompts + conversation history + current user prompt
+          // authData intentionally omitted (contains API keys)
           request_payload: JSON.stringify({
             provider: providerId,
             model: effectiveModel,
             baseUrl: resolvedBaseUrl,
-            messageCount: messages.length,
-            toolCount: allTools.length,
+            chatEndpoint,
+            messages,
+            tools: allTools.length ? allTools : [],
             settings,
           }),
-          response_payload: result.message.content.slice(0, 8000),
-          headers: JSON.stringify({ provider: providerId, baseUrl: resolvedBaseUrl }),
-          meta: JSON.stringify({ tokens: result.tokens, duration_ms: result.duration }),
+          // Full actual response received from the AI API
+          response_payload: JSON.stringify({
+            message: result.message,
+            tokens: result.tokens,
+            duration: result.duration,
+          }),
           duration_ms: result.duration,
         });
       } catch { /* ignore audit errors */ }
@@ -324,18 +341,22 @@ export async function handleAiSend(
           conversation_id: tabId,
           stage: 'DAAKIA_AI',
           model: effectiveModel,
-          system_prompt: systemPrompts.join('\n\n').slice(0, 4000),
-          user_prompt: userPrompt.slice(0, 4000),
           request_payload: JSON.stringify({
             provider: providerId,
             model: effectiveModel,
             baseUrl: resolvedBaseUrl,
-            messageCount: messages.length,
+            chatEndpoint,
+            messages,
+            tools: allTools.length ? allTools : [],
             settings,
           }),
+          // No response_payload on error — capture the error details instead
+          response_payload: JSON.stringify({
+            error: error.message,
+            code: error.code,
+            diagnostics: error.diagnostics ?? null,
+          }),
           error: error.message,
-          headers: JSON.stringify({ provider: providerId, baseUrl: resolvedBaseUrl, code: error.code }),
-          meta: JSON.stringify({ diagnostics: error.diagnostics }),
           duration_ms: 0,
         });
       } catch { /* ignore audit errors */ }

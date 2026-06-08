@@ -6,12 +6,15 @@ import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../i
 import { CodeEditor, StyledDropdown, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
 import { GRAPHQL_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
-import { MockAiGenerateButton } from '../MockAiGeneratePopover';
+import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import type { GraphQLMockOperation } from '../mock-types';
 
 const GRAPHQL_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
   ...GRAPHQL_SAMPLES.map(s => ({ value: s.id, label: s.label })),
 ];
+
+const GQL_COLOR = 'var(--color-protocol-graphql)';
 
 interface GraphQLConfigProps {
   server: MockServer;
@@ -22,6 +25,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
   const [selectedSample, setSelectedSample] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   const gqlUrl = server.running && server.port ? `http://localhost:${server.port}/graphql` : '';
 
@@ -52,26 +56,26 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
     });
   };
 
+  const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
+    const newOps: GraphQLMockOperation[] = items.map(item => {
+      const d = item.data as { operationType?: string; operationName?: string; response?: string; statusCode?: number };
+      return {
+        id: crypto.randomUUID(),
+        operationType: (['query', 'mutation', 'subscription'].includes(d.operationType || '') ? d.operationType : 'query') as 'query' | 'mutation' | 'subscription',
+        operationName: d.operationName || item.name,
+        response: d.response || '{\n  "data": {}\n}',
+        statusCode: d.statusCode || 200,
+        delay: 0,
+        enabled: true,
+      };
+    });
+    onUpdate({ graphqlOperations: [...(server.graphqlOperations || []), ...newOps] });
+  };
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Schema (SDL)</span>
-        <div className="flex items-center gap-1.5">
-          <StyledDropdown
-            size="sm"
-            options={GRAPHQL_SAMPLE_OPTIONS}
-            value={selectedSample}
-            onChange={applySample}
-            accentColor="var(--color-mock-server)"
-          />
-          <MockAiGenerateButton
-            templateKey="mock.graphql.generate"
-            title="GraphQL Schema"
-            serverName={server.name}
-            serverContext={server.graphqlSchema || undefined}
-            accentVar="var(--color-protocol-graphql)"
-          />
-        </div>
       </div>
       <p className="text-[10px] text-[var(--color-text-muted)]">
         Define a GraphQL schema (SDL) so the GraphQL client can introspect this mock server and show Schema/Documentation panels.
@@ -87,16 +91,49 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
 
       <div className="flex items-center justify-between mt-2">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Mock Operations ({server.graphqlOperations?.length || 0})</span>
-        <button
-          type="button"
-          onClick={() => {
-            const ops = server.graphqlOperations || [];
-            onUpdate({ graphqlOperations: [...ops, { id: crypto.randomUUID(), operationType: 'query', operationName: '', response: '{\n  "data": {}\n}', statusCode: 200, delay: 0, enabled: true }] });
-          }}
-          className="h-[28px] px-2.5 text-[11px] rounded-md text-[var(--color-mock-server)] border border-[rgba(234,179,8,0.25)] hover:bg-[rgba(234,179,8,0.1)] cursor-pointer transition-colors"
-        >
-          + Add Operation
-        </button>
+        <div className="flex items-center gap-1.5">
+          <StyledDropdown
+            size="sm"
+            options={GRAPHQL_SAMPLE_OPTIONS}
+            value={selectedSample}
+            onChange={applySample}
+            accentColor={GQL_COLOR}
+          />
+          <MockAiGenerateButton
+            templateKey="mock.graphql.generate"
+            title="GraphQL Operations"
+            serverName={server.name}
+            serverContext={[
+              server.description?.trim() ? `Server description (MANDATORY — use strictly as primary context):\n${server.description.trim()}` : '',
+              server.graphqlSchema ? `Existing schema:\n${server.graphqlSchema}` : '',
+            ].filter(Boolean).join('\n\n') || undefined}
+            accentVar={GQL_COLOR}
+            onAddGeneratedItems={handleAddGeneratedItems}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const ops = server.graphqlOperations || [];
+              onUpdate({ graphqlOperations: [...ops, { id: crypto.randomUUID(), operationType: 'query', operationName: '', response: '{\n  "data": {}\n}', statusCode: 200, delay: 0, enabled: true }] });
+            }}
+            className="h-[28px] px-2.5 text-[11px] rounded-md cursor-pointer transition-colors border"
+            style={{ color: GQL_COLOR, borderColor: `color-mix(in srgb, ${GQL_COLOR} 30%, transparent)` }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${GQL_COLOR} 10%, transparent)`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            + Add Operation
+          </button>
+          {(server.graphqlOperations || []).length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAll(true)}
+              title="Delete All Operations"
+              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+            >
+              <TrashIcon size={12} />
+            </button>
+          )}
+        </div>
       </div>
       {(server.graphqlOperations || []).map((op, i) => (
         <div key={op.id} className={`relative rounded-lg border p-3 flex flex-col gap-2 transition-all ${
@@ -139,7 +176,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
                 { value: 'mutation', label: 'Mutation' },
                 { value: 'subscription', label: 'Subscription' },
               ]}
-              accentColor="var(--color-mock-server)"
+              accentColor={GQL_COLOR}
             />
             <input
               type="text"
@@ -201,6 +238,20 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
             setDeleteConfirmId(null);
           }}
           onCancel={() => setDeleteConfirmId(null)}
+        />
+      )}
+
+      {showDeleteAll && (
+        <ConfirmDialog
+          title="Delete All Operations"
+          message={`Are you sure you want to delete all ${(server.graphqlOperations || []).length} operations? This cannot be undone.`}
+          confirmLabel="Delete All"
+          danger
+          onConfirm={() => {
+            onUpdate({ graphqlOperations: [] });
+            setShowDeleteAll(false);
+          }}
+          onCancel={() => setShowDeleteAll(false)}
         />
       )}
     </div>
