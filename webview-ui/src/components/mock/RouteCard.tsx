@@ -7,6 +7,14 @@ import { METHOD_COLORS, methodBg } from '../../colors';
 import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern, ExternalLinkIcon } from '../../icons';
 import type { MockRoute, HttpMethod } from './mock-types';
 import { openRouteTryTab } from './mock-try-handler';
+import { MatchBuilderPanel } from './wiremock/MatchBuilderPanel';
+import { TemplateEditorPanel } from './wiremock/TemplateEditorPanel';
+import { FaultInjectionPanel } from './wiremock/FaultInjectionPanel';
+import { SequencePanel } from './wiremock/SequencePanel';
+import { WebhookPanel } from './wiremock/WebhookPanel';
+import { RouteStatePanel } from './wiremock/StateMachinePanel';
+
+type RouteTab = 'basic' | 'matching' | 'advanced';
 
 function formatDelay(ms: number): string {
   if (ms >= 60000) return `${Math.round(ms / 60000)}m`;
@@ -28,16 +36,18 @@ interface RouteCardProps {
   route: MockRoute;
   isEditing: boolean;
   serverBaseUrl?: string;
+  availableStates?: string[];
   onEdit: () => void;
   onUpdate: (patch: Partial<MockRoute>) => void;
   onDelete: () => void;
 }
 
-export function RouteCard({ route, isEditing, serverBaseUrl, onEdit, onUpdate, onDelete }: RouteCardProps) {
+export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, onEdit, onUpdate, onDelete }: RouteCardProps) {
   const [contentType, setContentType] = useState<'application/json' | 'application/xml' | 'text/plain'>('application/json');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [headersExpanded, setHeadersExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<RouteTab>('basic');
 
   const copyFullPath = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -187,121 +197,174 @@ export function RouteCard({ route, isEditing, serverBaseUrl, onEdit, onUpdate, o
       {/* Expanded edit form */}
       {isEditing && route.enabled && (
         <div className="border-t border-[var(--color-surface-border)] px-3 py-3 flex flex-col gap-2.5">
-          {/* Method + Path */}
-          <div className="flex items-center gap-2">
-            <StyledDropdown
-              options={MOCK_METHOD_OPTIONS}
-              value={route.method}
-              onChange={(v) => onUpdate({ method: v as HttpMethod })}
-              className="mock-method"
-            />
-            <input
-              type="text"
-              value={route.path}
-              onChange={(e) => onUpdate({ path: e.target.value })}
-              placeholder="/api/endpoint"
-              className="flex-1 h-[32px] px-3 text-[13px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
-            />
+
+          {/* Route-level tab bar */}
+          <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.07)] -mx-3 px-3">
+            {([
+              { id: 'basic', label: 'Response' },
+              { id: 'matching', label: 'Matching' },
+              { id: 'advanced', label: 'Advanced' },
+            ] as { id: RouteTab; label: string }[]).map(t => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className="h-[28px] px-3 text-[10px] font-medium cursor-pointer transition-colors"
+                style={{
+                  borderBottom: activeTab === t.id ? '2px solid var(--color-mock-server)' : '2px solid transparent',
+                  color: activeTab === t.id ? 'var(--color-mock-server)' : 'var(--color-text-muted)',
+                  marginBottom: '-1px',
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
 
-          {/* Status + Delay */}
-          <div className="flex items-center gap-4 pt-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-[var(--color-text-muted)]">Status</span>
+          {/* ═══ BASIC TAB ═══════════════════════════════════════════════════ */}
+          {activeTab === 'basic' && <>
+            {/* Method + Path */}
+            <div className="flex items-center gap-2">
+              <StyledDropdown
+                options={MOCK_METHOD_OPTIONS}
+                value={route.method}
+                onChange={(v) => onUpdate({ method: v as HttpMethod })}
+                className="mock-method"
+              />
               <input
                 type="text"
-                inputMode="numeric"
-                value={route.statusCode}
-                onChange={(e) => onUpdate({ statusCode: parseInt(e.target.value) || 200 })}
-                className="w-[56px] h-[28px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                value={route.path}
+                onChange={(e) => onUpdate({ path: e.target.value })}
+                placeholder="/api/endpoint"
+                className="flex-1 h-[32px] px-3 text-[13px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
               />
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
-              <DurationInput
-                value={route.delay}
-                onChange={(ms) => onUpdate({ delay: ms })}
-              />
-            </div>
-          </div>
 
-          {/* Response Headers — collapsed by default, tight spacing */}
-          <div className="pt-0.5">
-            <button
-              type="button"
-              onClick={() => setHeadersExpanded(!headersExpanded)}
-              className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-            >
-              <span className={`transition-transform text-[8px] ${headersExpanded ? 'rotate-90' : ''}`}>▶</span>
-              Response Headers ({Object.keys(route.headers).length})
-            </button>
-            {headersExpanded && (
-              <div className="mt-1.5">
-                <KeyValueTable
-                  rows={headerRows}
-                  onChange={handleHeadersChange}
-                  placeholder={{ key: 'Header name', value: 'Value' }}
-                  autocompleteKeys
-                  label="Header List"
-                  accentColor="var(--color-mock-server)"
+            {/* Status + Delay */}
+            <div className="flex items-center gap-4 pt-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-[var(--color-text-muted)]">Status</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={route.statusCode}
+                  onChange={(e) => onUpdate({ statusCode: parseInt(e.target.value) || 200 })}
+                  className="w-[56px] h-[28px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
-            )}
-          </div>
-
-          {/* Response Body */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[11px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Response Body</label>
-              <div className="flex items-center gap-0.5 rounded-md border border-[var(--color-surface-border)] overflow-hidden">
-                {(['application/json', 'application/xml', 'text/plain'] as const).map(ct => (
-                  <button
-                    key={ct}
-                    type="button"
-                    onClick={() => {
-                      setContentType(ct);
-                      onUpdate({ headers: { ...route.headers, 'Content-Type': ct } });
-                    }}
-                    className={`px-2.5 py-1 text-[10px] cursor-pointer transition-colors ${
-                      contentType === ct
-                        ? 'bg-[rgba(234,179,8,0.15)] text-[var(--color-mock-server)] font-medium'
-                        : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]'
-                    }`}
-                  >
-                    {ct.split('/')[1]}
-                  </button>
-                ))}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
+                <DurationInput
+                  value={route.delay}
+                  onChange={(ms) => onUpdate({ delay: ms })}
+                />
               </div>
             </div>
-            <ResizablePanel id={`mock.rest.route.${route.id}.body`} defaultHeight={120} minHeight={60} maxHeight={500}>
-              <CodeEditor
-                value={route.body}
-                onChange={(val) => onUpdate({ body: val })}
-                language={getEditorLang() as any}
-                height="100%"
-              />
-            </ResizablePanel>
-          </div>
 
-          {/* Response Script (for dynamic responses like OAuth/JWT) */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[11px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">
-                Response Script
-                {route.responseScript?.trim() && <span className="ml-1.5 text-[9px] text-[var(--color-success)]">(active — overrides body)</span>}
-              </label>
-              <span className="text-[9px] text-[var(--color-text-muted)] opacity-60">JS • access: req.body, req.headers, req.query, jwt.sign()</span>
+            {/* Response Headers — collapsed by default, tight spacing */}
+            <div className="pt-0.5">
+              <button
+                type="button"
+                onClick={() => setHeadersExpanded(!headersExpanded)}
+                className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
+              >
+                <span className={`transition-transform text-[8px] ${headersExpanded ? 'rotate-90' : ''}`}>▶</span>
+                Response Headers ({Object.keys(route.headers).length})
+              </button>
+              {headersExpanded && (
+                <div className="mt-1.5">
+                  <KeyValueTable
+                    rows={headerRows}
+                    onChange={handleHeadersChange}
+                    placeholder={{ key: 'Header name', value: 'Value' }}
+                    autocompleteKeys
+                    label="Header List"
+                    accentColor="var(--color-mock-server)"
+                  />
+                </div>
+              )}
             </div>
-            <ResizablePanel id={`mock.rest.route.${route.id}.script`} defaultHeight={100} minHeight={50} maxHeight={400}>
-              <CodeEditor
-                value={route.responseScript || ''}
-                onChange={(val) => onUpdate({ responseScript: val })}
-                language="javascript"
-                placeholder="// Return object/string as response. Example:\n// const token = jwt.sign({ sub: req.body.username }, 'secret', { expiresIn: 3600 });\n// return { access_token: token };"
-                height="100%"
-              />
-            </ResizablePanel>
-          </div>
+
+            {/* Response Body */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[11px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Response Body</label>
+                <div className="flex items-center gap-0.5 rounded-md border border-[var(--color-surface-border)] overflow-hidden">
+                  {(['application/json', 'application/xml', 'text/plain'] as const).map(ct => (
+                    <button
+                      key={ct}
+                      type="button"
+                      onClick={() => {
+                        setContentType(ct);
+                        onUpdate({ headers: { ...route.headers, 'Content-Type': ct } });
+                      }}
+                      className={`px-2.5 py-1 text-[10px] cursor-pointer transition-colors ${
+                        contentType === ct
+                          ? 'bg-[rgba(234,179,8,0.15)] text-[var(--color-mock-server)] font-medium'
+                          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]'
+                      }`}
+                    >
+                      {ct.split('/')[1]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <ResizablePanel id={`mock.rest.route.${route.id}.body`} defaultHeight={120} minHeight={60} maxHeight={500}>
+                <CodeEditor
+                  value={route.body}
+                  onChange={(val) => onUpdate({ body: val })}
+                  language={getEditorLang() as any}
+                  height="100%"
+                />
+              </ResizablePanel>
+            </div>
+
+            {/* Template Editor (6A.7-6A.9) */}
+            <TemplateEditorPanel route={route} onUpdate={onUpdate} />
+
+            {/* Response Script (for dynamic responses like OAuth/JWT) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[11px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">
+                  Response Script
+                  {route.responseScript?.trim() && <span className="ml-1.5 text-[9px] text-[var(--color-success)]">(active — overrides body)</span>}
+                </label>
+                <span className="text-[9px] text-[var(--color-text-muted)] opacity-60">JS • access: req.body, req.headers, req.query, jwt.sign()</span>
+              </div>
+              <ResizablePanel id={`mock.rest.route.${route.id}.script`} defaultHeight={100} minHeight={50} maxHeight={400}>
+                <CodeEditor
+                  value={route.responseScript || ''}
+                  onChange={(val) => onUpdate({ responseScript: val })}
+                  language="javascript"
+                  placeholder="// Return object/string as response. Example:\n// const token = jwt.sign({ sub: req.body.username }, 'secret', { expiresIn: 3600 });\n// return { access_token: token };"
+                  height="100%"
+                />
+              </ResizablePanel>
+            </div>
+
+            {/* Sequence responses (6A.22) */}
+            <SequencePanel route={route} onUpdate={onUpdate} />
+          </>}
+
+          {/* ═══ MATCHING TAB ════════════════════════════════════════════════ */}
+          {activeTab === 'matching' && (
+            <MatchBuilderPanel route={route} onUpdate={onUpdate} />
+          )}
+
+          {/* ═══ ADVANCED TAB ════════════════════════════════════════════════ */}
+          {activeTab === 'advanced' && (
+            <div className="flex flex-col gap-3">
+              {/* State machine (6A.11) */}
+              <div>
+                <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-2">State Machine</p>
+                <RouteStatePanel route={route} onUpdate={onUpdate} availableStates={availableStates} />
+              </div>
+              {/* Fault injection + rate limit (6A.13-6A.14) */}
+              <FaultInjectionPanel route={route} onUpdate={onUpdate} />
+              {/* Webhooks (6A.23) */}
+              <WebhookPanel route={route} onUpdate={onUpdate} />
+            </div>
+          )}
         </div>
       )}
     </div>

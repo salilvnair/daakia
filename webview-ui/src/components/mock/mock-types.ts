@@ -23,9 +23,135 @@ export interface McpMockTool {
 }
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
+// ─── Advanced Matching Types (6A.1-6A.4) ────────────────────────────────────
+
+export type UrlMatchType = 'exact' | 'regex' | 'glob' | 'template' | 'pathPrefix';
+export type MatchType = 'equalTo' | 'contains' | 'regex' | 'absent' | 'present' | 'startsWith' | 'endsWith' | 'notContaining';
+export type BodyMatchType = 'equalTo' | 'equalToJson' | 'matchesJsonPath' | 'matchesJsonSchema' | 'equalToXml' | 'matchesXPath' | 'contains' | 'regex';
+export type CompositeLogic = 'AND' | 'OR';
+
+export interface UrlMatchConfig {
+  type: UrlMatchType;
+  value: string;
+  caseInsensitive?: boolean;
+}
+
+export interface MatchRule {
+  id: string;
+  key: string;
+  matchType: MatchType;
+  value: string;
+  caseInsensitive?: boolean;
+  negate?: boolean;
+}
+
+export interface BodyMatcher {
+  matchType: BodyMatchType;
+  value: string;
+  ignoreArrayOrder?: boolean;
+  ignoreExtraElements?: boolean;
+  negate?: boolean;
+}
+
+// ─── Fault Injection (6A.13-6A.15) ──────────────────────────────────────────
+
+export type FaultType = 'CONNECTION_RESET' | 'EMPTY_RESPONSE' | 'MALFORMED_JSON' | 'CHUNKED_DRIBBLE' | 'TIMEOUT' | 'RANDOM_5XX';
+
+export interface FaultConfig {
+  enabled: boolean;
+  type?: FaultType;
+  probability?: number;
+  delayMs?: number;
+  randomDelayRange?: { min: number; max: number };
+  errorRate?: number;
+}
+
+// ─── Rate Limiting (6A.14) ──────────────────────────────────────────────────
+
+export interface RateLimitConfig {
+  enabled: boolean;
+  requestsPerWindow: number;
+  windowMs: number;
+  burstAllowance?: number;
+}
+
+// ─── Response Sequences (6A.22) ─────────────────────────────────────────────
+
+export interface ResponseSequenceItem {
+  id: string;
+  statusCode: number;
+  headers: Record<string, string>;
+  body: string;
+  delayMs?: number;
+}
+
+export type SequenceMode = 'sequential' | 'round-robin' | 'random';
+
+// ─── Webhooks (6A.23) ───────────────────────────────────────────────────────
+
+export interface WebhookConfig {
+  id: string;
+  url: string;
+  method: HttpMethod;
+  headers?: Record<string, string>;
+  body?: string;
+  delayMs?: number;
+  enabled: boolean;
+}
+
+// ─── State Machine (6A.11-6A.12) ────────────────────────────────────────────
+
+export interface StateNode {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  isInitial?: boolean;
+  color?: string;
+}
+
+export interface StateTransition {
+  id: string;
+  from: string;
+  to: string;
+  routeId: string;
+  label?: string;
+}
+
+export interface StateMachineConfig {
+  enabled: boolean;
+  states: StateNode[];
+  transitions: StateTransition[];
+  sessionMode: 'cookie' | 'header' | 'global';
+  sessionKey?: string;
+  defaultState: string;
+}
+
+// ─── Record & Playback (6A.16-6A.18) ────────────────────────────────────────
+
+export interface RecordedRequest {
+  id: string;
+  timestamp: number;
+  method: HttpMethod;
+  path: string;
+  headers: Record<string, string>;
+  queryParams: Record<string, string>;
+  body?: string;
+  response: {
+    status: number;
+    headers: Record<string, string>;
+    body?: string;
+    duration: number;
+  };
+  matchedRouteId?: string;
+  savedAsStub?: boolean;
+}
+
+// ─── MockRoute (extended with all 6A features) ───────────────────────────────
+
 export interface MockRoute {
   id: string;
-  method: HttpMethod;
+  method: HttpMethod | 'ANY';
   path: string;
   statusCode: number;
   headers: Record<string, string>;
@@ -33,6 +159,44 @@ export interface MockRoute {
   body: string;
   delay: number;
   enabled: boolean;
+
+  // Advanced matching (6A.1-6A.4)
+  urlMatch?: UrlMatchConfig;
+  headerMatchers?: MatchRule[];
+  queryParamMatchers?: MatchRule[];
+  cookieMatchers?: MatchRule[];
+  bodyMatcher?: BodyMatcher;
+  compositeLogic?: CompositeLogic;
+
+  // Priority (6A.5)
+  priority?: number;
+
+  // Handlebars templating (6A.7)
+  isTemplate?: boolean;
+
+  // Body source (6A.10)
+  bodySource?: 'inline' | 'file' | 'proxy';
+  bodyFile?: string;
+  proxyTarget?: string;
+
+  // State machine (6A.11)
+  requiredState?: string;
+  newState?: string;
+  stateVariableUpdates?: Record<string, string>;
+
+  // Fault injection (6A.13)
+  fault?: FaultConfig;
+
+  // Rate limiting (6A.14)
+  rateLimit?: RateLimitConfig;
+
+  // Response sequences (6A.22)
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+
+  // Webhooks (6A.23)
+  webhooks?: WebhookConfig[];
+
   /** Optional JS script to dynamically generate response body (for OAuth/JWT flows) */
   responseScript?: string;
   /** Where to forward/store generated token */
@@ -67,6 +231,14 @@ export interface MockServer {
   mcpTools?: McpMockTool[];
   running: boolean;
   createdAt: number;
+
+  // WireMock-grade features (6A)
+  stateMachine?: StateMachineConfig;
+  globalFault?: FaultConfig;
+  globalRateLimit?: RateLimitConfig;
+  recordingMode?: boolean;
+  proxyTarget?: string;
+  recordedTraffic?: RecordedRequest[];
 }
 
 export interface GraphQLMockOperation {

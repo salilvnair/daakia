@@ -9,6 +9,15 @@ import type { MockServer, MockRoute } from './mock-types';
 import { openTryTab } from './mock-try-handler';
 import { RestRoutesConfig, GraphQLConfig, WebSocketConfig, SSEConfig, SocketIOConfig, MQTTConfig, GrpcConfig, SoapConfig, AiMockConfig, McpMockConfig } from './configs';
 import { postMsg } from '../../vscode';
+import { StateMachineEditor } from './wiremock/StateMachinePanel';
+import { TrafficInspectorPanel } from './wiremock/TrafficInspectorPanel';
+import { ImportPanel } from './wiremock/ImportPanel';
+import { ExportPanel } from './wiremock/ExportPanel';
+import { ChaosPanel } from './wiremock/ChaosPanel';
+import { MockApiCatalog } from './wiremock/MockApiCatalog';
+import type { MockRoute } from './mock-types';
+
+type ServerTab = 'routes' | 'state' | 'traffic' | 'import' | 'export' | 'chaos' | 'catalog';
 
 interface ServerDetailProps {
   server: MockServer;
@@ -26,6 +35,7 @@ interface ServerDetailProps {
 export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAddRoute, onAddGeneratedRoutes, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute }: ServerDetailProps) {
   const [urlCopied, setUrlCopied] = useState(false);
   const [wsdlCopied, setWsdlCopied] = useState(false);
+  const [serverTab, setServerTab] = useState<ServerTab>('routes');
 
   const serverUrl = server.running && server.port
     ? `${server.protocol === 'websocket' || server.protocol === 'socketio' || server.protocol === 'mqtt' ? 'ws' : 'http'}://localhost:${server.port}${server.protocol === 'graphql' ? '/graphql' : server.protocol === 'socketio' ? '/socket.io/' : server.protocol === 'ai' ? '/v1' : server.protocol === 'mcp' ? '/mcp' : ''}`
@@ -156,8 +166,37 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         style={{ fontFamily: 'inherit' }}
       />
 
-      {/* Protocol-specific content */}
+      {/* WireMock server-level tab bar (REST only) */}
       {server.protocol === 'rest' && (
+        <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.07)] -mx-4 px-4 flex-wrap">
+          {([
+            { id: 'routes',  label: 'Routes' },
+            { id: 'state',   label: 'State Machine' },
+            { id: 'traffic', label: 'Traffic' },
+            { id: 'import',  label: 'Import' },
+            { id: 'export',  label: 'Export' },
+            { id: 'chaos',   label: '⚡ Chaos' },
+            { id: 'catalog', label: '📚 Catalog' },
+          ] as { id: ServerTab; label: string }[]).map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setServerTab(t.id)}
+              className="h-[30px] px-3 text-[10px] font-medium cursor-pointer transition-colors flex-shrink-0"
+              style={{
+                borderBottom: serverTab === t.id ? '2px solid var(--color-mock-server)' : '2px solid transparent',
+                color: serverTab === t.id ? 'var(--color-mock-server)' : 'var(--color-text-muted)',
+                marginBottom: '-1px',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Protocol-specific content */}
+      {server.protocol === 'rest' && serverTab === 'routes' && (
         <RestRoutesConfig
           server={server}
           onUpdate={onUpdate}
@@ -167,6 +206,59 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
           onDeleteRoute={onDeleteRoute}
           editingRoute={editingRoute}
           onEditRoute={onEditRoute}
+        />
+      )}
+
+      {server.protocol === 'rest' && serverTab === 'state' && (
+        <StateMachineEditor
+          config={server.stateMachine}
+          onUpdate={cfg => onUpdate({ stateMachine: cfg })}
+        />
+      )}
+
+      {server.protocol === 'rest' && serverTab === 'traffic' && (
+        <TrafficInspectorPanel
+          server={server}
+          onUpdate={onUpdate}
+          onClearTraffic={() => onUpdate({ recordedTraffic: [] })}
+          onImportRecorded={reqs => {
+            const newRoutes: MockRoute[] = reqs.map(r => ({
+              id: crypto.randomUUID(),
+              method: r.method as MockRoute['method'],
+              path: r.path,
+              statusCode: r.responseStatus,
+              headers: r.responseHeaders,
+              body: r.responseBody,
+              delay: 0,
+              enabled: true,
+            }));
+            onUpdate({ routes: [...(server.routes ?? []), ...newRoutes] });
+          }}
+        />
+      )}
+
+      {server.protocol === 'rest' && serverTab === 'import' && (
+        <ImportPanel
+          onImport={routes => onUpdate({ routes: [...(server.routes ?? []), ...routes] })}
+        />
+      )}
+
+      {server.protocol === 'rest' && serverTab === 'export' && (
+        <ExportPanel
+          server={server}
+          onExport={format => {
+            postMsg({ type: 'exportMockServer', serverId: server.id, format });
+          }}
+        />
+      )}
+
+      {server.protocol === 'rest' && serverTab === 'chaos' && (
+        <ChaosPanel server={server} onUpdate={onUpdate} />
+      )}
+
+      {server.protocol === 'rest' && serverTab === 'catalog' && (
+        <MockApiCatalog
+          onAddRoutes={routes => onUpdate({ routes: [...(server.routes ?? []), ...routes] })}
         />
       )}
 
