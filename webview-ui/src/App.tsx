@@ -37,7 +37,7 @@ import { useSidebarDataStore } from './store/sidebar-data-store';
 import { useAiKeysStore } from './store/ai-keys-store';
 import { useAiFeaturesStore } from './store/ai-features-store';
 import { useAiHistoryStore } from './store/ai-history-store';
-import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_DEFAULTS } from './store/ai-prompt-templates-store';
+import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_DEFAULTS } from './store/prompt-template';
 import { useAiConversationStore } from './store/ai-conversation-store';
 import { getVsCodeApi, postMsg } from './vscode';
 import { getProtocolAccent } from './colors';

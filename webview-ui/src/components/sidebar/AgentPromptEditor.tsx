@@ -13,8 +13,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import type * as MonacoT from 'monaco-editor';
 import { TrashIcon } from '../../icons';
-import type { AgentScenario, ScenarioVarMap } from '../ai/ai-agent-prompts';
-import { SCENARIO_COLORS, SCENARIO_LABELS, SCENARIO_DESCRIPTIONS } from '../ai/ai-agent-prompts';
+import type { AgentScenario, ScenarioVarMap } from '../../store/prompt-template';
+import { SCENARIO_COLORS, SCENARIO_LABELS, SCENARIO_DESCRIPTIONS } from '../../store/prompt-template';
 
 const ACCENT = 'var(--color-protocol-ai)';
 

@@ -1,14 +1,16 @@
 import { useState, useEffect, type JSX } from 'react';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon } from '../../icons';
+import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, DocumentIcon, ChevronLeftIcon, ChevronRightIcon } from '../../icons';
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { PromptLibraryPanel } from './PromptLibraryPanel';
 import { AiFeatureSettings } from './AiFeatureSettings';
 import { AiAuditPanel } from './AiAuditPanel';
+import { DaakiaWikiPanel } from './wiki/DaakiaWikiPanel';
+import { DaakiaViewPage } from '../../pages/wiki/daakia-view/DaakiaViewPage';
 import { useMockStore } from '../../store/mock-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 
-type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools';
+type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'wiki' | 'wiki-new';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 
 const SECTIONS: { id: SettingsSection; label: string; icon: JSX.Element }[] = [
@@ -20,13 +22,15 @@ const SECTIONS: { id: SettingsSection; label: string; icon: JSX.Element }[] = [
   { id: 'prompt-library', label: 'Prompt Library',   icon: <AgentIcon size={14} /> },
   { id: 'ai-audit',       label: 'AI Audit',         icon: <SparkleIcon size={14} /> },
   { id: 'devtools',       label: 'Developer Tools',  icon: <CodeBracketsIcon size={14} /> },
+  { id: 'wiki',           label: 'Daakia Wiki',       icon: <DocumentIcon size={14} /> },
+  { id: 'wiki-new',       label: 'Wiki New',          icon: <SparkleIcon size={14} /> },
 ];
 
 export function SettingsPanel() {
   const storedSection = useUiStateStore(s => s.prefs['settings.section']) as SettingsSection | undefined;
-  // Guard: if stored section was removed (e.g. 'ai-templates'), fall back to 'general'
   const validStored = storedSection && SECTIONS.some(s => s.id === storedSection) ? storedSection : 'general';
   const [activeSection, setActiveSectionLocal] = useState<SettingsSection>(validStored);
+  const [navCollapsed, setNavCollapsed] = useState(false);
   const setActiveSection = (section: SettingsSection) => {
     setActiveSectionLocal(section);
     useUiStateStore.getState().setPref('settings.section', section);
@@ -36,9 +40,22 @@ export function SettingsPanel() {
   return (
     <div className="flex flex-1 h-full overflow-hidden">
       {/* Left navigation */}
-      <div className="w-[200px] flex-shrink-0 border-r border-[var(--color-surface-border)] flex flex-col">
-        <div className="flex items-center px-3 py-2.5 border-b border-[var(--color-surface-border)]">
-          <span className="text-[13px] font-medium text-[var(--color-text-primary)]">Settings</span>
+      <div
+        className="flex-shrink-0 border-r border-[var(--color-surface-border)] flex flex-col transition-all duration-200"
+        style={{ width: navCollapsed ? 40 : 200 }}
+      >
+        <div className="flex items-center px-2 py-2.5 border-b border-[var(--color-surface-border)] gap-1.5">
+          {!navCollapsed && (
+            <span className="text-[13px] font-medium text-[var(--color-text-primary)] flex-1">Settings</span>
+          )}
+          <button
+            type="button"
+            title={navCollapsed ? 'Show navigation' : 'Hide navigation'}
+            onClick={() => setNavCollapsed(v => !v)}
+            className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] cursor-pointer transition-colors flex-shrink-0 ml-auto"
+          >
+            {navCollapsed ? <ChevronRightIcon size={12} /> : <ChevronLeftIcon size={12} />}
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto px-1 py-1">
           {SECTIONS.map((sec) => (
@@ -46,21 +63,27 @@ export function SettingsPanel() {
               key={sec.id}
               type="button"
               onClick={() => setActiveSection(sec.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md cursor-pointer text-left transition-colors text-[12px] ${
+              title={navCollapsed ? sec.label : undefined}
+              className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-md cursor-pointer text-left transition-colors text-[12px] ${
+                navCollapsed ? 'justify-center' : ''
+              } ${
                 activeSection === sec.id
                   ? 'bg-[rgba(42,157,143,0.12)] text-[var(--color-settings)] font-medium'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.04)]'
               }`}
             >
               {sec.icon}
-              <span>{sec.label}</span>
+              {!navCollapsed && <span>{sec.label}</span>}
             </button>
           ))}
         </div>
       </div>
 
       {/* Right content area */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className={`flex-1 overflow-y-auto${activeSection === 'wiki' || activeSection === 'wiki-new' ? ' overflow-hidden' : ''}`}
+        style={activeSection === 'wiki' || activeSection === 'wiki-new' ? { display: 'flex', flexDirection: 'column' } : undefined}
+      >
         {activeSection === 'general' ? (
           <GeneralSettings />
         ) : activeSection === 'mock-server' ? (
@@ -73,6 +96,10 @@ export function SettingsPanel() {
           <PromptLibraryPanel />
         ) : activeSection === 'ai-audit' ? (
           <AiAuditPanel />
+        ) : activeSection === 'wiki-new' ? (
+          <DaakiaViewPage />
+        ) : activeSection === 'wiki' ? (
+          <DaakiaWikiPanel />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
             <div className="flex flex-col items-center gap-2">

@@ -16,7 +16,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useTabsStore } from '../../store/tabs-store';
-import { useAiPromptTemplatesStore, type AiPromptTemplateKey } from '../../store/ai-prompt-templates-store';
+import { useAiPromptTemplatesStore, type AiPromptTemplateKey } from '../../store/prompt-template';
 import { SparkleIcon, CloseIcon, RefreshIcon, PlusIcon, CopyIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
@@ -435,6 +435,7 @@ export function MockAiGeneratePopover({
     postMsg({
       type: 'ai:send',
       tabId: popoverId,
+      stage: templateKey,
       provider,
       model,
       baseUrl: '',
@@ -552,15 +553,39 @@ export function MockAiGeneratePopover({
         e.stopPropagation();
       }}
     >
+      {/* Snake glow wrapper — rotating conic-gradient border while streaming */}
+      <div
+        style={{
+          position: 'relative',
+          borderRadius: '13px',
+          padding: streaming ? '1.5px' : '0',
+          overflow: 'hidden',
+          flexShrink: 0,
+          maxWidth: '94vw',
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {streaming && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: '-50%',
+              background: `conic-gradient(${ACCENT} 0deg, color-mix(in srgb, ${ACCENT} 15%, transparent) 40deg, color-mix(in srgb, ${ACCENT} 15%, transparent) 320deg, ${ACCENT} 360deg)`,
+              animation: 'ai-snake-spin 2s linear infinite',
+            }}
+          />
+        )}
       <div
         className="flex flex-col rounded-xl border shadow-2xl overflow-hidden"
         style={{
+          position: 'relative',
+          zIndex: 1,
           width: 850,
           maxWidth: '94vw',
           maxHeight: '90vh',
           minHeight: 200,
           backgroundColor: 'var(--color-surface)',
-          borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
+          borderColor: streaming ? 'transparent' : `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
           boxShadow: `0 24px 60px rgba(0,0,0,0.55), 0 0 0 1px color-mix(in srgb, ${ACCENT} 15%, transparent)`,
         }}
         onMouseDown={(e) => e.stopPropagation()}
@@ -789,7 +814,7 @@ export function MockAiGeneratePopover({
                           backgroundColor: `color-mix(in srgb, ${ACCENT} 5%, transparent)`,
                         }}
                       >
-                        <PlusIcon size={9} />
+                        {!flavor.addButtonLabel && <PlusIcon size={9} />}
                         {flavor.addButtonLabel ? flavor.addButtonLabel(item) : `Add ${flavor.itemLabel}`}
                       </button>
                     )}
@@ -881,6 +906,7 @@ export function MockAiGeneratePopover({
           </div>
         )}
       </div>
+      </div> {/* ── end snake glow wrapper ── */}
     </div>
   );
 

@@ -289,10 +289,10 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
       className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50"
 
     >
-      <div className="w-full max-w-[560px] rounded-xl bg-[var(--color-elevated)] border border-[var(--color-elevated-border)] shadow-2xl animate-[fadeSlideIn_150ms_ease-out] flex flex-col max-h-[80vh]" style={{ '--modal-accent': accent } as React.CSSProperties}>
+      <div className="w-full max-w-[480px] rounded-xl bg-[var(--color-elevated)] border border-[var(--color-elevated-border)] shadow-2xl animate-[fadeSlideIn_150ms_ease-out] flex flex-col max-h-[80vh]" style={{ '--modal-accent': accent } as React.CSSProperties}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[var(--color-surface-border)]">
-          <h2 className="text-[20px] font-semibold text-[var(--color-text-primary)]">Save as</h2>
+        <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-[var(--color-surface-border)]">
+          <h2 className="text-[15px] font-semibold text-[var(--color-text-primary)]">Save as</h2>
           <button
             type="button"
             onClick={onClose}
@@ -303,7 +303,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
         </div>
 
         {/* Content */}
-        <div className="px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
+        <div className="px-4 py-3 space-y-3 flex-1 min-h-0 overflow-y-auto">
           {/* Request name + AI generate */}
           <div className="space-y-1.5">
             <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">Request name</label>
@@ -314,7 +314,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-                className="flex-1 h-[40px] px-3 rounded-lg bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[13px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--modal-accent)]"
+                className="flex-1 h-[32px] px-3 rounded-lg bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[12.5px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--modal-accent)]"
               />
               <button
                 type="button"
@@ -325,7 +325,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
                   const endpoint = parts.length > 1 ? parts.slice(1).join(' ') : parts[0] || 'request';
                   setName(`${getDisplayMethod(tab)} ${endpoint}`.slice(0, 60));
                 }}
-                className="flex items-center justify-center w-[40px] h-[40px] rounded-lg border border-[var(--color-input-border)] text-[var(--color-text-muted)] hover:text-[var(--modal-accent)] hover:border-[var(--modal-accent)] cursor-pointer transition-colors"
+                className="flex items-center justify-center w-[32px] h-[32px] rounded-lg border border-[var(--color-input-border)] text-[var(--color-text-muted)] hover:text-[var(--modal-accent)] hover:border-[var(--modal-accent)] cursor-pointer transition-colors"
               >
                 <SparkleIcon size={16} />
               </button>
@@ -412,7 +412,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-3 px-5 py-4 border-t border-[var(--color-surface-border)]">
+        <div className="flex items-center gap-3 px-4 py-2.5 border-t border-[var(--color-surface-border)]">
           <button
             type="button"
             onClick={handleSave}
@@ -477,7 +477,7 @@ function SaveTreeNode({
   renamingId: string | null;
   renameValue: string;
   renameRef: React.RefObject<HTMLInputElement>;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
   onToggleExpand: (id: string) => void;
   onAddSubfolder: (parentId: string) => void;
   onOpenContextMenu: (e: React.MouseEvent, nodeId: string, nodeName: string) => void;
@@ -493,7 +493,7 @@ function SaveTreeNode({
   return (
     <div className="mb-0.5 pt-[2px]">
       <div
-        onClick={() => !isRenaming && onSelect(node.id)}
+        onClick={() => !isRenaming && onSelect(selectedId === node.id ? null : node.id)}
         className={`group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer transition-colors rounded-md mx-1 ${
           isSelected ? 'bg-[var(--color-item-hover-bg)]' : 'hover:bg-[var(--color-item-hover-bg)]'
         }`}

@@ -1,6 +1,9 @@
 import Editor, { OnMount } from '@monaco-editor/react';
 import { useRef, useMemo, useEffect, useState } from 'react';
-import { getDkCompletions } from '../../../services/dk-repl';
+import { getDkCompletions, DK_TYPE_DEFS } from '../../../services/dk-repl';
+
+// Module-level flag — dk type defs are global to the JS language worker, register once only
+let dkLibRegistered = false;
 import { initGraphQLCompletionProvider } from '../../../services/graphql-completion';
 import { useBreakpointGutter } from '../../../hooks/useBreakpointGutter';
 import { useDebugVariableHover } from '../../../hooks/useDebugVariableHover';
@@ -423,6 +426,16 @@ export function CodeEditor({
 
     // Register dk/console intellisense for JavaScript editors (script editors)
     if (language === 'javascript') {
+      // Inject dk global type declarations once — tells Monaco's JavaScript diagnostics
+      // that `dk` is a valid global so it stops showing "Cannot find name 'dk'" errors.
+      if (!dkLibRegistered) {
+        monacoInstance.languages.typescript.javascriptDefaults.addExtraLib(
+          DK_TYPE_DEFS,
+          'dk-globals.d.ts',
+        );
+        dkLibRegistered = true;
+      }
+
       monacoInstance.languages.registerCompletionItemProvider('javascript', {
         triggerCharacters: ['.'],
         provideCompletionItems: (mdl: any, pos: any) => {

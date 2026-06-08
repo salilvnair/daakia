@@ -11,7 +11,7 @@ import { AI_PROVIDERS } from '../../../ai/ai-providers';
 import type { AiMessage, AiRequestPayload, AiSettings, AiToolDef } from '../../../ai/ai-types';
 import { DEFAULT_AI_SETTINGS } from '../../../ai/ai-types';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
-import { insertHistory, trimHistory, getSetting, insertAudit } from '../../../storage/db';
+import { getSetting, insertAudit } from '../../../storage/db';
 import { getAiMcpTools, callAiMcpTool } from './ai-mcp-handler';
 import { resolveProviderAuth, autoResolveProvider, resolveProviderConfig } from '../../../services/llm/llm-provider-service';
 
@@ -23,7 +23,6 @@ type PostMessage = (msg: unknown) => void;
 export async function handleAiSend(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
-  refreshHistory?: () => void,
 ) {
   const tabId = msg.tabId as string;
   // Use stored default provider — user sets this in LLM Provider settings (falls back to copilot)
@@ -61,6 +60,10 @@ export async function handleAiSend(
     });
     return;
   }
+
+  // Logical stage name — callers may pass a templateKey (e.g. "mock.websocket.generate")
+  // or an agent label (e.g. "REST Agent"). Defaults to 'DAAKIA_AI' for general AI chat.
+  const auditStage = (msg.stage as string | undefined) || 'DAAKIA_AI';
 
   // Build messages array from conversation + system prompts + user prompt
   const systemPrompts = (msg.systemPrompts as string[]) || [];
@@ -183,15 +186,11 @@ export async function handleAiSend(
         clearTimeout(timeoutId);
         cleanupAiRequest(tabId);
         postMessage({ type: 'ai:complete', ...result });
-        try {
-          insertHistory({ protocol: 'ai', method: 'COPILOT', url: 'vscode://copilot', status: 200, response_time: result.duration, request_data: JSON.stringify({ aiProvider: 'copilot', aiModel: resolvedModel, aiUserPrompt: userPrompt }), response_data: JSON.stringify({ content: result.message.content.slice(0, 500) }) });
-          trimHistory(500);
-          refreshHistory?.();
-        } catch { /* ignore */ }
+        // AI calls are tracked in the AI Audit panel — not in HTTP request history
         try {
           insertAudit({
             conversation_id: tabId,
-            stage: 'DAAKIA_AI',
+            stage: auditStage,
             model: 'copilot',
             // Full actual request — system prompts + conversation + user prompt are all in messages[]
             request_payload: JSON.stringify({
@@ -218,7 +217,7 @@ export async function handleAiSend(
         try {
           insertAudit({
             conversation_id: tabId,
-            stage: 'DAAKIA_AI',
+            stage: auditStage,
             model: 'copilot',
             request_payload: JSON.stringify({
               provider: 'copilot',
@@ -254,40 +253,12 @@ export async function handleAiSend(
       cleanupAiRequest(tabId);
       postMessage({ type: 'ai:complete', ...result });
 
-      // Save to history
-      try {
-        insertHistory({
-          protocol: 'ai',
-          method: providerId.toUpperCase(),
-          url: resolvedUrl,
-          status: 200,
-          response_time: result.duration,
-          request_data: JSON.stringify({
-            aiProvider: providerId,
-            aiModel: effectiveModel,
-            aiSystemPrompts: systemPrompts,
-            aiUserPrompt: userPrompt,
-            aiTools: tools,
-            aiSettings: settings,
-            mcpServerConfigs: mcpServerConfigs,
-            aiConversation: conversation.slice(-5),
-            authType: msg.authType,
-            authData: msg.authData,
-          }),
-          response_data: JSON.stringify({
-            content: result.message.content.slice(0, 500),
-            tokens: result.tokens,
-          }),
-        });
-        trimHistory(500);
-        refreshHistory?.();
-      } catch { /* ignore history errors */ }
-
+      // AI calls are tracked in the AI Audit panel — not in HTTP request history
       // Save to AI audit log — full actual request + full actual response, no duplication
       try {
         insertAudit({
           conversation_id: tabId,
-          stage: 'DAAKIA_AI',
+          stage: auditStage,
           model: effectiveModel,
           // Full actual request sent to the AI API
           // messages[] contains all system prompts + conversation history + current user prompt
@@ -320,26 +291,12 @@ export async function handleAiSend(
       }
       postMessage({ type: 'ai:error', ...error });
 
-      // Save error to history
-      try {
-        insertHistory({
-          protocol: 'ai',
-          method: providerId.toUpperCase(),
-          url: resolvedUrl,
-          status: parseInt(error.code || '0') || 0,
-          response_time: 0,
-          request_data: JSON.stringify({ aiProvider: providerId, aiModel: effectiveModel, aiSystemPrompts: systemPrompts, aiUserPrompt: userPrompt, aiTools: tools, aiSettings: settings, mcpServerConfigs: mcpServerConfigs }),
-          response_data: JSON.stringify({ error: error.message, diagnostics: error.diagnostics }),
-        });
-        trimHistory(500);
-        refreshHistory?.();
-      } catch { /* ignore */ }
-
+      // AI errors are tracked in the AI Audit panel — not in HTTP request history
       // Save error to AI audit log
       try {
         insertAudit({
           conversation_id: tabId,
-          stage: 'DAAKIA_AI',
+          stage: auditStage,
           model: effectiveModel,
           request_payload: JSON.stringify({
             provider: providerId,

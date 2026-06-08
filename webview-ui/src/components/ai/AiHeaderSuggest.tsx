@@ -8,12 +8,17 @@
  * the request's method, URL, body content-type, and auth type.
  * Suggestions appear as clickable chips — one click adds the header row.
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useAiProvidersStore } from '../../store/ai-providers-store';
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
+import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import type { KeyValueRow } from '../shared';
-import { SparkleIcon, CloseIcon, PlusIcon } from '../../icons';
+import { CloseIcon, PlusIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+
+export interface AiHeaderSuggestHandle {
+  trigger: () => void;
+  loading: boolean;
+}
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -31,34 +36,6 @@ interface Props {
   authType: string;
   existingHeaders: KeyValueRow[];
   onAddHeader: (key: string, value: string) => void;
-}
-
-// ─── Prompt builder ───────────────────────────────────────────────────────────
-
-function buildHeaderPrompt(method: string, url: string, contentType: string, authType: string, existingKeys: string[]): string {
-  const existing = existingKeys.filter(Boolean).join(', ') || 'none';
-  const authNote = authType === 'none' ? 'No auth configured' : `Auth type: ${authType} (auth header will be added automatically)`;
-
-  return `Suggest HTTP request headers for this API call.
-
-Request context:
-- Method: ${method}
-- URL: ${url || '(no URL yet)'}
-- Body Content-Type: ${contentType || 'none'}
-- ${authNote}
-- Headers already set: ${existing}
-
-Return ONLY a JSON array. No markdown, no explanation, no code fences. Example format:
-[{"key":"Accept","value":"application/json","reason":"Specify expected response format"},{"key":"X-Request-ID","value":"{{$random.uuid}}","reason":"Correlation ID for distributed tracing"}]
-
-Rules:
-- Suggest 3 to 6 headers
-- Skip any header already in the "Headers already set" list
-- Skip Content-Type if it is already set or if method is GET/HEAD
-- Skip Authorization if auth is already configured
-- Tailor suggestions to the URL pattern and method (e.g. pagination headers for GET lists, idempotency keys for POST)
-- Use Daakia variable syntax {{$random.uuid}} for dynamic IDs
-- Keep reason to one short sentence`;
 }
 
 // ─── JSON parser — strips markdown fences if present ─────────────────────────
@@ -86,7 +63,10 @@ function parseSuggestions(raw: string): HeaderSuggestion[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AiHeaderSuggest({ tabId, method, url, bodyContentType, authType, existingHeaders, onAddHeader }: Props) {
+export const AiHeaderSuggest = forwardRef<AiHeaderSuggestHandle, Props>(function AiHeaderSuggest(
+  { tabId, method, url, bodyContentType, authType, existingHeaders, onAddHeader }: Props,
+  ref,
+) {
   const [suggestions, setSuggestions] = useState<HeaderSuggestion[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -96,10 +76,12 @@ export function AiHeaderSuggest({ tabId, method, url, bodyContentType, authType,
   const accumulatedRef = useRef('');
   const popoverIdRef = useRef('');
 
-  const providers = useAiProvidersStore(s => s.providers);
+  // Only need activeTab for envId / authType / authData — provider resolution is
+  // handled entirely by ai-handler.ts (reads aiDefaultProvider from DB settings).
+  // Do NOT compute provider/model here — it resolves to copilot (first "enabled"
+  // in store) instead of the user's configured default.
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === tabId));
-  const providerId = activeTab?.aiProvider || providers.find(p => p.enabled)?.id || 'openai';
-  const model = activeTab?.aiModel || providers.find(p => p.id === providerId)?.models.find(m => m.enabled)?.id || '';
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
 
   // ── Listen for AI responses ────────────────────────────────────────────────
 
@@ -144,15 +126,32 @@ export function AiHeaderSuggest({ tabId, method, url, bodyContentType, authType,
     popoverIdRef.current = pid;
 
     const existingKeys = existingHeaders.filter(r => r.enabled && r.key).map(r => r.key);
+    const existing = existingKeys.join(', ') || 'none';
+    const authNote = authType === 'none' ? 'No auth configured' : authType;
+
+    const systemPrompt = resolve('rest.headers.suggest.system');
+    const userPrompt = resolve('rest.headers.suggest.generate', {
+      method,
+      url: url || '(no URL yet)',
+      contentType: bodyContentType || 'none',
+      authType: authNote,
+      existing,
+    });
 
     postMsg({
       type: 'ai:send',
       tabId: pid,
-      provider: providerId,
-      model,
-      baseUrl: activeTab?.url || '',
-      systemPrompts: ['You are a precise HTTP header suggestion assistant. Always return valid JSON arrays only — never explanatory text.'],
-      userPrompt: buildHeaderPrompt(method, url, bodyContentType, authType, existingKeys),
+      // Leave provider/model/baseUrl empty — ai-handler.ts reads aiDefaultProvider
+      // from DB settings and auto-resolves (same path as DaakiaAiPanel / AiAssistPopover).
+      // Passing providerId here was picking copilot (first "enabled" in store, not the
+      // user's selected default). Passing activeTab.url was setting the REST URL as
+      // the AI base URL — completely wrong.
+      provider: '',
+      model: '',
+      baseUrl: '',
+      stage: 'rest.headers.suggest.generate',
+      systemPrompts: [systemPrompt],
+      userPrompt,
       conversation: [],
       tools: [],
       settings: { temperature: 0.3, maxTokens: 512, stream: true, topP: 1, stopSequences: [], responseFormat: 'text', frequencyPenalty: 0, presencePenalty: 0, seed: null },
@@ -161,7 +160,7 @@ export function AiHeaderSuggest({ tabId, method, url, bodyContentType, authType,
       authData: activeTab?.authData,
       envId: activeTab?.envId,
     });
-  }, [method, url, bodyContentType, authType, existingHeaders, providerId, model, activeTab]);
+  }, [method, url, bodyContentType, authType, existingHeaders, activeTab, resolve]);
 
   // ── Add a single suggestion ───────────────────────────────────────────────
 
@@ -185,48 +184,32 @@ export function AiHeaderSuggest({ tabId, method, url, bodyContentType, authType,
   const visibleSuggestions = suggestions.filter(s => !dismissed.has(s.key));
   const allAdded = suggestions.length > 0 && visibleSuggestions.length === 0;
 
+  useImperativeHandle(ref, () => ({ trigger: triggerSuggest, loading }), [triggerSuggest, loading]);
+
   // ─────────────────────────────────────────────────────────────────────────
+
+  if (!visible && !loading) return null;
 
   return (
     <div className="mb-2">
-      {/* Trigger button — always visible */}
+      {/* Inline status row */}
       <div className="flex items-center gap-2 px-1 mb-1.5">
-        <button
-          type="button"
-          onClick={triggerSuggest}
-          disabled={loading}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium cursor-pointer transition-all border"
-          style={{
-            color: loading ? 'var(--color-text-muted)' : ACCENT,
-            borderColor: `color-mix(in srgb, ${ACCENT} 25%, transparent)`,
-            backgroundColor: loading ? 'transparent' : `color-mix(in srgb, ${ACCENT} 7%, transparent)`,
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-          title="Ask AI to suggest relevant headers for this request"
-        >
-          {loading ? (
-            <>
-              <div className="flex gap-0.5">
-                {[0, 120, 240].map(d => (
-                  <span key={d} className="w-[3px] h-[3px] rounded-full animate-pulse" style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-                ))}
-              </div>
-              Suggesting…
-            </>
-          ) : (
-            <>
-              <SparkleIcon size={10} style={{ color: ACCENT }} />
-              Suggest headers
-            </>
-          )}
-        </button>
+        {/* Loading indicator */}
+        {loading && (
+          <div className="flex gap-0.5 items-center">
+            {[0, 120, 240].map(d => (
+              <span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
+            ))}
+            <span className="text-[11px] ml-1.5" style={{ color: ACCENT }}>Suggesting…</span>
+          </div>
+        )}
 
         {/* Error */}
         {error && !loading && (
-          <span className="text-[10px] text-[var(--color-error)] truncate max-w-[200px]">{error}</span>
+          <span className="text-[10px] text-[var(--color-error)] truncate max-w-[280px]">{error}</span>
         )}
 
-        {/* "Add all" — when there are visible suggestions */}
+        {/* "Add all" */}
         {visibleSuggestions.length > 1 && !loading && (
           <button
             type="button"
@@ -238,13 +221,13 @@ export function AiHeaderSuggest({ tabId, method, url, bodyContentType, authType,
           </button>
         )}
 
-        {/* Dismiss strip */}
-        {visible && (suggestions.length > 0 || allAdded) && !loading && (
+        {/* Dismiss */}
+        {(suggestions.length > 0 || allAdded || error) && !loading && (
           <button
             type="button"
             onClick={() => { setVisible(false); setSuggestions([]); setError(''); }}
             className="ml-auto w-[18px] h-[18px] flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer transition-opacity"
-            title="Dismiss suggestions"
+            title="Dismiss"
           >
             <CloseIcon size={10} />
           </button>
@@ -264,7 +247,7 @@ export function AiHeaderSuggest({ tabId, method, url, bodyContentType, authType,
       )}
 
       {/* Loading skeleton chips */}
-      {loading && visible && (
+      {loading && (
         <div className="flex flex-wrap gap-1.5 px-1 mb-2">
           {[80, 120, 100, 90].map(w => (
             <div
@@ -277,7 +260,7 @@ export function AiHeaderSuggest({ tabId, method, url, bodyContentType, authType,
       )}
     </div>
   );
-}
+});
 
 // ─── Single suggestion chip ───────────────────────────────────────────────────
 

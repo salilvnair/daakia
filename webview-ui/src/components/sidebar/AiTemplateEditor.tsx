@@ -14,7 +14,7 @@ import {
   AI_PROMPT_TEMPLATE_VARIABLES,
   AI_TEMPLATE_COLORS,
   type AiPromptTemplateKey,
-} from '../../store/ai-prompt-templates-store';
+} from '../../store/prompt-template';
 
 const ACCENT = 'var(--color-protocol-ai)';
 

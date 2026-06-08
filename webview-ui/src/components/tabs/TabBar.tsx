@@ -455,12 +455,9 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
               } ${isDragOver ? 'border-l-2 border-l-[var(--color-primary)]' : ''} ${dragIdx === idx ? 'opacity-50' : ''}`}
               onClick={() => setActiveTab(tab.id)}
             >
-              {/* Active indicator line at top */}
+              {/* Active top-line indicator — absolutely positioned div, immune to overflow clipping */}
               {isActive && (
-                <div
-                  className="absolute top-0 left-0 right-0 h-[2px]"
-                  style={{ backgroundColor: tabAccent }}
-                />
+                <div className="absolute top-0 left-0 right-0 h-[2px] z-10" style={{ backgroundColor: tabAccent }} />
               )}
               {isSettings ? (
                 <SettingsIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-settings)' }} />

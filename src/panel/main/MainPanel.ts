@@ -292,7 +292,7 @@ export class MainPanel {
 
       // ── AI Protocol ──
       case 'ai:send':
-        handleAiSend(msg, this._post, () => this._sendHistory('ai'));
+        handleAiSend(msg, this._post);
         break;
       case 'ai:cancel':
         handleAiCancel(msg, this._post);

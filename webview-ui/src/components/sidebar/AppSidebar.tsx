@@ -1,3 +1,4 @@
+import { CopyRootHtmlButton } from '../../pages/wiki/daakia-view/CopyRootHtmlButton';
 import { CollectionsPanel } from '../rest/sidebar/CollectionsPanel';
 import { HistoryPanel } from '../rest/sidebar/HistoryPanel';
 import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
@@ -336,6 +337,9 @@ export function AppSidebar({ activeSection, onSectionChange, sidebarOpen, sideba
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Dev utility — copy root outerHTML for wiki captures */}
+        <CopyRootHtmlButton />
 
         {/* Daakia AI — chat tab shortcut */}
         <DaakiaAiButton />

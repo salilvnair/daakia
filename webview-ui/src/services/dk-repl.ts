@@ -317,6 +317,21 @@ export function replSendRequest(opts: DkSendRequestOpts): Promise<DkSendRequestR
   });
 }
 
+// ─── Monaco Type Declarations ─────────────────────────────────────────────────
+//
+// Injected via javascriptDefaults.addExtraLib() so Monaco knows `dk` is a valid
+// global — stops "Cannot find name 'dk'" errors in the script editor.
+// Keep in sync with createDkStub() above.
+
+// Declare dk as `any` — suppresses "Cannot find name 'dk'" without introducing
+// false type errors (over-constrained interfaces break valid dynamic patterns like
+// dk.request.headers.set(), dk.response.json().someField, etc.).
+// IntelliSense completions are provided separately by getDkCompletions() below.
+export const DK_TYPE_DEFS = `
+/** Daakia scripting API — available in Pre-request and Post-response scripts. */
+declare var dk: any;
+`;
+
 // ─── Monaco Autocomplete Definitions ─────────────────────────────────────────
 
 export function getDkCompletions(textUntilPosition: string, monaco: any, position: any) {

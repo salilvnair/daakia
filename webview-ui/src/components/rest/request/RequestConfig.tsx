@@ -6,7 +6,7 @@ import { useToastStore } from '../../../store/toast-store';
 import { PillTabs, KeyValueTable, FormDataTable, CodeEditor, StyledDropdown, ConfirmDialog, AuthEditor, ScriptsEditor, type PillTab } from '../../shared';
 import { TrashIcon, BulkEditIcon, PlusIcon, SparkleIcon, WandIcon, FileUploadIcon, LockIcon, CookieIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
-import { AiHeaderSuggest } from '../../ai/AiHeaderSuggest';
+import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../../ai/AiHeaderSuggest';
 
 // ── Computed auth header rows (Task 7) ──────────────────────────────────────
 function computeAuthRows(authType: string, authData: Record<string, string>): { key: string; value: string }[] {
@@ -76,6 +76,8 @@ export function RequestConfig() {
   const storedSection = useUiStateStore(s => s.prefs[`rest.subtab.${activeTabId}`]);
   const [activeSection, setActiveSectionLocal] = useState(storedSection || 'params');
   const [oauth2Loading, setOauth2Loading] = useState(false);
+  const [aiHeaderLoading, setAiHeaderLoading] = useState(false);
+  const aiHeaderSuggestRef = useRef<AiHeaderSuggestHandle>(null);
   // Task 8: cookie jar rows for the current URL's domain
   const [cookieJarRows, setCookieJarRows] = useState<{ key: string; value: string }[]>([]);
 
@@ -226,20 +228,6 @@ export function RequestConfig() {
                 badgeColor="var(--color-warning)"
               />
             ))}
-            <AiHeaderSuggest
-              tabId={tab.id}
-              method={tab.method}
-              url={tab.url}
-              bodyContentType={tab.bodyContentType}
-              authType={tab.authType}
-              existingHeaders={tab.headers}
-              onAddHeader={(key, value) => {
-                // Insert before the last empty row, or append
-                const rows = tab.headers.filter(r => r.key || r.value);
-                const newRow = { id: crypto.randomUUID(), key, value, description: '', enabled: true };
-                updateTab(tab.id, { headers: [...rows, newRow] });
-              }}
-            />
             <KeyValueTable
               rows={tab.headers}
               onChange={(rows) => updateTab(tab.id, { headers: rows })}
@@ -247,6 +235,37 @@ export function RequestConfig() {
               autocompleteKeys
               maskSensitive
               label="Header List"
+              toolbarExtra={
+                <button
+                  type="button"
+                  title="Suggest headers"
+                  disabled={aiHeaderLoading}
+                  onClick={() => {
+                    setAiHeaderLoading(true);
+                    aiHeaderSuggestRef.current?.trigger();
+                    setTimeout(() => setAiHeaderLoading(false), 300);
+                  }}
+                  className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:bg-[rgba(168,85,247,0.08)]"
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-protocol-ai)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '')}
+                >
+                  <SparkleIcon size={13} />
+                </button>
+              }
+            />
+            <AiHeaderSuggest
+              ref={aiHeaderSuggestRef}
+              tabId={tab.id}
+              method={tab.method}
+              url={tab.url}
+              bodyContentType={tab.bodyContentType}
+              authType={tab.authType}
+              existingHeaders={tab.headers}
+              onAddHeader={(key, value) => {
+                const rows = tab.headers.filter(r => r.key || r.value);
+                const newRow = { id: crypto.randomUUID(), key, value, description: '', enabled: true };
+                updateTab(tab.id, { headers: [...rows, newRow] });
+              }}
             />
           </>
         )}

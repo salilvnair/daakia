@@ -614,6 +614,12 @@ textarea:focus {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* ── AI Generate modal snake-border glow animation ─────────────── */
+@keyframes ai-snake-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* ─── Custom scrollbar (protocol-aware, thin & colorful) ─── */
 
 /* Base scrollbar — always visible track + thumb */
@@ -979,6 +985,26 @@ textarea:focus {
 .mdv-root p:first-child { margin-top: 0; }
 .mdv-root p:last-child  { margin-bottom: 0; }
 
+/* ── ConvEngine chat — tighter spacing inside chat bubbles ─────────── */
+/* Root: reduce line-height from 1.7 → 1.5 — this is the main cause of
+   large gaps, each block element gets (1.7-1)/2 * 12.5px = 4.4px of
+   half-leading above AND below, adding ~9px of invisible whitespace
+   between every adjacent block pair even before any margins apply.     */
+.daakia-chat-md .mdv-root { line-height: 1.5; }
+.daakia-chat-md .mdv-root p { margin: 0.1em 0; }
+.daakia-chat-md .mdv-root p:first-child { margin-top: 0; }
+.daakia-chat-md .mdv-root p:last-child  { margin-bottom: 0; }
+.daakia-chat-md .mdv-root ul,
+.daakia-chat-md .mdv-root ol { margin: 0.15em 0; }
+.daakia-chat-md .mdv-root li { margin: 0.06em 0; }
+.daakia-chat-md .mdv-root h1,
+.daakia-chat-md .mdv-root h2,
+.daakia-chat-md .mdv-root h3,
+.daakia-chat-md .mdv-root h4,
+.daakia-chat-md .mdv-root h5 { margin: 0.4em 0 0.15em; }
+.daakia-chat-md .mdv-root hr { margin: 0.4em 0; }
+.daakia-chat-md .mdv-root .mdv-code-block { margin: 0.3em 0; }
+
 /* ── Inline code ────────────────────────────────────────────────────── */
 .mdv-root .mdv-inline-code,
 .mdv-root code:not(.hljs) {
@@ -1131,7 +1157,9 @@ textarea:focus {
 .mdv-root pre {
   margin: 0;
   padding: 10px 13px;
-  overflow-x: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
   background: transparent !important;
 }
 .mdv-root pre code.hljs {
@@ -1140,6 +1168,8 @@ textarea:focus {
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace;
   font-size: 11px;
   line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ── hljs atom-one-dark colour palette ─────────────────────────────── */

@@ -5,7 +5,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { postMsg } from '../../vscode';
-import { RefreshIcon, TrashIcon, CopyIcon, ChevronLeftIcon, SparkleIcon } from '../../icons';
+import { RefreshIcon, TrashIcon, CopyIcon, CheckIcon, ChevronLeftIcon, SparkleIcon } from '../../icons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,26 @@ const DETAIL_TABS = [
 ] as const;
 type DetailTab = (typeof DETAIL_TABS)[number]['id'];
 
-// ─── Copy button ──────────────────────────────────────────────────────────────
+// ─── Stage label map ─────────────────────────────────────────────────────────
+// Maps raw stage values (templateKey or fallback 'DAAKIA_AI') to readable display names.
+const STAGE_LABEL_MAP: Record<string, string> = {
+  'DAAKIA_AI':                 'AI Chat',
+  'mock.rest.generate':        'REST Mock',
+  'mock.graphql.generate':     'GraphQL Mock',
+  'mock.websocket.generate':   'WebSocket Mock',
+  'mock.sse.generate':         'SSE Mock',
+  'mock.socketio.generate':    'Socket.IO Mock',
+  'mock.grpc.generate':        'gRPC Mock',
+  'mock.soap.generate':        'SOAP Mock',
+  'mock.mqtt.generate':             'MQTT Mock',
+  'rest.headers.suggest.generate':  'Header Suggest',
+};
+
+function prettifyStage(stage: string): string {
+  return STAGE_LABEL_MAP[stage] ?? stage;
+}
+
+// ─── Copy button (labeled — used in detail view) ─────────────────────────────
 
 function CopyBtn({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -60,8 +79,34 @@ function CopyBtn({ text, label = 'Copy' }: { text: string; label?: string }) {
         background: copied ? 'color-mix(in srgb, var(--color-success) 8%, transparent)' : 'transparent',
       }}
     >
-      <CopyIcon size={10} />
+      {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
       {copied ? 'Copied' : label}
+    </button>
+  );
+}
+
+// ─── Icon-only copy button (used in table rows — matches TrashIcon button) ────
+
+function CopyIconBtn({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      title="Copy to clipboard"
+      onClick={() => {
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+      className="flex items-center justify-center w-[24px] h-[24px] rounded transition-colors cursor-pointer"
+      style={{
+        color: copied ? 'var(--color-success)' : 'var(--color-text-muted)',
+        border: `1px solid ${copied ? 'color-mix(in srgb, var(--color-success) 25%, transparent)' : 'var(--color-surface-border)'}`,
+        background: copied ? 'color-mix(in srgb, var(--color-success) 8%, transparent)' : 'transparent',
+      }}
+    >
+      {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
     </button>
   );
 }
@@ -163,7 +208,7 @@ function EntryDetail({ entry, onBack }: { entry: CeAuditEntry; onBack: () => voi
                 : 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
             }}
           >
-            {entry.stage}
+            {prettifyStage(entry.stage)}
           </span>
           {entry.model && (
             <span className="text-[11px] text-[var(--color-text-muted)] truncate">{entry.model}</span>
@@ -430,7 +475,7 @@ export function AiAuditPanel() {
                             : 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
                         }}
                       >
-                        {e.stage}
+                        {prettifyStage(e.stage)}
                       </span>
                     </td>
                     <td className="px-2 py-1.5 text-[var(--color-text-primary)]">
@@ -444,7 +489,7 @@ export function AiAuditPanel() {
                     </td>
                     <td className="px-2 py-1.5 whitespace-nowrap" onClick={ev => ev.stopPropagation()}>
                       <div className="flex items-center gap-1">
-                        <CopyBtn
+                        <CopyIconBtn
                           text={JSON.stringify({
                             audit_id: e.audit_id, conversation_id: e.conversation_id,
                             stage: e.stage, model: e.model, duration_ms: e.duration_ms,

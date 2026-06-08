@@ -13,7 +13,7 @@ import {
   AI_PROMPT_TEMPLATE_LABELS,
   AI_PROMPT_TEMPLATE_DEFAULTS,
   type AiPromptTemplateKey,
-} from '../../store/ai-prompt-templates-store';
+} from '../../store/prompt-template';
 import { SparkleIcon, RefreshIcon } from '../../icons';
 
 const ACCENT = 'var(--color-protocol-ai)';

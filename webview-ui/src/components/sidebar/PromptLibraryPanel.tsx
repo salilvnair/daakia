@@ -17,25 +17,40 @@ import {
   AGENT_CATEGORIES, SCENARIO_LABELS, SCENARIO_DESCRIPTIONS, SCENARIO_COLORS,
   AGENT_SCENARIO_VARIABLES, getDefaultSystemPrompt, getDefaultUserPrompt,
   ALL_AGENT_SCENARIOS, type AgentScenario, type ScenarioVarMap,
-} from '../ai/ai-agent-prompts';
+} from '../../store/prompt-template';
 import {
   useAiPromptTemplatesStore,
   AI_TEMPLATE_CATEGORIES, AI_TEMPLATE_COLORS, AI_PROMPT_TEMPLATE_LABELS,
   AI_PROMPT_TEMPLATE_DEFAULTS, AI_PROMPT_TEMPLATE_VARIABLES,
   type AiPromptTemplateKey,
-} from '../../store/ai-prompt-templates-store';
+} from '../../store/prompt-template';
 
 const ACCENT = 'var(--color-protocol-ai)';
 const PL_MIN_W = 190;
 const PL_MAX_W = 400;
 const PL_DEFAULT_W = 255;
 
+// ─── System key resolver ──────────────────────────────────────────────────────
+//
+// Resolves the system-prompt counterpart for any mock user-prompt key.
+//  'mock.rest.generate'           → 'mock.rest.system'           (has .generate)
+//  'rest.headers.suggest.generate'→ 'rest.headers.suggest.system'(has .generate)
+//  'askAiWhy'                     → 'askAiWhy.system'            (no .generate)
+//  'explainWithAi'                → 'explainWithAi.system'
+//  'followupWithAi'               → 'followupWithAi.system'
+
+function toSystemKey(key: AiPromptTemplateKey): AiPromptTemplateKey {
+  return (key.includes('.generate')
+    ? key.replace('.generate', '.system')
+    : `${key}.system`) as AiPromptTemplateKey;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ActiveItem =
   | { kind: 'agent'; scenario: AgentScenario }
   | { kind: 'template'; key: AiPromptTemplateKey }
-  | { kind: 'mock'; key: AiPromptTemplateKey }    // key = .generate key; system = key.replace('.generate', '.system')
+  | { kind: 'mock'; key: AiPromptTemplateKey }    // key = user-prompt key; system = toSystemKey(key)
   | null;
 interface PromptRow { scenario: string; system_prompt: string; user_prompt?: string; agent_name?: string; updated_at?: string; }
 interface AgentEntry { scenario: AgentScenario; systemPrompt: string; userPrompt: string; agentName: string; isCustomized: boolean; variables: ScenarioVarMap; updatedAt: string | null; }
@@ -143,7 +158,7 @@ export function PromptLibraryPanel() {
       const e = entries.find(x => x.scenario === active.scenario);
       setEditA(e?.systemPrompt ?? ''); setEditB(e?.userPrompt ?? '');
     } else if (active.kind === 'mock') {
-      const systemKey = active.key.replace('.generate', '.system') as AiPromptTemplateKey;
+      const systemKey = toSystemKey(active.key);
       setEditA(templates[systemKey] ?? AI_PROMPT_TEMPLATE_DEFAULTS[systemKey] ?? '');
       setEditB(templates[active.key] ?? AI_PROMPT_TEMPLATE_DEFAULTS[active.key] ?? '');
     } else {
@@ -165,7 +180,7 @@ export function PromptLibraryPanel() {
       setTemplate(active.key, editA); setDirty(false); return;
     }
     if (active.kind === 'mock') {
-      const sysKey = active.key.replace('.generate', '.system') as AiPromptTemplateKey;
+      const sysKey = toSystemKey(active.key);
       setTemplate(sysKey, editA);
       setTemplate(active.key, editB);
       setDirty(false); return;
@@ -187,7 +202,7 @@ export function PromptLibraryPanel() {
     if (active.kind === 'template') {
       resetTemplate(active.key); setEditA(AI_PROMPT_TEMPLATE_DEFAULTS[active.key] ?? ''); setDirty(false);
     } else if (active.kind === 'mock') {
-      const sysKey = active.key.replace('.generate', '.system') as AiPromptTemplateKey;
+      const sysKey = toSystemKey(active.key);
       resetTemplate(sysKey); resetTemplate(active.key);
       setEditA(AI_PROMPT_TEMPLATE_DEFAULTS[sysKey] ?? '');
       setEditB(AI_PROMPT_TEMPLATE_DEFAULTS[active.key] ?? '');
@@ -225,8 +240,9 @@ export function PromptLibraryPanel() {
       return Object.entries({ ...known, ...extra }).map(([k, v]) => ({ pill: `{{${k}}}`, insert: `{{${k}}}`, title: `${v.description}\nSource: ${v.source}` }));
     }
     if (active.kind === 'mock') {
-      // System tab has no runtime vars; User tab has {serverName} and {context}
-      if (editRole === 'a') return [];
+      // Variables always shown at top level for BOTH System and User tabs —
+      // they belong to the user prompt but are visible on both tabs so the
+      // system prompt author can see what runtime context is available.
       return AI_PROMPT_TEMPLATE_VARIABLES[active.key].map(v => ({ pill: v, insert: v, title: `Variable: ${v}` }));
     }
     return AI_PROMPT_TEMPLATE_VARIABLES[active.key].map(v => ({ pill: v, insert: v, title: `Variable: ${v}` }));
@@ -237,7 +253,7 @@ export function PromptLibraryPanel() {
   const isTpl = active?.kind === 'template';
   const isMock = active?.kind === 'mock';
   const activeKey = (active as { key?: AiPromptTemplateKey })?.key;
-  const mockSystemKey = isMock && activeKey ? (activeKey.replace('.generate', '.system') as AiPromptTemplateKey) : null;
+  const mockSystemKey = isMock && activeKey ? toSystemKey(activeKey) : null;
 
   const editorColor = isAgent ? SCENARIO_COLORS[active!.scenario]
     : (isTpl || isMock) ? AI_TEMPLATE_COLORS[activeKey!]
@@ -385,7 +401,7 @@ export function PromptLibraryPanel() {
                           ? (active?.kind === 'mock' && active.key === key)
                           : (active?.kind === 'template' && active.key === key);
                         // For mock: badge if either system or user prompt is customized
-                        const sysKey = isMockCat ? (key.replace('.generate', '.system') as AiPromptTemplateKey) : null;
+                        const sysKey = isMockCat ? toSystemKey(key) : null;
                         const isItemCustomized = isMockCat
                           ? (
                             (templates[key] ?? '') !== (AI_PROMPT_TEMPLATE_DEFAULTS[key] ?? '') ||

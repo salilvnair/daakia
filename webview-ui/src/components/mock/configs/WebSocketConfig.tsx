@@ -104,52 +104,49 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Message Handlers ({handlers.length})</span>
-        <div className="flex items-center gap-1.5">
-          <StyledDropdown
-            size="sm"
-            options={WS_SAMPLE_OPTIONS}
-            value={selectedSample}
-            onChange={applySample}
-            accentColor="var(--color-protocol-websocket)"
-          />
-          <MockAiGenerateButton
-            templateKey="mock.websocket.generate"
-            title="WebSocket Handlers"
-            serverName={server.name}
-            serverContext={[
-              server.description?.trim() ? `Server description (MANDATORY — use strictly as primary context):\n${server.description.trim()}` : '',
-              handlers.length > 0 ? `Existing handlers:\n${handlers.map((h) => `${h.event}: ${h.matchPattern || ''}`).join(', ')}` : '',
-            ].filter(Boolean).join('\n\n') || undefined}
-            accentVar="var(--color-protocol-websocket)"
-            onAddGeneratedItems={handleAddGeneratedItems}
-          />
-        </div>
-      </div>
-      <div className="flex items-center gap-1">
+      {/* Single toolbar row: title | Load Sample | Generate with AI | + On Connect | + On Message | + On Disconnect | 🗑️ */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[12px] font-medium text-[var(--color-text-primary)] mr-auto">Message Handlers ({handlers.length})</span>
+        <StyledDropdown
+          size="sm"
+          options={WS_SAMPLE_OPTIONS}
+          value={selectedSample}
+          onChange={applySample}
+          accentColor="var(--color-protocol-websocket)"
+        />
+        <MockAiGenerateButton
+          templateKey="mock.websocket.generate"
+          title="WebSocket Handlers"
+          serverName={server.name}
+          serverContext={[
+            server.description?.trim() ? `Server description (MANDATORY — use strictly as primary context):\n${server.description.trim()}` : '',
+            handlers.length > 0 ? `Existing handlers:\n${handlers.map((h) => `${h.event}: ${h.matchPattern || ''}`).join(', ')}` : '',
+          ].filter(Boolean).join('\n\n') || undefined}
+          accentVar="var(--color-protocol-websocket)"
+          onAddGeneratedItems={handleAddGeneratedItems}
+        />
         <button
           type="button"
           onClick={() => addHandler('connection')}
           className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
-          style={{ color: 'var(--color-protocol-websocket)', borderColor: 'color-mix(in srgb, var(--color-protocol-websocket) 30%, transparent)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-websocket) 10%, transparent)'; }}
+          style={{ color: 'var(--color-success)', borderColor: 'color-mix(in srgb, var(--color-success) 30%, transparent)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-success) 10%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >+ On Connect</button>
         <button
           type="button"
           onClick={() => addHandler('message')}
           className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
-          style={{ color: 'var(--color-protocol-websocket)', borderColor: 'color-mix(in srgb, var(--color-protocol-websocket) 30%, transparent)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-websocket) 10%, transparent)'; }}
+          style={{ color: 'var(--color-mock-server)', borderColor: 'color-mix(in srgb, var(--color-mock-server) 30%, transparent)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-mock-server) 10%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >+ On Message</button>
         <button
           type="button"
           onClick={() => addHandler('disconnect')}
           className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
-          style={{ color: 'var(--color-protocol-websocket)', borderColor: 'color-mix(in srgb, var(--color-protocol-websocket) 30%, transparent)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-websocket) 10%, transparent)'; }}
+          style={{ color: 'var(--color-error)', borderColor: 'color-mix(in srgb, var(--color-error) 30%, transparent)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 10%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >+ On Disconnect</button>
         {handlers.length > 0 && (

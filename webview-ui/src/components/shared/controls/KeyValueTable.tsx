@@ -39,6 +39,8 @@ interface Props {
   label?: string;
   /** Accent color for + Row divider (defaults to indigo/primary) */
   accentColor?: string;
+  /** Extra icon buttons rendered before the trash icon in the toolbar */
+  toolbarExtra?: React.ReactNode;
 }
 
 export function KeyValueTable({
@@ -52,6 +54,7 @@ export function KeyValueTable({
   hideToolbar = false,
   label,
   accentColor,
+  toolbarExtra,
 }: Props) {
   const updateRow = (idx: number, field: keyof KeyValueRow, value: string | boolean) => {
     const updated = [...rows];
@@ -127,6 +130,7 @@ export function KeyValueTable({
         )}
         {!label && <div />}
         <div className="flex items-center gap-1">
+          {toolbarExtra}
           <button
             type="button"
             onClick={() => { if (rows.some(r => r.key || r.value)) setShowClearConfirm(true); }}
