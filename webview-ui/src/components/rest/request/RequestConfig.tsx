@@ -4,9 +4,10 @@ import { useUiStateStore } from '../../../store/ui-state-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { PillTabs, KeyValueTable, FormDataTable, CodeEditor, StyledDropdown, ConfirmDialog, AuthEditor, ScriptsEditor, type PillTab } from '../../shared';
-import { TrashIcon, BulkEditIcon, PlusIcon, SparkleIcon, WandIcon, FileUploadIcon, LockIcon, CookieIcon, DiceIcon } from '../../../icons';
+import { TrashIcon, BulkEditIcon, PlusIcon, SparkleIcon, WandIcon, FileUploadIcon, CookieIcon, DiceIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
 import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../../ai/AiHeaderSuggest';
+import { ComputedHeaderList } from './ComputedHeaderList';
 import { AiBodyGenerate, type AiBodyGenerateHandle } from '../../ai/AiBodyGenerate';
 import { AiDataGeneratorModal } from '../../ai/AiDataGeneratorModal';
 import { AiRequestFuzzerModal } from '../../ai/AiRequestFuzzerModal';
@@ -29,40 +30,6 @@ function computeAuthRows(authType: string, authData: Record<string, string>): { 
   return [];
 }
 
-// ── Read-only computed header row (auth or cookie) ───────────────────────────
-function ComputedHeaderRow({
-  icon, headerKey, headerValue, badge, badgeColor, onDelete, deleteTitle,
-}: {
-  icon: React.ReactNode;
-  headerKey: string;
-  headerValue: string;
-  badge: string;
-  badgeColor: string;
-  onDelete?: () => void;
-  deleteTitle?: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-[rgba(255,255,255,0.03)] border border-dashed border-[rgba(255,255,255,0.1)] mb-1 group">
-      <span className="text-[var(--color-text-muted)] opacity-50 flex-shrink-0">{icon}</span>
-      <span className="text-[12px] font-mono text-[var(--color-text-muted)] w-[160px] flex-shrink-0 truncate">{headerKey}</span>
-      <span className="text-[12px] font-mono text-[var(--color-text-muted)] flex-1 truncate opacity-70">{headerValue}</span>
-      <span
-        className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0"
-        style={{ background: `${badgeColor}22`, color: badgeColor }}
-      >{badge}</span>
-      {onDelete && (
-        <button
-          type="button"
-          title={deleteTitle || 'Remove'}
-          onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-all flex-shrink-0"
-        >
-          <TrashIcon size={11} />
-        </button>
-      )}
-    </div>
-  );
-}
 
 const CONFIG_TABS: PillTab[] = [
   { id: 'params', label: 'Params' },
@@ -81,9 +48,6 @@ export function RequestConfig() {
   const [oauth2Loading, setOauth2Loading] = useState(false);
   const [aiHeaderLoading, setAiHeaderLoading] = useState(false);
   const aiHeaderSuggestRef = useRef<AiHeaderSuggestHandle>(null);
-  const aiBodyGenerateRef = useRef<AiBodyGenerateHandle>(null);
-  const [showDataGenerator, setShowDataGenerator] = useState(false);
-  const [showFuzzer, setShowFuzzer] = useState(false);
   // Task 8: cookie jar rows for the current URL's domain
   const [cookieJarRows, setCookieJarRows] = useState<{ key: string; value: string }[]>([]);
 
@@ -225,30 +189,29 @@ export function RequestConfig() {
 
         {activeSection === 'headers' && (
           <>
-            {/* Task 7: Auth-derived computed headers */}
-            {computeAuthRows(tab.authType, tab.authData).map((row, i) => (
-              <ComputedHeaderRow
-                key={`auth-${i}`}
-                icon={<LockIcon size={13} />}
-                headerKey={row.key}
-                headerValue={row.value}
-                badge="auth"
-                badgeColor="var(--color-primary)"
-                onDelete={() => updateTab(tab.id, { authType: 'none' as typeof tab.authType, authData: {} })}
-                deleteTitle="Clear auth (sets auth type to None)"
-              />
-            ))}
-            {/* Task 8: Cookie jar computed header */}
-            {cookieJarRows.map((row, i) => (
-              <ComputedHeaderRow
-                key={`cookie-${i}`}
-                icon={<CookieIcon size={13} />}
-                headerKey={row.key}
-                headerValue={row.value}
-                badge="cookie jar"
-                badgeColor="var(--color-warning)"
-              />
-            ))}
+            {/* Computed headers: auth + cookie jar */}
+            <ComputedHeaderList
+              rows={[
+                ...computeAuthRows(tab.authType, tab.authData).map((row, i) => ({
+                  id: `auth-${i}`,
+                  key: row.key,
+                  value: row.value,
+                  badge: 'auth',
+                  badgeColor: 'var(--color-primary)',
+                  masked: true,
+                  onDelete: () => updateTab(tab.id, { authType: 'none' as typeof tab.authType, authData: {} }),
+                  deleteTitle: 'Clear auth (sets auth type to None)',
+                })),
+                ...cookieJarRows.map((row, i) => ({
+                  id: `cookie-${i}`,
+                  key: row.key,
+                  value: row.value,
+                  badge: 'cookie jar',
+                  badgeColor: 'var(--color-warning)',
+                  icon: <CookieIcon size={13} />,
+                })),
+              ]}
+            />
             <KeyValueTable
               rows={tab.headers}
               onChange={(rows) => updateTab(tab.id, { headers: rows })}
@@ -431,6 +394,9 @@ function BodyEditor({ tab }: { tab: ReturnType<typeof useTabsStore.getState>['ta
   const fileInputRef = useRef<HTMLInputElement>(null);
   const binaryFileInputRef = useRef<HTMLInputElement>(null);
   const [binaryFileName, setBinaryFileName] = useState('');
+  const aiBodyGenerateRef = useRef<AiBodyGenerateHandle>(null);
+  const [showDataGenerator, setShowDataGenerator] = useState(false);
+  const [showFuzzer, setShowFuzzer] = useState(false);
 
   const contentType = tab.bodyContentType || 'application/json';
   const bodyMode = tab.bodyMode;
