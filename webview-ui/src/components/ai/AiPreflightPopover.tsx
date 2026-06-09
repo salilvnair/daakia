@@ -234,7 +234,7 @@ export function AiPreflightPopover({ tab, onClose }: Props) {
 
   return (
     <div
-      className="absolute left-0 right-0 z-50"
+      className="absolute right-0 z-50"
       style={{ top: '100%', marginTop: '4px' }}
     >
       <div

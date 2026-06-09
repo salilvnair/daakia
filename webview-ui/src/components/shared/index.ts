@@ -14,6 +14,7 @@ export { Checkbox } from './controls/Checkbox';
 export { ResizablePanel } from './controls/ResizablePanel';
 export { DurationInput } from './controls/DurationInput';
 export type { DurationUnit } from './controls/DurationInput';
+export { SearchInput } from './controls/SearchInput';
 
 // ─── Display ───
 export { MethodBadge } from './display/MethodBadge';

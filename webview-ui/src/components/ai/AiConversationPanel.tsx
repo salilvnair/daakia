@@ -399,7 +399,7 @@ function ToolResultInputPanel({ toolCalls, onSubmit }: ToolResultInputPanelProps
       className="rounded-xl border overflow-hidden flex-shrink-0 mt-1"
       style={{
         borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 30%, var(--color-surface-border))',
-        backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 4%, var(--color-surface-bg))',
+        backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 4%, var(--color-panel))',
       }}
     >
       {/* Header */}

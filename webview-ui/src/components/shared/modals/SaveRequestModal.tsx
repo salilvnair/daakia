@@ -152,7 +152,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
       { id: 'rename', label: 'Rename', shortcut: 'N', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' },
       { id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' },
       { id: 'sep2', label: '', separator: true },
-      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} /> },
+      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} />, iconColor: 'var(--color-error)' },
     ];
     setContextMenu({ position: { x: e.clientX, y: e.clientY }, items, targetId: nodeId, targetName: nodeName });
   }, []);

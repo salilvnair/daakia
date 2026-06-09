@@ -63,6 +63,24 @@ export const testProvider: ScriptProvider = {
           throw new Error(`Expected ${actual} to be less than ${expected}`);
         }
       },
+      toHaveLength: (expected: number) => {
+        const val = actual as { length?: number };
+        if (val == null || typeof val.length !== 'number') {
+          throw new Error(`Expected value to have a .length property, but got ${JSON.stringify(actual)}`);
+        }
+        if (val.length !== expected) {
+          throw new Error(`Expected length ${expected} but got ${val.length}`);
+        }
+      },
+      toMatch: (pattern: string | RegExp) => {
+        if (typeof actual !== 'string') {
+          throw new Error(`toMatch requires a string value, got ${typeof actual}`);
+        }
+        const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
+        if (!re.test(actual)) {
+          throw new Error(`Expected "${actual}" to match ${re}`);
+        }
+      },
       toHaveProperty: (key: string) => {
         if (actual == null || typeof actual !== 'object' || !(key in (actual as Record<string, unknown>))) {
           throw new Error(`Expected object to have property "${key}"`);

@@ -100,7 +100,7 @@ export function AiResponseToTypescript({ responseBody, method, url, onClose }: P
   const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="w-[680px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}>
+        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
 
         {/* Header */}
         <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>

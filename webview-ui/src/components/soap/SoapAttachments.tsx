@@ -83,7 +83,10 @@ export function SoapAttachments() {
       </div>
 
       {/* Info banner */}
-      <div className="text-[10px] text-[var(--color-text-muted)] px-2.5 py-1.5 rounded-md bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.06)]">
+      <div
+        className="text-[10px] text-[var(--color-text-muted)] px-2.5 py-1.5 rounded-md"
+        style={{ backgroundColor: 'var(--color-surface-active)', border: '1px solid var(--color-surface-border)' }}
+      >
         Attachments are sent as MTOM (multipart/related). Reference them in the envelope with{' '}
         <code className="text-[var(--color-protocol-soap)]">&lt;xop:Include href="cid:content-id"/&gt;</code>
       </div>
@@ -99,13 +102,15 @@ export function SoapAttachments() {
           {attachments.map(att => (
             <div
               key={att.id}
-              className={`flex items-center gap-2 px-2.5 py-2 rounded-md transition-colors ${att.enabled ? 'bg-[rgba(255,255,255,0.02)]' : 'opacity-50'}`}
+              className={`flex items-center gap-2 px-2.5 py-2 rounded-md transition-colors ${att.enabled ? '' : 'opacity-50'}`}
+              style={att.enabled ? { backgroundColor: 'var(--color-surface-hover)' } : undefined}
             >
               {/* Toggle */}
               <button
                 type="button"
                 onClick={() => toggleAttachment(att.id)}
-                className={`w-6 h-3.5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${att.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[rgba(255,255,255,0.12)]'}`}
+                className={`w-6 h-3.5 rounded-full relative transition-colors cursor-pointer flex-shrink-0`}
+                style={{ backgroundColor: att.enabled ? ACCENT : 'var(--color-surface-active)' }}
               >
                 <span className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all ${att.enabled ? 'left-3' : 'left-0.5'}`} />
               </button>
@@ -124,7 +129,13 @@ export function SoapAttachments() {
                     type="text"
                     value={att.contentId}
                     onChange={(e) => updateContentId(att.id, e.target.value)}
-                    className="flex-1 h-[20px] px-1.5 text-[10px] font-mono rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                    className="flex-1 h-[20px] px-1.5 text-[10px] font-mono rounded text-[var(--color-text-primary)] focus:outline-none"
+                    style={{
+                      backgroundColor: 'var(--color-input-bg)',
+                      border: '1px solid var(--color-surface-border)',
+                    }}
+                    onFocus={e => e.currentTarget.style.borderColor = ACCENT}
+                    onBlur={e => e.currentTarget.style.borderColor = 'var(--color-surface-border)'}
                   />
                 </div>
               </div>

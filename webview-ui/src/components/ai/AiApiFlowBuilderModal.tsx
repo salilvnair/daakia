@@ -205,7 +205,7 @@ export function AiApiFlowBuilderModal({ protocol = 'rest', onClose }: Props) {
     >
       <div
         className="w-[680px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}
+        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
       >
         {/* Header */}
         <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
@@ -302,7 +302,7 @@ export function AiApiFlowBuilderModal({ protocol = 'rest', onClose }: Props) {
                   <div
                     key={idx}
                     className="rounded-lg border p-3"
-                    style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-bg)' }}
+                    style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}
                   >
                     <div className="flex items-start gap-2">
                       {/* Step number */}

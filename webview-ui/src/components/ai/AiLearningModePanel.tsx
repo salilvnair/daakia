@@ -114,7 +114,7 @@ export function AiLearningModePanel({ onClose }: Props) {
   const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="w-[620px] max-h-[88vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}>
+        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
 
         <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <SparkleIcon size={15} style={{ color: ACCENT }} />
@@ -206,7 +206,7 @@ export function AiLearningModePanel({ onClose }: Props) {
 
           {analysisName && (
             <div className="rounded-lg border p-4"
-              style={{ borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 4%, var(--color-surface-bg))` }}>
+              style={{ borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 4%, var(--color-panel))` }}>
               <p className="text-[11px] font-semibold" style={{ color: ACCENT }}>✦ Workflow identified</p>
               <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-primary)' }}>{analysisName}</p>
               <div className="mt-3">

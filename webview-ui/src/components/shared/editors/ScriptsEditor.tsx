@@ -8,6 +8,7 @@ import { ContextMenu } from '../menus/ContextMenu';
 import { useAiScriptAutocomplete, type AiAutocompleteMode } from '../../../hooks/useAiScriptAutocomplete';
 import { SparkleIcon } from '../../../icons';
 import { AiContractTestGenerator, type AiContractTestHandle } from '../../ai/AiContractTestGenerator';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
 
 interface ScriptsEditorProps {
   preRequestScript: string;
@@ -26,10 +27,15 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
   const [snippetsWidth, setSnippetsWidth] = useState(220);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  // AI Scripting Autocomplete
+  // AI feature flags
+  const aiFeatureEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const contractTestAllowed = aiFeatureEnabled('contractTestGenerator');
+  const autocompleteAllowed = aiFeatureEnabled('scriptAutocomplete');
+
+  // AI Scripting Autocomplete — local toggle (only shown when feature is enabled)
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiMode, setAiMode] = useState<AiAutocompleteMode>('on-demand');
-  const { handleEditorMount } = useAiScriptAutocomplete({ enabled: aiEnabled, mode: aiMode });
+  const { handleEditorMount } = useAiScriptAutocomplete({ enabled: aiEnabled && autocompleteAllowed, mode: aiMode });
 
   // AI Contract Test Generator
   const contractTestRef = useRef<AiContractTestHandle>(null);
@@ -141,8 +147,8 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
           accentColor={accentColor}
         />
         <div className="flex items-center gap-1 mr-2">
-          {/* AI Contract Test — post-response only */}
-          {activeScript === 'post-response' && (
+          {/* AI Contract Test — post-response only, gated by contractTestGenerator flag */}
+          {contractTestAllowed && activeScript === 'post-response' && (
             <button
               type="button"
               title="Generate contract tests with AI"
@@ -154,7 +160,8 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
               <span>Tests</span>
             </button>
           )}
-          {/* AI Autocomplete toggle */}
+          {/* AI Autocomplete toggle — gated by scriptAutocomplete flag */}
+          {autocompleteAllowed && (
           <button
             type="button"
             title={aiEnabled ? 'AI autocomplete ON — click to disable' : 'AI autocomplete OFF — click to enable (Ctrl+Alt+Space)'}
@@ -169,8 +176,9 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
             <SparkleIcon size={10} />
             <span>AI</span>
           </button>
-          {/* Mode toggle — only visible when AI is enabled */}
-          {aiEnabled && (
+          )}
+          {/* Mode toggle — only visible when AI autocomplete is enabled & allowed */}
+          {autocompleteAllowed && aiEnabled && (
             <button
               type="button"
               title={aiMode === 'on-demand' ? 'On-demand mode (Ctrl+Alt+Space) — click for auto' : 'Auto mode (triggers after idle) — click for on-demand'}

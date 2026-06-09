@@ -150,8 +150,11 @@ function BulkEditArea({ defaultValue, onChangeRef }: { defaultValue: string; onC
         onChange={(e) => setText(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full min-h-[160px] px-3 py-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-y"
-        style={focused ? { borderColor: ACCENT } : undefined}
+        className="w-full min-h-[160px] px-3 py-2.5 rounded-md text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-y"
+        style={{
+          backgroundColor: 'var(--color-input-bg)',
+          border: `1px solid ${focused ? ACCENT : 'var(--color-surface-border)'}`,
+        }}
         placeholder={`-m\napp_mcp.server\n--conn\npostgresql://user:pass@host:5432/db`}
         spellCheck={false}
       />

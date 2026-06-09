@@ -121,7 +121,7 @@ export function AiRequestFromLogsModal({ onClose }: Props) {
   const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="w-[680px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}>
+        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
 
         <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <SparkleIcon size={15} style={{ color: ACCENT }} />
@@ -171,7 +171,7 @@ export function AiRequestFromLogsModal({ onClose }: Props) {
 
           {result && (
             <div className="rounded-lg border p-3"
-              style={{ borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface-bg))` }}>
+              style={{ borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))` }}>
               <p className="text-[11px] font-semibold mb-2" style={{ color: ACCENT }}>✦ {result.length} unique requests found</p>
               <div className="flex flex-col gap-1">
                 {(result as Array<Record<string, unknown>>).slice(0, 8).map((req, i) => (

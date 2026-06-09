@@ -5,13 +5,15 @@
  * Catches issues like: age: -5, email without @, future dates in birthdate,
  * negative prices, invalid country codes — things schema allows but are logically wrong.
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CheckIcon } from '../../icons';
+import { SparkleIcon, CloseIcon, CheckIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
+import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
 
 interface Props {
+  tabId: string;
   responseBody: string;
   method?: string;
   url?: string;
@@ -45,8 +47,12 @@ Format your response as markdown with:
 
 Be concise. If data looks valid, say so briefly.`;
 
-export function AiSemanticValidatorModal({ responseBody, method, url, status, onClose }: Props) {
-  const [result, setResult] = useState('');
+export function AiSemanticValidatorModal({ tabId, responseBody, method, url, status, onClose }: Props) {
+  const { getTabActions, updateSemantic } = useAiResponseActionsStore();
+  const cached = getTabActions(tabId);
+
+  // Cache-first: initialize from stored result if available
+  const [result, setResult] = useState(cached.semantic?.result ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -56,13 +62,15 @@ export function AiSemanticValidatorModal({ responseBody, method, url, status, on
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
       const msg = evt.data as Record<string, unknown>;
-      if (!msg || msg.tabId !== reqIdRef.current) return;
+      if (!msg || (msg.tabId as string) !== reqIdRef.current) return;
       if (msg.type === 'ai:chunk') {
         accRef.current += (msg.delta as string) || (msg.text as string) || '';
         setResult(accRef.current);
       }
       if (msg.type === 'ai:complete') {
-        setResult(accRef.current || (msg.message as Record<string, unknown>)?.content as string || '');
+        const final = accRef.current || (msg.message as Record<string, unknown>)?.content as string || '';
+        setResult(final);
+        updateSemantic(tabId, { result: final });
         setLoading(false);
       }
       if (msg.type === 'ai:error') {
@@ -72,14 +80,15 @@ export function AiSemanticValidatorModal({ responseBody, method, url, status, on
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, []);
+  }, [tabId, updateSemantic]);
 
+  // Auto-run on first open only — skip if a cached result already exists
   useEffect(() => {
-    if (responseBody.trim()) run();
+    if (responseBody.trim() && !cached.semantic?.result) run();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const run = () => {
+  const run = useCallback(() => {
     if (!responseBody.trim()) { setError('No response body. Send the request first.'); return; }
     setLoading(true);
     setResult('');
@@ -97,14 +106,14 @@ export function AiSemanticValidatorModal({ responseBody, method, url, status, on
       settings: { temperature: 0.1, maxTokens: 1024, stream: true, topP: 1, stopSequences: [], responseFormat: 'text', frequencyPenalty: 0, presencePenalty: 0, seed: null },
       mcpServerConfigs: [],
     });
-  };
+  }, [responseBody, method, url, status]);
 
   const isAllGood = result && (result.includes('✅') || result.toLowerCase().includes('semantically valid')) && !result.includes('🔴') && !result.includes('🟡');
 
   const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="w-[620px] max-h-[88vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}>
+        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
 
         <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <SparkleIcon size={15} style={{ color: ACCENT }} />
@@ -112,6 +121,18 @@ export function AiSemanticValidatorModal({ responseBody, method, url, status, on
             <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Semantic Validator</p>
             <p className="text-[11px] text-[var(--color-text-muted)]">Catches logical errors beyond JSON schema</p>
           </div>
+          {/* Refresh — re-run validation without closing */}
+          {result && !loading && (
+            <button
+              type="button"
+              onClick={run}
+              title="Re-run validation"
+              className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer mr-1"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              <RefreshIcon size={13} />
+            </button>
+          )}
           <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
             <CloseIcon size={12} />
           </button>
@@ -136,7 +157,7 @@ export function AiSemanticValidatorModal({ responseBody, method, url, status, on
                 borderColor: isAllGood
                   ? 'color-mix(in srgb, var(--color-success) 30%, var(--color-surface-border))'
                   : `color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`,
-                backgroundColor: `color-mix(in srgb, ${isAllGood ? 'var(--color-success)' : ACCENT} 4%, var(--color-surface-bg))`,
+                backgroundColor: `color-mix(in srgb, ${isAllGood ? 'var(--color-success)' : ACCENT} 4%, var(--color-panel))`,
               }}>
               {isAllGood && (
                 <div className="flex items-center gap-1.5 mb-2 text-[11px] font-medium" style={{ color: 'var(--color-success)' }}>
@@ -155,19 +176,10 @@ export function AiSemanticValidatorModal({ responseBody, method, url, status, on
         </div>
 
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="flex gap-2">
-            {result && !loading && (
-              <button type="button" onClick={run}
-                className="h-[30px] px-3 text-[11px] rounded-md cursor-pointer border"
-                style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-                Re-validate
-              </button>
-            )}
-            <button type="button" onClick={onClose}
-              className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-              Close
-            </button>
-          </div>
+          <button type="button" onClick={onClose}
+            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            Close
+          </button>
         </div>
       </div>
     </div>

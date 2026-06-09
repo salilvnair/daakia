@@ -16,7 +16,7 @@ import { ConvEngineChat } from '@salilvnair/convengine-chat';
 import { useTabsStore, DAAKIA_ASSISTANT_SYSTEM_PROMPT, type ResponseData } from '../../store/tabs-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
-import { GeneralAssistantIcon, SparkleIcon, CloseCircleIcon } from '../../icons';
+import { GeneralAssistantIcon, SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
 import { AiPendingActions, parseDaakiaActions, type DaakiaAction } from './AiPendingActions';
@@ -112,58 +112,75 @@ function AiContextBar({
   url,
   response,
   envName,
-  onDismiss,
+  tabId,
 }: {
   method: string;
   url: string;
   response: ResponseData | null;
   envName: string | null;
-  onDismiss: () => void;
+  tabId: string;
 }) {
+  const setActiveTab = useTabsStore(s => s.setActiveTab);
   const statusColor = response
     ? response.status < 300 ? 'var(--color-success)'
     : response.status < 400 ? 'var(--color-warning)'
     : 'var(--color-error)'
     : 'var(--color-text-muted)';
 
-  const truncatedUrl = url.length > 45 ? url.slice(0, 42) + '…' : url;
+  const truncatedUrl = url.length > 40 ? url.slice(0, 37) + '…' : url;
 
   return (
     <div
-      className="flex items-center gap-1.5 px-3 py-1 text-[10.5px] border-b overflow-hidden"
+      className="flex items-center gap-2 px-3 py-1.5 border-b overflow-hidden flex-shrink-0"
       style={{
         borderColor: 'var(--color-surface-border)',
-        backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 6%, var(--color-panel))',
+        backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 5%, var(--color-panel))',
       }}
     >
-      <span className="flex-shrink-0 opacity-60" style={{ color: 'var(--color-protocol-ai)' }}>
-        Context:
+      {/* Context label */}
+      <span className="flex-shrink-0 text-[9.5px] font-semibold uppercase tracking-wider opacity-50" style={{ color: 'var(--color-protocol-ai)' }}>
+        Context
       </span>
-      <span className="font-mono font-bold flex-shrink-0" style={{ color: 'var(--color-protocol-ai)', fontSize: '10px' }}>
+
+      {/* Method + URL + status */}
+      <span className="font-mono font-bold flex-shrink-0 text-[10px]" style={{ color: 'var(--color-protocol-ai)' }}>
         {method}
       </span>
-      <span className="truncate flex-1 font-mono" style={{ color: 'var(--color-text-secondary)', fontSize: '10px' }}>
+      <span className="truncate flex-1 font-mono text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>
         {truncatedUrl}
       </span>
       {response && (
-        <span className="flex-shrink-0 font-semibold" style={{ color: statusColor, fontSize: '10px' }}>
+        <span className="flex-shrink-0 font-semibold text-[10px] px-1.5 py-0.5 rounded" style={{ color: statusColor, backgroundColor: `color-mix(in srgb, ${statusColor} 12%, transparent)` }}>
           {response.status}
         </span>
       )}
       {envName && envName !== 'Global' && (
-        <span className="flex-shrink-0 px-1.5 py-px rounded text-[9px]" style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 15%, transparent)', color: 'var(--color-protocol-ai)' }}>
+        <span className="flex-shrink-0 px-1.5 py-px rounded text-[9px]" style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 12%, transparent)', color: 'var(--color-protocol-ai)' }}>
           {envName}
         </span>
       )}
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="flex-shrink-0 cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
-        style={{ color: 'var(--color-text-muted)' }}
-        title="Dismiss context"
-      >
-        <CloseCircleIcon size={11} />
-      </button>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => setActiveTab(tabId)}
+          title="Switch to this request tab"
+          className="h-[18px] px-1.5 text-[9.5px] font-medium rounded cursor-pointer transition-all hover:opacity-80 border"
+          style={{ color: 'var(--color-protocol-ai)', borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 30%, transparent)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' }}
+        >
+          → Tab
+        </button>
+        <button
+          type="button"
+          onClick={() => postMsg({ type: 'openSaveAs', tabId })}
+          title="Save this request to a collection"
+          className="h-[18px] px-1.5 text-[9.5px] font-medium rounded cursor-pointer transition-all hover:opacity-80 border"
+          style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+        >
+          💾 Save
+        </button>
+      </div>
     </div>
   );
 }
@@ -243,13 +260,17 @@ export function DaakiaAiPanel() {
   const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
 
   // ── AI Conversation Context (4.5.4) ──────────────────────────────────────
-  // Find the most recent non-AI tab that has a URL (provides "current context")
+  // Use the tab that was active when "Ask AI" was clicked (previousTabId),
+  // NOT "last tab with a URL" which picks the wrong protocol when multiple tabs are open.
   const allTabs = useTabsStore(s => s.tabs);
+  const previousTabId = useTabsStore(s => s.previousTabId);
   const contextTab = useMemo(() => {
-    return allTabs
-      .filter(t => t.type !== 'daakia-ai' && t.url && t.url.trim().length > 0)
-      .slice(-1)[0] ?? null;
-  }, [allTabs]);
+    // Prefer the previousTabId set by openDaakiaAiTab — it's the exact tab the user came from
+    const prev = previousTabId ? allTabs.find(t => t.id === previousTabId) : null;
+    if (prev && prev.type !== 'daakia-ai' && prev.url?.trim()) return prev;
+    // Fallback: any non-AI tab with a URL (sorted by tab order, not insertion order)
+    return allTabs.filter(t => t.type !== 'daakia-ai' && t.url?.trim()).at(-1) ?? null;
+  }, [allTabs, previousTabId]);
 
   const environments = useEnvStore(s => s.environments);
   const activeEnvId = useEnvStore(s => s.activeEnvId);
@@ -263,9 +284,8 @@ export function DaakiaAiPanel() {
     return environments.find(e => e.id === envId) ?? null;
   }, [contextTab, environments, activeEnvId]);
 
-  // Whether context bar is shown (user can dismiss it)
-  const [contextDismissed, setContextDismissed] = useState(false);
-  const showContextBar = !contextDismissed && !!contextTab?.url;
+  // Context bar is shown whenever there's a valid non-AI tab with a URL
+  const showContextBar = !!contextTab?.url;
 
   // Guard: re-inject system prompts if the tab was loaded from persisted state
   // without them (tabs-store rehydration doesn't re-run openDaakiaAiTab logic).
@@ -411,14 +431,14 @@ export function DaakiaAiPanel() {
       {/* Colorful hero banner */}
       <DaakiaAiHero />
 
-      {/* Context bar — shows current tab context when a non-AI tab is active */}
+      {/* Context bar — shows current tab context */}
       {showContextBar && contextTab && (
         <AiContextBar
           method={contextTab.method}
           url={contextTab.url}
           response={contextTab.response}
           envName={contextEnv?.name ?? null}
-          onDismiss={() => setContextDismissed(true)}
+          tabId={contextTab.id}
         />
       )}
 

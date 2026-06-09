@@ -113,9 +113,9 @@ export function ServerList({ servers, activeServerId, onSelect, onNew, onRename,
         <ContextMenu
           position={{ x: entryMenu.x, y: entryMenu.y }}
           items={[
-            { id: 'rename', label: 'Rename', shortcut: 'R', icon: <RenameIcon size={14} /> },
-            { id: 'toggle', label: entryMenu.server.running ? 'Stop' : 'Start', shortcut: 'S', icon: entryMenu.server.running ? <PauseIcon size={14} /> : <PlayIcon size={14} /> },
-            { id: 'delete', label: 'Delete', shortcut: 'Del', icon: <TrashIcon size={14} />, danger: true },
+            { id: 'rename', label: 'Rename', shortcut: 'R', icon: <RenameIcon size={14} />, iconColor: 'var(--color-ctx-rename)' },
+            { id: 'toggle', label: entryMenu.server.running ? 'Stop' : 'Start', shortcut: 'S', icon: entryMenu.server.running ? <PauseIcon size={14} /> : <PlayIcon size={14} />, iconColor: entryMenu.server.running ? 'var(--color-warning)' : 'var(--color-success)' },
+            { id: 'delete', label: 'Delete', shortcut: 'Del', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)', danger: true },
           ]}
           onSelect={(id) => {
             const server = entryMenu.server;
@@ -134,7 +134,7 @@ export function ServerList({ servers, activeServerId, onSelect, onNew, onRename,
           position={{ x: headerMenu.x, y: headerMenu.y }}
           items={[
             ...(servers.length > 0 ? [
-              { id: 'delete-all', label: 'Delete All Mock Servers', shortcut: 'D', icon: <TrashIcon size={14} />, danger: true },
+              { id: 'delete-all', label: 'Delete All Mock Servers', shortcut: 'D', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)', danger: true },
             ] : []),
           ]}
           onSelect={(id) => {

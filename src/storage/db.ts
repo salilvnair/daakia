@@ -65,6 +65,9 @@ export async function initDb(extensionPath: string): Promise<void> {
       _runMigrations(_db);
     }
 
+    // Seed AI feature flags (idempotent — inserts missing keys, migrates old JSON blob).
+    seedAiFeatureDefaults();
+
     // Initial save
     _saveToDisk();
 
@@ -314,6 +317,14 @@ function _createSchema(db: SqlJsDatabase): void {
       token_total  INTEGER NOT NULL DEFAULT 0,
       created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       updated_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )
+  `);
+
+  // daakia_ai_feature — one row per feature flag: key | enabled
+  db.run(`
+    CREATE TABLE IF NOT EXISTS daakia_ai_feature (
+      key     TEXT    PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 1
     )
   `);
 }
@@ -1226,35 +1237,165 @@ export function searchAiChatSessions(query: string): AiChatSession[] {
 
 // ────────────────────── AI Feature Flags ──────────────────────
 
+// ── AiFeatureFlags ─────────────────────────────────────────────────────────────
+// ALL keys must match the webview ai-features-store.ts AiFeatureFlags interface.
+// tier: 'free' | 'premium' | 'enterprise' — reserved for future premium gating.
+
 export interface AiFeatureFlags {
+  // Core AI
   masterAgent: boolean;
   errorDiagnosis: boolean;
-  responseExplainer: boolean;
+  smartRetryAdvisor: boolean;
+  // Response Explain & Follow-ups (per protocol)
+  explainRest: boolean;
+  followUpsRest: boolean;
+  explainGraphql: boolean;
+  followUpsGraphql: boolean;
+  explainSoap: boolean;
+  followUpsSoap: boolean;
+  explainGrpc: boolean;
+  followUpsGrpc: boolean;
+  // Response actions
+  assertGeneration: boolean;
+  schemaRest: boolean;
+  schemaGraphql: boolean;
+  schemaSoap: boolean;
+  schemaGrpc: boolean;
+  semanticValidator: boolean;
+  responseTransformer: boolean;
+  patternBaseline: boolean;
+  recordBaseline: boolean;
+  responseDiff: boolean;
+  // Request helpers
   headerAutocomplete: boolean;
   bodyGenerator: boolean;
   requestNamer: boolean;
+  requestFuzzer: boolean;
+  dataGenerator: boolean;
+  preflightCheck: boolean;
+  // Script & dev helpers
+  contractTestGenerator: boolean;
   scriptAutocomplete: boolean;
-  inlineAssist: boolean;
+  // Collection AI Actions (one flag per action)
+  extractVariables: boolean;
+  organizeWithAi: boolean;
+  buildApiFlow: boolean;
+  testWithAiAgent: boolean;
+  generateChangelog: boolean;
+  dependencyGraph: boolean;
+  checkCompliance: boolean;
+  generateSdk: boolean;
+  optimizeRequests: boolean;
+  regressionDetector: boolean;
+  importFromScreenshot: boolean;
+  importFromLogs: boolean;
+  describeWorkflow: boolean;
+  generateScenario: boolean;
+  reverseEngineer: boolean;
+  // Mock AI
+  mockAiGenerate: boolean;
+  aiScenarioManager: boolean;
+  // AI Chat & Panels
+  daakiaAiChat: boolean;
 }
 
 export const DEFAULT_AI_FEATURES: AiFeatureFlags = {
   masterAgent: true,
   errorDiagnosis: true,
-  responseExplainer: true,
+  smartRetryAdvisor: true,
+  explainRest: true,
+  followUpsRest: true,
+  explainGraphql: true,
+  followUpsGraphql: true,
+  explainSoap: true,
+  followUpsSoap: true,
+  explainGrpc: true,
+  followUpsGrpc: true,
+  assertGeneration: true,
+  schemaRest: true,
+  schemaGraphql: true,
+  schemaSoap: true,
+  schemaGrpc: true,
+  semanticValidator: true,
+  responseTransformer: true,
+  patternBaseline: true,
+  recordBaseline: true,
+  responseDiff: true,
   headerAutocomplete: true,
   bodyGenerator: true,
   requestNamer: true,
+  requestFuzzer: true,
+  dataGenerator: true,
+  preflightCheck: true,
+  contractTestGenerator: true,
   scriptAutocomplete: true,
-  inlineAssist: true,
+  extractVariables: true,
+  organizeWithAi: true,
+  buildApiFlow: true,
+  testWithAiAgent: true,
+  generateChangelog: true,
+  dependencyGraph: true,
+  checkCompliance: true,
+  generateSdk: true,
+  optimizeRequests: true,
+  regressionDetector: true,
+  importFromScreenshot: true,
+  importFromLogs: true,
+  describeWorkflow: true,
+  generateScenario: true,
+  reverseEngineer: true,
+  mockAiGenerate: true,
+  aiScenarioManager: true,
+  daakiaAiChat: true,
 };
 
+// ── daakia_ai_feature table CRUD ───────────────────────────────────────────────
+// Each AI feature is a row: key TEXT PK | enabled INTEGER | tier TEXT
+// tier is reserved for premium/enterprise gating (future).
+
+/** Seed the daakia_ai_feature table from defaults.
+ *  Idempotent — only inserts rows that don't already exist.
+ *  On first run, migrates any existing aiFeatures JSON blob from the kv settings table. */
+export function seedAiFeatureDefaults(): void {
+  if (!_db) return;
+  const countResult = _db.exec('SELECT COUNT(*) as c FROM daakia_ai_feature');
+  const count = (countResult[0]?.values[0]?.[0] as number) ?? 0;
+  if (count === 0) {
+    // Migrate from old JSON blob if present
+    const legacy = getSetting<Partial<AiFeatureFlags>>('aiFeatures');
+    const merged: AiFeatureFlags = { ...DEFAULT_AI_FEATURES, ...(legacy || {}) };
+    for (const [key, enabled] of Object.entries(merged)) {
+      _db.run('INSERT OR IGNORE INTO daakia_ai_feature (key, enabled) VALUES (?, ?)', [key, enabled ? 1 : 0]);
+    }
+  } else {
+    // Ensure any new keys added since last startup are inserted with their defaults
+    for (const [key, enabled] of Object.entries(DEFAULT_AI_FEATURES)) {
+      _db.run('INSERT OR IGNORE INTO daakia_ai_feature (key, enabled) VALUES (?, ?)', [key, enabled ? 1 : 0]);
+    }
+  }
+  _scheduleSave();
+}
+
 export function getAiFeatures(): AiFeatureFlags {
-  const stored = getSetting<Partial<AiFeatureFlags>>('aiFeatures');
-  return { ...DEFAULT_AI_FEATURES, ...(stored || {}) };
+  if (!_db) return { ...DEFAULT_AI_FEATURES };
+  const result = _db.exec('SELECT key, enabled FROM daakia_ai_feature');
+  if (!result.length || !result[0].values.length) {
+    seedAiFeatureDefaults();
+    return { ...DEFAULT_AI_FEATURES };
+  }
+  const flags: Partial<AiFeatureFlags> = {};
+  for (const row of result[0].values) {
+    flags[row[0] as keyof AiFeatureFlags] = (row[1] as number) === 1;
+  }
+  return { ...DEFAULT_AI_FEATURES, ...flags };
 }
 
 export function setAiFeatures(flags: AiFeatureFlags): void {
-  setSetting('aiFeatures', flags);
+  if (!_db) return;
+  for (const [key, enabled] of Object.entries(flags)) {
+    _db.run('INSERT OR REPLACE INTO daakia_ai_feature (key, enabled) VALUES (?, ?)', [key, enabled ? 1 : 0]);
+  }
+  _scheduleSave();
 }
 
 // ────────────────────── AI Prompt Templates ──────────────────────

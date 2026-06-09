@@ -585,12 +585,20 @@ export const useTabsStore = create<TabsState>((set, get) => {
     },
 
     updateTab: (id, patch) => {
-      const NON_DIRTY_FIELDS = new Set(['response', 'loading', 'dirty', 'savedId', 'collectionId', 'requestId', 'envId', 'protocol', 'type', 'id', 'aiConversation', 'aiStreaming']);
+      // Fields that are never considered "unsaved content changes".
+      // ai* fields are ephemeral AI-panel state — daakia-ai tabs must never go dirty.
+      const NON_DIRTY_FIELDS = new Set([
+        'response', 'loading', 'dirty', 'savedId', 'collectionId', 'requestId',
+        'envId', 'protocol', 'type', 'id',
+        'aiConversation', 'aiStreaming', 'aiSystemPrompts', 'aiProvider', 'aiModel',
+      ]);
       const hasDirtyField = 'dirty' in patch;
       const hasContentChange = Object.keys(patch).some(k => !NON_DIRTY_FIELDS.has(k));
       set(s => ({
         tabs: s.tabs.map(t => {
           if (t.id !== id) return t;
+          // daakia-ai tabs are never "dirty" — they have no save flow
+          if (t.type === 'daakia-ai') return { ...t, ...patch, dirty: false };
           const newDirty = hasDirtyField ? (patch.dirty ?? true) : (hasContentChange ? true : t.dirty);
           return { ...t, ...patch, dirty: newDirty };
         }),

@@ -21,6 +21,9 @@
   --color-elevated: #252526;
   --color-elevated-border: #474747;
 
+  /* Surface background — used by modals and overlay panels */
+  --color-surface-bg: #1e1e1e;
+
   /* Input specific — clearly visible like VS Code inputs */
   --color-input-bg: #2d2d2d;
   --color-input-border: #3c3c3c;
@@ -115,6 +118,9 @@
 
   --color-elevated: #ffffff;
   --color-elevated-border: #d1d5db;
+
+  /* Surface background — used by modals and overlay panels */
+  --color-surface-bg: #ffffff;
 
   --color-input-bg: rgba(0, 0, 0, 0.02);
   --color-input-border: rgba(0, 0, 0, 0.12);
@@ -872,6 +878,29 @@ textarea:focus {
 .wsdl-comment { color: #6b7280; font-style: italic; }
 .wsdl-text { color: var(--color-text-primary); }
 
+/* ─── Monaco Find widget: fix X close button vertical alignment ──────────────
+   The close button renders slightly too high due to Monaco's default line-height.
+   Pull it down to center-align with the input row.
+   ─────────────────────────────────────────────────────────────────────────── */
+.monaco-editor .find-widget .button.close-widget,
+.monaco-editor .find-widget .codicon.codicon-close {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-top: 0 !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  position: relative !important;
+}
+
+/* Ensure the find widget has a solid non-transparent background */
+.monaco-editor .find-widget {
+  background-color: var(--color-surface-bg, #1e1e1e) !important;
+  border: 1px solid var(--color-surface-border, #414141) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+}
+
 /* ─── ConvEngineChat fullscreen integration overrides ─── */
 /* Strip the outer panel border/shadow so it blends into the Daakia AI panel */
 .ce-chat-root--fullscreen {
@@ -1215,3 +1244,76 @@ textarea:focus {
 .daakia-chat-md .mdv-root ul,
 .daakia-chat-md .mdv-root ol { margin: 0.2em 0; padding-left: 1.4em; }
 .daakia-chat-md .mdv-root pre { margin: 0.3em 0; }
+
+/* ── Fix ConvEngineChat token popup — force solid background ─────────────────── */
+/* The token usage popup (shown when clicking the tok chip) uses a portal
+   and may inherit a transparent background from the VS Code webview. */
+[class*="token-popup"],
+[class*="TokenPopup"],
+[class*="ce-token"],
+[class*="tok-detail"],
+[class*="usage-popup"],
+.ce-usage-popup {
+  background-color: var(--color-panel) !important;
+  border: 1px solid var(--color-surface-border) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+  border-radius: 10px !important;
+}
+
+/* ─── Light theme: improved tab distinction ──────────────────────────────────
+   In light mode, PillTabs renders bg-[var(--color-surface)] which is white on a
+   near-white panel (#f9fafb). We need a subtle elevated appearance so tabs are
+   visually separate from the surrounding panel.
+   ─────────────────────────────────────────────────────────────────────────── */
+[data-theme="light"] [role="tablist"] {
+  background-color: #ececec !important;
+  border: 1px solid #d1d5db;
+}
+
+/* Inactive tab text should be clearly visible, not the same as active */
+[data-theme="light"] [role="tab"]:not([aria-selected="true"]) {
+  color: #6b7280;
+}
+[data-theme="light"] [role="tab"][aria-selected="true"] {
+  color: var(--color-primary);
+}
+
+/* ─── Light theme: fix any remaining rgba(255,255,255, ...) backgrounds ───────
+   Components that use rgba(255,255,255,0.04) etc for dark-mode translucency
+   become nearly invisible in light mode. Override key UI elements.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Generic code/script text areas in light mode */
+[data-theme="light"] .monaco-editor .lines-content {
+  background: #ffffff !important;
+}
+
+/* Scrollbar track in light mode — light gray instead of dark */
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+[data-theme="light"] * {
+  scrollbar-color: #d1d5db #f3f4f6;
+}
+
+/* ─── Light theme: input / textarea base styles ───────────────────────────────
+   Many components hardcode rgba(255,255,255,0.04) / rgba(255,255,255,0.08)
+   for dark-mode translucency. In light mode these become white-on-white.
+   This CSS catch-all ensures native inputs always look correct.
+   ─────────────────────────────────────────────────────────────────────────── */
+[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+  background-color: var(--color-input-bg, #f9fafb) !important;
+  border-color: var(--color-surface-border, #e5e7eb) !important;
+  color: var(--color-text-primary) !important;
+}
+[data-theme="light"] textarea {
+  background-color: var(--color-input-bg, #f9fafb) !important;
+  border-color: var(--color-surface-border, #e5e7eb) !important;
+  color: var(--color-text-primary) !important;
+}

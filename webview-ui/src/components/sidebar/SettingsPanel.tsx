@@ -4,6 +4,7 @@ import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIc
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { PromptLibraryPanel } from './PromptLibraryPanel';
 import { AiFeatureSettings } from './AiFeatureSettings';
+import type { AiPromptTemplateKey } from '../../store/prompt-template';
 import { AiAuditPanel } from './AiAuditPanel';
 import { DaakiaWikiPanel } from './wiki/DaakiaWikiPanel';
 import { DaakiaViewPage } from '../../pages/wiki/daakia-view/DaakiaViewPage';
@@ -14,7 +15,6 @@ import { ProxySettings } from '../power/ProxySettings';
 import { ClientCertificates } from '../power/ClientCertificates';
 import { ApiMonitor } from '../power/ApiMonitor';
 import { RequestInterceptorPanel } from '../power/RequestInterceptorPanel';
-import { GrpcClientPanel } from '../power/GrpcClientPanel';
 import { ResponseDiffModal } from '../power/ResponseDiffModal';
 import { BulkUrlTester } from '../power/BulkUrlTester';
 import { LoadTester } from '../power/LoadTester';
@@ -25,7 +25,7 @@ import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 
 type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'wiki' | 'wiki-new' | 'power-features';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
-type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'grpc' | 'diff' | 'bulk' | 'load';
+type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load';
 
 const SECTIONS: { id: SettingsSection; label: string; icon: JSX.Element }[] = [
   { id: 'general',        label: 'General',         icon: <SettingsIcon size={14} /> },
@@ -46,10 +46,18 @@ export function SettingsPanel() {
   const validStored = storedSection && SECTIONS.some(s => s.id === storedSection) ? storedSection : 'general';
   const [activeSection, setActiveSectionLocal] = useState<SettingsSection>(validStored);
   const [navCollapsed, setNavCollapsed] = useState(false);
+  const [promptTarget, setPromptTarget] = useState<AiPromptTemplateKey | null>(null);
+
   const setActiveSection = (section: SettingsSection) => {
     setActiveSectionLocal(section);
     useUiStateStore.getState().setPref('settings.section', section);
   };
+
+  const handleNavigateToPrompt = (key: AiPromptTemplateKey) => {
+    setPromptTarget(key);
+    setActiveSection('prompt-library');
+  };
+
   const current = SECTIONS.find(s => s.id === activeSection) ?? SECTIONS[0];
 
   return (
@@ -106,9 +114,9 @@ export function SettingsPanel() {
         ) : activeSection === 'llm' ? (
           <LlmProviderSettings />
         ) : activeSection === 'ai-features' ? (
-          <AiFeatureSettings />
+          <AiFeatureSettings onNavigateToPrompt={handleNavigateToPrompt} />
         ) : activeSection === 'prompt-library' ? (
-          <PromptLibraryPanel />
+          <PromptLibraryPanel externalTarget={promptTarget} onTargetConsumed={() => setPromptTarget(null)} />
         ) : activeSection === 'ai-audit' ? (
           <AiAuditPanel />
         ) : activeSection === 'wiki-new' ? (
@@ -629,16 +637,15 @@ function MockServerSettings() {
 
 // ────────── Power Features Panel ──────────
 
-const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string }[] = [
-  { id: 'cookies',     label: 'Cookie Manager',      description: 'View, edit, and delete cookies across all domains' },
-  { id: 'proxy',       label: 'Proxy Settings',       description: 'Configure HTTP/HTTPS/SOCKS proxy for all requests' },
-  { id: 'certs',       label: 'Client Certificates',  description: 'mTLS client certificate configuration per domain' },
-  { id: 'monitor',     label: 'API Monitor',          description: 'Schedule periodic health checks with VS Code alerts' },
-  { id: 'interceptor', label: 'Request Interceptor',  description: 'Capture browser traffic via built-in proxy' },
-  { id: 'grpc',        label: 'gRPC Client',          description: 'Load .proto, browse services, send unary/streaming' },
-  { id: 'diff',        label: 'Response Diff',        description: 'Compare two responses side-by-side with highlighting' },
-  { id: 'bulk',        label: 'Bulk URL Tester',      description: 'Test multiple URLs at once, get summary table' },
-  { id: 'load',        label: 'Load Tester',          description: 'Concurrent load testing with p50/p95/p99 metrics' },
+const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon: string }[] = [
+  { id: 'cookies',     label: 'Cookie Manager',      description: 'View, edit, and delete cookies across all domains', icon: '🍪' },
+  { id: 'proxy',       label: 'Proxy Settings',       description: 'Configure HTTP/HTTPS/SOCKS proxy for all requests', icon: '🔀' },
+  { id: 'certs',       label: 'Client Certificates',  description: 'mTLS client certificate configuration per domain', icon: '🔐' },
+  { id: 'monitor',     label: 'API Monitor',          description: 'Schedule periodic health checks with VS Code alerts', icon: '📡' },
+  { id: 'interceptor', label: 'Request Interceptor',  description: 'Capture browser traffic via built-in proxy', icon: '🎯' },
+  { id: 'diff',        label: 'Response Diff',        description: 'Compare two responses side-by-side with highlighting', icon: '⚖️' },
+  { id: 'bulk',        label: 'Bulk URL Tester',      description: 'Test multiple URLs at once, get summary table', icon: '⚡' },
+  { id: 'load',        label: 'Load Tester',          description: 'Concurrent load testing with p50/p95/p99 metrics', icon: '📊' },
 ];
 
 function PowerFeaturesPanel() {
@@ -649,8 +656,7 @@ function PowerFeaturesPanel() {
   const [showCerts, setShowCerts] = useState(false);
   const [showMonitor, setShowMonitor] = useState(false);
   const [showInterceptor, setShowInterceptor] = useState(false);
-  const [showGrpc, setShowGrpc] = useState(false);
-  const [showDiff, setShowDiff] = useState(false);
+const [showDiff, setShowDiff] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
 
@@ -661,7 +667,6 @@ function PowerFeaturesPanel() {
     else if (id === 'certs') setShowCerts(true);
     else if (id === 'monitor') setShowMonitor(true);
     else if (id === 'interceptor') setShowInterceptor(true);
-    else if (id === 'grpc') setShowGrpc(true);
     else if (id === 'diff') setShowDiff(true);
     else if (id === 'bulk') setShowBulk(true);
     else if (id === 'load') setShowLoad(true);
@@ -679,11 +684,14 @@ function PowerFeaturesPanel() {
             key={t.id}
             type="button"
             onClick={() => openTool(t.id)}
-            className="text-left p-3 rounded-xl border cursor-pointer transition-colors hover:border-[var(--color-settings)]"
-            style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}
+            className="text-left p-3.5 rounded-xl border cursor-pointer transition-all hover:border-[var(--color-settings)] hover:brightness-105 flex flex-col gap-1.5 min-h-[80px]"
+            style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface)' }}
           >
-            <p className="text-[12px] font-semibold text-[var(--color-text-primary)]">{t.label}</p>
-            <p className="text-[10.5px] mt-0.5 text-[var(--color-text-muted)]">{t.description}</p>
+            <div className="flex items-center gap-2">
+              <span className="text-[15px] leading-none">{t.icon}</span>
+              <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{t.label}</p>
+            </div>
+            <p className="text-[10.5px] leading-snug" style={{ color: 'var(--color-text-muted)' }}>{t.description}</p>
           </button>
         ))}
       </div>
@@ -694,7 +702,6 @@ function PowerFeaturesPanel() {
       {showCerts && <ClientCertificates onClose={() => setShowCerts(false)} />}
       {showMonitor && <ApiMonitor onClose={() => setShowMonitor(false)} />}
       {showInterceptor && <RequestInterceptorPanel onClose={() => setShowInterceptor(false)} />}
-      {showGrpc && <GrpcClientPanel onClose={() => setShowGrpc(false)} />}
       {showDiff && <ResponseDiffModal onClose={() => setShowDiff(false)} />}
       {showBulk && <BulkUrlTester onClose={() => setShowBulk(false)} />}
       {showLoad && <LoadTester onClose={() => setShowLoad(false)} />}
@@ -747,59 +754,113 @@ function DevToolsSettingsPage() {
 
 // ────────── Theme Settings ──────────
 
+type ThemeChoice = 'dark' | 'light' | 'system';
+
+/** Resolve the effective dark/light from the OS media query */
+function resolveSystemTheme(): 'dark' | 'light' {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+/** Apply a resolved dark/light to the DOM (does NOT touch localStorage choice) */
+function applyThemeToDOM(resolved: 'dark' | 'light') {
+  document.documentElement.setAttribute('data-theme', resolved);
+  document.body.setAttribute('data-theme', resolved);
+}
+
 function ThemeSettings() {
-  const [theme, setThemeState] = useState<'dark' | 'light'>(() => {
-    return (document.documentElement.getAttribute('data-theme') as 'dark' | 'light') || 'dark';
+  const [choice, setChoice] = useState<ThemeChoice>(() => {
+    return (localStorage.getItem('daakia-theme') as ThemeChoice) || 'dark';
   });
 
-  const applyTheme = (t: 'dark' | 'light') => {
-    document.documentElement.setAttribute('data-theme', t);
-    document.body.setAttribute('data-theme', t);
+  // When the component mounts, wire up a media-query listener if we're in system mode
+  useEffect(() => {
+    if (choice !== 'system') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const listener = (e: MediaQueryListEvent) => applyThemeToDOM(e.matches ? 'dark' : 'light');
+    mq.addEventListener('change', listener);
+    return () => mq.removeEventListener('change', listener);
+  }, [choice]);
+
+  const selectTheme = (t: ThemeChoice) => {
+    setChoice(t);
     localStorage.setItem('daakia-theme', t);
-    setThemeState(t);
-    postMsg({ type: 'saveSettings', key: 'theme', value: t });
+    if (t === 'system') {
+      const resolved = resolveSystemTheme();
+      applyThemeToDOM(resolved);
+      postMsg({ type: 'saveSettings', key: 'theme', value: t });
+    } else {
+      applyThemeToDOM(t);
+      postMsg({ type: 'saveSettings', key: 'theme', value: t });
+    }
   };
+
+  const THEMES: { key: ThemeChoice; label: string; desc: string }[] = [
+    { key: 'dark',   label: 'Dark',   desc: 'Always dark' },
+    { key: 'light',  label: 'Light',  desc: 'Always light' },
+    { key: 'system', label: 'System', desc: 'Follows OS preference' },
+  ];
 
   return (
     <div className="p-6 flex flex-col gap-6">
       <div>
-        <h3 className="text-[13px] font-semibold text-[var(--color-text-primary)]">Appearance</h3>
-        <p className="text-[11px] text-[var(--color-text-muted)] mt-1">Choose how Daakia looks to you</p>
+        <h3 className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Appearance</h3>
+        <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-muted)' }}>Choose how Daakia looks to you</p>
       </div>
 
-      <div className="flex gap-4">
-        {(['dark', 'light'] as const).map(t => (
+      <div className="flex gap-3 flex-wrap">
+        {THEMES.map(({ key: t, label }) => (
           <button
             key={t}
             type="button"
-            onClick={() => applyTheme(t)}
-            className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all w-[140px] ${
-              theme === t
-                ? 'border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_8%,transparent)]'
-                : 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.2)]'
-            }`}
+            onClick={() => selectTheme(t)}
+            className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all w-[130px]"
+            style={{
+              borderColor: choice === t ? 'var(--color-primary)' : 'var(--color-surface-border)',
+              backgroundColor: choice === t
+                ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)'
+                : 'var(--color-surface)',
+            }}
           >
-            {/* Theme preview swatch */}
-            <div className={`w-full h-[72px] rounded-lg overflow-hidden border ${t === 'dark' ? 'bg-[#1e1e1e] border-[#414141]' : 'bg-white border-[#e5e7eb]'}`}>
-              <div className={`h-[20px] ${t === 'dark' ? 'bg-[#252526]' : 'bg-[#f3f4f6]'}`} />
-              <div className="flex gap-1.5 p-2">
-                <div className={`h-2 w-8 rounded ${t === 'dark' ? 'bg-[#3c3c3c]' : 'bg-[#e5e7eb]'}`} />
-                <div className={`h-2 w-12 rounded ${t === 'dark' ? 'bg-[#4b4b4b]' : 'bg-[#d1d5db]'}`} />
+            {/* Preview swatch */}
+            {t === 'system' ? (
+              <div className="w-full h-[72px] rounded-lg overflow-hidden border border-[#888] flex">
+                <div className="w-1/2 h-full bg-[#1e1e1e]">
+                  <div className="h-[20px] bg-[#252526]" />
+                  <div className="flex gap-1 p-1.5">
+                    <div className="h-1.5 w-5 rounded bg-[#3c3c3c]" />
+                    <div className="h-1.5 w-7 rounded bg-[#4b4b4b]" />
+                  </div>
+                </div>
+                <div className="w-1/2 h-full bg-white">
+                  <div className="h-[20px] bg-[#f3f4f6]" />
+                  <div className="flex gap-1 p-1.5">
+                    <div className="h-1.5 w-5 rounded bg-[#e5e7eb]" />
+                    <div className="h-1.5 w-7 rounded bg-[#d1d5db]" />
+                  </div>
+                </div>
               </div>
-              <div className="px-2 flex flex-col gap-1">
-                <div className={`h-1.5 w-full rounded ${t === 'dark' ? 'bg-[#333]' : 'bg-[#f3f4f6]'}`} />
-                <div className={`h-1.5 w-3/4 rounded ${t === 'dark' ? 'bg-[#2d2d2d]' : 'bg-[#e5e7eb]'}`} />
+            ) : (
+              <div className={`w-full h-[72px] rounded-lg overflow-hidden border ${t === 'dark' ? 'bg-[#1e1e1e] border-[#414141]' : 'bg-white border-[#e5e7eb]'}`}>
+                <div className={`h-[20px] ${t === 'dark' ? 'bg-[#252526]' : 'bg-[#f3f4f6]'}`} />
+                <div className="flex gap-1.5 p-2">
+                  <div className={`h-2 w-8 rounded ${t === 'dark' ? 'bg-[#3c3c3c]' : 'bg-[#e5e7eb]'}`} />
+                  <div className={`h-2 w-12 rounded ${t === 'dark' ? 'bg-[#4b4b4b]' : 'bg-[#d1d5db]'}`} />
+                </div>
+                <div className="px-2 flex flex-col gap-1">
+                  <div className={`h-1.5 w-full rounded ${t === 'dark' ? 'bg-[#333]' : 'bg-[#f3f4f6]'}`} />
+                  <div className={`h-1.5 w-3/4 rounded ${t === 'dark' ? 'bg-[#2d2d2d]' : 'bg-[#e5e7eb]'}`} />
+                </div>
               </div>
-            </div>
-            <span className="text-[12px] font-medium text-[var(--color-text-primary)] capitalize">{t}</span>
-            {theme === t && (
-              <span className="text-[10px] text-[var(--color-primary)] font-medium">Active</span>
+            )}
+            <span className="text-[12px] font-medium" style={{ color: 'var(--color-text-primary)' }}>{label}</span>
+            {choice === t && (
+              <span className="text-[10px] font-medium" style={{ color: 'var(--color-primary)' }}>Active</span>
             )}
           </button>
         ))}
       </div>
 
-      <p className="text-[10px] text-[var(--color-text-muted)]">
+      <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
         Note: VS Code applies its own theme to the extension host. This toggle controls the Daakia webview UI independently.
       </p>
     </div>

@@ -133,9 +133,74 @@ typescriptDefaults.setCompilerOptions({
   jsx: JsxEmit.React,
 });
 
+// Define VS Code "Light+" matching theme
+monaco.editor.defineTheme('daakia-light', {
+  base: 'vs',
+  inherit: true,
+  rules: [
+    { token: 'string.key.json',  foreground: '0451a5' },
+    { token: 'string.value.json', foreground: 'a31515' },
+    { token: 'number',            foreground: '09885a' },
+    { token: 'keyword.json',      foreground: '0000ff' },
+    { token: 'string',            foreground: 'a31515' },
+    { token: 'keyword',           foreground: '0000ff' },
+    { token: 'comment',           foreground: '008000' },
+    { token: 'type',              foreground: '267f99' },
+    { token: 'identifier',        foreground: '001080' },
+    { token: 'variable',          foreground: '001080' },
+    { token: 'constant',          foreground: '0070c1' },
+    { token: 'keyword.js',        foreground: 'af00db' },
+    { token: 'keyword.ts',        foreground: 'af00db' },
+    { token: 'string.js',         foreground: 'a31515' },
+    { token: 'string.ts',         foreground: 'a31515' },
+    { token: 'number.js',         foreground: '09885a' },
+    { token: 'number.ts',         foreground: '09885a' },
+    { token: 'regexp',            foreground: 'c41a16' },
+    { token: 'delimiter',         foreground: '000000' },
+    { token: 'delimiter.bracket', foreground: '000000' },
+    { token: 'tag',               foreground: '800000' },
+    { token: 'attribute.name',    foreground: 'ff0000' },
+    { token: 'attribute.value',   foreground: '0451a5' },
+    { token: 'keyword.graphql',              foreground: 'af00db' },
+    { token: 'type.identifier.graphql',      foreground: '267f99' },
+    { token: 'variable.graphql',             foreground: '001080' },
+    { token: 'string.graphql',               foreground: 'a31515' },
+    { token: 'comment.graphql',              foreground: '008000' },
+    { token: 'operator.graphql',             foreground: '000000' },
+    { token: 'identifier.graphql',           foreground: '000000' },
+  ],
+  colors: {
+    'editor.background':                   '#ffffff',
+    'editor.foreground':                   '#000000',
+    'editor.lineHighlightBackground':      '#f5f5f5',
+    'editor.selectionBackground':          '#add6ff',
+    'editor.inactiveSelectionBackground':  '#e5ebf1',
+    'editorLineNumber.foreground':         '#237893',
+    'editorLineNumber.activeForeground':   '#0b216f',
+    'editorCursor.foreground':             '#000000',
+    'editor.selectionHighlightBackground': '#add6ff4d',
+    'editorIndentGuide.background1':       '#d3d3d3',
+    'editorIndentGuide.activeBackground1': '#939393',
+    'editorGutter.background':             '#ffffff',
+    'editorWidget.background':             '#f3f3f3',
+    'editorSuggestWidget.background':      '#f3f3f3',
+    'editorSuggestWidget.border':          '#c8c8c8',
+    'editorSuggestWidget.selectedBackground': '#0060c0',
+    'list.hoverBackground':                '#f0f0f0',
+    'input.background':                    '#ffffff',
+    'input.border':                        '#d1d5db',
+    'focusBorder':                         '#6366f1',
+  },
+});
+
 loader.config({ monaco });
 
 // Expose monaco globally for context menu access to editor instances
 (window as any).monaco = monaco;
+
+/** Call this whenever the app theme changes to re-theme all open Monaco editors */
+export function applyMonacoTheme(theme: 'dark' | 'light') {
+  monaco.editor.setTheme(theme === 'dark' ? 'daakia-dark' : 'daakia-light');
+}
 
 export { monaco };

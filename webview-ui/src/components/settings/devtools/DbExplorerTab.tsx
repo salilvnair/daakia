@@ -3,9 +3,10 @@
  * Colorful: table list with per-table color, colored column headers, JSON Monaco preview.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { postMsg } from '../../../vscode';
 import { CodeEditor } from '../../shared';
-import { RefreshIcon, TrashIcon, ChevronRightIcon, ChevronDownIcon, ServerIcon } from '../../../icons';
+import { RefreshIcon, TrashIcon, ChevronRightIcon, ServerIcon, CloseIcon } from '../../../icons';
 
 interface TableInfo { name: string; rowCount: number; columns: string[]; }
 
@@ -29,10 +30,60 @@ function tableColor(name: string): string {
   return TABLE_COLORS[name] ?? '#818cf8';
 }
 
+// ─── JSON popup modal ─────────────────────────────────────────────────────────
+
+function JsonPopupModal({ value, accentColor, onClose }: { value: string; accentColor: string; onClose: () => void }) {
+  let pretty = value;
+  try { pretty = JSON.stringify(JSON.parse(value), null, 2); } catch { /* raw */ }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="flex flex-col rounded-xl overflow-hidden shadow-2xl"
+        style={{
+          width: 'min(700px, 90vw)',
+          height: 'min(520px, 80vh)',
+          backgroundColor: 'var(--vscode-editor-background, #1e1e1e)',
+          border: `1px solid color-mix(in srgb, ${accentColor} 25%, transparent)`,
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 py-2.5 border-b flex-shrink-0"
+          style={{ borderColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`, backgroundColor: `color-mix(in srgb, ${accentColor} 6%, transparent)` }}
+        >
+          <span className="text-[11px] font-semibold" style={{ color: accentColor }}>JSON Viewer</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-mono text-[var(--color-text-muted)]">{pretty.length.toLocaleString()} chars</span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.08)] transition-colors"
+              title="Close"
+            >
+              <CloseIcon size={13} />
+            </button>
+          </div>
+        </div>
+        {/* Monaco editor */}
+        <div className="flex-1 min-h-0">
+          <CodeEditor value={pretty.slice(0, 50000)} language="json" readOnly height="100%" />
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ─── JSON expand cell ─────────────────────────────────────────────────────────
 
 function JsonCell({ value, accentColor }: { value: unknown; accentColor: string }) {
-  const [open, setOpen] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
   const str = value == null ? '' : String(value);
   const isJson = str.startsWith('{') || str.startsWith('[');
 
@@ -44,26 +95,22 @@ function JsonCell({ value, accentColor }: { value: unknown; accentColor: string 
     );
   }
 
-  let pretty = str;
-  try { pretty = JSON.stringify(JSON.parse(str), null, 2); } catch { /* raw */ }
-
   return (
-    <span className="flex flex-col gap-1">
+    <>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setShowPopup(true)}
         className="flex items-center gap-1 cursor-pointer text-[10px] font-mono"
         style={{ color: accentColor }}
+        title="Click to open JSON viewer"
       >
-        {open ? <ChevronDownIcon size={10} /> : <ChevronRightIcon size={10} />}
-        <span className="opacity-70">{open ? 'collapse' : `{…} ${str.length} chars`}</span>
+        <ChevronRightIcon size={10} />
+        <span className="opacity-70">{`{…} ${str.length} chars`}</span>
       </button>
-      {open && (
-        <div className="rounded-lg overflow-hidden border" style={{ borderColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }}>
-          <CodeEditor value={pretty.slice(0, 2000)} language="json" readOnly height="120px" />
-        </div>
+      {showPopup && (
+        <JsonPopupModal value={str} accentColor={accentColor} onClose={() => setShowPopup(false)} />
       )}
-    </span>
+    </>
   );
 }
 

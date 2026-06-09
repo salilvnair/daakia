@@ -385,7 +385,7 @@ export function ImportCurlModal({ open, onClose }: ImportCurlModalProps) {
             <div
               className="rounded-lg border p-3 max-h-[220px] overflow-y-auto [scrollbar-gutter:stable]"
               style={{
-                backgroundColor: `color-mix(in srgb, ${EXPLAIN_ACCENT} 4%, var(--color-surface-bg))`,
+                backgroundColor: `color-mix(in srgb, ${EXPLAIN_ACCENT} 4%, var(--color-panel))`,
                 borderColor: `color-mix(in srgb, ${EXPLAIN_ACCENT} 25%, var(--color-surface-border))`,
               }}
             >
@@ -481,7 +481,7 @@ export function ImportCurlModal({ open, onClose }: ImportCurlModalProps) {
                 <div
                   className="rounded-lg border p-3 space-y-2"
                   style={{
-                    backgroundColor: `color-mix(in srgb, ${CODE_ACCENT} 4%, var(--color-surface-bg))`,
+                    backgroundColor: `color-mix(in srgb, ${CODE_ACCENT} 4%, var(--color-panel))`,
                     borderColor: `color-mix(in srgb, ${CODE_ACCENT} 25%, var(--color-surface-border))`,
                   }}
                 >

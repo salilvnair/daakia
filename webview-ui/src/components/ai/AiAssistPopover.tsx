@@ -367,6 +367,10 @@ interface AiActionButtonProps {
   requestBody?: string;
   open: boolean;
   onOpen: () => void;
+  /** Override the accent color for this specific button */
+  accentColor?: string;
+  /** compact=true → small rectangular style for response panel toolbar */
+  compact?: boolean;
 }
 
 export function AiActionButton({
@@ -378,23 +382,41 @@ export function AiActionButton({
   requestBody,
   open,
   onOpen,
+  accentColor,
+  compact,
 }: AiActionButtonProps) {
+  const btnAccent = accentColor ?? ACCENT;
   return (
     <div className="relative">
       <button
         type="button"
         onClick={onOpen}
-        className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
+        className={compact
+          ? 'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] cursor-pointer transition-all border'
+          : 'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-medium cursor-pointer transition-all border'
+        }
         style={{
-          color: ACCENT,
-          borderColor: `color-mix(in srgb, ${ACCENT} 25%, transparent)`,
+          color: btnAccent,
+          borderColor: open
+            ? `color-mix(in srgb, ${btnAccent} 45%, var(--color-surface-border))`
+            : `color-mix(in srgb, ${btnAccent} 25%, var(--color-surface-border))`,
           backgroundColor: open
-            ? `color-mix(in srgb, ${ACCENT} 10%, transparent)`
+            ? `color-mix(in srgb, ${btnAccent} 12%, var(--color-surface))`
             : 'transparent',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.backgroundColor = `color-mix(in srgb, ${btnAccent} 10%, var(--color-surface))`;
+          e.currentTarget.style.borderColor = `color-mix(in srgb, ${btnAccent} 45%, var(--color-surface-border))`;
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.backgroundColor = open ? `color-mix(in srgb, ${btnAccent} 12%, var(--color-surface))` : 'transparent';
+          e.currentTarget.style.borderColor = open
+            ? `color-mix(in srgb, ${btnAccent} 45%, var(--color-surface-border))`
+            : `color-mix(in srgb, ${btnAccent} 25%, var(--color-surface-border))`;
         }}
         title={label}
       >
-        <SparkleIcon size={10} style={{ color: ACCENT }} />
+        <SparkleIcon size={compact ? 8 : 10} style={{ color: btnAccent }} />
         {label}
       </button>
 

@@ -57,6 +57,7 @@ export function ResponseStatusBar({ response, requestMethod = 'GET', requestUrl 
       {/* AI action: error diagnosis — only shown on 4xx/5xx/network errors when feature enabled */}
       {isError && requestUrl && errorDiagnosisEnabled && (
         <AiActionButton
+          compact
           mode="error-diagnosis"
           label="Ask AI why"
           response={response}

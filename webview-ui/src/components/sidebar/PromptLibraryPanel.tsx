@@ -14,7 +14,7 @@ import { postMsg } from '../../vscode';
 import { TrashIcon, ChevronRightIcon, SparkleIcon } from '../../icons';
 import { ConfirmDialog } from '../shared';
 import {
-  AGENT_CATEGORIES, SCENARIO_LABELS, SCENARIO_DESCRIPTIONS, SCENARIO_COLORS,
+  AGENT_CATEGORIES, SCENARIO_LABELS, SCENARIO_DESCRIPTIONS, SCENARIO_COLORS, SCENARIO_GATES,
   AGENT_SCENARIO_VARIABLES, getDefaultSystemPrompt, getDefaultUserPrompt,
   ALL_AGENT_SCENARIOS, type AgentScenario, type ScenarioVarMap,
 } from '../../store/prompt-template';
@@ -24,6 +24,7 @@ import {
   AI_PROMPT_TEMPLATE_DEFAULTS, AI_PROMPT_TEMPLATE_VARIABLES,
   type AiPromptTemplateKey,
 } from '../../store/prompt-template';
+import { AI_FEATURE_LABELS, TEMPLATE_TO_FEATURE_KEY } from '../../store/ai-features-store';
 
 const ACCENT = 'var(--color-protocol-ai)';
 const PL_MIN_W = 190;
@@ -102,7 +103,7 @@ function PromptPreview({ text }: { text: string }) {
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-export function PromptLibraryPanel() {
+export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { externalTarget?: AiPromptTemplateKey | null; onTargetConsumed?: () => void } = {}) {
   // ── data ──
   const [dbRows, setDbRows] = useState<PromptRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,6 +138,19 @@ export function PromptLibraryPanel() {
   const { templates, setTemplate, resetTemplate, loadTemplates } = useAiPromptTemplatesStore();
 
   useEffect(() => { ensureVarStyle(); loadTemplates(); }, [loadTemplates]);
+
+  // Navigate to external target when arriving from AI Features settings
+  useEffect(() => {
+    if (!externalTarget) return;
+    const cat = AI_TEMPLATE_CATEGORIES.find(c => c.keys.includes(externalTarget));
+    if (cat) {
+      setActive(cat.kind === 'mock' ? { kind: 'mock', key: externalTarget } : { kind: 'template', key: externalTarget });
+      setAiCollapsed(false);
+      if (cat.id) setCatCollapsed(prev => { const n = new Set(prev); n.delete(`tpl-${cat.id}`); return n; });
+    }
+    onTargetConsumed?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalTarget]);
 
   // Load agent rows
   useEffect(() => {
@@ -309,6 +323,9 @@ export function PromptLibraryPanel() {
             >
               <span className={`transition-transform duration-150 ${agentCollapsed ? '' : 'rotate-90'}`}><ChevronRightIcon size={9} /></span>
               <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Agent Prompts</span>
+              <span className="ml-auto text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-full" style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)` }}>
+                {ALL_AGENT_SCENARIOS.length}
+              </span>
             </button>
 
             {!agentCollapsed && (
@@ -378,6 +395,9 @@ export function PromptLibraryPanel() {
             >
               <span className={`transition-transform duration-150 ${aiCollapsed ? '' : 'rotate-90'}`}><ChevronRightIcon size={9} /></span>
               <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">AI Actions</span>
+              <span className="ml-auto text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-full" style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)` }}>
+                {AI_TEMPLATE_CATEGORIES.reduce((sum, cat) => sum + cat.keys.length, 0)}
+              </span>
             </button>
 
             {!aiCollapsed && (
@@ -466,6 +486,24 @@ export function PromptLibraryPanel() {
                     {dirty && <span className="text-[9px] text-[var(--color-text-muted)]">● unsaved</span>}
                   </div>
                   <p className="text-[11px] text-[var(--color-text-muted)]">{editorDesc}</p>
+                  {/* Where-used line — agents use SCENARIO_GATES, templates use AI_FEATURE_LABELS.gates */}
+                  {isAgent && (() => {
+                    const gates = SCENARIO_GATES[(active as { scenario: AgentScenario }).scenario];
+                    return gates ? (
+                      <p className="text-[9.5px] mt-1 leading-relaxed" style={{ color: `color-mix(in srgb, ${editorColor} 65%, var(--color-text-muted))` }}>
+                        ↳ {gates}
+                      </p>
+                    ) : null;
+                  })()}
+                  {(isTpl || isMock) && activeKey && (() => {
+                    const flagKey = TEMPLATE_TO_FEATURE_KEY[activeKey];
+                    const gates = flagKey ? AI_FEATURE_LABELS[flagKey]?.gates : undefined;
+                    return gates ? (
+                      <p className="text-[9.5px] mt-1 leading-relaxed" style={{ color: `color-mix(in srgb, ${editorColor} 65%, var(--color-text-muted))` }}>
+                        ↳ {gates}
+                      </p>
+                    ) : null;
+                  })()}
                   {updatedAt && <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">Modified: {new Date(updatedAt).toLocaleString()}</p>}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 pt-0.5">

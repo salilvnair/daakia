@@ -157,25 +157,25 @@ export function PerformanceTab() {
       )}
 
       {data && (
-        <>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
           {/* Heap Memory — teal */}
           <SectionCard title="Heap Memory" color="#10b981" icon={<MemoryIcon size={13} />}>
             <MetricRow label="Heap Used" value={`${formatBytes(heapUsed)} / ${formatBytes(heapTotal)}`} bar={heapPct} color="#10b981" />
-            <MetricRow label="Heap Total (allocated)" value={formatBytes(heapTotal)} color="#10b981" />
+            <MetricRow label="Heap Total" value={formatBytes(heapTotal)} color="#10b981" />
           </SectionCard>
 
           {/* Process Memory — blue */}
           <SectionCard title="Process Memory" color="#06b6d4" icon={<MemoryIcon size={13} />}>
             <MetricRow label="RSS (Resident Set)" value={formatBytes(rss)} color="#06b6d4" />
-            <MetricRow label="External (C++ objects)" value={formatBytes(external)} color="#06b6d4" />
+            <MetricRow label="External (C++)" value={formatBytes(external)} color="#06b6d4" />
             <MetricRow label="Array Buffers" value={formatBytes(arrayBuffers)} color="#06b6d4" />
           </SectionCard>
 
           {/* OS Memory — indigo */}
           {osTotal > 0 && (
             <SectionCard title="System Memory" color="#818cf8" icon={<GaugeIcon size={13} />}>
-              <MetricRow label="OS Memory Used" value={`${formatBytes(osUsed)} / ${formatBytes(osTotal)}`} bar={osPct} color="#818cf8" />
-              <MetricRow label="OS Free Memory" value={formatBytes(osFree)} color="#818cf8" />
+              <MetricRow label="OS Used" value={`${formatBytes(osUsed)} / ${formatBytes(osTotal)}`} bar={osPct} color="#818cf8" />
+              <MetricRow label="OS Free" value={formatBytes(osFree)} color="#818cf8" />
             </SectionCard>
           )}
 
@@ -183,12 +183,12 @@ export function PerformanceTab() {
           <SectionCard title="Process Info" color="#a855f7" icon={<ProcessIcon size={13} />}>
             <MetricRow label="CPU Usage" value={`${cpu.toFixed(1)}%`} bar={cpu} color="#a855f7" />
             <MetricRow label="Uptime" value={formatUptime(data.uptime)} color="#a855f7" />
-            <MetricRow label="Process ID" value={String(data.processId)} color="#a855f7" />
+            <MetricRow label="PID" value={String(data.processId)} color="#a855f7" />
             {data.nodeVersion && (
-              <MetricRow label="Node.js Version" value={data.nodeVersion} color="#a855f7" />
+              <MetricRow label="Node.js" value={data.nodeVersion} color="#a855f7" />
             )}
           </SectionCard>
-        </>
+        </div>
       )}
     </div>
   );

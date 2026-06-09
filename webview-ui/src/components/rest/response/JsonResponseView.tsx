@@ -3,37 +3,29 @@ import { useTabsStore } from '../../../store/tabs-store';
 import { CodeEditor, CopyButton } from '../../shared';
 import { useClickOutside } from '../../../hooks/useClickOutside';
 import { applyJqFilter, formatBody, getResponseLanguage, downloadBlob, getExtensionForContentType } from '../../../services/response';
-import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, HelpCircleIcon, SparkleIcon, CloseCircleIcon } from '../../../icons';
+import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, HelpCircleIcon, CloseCircleIcon } from '../../../icons';
 import { ToolbarBtn } from './ToolbarBtn';
-import { AiResponseDiffModal } from '../../ai/AiResponseDiffModal';
-import { AiSchemaValidatorModal } from '../../ai/AiSchemaValidatorModal';
 
 interface JsonViewProps {
-  response: { body: string; contentType: string };
+  response: { body: string; contentType: string; status?: number };
   wrapLines: boolean;
   setWrapLines: (v: boolean) => void;
   showFilter: boolean;
   setShowFilter: (v: boolean) => void;
   filterQuery: string;
   setFilterQuery: (v: string) => void;
-  showMoreMenu: boolean;
-  setShowMoreMenu: (v: boolean) => void;
-  moreMenuRef: React.RefObject<HTMLDivElement | null>;
   tabId: string;
-  onShowSchema: () => void;
+  requestMethod?: string;
+  requestUrl?: string;
 }
 
-export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter, setShowFilter, filterQuery, setFilterQuery, showMoreMenu, setShowMoreMenu, moreMenuRef, tabId, onShowSchema }: JsonViewProps) {
+export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter, setShowFilter, filterQuery, setFilterQuery, tabId, requestMethod, requestUrl }: JsonViewProps) {
   const formattedBody = useMemo(() => formatBody(response.body, response.contentType), [response.body, response.contentType]);
   const [filterError, setFilterError] = useState<string | null>(null);
   const [showJqHelp, setShowJqHelp] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const jqHelpRef = useRef<HTMLDivElement>(null);
-
-  // AI Diff + Schema Validator state
-  const [showDiff, setShowDiff] = useState(false);
-  const [showSchemaVal, setShowSchemaVal] = useState(false);
-
-  const tab = useTabsStore(s => s.tabs.find(t => t.id === tabId));
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   // Click-outside for jq help popup
   useClickOutside(jqHelpRef, () => setShowJqHelp(false), showJqHelp);
@@ -88,54 +80,29 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
           {/* Copy */}
           <CopyButton text={formattedBody} size={14} title="Copy response" className="w-7 h-7" />
 
-          {/* More menu */}
+          {/* ⋮ More menu — Clear Response only; AI actions moved to sparkle 3-dot next to Record Baseline */}
           <div className="relative" ref={moreMenuRef}>
             <ToolbarBtn title="More options" onClick={() => setShowMoreMenu(!showMoreMenu)}>
               <MoreVerticalIcon size={14} />
             </ToolbarBtn>
             {showMoreMenu && (
-              <div className="absolute top-full right-0 z-50 mt-1 bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-md shadow-lg py-1 w-[200px]">
-                {isJson && hasBody && (
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
-                    onClick={() => { setShowMoreMenu(false); onShowSchema(); }}
-                  >
-                    <SparkleIcon size={14} />
-                    Generate Data Schema
-                  </button>
-                )}
-                {hasBody && (
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
-                    onClick={() => { setShowMoreMenu(false); setShowDiff(true); }}
-                  >
-                    <SparkleIcon size={14} style={{ color: 'var(--color-warning)' }} />
-                    Compare with AI
-                  </button>
-                )}
-                {hasBody && (
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
-                    onClick={() => { setShowMoreMenu(false); setShowSchemaVal(true); }}
-                  >
-                    <SparkleIcon size={14} style={{ color: 'var(--color-info)' }} />
-                    Validate Schema with AI
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer"
+              <div
+                className="absolute top-full right-0 z-50 mt-1 rounded-xl border shadow-2xl overflow-hidden min-w-[190px]"
+                style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
+              >
+                <button type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[11.5px] cursor-pointer transition-colors text-left"
+                  style={{ color: 'var(--color-text-primary)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#ef4444'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
                   onClick={() => {
                     setShowMoreMenu(false);
                     useTabsStore.getState().updateTab(tabId, { response: null });
                   }}
                 >
                   <CloseCircleIcon size={14} />
-                  Clear Response
-                  <span className="ml-auto text-[10px] text-[var(--color-text-muted)]">Ctrl Del</span>
+                  <span className="whitespace-nowrap">Clear Response</span>
+                  <span className="ml-auto text-[10px] text-[var(--color-text-muted)] whitespace-nowrap pl-3">Ctrl Del</span>
                 </button>
               </div>
             )}
@@ -175,52 +142,25 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
                 <h4 className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2">jq Filter Syntax</h4>
                 <p className="text-[11px] text-[var(--color-text-muted)] mb-3">Use dot notation to access nested fields. Supports basic jq-like path expressions.</p>
                 <div className="space-y-2 text-[11px] font-mono">
-                  <div className="flex gap-2">
-                    <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">.name</code>
-                    <span className="text-[var(--color-text-muted)]">Access field "name"</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">.data.items</code>
-                    <span className="text-[var(--color-text-muted)]">Nested access</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">.[0]</code>
-                    <span className="text-[var(--color-text-muted)]">First array element</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">.[-1]</code>
-                    <span className="text-[var(--color-text-muted)]">Last array element</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">.[]</code>
-                    <span className="text-[var(--color-text-muted)]">Iterate all elements</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">.[].name</code>
-                    <span className="text-[var(--color-text-muted)]">Get "name" from each item</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">.items[].name</code>
-                    <span className="text-[var(--color-text-muted)]">Map over nested array</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">.[0:3]</code>
-                    <span className="text-[var(--color-text-muted)]">Slice first 3 items</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">.</code>
-                    <span className="text-[var(--color-text-muted)]">Identity (full response)</span>
-                  </div>
-                </div>
-                <div className="mt-3 pt-2 border-t border-[var(--color-surface-border)]">
-                  <p className="text-[10px] text-[var(--color-text-muted)]">Example: For [{"{"}"id":1, "name":"..."{"}"}, ...],  use <code className="text-[var(--color-primary)]">.[].name</code> or <code className="text-[var(--color-primary)]">.[0]</code></p>
-                  <p className="text-[10px] text-[var(--color-text-muted)] mt-1">For {"{"}"data": {"{"}"users": [...]{"}"}{"}"},  use <code className="text-[var(--color-primary)]">.data.users</code></p>
+                  {[
+                    ['.name', 'Access field "name"'],
+                    ['.data.items', 'Nested access'],
+                    ['.[0]', 'First array element'],
+                    ['.[-1]', 'Last array element'],
+                    ['.[]', 'Iterate all elements'],
+                    ['.[].name', 'Get "name" from each item'],
+                    ['.items[].name', 'Map over nested array'],
+                    ['.[0:3]', 'Slice first 3 items'],
+                    ['.', 'Identity (full response)'],
+                  ].map(([code, desc]) => (
+                    <div key={code} className="flex gap-2">
+                      <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">{code}</code>
+                      <span className="text-[var(--color-text-muted)]">{desc}</span>
+                    </div>
+                  ))}
                 </div>
                 <div className="mt-2">
-                  <button
-                    className="text-[10px] text-[var(--color-primary)] hover:underline cursor-pointer"
-                    onClick={() => { /* TODO: open wiki page */ }}
-                  >
+                  <button className="text-[10px] text-[var(--color-primary)] hover:underline cursor-pointer" onClick={() => {}}>
                     Open Wiki →
                   </button>
                 </div>
@@ -241,26 +181,6 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
         />
       </div>
 
-      {/* AI Diff Modal */}
-      {showDiff && (
-        <AiResponseDiffModal
-          currentResponseBody={response.body || ''}
-          method={tab?.method}
-          url={tab?.url}
-          onClose={() => setShowDiff(false)}
-        />
-      )}
-
-      {/* AI Schema Validator Modal */}
-      {showSchemaVal && (
-        <AiSchemaValidatorModal
-          responseBody={response.body || ''}
-          method={tab?.method}
-          url={tab?.url}
-          status={String((tab?.response as any)?.status || '')}
-          onClose={() => setShowSchemaVal(false)}
-        />
-      )}
     </div>
   );
 }

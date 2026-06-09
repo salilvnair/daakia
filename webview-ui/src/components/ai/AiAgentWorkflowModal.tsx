@@ -208,7 +208,7 @@ export function AiAgentWorkflowModal({ collectionId, collectionName, protocol, o
         {/* Phase status bar */}
         <div
           className="flex items-center gap-2 px-4 py-1.5 text-[11px]"
-          style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, var(--color-surface-bg))`, color: ACCENT }}
+          style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, var(--color-panel))`, color: ACCENT }}
         >
           <span
             className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -281,7 +281,7 @@ export function AiAgentWorkflowModal({ collectionId, collectionName, protocol, o
               {summary && (
                 <div
                   className="flex items-center gap-4 px-4 py-2 text-[11px] border-b"
-                  style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-bg)' }}
+                  style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}
                 >
                   <span style={{ color: 'var(--color-text-muted)' }}>
                     {summary.total} requests · {(summary.duration / 1000).toFixed(1)}s
@@ -310,7 +310,7 @@ export function AiAgentWorkflowModal({ collectionId, collectionName, protocol, o
               {/* AI analysis section */}
               {(phase === 'analyzing' || phase === 'done') && (
                 <div className="flex flex-col flex-1 overflow-hidden border-t" style={{ borderColor: 'var(--color-elevated-border)' }}>
-                  <div className="flex items-center gap-2 px-4 py-2" style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 6%, var(--color-surface-bg))` }}>
+                  <div className="flex items-center gap-2 px-4 py-2" style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 6%, var(--color-panel))` }}>
                     <SparkleIcon size={12} style={{ color: ACCENT }} />
                     <span className="text-[11px] font-semibold" style={{ color: ACCENT }}>
                       {phase === 'analyzing' ? 'AI is analyzing your test results...' : 'AI Test Report'}

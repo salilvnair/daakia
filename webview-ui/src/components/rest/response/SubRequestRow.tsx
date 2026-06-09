@@ -54,7 +54,7 @@ function SubRequestDetails({ sr }: { sr: { requestHeaders?: Record<string, strin
   const [tab, setTab] = useState<'request' | 'response'>('response');
 
   return (
-    <div className="mx-2 mb-2 mt-1 rounded border border-[var(--color-surface-border)] bg-[var(--color-surface-bg)] overflow-hidden">
+    <div className="mx-2 mb-2 mt-1 rounded border border-[var(--color-surface-border)] bg-[var(--color-panel)] overflow-hidden">
       <div className="flex border-b border-[var(--color-surface-border)]">
         <button
           type="button"

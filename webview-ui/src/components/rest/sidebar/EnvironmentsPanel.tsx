@@ -171,16 +171,16 @@ export function EnvironmentsPanel() {
   const openImportExportMenu = (e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const items: ContextMenuItem[] = [
-      { id: 'import-postman', label: 'Import from Postman', shortcut: 'P', icon: <FolderImportIcon size={14} /> },
-      { id: 'import-insomnia', label: 'Import from Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} /> },
-      { id: 'import-json', label: 'Import Daakia JSON', shortcut: 'J', icon: <FolderImportIcon size={14} /> },
-      { id: 'import-dotenv', label: 'Import .env file', shortcut: '.', icon: <FolderImportIcon size={14} /> },
+      { id: 'import-postman',  label: 'Import from Postman',     shortcut: 'P', icon: <FolderImportIcon size={14} />, iconColor: 'var(--color-info)' },
+      { id: 'import-insomnia', label: 'Import from Insomnia',    shortcut: 'I', icon: <FolderImportIcon size={14} />, iconColor: 'var(--color-info)' },
+      { id: 'import-json',     label: 'Import Daakia JSON',      shortcut: 'J', icon: <FolderImportIcon size={14} />, iconColor: 'var(--color-info)' },
+      { id: 'import-dotenv',   label: 'Import .env file',        shortcut: '.', icon: <FolderImportIcon size={14} />, iconColor: 'var(--color-info)' },
       { id: 'sep1', label: '', separator: true },
-      { id: 'export-json', label: 'Export as Daakia JSON', shortcut: 'E', icon: <FolderExportIcon size={14} /> },
-      { id: 'export-postman', label: 'Export as Postman', shortcut: 'M', icon: <FolderExportIcon size={14} /> },
-      { id: 'export-bruno', label: 'Export as Bruno .env', shortcut: 'B', icon: <FolderExportIcon size={14} /> },
-      { id: 'export-insomnia', label: 'Export as Insomnia', shortcut: 'N', icon: <FolderExportIcon size={14} /> },
-      { id: 'export-httpie', label: 'Export as HTTPie session', shortcut: 'H', icon: <FolderExportIcon size={14} /> },
+      { id: 'export-json',     label: 'Export as Daakia JSON',   shortcut: 'E', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
+      { id: 'export-postman',  label: 'Export as Postman',       shortcut: 'M', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
+      { id: 'export-bruno',    label: 'Export as Bruno .env',    shortcut: 'B', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
+      { id: 'export-insomnia', label: 'Export as Insomnia',      shortcut: 'N', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
+      { id: 'export-httpie',   label: 'Export as HTTPie session', shortcut: 'H', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
     ];
     setContextMenu({ position: { x: rect.right - 220, y: rect.bottom + 6 }, items, targetId: '', kind: 'importExport' });
   };
@@ -189,7 +189,7 @@ export function EnvironmentsPanel() {
   const openMoreMenu = (e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const items: ContextMenuItem[] = [
-      { id: 'delete-all', label: 'Delete all environments', danger: true, shortcut: 'D', icon: <TrashIcon size={14} /> },
+      { id: 'delete-all', label: 'Delete all environments', danger: true, shortcut: 'D', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)' },
     ];
     setContextMenu({ position: { x: rect.right - 220, y: rect.bottom + 6 }, items, targetId: '', kind: 'more' });
   };
@@ -200,12 +200,12 @@ export function EnvironmentsPanel() {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const isGlobal = envId === GLOBAL_ENV_ID;
     const items: ContextMenuItem[] = [
-      { id: 'edit', label: 'Edit', shortcut: 'E', icon: <RenameIcon size={14} /> },
-      ...(!isGlobal ? [{ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={14} /> }] : []),
-      { id: 'export', label: 'Export as JSON', shortcut: 'X', icon: <FolderExportIcon size={14} /> },
+      { id: 'edit',      label: 'Edit',           shortcut: 'E', icon: <RenameIcon size={14} />,     iconColor: 'var(--color-ctx-rename)' },
+      ...(!isGlobal ? [{ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={14} />, iconColor: 'var(--color-ctx-duplicate)' }] : []),
+      { id: 'export',    label: 'Export as JSON', shortcut: 'X', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
       ...(!isGlobal ? [
         { id: 'sep1', label: '', separator: true },
-        { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={14} /> },
+        { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)' },
       ] : []),
     ];
     setContextMenu({ position: { x: rect.right - 200, y: rect.bottom + 4 }, items, targetId: envId, kind: 'row' });

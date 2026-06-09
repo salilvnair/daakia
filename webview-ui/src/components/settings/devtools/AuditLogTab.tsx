@@ -2,10 +2,10 @@
  * AuditLogTab — 7.3 Developer Tools: Audit Log
  * Colorful audit log: single URL-bar search, stage badges, Monaco read-only for payload preview.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { postMsg } from '../../../vscode';
-import { CodeEditor } from '../../shared';
-import { TrashIcon, RefreshIcon, SearchIcon, ChevronDownIcon } from '../../../icons';
+import { CodeEditor, SearchInput } from '../../shared';
+import { TrashIcon, RefreshIcon, SearchIcon, CloseIcon, ChevronDownIcon } from '../../../icons';
 
 interface AuditEntry {
   audit_id: number;
@@ -21,27 +21,78 @@ interface AuditEntry {
   created_at: string;
 }
 
-// ─── Stage color / label ───────────────────────────────────────────────────────
-
+// ─── Stage label map ───────────────────────────────────────────────────────────
+// Names MUST match the button label the user sees in the UI.
 const STAGE_LABEL: Record<string, string> = {
-  'DAAKIA_AI':                 'AI Chat',
-  'mock.rest.generate':        'REST Mock',
-  'mock.graphql.generate':     'GQL Mock',
-  'mock.websocket.generate':   'WS Mock',
-  'mock.sse.generate':         'SSE Mock',
-  'mock.socketio.generate':    'SIO Mock',
-  'mock.grpc.generate':        'gRPC Mock',
-  'mock.soap.generate':        'SOAP Mock',
-  'mock.mqtt.generate':        'MQTT Mock',
-  'rest.headers.suggest.generate': 'Header Suggest',
+  // ── Core ───────────────────────────────────────────────────────────────────
+  'DAAKIA_AI':                        'AI Chat',
+
+  // ── Response panel AI actions ──────────────────────────────────────────────
+  'rest.assert.generate':             'AI Assertions',
+  'rest.semantic.validate':           'Semantic Validate',
+  'rest.response.transform':          'Transform Response',
+  'rest.response.diff':               'Compare with AI',
+  'rest.schema.validate':             'Schema Validate',
+  'rest.ts.generate':                 'TypeScript Types',
+  'rest.pattern.check':               'Pattern Baseline',
+  'rest.retry.advisor':               'Smart Retry',
+  'rest.performance.insights':        'Performance Insights',
+  'rest.changelog.generate':          'API Changelog',
+  'rest.semantic.diff':               'Semantic Diff',
+  'rest.contract.test':               'Contract Tests',
+
+  // ── Request builder AI helpers ─────────────────────────────────────────────
+  'rest.body.generate':               'Generate Body',
+  'rest.headers.suggest.generate':    'Header Suggest',
+  'rest.request.name':                'Name Request',
+  'rest.env.extract':                 'Extract Variables',
+  'rest.api.flow':                    'API Flow Builder',
+  'rest.collection.organize':         'Organize Collection',
+  'rest.collection.search':           'Smart Search',
+
+  // ── Import tools ───────────────────────────────────────────────────────────
+  'rest.curl.explain':                'Explain cURL',
+  'rest.code.import':                 'Import Code',
+  'import.logs':                      'From Logs',
+  'import.voice':                     'Voice to Request',
+  'import.openapi.enrich':            'OpenAPI Enrich',
+  'import.screenshot':                'From Screenshot',
+
+  // ── Collection tools ───────────────────────────────────────────────────────
+  'collection.dependency.graph':      'Dependency Graph',
+  'collection.sdk.generate':          'SDK Generator',
+  'collection.compliance':            'Compliance Check',
+  'collection.generate':              'Build Collection',
+  'collection.scenario.generate':     'Scenario Generator',
+  'collection.optimize':              'Request Optimizer',
+
+  // ── Test & agent tools ─────────────────────────────────────────────────────
+  'test.variations.generate':         'Test Variations',
+  'test.variations.analyze':          'Analyze Variations',
+  'data.generate':                    'Data Generator',
+  'agent.learn.analyze':              'Agent Learning',
+
+  // ── Mock server AI generators ──────────────────────────────────────────────
+  'mock.rest.generate':               'REST Mock',
+  'mock.graphql.generate':            'GQL Mock',
+  'mock.websocket.generate':          'WS Mock',
+  'mock.sse.generate':                'SSE Mock',
+  'mock.socketio.generate':           'SIO Mock',
+  'mock.grpc.generate':               'gRPC Mock',
+  'mock.soap.generate':               'SOAP Mock',
+  'mock.mqtt.generate':               'MQTT Mock',
 };
 
+// ─── Stage color by category ──────────────────────────────────────────────────
 function stageColor(stage: string): string {
-  if (stage.includes('error') || stage.includes('fail')) return '#ef4444';
-  if (stage.includes('complete') || stage.includes('success')) return '#10b981';
-  if (stage.includes('stream') || stage.includes('start')) return '#f59e0b';
-  if (stage.includes('mock')) return 'var(--color-mock-server)';
-  if (stage.includes('AI') || stage.includes('ai')) return 'var(--color-protocol-ai)';
+  if (stage === 'DAAKIA_AI')                  return 'var(--color-protocol-ai)';
+  if (stage.startsWith('mock.'))              return 'var(--color-mock-server)';
+  if (stage.startsWith('rest.'))              return 'var(--color-protocol-ai)';
+  if (stage.startsWith('collection.'))        return 'var(--color-primary)';
+  if (stage.startsWith('import.'))            return 'var(--color-info)';
+  if (stage.startsWith('test.'))              return 'var(--color-success)';
+  if (stage.startsWith('data.'))              return '#a78bfa';
+  if (stage.startsWith('agent.'))             return 'var(--color-warning)';
   return '#818cf8';
 }
 
@@ -58,7 +109,12 @@ function StageBadge({ stage }: { stage: string }) {
   );
 }
 
-// ─── Payload block with Monaco read-only ──────────────────────────────────────
+// ─── Payload block with draggable-resize Monaco ──────────────────────────────
+// Drag the bottom handle to resize. Min 80px, max 600px.
+
+const DEFAULT_PAYLOAD_HEIGHT = 120;
+const MIN_PAYLOAD_HEIGHT = 80;
+const MAX_PAYLOAD_HEIGHT = 600;
 
 function PayloadBlock({ label, value, color, lang = 'plaintext' }: {
   label: string;
@@ -66,6 +122,33 @@ function PayloadBlock({ label, value, color, lang = 'plaintext' }: {
   color: string;
   lang?: string;
 }) {
+  const [height, setHeight] = useState(DEFAULT_PAYLOAD_HEIGHT);
+  const isDragging = useRef(false);
+  const startY = useRef(0);
+  const startH = useRef(0);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const diff = e.clientY - startY.current;
+      setHeight(Math.max(MIN_PAYLOAD_HEIGHT, Math.min(MAX_PAYLOAD_HEIGHT, startH.current + diff)));
+    };
+    const onMouseUp = () => { isDragging.current = false; };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    startY.current = e.clientY;
+    startH.current = height;
+    e.preventDefault();
+  };
+
   if (!value) return null;
   // Detect JSON
   const trimmed = value.trim();
@@ -83,13 +166,35 @@ function PayloadBlock({ label, value, color, lang = 'plaintext' }: {
       >
         {label}
       </span>
-      <div className="rounded-lg overflow-hidden border" style={{ borderColor: `color-mix(in srgb, ${color} 15%, transparent)` }}>
+      <div className="rounded-lg overflow-hidden border relative" style={{ borderColor: `color-mix(in srgb, ${color} 15%, transparent)` }}>
         <CodeEditor
-          value={display.slice(0, 3000)}
+          value={display.slice(0, 6000)}
           language={language}
           readOnly
-          height="120px"
+          height={`${height}px`}
         />
+        {/* Drag handle — same pattern as mock server resize */}
+        <div
+          onMouseDown={handleDragStart}
+          className="absolute bottom-0 left-0 right-0 h-[7px] flex items-center justify-center select-none z-10"
+          style={{
+            cursor: 'ns-resize',
+            backgroundColor: `color-mix(in srgb, ${color} 8%, var(--color-surface))`,
+            borderTop: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
+          }}
+          title="Drag to resize"
+        >
+          {/* Grip dots */}
+          <div className="flex gap-[3px]">
+            {[0, 1, 2, 3, 4].map(i => (
+              <div
+                key={i}
+                className="w-[3px] h-[3px] rounded-full"
+                style={{ backgroundColor: `color-mix(in srgb, ${color} 50%, transparent)` }}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -142,24 +247,31 @@ export function AuditLogTab() {
     <div className="flex flex-col h-full min-h-0">
       {/* ─── Toolbar ─── */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] shrink-0">
-        {/* Search bar: flex row — icon sits BESIDE input, both inside a styled container */}
-        <div
-          className="flex items-center gap-1.5 flex-1 h-[28px] px-2.5 rounded-md border transition-colors"
-          style={{
-            background: 'rgba(255,255,255,0.04)',
-            borderColor: 'rgba(255,255,255,0.08)',
-          }}
-        >
-          <SearchIcon size={11} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Filter by stage, model, prompt…"
-            className="flex-1 min-w-0 bg-transparent border-none outline-none text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
-          />
-        </div>
-        <span className="text-[10px] font-mono text-[var(--color-text-muted)] shrink-0 tabular-nums">{filtered.length} entries</span>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Filter by stage, model, prompt…"
+          prefix={<SearchIcon size={11} />}
+          suffix={
+            search ? (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:text-[var(--color-text-primary)] transition-colors"
+                title="Clear filter"
+              >
+                <CloseIcon size={10} />
+              </button>
+            ) : (
+              <span
+                className="text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded"
+                style={{ color: 'var(--color-text-muted)', backgroundColor: 'rgba(255,255,255,0.04)' }}
+              >
+                {filtered.length}
+              </span>
+            )
+          }
+        />
         <button type="button" onClick={load} title="Refresh"
           className="w-7 h-7 flex items-center justify-center rounded-md cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] transition-colors">
           <RefreshIcon size={13} />

@@ -9,6 +9,7 @@ import type { MockServer, MockRoute } from './mock-types';
 import { openTryTab } from './mock-try-handler';
 import { RestRoutesConfig, GraphQLConfig, WebSocketConfig, SSEConfig, SocketIOConfig, MQTTConfig, GrpcConfig, SoapConfig, AiMockConfig, McpMockConfig } from './configs';
 import { postMsg } from '../../vscode';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { StateMachineEditor } from './wiremock/StateMachinePanel';
 import { TrafficInspectorPanel } from './wiremock/TrafficInspectorPanel';
 import { ImportPanel } from './wiremock/ImportPanel';
@@ -60,6 +61,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
   const [urlCopied, setUrlCopied] = useState(false);
   const [wsdlCopied, setWsdlCopied] = useState(false);
   const [serverTab, setServerTab] = useState<ServerTab>('routes');
+  const aiScenarioEnabled = useAiFeaturesStore(s => s.isEnabled('aiScenarioManager'));
 
   // Reset to 'routes' if switching to a non-tabbed protocol
   useEffect(() => {
@@ -299,7 +301,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
       )}
 
       {/* ── Non-tabbed protocols (AI / MCP keep their own standalone layout) */}
-      {server.protocol === 'ai' && (
+      {server.protocol === 'ai' && aiScenarioEnabled && (
         <AiMockConfig server={server} onUpdate={onUpdate} />
       )}
 

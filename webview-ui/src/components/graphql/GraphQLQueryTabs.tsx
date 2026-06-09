@@ -12,32 +12,25 @@ export interface QueryTab {
 /**
  * GraphQL Query Tabs — inner tabs within the Query sub-tab for multiple queries per connection.
  * Stored in tab.authData['gql_queries'] and tab.authData['gql_active_query'].
+ *
+ * IMPORTANT: All hooks must be declared before any early returns (React rules of hooks).
  */
 export function GraphQLQueryTabs() {
+  // ── All hooks declared unconditionally at the top ──────────────────────────
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
-
-  if (!activeTab) return null;
-
-  const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
-  const activeQueryId: string = activeTab.authData?.['gql_active_query'] || '';
-
-  // If no query tabs exist, don't render the bar (single-query mode)
-  if (queries.length === 0) return null;
 
   const handleSelectQuery = useCallback((queryId: string) => {
     if (!activeTab) return;
     const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
     const currentActive = activeTab.authData?.['gql_active_query'] || '';
 
-    // Save current query content to the currently active query tab
     const updated = queries.map(q =>
       q.id === currentActive
         ? { ...q, query: activeTab.bodyRaw || '', variables: activeTab.authData?.['gql_variables'] || '{}' }
         : q
     );
 
-    // Load the selected query tab content
     const selected = updated.find(q => q.id === queryId);
     if (!selected) return;
 
@@ -57,7 +50,6 @@ export function GraphQLQueryTabs() {
     const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
     const currentActive = activeTab.authData?.['gql_active_query'] || '';
 
-    // Save current content
     const updated = queries.map(q =>
       q.id === currentActive
         ? { ...q, query: activeTab.bodyRaw || '', variables: activeTab.authData?.['gql_variables'] || '{}' }
@@ -87,15 +79,12 @@ export function GraphQLQueryTabs() {
     e.stopPropagation();
     if (!activeTab) return;
     const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
-
-    // Don't allow closing the last query tab
     if (queries.length <= 1) return;
 
     const remaining = queries.filter(q => q.id !== queryId);
     const wasActive = activeTab.authData?.['gql_active_query'] === queryId;
 
     if (wasActive) {
-      // Switch to first remaining tab
       const next = remaining[0];
       updateTab(activeTab.id, {
         bodyRaw: next.query,
@@ -121,6 +110,15 @@ export function GraphQLQueryTabs() {
       authData: { ...activeTab.authData, gql_queries: updated },
     });
   }, [activeTab, updateTab]);
+
+  // ── Early returns AFTER all hooks ──────────────────────────────────────────
+  if (!activeTab) return null;
+
+  const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
+  const activeQueryId: string = activeTab.authData?.['gql_active_query'] || '';
+
+  // If no query tabs exist, don't render the bar (single-query mode)
+  if (queries.length === 0) return null;
 
   return (
     <div className="flex items-center gap-0 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] px-1 overflow-x-auto [scrollbar-width:none]">
@@ -155,7 +153,6 @@ export function GraphQLQueryTabs() {
           )}
         </div>
       ))}
-      {/* Add query tab */}
       <button
         type="button"
         onClick={handleAddQuery}
@@ -176,7 +173,7 @@ export function initMultiQuery(tabId: string) {
   const { tabs, updateTab } = useTabsStore.getState();
   const tab = tabs.find(t => t.id === tabId);
   if (!tab) return;
-  if (tab.authData?.['gql_queries']?.length) return; // already initialized
+  if (tab.authData?.['gql_queries']?.length) return;
 
   const firstQuery: QueryTab = {
     id: crypto.randomUUID(),

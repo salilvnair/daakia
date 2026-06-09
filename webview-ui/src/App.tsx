@@ -511,11 +511,22 @@ export default function App() {
           setSqliteStatus({ ok: msg.sqliteOk, error: msg.sqliteError });
           // Load persisted Daakia AI conversation on startup
           useAiConversationStore.getState().loadFromDb();
-          // Restore saved theme (7.6)
+          // Restore saved theme (7.6, E3.x system theme)
           const savedTheme = localStorage.getItem('daakia-theme');
-          if (savedTheme === 'light' || savedTheme === 'dark') {
-            document.documentElement.setAttribute('data-theme', savedTheme);
-            document.body.setAttribute('data-theme', savedTheme);
+          const resolvedTheme: 'dark' | 'light' =
+            savedTheme === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+              : savedTheme === 'light' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', resolvedTheme);
+          document.body.setAttribute('data-theme', resolvedTheme);
+          // If system mode: keep in sync with OS changes
+          if (savedTheme === 'system') {
+            const mq = window.matchMedia('(prefers-color-scheme: dark)');
+            mq.addEventListener('change', (e) => {
+              const t = e.matches ? 'dark' : 'light';
+              document.documentElement.setAttribute('data-theme', t);
+              document.body.setAttribute('data-theme', t);
+            });
           }
           break;
         }

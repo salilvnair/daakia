@@ -11,6 +11,7 @@ import { ComputedHeaderList } from './ComputedHeaderList';
 import { AiBodyGenerate, type AiBodyGenerateHandle } from '../../ai/AiBodyGenerate';
 import { AiDataGeneratorModal } from '../../ai/AiDataGeneratorModal';
 import { AiRequestFuzzerModal } from '../../ai/AiRequestFuzzerModal';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
 
 // ── Computed auth header rows (Task 7) ──────────────────────────────────────
 function computeAuthRows(authType: string, authData: Record<string, string>): { key: string; value: string }[] {
@@ -43,6 +44,7 @@ const CONFIG_TABS: PillTab[] = [
 export function RequestConfig() {
   const { tabs, activeTabId, updateTab } = useTabsStore();
   const tab = tabs.find(t => t.id === activeTabId);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const storedSection = useUiStateStore(s => s.prefs[`rest.subtab.${activeTabId}`]);
   const [activeSection, setActiveSectionLocal] = useState(storedSection || 'params');
   const [oauth2Loading, setOauth2Loading] = useState(false);
@@ -161,8 +163,8 @@ export function RequestConfig() {
             variant="underline"
           />
         </div>
-        {/* AI Fuzzer trigger — only visible on Body tab */}
-        {activeSection === 'body' && tab.bodyRaw?.trim() && (
+        {/* AI Fuzzer trigger — only visible on Body tab when feature is enabled */}
+        {aiEnabled('requestFuzzer') && activeSection === 'body' && tab.bodyRaw?.trim() && (
           <button
             type="button"
             onClick={() => setShowFuzzer(true)}
@@ -220,21 +222,23 @@ export function RequestConfig() {
               maskSensitive
               label="Header List"
               toolbarExtra={
-                <button
-                  type="button"
-                  title="Suggest headers"
-                  disabled={aiHeaderLoading}
-                  onClick={() => {
-                    setAiHeaderLoading(true);
-                    aiHeaderSuggestRef.current?.trigger();
-                    setTimeout(() => setAiHeaderLoading(false), 300);
-                  }}
-                  className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:bg-[rgba(168,85,247,0.08)]"
-                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-protocol-ai)')}
-                  onMouseLeave={e => (e.currentTarget.style.color = '')}
-                >
-                  <SparkleIcon size={13} />
-                </button>
+                aiEnabled('headerAutocomplete') ? (
+                  <button
+                    type="button"
+                    title="Suggest headers"
+                    disabled={aiHeaderLoading}
+                    onClick={() => {
+                      setAiHeaderLoading(true);
+                      aiHeaderSuggestRef.current?.trigger();
+                      setTimeout(() => setAiHeaderLoading(false), 300);
+                    }}
+                    className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:bg-[rgba(168,85,247,0.08)]"
+                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-protocol-ai)')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '')}
+                  >
+                    <SparkleIcon size={13} />
+                  </button>
+                ) : undefined
               }
             />
             <AiHeaderSuggest
@@ -388,6 +392,7 @@ const CONTENT_TYPE_OPTIONS = [
 function BodyEditor({ tab }: { tab: ReturnType<typeof useTabsStore.getState>['tabs'][0] }) {
   const { updateTab } = useTabsStore();
   const { addToast } = useToastStore();
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const [bulkEdit, setBulkEdit] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const bulkTextRef = useRef('');
@@ -554,29 +559,33 @@ function BodyEditor({ tab }: { tab: ReturnType<typeof useTabsStore.getState>['ta
                     <WandIcon size={14} />
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => aiBodyGenerateRef.current?.open()}
-                  className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
-                  style={{
-                    color: aiBodyGenerateRef.current?.loading
-                      ? 'var(--color-protocol-ai)'
-                      : 'var(--color-text-muted)',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-protocol-ai)')}
-                  onMouseLeave={e => { if (!aiBodyGenerateRef.current?.loading) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
-                  title="Generate body with AI"
-                >
-                  <SparkleIcon size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowDataGenerator(true)}
-                  className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-info)] hover:bg-[rgba(14,165,233,0.08)] cursor-pointer transition-colors"
-                  title="Generate test data with AI"
-                >
-                  <DiceIcon size={14} />
-                </button>
+                {aiEnabled('bodyGenerator') && (
+                  <button
+                    type="button"
+                    onClick={() => aiBodyGenerateRef.current?.open()}
+                    className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
+                    style={{
+                      color: aiBodyGenerateRef.current?.loading
+                        ? 'var(--color-protocol-ai)'
+                        : 'var(--color-text-muted)',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-protocol-ai)')}
+                    onMouseLeave={e => { if (!aiBodyGenerateRef.current?.loading) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+                    title="Generate body with AI"
+                  >
+                    <SparkleIcon size={14} />
+                  </button>
+                )}
+                {aiEnabled('dataGenerator') && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDataGenerator(true)}
+                    className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-info)] hover:bg-[rgba(14,165,233,0.08)] cursor-pointer transition-colors"
+                    title="Generate test data with AI"
+                  >
+                    <DiceIcon size={14} />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}

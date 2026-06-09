@@ -141,7 +141,7 @@ export function InsomniaImportModal({ onClose }: Props) {
 
           {preview && (
             <div className="rounded-lg border p-4 flex items-start gap-3"
-              style={{ borderColor: 'color-mix(in srgb, var(--color-success) 30%, var(--color-surface-border))', backgroundColor: 'color-mix(in srgb, var(--color-success) 5%, var(--color-surface-bg))' }}>
+              style={{ borderColor: 'color-mix(in srgb, var(--color-success) 30%, var(--color-surface-border))', backgroundColor: 'color-mix(in srgb, var(--color-success) 5%, var(--color-panel))' }}>
               <CheckIcon size={16} style={{ color: 'var(--color-success)', marginTop: '1px' }} />
               <div>
                 <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{preview.name}</p>

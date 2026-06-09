@@ -80,7 +80,7 @@ export function McpPromptsTab() {
               {/* Prompt header row */}
               <div
                 className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${isExpanded ? '' : 'hover:bg-[var(--color-surface-hover)]'}`}
-                style={isExpanded ? { backgroundColor: `color-mix(in srgb, ${ACCENT} 5%, var(--color-surface-bg))` } : undefined}
+                style={isExpanded ? { backgroundColor: `color-mix(in srgb, ${ACCENT} 5%, var(--color-panel))` } : undefined}
                 onClick={() => setExpandedPrompt(isExpanded ? null : prompt.name)}
               >
                 <span

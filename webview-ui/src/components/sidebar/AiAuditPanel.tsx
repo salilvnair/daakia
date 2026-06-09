@@ -41,17 +41,65 @@ type DetailTab = (typeof DETAIL_TABS)[number]['id'];
 
 // ─── Stage label map ─────────────────────────────────────────────────────────
 // Maps raw stage values (templateKey or fallback 'DAAKIA_AI') to readable display names.
+// Names MUST match the button label the user sees in the UI.
 const STAGE_LABEL_MAP: Record<string, string> = {
-  'DAAKIA_AI':                 'AI Chat',
-  'mock.rest.generate':        'REST Mock',
-  'mock.graphql.generate':     'GraphQL Mock',
-  'mock.websocket.generate':   'WebSocket Mock',
-  'mock.sse.generate':         'SSE Mock',
-  'mock.socketio.generate':    'Socket.IO Mock',
-  'mock.grpc.generate':        'gRPC Mock',
-  'mock.soap.generate':        'SOAP Mock',
-  'mock.mqtt.generate':             'MQTT Mock',
-  'rest.headers.suggest.generate':  'Header Suggest',
+  // ── Core ───────────────────────────────────────────────────────────────────
+  'DAAKIA_AI':                        'AI Chat',
+
+  // ── Response panel AI actions ──────────────────────────────────────────────
+  'rest.assert.generate':             'AI Assertions',
+  'rest.semantic.validate':           'Semantic Validate',
+  'rest.response.transform':          'Transform Response',
+  'rest.response.diff':               'Compare with AI',
+  'rest.schema.validate':             'Schema Validate',
+  'rest.ts.generate':                 'TypeScript Types',
+  'rest.pattern.check':               'Pattern Baseline',
+  'rest.retry.advisor':               'Smart Retry',
+  'rest.performance.insights':        'Performance Insights',
+  'rest.changelog.generate':          'API Changelog',
+  'rest.semantic.diff':               'Semantic Diff',
+  'rest.contract.test':               'Contract Tests',
+
+  // ── Request builder AI helpers ─────────────────────────────────────────────
+  'rest.body.generate':               'Generate Body',
+  'rest.headers.suggest.generate':    'Header Suggest',
+  'rest.request.name':                'Name Request',
+  'rest.env.extract':                 'Extract Variables',
+  'rest.api.flow':                    'API Flow Builder',
+  'rest.collection.organize':         'Organize Collection',
+  'rest.collection.search':           'Smart Search',
+
+  // ── Import tools ───────────────────────────────────────────────────────────
+  'rest.curl.explain':                'Explain cURL',
+  'rest.code.import':                 'Import Code',
+  'import.logs':                      'From Logs',
+  'import.voice':                     'Voice to Request',
+  'import.openapi.enrich':            'OpenAPI Enrich',
+  'import.screenshot':                'From Screenshot',
+
+  // ── Collection tools ───────────────────────────────────────────────────────
+  'collection.dependency.graph':      'Dependency Graph',
+  'collection.sdk.generate':          'SDK Generator',
+  'collection.compliance':            'Compliance Check',
+  'collection.generate':              'Build Collection',
+  'collection.scenario.generate':     'Scenario Generator',
+  'collection.optimize':              'Request Optimizer',
+
+  // ── Test & agent tools ─────────────────────────────────────────────────────
+  'test.variations.generate':         'Test Variations',
+  'test.variations.analyze':          'Analyze Variations',
+  'data.generate':                    'Data Generator',
+  'agent.learn.analyze':              'Agent Learning',
+
+  // ── Mock server AI generators ──────────────────────────────────────────────
+  'mock.rest.generate':               'REST Mock',
+  'mock.graphql.generate':            'GraphQL Mock',
+  'mock.websocket.generate':          'WebSocket Mock',
+  'mock.sse.generate':                'SSE Mock',
+  'mock.socketio.generate':           'Socket.IO Mock',
+  'mock.grpc.generate':               'gRPC Mock',
+  'mock.soap.generate':               'SOAP Mock',
+  'mock.mqtt.generate':               'MQTT Mock',
 };
 
 function prettifyStage(stage: string): string {

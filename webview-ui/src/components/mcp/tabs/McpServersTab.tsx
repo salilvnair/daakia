@@ -177,7 +177,7 @@ export function McpServersTab() {
 
               {/* Edit form */}
               {isEditing && (
-                <div className="px-3 pb-3 flex flex-col gap-2" style={{ borderTop: `1px solid color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface-bg))` }}>
+                <div className="px-3 pb-3 flex flex-col gap-2" style={{ borderTop: `1px solid color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))` }}>
                   <div className="flex flex-col gap-1 pt-2">
                     <label className="text-[11px] text-[var(--color-text-muted)]">Name</label>
                     <input

@@ -2,18 +2,21 @@
  * AiNaturalAssertPopover — converts plain-English test assertions to dk.* script code.
  * Feature 4.6.3 — AI Natural Language Assertions
  *
- * User writes: "response should have 10 users each with valid email"
- * AI generates: dk.test('...', () => { dk.expect(...).toBe(10); ... })
- * "Apply" appends the generated code to the post-response script.
+ * Draft input + generated result are persisted per-tab in Zustand.
+ * Cache-first: if a result already exists when opened, it's shown immediately.
+ * Explicit refresh is required to re-generate.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
+import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
 import { postMsg } from '../../vscode';
-import { SparkleIcon } from '../../icons';
+import { SparkleIcon, RefreshIcon } from '../../icons';
+import { MdViewer } from '../shared/display/MdViewer';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
 interface Props {
+  tabId: string;
   response: { body: string; status: number; contentType?: string };
   requestMethod: string;
   requestUrl: string;
@@ -44,45 +47,53 @@ IMPORTANT RULES:
 - Keep it concise and readable
 - Do NOT use console.log or any other APIs not listed above`;
 
-export function AiNaturalAssertPopover({ response, requestMethod, requestUrl, onClose }: Props) {
+export function AiNaturalAssertPopover({ tabId, response, requestMethod, requestUrl, onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
 
-  const [input, setInput] = useState('');
-  const [generated, setGenerated] = useState('');
+  const { getTabActions, updateAssert } = useAiResponseActionsStore();
+  const cached = getTabActions(tabId);
+
+  // Initialize from cached state
+  const [input, setInput] = useState(cached.assert?.input ?? '');
+  const [generated, setGenerated] = useState(cached.assert?.result ?? '');
   const [streaming, setStreaming] = useState(false);
   const [applied, setApplied] = useState(false);
 
-  const reqIdRef = useRef(`nlassert-${Date.now()}`);
+  const reqIdRef = useRef('');
   const accRef = useRef('');
 
-  // Listen for AI streaming events
+  // Persist input changes to store
+  const handleInputChange = (val: string) => {
+    setInput(val);
+    updateAssert(tabId, { input: val });
+  };
+
+  // Listen for AI streaming events (match on tabId)
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data as Record<string, unknown>;
       if (!msg || typeof msg !== 'object') return;
-      const reqId = msg.reqId as string | undefined;
-      if (reqId && reqId !== reqIdRef.current) return;
+      if ((msg.tabId as string) !== reqIdRef.current) return;
 
-      switch (msg.type) {
-        case 'ai:chunk': {
-          const chunk = msg.chunk as { delta?: { content?: string } } | string;
-          const delta = typeof chunk === 'string' ? chunk : (chunk?.delta?.content ?? '');
-          accRef.current += delta;
-          setGenerated(accRef.current);
-          break;
-        }
-        case 'ai:complete':
-          setStreaming(false);
-          break;
-        case 'ai:error':
-          setStreaming(false);
-          break;
+      if (msg.type === 'ai:chunk') {
+        const delta = (msg.delta as string) || (msg.text as string) || '';
+        accRef.current += delta;
+        setGenerated(accRef.current);
+      }
+      if (msg.type === 'ai:complete') {
+        const final = accRef.current || (msg.message as Record<string, unknown>)?.content as string || '';
+        setGenerated(final);
+        updateAssert(tabId, { result: final });
+        setStreaming(false);
+      }
+      if (msg.type === 'ai:error') {
+        setStreaming(false);
       }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, []);
+  }, [tabId, updateAssert]);
 
   const handleGenerate = useCallback(() => {
     if (!input.trim() || streaming) return;
@@ -90,16 +101,18 @@ export function AiNaturalAssertPopover({ response, requestMethod, requestUrl, on
     setGenerated('');
     setApplied(false);
     setStreaming(true);
-    reqIdRef.current = `nlassert-${Date.now()}`;
+
+    const pid = `ai-assert-${Date.now()}`;
+    reqIdRef.current = pid;
 
     const bodyPreview = response.body?.slice(0, 600) ?? '';
-    const userMessage = `Current response context:
+    const userPrompt = `Current response context:
 - Method: ${requestMethod} ${requestUrl}
 - Status: ${response.status}
 - Content-Type: ${response.contentType ?? 'unknown'}
 - Response body (preview):
 \`\`\`json
-${bodyPreview}${response.body?.length > 600 ? '\n... (truncated)' : ''}
+${bodyPreview}${(response.body?.length ?? 0) > 600 ? '\n... (truncated)' : ''}
 \`\`\`
 
 User's assertion in plain English:
@@ -109,12 +122,26 @@ Generate the dk.* test script:`;
 
     postMsg({
       type: 'ai:send',
-      reqId: reqIdRef.current,
-      systemPrompt: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-      stream: true,
+      tabId: pid,
+      provider: '', model: '', baseUrl: '',
+      stage: 'rest.assert.generate',
+      systemPrompts: [SYSTEM_PROMPT],
+      userPrompt,
+      conversation: [], tools: [],
+      settings: {
+        temperature: 0.1, maxTokens: 1024, stream: true, topP: 1,
+        stopSequences: [], responseFormat: 'text',
+        frequencyPenalty: 0, presencePenalty: 0, seed: null,
+      },
+      mcpServerConfigs: [],
     });
   }, [input, streaming, response, requestMethod, requestUrl]);
+
+  const handleRefresh = useCallback(() => {
+    setGenerated('');
+    updateAssert(tabId, { result: '' });
+    setApplied(false);
+  }, [tabId, updateAssert]);
 
   const handleApply = useCallback(() => {
     if (!generated.trim() || !activeTab) return;
@@ -128,11 +155,13 @@ Generate the dk.* test script:`;
     setApplied(true);
   }, [generated, activeTab, updateTab]);
 
+  const hasCachedResult = !!generated;
+
   return (
     <div
-      className="absolute z-50 right-0 mt-1 rounded-lg border overflow-hidden flex flex-col"
+      className="rounded-lg border overflow-hidden flex flex-col"
       style={{
-        width: 440,
+        width: '100%',
         backgroundColor: 'var(--color-panel)',
         borderColor: 'var(--color-surface-border)',
         boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
@@ -141,14 +170,31 @@ Generate the dk.* test script:`;
       {/* Header */}
       <div
         className="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
-        style={{ borderColor: 'var(--color-surface-border)', backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, var(--color-panel))` }}
+        style={{
+          borderColor: 'var(--color-surface-border)',
+          backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, var(--color-panel))`,
+        }}
       >
         <SparkleIcon size={11} style={{ color: ACCENT }} />
         <span className="text-[11px] font-semibold" style={{ color: ACCENT }}>AI Assertions</span>
+
+        {/* Refresh — clear cached result to re-generate */}
+        {hasCachedResult && !streaming && (
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="ml-auto mr-1 w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:opacity-70 transition-opacity"
+            title="Clear result and re-generate"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            <RefreshIcon size={11} />
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onClose}
-          className="ml-auto text-[12px] cursor-pointer hover:opacity-70 transition-opacity"
+          className={`${hasCachedResult && !streaming ? '' : 'ml-auto'} text-[12px] cursor-pointer hover:opacity-70 transition-opacity`}
           style={{ color: 'var(--color-text-muted)' }}
         >
           ×
@@ -159,11 +205,11 @@ Generate the dk.* test script:`;
       <div className="p-3 flex flex-col gap-2">
         <textarea
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={e => handleInputChange(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleGenerate(); }}
           placeholder="e.g. response should have 10 users each with valid email"
           rows={2}
-          autoFocus
+          autoFocus={!hasCachedResult}
           className="w-full px-3 py-2 text-[12px] rounded-md border resize-none"
           style={{
             backgroundColor: 'var(--color-input-bg)',
@@ -179,7 +225,7 @@ Generate the dk.* test script:`;
             className="h-[26px] px-3 text-[11px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
             style={{ backgroundColor: ACCENT, color: '#fff' }}
           >
-            {streaming ? 'Generating…' : 'Generate'}
+            {streaming ? 'Generating…' : hasCachedResult ? 'Re-generate' : 'Generate'}
           </button>
           <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>Ctrl+Enter to generate</span>
         </div>
@@ -200,13 +246,9 @@ Generate the dk.* test script:`;
               {applied ? '✓ Applied' : 'Apply to Script'}
             </button>
           </div>
-          <pre
-            className="px-3 pb-3 text-[10.5px] font-mono overflow-x-auto"
-            style={{ color: 'var(--color-text-primary)', maxHeight: 200, overflowY: 'auto' }}
-          >
-            {generated}
-            {streaming && <span className="animate-pulse" style={{ color: ACCENT }}> ▋</span>}
-          </pre>
+          <div className="px-3 pb-3 overflow-y-auto" style={{ maxHeight: 240 }}>
+            <MdViewer content={`\`\`\`javascript\n${generated}${streaming ? ' ▋' : ''}\n\`\`\``} />
+          </div>
         </div>
       )}
     </div>

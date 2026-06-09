@@ -207,7 +207,7 @@ export function AiCollectionOrganizerModal({ collectionNode, protocol, onClose, 
       <div
         className="w-[560px] max-h-[82vh] flex flex-col rounded-xl border shadow-2xl"
         style={{
-          backgroundColor: 'var(--color-surface-bg)',
+          backgroundColor: 'var(--color-panel)',
           borderColor: 'var(--color-surface-border)',
         }}
       >
@@ -367,7 +367,7 @@ function FolderPreviewCard({
       className="rounded-lg border overflow-hidden"
       style={{
         borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
-        backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface-bg))`,
+        backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))`,
       }}
     >
       {/* Folder header */}

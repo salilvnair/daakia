@@ -151,7 +151,7 @@ export function AiPerformanceInsightsModal({ collectionName, results, onClose }:
     >
       <div
         className="w-[680px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}
+        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
       >
         {/* Header */}
         <div
@@ -221,7 +221,7 @@ export function AiPerformanceInsightsModal({ collectionName, results, onClose }:
               className="rounded-lg border p-4"
               style={{
                 borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
-                backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface-bg))`,
+                backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))`,
               }}
             >
               <MdViewer content={analysis} />

@@ -8,6 +8,7 @@ import { CollectionsFolderIcon, ClockIcon, LayersIcon, SettingsIcon, DocumentIco
 import { useTabsStore } from '../../store/tabs-store';
 import { useDebugStore } from '../../store/debug-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -368,19 +369,30 @@ function DaakiaAiButton() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const isDaakiaAiOpen = tabs.some(t => t.type === 'daakia-ai');
   const isDaakiaAiActive = activeTab?.type === 'daakia-ai';
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+
+  // If daakiaAiChat feature is disabled, hide the button entirely
+  if (!aiEnabled('daakiaAiChat')) return null;
 
   return (
     <button
       type="button"
       onClick={() => useTabsStore.getState().openDaakiaAiTab()}
       title="Daakia AI"
-      className="w-9 h-9 flex items-center justify-center rounded-lg cursor-pointer transition-colors hover:opacity-80"
+      className="w-9 h-9 flex items-center justify-center rounded-lg cursor-pointer transition-colors"
       style={{
         backgroundColor: isDaakiaAiActive
-          ? 'color-mix(in srgb, var(--color-protocol-ai) 15%, transparent)'
+          ? 'color-mix(in srgb, var(--color-protocol-ai) 18%, transparent)'
           : isDaakiaAiOpen
-            ? 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)'
+            ? 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)'
             : undefined,
+      }}
+      onMouseEnter={e => {
+        if (!isDaakiaAiActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.07)';
+      }}
+      onMouseLeave={e => {
+        if (!isDaakiaAiActive) (e.currentTarget as HTMLElement).style.backgroundColor =
+          isDaakiaAiOpen ? 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)' : '';
       }}
     >
       <GeneralAssistantIcon

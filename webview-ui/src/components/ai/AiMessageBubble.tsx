@@ -194,7 +194,7 @@ function TokenBadge({ tokens }: { tokens: { prompt: number; completion: number; 
       {showBreakdown && (
         <div
           className="absolute top-full mt-1 left-0 z-50 rounded-lg border shadow-lg p-2.5 flex flex-col gap-1.5 min-w-[160px]"
-          style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}
+          style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
         >
           <p className="text-[10px] font-semibold mb-0.5" style={{ color: 'var(--color-text-primary)' }}>Token Usage</p>
           <div className="flex items-center justify-between gap-4">

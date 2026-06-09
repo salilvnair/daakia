@@ -114,6 +114,15 @@ export const AGENT_CATEGORIES: { id: string; label: string; scenarios: AgentScen
   { id: 'knowledge', label: 'Knowledge & Chat',   scenarios: ['explain', 'general'] },
 ];
 
+export const SCENARIO_GATES: Record<AgentScenario, string> = {
+  request: 'Daakia AI chat → "Build Request" intent · triggered when asking AI to create or modify an HTTP request',
+  curl:    'Daakia AI chat → "Convert cURL" intent · triggered when pasting a cURL command into the AI chat',
+  mock:    '"✨ Generate with AI" button in Mock Server endpoint configuration',
+  test:    '"Tests ✦" button in Scripts tab toolbar (post-response mode)',
+  explain: 'Daakia AI chat → knowledge and explanation questions about HTTP, APIs, and Daakia features',
+  general: 'Fallback agent — handles all conversational requests in Daakia AI chat not matched by a specialist',
+};
+
 export const SCENARIO_COLORS: Record<AgentScenario, string> = {
   request: '#3b82f6',
   mock:    '#8b5cf6',
@@ -215,7 +224,76 @@ export type AiPromptTemplateKey =
   | 'rest.api.flow.system'
   // ── AI Agent Workflow ──────────────────────────────────────────────────────
   | 'rest.agent.workflow'
-  | 'rest.agent.workflow.system';
+  | 'rest.agent.workflow.system'
+  // ── Assert Generation ─────────────────────────────────────────────────────
+  | 'rest.assert.generate'
+  | 'rest.assert.generate.system'
+  // ── Semantic Validator ────────────────────────────────────────────────────
+  | 'rest.semantic.validate'
+  | 'rest.semantic.validate.system'
+  // ── Response Transformer ──────────────────────────────────────────────────
+  | 'rest.response.transform'
+  | 'rest.response.transform.system'
+  // ── Pattern Baseline ──────────────────────────────────────────────────────
+  | 'rest.pattern.baseline'
+  | 'rest.pattern.baseline.system'
+  // ── Record Baseline ───────────────────────────────────────────────────────
+  | 'rest.record.baseline'
+  | 'rest.record.baseline.system'
+  // ── Request Fuzzer ────────────────────────────────────────────────────────
+  | 'rest.request.fuzz'
+  | 'rest.request.fuzz.system'
+  // ── Pre-flight Check ──────────────────────────────────────────────────────
+  | 'rest.preflight'
+  | 'rest.preflight.system'
+  // ── Smart Retry Advisor ───────────────────────────────────────────────────
+  | 'rest.smart.retry'
+  | 'rest.smart.retry.system'
+  // ── Schema — GraphQL ──────────────────────────────────────────────────────
+  | 'graphql.schema.view'
+  | 'graphql.schema.view.system'
+  // ── Schema — SOAP ─────────────────────────────────────────────────────────
+  | 'soap.schema.view'
+  | 'soap.schema.view.system'
+  // ── Schema — gRPC ─────────────────────────────────────────────────────────
+  | 'grpc.schema.view'
+  | 'grpc.schema.view.system'
+  // ── Dependency Graph ──────────────────────────────────────────────────────
+  | 'collection.dependency.graph'
+  | 'collection.dependency.graph.system'
+  // ── Check Compliance ──────────────────────────────────────────────────────
+  | 'collection.compliance'
+  | 'collection.compliance.system'
+  // ── Generate SDK ──────────────────────────────────────────────────────────
+  | 'collection.sdk.generate'
+  | 'collection.sdk.generate.system'
+  // ── Optimize Requests ─────────────────────────────────────────────────────
+  | 'collection.optimize'
+  | 'collection.optimize.system'
+  // ── Regression Detector ───────────────────────────────────────────────────
+  | 'collection.regression'
+  | 'collection.regression.system'
+  // ── Import from Screenshot ────────────────────────────────────────────────
+  | 'import.screenshot'
+  | 'import.screenshot.system'
+  // ── Import from Server Logs ───────────────────────────────────────────────
+  | 'import.logs'
+  | 'import.logs.system'
+  // ── Describe Workflow ─────────────────────────────────────────────────────
+  | 'import.describe.workflow'
+  | 'import.describe.workflow.system'
+  // ── Generate Scenario ─────────────────────────────────────────────────────
+  | 'import.scenario.generate'
+  | 'import.scenario.generate.system'
+  // ── Reverse Engineer ──────────────────────────────────────────────────────
+  | 'import.reverse.engineer'
+  | 'import.reverse.engineer.system'
+  // ── AI Scenario Manager ───────────────────────────────────────────────────
+  | 'mock.scenario.manager'
+  | 'mock.scenario.manager.system'
+  // ── Master Agent ──────────────────────────────────────────────────────────
+  | 'agent.master'
+  | 'agent.master.system';
 
 // ─── Default templates ────────────────────────────────────────────────────────
 
@@ -351,6 +429,121 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `Analyze these API collection requests and identify hardcoded values that should be environment variables.\n\nCollection: {collectionName}\nRequests:\n{requests}\n\nReturn ONLY a JSON array. No markdown, no explanation, no code fences. Each object has:\n- name: short camelCase variable name (e.g. baseUrl, apiKey, userId)\n- value: the actual hardcoded value found in the requests\n- reason: one sentence explaining what it is and why it should be a variable\n- occurrences: number of requests where this value appears\n\nExample:\n[{"name":"baseUrl","value":"https://api.example.com","reason":"Base URL repeated in every request endpoint","occurrences":8},{"name":"apiKey","value":"sk-abc123","reason":"API key hardcoded in Authorization header","occurrences":3}]\n\nRules:\n- Only suggest values that appear in multiple requests OR are sensitive (keys, tokens, passwords)\n- Base URL / hostname: always suggest if repeated\n- API keys, tokens, passwords: always suggest even if seen once\n- IDs or resource-specific values that appear only once: skip\n- Keep name concise — max 3 words camelCase\n- Keep reason to one short sentence`,
   'rest.env.extract.system':
     `You are a precise REST API environment variable extraction assistant. Analyze request URLs, headers, and body data to identify hardcoded values that should be parameterized as {{variables}}. Always return valid JSON arrays only — never explanatory text, never markdown fences, never partial output.`,
+  // ── Assert Generation ─────────────────────────────────────────────────────
+  'rest.assert.generate':
+    `Generate dk.test() assertions from this plain-English description.\n\nRequest: {method} {url}\nStatus: {status}\nResponse body:\n{responseBody}\n\nAssertion description: {assertDescription}\n\nReturn ONLY the JavaScript assertion code using the dk.* API. No explanation, no fences.\n\nExamples:\ndk.test('status is 200', () => dk.expect(dk.response.status).toBe(200));\ndk.test('name is a string', () => dk.expect(dk.response.json().name).toBeType('string'));\ndk.test('items array not empty', () => dk.expect(dk.response.json().items.length).toBeGreaterThan(0));`,
+  'rest.assert.generate.system':
+    `You are an expert API test assertion generator for Daakia. Convert plain-English descriptions into precise dk.* test assertions. Return ONLY valid JavaScript — no explanation, no fences. Use dk.test(), dk.expect(), dk.response.json(), dk.response.status, dk.response.time. Keep assertions atomic and use descriptive labels.`,
+  // ── Semantic Validator ────────────────────────────────────────────────────
+  'rest.semantic.validate':
+    `Analyze this API response for semantic data errors — values that are syntactically valid but logically wrong.\n\nRequest: {method} {url}\nStatus: {status}\nResponse body:\n{responseBody}\n\nCheck for:\n1. Impossible values (negative ages, dates in the future when past expected, temperatures below absolute zero)\n2. Format violations (malformed emails, invalid phone numbers, bad UUIDs)\n3. Business logic anomalies (free_trial: true AND subscription_active: true simultaneously)\n4. Suspicious patterns (all-zero IDs, test/placeholder values like "John Doe", "test@test.com")\n5. Missing required semantics (empty required arrays, null IDs on created resources)\n\nList each issue with: field path, actual value, what's wrong, and suggested fix.`,
+  'rest.semantic.validate.system':
+    `You are a semantic API response validator. Find logically invalid data that passes syntactic checks. Be precise: specify field paths (e.g. data.users[0].age), actual values, and clear explanations of the semantic violation. Don't flag optional or nullable fields — only flag values that are objectively wrong given their field name and context.`,
+  // ── Response Transformer ──────────────────────────────────────────────────
+  'rest.response.transform':
+    `Transform this API response according to the user's instruction.\n\nRequest: {method} {url}\nResponse body:\n{responseBody}\n\nTransformation: {transformInstruction}\n\nCommon transformations:\n- JSON → CSV: produce a CSV with headers and rows\n- Extract fields: pick specific fields from nested objects\n- Flatten arrays: reduce nested structure to flat list\n- Reshape: rename keys, reorder fields, group by field\n- Filter: keep only items matching a condition\n\nReturn ONLY the transformed output — no explanation, no code fences. If transforming to JSON, return valid JSON. If transforming to CSV, return raw CSV text.`,
+  'rest.response.transform.system':
+    `You are a precise API response transformation engine. Apply the requested transformation and return ONLY the transformed data — no explanation, no markdown fences, no preamble. Output must be directly usable (valid JSON for JSON output, raw CSV for CSV, plain text for text).`,
+  // ── Pattern Baseline ──────────────────────────────────────────────────────
+  'rest.pattern.baseline':
+    `Analyze this API response and define a baseline pattern for future comparison.\n\nRequest: {method} {url}\nStatus: {status}\nResponse body:\n{responseBody}\n\nGenerate a baseline pattern that captures:\n1. Expected HTTP status code\n2. Response structure (required fields and their types)\n3. Value ranges or constraints (e.g. count > 0, price > 0)\n4. Performance baseline (response time threshold)\n5. Behavioral invariants (fields that should never change between calls)\n\nReturn ONLY a JSON object. No explanation, no fences.\n\n{"status":200,"requiredFields":[{"path":"$.data.id","type":"string"},{"path":"$.data.items","type":"array"}],"constraints":[{"path":"$.data.items","check":"length > 0"}],"maxResponseMs":2000,"invariants":["$.data.type always equals \\"product\\""]}`,
+  'rest.pattern.baseline.system':
+    `You are an API response pattern analyst. Generate precise baseline patterns in JSON format for use in regression and drift detection. Return ONLY valid JSON — no explanation, no fences. Use JSONPath syntax for field paths. Keep constraints specific and testable.`,
+  // ── Record Baseline ───────────────────────────────────────────────────────
+  'rest.record.baseline':
+    `Record this API response as a baseline for {endpoint}.\n\nRequest: {method} {url}\nStatus: {status}\nResponse time: {responseTime}ms\nResponse body:\n{responseBody}\n\nSummarize what this baseline captures:\n1. Key fields recorded\n2. Response shape (nested vs flat, array vs object, count of items)\n3. Performance snapshot\n4. What deviations should trigger alerts in future comparisons\n\nReturn a JSON object:\n{"recorded":true,"endpoint":"{method} {url}","status":{status},"responseTimeMs":{responseTime},"fieldCount":N,"arrayLengths":{"$.items":N},"alertOn":["status code changes","response time > 3x baseline","required fields missing"]}`,
+  'rest.record.baseline.system':
+    `You are an API baseline recorder. Analyze and summarize API responses for drift detection. Return ONLY valid JSON. Be specific about what changes should trigger alerts — avoid generic advice.`,
+  // ── Request Fuzzer ────────────────────────────────────────────────────────
+  'rest.request.fuzz':
+    `Generate {count} edge-case request bodies for fuzz testing this API endpoint.\n\nRequest: {method} {url}\nCurrent body:\n{currentBody}\n\nGenerate payloads that test:\n1. Boundary values (max length strings, max int, min int, zero, -1)\n2. Empty/null/missing required fields\n3. Wrong types (string where int expected, array where object expected)\n4. Special characters (SQL injection strings, XSS payloads, unicode, emojis)\n5. Oversized values (very long strings, deeply nested objects)\n\nReturn ONLY a JSON array of {count} payloads. No explanation, no fences.\n[{"_fuzzCase":"empty required field","body":{...}},{"_fuzzCase":"max length string","body":{...}}]`,
+  'rest.request.fuzz.system':
+    `You are an API fuzzing expert. Generate edge-case request payloads that probe security, validation, and error handling. Return ONLY valid JSON arrays — no explanation, no fences. Include a "_fuzzCase" field in each object describing the test scenario. Generate realistic-looking but boundary-pushing values.`,
+  // ── Pre-flight Check ──────────────────────────────────────────────────────
+  'rest.preflight':
+    `Check this API request for common issues before sending.\n\nMethod: {method}\nURL: {url}\nHeaders: {headers}\nAuth: {authType}\nBody: {body}\n\nCheck for:\n1. Auth issues (missing token, expired format, wrong scheme for endpoint)\n2. URL problems (localhost in prod URL, typos in path, missing path segments)\n3. Header issues (missing Content-Type for POST/PUT, duplicate headers)\n4. Body issues (malformed JSON, missing required fields visible from URL pattern)\n5. Environment issues ({{variables}} left unresolved)\n\nFor each issue found:\n- Severity: ERROR (will definitely fail) | WARNING (may fail) | INFO (best practice)\n- Field: what's affected\n- Issue: one sentence description\n- Fix: concrete corrective action\n\nReturn ONLY a JSON array. Return [] if no issues found.`,
+  'rest.preflight.system':
+    `You are an API request pre-flight checker. Identify issues that will likely cause request failures before they happen. Return ONLY a valid JSON array — no explanation, no fences. Each item: {"severity":"ERROR|WARNING|INFO","field":"...","issue":"...","fix":"..."}. Return [] if no issues found.`,
+  // ── Smart Retry Advisor ───────────────────────────────────────────────────
+  'rest.smart.retry':
+    `Analyze this failed API response and suggest a retry strategy.\n\nRequest: {method} {url}\nStatus: {status} {statusText}\nResponse body: {body}\nAttempt: {attempt} of {maxAttempts}\n\nProvide:\n1. Root cause category: Network / Auth / Rate-limit / Server / Client / Transient\n2. Should retry? Yes / No\n3. If yes: recommended delay before next retry (in seconds)\n4. Retry condition: what to check before retrying (e.g. "wait for 429 Retry-After header value")\n5. Max safe retries for this error type\n6. Alternative fix if retrying won't help (e.g. "refresh token", "reduce request rate")\n\nKeep the analysis concise and actionable.`,
+  'rest.smart.retry.system':
+    `You are an API retry strategy advisor. Given a failed API response, determine whether retrying is appropriate and recommend a concrete retry plan. Be specific about delays, conditions, and maximum attempts. If retrying won't help, say so clearly and suggest the real fix.`,
+  // ── Schema — GraphQL ──────────────────────────────────────────────────────
+  'graphql.schema.view':
+    `Analyze this GraphQL response and extract or generate the SDL schema.\n\nOperation: {operation}\nResponse body:\n{responseBody}\n\nProvide:\n1. Inferred SDL type definitions for all types visible in the response\n2. Field nullability (mark fields null if they appear null in the response)\n3. Likely Query/Mutation/Subscription signatures\n4. Any obvious relationship types (edges, nodes, connections, pagination)\n\nReturn the SDL schema in a \`\`\`graphql code block, then add a brief explanation of the type structure.`,
+  'graphql.schema.view.system':
+    `You are a GraphQL schema analyst. Infer SDL type definitions from response data. Use standard GraphQL SDL conventions: PascalCase types, camelCase fields, ! for non-null. When unsure about nullability, leave fields nullable. Format in a \`\`\`graphql code block.`,
+  // ── Schema — SOAP ─────────────────────────────────────────────────────────
+  'soap.schema.view':
+    `Analyze this SOAP response and extract the WSDL/XSD schema structure.\n\nOperation: {operation}\nResponse body:\n{responseBody}\n\nProvide:\n1. Element definitions for all XML elements visible in the response\n2. Type definitions (simple types, complex types)\n3. Namespace prefixes used\n4. Inferred WSDL operation signature\n\nReturn the XSD schema fragment in a \`\`\`xml code block, then add a brief explanation of the message structure.`,
+  'soap.schema.view.system':
+    `You are a SOAP/WSDL schema analyst. Infer XSD type definitions from XML response data. Use standard XSD conventions: xs:element, xs:complexType, xs:sequence. Include namespace declarations. Format in a \`\`\`xml code block.`,
+  // ── Schema — gRPC ─────────────────────────────────────────────────────────
+  'grpc.schema.view':
+    `Analyze this gRPC response and extract the protobuf schema.\n\nService: {service}\nMethod: {method}\nResponse body:\n{responseBody}\n\nProvide:\n1. Inferred proto3 message definitions for all types in the response\n2. Field numbers (start from 1, use logical order)\n3. Field types mapped from JSON values (string, int32, int64, bool, repeated, etc.)\n4. Likely service definition with this RPC method\n\nReturn the protobuf schema in a \`\`\`protobuf code block, then add a brief explanation.`,
+  'grpc.schema.view.system':
+    `You are a gRPC/protobuf schema analyst. Infer proto3 message definitions from JSON response data. Use proto3 syntax. PascalCase for message names, snake_case for field names. Assign sequential field numbers. Format in a \`\`\`protobuf code block.`,
+  // ── Dependency Graph ──────────────────────────────────────────────────────
+  'collection.dependency.graph':
+    `Analyze this API collection and generate a dependency graph of API calls.\n\nCollection: {collectionName}\nRequests (id | method | name | url | extracts):\n{requests}\n\nBuild a dependency graph where:\n- Each request is a node\n- A directed edge A → B means "B uses a value extracted from A's response"\n- Common patterns: login → subsequent authenticated requests; create resource → get/update/delete that resource\n\nReturn ONLY a JSON object. No explanation, no fences.\n{\n  "nodes": [{"id":"req1","name":"Login","method":"POST","url":"/auth/login"}],\n  "edges": [{"from":"req1","to":"req2","variable":"authToken","description":"Bearer token"}],\n  "entryPoints": ["req1"],\n  "chains": [["req1","req2","req3"]]\n}`,
+  'collection.dependency.graph.system':
+    `You are an API dependency analyzer. Identify data flow between API calls — which requests produce values that other requests consume. Return ONLY valid JSON with nodes, edges, entryPoints, and chains arrays. Use the exact request IDs provided. Never invent edges not supported by the data.`,
+  // ── Check Compliance ──────────────────────────────────────────────────────
+  'collection.compliance':
+    `Audit this API collection against REST best practices and compliance rules.\n\nCollection: {collectionName}\nRequests (id | method | name | url | headers | body):\n{requests}\n\nCheck each request against:\n1. REST naming conventions (plural nouns, lowercase, hyphens not underscores)\n2. HTTP method correctness (GET doesn't mutate, DELETE has no body, etc.)\n3. Authentication consistency (all requests have auth or explicitly mark public endpoints)\n4. Response code expectations (POST returns 201, DELETE returns 204, etc.)\n5. Security headers present (Content-Type, Accept)\n6. No sensitive data in URLs (tokens, passwords in query params)\n7. Idempotency: PUT/PATCH endpoints use appropriate methods\n\nFor each violation: requestId, requestName, severity (ERROR/WARNING/INFO), rule, description, fix.`,
+  'collection.compliance.system':
+    `You are an API compliance auditor. Check REST requests against design best practices and security rules. Be specific about violations — include request names, the rule broken, and a concrete fix. Format as a structured list. Severity: ERROR for security/correctness issues, WARNING for design issues, INFO for best practice suggestions.`,
+  // ── Generate SDK ──────────────────────────────────────────────────────────
+  'collection.sdk.generate':
+    `Generate a typed SDK client from this API collection.\n\nCollection: {collectionName}\nBase URL: {baseUrl}\nTarget language: {language}\nRequests (method | name | url | headers | body):\n{requests}\n\nGenerate a clean, typed SDK class with:\n1. Constructor that accepts baseUrl and optional auth token\n2. One method per API request (camelCase name derived from request name)\n3. Proper TypeScript types (or Python type hints) for request params and return values\n4. Axios/fetch (TypeScript) or httpx/requests (Python) for HTTP calls\n5. Error handling that throws typed errors\n6. JSDoc/docstring comments for each method\n\nReturn ONLY the SDK code. No explanation outside of inline comments.`,
+  'collection.sdk.generate.system':
+    `You are an expert SDK generator. Produce clean, production-ready typed API client code. For TypeScript: use async/await, proper interfaces, axios or fetch. For Python: use httpx or requests, type hints, dataclasses. Return ONLY the code — no markdown fences, no explanation outside of inline comments. Code must be directly usable.`,
+  // ── Optimize Requests ─────────────────────────────────────────────────────
+  'collection.optimize':
+    `Analyze this API collection for performance and optimization opportunities.\n\nCollection: {collectionName}\nRequests (method | name | url | headers | avgResponseTime):\n{requests}\n\nIdentify optimization opportunities:\n1. Batching candidates — multiple requests that could be combined into one\n2. Caching opportunities — GET requests returning stable data\n3. Parallel execution — independent requests that could run concurrently\n4. Over-fetching — large payloads where field filtering would help\n5. N+1 patterns — requests inside loops that could be batched\n6. Slow endpoints — flag anything averaging > 500ms and suggest causes\n\nPrioritize by impact: highest estimated time savings first.`,
+  'collection.optimize.system':
+    `You are an API performance optimization expert. Analyze API request patterns and suggest concrete improvements. Be specific — name the requests, describe the exact optimization, and estimate the benefit. Focus on actionable changes the developer can make today.`,
+  // ── Regression Detector ───────────────────────────────────────────────────
+  'collection.regression':
+    `Compare these two API collection run results and detect regressions.\n\nCollection: {collectionName}\nBaseline run ({baselineLabel}):\n{baselineResults}\n\nCurrent run ({currentLabel}):\n{currentResults}\n\nFor each request, compare:\n1. Status code changes (any change is a potential regression)\n2. Response time degradation (> 20% slower = WARNING, > 2x slower = ERROR)\n3. Response schema changes (new required fields, removed fields, type changes)\n4. Error rate changes (new failures vs baseline)\n5. Response size changes (> 50% larger or smaller)\n\nFormat:\n## Regressions Found\n### {REQUEST_NAME} — {SEVERITY}\n- Change: <what changed>\n- Impact: <why this matters>\n- Baseline: <old value>\n- Current: <new value>\n\n## Improvements\n<requests that are faster or more stable>`,
+  'collection.regression.system':
+    `You are an API regression detection specialist. Compare API run results and flag changes that indicate regressions. Be precise about what changed and why it matters. Distinguish between regressions (bad changes) and improvements (good changes). Use ERROR for breaking changes, WARNING for degradations, INFO for notable differences.`,
+  // ── Import from Screenshot ────────────────────────────────────────────────
+  'import.screenshot':
+    `Extract API request details from this screenshot.\n\nScreenshot description/context: {context}\n\nExtract all visible API requests and return ONLY a JSON array:\n[\n  {\n    "name": "Descriptive request name",\n    "method": "GET|POST|PUT|PATCH|DELETE",\n    "url": "full URL or template",\n    "headers": [{"key":"...","value":"..."}],\n    "bodyMode": "raw|form-data|urlencoded|none",\n    "bodyRaw": "body as string if applicable"\n  }\n]\n\nRules:\n- Extract as many requests as visible in the screenshot\n- Infer missing values from context (e.g. if auth token visible, include in headers)\n- For Postman screenshots: map collections and requests exactly\n- For API docs screenshots: extract example requests\n- Return [] if no requests visible`,
+  'import.screenshot.system':
+    `You are an API request extractor with computer vision capabilities. Extract HTTP request details from screenshots of Postman, Insomnia, API documentation, or any API tool. Return ONLY valid JSON arrays — never explanation or markdown. Be precise about methods, URLs, headers, and body content visible in the image.`,
+  // ── Import from Server Logs ───────────────────────────────────────────────
+  'import.logs':
+    `Parse these server logs and extract unique API endpoints as importable requests.\n\nLog format: {logFormat}\nLogs:\n{logs}\n\nExtract unique API requests and return ONLY a JSON array:\n[\n  {\n    "name": "Descriptive name based on method + path",\n    "method": "GET|POST|PUT|PATCH|DELETE",\n    "url": "path pattern with :param placeholders",\n    "headers": [{"key":"...","value":"..."}],\n    "bodyMode": "raw|none",\n    "bodyRaw": "sample body if POST/PUT body visible in logs"\n  }\n]\n\nRules:\n- Deduplicate: same method + path pattern = one entry (don't repeat per request ID)\n- Replace dynamic segments with :param (e.g. /users/123 → /users/:id)\n- Include common headers visible in logs (Content-Type, User-Agent, etc.)\n- Sort by frequency (most common endpoints first)\n- Ignore static asset requests (\.js, \.css, \.png, etc.)`,
+  'import.logs.system':
+    `You are a server log parser and API endpoint extractor. Parse access logs in any common format (Apache, Nginx, JSON, custom) and extract unique API endpoints. Deduplicate by path pattern. Return ONLY valid JSON arrays — never explanation or markdown. Normalize dynamic path segments to :param placeholders.`,
+  // ── Describe Workflow ─────────────────────────────────────────────────────
+  'import.describe.workflow':
+    `Convert this plain-English workflow description into an API request collection.\n\nWorkflow description:\n{description}\n\nBase API URL: {baseUrl}\n\nGenerate a collection of requests that implement this workflow step by step.\n\nReturn ONLY a JSON object:\n{\n  "collectionName": "Workflow name",\n  "requests": [\n    {\n      "name": "Step name",\n      "method": "GET|POST|PUT|PATCH|DELETE",\n      "url": "{{baseUrl}}/path",\n      "headers": [{"key":"Content-Type","value":"application/json","enabled":true}],\n      "bodyMode": "raw|none",\n      "bodyRaw": "JSON body as string",\n      "description": "What this step does"\n    }\n  ]\n}\n\nRules:\n- Use {{baseUrl}} for the base URL\n- Use {{varName}} for values extracted from previous steps\n- Keep request names as clear action phrases (e.g. "Create User", "Get Auth Token")\n- Order steps logically — auth first, then operations`,
+  'import.describe.workflow.system':
+    `You are an API workflow architect. Convert plain-English descriptions into ordered API request sequences. Use chained {{variables}} to pass data between steps. Return ONLY valid JSON — never markdown, explanation, or code fences. Design realistic, immediately-runnable workflows.`,
+  // ── Generate Scenario ─────────────────────────────────────────────────────
+  'import.scenario.generate':
+    `Generate a complete test scenario for this use case.\n\nUse case: {useCase}\nCollection context (available requests):\n{collectionRequests}\n\nGenerate a scenario that tests this use case end-to-end.\n\nReturn ONLY a JSON object:\n{\n  "scenarioName": "Test scenario name",\n  "description": "What this scenario tests",\n  "steps": [\n    {\n      "requestId": "id from collection or null for new",\n      "name": "Step name",\n      "method": "GET|POST|...",\n      "url": "{{baseUrl}}/path",\n      "headers": [],\n      "bodyMode": "raw|none",\n      "bodyRaw": "",\n      "assertions": ["dk.expect(dk.response.status).toBe(200)", "..."],\n      "extracts": [{"variable":"userId","path":"$.data.id"}]\n    }\n  ]\n}`,
+  'import.scenario.generate.system':
+    `You are an API test scenario designer. Generate complete, runnable end-to-end test scenarios from use case descriptions. Each step should include assertions and variable extractions. Return ONLY valid JSON — never markdown or explanation. Steps must be in logical order, with auth before protected endpoints.`,
+  // ── Reverse Engineer ──────────────────────────────────────────────────────
+  'import.reverse.engineer':
+    `Reverse engineer an API collection from this HAR file, logs, or documentation.\n\nInput type: {inputType}\nContent:\n{content}\n\nExtract and structure all API requests found in the input.\n\nReturn ONLY a JSON object:\n{\n  "collectionName": "Reverse Engineered — {source}",\n  "baseUrl": "detected base URL",\n  "requests": [\n    {\n      "name": "Action-oriented name",\n      "method": "GET|POST|PUT|PATCH|DELETE",\n      "url": "path with :param placeholders",\n      "headers": [{"key":"...","value":"...","enabled":true}],\n      "bodyMode": "raw|form-data|urlencoded|none",\n      "bodyRaw": ""\n    }\n  ]\n}\n\nRules:\n- Deduplicate requests with the same method + path pattern\n- Replace dynamic IDs with :param (e.g. /users/123 → /users/:id)\n- Group similar endpoints (CRUD on the same resource)\n- Extract the common base URL\n- Ignore non-API requests (static assets, tracking pixels)`,
+  'import.reverse.engineer.system':
+    `You are an API reverse engineering specialist. Extract structured API requests from HAR files, server logs, or API documentation. Deduplicate and normalize path parameters. Return ONLY valid JSON — never markdown or explanation. Infer missing information (auth headers, content-type) from context.`,
+  // ── AI Scenario Manager ───────────────────────────────────────────────────
+  'mock.scenario.manager':
+    `Manage AI-generated response scenarios for the mock server named "{serverName}".\n\nExisting scenarios:\n{scenarios}\n\nUser request: {userRequest}\n\nAvailable actions:\n- ADD: add a new scenario with specific conditions and response\n- EDIT: modify an existing scenario's conditions or response\n- REMOVE: remove a scenario by name\n- LIST: describe all current scenarios\n- GENERATE: create a set of scenarios for a use case\n\nReturn ONLY a JSON object describing the action taken:\n{\n  "action": "add|edit|remove|list|generate",\n  "scenarios": [\n    {\n      "name": "Scenario name",\n      "condition": "request condition (e.g. method=POST AND body.role=admin)",\n      "statusCode": 200,\n      "response": {"key": "value"},\n      "description": "When this scenario fires"\n    }\n  ],\n  "message": "Human-readable summary of what was done"\n}`,
+  'mock.scenario.manager.system':
+    `You are a mock server scenario manager for Daakia. Manage conditional response scenarios — each scenario fires when specific request conditions are met. Return ONLY valid JSON — never markdown or explanation. Scenarios must have clear, testable conditions (header values, body fields, query params) and realistic response bodies.`,
+  // ── Master Agent ──────────────────────────────────────────────────────────
+  'agent.master':
+    `Classify this user message and route it to the most appropriate AI agent.\n\nUser message: {userMessage}\nActive context: {context}\n\nAvailable agents:\n- request: Build or modify HTTP requests from natural language\n- mock: Design mock API endpoints and response data\n- test: Generate dk.* test assertions from responses\n- curl: Convert cURL commands to Daakia requests\n- explain: Explain HTTP responses, status codes, API concepts\n- general: Answer API-related questions and provide guidance\n\nReturn ONLY a JSON object:\n{"agent": "request|mock|test|curl|explain|general", "confidence": 0.0-1.0, "reason": "one sentence why"}`,
+  'agent.master.system':
+    `You are the master routing agent for Daakia AI. Classify user messages and route them to the correct specialized agent. Return ONLY valid JSON with agent name, confidence score (0.0-1.0), and a one-sentence reason. If ambiguous, prefer "explain" for questions and "request" for action requests.`,
 };
 
 // ─── Labels for UI ────────────────────────────────────────────────────────────
@@ -403,6 +596,52 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'rest.api.flow.system': { label: 'API Flow Builder — System', description: 'Behavioral rules for API flow builder (JSON only, chained variables)' },
   'rest.agent.workflow':        { label: 'AI Agent Workflow',        description: 'Runs a collection, diagnoses failures, and suggests fixes' },
   'rest.agent.workflow.system': { label: 'AI Agent Workflow — System', description: 'Behavioral rules for the AI testing agent (diagnosis, fixes, recommendations)' },
+  'rest.assert.generate':        { label: 'Assert Generation',             description: 'Converts plain-English descriptions into dk.test() assertions from response body' },
+  'rest.assert.generate.system': { label: 'Assert Generation — System',    description: 'Behavioral rules for the assertion generator (JavaScript only)' },
+  'rest.semantic.validate':        { label: 'Semantic Validator',           description: 'Detects semantically wrong data (negative ages, malformed emails, bad UUIDs)' },
+  'rest.semantic.validate.system': { label: 'Semantic Validator — System',  description: 'Behavioral rules for semantic validator' },
+  'rest.response.transform':        { label: 'Response Transformer',        description: 'Transforms response: JSON→CSV, field extraction, reshape, filter' },
+  'rest.response.transform.system': { label: 'Response Transformer — System', description: 'Behavioral rules for response transformer (raw output only)' },
+  'rest.pattern.baseline':        { label: 'Pattern Baseline',              description: 'Generates a baseline pattern for future regression and drift comparison' },
+  'rest.pattern.baseline.system': { label: 'Pattern Baseline — System',     description: 'Behavioral rules for pattern baseline generator (JSON only)' },
+  'rest.record.baseline':        { label: 'Record Baseline',                description: 'Records current response as a named baseline snapshot' },
+  'rest.record.baseline.system': { label: 'Record Baseline — System',       description: 'Behavioral rules for baseline recorder (JSON only)' },
+  'rest.request.fuzz':        { label: 'Request Fuzzer',                    description: 'Generates edge-case payloads for fuzz-testing request bodies' },
+  'rest.request.fuzz.system': { label: 'Request Fuzzer — System',           description: 'Behavioral rules for request fuzzer (JSON array only)' },
+  'rest.preflight':        { label: 'Pre-flight Check',                     description: 'Checks for auth, URL, header, and body issues before sending the request' },
+  'rest.preflight.system': { label: 'Pre-flight Check — System',            description: 'Behavioral rules for pre-flight checker (JSON array only)' },
+  'rest.smart.retry':        { label: 'Smart Retry Advisor',                description: 'Analyzes failed responses and recommends an intelligent retry strategy' },
+  'rest.smart.retry.system': { label: 'Smart Retry Advisor — System',       description: 'Behavioral rules for retry advisor' },
+  'graphql.schema.view':        { label: 'Schema Viewer (GraphQL)',          description: 'Infers SDL type definitions from a GraphQL response body' },
+  'graphql.schema.view.system': { label: 'Schema Viewer (GraphQL) — System', description: 'Behavioral rules for GraphQL schema analyst' },
+  'soap.schema.view':        { label: 'Schema Viewer (SOAP)',                description: 'Infers XSD/WSDL type definitions from a SOAP XML response' },
+  'soap.schema.view.system': { label: 'Schema Viewer (SOAP) — System',      description: 'Behavioral rules for SOAP schema analyst' },
+  'grpc.schema.view':        { label: 'Schema Viewer (gRPC)',                description: 'Infers proto3 message definitions from a gRPC response body' },
+  'grpc.schema.view.system': { label: 'Schema Viewer (gRPC) — System',      description: 'Behavioral rules for gRPC schema analyst' },
+  'collection.dependency.graph':        { label: 'Dependency Graph',         description: 'Builds a directed dependency graph of API call data flows in a collection' },
+  'collection.dependency.graph.system': { label: 'Dependency Graph — System', description: 'Behavioral rules for dependency graph builder (JSON only)' },
+  'collection.compliance':        { label: 'Check Compliance',               description: 'Audits collection requests against REST best practices and security rules' },
+  'collection.compliance.system': { label: 'Check Compliance — System',      description: 'Behavioral rules for compliance auditor' },
+  'collection.sdk.generate':        { label: 'Generate SDK',                 description: 'Generates a typed TypeScript or Python SDK client from a collection' },
+  'collection.sdk.generate.system': { label: 'Generate SDK — System',        description: 'Behavioral rules for SDK generator (code only)' },
+  'collection.optimize':        { label: 'Optimize Requests',                description: 'Suggests batching, caching, parallelism, and N+1 optimizations for a collection' },
+  'collection.optimize.system': { label: 'Optimize Requests — System',       description: 'Behavioral rules for request optimizer' },
+  'collection.regression':        { label: 'Regression Detector',            description: 'Compares two collection run results and flags regressions and improvements' },
+  'collection.regression.system': { label: 'Regression Detector — System',   description: 'Behavioral rules for regression detector' },
+  'import.screenshot':        { label: 'Import from Screenshot',             description: 'Extracts API requests from screenshots of Postman, Insomnia, or API docs' },
+  'import.screenshot.system': { label: 'Import from Screenshot — System',    description: 'Behavioral rules for screenshot importer (JSON only)' },
+  'import.logs':        { label: 'Import from Server Logs',                  description: 'Parses server access logs and imports detected API endpoints' },
+  'import.logs.system': { label: 'Import from Server Logs — System',         description: 'Behavioral rules for log importer (JSON only)' },
+  'import.describe.workflow':        { label: 'Describe Workflow',            description: 'Converts a plain-English workflow description into an API request collection' },
+  'import.describe.workflow.system': { label: 'Describe Workflow — System',   description: 'Behavioral rules for workflow importer (JSON only)' },
+  'import.scenario.generate':        { label: 'Generate Scenario',           description: 'Generates a complete end-to-end test scenario from a use case description' },
+  'import.scenario.generate.system': { label: 'Generate Scenario — System',  description: 'Behavioral rules for scenario generator (JSON only)' },
+  'import.reverse.engineer':        { label: 'Reverse Engineer',             description: 'Extracts a structured collection from HAR files, logs, or API documentation' },
+  'import.reverse.engineer.system': { label: 'Reverse Engineer — System',    description: 'Behavioral rules for reverse engineer (JSON only)' },
+  'mock.scenario.manager':        { label: 'AI Scenario Manager',            description: 'Manages conditional response scenarios in the Mock Server' },
+  'mock.scenario.manager.system': { label: 'AI Scenario Manager — System',   description: 'Behavioral rules for the mock scenario manager' },
+  'agent.master':        { label: 'Master Agent (Auto-Route)',               description: 'Routes user messages to the correct specialized AI agent' },
+  'agent.master.system': { label: 'Master Agent — System',                   description: 'Behavioral rules for the master routing agent' },
   'mock.rest.system':        { label: 'REST — System',       description: 'AI behavioral rules for REST route generation (format, limits, JSON completeness)' },
   'mock.graphql.system':     { label: 'GraphQL — System',   description: 'AI behavioral rules for GraphQL schema generation' },
   'mock.grpc.system':        { label: 'gRPC — System',      description: 'AI behavioral rules for gRPC service definition generation' },
@@ -463,6 +702,52 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'rest.api.flow.system': [],
   'rest.agent.workflow':        ['{collectionName}', '{environment}', '{results}'],
   'rest.agent.workflow.system': [],
+  'rest.assert.generate':        ['{method}', '{url}', '{status}', '{responseBody}', '{assertDescription}'],
+  'rest.assert.generate.system': [],
+  'rest.semantic.validate':        ['{method}', '{url}', '{status}', '{responseBody}'],
+  'rest.semantic.validate.system': [],
+  'rest.response.transform':        ['{method}', '{url}', '{responseBody}', '{transformInstruction}'],
+  'rest.response.transform.system': [],
+  'rest.pattern.baseline':        ['{method}', '{url}', '{status}', '{responseBody}'],
+  'rest.pattern.baseline.system': [],
+  'rest.record.baseline':        ['{endpoint}', '{method}', '{url}', '{status}', '{responseTime}', '{responseBody}'],
+  'rest.record.baseline.system': [],
+  'rest.request.fuzz':        ['{method}', '{url}', '{currentBody}', '{count}'],
+  'rest.request.fuzz.system': [],
+  'rest.preflight':        ['{method}', '{url}', '{headers}', '{authType}', '{body}'],
+  'rest.preflight.system': [],
+  'rest.smart.retry':        ['{method}', '{url}', '{status}', '{statusText}', '{body}', '{attempt}', '{maxAttempts}'],
+  'rest.smart.retry.system': [],
+  'graphql.schema.view':        ['{operation}', '{responseBody}'],
+  'graphql.schema.view.system': [],
+  'soap.schema.view':        ['{operation}', '{responseBody}'],
+  'soap.schema.view.system': [],
+  'grpc.schema.view':        ['{service}', '{method}', '{responseBody}'],
+  'grpc.schema.view.system': [],
+  'collection.dependency.graph':        ['{collectionName}', '{requests}'],
+  'collection.dependency.graph.system': [],
+  'collection.compliance':        ['{collectionName}', '{requests}'],
+  'collection.compliance.system': [],
+  'collection.sdk.generate':        ['{collectionName}', '{baseUrl}', '{language}', '{requests}'],
+  'collection.sdk.generate.system': [],
+  'collection.optimize':        ['{collectionName}', '{requests}'],
+  'collection.optimize.system': [],
+  'collection.regression':        ['{collectionName}', '{baselineLabel}', '{baselineResults}', '{currentLabel}', '{currentResults}'],
+  'collection.regression.system': [],
+  'import.screenshot':        ['{context}'],
+  'import.screenshot.system': [],
+  'import.logs':        ['{logFormat}', '{logs}'],
+  'import.logs.system': [],
+  'import.describe.workflow':        ['{description}', '{baseUrl}'],
+  'import.describe.workflow.system': [],
+  'import.scenario.generate':        ['{useCase}', '{collectionRequests}'],
+  'import.scenario.generate.system': [],
+  'import.reverse.engineer':        ['{inputType}', '{content}'],
+  'import.reverse.engineer.system': [],
+  'mock.scenario.manager':        ['{serverName}', '{scenarios}', '{userRequest}'],
+  'mock.scenario.manager.system': [],
+  'agent.master':        ['{userMessage}', '{context}'],
+  'agent.master.system': [],
   'mock.rest.system':        [],
   'mock.graphql.system':     [],
   'mock.grpc.system':        [],
@@ -598,6 +883,144 @@ export const AI_TEMPLATE_CATEGORIES: {
     kind: 'mock',
     keys: ['rest.agent.workflow'],
   },
+  {
+    id: 'assert-generate',
+    label: 'Assert Generation',
+    kind: 'mock',
+    keys: ['rest.assert.generate'],
+  },
+  {
+    id: 'semantic-validate',
+    label: 'Semantic Validator',
+    kind: 'mock',
+    keys: ['rest.semantic.validate'],
+  },
+  {
+    id: 'response-transform',
+    label: 'Response Transformer',
+    kind: 'mock',
+    keys: ['rest.response.transform'],
+  },
+  {
+    id: 'pattern-baseline',
+    label: 'Pattern Baseline',
+    kind: 'mock',
+    keys: ['rest.pattern.baseline'],
+  },
+  {
+    id: 'record-baseline',
+    label: 'Record Baseline',
+    kind: 'mock',
+    keys: ['rest.record.baseline'],
+  },
+  {
+    id: 'request-fuzz',
+    label: 'Request Fuzzer',
+    kind: 'mock',
+    keys: ['rest.request.fuzz'],
+  },
+  {
+    id: 'preflight',
+    label: 'Pre-flight Check',
+    kind: 'mock',
+    keys: ['rest.preflight'],
+  },
+  {
+    id: 'smart-retry',
+    label: 'Smart Retry Advisor',
+    kind: 'mock',
+    keys: ['rest.smart.retry'],
+  },
+  {
+    id: 'graphql-schema',
+    label: 'Schema Viewer (GraphQL)',
+    kind: 'mock',
+    keys: ['graphql.schema.view'],
+  },
+  {
+    id: 'soap-schema',
+    label: 'Schema Viewer (SOAP)',
+    kind: 'mock',
+    keys: ['soap.schema.view'],
+  },
+  {
+    id: 'grpc-schema',
+    label: 'Schema Viewer (gRPC)',
+    kind: 'mock',
+    keys: ['grpc.schema.view'],
+  },
+  {
+    id: 'dependency-graph',
+    label: 'Dependency Graph',
+    kind: 'mock',
+    keys: ['collection.dependency.graph'],
+  },
+  {
+    id: 'compliance',
+    label: 'Check Compliance',
+    kind: 'mock',
+    keys: ['collection.compliance'],
+  },
+  {
+    id: 'sdk-generate',
+    label: 'Generate SDK',
+    kind: 'mock',
+    keys: ['collection.sdk.generate'],
+  },
+  {
+    id: 'optimize-requests',
+    label: 'Optimize Requests',
+    kind: 'mock',
+    keys: ['collection.optimize'],
+  },
+  {
+    id: 'regression-detector',
+    label: 'Regression Detector',
+    kind: 'mock',
+    keys: ['collection.regression'],
+  },
+  {
+    id: 'import-screenshot',
+    label: 'Import from Screenshot',
+    kind: 'mock',
+    keys: ['import.screenshot'],
+  },
+  {
+    id: 'import-logs',
+    label: 'Import from Server Logs',
+    kind: 'mock',
+    keys: ['import.logs'],
+  },
+  {
+    id: 'describe-workflow',
+    label: 'Describe Workflow',
+    kind: 'mock',
+    keys: ['import.describe.workflow'],
+  },
+  {
+    id: 'scenario-generate',
+    label: 'Generate Scenario',
+    kind: 'mock',
+    keys: ['import.scenario.generate'],
+  },
+  {
+    id: 'reverse-engineer',
+    label: 'Reverse Engineer',
+    kind: 'mock',
+    keys: ['import.reverse.engineer'],
+  },
+  {
+    id: 'scenario-manager',
+    label: 'AI Scenario Manager',
+    kind: 'mock',
+    keys: ['mock.scenario.manager'],
+  },
+  {
+    id: 'master-agent',
+    label: 'Master Agent (Auto-Route)',
+    kind: 'mock',
+    keys: ['agent.master'],
+  },
 ];
 
 export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
@@ -648,6 +1071,52 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'rest.api.flow.system': '#8b5cf6',
   'rest.agent.workflow':        '#10b981',
   'rest.agent.workflow.system': '#10b981',
+  'rest.assert.generate':        '#f97316',
+  'rest.assert.generate.system': '#f97316',
+  'rest.semantic.validate':        '#a78bfa',
+  'rest.semantic.validate.system': '#a78bfa',
+  'rest.response.transform':        '#06b6d4',
+  'rest.response.transform.system': '#06b6d4',
+  'rest.pattern.baseline':        '#10b981',
+  'rest.pattern.baseline.system': '#10b981',
+  'rest.record.baseline':        '#22c55e',
+  'rest.record.baseline.system': '#22c55e',
+  'rest.request.fuzz':        '#ef4444',
+  'rest.request.fuzz.system': '#ef4444',
+  'rest.preflight':        '#f59e0b',
+  'rest.preflight.system': '#f59e0b',
+  'rest.smart.retry':        '#3b82f6',
+  'rest.smart.retry.system': '#3b82f6',
+  'graphql.schema.view':        '#ec4899',
+  'graphql.schema.view.system': '#ec4899',
+  'soap.schema.view':        '#8b5cf6',
+  'soap.schema.view.system': '#8b5cf6',
+  'grpc.schema.view':        '#f97316',
+  'grpc.schema.view.system': '#f97316',
+  'collection.dependency.graph':        '#06b6d4',
+  'collection.dependency.graph.system': '#06b6d4',
+  'collection.compliance':        '#10b981',
+  'collection.compliance.system': '#10b981',
+  'collection.sdk.generate':        '#8b5cf6',
+  'collection.sdk.generate.system': '#8b5cf6',
+  'collection.optimize':        '#f59e0b',
+  'collection.optimize.system': '#f59e0b',
+  'collection.regression':        '#ef4444',
+  'collection.regression.system': '#ef4444',
+  'import.screenshot':        '#a855f7',
+  'import.screenshot.system': '#a855f7',
+  'import.logs':        '#06b6d4',
+  'import.logs.system': '#06b6d4',
+  'import.describe.workflow':        '#3b82f6',
+  'import.describe.workflow.system': '#3b82f6',
+  'import.scenario.generate':        '#10b981',
+  'import.scenario.generate.system': '#10b981',
+  'import.reverse.engineer':        '#f97316',
+  'import.reverse.engineer.system': '#f97316',
+  'mock.scenario.manager':        '#ec4899',
+  'mock.scenario.manager.system': '#ec4899',
+  'agent.master':        '#a78bfa',
+  'agent.master.system': '#a78bfa',
   'mock.rest.system':        '#3b82f6',
   'mock.graphql.system':     '#ec4899',
   'mock.grpc.system':        '#f97316',

@@ -120,22 +120,40 @@ export function AiResponsePatternLearning({ responseBody, method, url, status }:
         </button>
       )}
 
-      {/* Record baseline button */}
-      <button type="button" onClick={recordBaseline}
-        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border cursor-pointer transition-all"
-        style={{
-          color: recorded ? 'var(--color-success)' : ACCENT,
-          borderColor: `color-mix(in srgb, ${recorded ? 'var(--color-success)' : ACCENT} 30%, transparent)`,
-        }}
-        title="Record this response as the baseline pattern for anomaly detection">
-        <SparkleIcon size={9} />
-        {recorded ? 'Recorded!' : checking ? 'Checking…' : hasBaseline.current ? 'Update baseline' : 'Record baseline'}
-      </button>
+      {/* Record Baseline — compact pill, same height as Explain/Follow-ups, SOAP red tint */}
+      {(() => {
+        const c = recorded ? 'var(--color-success)' : 'var(--color-protocol-soap)';
+        const label = recorded ? 'Recorded!' : checking ? 'Checking…' : hasBaseline.current ? 'Update Baseline' : 'Record Baseline';
+        return (
+          <button
+            type="button"
+            onClick={recordBaseline}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] cursor-pointer transition-all border"
+            style={{
+              color: c,
+              borderColor: `color-mix(in srgb, ${c} 25%, var(--color-surface-border))`,
+              backgroundColor: 'transparent',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = `color-mix(in srgb, ${c} 10%, var(--color-surface))`;
+              e.currentTarget.style.borderColor = `color-mix(in srgb, ${c} 45%, var(--color-surface-border))`;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.borderColor = `color-mix(in srgb, ${c} 25%, var(--color-surface-border))`;
+            }}
+            title="Record this response as the baseline pattern for anomaly detection"
+          >
+            <SparkleIcon size={8} style={{ color: c }} />
+            {label}
+          </button>
+        );
+      })()}
 
       {/* Anomaly detail popover */}
       {open && anomaly && (
         <div className="absolute top-full mt-1 right-0 z-50 w-[320px] rounded-xl border p-3 shadow-xl"
-          style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: `color-mix(in srgb, ${WARN} 40%, var(--color-surface-border))` }}>
+          style={{ backgroundColor: 'var(--color-panel)', borderColor: `color-mix(in srgb, ${WARN} 40%, var(--color-surface-border))` }}>
           <p className="text-[11px] font-semibold mb-1.5" style={{ color: WARN }}>⚠ Pattern Anomaly Detected</p>
           <MdViewer content={anomaly} />
           <button type="button" onClick={() => setOpen(false)} className="mt-2 text-[10px] cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>Dismiss</button>

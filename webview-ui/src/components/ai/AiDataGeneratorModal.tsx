@@ -175,7 +175,7 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
       <div
         className="w-[580px] max-h-[85vh] flex flex-col rounded-xl border shadow-2xl"
         style={{
-          backgroundColor: 'var(--color-surface-bg)',
+          backgroundColor: 'var(--color-panel)',
           borderColor: 'var(--color-surface-border)',
         }}
       >
@@ -212,8 +212,8 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
                 style={{
                   borderColor: dataType === cat.id ? ACCENT : 'var(--color-surface-border)',
                   backgroundColor: dataType === cat.id
-                    ? `color-mix(in srgb, ${ACCENT} 10%, var(--color-surface-bg))`
-                    : 'var(--color-surface-bg)',
+                    ? `color-mix(in srgb, ${ACCENT} 10%, var(--color-panel))`
+                    : 'var(--color-panel)',
                   color: dataType === cat.id ? ACCENT : 'var(--color-text-secondary)',
                 }}
               >

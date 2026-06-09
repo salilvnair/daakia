@@ -1,6 +1,7 @@
 import Editor, { OnMount } from '@monaco-editor/react';
 import { useRef, useMemo, useEffect, useState } from 'react';
 import { getDkCompletions, DK_TYPE_DEFS } from '../../../services/dk-repl';
+import { useAppTheme } from '../../../hooks/useAppTheme';
 
 // Module-level flag — dk type defs are global to the JS language worker, register once only
 let dkLibRegistered = false;
@@ -116,6 +117,10 @@ export function CodeEditor({
 
   // Variable hover during debug — shows values on hover over identifiers
   const { attach: attachDebugHover } = useDebugVariableHover();
+
+  // Dynamic Monaco theme — follows the app-wide dark/light setting
+  const appTheme = useAppTheme();
+  const monacoTheme = appTheme === 'light' ? 'daakia-light' : 'daakia-dark';
 
   // Cleanup on unmount — dispose listeners and model to prevent leaks
   useEffect(() => {
@@ -477,6 +482,23 @@ export function CodeEditor({
 
     // Notify parent with editor + monaco instances (used by AI autocomplete)
     onEditorMount?.(editor, monacoInstance);
+
+    // Find & Replace shortcut — Ctrl+Shift+H (avoids VS Code's Ctrl+R window reload and Ctrl+H interference)
+    // Also adds "Find and Replace" to the right-click context menu via addAction
+    editor.addAction({
+      id: 'daakia.findAndReplace',
+      label: 'Find and Replace',
+      keybindings: [
+        monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyH,
+      ],
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.5,
+      run: () => editor.getAction('editor.action.startFindReplaceAction')?.run(),
+    });
+
+    // Enable the standard context menu so "Find and Replace" appears
+    // Note: we re-enable just for the custom action; other VS Code menu items are suppressed by Monaco defaults
+    editor.updateOptions({ contextmenu: true });
   };
 
   return (
@@ -488,7 +510,7 @@ export function CodeEditor({
         value={value}
         onChange={(val) => onChange?.(val ?? '')}
         onMount={handleMount}
-        theme="daakia-dark"
+        theme={monacoTheme}
         options={{
           readOnly,
           minimap: { enabled: false },
@@ -509,7 +531,7 @@ export function CodeEditor({
           folding: true,
           bracketPairColorization: { enabled: true },
           automaticLayout: true,
-          contextmenu: false,
+          contextmenu: true,
           fixedOverflowWidgets: true,
           // Let Monaco handle clipboard internally
           copyWithSyntaxHighlighting: true,

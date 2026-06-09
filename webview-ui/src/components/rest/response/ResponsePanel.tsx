@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { PillTabs, ScriptResultsView, RequestProgressOverlay } from '../../shared';
 import { cancelRequest } from '../../../services/request';
 import { ResponseStatusBar } from './ResponseStatusBar';
@@ -9,15 +10,12 @@ import { RawResponseView } from './RawResponseView';
 import { HeadersView } from './HeadersView';
 import { CookiesView } from './CookiesView';
 import { TimelineView } from './TimelineView';
-import { DataSchemaModal } from './DataSchemaModal';
-import { AiActionButton, type AssistMode } from '../../ai/AiAssistPopover';
-import { AiNaturalAssertPopover } from '../../ai/AiNaturalAssertPopover';
-import { AiResponseToTypescript } from '../../ai/AiResponseToTypescript';
-import { AiSemanticValidatorModal } from '../../ai/AiSemanticValidatorModal';
-import { AiResponseTransformer } from '../../ai/AiResponseTransformer';
 import { AiSmartRetryAdvisor } from '../../ai/AiSmartRetryAdvisor';
+import { AiActionButton, type AssistMode } from '../../ai/AiAssistPopover';
 import { AiResponsePatternLearning } from '../../ai/AiResponsePatternLearning';
-import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { AiResponseActionsMenu } from './AiResponseActionsMenu';
+import { postMsg } from '../../../vscode';
+import { useDebugStore } from '../../../store/debug-store';
 
 type ResponseView = 'json' | 'raw' | 'headers' | 'cookies' | 'timeline' | 'tests';
 
@@ -29,14 +27,7 @@ export function ResponsePanel() {
   const [wrapLines, setWrapLines] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
   const [showFilter, setShowFilter] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
-  const [showNaturalAssert, setShowNaturalAssert] = useState(false);
-  const [showTsGen, setShowTsGen] = useState(false);
-  const [showSemanticVal, setShowSemanticVal] = useState(false);
-  const [showTransformer, setShowTransformer] = useState(false);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   useEffect(() => {
@@ -49,13 +40,12 @@ export function ResponsePanel() {
     useUiStateStore.getState().setPref(`response.subtab.${activeTabId}`, view);
   };
 
-  // Ctrl+F — open filter/search in response panel (5.4.2)
+  // Ctrl+F — open filter/search in response panel
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'f' && !e.shiftKey) {
-        // Only intercept when response panel area is focused or not in an input
-        const tag = (document.activeElement as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         e.preventDefault();
         setShowFilter(true);
         if (activeView !== 'json') setActiveView('raw');
@@ -78,6 +68,11 @@ export function ResponsePanel() {
         onCancel={() => {
           cancelRequest(tab.id);
           useTabsStore.getState().updateTab(tab.id, { loading: false, requestProgress: undefined });
+          const dbg = useDebugStore.getState();
+          if (dbg.active && dbg.tabId === tab.id) {
+            postMsg({ type: 'scriptDebug:stop', tabId: tab.id });
+            dbg.stopDebug();
+          }
         }}
       />
     );
@@ -100,7 +95,6 @@ export function ResponsePanel() {
     (response.scriptErrors && response.scriptErrors.length > 0) ||
     (response.testResults && response.testResults.length > 0);
 
-  // Request context for AI actions
   const requestMethod = tab.method || 'GET';
   const requestUrl = tab.url || '';
   const requestBody = tab.bodyRaw || undefined;
@@ -115,7 +109,7 @@ export function ResponsePanel() {
         requestBody={requestBody}
       />
 
-      {/* Response tabs + AI toolbar buttons */}
+      {/* Response tabs + AI inline action buttons (right side) */}
       <div className="flex items-center justify-between px-3 pt-2 pb-0 border-b border-[var(--color-surface-border)]">
         <PillTabs
           tabs={[
@@ -132,110 +126,53 @@ export function ResponsePanel() {
           variant="underline"
         />
 
-        {/* AI inline actions — always visible when there is a response */}
+        {/* AI inline actions — same small pill buttons as original */}
         <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
-          {aiEnabled('responseExplainer') && (
+          {aiEnabled('explainRest') && (
             <AiActionButton
+              compact
               mode="explain"
               label="Explain"
               response={response}
               requestMethod={requestMethod}
               requestUrl={requestUrl}
               open={activePopup === 'explain'}
-              onOpen={() => { setActivePopup(p => p === 'explain' ? null : 'explain'); setShowNaturalAssert(false); }}
+              onOpen={() => { setActivePopup(p => p === 'explain' ? null : 'explain'); }}
             />
           )}
-          {aiEnabled('followUps') && (
+
+          {aiEnabled('followUpsRest') && (
             <AiActionButton
+              compact
               mode="follow-up"
               label="Follow-ups"
               response={response}
               requestMethod={requestMethod}
               requestUrl={requestUrl}
               open={activePopup === 'follow-up'}
-              onOpen={() => { setActivePopup(p => p === 'follow-up' ? null : 'follow-up'); setShowNaturalAssert(false); }}
+              onOpen={() => { setActivePopup(p => p === 'follow-up' ? null : 'follow-up'); }}
             />
           )}
-          {/* AI Natural Language Assertions (4.6.3) */}
-          {aiEnabled('assertGeneration') && (
+
+          {/* Record Baseline — gated by recordBaseline flag */}
+          {aiEnabled('recordBaseline') && (
             <div className="relative">
-              <button
-                type="button"
-                onClick={() => { setShowNaturalAssert(p => !p); setActivePopup(null); }}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
-                style={{
-                  color: 'var(--color-protocol-ai)',
-                  borderColor: showNaturalAssert ? 'var(--color-protocol-ai)' : 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-                  backgroundColor: showNaturalAssert ? 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)' : 'transparent',
-                }}
-                title="Write test assertions in plain English"
-              >
-                ✦ Assert
-              </button>
-              {showNaturalAssert && (
-                <AiNaturalAssertPopover
-                  response={{ body: response.body, status: response.status, contentType: response.contentType }}
-                  requestMethod={requestMethod}
-                  requestUrl={requestUrl}
-                  onClose={() => setShowNaturalAssert(false)}
-                />
-              )}
+              <AiResponsePatternLearning
+                responseBody={response.body || ''}
+                method={requestMethod}
+                url={requestUrl}
+                status={response.status}
+              />
             </div>
           )}
-          {/* AI Response → TypeScript (4.6.8) */}
-          {aiEnabled('typescriptTypes') && (
-            <button
-              type="button"
-              onClick={() => { setShowTsGen(true); setActivePopup(null); setShowNaturalAssert(false); }}
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
-              style={{
-                color: 'var(--color-protocol-ai)',
-                borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-              }}
-              title="Generate TypeScript interfaces from response"
-            >
-              ✦ TS
-            </button>
-          )}
-          {/* AI Semantic Validator (4.6.15) */}
-          {aiEnabled('semanticValidator') && (
-            <button
-              type="button"
-              onClick={() => { setShowSemanticVal(true); setActivePopup(null); setShowNaturalAssert(false); }}
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
-              style={{
-                color: 'var(--color-protocol-ai)',
-                borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-              }}
-              title="AI semantic validation (age: -5 is wrong, email without @ is suspicious)"
-            >
-              ✦ Semantic
-            </button>
-          )}
-          {/* AI Response Transformer (4.6.18) */}
-          {aiEnabled('responseTransformer') && (
-            <button
-              type="button"
-              onClick={() => { setShowTransformer(true); setActivePopup(null); setShowNaturalAssert(false); }}
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
-              style={{
-                color: 'var(--color-protocol-ai)',
-                borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-              }}
-              title="Transform response: JSON→CSV, extract emails, reshape"
-            >
-              ✦ Transform
-            </button>
-          )}
-          {/* AI Pattern Learning (4.6.6) — inline record/anomaly for successful responses */}
-          <div className="relative">
-            <AiResponsePatternLearning
-              responseBody={response.body || ''}
-              method={requestMethod}
-              url={requestUrl}
-              status={response.status}
-            />
-          </div>
+
+          {/* AI Actions 3-dot — Assert, Semantic Validate, Transform, Compare, Schema */}
+          <AiResponseActionsMenu
+            tabId={tab.id}
+            response={response}
+            requestMethod={requestMethod}
+            requestUrl={requestUrl}
+          />
         </div>
       </div>
 
@@ -243,23 +180,21 @@ export function ResponsePanel() {
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         {activeView === 'json' && (
           <JsonResponseView
-            response={response}
+            response={{ ...response, status: response.status }}
             wrapLines={wrapLines}
             setWrapLines={setWrapLines}
             showFilter={showFilter}
             setShowFilter={setShowFilter}
             filterQuery={filterQuery}
             setFilterQuery={setFilterQuery}
-            showMoreMenu={showMoreMenu}
-            setShowMoreMenu={setShowMoreMenu}
-            moreMenuRef={moreMenuRef}
             tabId={tab.id}
-            onShowSchema={() => setShowSchema(true)}
+            requestMethod={requestMethod}
+            requestUrl={requestUrl}
           />
         )}
 
         {activeView === 'raw' && (
-          <RawResponseView response={response} wrapLines={wrapLines} setWrapLines={setWrapLines} />
+          <RawResponseView response={response} wrapLines={wrapLines} setWrapLines={setWrapLines} tabId={tab.id} />
         )}
 
         {activeView === 'headers' && (
@@ -277,11 +212,10 @@ export function ResponsePanel() {
         {activeView === 'tests' && (
           <ScriptResultsView response={response} />
         )}
-
       </div>
 
-      {/* AI Smart Retry Advisor (4.6.17) — shown below status bar for error responses */}
-      {response.status >= 400 && (
+      {/* AI Smart Retry Advisor — shown below status bar for error responses */}
+      {response.status >= 400 && aiEnabled('smartRetryAdvisor') && (
         <div className="px-3 pt-1.5 pb-0.5">
           <AiSmartRetryAdvisor
             status={response.status}
@@ -290,43 +224,6 @@ export function ResponsePanel() {
             url={requestUrl}
           />
         </div>
-      )}
-
-      {/* Data Schema Modal */}
-      {showSchema && response && (
-        <DataSchemaModal body={response.body} onClose={() => setShowSchema(false)} />
-      )}
-
-      {/* AI Response → TypeScript Modal (4.6.8) */}
-      {showTsGen && (
-        <AiResponseToTypescript
-          responseBody={response.body || ''}
-          method={requestMethod}
-          url={requestUrl}
-          onClose={() => setShowTsGen(false)}
-        />
-      )}
-
-      {/* AI Semantic Validator Modal (4.6.15) */}
-      {showSemanticVal && (
-        <AiSemanticValidatorModal
-          responseBody={response.body || ''}
-          method={requestMethod}
-          url={requestUrl}
-          status={String(response.status)}
-          onClose={() => setShowSemanticVal(false)}
-        />
-      )}
-
-      {/* AI Response Transformer Modal (4.6.18) */}
-      {showTransformer && (
-        <AiResponseTransformer
-          responseBody={response.body || ''}
-          contentType={response.contentType}
-          method={requestMethod}
-          url={requestUrl}
-          onClose={() => setShowTransformer(false)}
-        />
       )}
     </div>
   );

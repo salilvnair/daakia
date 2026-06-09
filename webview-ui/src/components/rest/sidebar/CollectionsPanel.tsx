@@ -5,6 +5,7 @@ import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ContextMenu, ImportExportIcon, type CollectionProperties, type ContextMenuItem } from '../../shared';
 import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
@@ -49,6 +50,9 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [tree, setTree] = useState<CollectionTreeNode[]>(cachedTree);
   const [search, setSearch] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // AI feature flags — used to gate collection AI context menu items
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   // AI NL Search state
   const [aiSearchActive, setAiSearchActive] = useState(false);
@@ -474,39 +478,69 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const openCollectionContextMenu = (e: React.MouseEvent, node: CollectionTreeNode) => {
     e.preventDefault();
     e.stopPropagation();
+    const hasReqs = hasAnyRequests(node);
     const items: ContextMenuItem[] = [
-      { id: 'new-request', label: 'New Request', shortcut: 'Q', icon: <PlusIcon />, iconColor: 'var(--color-success)' },
-      { id: 'new-folder', label: 'New Folder', shortcut: 'F', icon: <FolderIcon />, iconColor: 'var(--color-warning)' },
+      { id: 'new-request', label: 'New Request',    shortcut: 'Q', icon: <PlusIcon />,   iconColor: 'var(--color-success)' },
+      { id: 'new-folder',  label: 'New Folder',     shortcut: 'F', icon: <FolderIcon />, iconColor: 'var(--color-warning)' },
       { id: 'sep1', label: '', separator: true },
-      { id: 'run', label: 'Run Collection', shortcut: 'R', icon: <PlayIcon />, iconColor: 'var(--color-success)', disabled: !hasAnyRequests(node) },
+      { id: 'run', label: 'Run Collection', shortcut: 'R', icon: <PlayIcon />, iconColor: 'var(--color-success)', disabled: !hasReqs },
       { id: 'sep2', label: '', separator: true },
-      { id: 'documentation', label: 'Documentation', disabled: true, icon: <DocumentIcon />, iconColor: 'var(--color-info)' },
-      { id: 'mock-server', label: 'Configure Mock Server', disabled: true, icon: <ServerIcon />, iconColor: 'var(--color-mock-server)' },
+      { id: 'rename',    label: 'Rename',    shortcut: 'N', icon: <RenameIcon />, iconColor: 'var(--color-ctx-rename)' },
+      { id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon />,   iconColor: 'var(--color-ctx-duplicate)' },
       { id: 'sep3', label: '', separator: true },
-      { id: 'rename', label: 'Rename', shortcut: 'N', icon: <RenameIcon />, iconColor: 'var(--color-ctx-rename)' },
-      { id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon />, iconColor: 'var(--color-ctx-duplicate)' },
-      { id: 'sep3b', label: '', separator: true },
-      { id: 'ai-extract-env', label: 'Extract Variables with AI', shortcut: 'V', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)', disabled: !hasAnyRequests(node) },
-      { id: 'ai-organize', label: 'Organize with AI', shortcut: 'O', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-warning)', disabled: !hasAnyRequests(node) },
-      { id: 'ai-flow-builder', label: 'Build API Flow with AI', shortcut: 'F', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-primary)' },
-      { id: 'ai-agent-workflow', label: 'Test with AI Agent', shortcut: 'T', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)', disabled: !hasAnyRequests(node) },
-      { id: 'ai-changelog', label: 'Generate Changelog with AI', shortcut: 'C', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-warning)', disabled: !hasAnyRequests(node) },
-      { id: 'ai-dependency-graph', label: 'API Dependency Graph (AI)', shortcut: 'G', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-info)', disabled: !hasAnyRequests(node) },
-      { id: 'ai-compliance', label: 'Check Compliance (AI)', shortcut: 'L', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-error)', disabled: !hasAnyRequests(node) },
-      { id: 'ai-sdk-generator', label: 'Generate SDK (AI)', shortcut: 'K', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)', disabled: !hasAnyRequests(node) },
-      { id: 'ai-optimizer', label: 'Optimize Requests (AI)', shortcut: 'Z', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-warning)', disabled: !hasAnyRequests(node) },
-      { id: 'ai-regression', label: 'Regression Detector (AI)', shortcut: 'E', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-error)', disabled: !hasAnyRequests(node) },
-      { id: 'sep3c', label: '', separator: true },
-      { id: 'export-daakia', label: 'Export as Daakia JSON', shortcut: 'J', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
-      { id: 'export-postman', label: 'Export as Postman', shortcut: 'M', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
-      { id: 'export-insomnia', label: 'Export as Insomnia', shortcut: 'I', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
-      { id: 'export-bruno', label: 'Export as Bruno (.bru)', shortcut: 'B', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
-      { id: 'export-httpie', label: 'Export as HTTPie', shortcut: 'H', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
-      { id: 'export-openapi', label: 'Export as OpenAPI 3.0', shortcut: 'O', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
-      { id: 'export-docs', label: 'Export API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
-      { id: 'properties', label: 'Properties', shortcut: 'P', icon: <SettingsIcon />, iconColor: 'var(--color-text-muted)' },
+      ...((() => {
+        // Build AI Actions submenu — only include items enabled by their individual flag
+        const g1: ContextMenuItem[] = [
+          ...(aiEnabled('extractVariables')  ? [{ id: 'ai-extract-env',    label: 'Extract Variables',   shortcut: 'V', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-success)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('organizeWithAi')    ? [{ id: 'ai-organize',        label: 'Organize with AI',    shortcut: 'O', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-warning)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('buildApiFlow')      ? [{ id: 'ai-flow-builder',    label: 'Build API Flow',      shortcut: 'F', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-primary)' }] : []),
+          ...(aiEnabled('testWithAiAgent')   ? [{ id: 'ai-agent-workflow',  label: 'Test with AI Agent',  shortcut: 'T', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-success)', disabled: !hasReqs }] : []),
+        ];
+        const g2: ContextMenuItem[] = [
+          ...(aiEnabled('generateChangelog') ? [{ id: 'ai-changelog',       label: 'Generate Changelog',  shortcut: 'C', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-warning)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('dependencyGraph')   ? [{ id: 'ai-dependency-graph',label: 'Dependency Graph',    shortcut: 'G', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-info)',    disabled: !hasReqs }] : []),
+          ...(aiEnabled('checkCompliance')   ? [{ id: 'ai-compliance',      label: 'Check Compliance',    shortcut: 'L', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-error)',   disabled: !hasReqs }] : []),
+        ];
+        const g3: ContextMenuItem[] = [
+          ...(aiEnabled('generateSdk')       ? [{ id: 'ai-sdk-generator',   label: 'Generate SDK',        shortcut: 'K', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-success)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('optimizeRequests')  ? [{ id: 'ai-optimizer',       label: 'Optimize Requests',   shortcut: 'Z', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-warning)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('regressionDetector')? [{ id: 'ai-regression',      label: 'Regression Detector', shortcut: 'E', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-error)',   disabled: !hasReqs }] : []),
+        ];
+        const sub: ContextMenuItem[] = [];
+        if (g1.length) sub.push(...g1);
+        if (g1.length && g2.length) sub.push({ id: 'sep-ai1', label: '', separator: true });
+        if (g2.length) sub.push(...g2);
+        if ((g1.length || g2.length) && g3.length) sub.push({ id: 'sep-ai2', label: '', separator: true });
+        if (g3.length) sub.push(...g3);
+        // Only show the AI Actions parent menu if at least one sub-action is enabled
+        if (sub.length === 0) return [];
+        return [{
+          id: 'ai-actions',
+          label: 'AI Actions',
+          icon: <SparkleIcon size={14} />,
+          iconColor: 'var(--color-protocol-ai)',
+          submenu: sub,
+        }];
+      })()),
+      {
+        id: 'export',
+        label: 'Export',
+        icon: <FolderExportIcon />,
+        iconColor: 'var(--color-warning)',
+        submenu: [
+          { id: 'export-daakia',  label: 'Daakia JSON',        shortcut: 'J', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
+          { id: 'export-postman', label: 'Postman',            shortcut: 'M', icon: <FolderExportIcon />, iconColor: '#ff6c37' },
+          { id: 'export-insomnia',label: 'Insomnia',           shortcut: 'I', icon: <FolderExportIcon />, iconColor: '#7400e1' },
+          { id: 'export-bruno',   label: 'Bruno (.bru)',       shortcut: 'B', icon: <FolderExportIcon />, iconColor: '#f4a623' },
+          { id: 'export-httpie',  label: 'HTTPie',             shortcut: 'H', icon: <FolderExportIcon />, iconColor: '#73dc8c' },
+          { id: 'export-openapi', label: 'OpenAPI 3.0',        shortcut: 'O', icon: <FolderExportIcon />, iconColor: '#85ea2d' },
+          { id: 'export-docs',    label: 'API Docs (Markdown)',shortcut: 'D', icon: <FolderExportIcon />, iconColor: 'var(--color-info)' },
+        ],
+      },
       { id: 'sep4', label: '', separator: true },
-      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon /> },
+      { id: 'properties', label: 'Properties', shortcut: 'P', icon: <SettingsIcon />, iconColor: 'var(--color-text-muted)' },
+      { id: 'sep5', label: '', separator: true },
+      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon />, iconColor: 'var(--color-error)' },
     ];
     setContextMenu({ position: { x: e.clientX, y: e.clientY }, items, targetId: node.id, targetType: 'collection', targetName: node.name });
   };
@@ -522,15 +556,18 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       { id: 'sep1', label: '', separator: true },
       { id: 'documentation', label: 'Documentation', disabled: true, icon: <DocumentIcon />, iconColor: 'var(--color-info)' },
       { id: 'sep2', label: '', separator: true },
-      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon /> },
+      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon />, iconColor: 'var(--color-error)' },
     ];
     setContextMenu({ position: { x: e.clientX, y: e.clientY }, items, targetId: req.id, targetType: 'request', targetName: req.name });
   };
 
-  const handleContextMenuSelect = useCallback((actionId: string) => {
+  const handleContextMenuSelect = useCallback((actionId: string, subId?: string) => {
     if (!contextMenu) return;
+    // When a submenu item fires, `actionId` is the parent group (e.g. 'ai-actions', 'export')
+    // and `subId` is the actual item selected. Use subId as the effective action when present.
+    const effectiveId = subId ?? actionId;
     const { targetId, targetType, targetName } = contextMenu;
-    switch (actionId) {
+    switch (effectiveId) {
       case 'new-request':
         openNewRequest(targetId);
         break;
@@ -819,11 +856,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
                 { id: 'import-bruno', label: 'Import from Bruno', shortcut: 'B', icon: <FolderImportIcon size={14} />, iconColor: '#eab308' },
                 { id: 'import-insomnia', label: 'Import from Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} />, iconColor: '#a78bfa' },
                 { id: 'import-har', label: 'Import from HAR', shortcut: 'H', icon: <FolderImportIcon size={14} />, iconColor: '#06b6d4' },
-                { id: 'import-screenshot', label: 'Import from Screenshot (AI)', shortcut: 'S', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' },
-                { id: 'import-logs', label: 'Import from Server Logs (AI)', shortcut: 'L', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' },
-                { id: 'ai-conversation', label: 'Describe Workflow (AI)', shortcut: 'W', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' },
-                { id: 'ai-scenario', label: 'Generate Scenario (AI)', shortcut: 'G', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)' },
-                { id: 'ai-reverse-engineer', label: 'Reverse Engineer (AI)', shortcut: 'R', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' },
+                ...(aiEnabled('importFromScreenshot') ? [{ id: 'import-screenshot', label: 'Import from Screenshot (AI)', shortcut: 'S', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' }] : []),
+                ...(aiEnabled('importFromLogs')       ? [{ id: 'import-logs',        label: 'Import from Server Logs (AI)', shortcut: 'L', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' }] : []),
+                ...(aiEnabled('describeWorkflow')     ? [{ id: 'ai-conversation',    label: 'Describe Workflow (AI)',       shortcut: 'W', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' }] : []),
+                ...(aiEnabled('generateScenario')     ? [{ id: 'ai-scenario',        label: 'Generate Scenario (AI)',      shortcut: 'G', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-success)' }] : []),
+                ...(aiEnabled('reverseEngineer')      ? [{ id: 'ai-reverse-engineer',label: 'Reverse Engineer (AI)',       shortcut: 'R', icon: <SparkleIcon size={14} />, iconColor: 'var(--color-protocol-ai)' }] : []),
                 { id: 'sep1', label: '', separator: true },
                 { id: 'export-json', label: 'Export as JSON', shortcut: 'E', icon: <FolderExportIcon size={14} />, iconColor: '#3b82f6' },
               ]}
@@ -1278,7 +1315,7 @@ function TreeNode({
                       className="flex-1 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-primary)] rounded px-1 py-0 text-[var(--color-text-primary)] focus:outline-none min-w-0"
                     />
                   ) : (
-                    <span className="text-[11.5px] text-[var(--color-text-primary)] truncate min-w-0">
+                    <span className="flex-1 text-[11.5px] text-[var(--color-text-primary)] truncate min-w-0">
                       {req.name || req.url || 'Untitled'}
                     </span>
                   )}

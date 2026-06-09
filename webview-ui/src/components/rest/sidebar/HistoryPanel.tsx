@@ -420,13 +420,13 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
         <ContextMenu
           position={{ x: contextMenu.x, y: contextMenu.y }}
           items={[
-            { id: 'open', label: 'Open', shortcut: 'O', icon: <ExternalLinkIcon size={14} /> },
-            { id: 'open-new-tab', label: 'Open in New Tab', shortcut: 'T', icon: <PlusSquareIcon size={14} /> },
+            { id: 'open',        label: 'Open',               shortcut: 'O',   icon: <ExternalLinkIcon size={14} />, iconColor: 'var(--color-info)' },
+            { id: 'open-new-tab',label: 'Open in New Tab',    shortcut: 'T',   icon: <PlusSquareIcon size={14} />,   iconColor: 'var(--color-success)' },
             { id: 'sep1', label: '', separator: true },
-            { id: 'save', label: 'Save to Collection', shortcut: 'S', icon: <SaveIcon size={14} /> },
-            { id: 'export', label: 'Export as JSON', shortcut: 'E', icon: <DownloadIcon size={14} /> },
+            { id: 'save',   label: 'Save to Collection', shortcut: 'S',   icon: <SaveIcon size={14} />,      iconColor: 'var(--color-primary)' },
+            { id: 'export', label: 'Export as JSON',     shortcut: 'E',   icon: <DownloadIcon size={14} />,  iconColor: 'var(--color-warning)' },
             { id: 'sep2', label: '', separator: true },
-            { id: 'delete', label: 'Delete', danger: true, shortcut: 'Del', icon: <TrashIcon size={14} /> },
+            { id: 'delete', label: 'Delete',             danger: true, shortcut: 'Del', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)' },
           ]}
           onSelect={(id) => {
             const item = contextMenu.item;
@@ -446,7 +446,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
       {/* Header more menu */}
       {headerMenu && (
         <ContextMenu
-          items={[{ id: 'clear-all', label: 'Delete all history', danger: true, shortcut: 'D', icon: <TrashIcon size={14} /> }]}
+          items={[{ id: 'clear-all', label: 'Delete all history', danger: true, shortcut: 'D', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)' }]}
           position={headerMenu}
           onSelect={() => { setShowClearConfirm(true); setHeaderMenu(null); }}
           onClose={() => setHeaderMenu(null)}

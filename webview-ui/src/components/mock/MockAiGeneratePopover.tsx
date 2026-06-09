@@ -21,6 +21,7 @@ import { SparkleIcon, CloseIcon, RefreshIcon, PlusIcon, CopyIcon, CheckIcon } fr
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import type { MockRoute, HttpMethod } from './mock-types';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
 
 const ACCENT = 'var(--color-mock-server)';
 
@@ -1169,6 +1170,10 @@ export function MockAiGenerateButton({
   onAddGeneratedItems,
 }: MockAiGenerateButtonProps) {
   const [open, setOpen] = useState(false);
+  const mockAiEnabled = useAiFeaturesStore(s => s.isEnabled('mockAiGenerate'));
+
+  // Gated by mockAiGenerate feature flag — hides button completely when disabled
+  if (!mockAiEnabled) return null;
 
   return (
     <>

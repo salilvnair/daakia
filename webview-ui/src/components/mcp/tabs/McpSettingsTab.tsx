@@ -111,7 +111,7 @@ export function McpSettingsTab() {
       {/* ── Daakia as MCP Server ── */}
       <div
         className="mt-2 rounded-lg p-3 border"
-        style={{ borderColor: 'var(--color-protocol-mcp)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-mcp) 5%, var(--color-surface-bg))' }}
+        style={{ borderColor: 'var(--color-protocol-mcp)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-mcp) 5%, var(--color-panel))' }}
       >
         <div className="flex items-center gap-2 mb-2">
           <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-protocol-mcp)' }}>

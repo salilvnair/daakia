@@ -152,7 +152,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
 
   const handleClose = (tabId: string) => {
     const tab = tabs.find(t => t.id === tabId);
-    if (tab?.dirty) {
+    // daakia-ai tabs have no save flow — never prompt for unsaved changes
+    if (tab?.dirty && tab.type !== 'daakia-ai') {
       setConfirmCloseId(tabId);
     } else {
       closeTab(tabId);
@@ -218,6 +219,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
         icon: <FilterIcon size={13} />,
         iconColor: tabProtocolFilter.size > 0 ? 'var(--color-primary)' : 'var(--color-ctx-close-batch)',
         submenu: buildFilterSubmenu(),
+        keepOpenOnSelect: true,
       });
       if (tabProtocolFilter.size > 0) {
         items.push({

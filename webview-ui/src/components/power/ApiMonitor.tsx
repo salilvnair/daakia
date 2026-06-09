@@ -148,7 +148,7 @@ export function ApiMonitor({ onClose }: Props) {
           {/* Add rule form */}
           {adding && (
             <div className="rounded-xl border p-4 flex flex-col gap-3"
-              style={{ borderColor: 'color-mix(in srgb, var(--color-success) 30%, var(--color-surface-border))', backgroundColor: 'color-mix(in srgb, var(--color-success) 3%, var(--color-surface-bg))' }}>
+              style={{ borderColor: 'color-mix(in srgb, var(--color-success) 30%, var(--color-surface-border))', backgroundColor: 'color-mix(in srgb, var(--color-success) 3%, var(--color-panel))' }}>
               <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>New Monitor</p>
 
               <div className="grid grid-cols-2 gap-3">

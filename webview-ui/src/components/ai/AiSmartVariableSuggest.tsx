@@ -124,7 +124,7 @@ export function AiSmartVariableSuggest({ value, onChange, fieldType, placeholder
 
       {showSuggestions && suggestions.length > 0 && (
         <div className="absolute top-full left-0 z-50 mt-1 min-w-[220px] rounded-xl border shadow-xl overflow-hidden"
-          style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: `color-mix(in srgb, ${AI_ACCENT} 30%, var(--color-surface-border))` }}>
+          style={{ backgroundColor: 'var(--color-panel)', borderColor: `color-mix(in srgb, ${AI_ACCENT} 30%, var(--color-surface-border))` }}>
           <div className="flex items-center gap-1.5 px-3 py-1.5 border-b"
             style={{ borderColor: 'var(--color-surface-border)', backgroundColor: `color-mix(in srgb, ${AI_ACCENT} 5%, transparent)` }}>
             <SparkleIcon size={10} style={{ color: AI_ACCENT }} />

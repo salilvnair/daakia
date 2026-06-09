@@ -233,7 +233,7 @@ export function AiEnvExtractModal({ collectionNode, onClose }: Props) {
       <div
         className="w-[520px] max-h-[80vh] flex flex-col rounded-xl border shadow-2xl"
         style={{
-          backgroundColor: 'var(--color-surface-bg)',
+          backgroundColor: 'var(--color-panel)',
           borderColor: 'var(--color-surface-border)',
         }}
       >
@@ -377,8 +377,8 @@ function SuggestionRow({ suggestion, onAdd }: { suggestion: EnvSuggestion; onAdd
           ? `color-mix(in srgb, ${ACCENT} 35%, transparent)`
           : 'var(--color-surface-border)',
         backgroundColor: hovered
-          ? `color-mix(in srgb, ${ACCENT} 5%, var(--color-surface-bg))`
-          : 'var(--color-surface-bg)',
+          ? `color-mix(in srgb, ${ACCENT} 5%, var(--color-panel))`
+          : 'var(--color-panel)',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}

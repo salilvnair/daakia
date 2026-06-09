@@ -147,7 +147,7 @@ export const AiContractTestGenerator = forwardRef<AiContractTestHandle, Props>(
         <div
           className="w-[580px] max-h-[85vh] flex flex-col rounded-xl border shadow-2xl"
           style={{
-            backgroundColor: 'var(--color-surface-bg)',
+            backgroundColor: 'var(--color-panel)',
             borderColor: 'var(--color-surface-border)',
           }}
         >

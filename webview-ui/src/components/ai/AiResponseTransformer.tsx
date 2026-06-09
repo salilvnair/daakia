@@ -3,14 +3,18 @@
  * Feature 4.6.18 — AI Response Transformer
  *
  * "Convert this XML to flat CSV", "Extract just emails from nested JSON", "Reshape to match this schema"
+ *
+ * Instruction draft + generated result are persisted per-tab in Zustand.
+ * Cache-first: if result exists when opened, shows immediately; refresh to re-run.
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CopyIcon } from '../../icons';
+import { SparkleIcon, CloseIcon, CopyIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { MdViewer } from '../shared/display/MdViewer';
+import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
 
 interface Props {
+  tabId: string;
   responseBody: string;
   contentType?: string;
   method?: string;
@@ -37,9 +41,13 @@ Apply the transformation and return ONLY the result — no explanation, no pream
 
 If the transformation doesn't apply (wrong format, empty data, etc.), say so briefly.`;
 
-export function AiResponseTransformer({ responseBody, contentType, method, url, onClose }: Props) {
-  const [instruction, setInstruction] = useState('');
-  const [result, setResult] = useState('');
+export function AiResponseTransformer({ tabId, responseBody, contentType, method, url, onClose }: Props) {
+  const { getTabActions, updateTransform } = useAiResponseActionsStore();
+  const cached = getTabActions(tabId);
+
+  // Cache-first: initialize from stored state
+  const [instruction, setInstruction] = useState(cached.transform?.instruction ?? '');
+  const [result, setResult] = useState(cached.transform?.result ?? '');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
@@ -47,16 +55,31 @@ export function AiResponseTransformer({ responseBody, contentType, method, url, 
   const accRef = useRef('');
   const reqIdRef = useRef('');
 
+  // Persist instruction changes
+  const handleInstructionChange = (val: string) => {
+    setInstruction(val);
+    setError('');
+    updateTransform(tabId, { instruction: val });
+  };
+
+  // Apply preset — persist to store too
+  const applyPreset = (prompt: string) => {
+    setInstruction(prompt);
+    updateTransform(tabId, { instruction: prompt });
+  };
+
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
       const msg = evt.data as Record<string, unknown>;
-      if (!msg || msg.tabId !== reqIdRef.current) return;
+      if (!msg || (msg.tabId as string) !== reqIdRef.current) return;
       if (msg.type === 'ai:chunk') {
         accRef.current += (msg.delta as string) || (msg.text as string) || '';
         setResult(accRef.current);
       }
       if (msg.type === 'ai:complete') {
-        setResult(accRef.current || (msg.message as Record<string, unknown>)?.content as string || '');
+        const final = accRef.current || (msg.message as Record<string, unknown>)?.content as string || '';
+        setResult(final);
+        updateTransform(tabId, { result: final });
         setLoading(false);
       }
       if (msg.type === 'ai:error') {
@@ -66,9 +89,9 @@ export function AiResponseTransformer({ responseBody, contentType, method, url, 
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, []);
+  }, [tabId, updateTransform]);
 
-  const run = () => {
+  const run = useCallback(() => {
     if (!instruction.trim()) { setError('Enter a transformation instruction.'); return; }
     if (!responseBody.trim()) { setError('No response body. Send the request first.'); return; }
     setLoading(true);
@@ -87,7 +110,12 @@ export function AiResponseTransformer({ responseBody, contentType, method, url, 
       settings: { temperature: 0.1, maxTokens: 2048, stream: true, topP: 1, stopSequences: [], responseFormat: 'text', frequencyPenalty: 0, presencePenalty: 0, seed: null },
       mcpServerConfigs: [],
     });
-  };
+  }, [instruction, responseBody, method, url, contentType]);
+
+  const handleRefresh = useCallback(() => {
+    setResult('');
+    updateTransform(tabId, { result: '' });
+  }, [tabId, updateTransform]);
 
   const copy = async () => {
     if (!result) return;
@@ -99,7 +127,7 @@ export function AiResponseTransformer({ responseBody, contentType, method, url, 
   const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="w-[680px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}>
+        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
 
         <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <SparkleIcon size={15} style={{ color: ACCENT }} />
@@ -107,6 +135,18 @@ export function AiResponseTransformer({ responseBody, contentType, method, url, 
             <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Response Transformer</p>
             <p className="text-[11px] text-[var(--color-text-muted)]">Convert, extract, or reshape the response with AI</p>
           </div>
+          {/* Refresh — clear result to re-run */}
+          {result && !loading && (
+            <button
+              type="button"
+              onClick={handleRefresh}
+              title="Clear result and re-transform"
+              className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer mr-1"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              <RefreshIcon size={13} />
+            </button>
+          )}
           <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
             <CloseIcon size={12} />
           </button>
@@ -119,7 +159,7 @@ export function AiResponseTransformer({ responseBody, contentType, method, url, 
             <div className="flex flex-wrap gap-1.5">
               {PRESETS.map(p => (
                 <button key={p.label} type="button"
-                  onClick={() => setInstruction(p.prompt)}
+                  onClick={() => applyPreset(p.prompt)}
                   className="px-2.5 py-1 text-[10.5px] rounded-full border cursor-pointer transition-all"
                   style={{
                     borderColor: instruction === p.prompt ? ACCENT : 'var(--color-surface-border)',
@@ -139,7 +179,7 @@ export function AiResponseTransformer({ responseBody, contentType, method, url, 
             </label>
             <textarea
               value={instruction}
-              onChange={e => { setInstruction(e.target.value); setError(''); }}
+              onChange={e => handleInstructionChange(e.target.value)}
               rows={3}
               className="w-full px-3 py-2 rounded-lg text-[11.5px] resize-none outline-none"
               placeholder='e.g. "Convert this JSON to CSV" or "Extract all email addresses" or "Reshape so each user has a roles array"'
@@ -186,7 +226,7 @@ export function AiResponseTransformer({ responseBody, contentType, method, url, 
               className="h-[32px] px-4 text-[12px] font-medium rounded-md text-white cursor-pointer hover:opacity-90 disabled:opacity-40"
               style={{ backgroundColor: ACCENT }}>
               <SparkleIcon size={11} className="inline mr-1" />
-              Transform
+              {result ? 'Re-transform' : 'Transform'}
             </button>
             <button type="button" onClick={onClose}
               className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">

@@ -194,7 +194,7 @@ export const AiBodyGenerate = forwardRef<AiBodyGenerateHandle, Props>(
         className="mx-1 mb-2 rounded-lg border overflow-hidden"
         style={{
           borderColor: `color-mix(in srgb, ${ACCENT} 25%, transparent)`,
-          backgroundColor: `color-mix(in srgb, ${ACCENT} 4%, var(--color-surface-bg))`,
+          backgroundColor: `color-mix(in srgb, ${ACCENT} 4%, var(--color-panel))`,
         }}
       >
         {/* Header row */}

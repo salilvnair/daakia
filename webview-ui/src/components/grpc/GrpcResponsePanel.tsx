@@ -9,6 +9,7 @@ import type { PillTab } from '../shared';
 import { ArrowUpIcon, ArrowDownIcon, SparkleIcon } from '../../icons';
 import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
 import { DataSchemaModal } from '../rest/response/DataSchemaModal';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
 
 const ACCENT = 'var(--color-protocol-grpc)';
 
@@ -30,6 +31,7 @@ export function GrpcResponsePanel() {
   const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'body');
   const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const setActiveSubTab = (tab: string) => {
     setActiveSubTabLocal(tab);
     if (activeTabId) useUiStateStore.getState().setPref(`grpc.response.subtab.${activeTabId}`, tab);
@@ -95,38 +97,44 @@ export function GrpcResponsePanel() {
         />
         {response && activeSubTab === 'body' && (
           <div className="flex items-center gap-1.5 pb-1.5">
-            <AiActionButton
-              mode="explain"
-              label="Explain"
-              response={response}
-              requestMethod="gRPC"
-              requestUrl={activeTab.url || ''}
-              open={activePopup === 'explain'}
-              onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
-            />
-            <AiActionButton
-              mode="follow-up"
-              label="Follow-ups"
-              response={response}
-              requestMethod="gRPC"
-              requestUrl={activeTab.url || ''}
-              open={activePopup === 'follow-up'}
-              onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
-            />
-            <button
-              type="button"
-              onClick={() => setShowSchema(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
-              style={{
-                color: 'var(--color-protocol-ai)',
-                borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-                backgroundColor: 'transparent',
-              }}
-              title="Generate Data Schema"
-            >
-              <SparkleIcon size={10} />
-              Schema
-            </button>
+            {aiEnabled('explainGrpc') && (
+              <AiActionButton
+                mode="explain"
+                label="Explain"
+                response={response}
+                requestMethod="gRPC"
+                requestUrl={activeTab.url || ''}
+                open={activePopup === 'explain'}
+                onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
+              />
+            )}
+            {aiEnabled('followUpsGrpc') && (
+              <AiActionButton
+                mode="follow-up"
+                label="Follow-ups"
+                response={response}
+                requestMethod="gRPC"
+                requestUrl={activeTab.url || ''}
+                open={activePopup === 'follow-up'}
+                onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
+              />
+            )}
+            {aiEnabled('schemaGrpc') && (
+              <button
+                type="button"
+                onClick={() => setShowSchema(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
+                style={{
+                  color: 'var(--color-protocol-ai)',
+                  borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+                  backgroundColor: 'transparent',
+                }}
+                title="Generate Data Schema"
+              >
+                <SparkleIcon size={10} />
+                Schema
+              </button>
+            )}
           </div>
         )}
       </div>

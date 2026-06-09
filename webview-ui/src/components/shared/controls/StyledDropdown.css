@@ -1,4 +1,4 @@
-/* ─── StyledDropdown — dark gray design system ─── */
+/* ─── StyledDropdown — adaptive dark / light design system ─── */
 
 .sd-wrap {
   position: relative;
@@ -13,8 +13,8 @@
   width: 100%;
   padding: 9px 12px;
   min-height: 36px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-input-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--color-surface-border, rgba(255, 255, 255, 0.08));
   border-radius: 8px;
   color: var(--color-text-primary, #e5e7eb);
   font-family: inherit;
@@ -26,14 +26,14 @@
 }
 
 .sd-trigger:hover {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--color-input-border, rgba(255, 255, 255, 0.14));
+  background: var(--color-input-hover, rgba(255, 255, 255, 0.06));
 }
 
 .sd-trigger.open {
   border-color: var(--color-primary, #6366f1);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-input-focus, rgba(255, 255, 255, 0.05));
 }
 
 .sd-val {
@@ -52,7 +52,7 @@
 .sd-arrow {
   width: 12px;
   height: 12px;
-  color: #64748b;
+  color: var(--color-muted, #64748b);
   flex-shrink: 0;
   margin-left: 6px;
   transition: transform 140ms, color 140ms;
@@ -72,11 +72,11 @@
   width: max-content;
   max-height: min(480px, 80vh);
   overflow-y: auto;
-  background: #1e1e1e;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-bg, #1e1e1e);
+  border: 1px solid var(--color-surface-border, rgba(255, 255, 255, 0.1));
   border-radius: 10px;
   padding: 5px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--color-panel-border, rgba(255, 255, 255, 0.04));
   animation: sd-menu-in 120ms ease-out;
 }
 
@@ -99,7 +99,7 @@
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #94a3b8;
+  color: var(--color-text-secondary, #94a3b8);
   cursor: pointer;
   transition: all 100ms;
 }
@@ -110,19 +110,19 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b;
+  color: var(--color-muted, #64748b);
   pointer-events: none;
   user-select: none;
 }
 
 .sd-item:hover {
   background: color-mix(in srgb, var(--sd-accent, rgb(99, 102, 241)) 10%, transparent);
-  color: #e5e7eb;
+  color: var(--color-text-primary, #e5e7eb);
 }
 
 .sd-item.selected {
   background: color-mix(in srgb, var(--sd-accent, rgb(99, 102, 241)) 15%, transparent);
-  color: #c7d2fe;
+  color: var(--color-primary, #c7d2fe);
 }
 
 .sd-item-icon {
