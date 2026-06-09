@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries } from '../../storage/db';
+import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
 // Handler imports
@@ -34,7 +34,8 @@ import {
 import {
   handleExportCollectionDaakia, handleExportCollectionPostman,
   handleExportCollectionBruno, handleExportCollectionInsomnia,
-  handleExportCollectionHttpie,
+  handleExportCollectionHttpie, handleExportCollectionOpenApi,
+  handleExportCollectionDocs,
 } from '../../services/collection-exporter';
 import {
   handleStartMockServer, handleStopMockServer, handleUpdateMockRoutes,
@@ -49,7 +50,7 @@ import { handleSseConnect, handleSseDisconnect, cleanupAllSseConnections } from 
 import { handleSocketIOConnect, handleSocketIODisconnect, handleSocketIOEmit, cleanupAllSocketIOConnections } from './handlers/socketio-handler';
 import { handleMqttConnect, handleMqttDisconnect, handleMqttSubscribe, handleMqttUnsubscribe, handleMqttPublish, cleanupAllMqttConnections } from './handlers/mqtt-handler';
 import { handleGrpcInvoke, handleGrpcCancel, handleGrpcStreamSend, handleGrpcStreamEnd, handleGrpcReflect, handleGrpcLoadProto, cleanupAllGrpcStreams } from './handlers/grpc-handler';
-import { handleSoapInvoke, handleSoapCancel, handleLoadWsdl, handleLoadWsdlContent, handleGenerateEnvelope, handleExtractFields, handleGenerateSecurity, handleInjectSecurity, handleImportSoapUiProject } from './handlers/soap-handler';
+import { handleSoapInvoke, handleSoapCancel, handleLoadWsdl, handleLoadWsdlContent, handleGenerateEnvelope, handleExtractFields, handleGenerateSecurity, handleInjectSecurity, handleImportSoapUiProject, handleImportWsdlToCollection } from './handlers/soap-handler';
 import {
   handleAiSend, handleAiCancel,
   handleAiSaveConversation, handleAiLoadConversations, handleAiLoadConversation,
@@ -57,7 +58,7 @@ import {
 } from './handlers/ai-handler';
 import { handleAiDiscovery } from './handlers/ai-discovery-handler';
 import { handleAiFuzz } from './handlers/ai-fuzz-handler';
-import { handleMcpConnect, handleMcpDisconnect, handleMcpCallTool, handleMcpGetPrompt, handleMcpReadResource, cleanupAllMcpClients } from './handlers/mcp-handler';
+import { handleMcpConnect, handleMcpDisconnect, handleMcpCallTool, handleMcpGetPrompt, handleMcpReadResource, cleanupAllMcpClients, handleMcpConnectServer, handleMcpDisconnectServer, handleMcpCallToolOnServer } from './handlers/mcp-handler';
 import { handleAiMcpConnect, handleAiMcpDisconnect, cleanupAiMcpClients } from './handlers/ai-mcp-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from './handlers/ui-state-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
@@ -303,6 +304,9 @@ export class MainPanel {
       case 'soap:importSoapUi':
         handleImportSoapUiProject(msg, this._post);
         break;
+      case 'soap:importWsdlToCollection':
+        handleImportWsdlToCollection(msg, this._post);
+        break;
 
       // ── AI Protocol ──
       case 'ai:send':
@@ -363,6 +367,15 @@ export class MainPanel {
         break;
       case 'mcp:readResource':
         handleMcpReadResource(msg, this._post);
+        break;
+      case 'mcp:connectServer':
+        handleMcpConnectServer(msg, this._post);
+        break;
+      case 'mcp:disconnectServer':
+        handleMcpDisconnectServer(msg, this._post);
+        break;
+      case 'mcp:callToolOnServer':
+        handleMcpCallToolOnServer(msg, this._post);
         break;
       case 'mcp:showServerConfig':
         this._showMcpServerConfig();
@@ -581,6 +594,12 @@ export class MainPanel {
       case 'exportCollectionHttpie':
         handleExportCollectionHttpie(msg, this._post);
         break;
+      case 'exportCollectionOpenApi':
+        handleExportCollectionOpenApi(msg, this._post);
+        break;
+      case 'exportCollectionDocs':
+        handleExportCollectionDocs(msg, this._post);
+        break;
       case 'runCollection':
         handleRunCollection(msg, this._post);
         break;
@@ -689,6 +708,22 @@ export class MainPanel {
       case 'aiAudit:clear':
         clearAuditEntries();
         break;
+
+      // ── DB Explorer (7.4) ──
+      case 'dbExplorer:getTables':
+        this._post({ type: 'dbExplorer:tables', tables: getDbTables() });
+        break;
+      case 'dbExplorer:getRows': {
+        const { tableName, limit, offset } = msg as { tableName: string; limit?: number; offset?: number };
+        this._post({ type: 'dbExplorer:rows', tableName, rows: getDbTableRows(tableName, limit ?? 100, offset ?? 0) });
+        break;
+      }
+      case 'dbExplorer:deleteRow': {
+        const { tableName, pkCol, pkVal } = msg as { tableName: string; pkCol: string; pkVal: unknown };
+        deleteDbRow(tableName, pkCol, pkVal);
+        this._post({ type: 'dbExplorer:rowDeleted', tableName, pkVal });
+        break;
+      }
 
       // ── AI Feature Flags ──
       case 'aiFeatures:load':
@@ -803,6 +838,8 @@ export class MainPanel {
     const uptimeSeconds = process.uptime();
     // CPU percentage approximation (microseconds to percentage of 1 core)
     const cpuPercent = ((cpuUsage.user + cpuUsage.system) / (uptimeSeconds * 1_000_000)) * 100;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const os = require('os') as typeof import('os');
     this.postMessage({
       type: 'performanceData',
       data: {
@@ -810,6 +847,15 @@ export class MainPanel {
         memoryUsage: memUsage.rss,
         uptime: uptimeSeconds,
         processId: process.pid,
+        // Extended memory breakdown (7.1)
+        heapUsed: memUsage.heapUsed,
+        heapTotal: memUsage.heapTotal,
+        rss: memUsage.rss,
+        external: memUsage.external,
+        arrayBuffers: memUsage.arrayBuffers,
+        osFreeMemory: os.freemem(),
+        osTotalMemory: os.totalmem(),
+        nodeVersion: process.version,
       },
     });
   }

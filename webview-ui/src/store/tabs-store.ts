@@ -82,6 +82,10 @@ export interface RequestTab {
   pinned?: boolean; // pinned tabs stick to the left
   // Request progress stages (shown during loading)
   requestProgress?: RequestProgressStage[];
+  // WebSocket-specific fields
+  wsTemplates?: WsTemplate[];          // Saved message templates (5.3.11)
+  wsAutoReconnect?: boolean;           // Auto-reconnect on disconnect (5.3.12)
+  wsReconnectBackoff?: number;         // Backoff delay in ms (starts at this, doubles)
   // gRPC-specific fields
   grpcMethod?: string; // selected service/method (e.g. 'package.Service/Method')
   grpcMessage?: string; // JSON message body
@@ -118,6 +122,7 @@ export interface RequestTab {
   aiSettings?: AiSettings;       // Temperature, max_tokens, etc.
   aiConversation?: AiMessage[];  // Conversation history (messages array)
   aiStreaming?: boolean;         // Whether currently streaming a response
+  aiImages?: AiImageAttachment[]; // Image attachments for multimodal prompts (6D.22)
   // MCP-specific fields
   mcpTransport?: McpTransport;         // 'stdio' | 'http'
   mcpCommand?: string;                 // STDIO command (e.g., 'npx @mcp/weather-server')
@@ -127,7 +132,9 @@ export interface RequestTab {
   mcpCapabilities?: McpCapabilities;   // Discovered tools/prompts/resources
   mcpConversation?: McpConversationEntry[]; // Invocation log
   mcpEnvVars?: Record<string, string>; // Env vars for STDIO process
+  mcpAuth?: McpAuth;                   // Transport auth (Bearer, API key, etc.)
   mcpSettings?: McpSettings;           // Timeout, retry, connection settings
+  mcpConnectionError?: string;         // Last connection error message (6E.25)
   mcpActiveServerId?: string;          // Currently selected server
   mcpEditingServer?: McpServerConfig | null; // Persisted editing form state (survives tab switch)
   mcpServerStates?: Record<string, { connected: boolean; connecting: boolean; tools: McpToolDef[]; error?: string }>; // Connection states (survives tab switch)
@@ -229,6 +236,9 @@ export interface ResponseData {
   scriptSubRequests?: { method: string; url: string; status: number; statusText: string; duration: number; timestamp: number; phase: string; requestHeaders?: Record<string, string>; requestBody?: string; responseHeaders?: Record<string, string>; responseBody?: string }[];
   // Raw error detail for DevTools — always shows actual error code/message/cause
   errorDetail?: { code: string; message: string; cause?: string };
+  // 7.7 — Large response truncation flag
+  bodyTruncated?: boolean;
+  fullSize?: number;
 }
 
 export type GrpcMethodType = 'unary' | 'server_streaming' | 'client_streaming' | 'bidi_streaming';
@@ -264,6 +274,15 @@ export interface RequestProgressStage {
 }
 
 // ────────────── AI Types ──────────────
+
+export interface AiImageAttachment {
+  id: string;
+  type: 'url' | 'base64';
+  url?: string;          // for type='url'
+  base64?: string;       // for type='base64', data URL format: "data:image/png;base64,..."
+  mimeType?: string;     // e.g. 'image/png', 'image/jpeg'
+  filename?: string;     // original filename for base64 uploads
+}
 
 export interface AiToolCall {
   id: string;
@@ -363,6 +382,20 @@ export interface McpSettings {
   autoReconnect: boolean;
   maxRetries: number;
   workingDir?: string;         // STDIO working directory
+}
+
+export interface WsTemplate {
+  id: string;
+  name: string;
+  message: string;
+  format?: 'json' | 'text' | 'binary';
+}
+
+export interface McpAuth {
+  type: 'none' | 'bearer' | 'api-key';
+  token?: string;          // Bearer token
+  headerName?: string;     // API key header name (e.g. X-API-Key)
+  headerValue?: string;    // API key header value
 }
 
 // ────────────── Defaults ──────────────

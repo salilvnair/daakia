@@ -15,7 +15,35 @@ export interface WsMessage {
   id: string;
   direction: 'sent' | 'received' | 'system' | 'error' | 'disconnect';
   data: string;
+  binary?: boolean;   // True for binary frames (hex dump mode, 5.3.13)
+  byteLength?: number;
   timestamp: number;
+}
+
+/** Convert string to hex + ASCII dump (5.3.13) */
+function toHexDump(data: string, maxBytes = 512): string {
+  const bytes: number[] = [];
+  // If base64 encoded, decode first
+  try {
+    const decoded = atob(data);
+    for (let i = 0; i < decoded.length && i < maxBytes; i++) {
+      bytes.push(decoded.charCodeAt(i));
+    }
+  } catch {
+    // Not base64 — treat as UTF-8 string
+    for (let i = 0; i < data.length && i < maxBytes; i++) {
+      bytes.push(data.charCodeAt(i) & 0xff);
+    }
+  }
+  const lines: string[] = [];
+  for (let i = 0; i < bytes.length; i += 16) {
+    const chunk = bytes.slice(i, i + 16);
+    const offset = i.toString(16).padStart(8, '0');
+    const hex = chunk.map(b => b.toString(16).padStart(2, '0')).join(' ').padEnd(48, ' ');
+    const ascii = chunk.map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.').join('');
+    lines.push(`${offset}  ${hex}  |${ascii}|`);
+  }
+  return lines.join('\n');
 }
 
 // ────────── Copy Button ──────────
@@ -50,9 +78,10 @@ export function CopyButton({ text, size = 13 }: { text: string; size?: number })
 
 export function WsLogEntry({ message }: { message: WsMessage }) {
   const [expanded, setExpanded] = useState(false);
-  const [viewMode, setViewMode] = useState<'json' | 'raw'>('json');
+  const [viewMode, setViewMode] = useState<'json' | 'raw' | 'hex'>('json');
   const [wordWrap, setWordWrap] = useState(false);
 
+  const isBinary = message.binary === true;
   const isSent = message.direction === 'sent';
   const isSystem = message.direction === 'system';
   const isError = message.direction === 'error';
@@ -66,7 +95,7 @@ export function WsLogEntry({ message }: { message: WsMessage }) {
   // Try to format as JSON
   let formattedData = message.data;
   let isJson = false;
-  if (!isStatusMsg) {
+  if (!isStatusMsg && !isBinary) {
     try {
       const parsed = JSON.parse(message.data);
       formattedData = JSON.stringify(parsed, null, 2);
@@ -76,7 +105,10 @@ export function WsLogEntry({ message }: { message: WsMessage }) {
     }
   }
 
-  const singleLine = isJson ? JSON.stringify(JSON.parse(message.data)) : message.data;
+  const hexDump = isBinary ? toHexDump(message.data) : '';
+  const singleLine = isBinary
+    ? `[Binary: ${message.byteLength ?? message.data.length} bytes]`
+    : isJson ? JSON.stringify(JSON.parse(message.data)) : message.data;
 
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -117,6 +149,7 @@ export function WsLogEntry({ message }: { message: WsMessage }) {
 
         {/* Message preview (single line) */}
         <span className={`flex-1 text-[12px] font-mono truncate ${isError ? 'text-[var(--color-error)]' : isDisconnect ? 'text-[var(--color-warning)]' : isSystem ? 'text-[var(--color-success)]' : 'text-[var(--color-text-primary)]'}`}>
+          {isBinary && <span className="mr-1.5 text-[9.5px] px-1 py-0.5 rounded font-sans font-semibold uppercase" style={{ backgroundColor: 'color-mix(in srgb, var(--color-warning) 15%, transparent)', color: 'var(--color-warning)' }}>BIN</span>}
           {singleLine}
         </span>
 
@@ -139,7 +172,7 @@ export function WsLogEntry({ message }: { message: WsMessage }) {
         <div className="border-t border-[var(--color-surface-border)] bg-[var(--color-panel)]">
           {/* Tabs + actions row */}
           <div className="flex items-center justify-between px-3 py-1">
-            {/* JSON / Raw tabs — only show JSON tab if message is actually JSON */}
+            {/* JSON / Raw / Hex tabs */}
             <div className="flex items-center gap-0">
               {isJson && (
                 <button
@@ -154,16 +187,30 @@ export function WsLogEntry({ message }: { message: WsMessage }) {
                   JSON
                 </button>
               )}
+              {!isBinary && (
+                <button
+                  type="button"
+                  onClick={() => setViewMode('raw')}
+                  className={`px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors border-b-2 ${
+                    viewMode === 'raw' || (!isJson && !isBinary)
+                      ? 'text-[var(--color-text-primary)] border-[var(--color-protocol-websocket)]'
+                      : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
+                  }`}
+                >
+                  Raw
+                </button>
+              )}
+              {/* Hex dump tab — always available for binary, optional for text (5.3.13) */}
               <button
                 type="button"
-                onClick={() => setViewMode('raw')}
+                onClick={() => setViewMode('hex')}
                 className={`px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors border-b-2 ${
-                  viewMode === 'raw' || !isJson
+                  viewMode === 'hex'
                     ? 'text-[var(--color-text-primary)] border-[var(--color-protocol-websocket)]'
                     : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
                 }`}
               >
-                Raw
+                Hex
               </button>
             </div>
 
@@ -194,14 +241,20 @@ export function WsLogEntry({ message }: { message: WsMessage }) {
 
           {/* Code viewer */}
           <div className="h-[120px] border-t border-[var(--color-surface-border)]">
-            <CodeEditor
-              value={viewMode === 'json' && isJson ? formattedData : message.data}
-              onChange={() => {}}
-              language={viewMode === 'json' && isJson ? 'json' : 'plaintext'}
-              height="100%"
-              readOnly
-              wordWrap={wordWrap}
-            />
+            {viewMode === 'hex' ? (
+              <pre className="h-full overflow-auto p-2 text-[10.5px] font-mono bg-[var(--color-panel)]" style={{ color: 'var(--color-text-primary)' }}>
+                {hexDump || toHexDump(message.data)}
+              </pre>
+            ) : (
+              <CodeEditor
+                value={viewMode === 'json' && isJson ? formattedData : message.data}
+                onChange={() => {}}
+                language={viewMode === 'json' && isJson ? 'json' : 'plaintext'}
+                height="100%"
+                readOnly
+                wordWrap={wordWrap}
+              />
+            )}
           </div>
         </div>
       )}

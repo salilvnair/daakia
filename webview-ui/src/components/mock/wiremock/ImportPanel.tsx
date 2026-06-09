@@ -1,11 +1,39 @@
 /**
  * ImportPanel — protocol-aware import for REST, GraphQL, gRPC, SOAP, and Realtime mocks.
+ * Input area uses Monaco CodeEditor (language-aware). Protocol colors follow each protocol's accent.
  */
 import { useState, useRef } from 'react';
 import { ChevronDownIcon } from '../../../icons';
+import { CodeEditor, type CodeLanguage } from '../../shared';
 import type { MockRoute } from '../mock-types';
 
-const MOCK_ACCENT = 'var(--color-mock-server)';
+// Protocol → accent color
+const PROTOCOL_ACCENT: Record<string, string> = {
+  rest:      'var(--color-protocol-rest)',
+  graphql:   'var(--color-protocol-gql)',
+  websocket: 'var(--color-protocol-ws)',
+  sse:       'var(--color-protocol-sse)',
+  socketio:  'var(--color-protocol-socketio)',
+  mqtt:      'var(--color-protocol-mqtt)',
+  grpc:      'var(--color-protocol-grpc)',
+  soap:      'var(--color-protocol-soap)',
+  mcp:       'var(--color-protocol-mcp)',
+};
+
+// Import format → Monaco language
+const FORMAT_LANGUAGE: Record<string, CodeLanguage> = {
+  openapi:     'plaintext',
+  postman:     'json',
+  wiremock:    'json',
+  sdl:         'graphql',
+  proto:       'plaintext',
+  wsdl:        'xml',
+  'json-events': 'json',
+};
+
+function getAccent(protocol: string): string {
+  return PROTOCOL_ACCENT[protocol] ?? 'var(--color-mock-server)';
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -111,6 +139,7 @@ function getProtocolConfig(protocol: string): ProtocolConfig {
 
 export function ImportPanel({ protocol = 'rest', onImport }: Props) {
   const cfg = getProtocolConfig(protocol);
+  const ACCENT = getAccent(protocol);
   const [format, setFormat] = useState<ImportFormat>(cfg.formats[0].id);
   const [content, setContent] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -118,6 +147,7 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
   const [contractMode, setContractMode] = useState(false);
   const [contractResult, setContractResult] = useState<ContractResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const editorLanguage: CodeLanguage = (FORMAT_LANGUAGE[format] as CodeLanguage) ?? 'plaintext';
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -156,8 +186,8 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
               <button key={f.id} type="button" onClick={() => { setFormat(f.id); setResult(null); setContractResult(null); }}
                 className="h-[26px] px-3 text-[10px] font-medium cursor-pointer transition-colors"
                 style={{
-                  background: format === f.id ? `color-mix(in srgb, ${MOCK_ACCENT} 15%, transparent)` : 'transparent',
-                  color: format === f.id ? MOCK_ACCENT : 'var(--color-text-muted)',
+                  background: format === f.id ? `color-mix(in srgb, ${ACCENT} 15%, transparent)` : 'transparent',
+                  color: format === f.id ? ACCENT : 'var(--color-text-muted)',
                   borderRight: i < cfg.formats.length - 1 ? '1px solid rgba(255,255,255,0.1)' : undefined,
                 }}>
                 {f.label}
@@ -169,7 +199,7 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
               <label className="text-[10px] text-[var(--color-text-muted)] cursor-pointer">Contract validation</label>
               <button type="button" onClick={() => setContractMode(v => !v)}
                 className="relative w-[28px] h-[14px] rounded-full transition-colors cursor-pointer flex-shrink-0"
-                style={{ backgroundColor: contractMode ? MOCK_ACCENT : 'var(--color-muted-fallback)' }}>
+                style={{ backgroundColor: contractMode ? ACCENT : 'var(--color-muted-fallback)' }}>
                 <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: contractMode ? '16px' : '2px' }} />
               </button>
             </div>
@@ -188,22 +218,30 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
           </label>
           <button type="button" onClick={() => fileRef.current?.click()}
             className="h-[22px] px-2 text-[10px] rounded cursor-pointer"
-            style={{ color: MOCK_ACCENT, background: `color-mix(in srgb, ${MOCK_ACCENT} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${MOCK_ACCENT} 20%, transparent)` }}>
+            style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
             Upload file
           </button>
           <input ref={fileRef} type="file" accept={cfg.accept} className="hidden" onChange={handleFile} />
         </div>
-        <textarea value={content} onChange={e => setContent(e.target.value)} rows={9}
-          placeholder={currentPlaceholder}
-          className="w-full px-3 py-2 text-[10px] font-mono rounded-md bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-muted)] placeholder:text-[var(--color-text-muted)] placeholder:opacity-30 focus:outline-none resize-none"
-          spellCheck={false} />
+        <div
+          className="rounded-lg overflow-hidden border"
+          style={{ borderColor: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}
+        >
+          <CodeEditor
+            value={content || currentPlaceholder}
+            onChange={v => setContent(v ?? '')}
+            language={editorLanguage}
+            height="220px"
+            fontSize={11}
+          />
+        </div>
       </div>
 
       {/* Action buttons */}
       <div className="flex items-center gap-2">
         <button type="button" onClick={handleParse} disabled={!content.trim() || loading}
           className="h-[30px] px-4 text-[11px] font-medium rounded cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: `color-mix(in srgb, ${MOCK_ACCENT} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${MOCK_ACCENT} 30%, transparent)`, color: MOCK_ACCENT }}>
+          style={{ background: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`, color: ACCENT }}>
           {loading ? 'Parsing…' : 'Parse & Preview'}
         </button>
         {contractMode && cfg.hasContractValidation && (
@@ -216,7 +254,7 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
       </div>
 
       {contractResult && <ContractResultView result={contractResult} />}
-      {result && <ParseResultView result={result} protocol={protocol} onImport={() => onImport(result.routes, result.raw)} />}
+      {result && <ParseResultView result={result} protocol={protocol} accent={ACCENT} onImport={() => onImport(result.routes, result.raw)} />}
     </div>
   );
 }
@@ -246,7 +284,8 @@ function ContractResultView({ result }: { result: ContractResult }) {
 
 // ─── Parse result ─────────────────────────────────────────────────────────────
 
-function ParseResultView({ result, protocol, onImport }: { result: ImportResult; protocol: string; onImport: () => void }) {
+function ParseResultView({ result, protocol, accent, onImport }: { result: ImportResult; protocol: string; accent: string; onImport: () => void }) {
+  const ACCENT = accent;
   const [expanded, setExpanded] = useState(true);
   const isNonRest = protocol !== 'rest';
 
@@ -266,7 +305,7 @@ function ParseResultView({ result, protocol, onImport }: { result: ImportResult;
         {(result.routes.length > 0 || result.raw) && (
           <button type="button" onClick={onImport}
             className="h-[26px] px-3 text-[10px] font-medium rounded cursor-pointer"
-            style={{ background: `color-mix(in srgb, ${MOCK_ACCENT} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${MOCK_ACCENT} 30%, transparent)`, color: MOCK_ACCENT }}>
+            style={{ background: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`, color: ACCENT }}>
             {isNonRest ? 'Apply to Server' : 'Import All Routes'}
           </button>
         )}
@@ -282,7 +321,15 @@ function ParseResultView({ result, protocol, onImport }: { result: ImportResult;
           ))}
           {result.raw && isNonRest && (
             <div className="px-3 py-2">
-              <pre className="text-[9px] font-mono text-[var(--color-text-muted)] opacity-70 whitespace-pre-wrap max-h-[80px] overflow-auto">{result.raw.slice(0, 300)}{result.raw.length > 300 ? '\n…' : ''}</pre>
+              <div className="rounded-lg overflow-hidden border border-[rgba(255,255,255,0.06)]">
+                <CodeEditor
+                  value={result.raw.slice(0, 1000)}
+                  language={protocol === 'soap' ? 'xml' : protocol === 'graphql' ? 'graphql' : 'plaintext'}
+                  readOnly
+                  height="100px"
+                  fontSize={10}
+                />
+              </div>
             </div>
           )}
           {result.warnings.map((w, i) => <div key={`w${i}`} className="px-3 py-1.5 text-[10px] text-[var(--color-warning)] opacity-80">⚠ {w}</div>)}

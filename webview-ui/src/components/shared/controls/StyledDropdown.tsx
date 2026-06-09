@@ -94,6 +94,8 @@ export function StyledDropdown({ options, value, onChange, className = '', size 
 
   const sizeClass = size === 'xs' ? 'sd-xs' : size === 'sm' ? 'sd-sm' : '';
 
+  const menuId = `sd-menu-${Math.random().toString(36).slice(2, 8)}`;
+
   return (
     <div className={`sd-wrap ${sizeClass} ${className}`} onKeyDown={handleKey}>
       <button
@@ -102,25 +104,38 @@ export function StyledDropdown({ options, value, onChange, className = '', size 
         className={`sd-trigger${open ? ' open' : ''}`}
         style={open && accentColor ? { borderColor: accentColor, boxShadow: `0 0 0 3px ${accentColor}29` } : undefined}
         onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        aria-label={selected?.label ?? placeholder ?? value}
       >
-        {selected?.icon && <span className="sd-icon">{selected.icon}</span>}
+        {selected?.icon && <span className="sd-icon" aria-hidden="true">{selected.icon}</span>}
         <span className="sd-val" style={selected?.color ? { color: selected.color } : !selected && placeholder ? { opacity: 0.6 } : undefined}>
           {selected?.label ?? placeholder ?? value}
         </span>
-        <DropdownArrowIcon className="sd-arrow" style={open && accentColor ? { color: accentColor } : undefined} />
+        <DropdownArrowIcon className="sd-arrow" aria-hidden="true" style={open && accentColor ? { color: accentColor } : undefined} />
       </button>
       {open && createPortal(
-        <div ref={menuRef} className={`sd-menu sd-menu-portal${size === 'xs' || size === 'sm' ? ' sd-menu-sm' : ''}`} style={accentColor ? { '--sd-accent': accentColor } as React.CSSProperties : undefined}>
+        <div
+          id={menuId}
+          ref={menuRef}
+          role="listbox"
+          aria-label="Options"
+          className={`sd-menu sd-menu-portal${size === 'xs' || size === 'sm' ? ' sd-menu-sm' : ''}`}
+          style={accentColor ? { '--sd-accent': accentColor } as React.CSSProperties : undefined}
+        >
           {options.map(opt => opt.isHeader ? (
-            <div key={opt.value} className="sd-group-header">{opt.label}</div>
+            <div key={opt.value} className="sd-group-header" role="presentation">{opt.label}</div>
           ) : (
             <div
               key={opt.value}
+              role="option"
+              aria-selected={opt.value === value}
               className={`sd-item${opt.value === value ? ' selected' : ''}`}
               onClick={() => handleSelect(opt.value)}
               style={opt.color ? { color: opt.color } : undefined}
             >
-              {opt.icon && <span className="sd-item-icon">{opt.icon}</span>}
+              {opt.icon && <span className="sd-item-icon" aria-hidden="true">{opt.icon}</span>}
               <span>{opt.label}</span>
             </div>
           ))}

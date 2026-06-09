@@ -55,6 +55,26 @@ function buildOpenAiRequest(payload: AiRequestPayload, baseUrl: string, endpoint
   const messages = payload.messages
     .filter(m => m.content || m.toolCalls?.length)
     .map(m => {
+      const msgExt = m as AiMessage & { imageAttachments?: Array<{ type: 'url' | 'base64'; url?: string; base64?: string; mimeType?: string }> };
+      // 6D.22 — multimodal: if this user message has image attachments, build content array
+      if (m.role === 'user' && msgExt.imageAttachments?.length) {
+        const contentParts: unknown[] = [];
+        // Text part first
+        if (m.content) contentParts.push({ type: 'text', text: m.content });
+        // Image parts
+        for (const img of msgExt.imageAttachments) {
+          if (img.type === 'url' && img.url) {
+            contentParts.push({ type: 'image_url', image_url: { url: img.url } });
+          } else if (img.type === 'base64' && img.base64) {
+            // base64 is a data URL like "data:image/png;base64,..." — extract the base64 part
+            const b64Match = img.base64.match(/^data:([^;]+);base64,(.+)$/);
+            if (b64Match) {
+              contentParts.push({ type: 'image_url', image_url: { url: img.base64 } });
+            }
+          }
+        }
+        return { role: m.role, content: contentParts };
+      }
       const msg: Record<string, unknown> = { role: m.role, content: m.content };
       if (m.toolCalls?.length) msg.tool_calls = m.toolCalls;
       if (m.toolCallId) msg.tool_call_id = m.toolCallId;

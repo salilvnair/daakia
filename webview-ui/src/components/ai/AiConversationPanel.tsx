@@ -74,6 +74,60 @@ export function AiConversationPanel() {
     });
   }, [tab, conversation]);
 
+  // 6D.20 — Export conversation as Markdown or JSON
+  const handleExport = useCallback((format: 'md' | 'json') => {
+    if (!conversation.length) return;
+    let content: string;
+    let filename: string;
+    let mimeType: string;
+
+    if (format === 'json') {
+      content = JSON.stringify(conversation, null, 2);
+      filename = `daakia-conversation-${Date.now()}.json`;
+      mimeType = 'application/json';
+    } else {
+      // Markdown export
+      const lines: string[] = [
+        `# AI Conversation Export`,
+        `> Provider: ${tab?.aiProvider || 'unknown'} / Model: ${tab?.aiModel || 'unknown'}`,
+        `> Exported: ${new Date().toLocaleString()}`,
+        '',
+      ];
+      for (const msg of conversation) {
+        const roleLabel = msg.role.toUpperCase();
+        const time = msg.timestamp > 0 ? new Date(msg.timestamp).toLocaleTimeString() : '';
+        lines.push(`## ${roleLabel}${time ? ` (${time})` : ''}`);
+        if (msg.tokens) {
+          lines.push(`> Tokens: ↑${msg.tokens.prompt} ↓${msg.tokens.completion} =${msg.tokens.total}`);
+        }
+        if (msg.toolCalls?.length) {
+          for (const tc of msg.toolCalls) {
+            lines.push(`\n**Tool Call:** \`${tc.function.name}\``);
+            lines.push('```json');
+            lines.push(tc.function.arguments);
+            lines.push('```');
+          }
+        }
+        lines.push('');
+        lines.push(msg.content || '');
+        lines.push('');
+        lines.push('---');
+        lines.push('');
+      }
+      content = lines.join('\n');
+      filename = `daakia-conversation-${Date.now()}.md`;
+      mimeType = 'text/markdown';
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [conversation, tab]);
+
   // ─── Detect pending (unresolved) tool calls ───────────────────────────────
   // "Pending" = last assistant message has toolCalls, streaming is done,
   // and none of those toolCallIds appear as toolCallId in any tool message.
@@ -119,10 +173,45 @@ export function AiConversationPanel() {
       {/* AI History Panel overlay */}
       {showHistory && <AiHistoryPanel onClose={() => setShowHistory(false)} />}
 
-      {/* Header with Save + History + Clear buttons */}
+      {/* Header with context count, Save, Export, History, Clear */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] flex-shrink-0">
-        <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Conversation</span>
+        {/* 6D.19 — Multi-turn context indicator */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Conversation</span>
+          {conversation.length > 0 && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded-full font-mono"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)', color: 'var(--color-protocol-ai)' }}
+              title={`${conversation.length} messages in context — all sent to the AI on next request`}
+            >
+              {conversation.length} ctx
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
+          {/* 6D.20 — Export conversation */}
+          {conversation.length > 0 && !streaming && (
+            <>
+              <button
+                type="button"
+                onClick={() => handleExport('md')}
+                className="h-[24px] px-2 flex items-center rounded-md cursor-pointer transition-colors text-[10px]"
+                style={{ color: 'var(--color-text-muted)' }}
+                title="Export as Markdown"
+              >
+                .md
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExport('json')}
+                className="h-[24px] px-2 flex items-center rounded-md cursor-pointer transition-colors text-[10px]"
+                style={{ color: 'var(--color-text-muted)' }}
+                title="Export as JSON"
+              >
+                .json
+              </button>
+            </>
+          )}
           {/* Save conversation */}
           {conversation.length > 0 && !streaming && (
             <button

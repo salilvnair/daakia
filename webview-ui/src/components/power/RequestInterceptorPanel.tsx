@@ -131,7 +131,7 @@ iOS: Wi-Fi → i → HTTP Proxy (Manual)`;
   const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="w-[920px] max-h-[92vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}>
+        style={{ backgroundColor: '#1a1a1f', borderColor: 'var(--color-surface-border)' }}>
 
         {/* Header */}
         <div className="flex items-center gap-2.5 px-5 py-3.5 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>

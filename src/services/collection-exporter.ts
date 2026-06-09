@@ -450,3 +450,166 @@ export async function handleExportCollectionHttpie(
   fs.writeFileSync(uri.fsPath, JSON.stringify(doc, null, 2), 'utf8');
   postMessage({ type: 'toast', toastType: 'success', message: `Exported as HTTPie collection to ${path.basename(uri.fsPath)}` });
 }
+
+// ─── 5.4.7 — OpenAPI 3.x ─────────────────────────────────────────────────────
+
+interface OAParam { name: string; in: string; schema: { type: string }; required?: boolean; }
+interface OARequestBody { content: Record<string, { schema: { type: string } }>; required: boolean; }
+interface OAOperation { summary: string; operationId: string; tags: string[]; parameters?: OAParam[]; requestBody?: OARequestBody; responses: Record<string, { description: string }>; }
+
+function buildOpenApiPaths(node: CollectionTreeNode, tag: string, paths: Record<string, Record<string, OAOperation>>) {
+  for (const req of node.requests) {
+    const d = parseRequestData(req);
+    // Build path — replace query param literals with path template params where {} not already present
+    let urlPath = req.url || '/';
+    try {
+      const u = new URL(urlPath.startsWith('http') ? urlPath : `http://placeholder${urlPath}`);
+      urlPath = u.pathname || '/';
+    } catch { urlPath = '/'; }
+    if (!urlPath) urlPath = '/';
+
+    const method = (req.method || 'GET').toLowerCase();
+    const parameters: OAParam[] = [];
+
+    // Parse query params
+    for (const p of (d.params as { key: string; value: string; enabled?: boolean }[] || [])) {
+      if (p.enabled !== false && p.key) {
+        parameters.push({ name: p.key, in: 'query', schema: { type: 'string' } });
+      }
+    }
+
+    // Parse headers
+    for (const h of (d.headers as { key: string; value: string; enabled?: boolean }[] || [])) {
+      if (h.enabled !== false && h.key && h.key.toLowerCase() !== 'content-type' && h.key.toLowerCase() !== 'authorization') {
+        parameters.push({ name: h.key, in: 'header', schema: { type: 'string' } });
+      }
+    }
+
+    const op: OAOperation = {
+      summary: req.name,
+      operationId: req.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, ''),
+      tags: [tag],
+      responses: { '200': { description: 'Successful response' }, '400': { description: 'Bad request' }, '500': { description: 'Server error' } },
+    };
+    if (parameters.length) op.parameters = parameters;
+
+    const bodyMode = d.bodyMode as string;
+    if (['raw', 'form-data', 'urlencoded'].includes(bodyMode) && ['post', 'put', 'patch'].includes(method)) {
+      const ct = bodyMode === 'raw' ? 'application/json' : bodyMode === 'form-data' ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
+      op.requestBody = { content: { [ct]: { schema: { type: 'object' } } }, required: true };
+    }
+
+    if (!paths[urlPath]) paths[urlPath] = {};
+    paths[urlPath][method] = op;
+  }
+  for (const child of node.children) {
+    buildOpenApiPaths(child, tag, paths);
+  }
+}
+
+export async function handleExportCollectionOpenApi(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+) {
+  const collectionId = msg.collectionId as string;
+  const tree = getCollectionTree();
+  const node = collectionId ? findNode(tree, collectionId) : null;
+
+  const paths: Record<string, Record<string, OAOperation>> = {};
+  const toExport = node ? [node] : tree;
+  for (const n of toExport) {
+    buildOpenApiPaths(n as CollectionTreeNode, n.name, paths);
+  }
+
+  const collectionName = node?.name || 'Daakia API';
+  const doc = {
+    openapi: '3.0.3',
+    info: { title: collectionName, version: '1.0.0', description: `OpenAPI 3.0 spec generated from Daakia collection — ${collectionName}` },
+    paths,
+  };
+
+  const defaultName = node ? `${node.name}.openapi.json` : 'daakia-openapi.json';
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: 'Export as OpenAPI 3.0 spec',
+    defaultUri: vscode.Uri.file(defaultName),
+    filters: { 'JSON Files': ['json'] },
+  });
+  if (!uri) return;
+
+  fs.writeFileSync(uri.fsPath, JSON.stringify(doc, null, 2), 'utf8');
+  postMessage({ type: 'toast', toastType: 'success', message: `Exported OpenAPI 3.0 spec to ${path.basename(uri.fsPath)}` });
+}
+
+// ─── 5.4.8 — API Documentation (Markdown) ────────────────────────────────────
+
+function buildMarkdownDocs(node: CollectionTreeNode, depth: number, lines: string[]) {
+  const heading = '#'.repeat(Math.min(depth + 1, 6));
+  lines.push(`${heading} ${node.name}`, '');
+  for (const req of node.requests) {
+    const d = parseRequestData(req);
+    lines.push(`${'#'.repeat(Math.min(depth + 2, 6))} ${req.name}`, '');
+    lines.push(`**Method:** \`${req.method || 'GET'}\`  `);
+    lines.push(`**URL:** \`${req.url || ''}\``, '');
+
+    const headers = d.headers as { key: string; value: string; enabled?: boolean }[] || [];
+    const enabledHeaders = headers.filter(h => h.enabled !== false && h.key);
+    if (enabledHeaders.length) {
+      lines.push('**Headers:**', '');
+      lines.push('| Key | Value |', '|---|---|');
+      for (const h of enabledHeaders) lines.push(`| \`${h.key}\` | \`${h.value}\` |`);
+      lines.push('');
+    }
+
+    const params = d.params as { key: string; value: string; enabled?: boolean }[] || [];
+    const enabledParams = params.filter(p => p.enabled !== false && p.key);
+    if (enabledParams.length) {
+      lines.push('**Query Parameters:**', '');
+      lines.push('| Key | Value |', '|---|---|');
+      for (const p of enabledParams) lines.push(`| \`${p.key}\` | \`${p.value}\` |`);
+      lines.push('');
+    }
+
+    const bodyRaw = d.bodyRaw as string;
+    const bodyMode = d.bodyMode as string;
+    if (bodyRaw && bodyMode !== 'none') {
+      lines.push('**Request Body:**', '');
+      const lang = bodyMode === 'raw' ? 'json' : bodyMode || '';
+      lines.push(`\`\`\`${lang}`, bodyRaw.trim(), '```', '');
+    }
+
+    lines.push('---', '');
+  }
+  for (const child of node.children) {
+    buildMarkdownDocs(child, depth + 1, lines);
+  }
+}
+
+export async function handleExportCollectionDocs(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+) {
+  const collectionId = msg.collectionId as string;
+  const tree = getCollectionTree();
+  const node = collectionId ? findNode(tree, collectionId) : null;
+
+  const lines: string[] = [];
+  const title = node?.name || 'Daakia API Documentation';
+  lines.push(`# ${title}`, '', `> Generated by Daakia on ${new Date().toISOString().split('T')[0]}`, '');
+
+  const toExport = node ? [node] : tree;
+  for (const n of toExport) {
+    buildMarkdownDocs(n as CollectionTreeNode, 1, lines);
+  }
+
+  const markdown = lines.join('\n');
+  const defaultName = node ? `${node.name}.docs.md` : 'daakia-api-docs.md';
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: 'Export as API Documentation (Markdown)',
+    defaultUri: vscode.Uri.file(defaultName),
+    filters: { 'Markdown Files': ['md'], 'All Files': ['*'] },
+  });
+  if (!uri) return;
+
+  fs.writeFileSync(uri.fsPath, markdown, 'utf8');
+  postMessage({ type: 'toast', toastType: 'success', message: `API documentation exported to ${path.basename(uri.fsPath)}` });
+}

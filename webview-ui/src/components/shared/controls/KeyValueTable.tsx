@@ -496,9 +496,10 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
           type="button"
           onClick={() => onRemove(idx)}
           className="opacity-0 group-hover:opacity-100 p-1 text-[var(--color-text-muted)] hover:text-[#ef4444] cursor-pointer transition-all"
-          title="Remove"
+          title="Remove row"
+          aria-label="Remove row"
         >
-          <TrashIcon size={14} />
+          <TrashIcon size={14} aria-hidden="true" />
         </button>
       </div>
     </div>

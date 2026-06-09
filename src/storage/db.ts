@@ -1409,3 +1409,57 @@ export function clearAiConversations(): void {
   _db.run('DELETE FROM ai_conversations');
   _scheduleSave();
 }
+
+// ────────────────────── DB Explorer (7.4) ──────────────────────
+
+export interface DbTableInfo {
+  name: string;
+  rowCount: number;
+  columns: string[];
+}
+
+export function getDbTables(): DbTableInfo[] {
+  if (!_db) { return []; }
+  const stmt = _db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`);
+  const tables: DbTableInfo[] = [];
+  while (stmt.step()) {
+    const { name } = stmt.getAsObject() as { name: string };
+    // Get columns
+    const colStmt = _db.prepare(`PRAGMA table_info(${name})`);
+    const columns: string[] = [];
+    while (colStmt.step()) {
+      const col = colStmt.getAsObject() as { name: string };
+      columns.push(col.name);
+    }
+    colStmt.free();
+    // Get row count
+    const countStmt = _db.prepare(`SELECT COUNT(*) as cnt FROM ${name}`);
+    countStmt.step();
+    const { cnt } = countStmt.getAsObject() as { cnt: number };
+    countStmt.free();
+    tables.push({ name, rowCount: cnt, columns });
+  }
+  stmt.free();
+  return tables;
+}
+
+export function getDbTableRows(tableName: string, limit = 100, offset = 0): Record<string, unknown>[] {
+  if (!_db) { return []; }
+  // Validate table name (only allow alphanumeric + underscore to prevent injection)
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) { return []; }
+  const stmt = _db.prepare(`SELECT * FROM ${tableName} LIMIT ? OFFSET ?`);
+  stmt.bind([limit, offset]);
+  const rows: Record<string, unknown>[] = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject() as Record<string, unknown>);
+  }
+  stmt.free();
+  return rows;
+}
+
+export function deleteDbRow(tableName: string, pkCol: string, pkVal: unknown): void {
+  if (!_db) { return; }
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName) || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(pkCol)) { return; }
+  _db.run(`DELETE FROM ${tableName} WHERE ${pkCol} = ?`, [pkVal as string | number]);
+  _scheduleSave();
+}

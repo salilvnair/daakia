@@ -262,15 +262,31 @@ export function SoapWsdlImport({ open, onClose }: SoapWsdlImportProps) {
             Cancel
           </button>
           {mode === 'url' && (
-            <button
-              type="button"
-              onClick={handleLoadUrl}
-              disabled={!url.trim() || loading}
-              className="h-[30px] px-4 text-[12px] font-medium rounded-md text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity"
-              style={{ backgroundColor: ACCENT }}
-            >
-              {loading ? 'Loading...' : 'Load WSDL'}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!activeTab || !url.trim()) return;
+                  const collectionName = `${url.trim().split('/').pop()?.replace('.wsdl', '') || 'WSDL'} Collection`;
+                  postMsg({ type: 'soap:importWsdlToCollection', wsdlUrl: url.trim(), collectionName });
+                }}
+                disabled={!url.trim() || loading}
+                className="h-[30px] px-3 text-[11.5px] font-medium rounded-md hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity"
+                style={{ color: ACCENT, border: `1px solid ${ACCENT}` }}
+                title="Parse WSDL and create a SOAP collection with all operations"
+              >
+                Import to Collection
+              </button>
+              <button
+                type="button"
+                onClick={handleLoadUrl}
+                disabled={!url.trim() || loading}
+                className="h-[30px] px-4 text-[12px] font-medium rounded-md text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity"
+                style={{ backgroundColor: ACCENT }}
+              >
+                {loading ? 'Loading...' : 'Load WSDL'}
+              </button>
+            </>
           )}
         </div>
       </div>

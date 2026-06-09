@@ -42,9 +42,10 @@ export function PillTabs({ tabs, activeTab, onChange, size = 'md', className = '
 
   if (variant === 'underline') {
     return (
-      <div ref={containerRef} className={`relative flex items-center gap-1 ${className}`}>
+      <div ref={containerRef} role="tablist" className={`relative flex items-center gap-1 ${className}`}>
         {/* Sliding underline indicator */}
         <div
+          aria-hidden="true"
           className={`absolute bottom-0 h-[2px] rounded-full transition-all duration-200 ease-out ${!accentColor ? 'bg-[var(--color-primary)]' : ''}`}
           style={{ left: indicatorStyle.left, width: indicatorStyle.width, ...(accentColor ? { backgroundColor: accentColor } : {}) }}
         />
@@ -54,6 +55,8 @@ export function PillTabs({ tabs, activeTab, onChange, size = 'md', className = '
             key={tab.id}
             data-tab-id={tab.id}
             type="button"
+            role="tab"
+            aria-selected={tab.id === activeTab}
             className={`relative z-10 pb-2.5 pt-1 ${px} ${textSize} font-medium transition-colors cursor-pointer ${
               tab.id === activeTab
                 ? (accentColor ? '' : 'text-[var(--color-primary-light)]')
@@ -81,9 +84,10 @@ export function PillTabs({ tabs, activeTab, onChange, size = 'md', className = '
   }
 
   return (
-    <div ref={containerRef} className={`relative flex items-center gap-0.5 bg-[var(--color-surface)] rounded-lg p-1 ${className}`}>
+    <div ref={containerRef} role="tablist" className={`relative flex items-center gap-0.5 bg-[var(--color-surface)] rounded-lg p-1 ${className}`}>
       {/* Sliding pill indicator */}
       <div
+        aria-hidden="true"
         className={`absolute top-1 bottom-1 rounded-md transition-all duration-200 ease-out ${!accentColor ? 'bg-[var(--color-primary)]/12 border border-[var(--color-primary)]/25' : 'border'}`}
         style={{ left: indicatorStyle.left, width: indicatorStyle.width, ...(accentColor ? { backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)`, borderColor: `color-mix(in srgb, ${accentColor} 25%, transparent)` } : {}) }}
       />
@@ -93,6 +97,8 @@ export function PillTabs({ tabs, activeTab, onChange, size = 'md', className = '
           key={tab.id}
           data-tab-id={tab.id}
           type="button"
+          role="tab"
+          aria-selected={tab.id === activeTab}
           className={`relative z-10 ${py} ${px} ${textSize} rounded-md font-medium transition-colors cursor-pointer ${
             tab.id === activeTab
               ? (accentColor ? '' : 'text-[var(--color-primary-light)]')

@@ -128,7 +128,7 @@ export function CookieManager({ onClose }: Props) {
   const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="w-[780px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}>
+        style={{ backgroundColor: '#1a1a1f', borderColor: 'var(--color-surface-border)' }}>
 
         <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <div className="flex-1">
@@ -248,7 +248,7 @@ export function CookieManager({ onClose }: Props) {
         {showImport && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 rounded-xl">
             <div className="w-[480px] rounded-xl border p-5 flex flex-col gap-3"
-              style={{ backgroundColor: 'var(--color-surface-bg)', borderColor: 'var(--color-surface-border)' }}>
+              style={{ backgroundColor: '#1a1a1f', borderColor: 'var(--color-surface-border)' }}>
               <p className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Import Cookies</p>
               <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Paste Netscape format cookies (from browser devtools or curl --cookie-jar)</p>
               <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={8}

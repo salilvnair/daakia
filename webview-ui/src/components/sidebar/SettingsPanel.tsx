@@ -18,6 +18,10 @@ import { GrpcClientPanel } from '../power/GrpcClientPanel';
 import { ResponseDiffModal } from '../power/ResponseDiffModal';
 import { BulkUrlTester } from '../power/BulkUrlTester';
 import { LoadTester } from '../power/LoadTester';
+import { PerformanceTab } from '../shared/devtools/PerformanceTab';
+import { AuditLogTab } from '../settings/devtools/AuditLogTab';
+import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
+import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 
 type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'wiki' | 'wiki-new' | 'power-features';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
@@ -113,6 +117,10 @@ export function SettingsPanel() {
           <DaakiaWikiPanel />
         ) : activeSection === 'power-features' ? (
           <PowerFeaturesPanel />
+        ) : activeSection === 'devtools' ? (
+          <DevToolsSettingsPage />
+        ) : activeSection === 'theme' ? (
+          <ThemeSettings />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
             <div className="flex flex-col items-center gap-2">
@@ -690,6 +698,110 @@ function PowerFeaturesPanel() {
       {showDiff && <ResponseDiffModal onClose={() => setShowDiff(false)} />}
       {showBulk && <BulkUrlTester onClose={() => setShowBulk(false)} />}
       {showLoad && <LoadTester onClose={() => setShowLoad(false)} />}
+    </div>
+  );
+}
+
+// ────────── Developer Tools Settings Page ──────────
+
+type DevToolsSubtab = 'memory' | 'audit' | 'db' | 'snapshot';
+
+const DEVTOOLS_TABS: { id: DevToolsSubtab; label: string }[] = [
+  { id: 'memory',   label: 'Memory Footprint' },
+  { id: 'audit',    label: 'Audit Log' },
+  { id: 'db',       label: 'DB Explorer' },
+  { id: 'snapshot', label: 'Debug Snapshot' },
+];
+
+function DevToolsSettingsPage() {
+  const [active, setActive] = useState<DevToolsSubtab>('memory');
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Sub-tab bar */}
+      <div className="flex items-center gap-0.5 px-4 pt-3 pb-0 border-b border-[var(--color-surface-border)] shrink-0">
+        {DEVTOOLS_TABS.map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActive(tab.id)}
+            className={`h-[30px] px-3 text-[11px] font-medium rounded-t-md cursor-pointer transition-colors border-b-2 ${
+              active === tab.id
+                ? 'text-[var(--color-primary)] border-[var(--color-primary)] bg-[rgba(99,102,241,0.06)]'
+                : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {/* Content */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {active === 'memory' && <PerformanceTab />}
+        {active === 'audit' && <AuditLogTab />}
+        {active === 'db' && <DbExplorerTab />}
+        {active === 'snapshot' && <DebugSnapshotTab />}
+      </div>
+    </div>
+  );
+}
+
+// ────────── Theme Settings ──────────
+
+function ThemeSettings() {
+  const [theme, setThemeState] = useState<'dark' | 'light'>(() => {
+    return (document.documentElement.getAttribute('data-theme') as 'dark' | 'light') || 'dark';
+  });
+
+  const applyTheme = (t: 'dark' | 'light') => {
+    document.documentElement.setAttribute('data-theme', t);
+    document.body.setAttribute('data-theme', t);
+    localStorage.setItem('daakia-theme', t);
+    setThemeState(t);
+    postMsg({ type: 'saveSettings', key: 'theme', value: t });
+  };
+
+  return (
+    <div className="p-6 flex flex-col gap-6">
+      <div>
+        <h3 className="text-[13px] font-semibold text-[var(--color-text-primary)]">Appearance</h3>
+        <p className="text-[11px] text-[var(--color-text-muted)] mt-1">Choose how Daakia looks to you</p>
+      </div>
+
+      <div className="flex gap-4">
+        {(['dark', 'light'] as const).map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => applyTheme(t)}
+            className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all w-[140px] ${
+              theme === t
+                ? 'border-[var(--color-primary)] bg-[color-mix(in_srgb,var(--color-primary)_8%,transparent)]'
+                : 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.2)]'
+            }`}
+          >
+            {/* Theme preview swatch */}
+            <div className={`w-full h-[72px] rounded-lg overflow-hidden border ${t === 'dark' ? 'bg-[#1e1e1e] border-[#414141]' : 'bg-white border-[#e5e7eb]'}`}>
+              <div className={`h-[20px] ${t === 'dark' ? 'bg-[#252526]' : 'bg-[#f3f4f6]'}`} />
+              <div className="flex gap-1.5 p-2">
+                <div className={`h-2 w-8 rounded ${t === 'dark' ? 'bg-[#3c3c3c]' : 'bg-[#e5e7eb]'}`} />
+                <div className={`h-2 w-12 rounded ${t === 'dark' ? 'bg-[#4b4b4b]' : 'bg-[#d1d5db]'}`} />
+              </div>
+              <div className="px-2 flex flex-col gap-1">
+                <div className={`h-1.5 w-full rounded ${t === 'dark' ? 'bg-[#333]' : 'bg-[#f3f4f6]'}`} />
+                <div className={`h-1.5 w-3/4 rounded ${t === 'dark' ? 'bg-[#2d2d2d]' : 'bg-[#e5e7eb]'}`} />
+              </div>
+            </div>
+            <span className="text-[12px] font-medium text-[var(--color-text-primary)] capitalize">{t}</span>
+            {theme === t && (
+              <span className="text-[10px] text-[var(--color-primary)] font-medium">Active</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-[var(--color-text-muted)]">
+        Note: VS Code applies its own theme to the extension host. This toggle controls the Daakia webview UI independently.
+      </p>
     </div>
   );
 }

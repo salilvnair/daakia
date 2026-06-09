@@ -12,7 +12,7 @@ import type { AiMessage, AiRequestPayload, AiSettings, AiToolDef } from '../../.
 import { DEFAULT_AI_SETTINGS } from '../../../ai/ai-types';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import {
-  getSetting, insertAudit,
+  getSetting, insertAudit, insertHistory,
   upsertAiConversation, getAiConversations, getAiConversationById,
   deleteAiConversation, clearAiConversations,
 } from '../../../storage/db';
@@ -76,6 +76,8 @@ export async function handleAiSend(
   const tools = (msg.tools as AiToolDef[]) || [];
   const mcpServerConfigs = (msg.mcpServerConfigs as any[]) || [];
   const rawSettings = (msg.settings as Partial<AiSettings>) || {};
+  // 6D.22 — multimodal image attachments
+  const images = (msg.images as Array<{ id: string; type: 'url' | 'base64'; url?: string; base64?: string; mimeType?: string }>) || [];
 
   const settings: AiSettings = { ...DEFAULT_AI_SETTINGS, ...rawSettings };
 
@@ -100,14 +102,20 @@ export async function handleAiSend(
     messages.push({ ...m, content: resolveEnvString(m.content, vars) });
   }
 
-  // Add current user prompt (webview sends old conversation, then appends locally)
-  if (userPrompt.trim()) {
+  // Add current user prompt — with optional image attachments (6D.22 multimodal)
+  if (userPrompt.trim() || images.length > 0) {
+    const resolvedPrompt = resolveEnvString(userPrompt, vars);
+    // Build multimodal content if images are present
+    // For providers that support it (OpenAI, Anthropic, Google), the executor
+    // will receive images via the imageAttachments field and inject into the request body.
     messages.push({
       id: crypto.randomUUID(),
       role: 'user',
-      content: resolveEnvString(userPrompt, vars),
+      content: resolvedPrompt,
       timestamp: Date.now(),
-    });
+      // Pass images as extra metadata for executor to build multimodal content
+      ...(images.length > 0 ? { imageAttachments: images } : {}),
+    } as AiMessage & { imageAttachments?: typeof images });
   }
 
   // Get provider info for chat endpoint
@@ -285,6 +293,25 @@ export async function handleAiSend(
           duration_ms: result.duration,
         });
       } catch { /* ignore audit errors */ }
+
+      // 6D.18 — Record AI invocation in history panel (protocol='ai')
+      try {
+        const userMsg = messages.slice().reverse().find(m => m.role === 'user');
+        const promptPreview = (userMsg?.content || '').slice(0, 200);
+        const responsePreview = (result.message.content || '').slice(0, 200);
+        insertHistory({
+          request_id: tabId,
+          method: providerId,                           // "openai", "anthropic", etc.
+          url: effectiveModel,                          // "gpt-4o", "claude-3-opus", etc.
+          status: 200,
+          status_text: `${result.tokens?.total ?? 0} tokens`,
+          response_time: result.duration,
+          response_size: result.tokens?.total ?? (result.message.content?.length ?? 0),
+          request_data: JSON.stringify({ provider: providerId, model: effectiveModel, promptPreview, toolCount: allTools.length, settings }),
+          response_data: JSON.stringify({ body: responsePreview, contentType: 'text/plain', tokens: result.tokens }),
+          protocol: 'ai',
+        });
+      } catch { /* ignore history errors */ }
     },
     onError: (error) => {
       clearTimeout(timeoutId);

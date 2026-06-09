@@ -8,7 +8,7 @@ import { buildSkeletonEnvelope, injectSecurityHeader } from '../../../soap/soap-
 import { generateWsSecurityHeader, type WsSecurityOptions } from '../../../soap/ws-security';
 import { parseSoapUiProject } from '../../../soap/soapui-importer';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
-import { insertHistory, trimHistory, getSetting } from '../../../storage/db';
+import { insertHistory, trimHistory, getSetting, upsertCollection, upsertCollectionRequest } from '../../../storage/db';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -378,6 +378,72 @@ export function handleInjectSecurity(
 /**
  * Handle soap:importSoapUi — parse a SoapUI project XML file.
  */
+/**
+ * Handle soap:importWsdlToCollection — Parse WSDL and create a collection with one request per operation (5.4.4).
+ */
+export async function handleImportWsdlToCollection(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+) {
+  const wsdlUrl = msg.wsdlUrl as string || '';
+  const wsdlContent = msg.wsdlContent as string || '';
+  const collectionName = (msg.collectionName as string) || 'WSDL Import';
+
+  try {
+    const result = wsdlContent
+      ? await loadWsdlFromContent(wsdlContent, 'imported.wsdl')
+      : await loadWsdlFromUrl(wsdlUrl);
+
+    // Create a root collection for this WSDL
+    const { randomUUID } = await import('crypto');
+    const collectionId = randomUUID();
+    upsertCollection(collectionId, collectionName, null, 'soap');
+
+    let requestCount = 0;
+    for (const service of result.services) {
+      // Create a sub-collection per service
+      const svcId = randomUUID();
+      upsertCollection(svcId, service.name, collectionId, 'soap');
+
+      for (const port of service.ports) {
+        for (const op of port.operations) {
+          // Build a skeleton SOAP envelope for this operation
+          let skeleton = '';
+          try {
+            skeleton = buildSkeletonEnvelope({ serviceName: service.name, portName: port.name, operationName: op.name, soapVersion: port.soapVersion, soapAction: op.soapAction || '', inputSchema: op.inputSchema });
+          } catch { /* use empty envelope */ }
+
+          const reqId = randomUUID();
+          const data = JSON.stringify({
+            protocol: 'soap',
+            method: 'POST',
+            url: port.address || wsdlUrl,
+            bodyRaw: skeleton || `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">\n  <soapenv:Header/>\n  <soapenv:Body>\n    <!-- ${op.name} -->\n  </soapenv:Body>\n</soapenv:Envelope>`,
+            bodyMode: 'raw',
+            bodyContentType: 'application/xml',
+            headers: [{ id: randomUUID(), key: 'Content-Type', value: op.soapVersion === '1.2' ? 'application/soap+xml; charset=utf-8' : 'text/xml; charset=utf-8', enabled: true }],
+            soapVersion: op.soapVersion,
+            soapAction: op.soapAction,
+          });
+
+          upsertCollectionRequest({ id: reqId, collection_id: svcId, name: op.name, method: 'POST', url: port.address || '', data });
+          requestCount++;
+        }
+      }
+    }
+
+    postMessage({
+      type: 'soap:wsdlImportedToCollection',
+      collectionId,
+      collectionName,
+      requestCount,
+      serviceCount: result.services.length,
+    });
+  } catch (err) {
+    postMessage({ type: 'soap:wsdlImportError', error: (err as Error).message });
+  }
+}
+
 export function handleImportSoapUiProject(
   msg: Record<string, unknown>,
   postMessage: PostMessage,

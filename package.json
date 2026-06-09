@@ -10,6 +10,13 @@
     "url": "https://github.com/salilvnair/daakia"
   },
   "icon": "images/daakia-icon.png",
+  "galleryBanner": {
+    "color": "#0f0f0f",
+    "theme": "dark"
+  },
+  "changelog": "CHANGELOG.md",
+  "categories": ["Testing", "Other", "Debuggers"],
+  "keywords": ["api", "rest", "http", "postman", "graphql", "soap", "grpc", "websocket", "mqtt", "mock", "collections", "openapi", "swagger", "ai", "mcp"],
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -245,7 +252,9 @@
     "vscode:publish": "vsce publish",
     "vscode:publish:patch": "vsce publish patch",
     "vscode:publish:minor": "vsce publish minor",
-    "vscode:publish:major": "vsce publish major"
+    "vscode:publish:major": "vsce publish major",
+    "test:e2e": "node out/test/runTests.js",
+    "pretest:e2e": "npm run build:ext"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",
@@ -275,6 +284,10 @@
     "svgicons2svgfont": "^15.0.1",
     "ttf2woff": "^3.0.0",
     "typescript": "^5.7.0",
-    "@vscode/vsce": "^3.0.0"
+    "@vscode/vsce": "^3.0.0",
+    "@vscode/test-electron": "^2.4.0",
+    "@types/mocha": "^10.0.0",
+    "mocha": "^10.4.0",
+    "glob": "^11.0.0"
   }
 }

@@ -13,17 +13,19 @@ import { SocketIOPanel } from '../sio/SocketIOPanel';
 import { MQTTPanel } from '../mqtt/MQTTPanel';
 import { WsLogEntry, type WsMessage } from './WsLogEntry';
 import { WsProtocolsTab } from './WsProtocolsTab';
+import { WsTemplatesTab } from './WsTemplatesTab';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 
 // ────────── State Types ──────────
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
-type SubTab = 'communication' | 'protocols';
+type SubTab = 'communication' | 'protocols' | 'templates';
 type MessageFormat = 'json' | 'raw';
 
 // ────────── Per-tab state cache (survives tab switches) ──────────
 const wsMessagesCache = new Map<string, WsMessage[]>();
 const wsConnStateCache = new Map<string, ConnectionState>();
+const wsReconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 // ────────── WebSocket Panel ──────────
 
@@ -100,6 +102,7 @@ export function WebSocketPanel() {
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const reconnectAttemptRef = useRef(0); // tracks backoff attempt count
 
   // Scroll to bottom on new messages (when autoScroll is on)
   useEffect(() => {
@@ -118,6 +121,7 @@ export function WebSocketPanel() {
         case 'ws:connected':
           if (msg.tabId === activeTab.id) {
             setConnState('connected');
+            reconnectAttemptRef.current = 0; // reset backoff on successful connect
             if (activeTab.url) useUrlSuggestionsStore.getState().addUrls([activeTab.url], 'websocket');
             setMessages(prev => [...prev, {
               id: crypto.randomUUID(),
@@ -136,6 +140,24 @@ export function WebSocketPanel() {
               data: `Disconnected${msg.reason ? `: ${msg.reason}` : ''}`,
               timestamp: Date.now(),
             }]);
+            // Auto-reconnect with exponential backoff (5.3.12)
+            if (activeTab.wsAutoReconnect && activeTab.url) {
+              const attempt = reconnectAttemptRef.current++;
+              const baseBackoff = activeTab.wsReconnectBackoff || 1000;
+              const delay = Math.min(baseBackoff * Math.pow(2, attempt), 30000);
+              setMessages(prev => [...prev, {
+                id: crypto.randomUUID(),
+                direction: 'system',
+                data: `Auto-reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${attempt + 1})…`,
+                timestamp: Date.now(),
+              }]);
+              const timer = setTimeout(() => {
+                wsReconnectTimers.delete(activeTab.id);
+                postMsg({ type: 'ws:connect', tabId: activeTab.id, url: activeTab.url, protocols: activeTab.authData?.['ws_protocols'] || '', envId: activeTab.envId });
+                setConnState('connecting');
+              }, delay);
+              wsReconnectTimers.set(activeTab.id, timer);
+            }
           }
           break;
         case 'ws:message':
@@ -362,7 +384,7 @@ export function WebSocketPanel() {
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Sub-tabs: Communication | Protocols */}
           <div className="flex items-center border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] px-2">
-            {(['communication', 'protocols'] as SubTab[]).map(tab => {
+            {(['communication', 'protocols', 'templates'] as SubTab[]).map(tab => {
               const protocolsCount = tab === 'protocols'
                 ? (() => { try { const e = JSON.parse(activeTab.authData?.['ws_protocol_entries'] || '[]'); return e.filter((p: any) => p.enabled && p.value?.trim()).length; } catch { return 0; } })()
                 : 0;
@@ -446,6 +468,12 @@ export function WebSocketPanel() {
             {activeSubTab === 'protocols' && (
               <WsProtocolsTab />
             )}
+            {activeSubTab === 'templates' && (
+              <WsTemplatesTab
+                onLoad={(msg) => { setInputMsg(msg); setActiveSubTab('communication'); }}
+                currentMessage={inputMsg}
+              />
+            )}
           </div>
           </div>
         </div>
@@ -521,6 +549,19 @@ export function WebSocketPanel() {
                 title={autoScroll ? 'Autoscroll: Turn off' : 'Autoscroll: Turn on'}
               >
                 <AutoScrollIcon size={14} />
+              </button>
+              {/* Auto-reconnect toggle (5.3.12) */}
+              <button
+                type="button"
+                onClick={() => { if (activeTab) updateTab(activeTab.id, { wsAutoReconnect: !activeTab.wsAutoReconnect }); }}
+                className={`h-[26px] px-1.5 text-[9.5px] flex items-center gap-0.5 cursor-pointer transition-colors rounded-md font-medium ${
+                  activeTab?.wsAutoReconnect
+                    ? 'text-[var(--color-warning)] hover:bg-[rgba(234,179,8,0.08)]'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
+                }`}
+                title={activeTab?.wsAutoReconnect ? 'Auto-reconnect: On (click to disable)' : 'Auto-reconnect: Off (click to enable)'}
+              >
+                ⟳ Auto
               </button>
             </div>
           </div>

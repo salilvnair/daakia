@@ -26,6 +26,7 @@ export function McpUrlBar() {
   const url = activeTab?.url || '';
   const connected = activeTab?.mcpConnected || false;
   const loading = activeTab?.loading || false;
+  const connectionError = activeTab?.mcpConnectionError;
 
   const handleTransportChange = useCallback((val: string) => {
     if (!activeTab) return;
@@ -65,9 +66,36 @@ export function McpUrlBar() {
     }
   }, [activeTab, updateTab, connected, transport, command, url, loading]);
 
+  const handleRetry = useCallback(() => {
+    if (!activeTab) return;
+    updateTab(activeTab.id, { mcpConnectionError: undefined });
+    handleConnect();
+  }, [activeTab, updateTab, handleConnect]);
+
   if (!activeTab) return null;
 
   return (
+    <>
+    {connectionError && (
+      <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] shrink-0" style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)', borderBottom: '1px solid color-mix(in srgb, var(--color-error) 30%, transparent)', color: 'var(--color-error)' }}>
+        <span className="flex-1 truncate">⚠ {connectionError}</span>
+        <button
+          type="button"
+          onClick={handleRetry}
+          className="shrink-0 text-[10.5px] px-2 py-0.5 rounded cursor-pointer border transition-colors"
+          style={{ borderColor: 'var(--color-error)', color: 'var(--color-error)' }}
+        >
+          Retry
+        </button>
+        <button
+          type="button"
+          onClick={() => updateTab(activeTab.id, { mcpConnectionError: undefined })}
+          className="shrink-0 cursor-pointer text-[var(--color-error)] opacity-70 hover:opacity-100"
+        >
+          ×
+        </button>
+      </div>
+    )}
     <div className="url-bar">
       {/* Protocol badge */}
       <ProtocolMcpBadge size={28} />
@@ -128,5 +156,6 @@ export function McpUrlBar() {
         items={saveItems}
       />
     </div>
+    </>
   );
 }

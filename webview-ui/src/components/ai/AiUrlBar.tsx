@@ -114,6 +114,7 @@ export function AiUrlBar() {
       tools: activeTab.aiTools || [],
       settings: activeTab.aiSettings || {},
       mcpServerConfigs: activeTab.mcpServerConfigs || [],
+      images: activeTab.aiImages || [], // 6D.22 — multimodal image attachments
       envId: activeTab.envId,
     };
     postMsg(aiPayload);

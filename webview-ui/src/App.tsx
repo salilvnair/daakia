@@ -511,6 +511,12 @@ export default function App() {
           setSqliteStatus({ ok: msg.sqliteOk, error: msg.sqliteError });
           // Load persisted Daakia AI conversation on startup
           useAiConversationStore.getState().loadFromDb();
+          // Restore saved theme (7.6)
+          const savedTheme = localStorage.getItem('daakia-theme');
+          if (savedTheme === 'light' || savedTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            document.body.setAttribute('data-theme', savedTheme);
+          }
           break;
         }
         case 'aiConversation:data': {
@@ -894,6 +900,14 @@ export default function App() {
         }
         case 'soap:wsdlError': {
           // Handled by SoapWsdlImport component directly via its own listener
+          break;
+        }
+        case 'soap:wsdlImportedToCollection': {
+          const { collectionName, requestCount, serviceCount } = msg;
+          useToastStore.getState().addToast({
+            type: 'success',
+            message: `Imported "${collectionName}" — ${serviceCount} service(s), ${requestCount} operation(s) added to Collections`,
+          });
           break;
         }
         case 'soap:envelopeGenerated': {
@@ -1544,6 +1558,7 @@ export default function App() {
             mcpConnected: true,
             mcpCapabilities: capabilities,
             loading: false,
+            mcpConnectionError: undefined,
           });
           useDevToolsStore.getState().addLog({
             timestamp: Date.now(), level: 'info',
@@ -1563,8 +1578,8 @@ export default function App() {
           break;
         }
         case 'mcp:connectFailed': {
-          const { tabId } = msg;
-          useTabsStore.getState().updateTab(tabId, { loading: false });
+          const { tabId, message: failMsg } = msg;
+          useTabsStore.getState().updateTab(tabId, { loading: false, mcpConnectionError: (failMsg as string) || 'Connection failed' });
           useDevToolsStore.getState().addLog({
             timestamp: Date.now(), level: 'error', args: ['[MCP] Connection failed'],
           });
@@ -1665,6 +1680,63 @@ export default function App() {
             });
             useTabsStore.getState().updateTab(tabId, { mcpConversation: conv });
           }
+          break;
+        }
+
+        // ─── MCP Multi-Server Events (6E.18) ─────────────────────────────
+        case 'mcp:serverConnecting': {
+          const { tabId, serverId } = msg;
+          const msTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+          if (msTab) {
+            const states = { ...(msTab.mcpServerStates || {}) };
+            states[serverId as string] = { ...states[serverId as string], connecting: true, connected: false };
+            useTabsStore.getState().updateTab(tabId, { mcpServerStates: states });
+          }
+          break;
+        }
+        case 'mcp:serverConnected': {
+          const { tabId, serverId, capabilities } = msg;
+          const msTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+          if (msTab) {
+            const states = { ...(msTab.mcpServerStates || {}) };
+            states[serverId as string] = { connected: true, connecting: false, tools: (capabilities as any)?.tools || [] };
+            useTabsStore.getState().updateTab(tabId, { mcpServerStates: states });
+          }
+          break;
+        }
+        case 'mcp:serverDisconnected': {
+          const { tabId, serverId } = msg;
+          const msTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+          if (msTab) {
+            const states = { ...(msTab.mcpServerStates || {}) };
+            states[serverId as string] = { connected: false, connecting: false, tools: [] };
+            useTabsStore.getState().updateTab(tabId, { mcpServerStates: states });
+          }
+          break;
+        }
+        case 'mcp:serverConnectFailed': {
+          const { tabId, serverId, message } = msg;
+          const msTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+          if (msTab) {
+            const states = { ...(msTab.mcpServerStates || {}) };
+            states[serverId as string] = { connected: false, connecting: false, tools: [], error: message as string };
+            useTabsStore.getState().updateTab(tabId, { mcpServerStates: states });
+          }
+          break;
+        }
+        case 'mcp:serverError': {
+          const { tabId, serverId, message } = msg;
+          const msTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+          if (msTab) {
+            const states = { ...(msTab.mcpServerStates || {}) };
+            states[serverId as string] = { ...states[serverId as string], error: message as string };
+            useTabsStore.getState().updateTab(tabId, { mcpServerStates: states });
+          }
+          break;
+        }
+        case 'mcp:capabilitiesUpdated': {
+          const { tabId, capabilities } = msg;
+          useTabsStore.getState().updateTab(tabId, { mcpCapabilities: capabilities as any });
           break;
         }
 

@@ -17,6 +17,7 @@ import { AiSemanticValidatorModal } from '../../ai/AiSemanticValidatorModal';
 import { AiResponseTransformer } from '../../ai/AiResponseTransformer';
 import { AiSmartRetryAdvisor } from '../../ai/AiSmartRetryAdvisor';
 import { AiResponsePatternLearning } from '../../ai/AiResponsePatternLearning';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
 
 type ResponseView = 'json' | 'raw' | 'headers' | 'cookies' | 'timeline' | 'tests';
 
@@ -36,6 +37,7 @@ export function ResponsePanel() {
   const [showSemanticVal, setShowSemanticVal] = useState(false);
   const [showTransformer, setShowTransformer] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   useEffect(() => {
     const pref = useUiStateStore.getState().getPref(`response.subtab.${activeTabId}`, 'json') as ResponseView;
@@ -46,6 +48,23 @@ export function ResponsePanel() {
     setActiveViewLocal(view);
     useUiStateStore.getState().setPref(`response.subtab.${activeTabId}`, view);
   };
+
+  // Ctrl+F — open filter/search in response panel (5.4.2)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f' && !e.shiftKey) {
+        // Only intercept when response panel area is focused or not in an input
+        const tag = (document.activeElement as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+        setShowFilter(true);
+        if (activeView !== 'json') setActiveView('raw');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView]);
 
   if (!tab) return null;
 
@@ -115,87 +134,99 @@ export function ResponsePanel() {
 
         {/* AI inline actions — always visible when there is a response */}
         <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
-          <AiActionButton
-            mode="explain"
-            label="Explain"
-            response={response}
-            requestMethod={requestMethod}
-            requestUrl={requestUrl}
-            open={activePopup === 'explain'}
-            onOpen={() => { setActivePopup(p => p === 'explain' ? null : 'explain'); setShowNaturalAssert(false); }}
-          />
-          <AiActionButton
-            mode="follow-up"
-            label="Follow-ups"
-            response={response}
-            requestMethod={requestMethod}
-            requestUrl={requestUrl}
-            open={activePopup === 'follow-up'}
-            onOpen={() => { setActivePopup(p => p === 'follow-up' ? null : 'follow-up'); setShowNaturalAssert(false); }}
-          />
+          {aiEnabled('responseExplainer') && (
+            <AiActionButton
+              mode="explain"
+              label="Explain"
+              response={response}
+              requestMethod={requestMethod}
+              requestUrl={requestUrl}
+              open={activePopup === 'explain'}
+              onOpen={() => { setActivePopup(p => p === 'explain' ? null : 'explain'); setShowNaturalAssert(false); }}
+            />
+          )}
+          {aiEnabled('followUps') && (
+            <AiActionButton
+              mode="follow-up"
+              label="Follow-ups"
+              response={response}
+              requestMethod={requestMethod}
+              requestUrl={requestUrl}
+              open={activePopup === 'follow-up'}
+              onOpen={() => { setActivePopup(p => p === 'follow-up' ? null : 'follow-up'); setShowNaturalAssert(false); }}
+            />
+          )}
           {/* AI Natural Language Assertions (4.6.3) */}
-          <div className="relative">
+          {aiEnabled('assertGeneration') && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => { setShowNaturalAssert(p => !p); setActivePopup(null); }}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
+                style={{
+                  color: 'var(--color-protocol-ai)',
+                  borderColor: showNaturalAssert ? 'var(--color-protocol-ai)' : 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+                  backgroundColor: showNaturalAssert ? 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)' : 'transparent',
+                }}
+                title="Write test assertions in plain English"
+              >
+                ✦ Assert
+              </button>
+              {showNaturalAssert && (
+                <AiNaturalAssertPopover
+                  response={{ body: response.body, status: response.status, contentType: response.contentType }}
+                  requestMethod={requestMethod}
+                  requestUrl={requestUrl}
+                  onClose={() => setShowNaturalAssert(false)}
+                />
+              )}
+            </div>
+          )}
+          {/* AI Response → TypeScript (4.6.8) */}
+          {aiEnabled('typescriptTypes') && (
             <button
               type="button"
-              onClick={() => { setShowNaturalAssert(p => !p); setActivePopup(null); }}
+              onClick={() => { setShowTsGen(true); setActivePopup(null); setShowNaturalAssert(false); }}
               className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
               style={{
                 color: 'var(--color-protocol-ai)',
-                borderColor: showNaturalAssert ? 'var(--color-protocol-ai)' : 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-                backgroundColor: showNaturalAssert ? 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)' : 'transparent',
+                borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
               }}
-              title="Write test assertions in plain English"
+              title="Generate TypeScript interfaces from response"
             >
-              ✦ Assert
+              ✦ TS
             </button>
-            {showNaturalAssert && (
-              <AiNaturalAssertPopover
-                response={{ body: response.body, status: response.status, contentType: response.contentType }}
-                requestMethod={requestMethod}
-                requestUrl={requestUrl}
-                onClose={() => setShowNaturalAssert(false)}
-              />
-            )}
-          </div>
-          {/* AI Response → TypeScript (4.6.8) */}
-          <button
-            type="button"
-            onClick={() => { setShowTsGen(true); setActivePopup(null); setShowNaturalAssert(false); }}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
-            style={{
-              color: 'var(--color-protocol-ai)',
-              borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-            }}
-            title="Generate TypeScript interfaces from response"
-          >
-            ✦ TS
-          </button>
+          )}
           {/* AI Semantic Validator (4.6.15) */}
-          <button
-            type="button"
-            onClick={() => { setShowSemanticVal(true); setActivePopup(null); setShowNaturalAssert(false); }}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
-            style={{
-              color: 'var(--color-protocol-ai)',
-              borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-            }}
-            title="AI semantic validation (age: -5 is wrong, email without @ is suspicious)"
-          >
-            ✦ Semantic
-          </button>
+          {aiEnabled('semanticValidator') && (
+            <button
+              type="button"
+              onClick={() => { setShowSemanticVal(true); setActivePopup(null); setShowNaturalAssert(false); }}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
+              style={{
+                color: 'var(--color-protocol-ai)',
+                borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+              }}
+              title="AI semantic validation (age: -5 is wrong, email without @ is suspicious)"
+            >
+              ✦ Semantic
+            </button>
+          )}
           {/* AI Response Transformer (4.6.18) */}
-          <button
-            type="button"
-            onClick={() => { setShowTransformer(true); setActivePopup(null); setShowNaturalAssert(false); }}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
-            style={{
-              color: 'var(--color-protocol-ai)',
-              borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-            }}
-            title="Transform response: JSON→CSV, extract emails, reshape"
-          >
-            ✦ Transform
-          </button>
+          {aiEnabled('responseTransformer') && (
+            <button
+              type="button"
+              onClick={() => { setShowTransformer(true); setActivePopup(null); setShowNaturalAssert(false); }}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] cursor-pointer transition-all border"
+              style={{
+                color: 'var(--color-protocol-ai)',
+                borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
+              }}
+              title="Transform response: JSON→CSV, extract emails, reshape"
+            >
+              ✦ Transform
+            </button>
+          )}
           {/* AI Pattern Learning (4.6.6) — inline record/anomaly for successful responses */}
           <div className="relative">
             <AiResponsePatternLearning

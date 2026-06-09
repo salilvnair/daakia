@@ -364,9 +364,17 @@ export async function handleExecuteRequest(
       requestBodyForDevTools = formSummary;
     }
 
+    // 7.7 — Perf: cap body sent to webview at 512 KB to keep postMessage fast
+    const MAX_BODY_CHARS = 512 * 1024;
+    const rawBody: string = result.response?.body ?? '';
+    const bodyTruncated = rawBody.length > MAX_BODY_CHARS;
+    const safeResult = bodyTruncated
+      ? { ...result, response: { ...result.response, body: rawBody.slice(0, MAX_BODY_CHARS) + '\n\n[... truncated — response exceeds 512 KB display limit ...]', bodyTruncated: true, fullSize: rawBody.length } }
+      : result;
+
     postMessage({
       type: 'responseData',
-      ...result,
+      ...safeResult,
       requestMethod: msg.method,
       requestUrl: msg.url,
       requestHeaders: sentHeaders,

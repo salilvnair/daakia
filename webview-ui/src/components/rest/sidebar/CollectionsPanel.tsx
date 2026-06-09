@@ -502,6 +502,8 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       { id: 'export-insomnia', label: 'Export as Insomnia', shortcut: 'I', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
       { id: 'export-bruno', label: 'Export as Bruno (.bru)', shortcut: 'B', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
       { id: 'export-httpie', label: 'Export as HTTPie', shortcut: 'H', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
+      { id: 'export-openapi', label: 'Export as OpenAPI 3.0', shortcut: 'O', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
+      { id: 'export-docs', label: 'Export API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon />, iconColor: 'var(--color-warning)' },
       { id: 'properties', label: 'Properties', shortcut: 'P', icon: <SettingsIcon />, iconColor: 'var(--color-text-muted)' },
       { id: 'sep4', label: '', separator: true },
       { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon /> },
@@ -630,6 +632,12 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
         break;
       case 'export-httpie':
         postMsg({ type: 'exportCollectionHttpie', collectionId: targetId });
+        break;
+      case 'export-openapi':
+        postMsg({ type: 'exportCollectionOpenApi', collectionId: targetId });
+        break;
+      case 'export-docs':
+        postMsg({ type: 'exportCollectionDocs', collectionId: targetId });
         break;
       case 'open':
         // For requests, find and open
