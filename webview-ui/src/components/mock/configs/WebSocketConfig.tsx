@@ -128,7 +128,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
         <button
           type="button"
           onClick={() => addHandler('connection')}
-          className="h-[26px] px-2.5 text-[10px] rounded cursor-pointer transition-colors border"
+          className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
           style={{ color: 'var(--color-success)', borderColor: 'color-mix(in srgb, var(--color-success) 30%, transparent)' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-success) 10%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -136,7 +136,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
         <button
           type="button"
           onClick={() => addHandler('message')}
-          className="h-[26px] px-2.5 text-[10px] rounded cursor-pointer transition-colors border"
+          className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
           style={{ color: 'var(--color-mock-server)', borderColor: 'color-mix(in srgb, var(--color-mock-server) 30%, transparent)' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-mock-server) 10%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -144,7 +144,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
         <button
           type="button"
           onClick={() => addHandler('disconnect')}
-          className="h-[26px] px-2.5 text-[10px] rounded cursor-pointer transition-colors border"
+          className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
           style={{ color: 'var(--color-error)', borderColor: 'color-mix(in srgb, var(--color-error) 30%, transparent)' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 10%, transparent)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}

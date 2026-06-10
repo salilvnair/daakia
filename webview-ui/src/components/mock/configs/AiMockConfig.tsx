@@ -295,7 +295,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
         <div className="flex items-center gap-1 flex-shrink-0">
           {aiEnabled('mockIntelligence') && (
             <button type="button" onClick={() => setShowMockIntelligence(true)}
-              className="flex items-center gap-1 h-[24px] px-2 rounded-lg text-[10px] font-medium cursor-pointer"
+              className="flex items-center gap-1 h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer"
               style={{ color: AI_COLOR, backgroundColor: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}
               title="AI Mock Intelligence — learn from real API responses"
             >
@@ -304,7 +304,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           )}
           {aiEnabled('adaptiveMockLearning') && (
             <button type="button" onClick={() => setShowAdaptiveLearning(true)}
-              className="flex items-center gap-1 h-[24px] px-2 rounded-lg text-[10px] font-medium cursor-pointer"
+              className="flex items-center gap-1 h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer"
               style={{ color: AI_COLOR, backgroundColor: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}
               title="Adaptive Mock Learning — record real traffic, AI builds smart mock rules"
             >
@@ -313,7 +313,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           )}
           {aiEnabled('aiScenarioComposer') && (
             <button type="button" onClick={() => setShowScenarioComposer(true)}
-              className="flex items-center gap-1 h-[24px] px-2 rounded-lg text-[10px] font-medium cursor-pointer"
+              className="flex items-center gap-1 h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer"
               style={{ color: AI_COLOR, backgroundColor: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}
               title="AI Scenario Composer — describe complex scenarios in plain English"
             >
@@ -420,7 +420,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           <button
             type="button"
             onClick={() => { setAddingNew(true); setEditingId(null); }}
-            className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] rounded cursor-pointer transition-colors border"
+            className="flex items-center gap-1.5 h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
             style={{ color: AI_COLOR, borderColor: `color-mix(in srgb, ${AI_COLOR} 30%, transparent)`, background: 'transparent' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${AI_COLOR} 10%, transparent)`; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -433,7 +433,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
               type="button"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Custom Scenarios"
-              className="flex items-center gap-1 h-[26px] px-2.5 text-[10px] rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+              className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
             >
               <TrashIcon size={11} />
               Delete All

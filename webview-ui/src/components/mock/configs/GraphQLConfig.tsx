@@ -5,9 +5,33 @@ import { useState } from 'react';
 import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
 import { CodeEditor, StyledDropdown, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
 import { GRAPHQL_SAMPLES } from '../samples';
-import type { MockServer } from '../mock-types';
+import type { MockServer, MockRoute } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 import type { GraphQLMockOperation } from '../mock-types';
+import { SequencePanel } from '../wiremock/SequencePanel';
+import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
+import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
+
+type GQLOpTab = 'response' | 'sequence' | 'matching' | 'advanced';
+
+function gqlOpToRoute(op: GraphQLMockOperation): MockRoute {
+  return {
+    id: op.id, method: 'POST', path: op.operationName, statusCode: op.statusCode,
+    headers: {}, body: op.response, delay: op.delay, enabled: op.enabled,
+    responses: op.responses, sequenceMode: op.sequenceMode,
+    urlMatch: op.urlMatch, headerMatchers: op.headerMatchers,
+    queryParamMatchers: op.queryParamMatchers, cookieMatchers: op.cookieMatchers,
+    bodyMatcher: op.bodyMatcher, compositeLogic: op.compositeLogic,
+    priority: op.priority, fault: op.fault, rateLimit: op.rateLimit,
+  };
+}
+
+function routeToGQLPatch(patch: Partial<MockRoute>): Partial<GraphQLMockOperation> {
+  const { responses, sequenceMode, urlMatch, headerMatchers, queryParamMatchers,
+          cookieMatchers, bodyMatcher, compositeLogic, priority, fault, rateLimit } = patch;
+  return { responses, sequenceMode, urlMatch, headerMatchers, queryParamMatchers,
+           cookieMatchers, bodyMatcher, compositeLogic, priority, fault, rateLimit };
+}
 
 const GRAPHQL_SAMPLE_OPTIONS: DropdownOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -136,94 +160,19 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
         </div>
       </div>
       {(server.graphqlOperations || []).map((op, i) => (
-        <div key={op.id} className={`relative rounded-lg border p-3 flex flex-col gap-2 transition-all ${
-          op.enabled !== false
-            ? 'border-[var(--color-surface-border)] bg-[var(--color-surface)]'
-            : 'border-[var(--color-surface-border)] bg-[var(--color-panel)]'
-        }`}>
-          {/* Disabled overlay */}
-          {op.enabled === false && (
-            <div className="absolute inset-0 rounded-lg z-10 pointer-events-none overflow-hidden">
-              <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg bg-[var(--color-muted-fallback)]" />
-              <DiagonalLinesPattern patternId={`disabled-gql-${op.id}`} />
-            </div>
-          )}
-
-          <div className={`flex items-center gap-2 ${op.enabled === false ? 'opacity-50' : ''}`}>
-            <button
-              type="button"
-              onClick={() => {
-                const ops = [...(server.graphqlOperations || [])];
-                ops[i] = { ...op, enabled: op.enabled === false ? true : false };
-                onUpdate({ graphqlOperations: ops });
-              }}
-              className="relative z-20 w-[28px] h-[14px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-              style={{ backgroundColor: op.enabled !== false ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-              title={op.enabled !== false ? 'Disable' : 'Enable'}
-            >
-              <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: op.enabled !== false ? '16px' : '2px' }} />
-            </button>
-            <StyledDropdown
-              size="sm"
-              value={op.operationType}
-              onChange={(val) => {
-                const ops = [...(server.graphqlOperations || [])];
-                ops[i] = { ...op, operationType: val as any };
-                onUpdate({ graphqlOperations: ops });
-              }}
-              options={[
-                { value: 'query', label: 'Query' },
-                { value: 'mutation', label: 'Mutation' },
-                { value: 'subscription', label: 'Subscription' },
-              ]}
-              accentColor={GQL_COLOR}
-            />
-            <input
-              type="text"
-              value={op.operationName}
-              onChange={(e) => {
-                const ops = [...(server.graphqlOperations || [])];
-                ops[i] = { ...op, operationName: e.target.value };
-                onUpdate({ graphqlOperations: ops });
-              }}
-              placeholder="Operation name (optional)"
-              className="flex-1 h-[26px] px-2.5 text-[12px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
-            />
-            {gqlUrl && op.enabled !== false && (
-              <button
-                type="button"
-                onClick={() => copyEndpoint(op.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-                title="Copy endpoint URL"
-              >
-                {copiedId === op.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-              </button>
-            )}
-            {op.enabled !== false && (
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmId(op.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer"
-              >
-                <TrashIcon size={12} />
-              </button>
-            )}
-          </div>
-          {op.enabled !== false && (
-            <ResizablePanel id={`mock.gql.op.${op.id}`} defaultHeight={80} minHeight={50} maxHeight={400}>
-              <CodeEditor
-                value={op.response}
-                onChange={(val) => {
-                  const ops = [...(server.graphqlOperations || [])];
-                  ops[i] = { ...op, response: val };
-                  onUpdate({ graphqlOperations: ops });
-                }}
-                language="json"
-                height="100%"
-              />
-            </ResizablePanel>
-          )}
-        </div>
+        <GQLOperationCard
+          key={op.id}
+          op={op}
+          gqlUrl={gqlUrl}
+          copiedId={copiedId}
+          onCopyEndpoint={copyEndpoint}
+          onDelete={() => setDeleteConfirmId(op.id)}
+          onUpdate={(patch) => {
+            const ops = [...(server.graphqlOperations || [])];
+            ops[i] = { ...ops[i], ...patch };
+            onUpdate({ graphqlOperations: ops });
+          }}
+        />
       ))}
 
       {deleteConfirmId && (
@@ -253,6 +202,103 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
           }}
           onCancel={() => setShowDeleteAll(false)}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── GQL Operation Card ───────────────────────────────────────────────────────
+
+interface GQLOperationCardProps {
+  op: GraphQLMockOperation;
+  gqlUrl: string;
+  copiedId: string | null;
+  onCopyEndpoint: (id: string) => void;
+  onDelete: () => void;
+  onUpdate: (patch: Partial<GraphQLMockOperation>) => void;
+}
+
+function GQLOperationCard({ op, gqlUrl, copiedId, onCopyEndpoint, onDelete, onUpdate }: GQLOperationCardProps) {
+  const [activeTab, setActiveTab] = useState<GQLOpTab>('response');
+
+  return (
+    <div className={`relative rounded-lg border flex flex-col transition-all overflow-hidden ${
+      op.enabled !== false
+        ? 'border-[var(--color-surface-border)] bg-[var(--color-surface)]'
+        : 'border-[var(--color-surface-border)] bg-[var(--color-panel)]'
+    }`}>
+      {/* Disabled overlay */}
+      {op.enabled === false && (
+        <div className="absolute inset-0 rounded-lg z-10 pointer-events-none overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg bg-[var(--color-muted-fallback)]" />
+          <DiagonalLinesPattern patternId={`disabled-gql-${op.id}`} />
+        </div>
+      )}
+
+      {/* Header row */}
+      <div className={`flex items-center gap-2 p-3 ${op.enabled === false ? 'opacity-50' : ''}`}>
+        <button type="button"
+          onClick={() => onUpdate({ enabled: op.enabled === false ? true : false })}
+          className="relative z-20 w-[28px] h-[14px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
+          style={{ backgroundColor: op.enabled !== false ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
+          title={op.enabled !== false ? 'Disable' : 'Enable'}>
+          <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: op.enabled !== false ? '16px' : '2px' }} />
+        </button>
+        <StyledDropdown size="sm" value={op.operationType}
+          onChange={(val) => onUpdate({ operationType: val as GraphQLMockOperation['operationType'] })}
+          options={[{ value: 'query', label: 'Query' }, { value: 'mutation', label: 'Mutation' }, { value: 'subscription', label: 'Subscription' }]}
+          accentColor={GQL_COLOR} />
+        <input type="text" value={op.operationName}
+          onChange={(e) => onUpdate({ operationName: e.target.value })}
+          placeholder="Operation name (optional)"
+          className="flex-1 h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none" />
+        {gqlUrl && op.enabled !== false && (
+          <button type="button" onClick={() => onCopyEndpoint(op.id)}
+            className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors" title="Copy endpoint URL">
+            {copiedId === op.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
+          </button>
+        )}
+        {op.enabled !== false && (
+          <button type="button" onClick={onDelete} className="text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer">
+            <TrashIcon size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Tab bar — only when enabled */}
+      {op.enabled !== false && (
+        <>
+          <div className="flex items-center gap-0 border-t border-b border-[rgba(255,255,255,0.06)] px-3">
+            {(['response', 'sequence', 'matching', 'advanced'] as GQLOpTab[]).map(tab => (
+              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+                className="h-[28px] px-2.5 text-[10px] font-medium cursor-pointer transition-colors"
+                style={{
+                  borderBottom: activeTab === tab ? `2px solid ${GQL_COLOR}` : '2px solid transparent',
+                  color: activeTab === tab ? GQL_COLOR : 'var(--color-text-muted)',
+                  marginBottom: '-1px',
+                }}>
+                {tab === 'response' ? 'Response' : tab === 'sequence' ? 'Sequence' : tab === 'matching' ? 'Matching' : 'Advanced'}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-3 flex flex-col gap-2">
+            {activeTab === 'response' && (
+              <ResizablePanel id={`mock.gql.op.${op.id}`} defaultHeight={80} minHeight={50} maxHeight={400}>
+                <CodeEditor value={op.response} onChange={(val) => onUpdate({ response: val })} language="json" height="100%" />
+              </ResizablePanel>
+            )}
+            {activeTab === 'sequence' && (
+              <SequencePanel route={gqlOpToRoute(op)} onUpdate={(patch) => onUpdate(routeToGQLPatch(patch))} />
+            )}
+            {activeTab === 'matching' && (
+              <MatchBuilderPanel route={gqlOpToRoute(op)} onUpdate={(patch) => onUpdate(routeToGQLPatch(patch))} />
+            )}
+            {activeTab === 'advanced' && (
+              <FaultInjectionPanel route={gqlOpToRoute(op)} onUpdate={(patch) => onUpdate(routeToGQLPatch(patch))} />
+            )}
+          </div>
+        </>
       )}
     </div>
   );

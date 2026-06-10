@@ -4,8 +4,29 @@ import type { DropdownOption } from '../../shared';
 import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, GrpcUnaryIcon, GrpcServerStreamIcon, GrpcClientStreamIcon, GrpcBidiStreamIcon } from '../../../icons';
 import { GRPC_SAMPLES } from '../samples/grpc';
 import { useUiStateStore } from '../../../store/ui-state-store';
-import type { MockServer, GrpcMockMethod } from '../mock-types';
+import type { MockServer, GrpcMockMethod, MockRoute } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import { SequencePanel } from '../wiremock/SequencePanel';
+import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
+import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
+
+type GrpcMethodTab = 'response' | 'sequence' | 'matching' | 'advanced';
+
+function methodToRoute(m: GrpcMockMethod): MockRoute {
+  return {
+    id: m.id, method: 'POST', path: m.method, statusCode: m.statusCode ?? 0,
+    headers: {}, body: m.response, delay: m.delay ?? 0, enabled: m.enabled,
+    responses: m.responses, sequenceMode: m.sequenceMode,
+    headerMatchers: m.headerMatchers, bodyMatcher: m.bodyMatcher,
+    compositeLogic: m.compositeLogic, priority: m.priority,
+    fault: m.fault, rateLimit: m.rateLimit,
+  };
+}
+
+function routeToMethodPatch(patch: Partial<MockRoute>): Partial<GrpcMockMethod> {
+  const { responses, sequenceMode, headerMatchers, bodyMatcher, compositeLogic, priority, fault, rateLimit } = patch;
+  return { responses, sequenceMode, headerMatchers, bodyMatcher, compositeLogic, priority, fault, rateLimit };
+}
 
 const ACCENT = 'var(--color-protocol-grpc)';
 
@@ -41,6 +62,14 @@ interface GrpcMethodRow {
   delay: number;
   statusCode: number;
   serviceEnabled: boolean;
+  responses?: import('../mock-types').ResponseSequenceItem[];
+  sequenceMode?: import('../mock-types').SequenceMode;
+  headerMatchers?: import('../mock-types').MatchRule[];
+  bodyMatcher?: import('../mock-types').BodyMatcher;
+  compositeLogic?: import('../mock-types').CompositeLogic;
+  priority?: number;
+  fault?: import('../mock-types').FaultConfig;
+  rateLimit?: import('../mock-types').RateLimitConfig;
 }
 
 interface ServiceGroup {
@@ -416,6 +445,7 @@ interface MethodRowProps {
 }
 
 function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }: MethodRowProps) {
+  const [activeTab, setActiveTab] = useState<GrpcMethodTab>('response');
   return (
     <div
       className={`relative rounded-md border overflow-hidden transition-all ${
@@ -487,59 +517,81 @@ function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }
 
       {/* Expanded detail */}
       {m.enabled && isExpanded && (
-        <div className="px-2.5 pb-2.5 pt-1 border-t border-[rgba(255,255,255,0.06)] flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Method Name</label>
-              <input
-                type="text"
-                value={m.method}
-                onChange={(e) => onUpdate({ method: e.target.value })}
-                className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Type</label>
-              <StyledDropdown
-                options={RPC_TYPE_OPTIONS}
-                value={m.type}
-                onChange={(v) => onUpdate({ type: v as GrpcMethodRow['type'] })}
-                size="sm"
-                accentColor={ACCENT}
-              />
-            </div>
+        <div className="border-t border-[rgba(255,255,255,0.06)]">
+          {/* Tab bar */}
+          <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.06)] px-2.5">
+            {(['response', 'sequence', 'matching', 'advanced'] as GrpcMethodTab[]).map(tab => (
+              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+                className="h-[28px] px-2.5 text-[10px] font-medium cursor-pointer transition-colors capitalize"
+                style={{
+                  borderBottom: activeTab === tab ? `2px solid ${ACCENT}` : '2px solid transparent',
+                  color: activeTab === tab ? ACCENT : 'var(--color-text-muted)',
+                  marginBottom: '-1px',
+                }}>
+                {tab === 'response' ? 'Response' : tab === 'sequence' ? 'Sequence' : tab === 'matching' ? 'Matching' : 'Advanced'}
+              </button>
+            ))}
           </div>
-          <div>
-            <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response (JSON)</label>
-            <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
-              <CodeEditor
-                value={m.response}
-                onChange={(val) => onUpdate({ response: val })}
-                language="json"
-                className="h-full"
+
+          <div className="px-2.5 pb-2.5 pt-2 flex flex-col gap-2">
+            {/* ── Response tab ── */}
+            {activeTab === 'response' && <>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Method Name</label>
+                  <input type="text" value={m.method} onChange={(e) => onUpdate({ method: e.target.value })}
+                    className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Type</label>
+                  <StyledDropdown options={RPC_TYPE_OPTIONS} value={m.type}
+                    onChange={(v) => onUpdate({ type: v as GrpcMethodRow['type'] })} size="sm" accentColor={ACCENT} />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response (JSON)</label>
+                <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
+                  <CodeEditor value={m.response} onChange={(val) => onUpdate({ response: val })} language="json" className="h-full" />
+                </div>
+              </div>
+              <div className="flex items-center gap-4 pt-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-[var(--color-text-muted)]">Status</span>
+                  <input type="text" inputMode="numeric" value={m.statusCode}
+                    onChange={(e) => onUpdate({ statusCode: parseInt(e.target.value) || 0 })}
+                    className="w-[56px] h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)] text-center"
+                    title="gRPC status code (0=OK, 1=CANCELLED, 2=UNKNOWN, ...)" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
+                  <DurationInput value={m.delay} onChange={(ms) => onUpdate({ delay: ms })} />
+                </div>
+              </div>
+            </>}
+
+            {/* ── Sequence tab ── */}
+            {activeTab === 'sequence' && (
+              <SequencePanel
+                route={methodToRoute(m as unknown as GrpcMockMethod)}
+                onUpdate={(patch) => onUpdate(routeToMethodPatch(patch) as Partial<GrpcMethodRow>)}
               />
-            </div>
-          </div>
-          {/* Status + Delay */}
-          <div className="flex items-center gap-4 pt-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-[var(--color-text-muted)]">Status</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={m.statusCode}
-                onChange={(e) => onUpdate({ statusCode: parseInt(e.target.value) || 0 })}
-                className="w-[56px] h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                title="gRPC status code (0=OK, 1=CANCELLED, 2=UNKNOWN, ...)"
+            )}
+
+            {/* ── Matching tab ── */}
+            {activeTab === 'matching' && (
+              <MatchBuilderPanel
+                route={methodToRoute(m as unknown as GrpcMockMethod)}
+                onUpdate={(patch) => onUpdate(routeToMethodPatch(patch) as Partial<GrpcMethodRow>)}
               />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
-              <DurationInput
-                value={m.delay}
-                onChange={(ms) => onUpdate({ delay: ms })}
+            )}
+
+            {/* ── Advanced tab ── */}
+            {activeTab === 'advanced' && (
+              <FaultInjectionPanel
+                route={methodToRoute(m as unknown as GrpcMockMethod)}
+                onUpdate={(patch) => onUpdate(routeToMethodPatch(patch) as Partial<GrpcMethodRow>)}
               />
-            </div>
+            )}
           </div>
         </div>
       )}

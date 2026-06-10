@@ -249,6 +249,18 @@ export interface GraphQLMockOperation {
   statusCode: number;
   delay: number;
   enabled: boolean;
+  // Advanced matching + sequencing (shared with REST RouteCard)
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  urlMatch?: UrlMatchConfig;
+  headerMatchers?: MatchRule[];
+  queryParamMatchers?: MatchRule[];
+  cookieMatchers?: MatchRule[];
+  bodyMatcher?: BodyMatcher;
+  compositeLogic?: CompositeLogic;
+  priority?: number;
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
 }
 
 export interface WebSocketMockHandler {
@@ -304,6 +316,15 @@ export interface GrpcMockMethod {
   delay?: number;
   statusCode?: number;
   serviceEnabled?: boolean;
+  // Advanced matching + sequencing (shared with REST RouteCard)
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  headerMatchers?: MatchRule[];
+  bodyMatcher?: BodyMatcher;
+  compositeLogic?: CompositeLogic;
+  priority?: number;
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
 }
 
 export interface SoapMockOperation {
@@ -319,6 +340,15 @@ export interface SoapMockOperation {
   delay: number;
   enabled: boolean;
   serviceEnabled?: boolean;
+  // Advanced matching + sequencing (shared with REST RouteCard)
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  headerMatchers?: MatchRule[];
+  bodyMatcher?: BodyMatcher;
+  compositeLogic?: CompositeLogic;
+  priority?: number;
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
 }
 
 export interface MockLogEntry {

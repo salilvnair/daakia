@@ -5,8 +5,29 @@ import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, CopyIcon, CheckIcon,
 import { SOAP_MOCK_SAMPLES } from '../samples/soap';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useTabsStore } from '../../../store/tabs-store';
-import type { MockServer, SoapMockOperation } from '../mock-types';
+import type { MockServer, SoapMockOperation, MockRoute } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import { SequencePanel } from '../wiremock/SequencePanel';
+import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
+import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
+
+type SoapOpTab = 'response' | 'sequence' | 'matching' | 'advanced';
+
+function opToRoute(op: OperationRow): MockRoute {
+  return {
+    id: op.id, method: 'POST', path: op.soapAction || op.operation, statusCode: 200,
+    headers: {}, body: op.response, delay: op.delay, enabled: op.enabled,
+    responses: op.responses, sequenceMode: op.sequenceMode,
+    headerMatchers: op.headerMatchers, bodyMatcher: op.bodyMatcher,
+    compositeLogic: op.compositeLogic, priority: op.priority,
+    fault: op.fault, rateLimit: op.rateLimit,
+  };
+}
+
+function routeToOpPatch(patch: Partial<MockRoute>): Partial<OperationRow> {
+  const { responses, sequenceMode, headerMatchers, bodyMatcher, compositeLogic, priority, fault, rateLimit } = patch;
+  return { responses, sequenceMode, headerMatchers, bodyMatcher, compositeLogic, priority, fault, rateLimit };
+}
 
 const ACCENT = 'var(--color-protocol-soap)';
 
@@ -40,6 +61,14 @@ interface OperationRow {
   delay: number;
   enabled: boolean;
   serviceEnabled: boolean;
+  responses?: import('../mock-types').ResponseSequenceItem[];
+  sequenceMode?: import('../mock-types').SequenceMode;
+  headerMatchers?: import('../mock-types').MatchRule[];
+  bodyMatcher?: import('../mock-types').BodyMatcher;
+  compositeLogic?: import('../mock-types').CompositeLogic;
+  priority?: number;
+  fault?: import('../mock-types').FaultConfig;
+  rateLimit?: import('../mock-types').RateLimitConfig;
 }
 
 interface ServiceGroup {
@@ -379,7 +408,7 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
                         type="text"
                         value={group.service}
                         onChange={(e) => renameService(group.service, e.target.value)}
-                        className="flex-1 h-[26px] px-2 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
+                        className="flex-1 h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
                       />
                     </div>
 
@@ -399,7 +428,7 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
                     <button
                       type="button"
                       onClick={() => addOperationToService(group.service)}
-                      className="h-[26px] px-2 text-[10px] rounded cursor-pointer transition-colors self-start border border-dashed"
+                      className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors self-start border border-dashed"
                       style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: 'transparent' }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -460,6 +489,7 @@ interface OperationItemProps {
 
 function OperationItem({ operation: op, isExpanded, onToggleExpand, onUpdate, onRemove }: OperationItemProps) {
   const cfg = RESPONSE_TYPE_CONFIG[op.responseType] || RESPONSE_TYPE_CONFIG.static;
+  const [activeTab, setActiveTab] = useState<SoapOpTab>('response');
 
   return (
     <div
@@ -520,101 +550,98 @@ function OperationItem({ operation: op, isExpanded, onToggleExpand, onUpdate, on
 
       {/* Expanded detail */}
       {op.enabled && isExpanded && (
-        <div className="px-2.5 pb-2.5 pt-1 border-t border-[rgba(255,255,255,0.06)] flex flex-col gap-2">
-          {/* Operation name + SOAPAction */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Operation Name</label>
-              <input
-                type="text"
-                value={op.operation}
-                onChange={(e) => onUpdate({ operation: e.target.value })}
-                className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">SOAPAction</label>
-              <input
-                type="text"
-                value={op.soapAction}
-                onChange={(e) => onUpdate({ soapAction: e.target.value })}
-                className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
-              />
-            </div>
+        <div className="border-t border-[rgba(255,255,255,0.06)]">
+          {/* Tab bar */}
+          <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.06)] px-2.5">
+            {(['response', 'sequence', 'matching', 'advanced'] as SoapOpTab[]).map(tab => (
+              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+                className="h-[28px] px-2.5 text-[10px] font-medium cursor-pointer transition-colors"
+                style={{
+                  borderBottom: activeTab === tab ? `2px solid ${ACCENT}` : '2px solid transparent',
+                  color: activeTab === tab ? ACCENT : 'var(--color-text-muted)',
+                  marginBottom: '-1px',
+                }}>
+                {tab === 'response' ? 'Response' : tab === 'sequence' ? 'Sequence' : tab === 'matching' ? 'Matching' : 'Advanced'}
+              </button>
+            ))}
           </div>
 
-          {/* Response type + delay */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response Type</label>
-              <StyledDropdown
-                options={RESPONSE_TYPE_OPTIONS}
-                value={op.responseType}
-                onChange={(v) => onUpdate({ responseType: v as OperationRow['responseType'] })}
-                size="sm"
-                accentColor={ACCENT}
-              />
-            </div>
-            <div className="flex items-end gap-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
-                <DurationInput
-                  value={op.delay}
-                  onChange={(ms) => onUpdate({ delay: ms })}
-                />
+          <div className="px-2.5 pb-2.5 pt-2 flex flex-col gap-2">
+            {/* ── Response tab ── */}
+            {activeTab === 'response' && <>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Operation Name</label>
+                  <input type="text" value={op.operation} onChange={(e) => onUpdate({ operation: e.target.value })}
+                    className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">SOAPAction</label>
+                  <input type="text" value={op.soapAction} onChange={(e) => onUpdate({ soapAction: e.target.value })}
+                    className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]" />
+                </div>
               </div>
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response Type</label>
+                  <StyledDropdown options={RESPONSE_TYPE_OPTIONS} value={op.responseType}
+                    onChange={(v) => onUpdate({ responseType: v as OperationRow['responseType'] })} size="sm" accentColor={ACCENT} />
+                </div>
+                <div className="flex items-end">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
+                    <DurationInput value={op.delay} onChange={(ms) => onUpdate({ delay: ms })} />
+                  </div>
+                </div>
+              </div>
+              {op.responseType === 'fault' ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Fault Code</label>
+                    <input type="text" value={op.faultCode || ''} onChange={(e) => onUpdate({ faultCode: e.target.value })}
+                      placeholder="soap:Server"
+                      className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-mock-server)]" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Fault String</label>
+                    <input type="text" value={op.faultString || ''} onChange={(e) => onUpdate({ faultString: e.target.value })}
+                      placeholder="Error description"
+                      className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-mock-server)]" />
+                  </div>
+                </div>
+              ) : op.responseType === 'script' ? (
+                <div>
+                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response Script</label>
+                  <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
+                    <CodeEditor value={op.responseScript || '// Return XML string\nreturn `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Body>\n    <Response><result>${Date.now()}</result></Response>\n  </soap:Body>\n</soap:Envelope>`;'}
+                      onChange={(v) => onUpdate({ responseScript: v })} language="javascript" className="h-full" />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response XML</label>
+                  <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
+                    <CodeEditor value={op.response} onChange={(v) => onUpdate({ response: v })} language="xml" className="h-full" />
+                  </div>
+                </div>
+              )}
+            </>}
 
-          {/* Response body / fault config */}
-          {op.responseType === 'fault' ? (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Fault Code</label>
-                <input
-                  type="text"
-                  value={op.faultCode || ''}
-                  onChange={(e) => onUpdate({ faultCode: e.target.value })}
-                  placeholder="soap:Server"
-                  className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-mock-server)]"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Fault String</label>
-                <input
-                  type="text"
-                  value={op.faultString || ''}
-                  onChange={(e) => onUpdate({ faultString: e.target.value })}
-                  placeholder="Error description"
-                  className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-mock-server)]"
-                />
-              </div>
-            </div>
-          ) : op.responseType === 'script' ? (
-            <div>
-              <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response Script</label>
-              <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
-                <CodeEditor
-                  value={op.responseScript || '// Return XML string\nreturn `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Body>\n    <Response><result>${Date.now()}</result></Response>\n  </soap:Body>\n</soap:Envelope>`;'}
-                  onChange={(v) => onUpdate({ responseScript: v })}
-                  language="javascript"
-                  className="h-full"
-                />
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response XML</label>
-              <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
-                <CodeEditor
-                  value={op.response}
-                  onChange={(v) => onUpdate({ response: v })}
-                  language="xml"
-                  className="h-full"
-                />
-              </div>
-            </div>
-          )}
+            {/* ── Sequence tab ── */}
+            {activeTab === 'sequence' && (
+              <SequencePanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />
+            )}
+
+            {/* ── Matching tab ── */}
+            {activeTab === 'matching' && (
+              <MatchBuilderPanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />
+            )}
+
+            {/* ── Advanced tab ── */}
+            {activeTab === 'advanced' && (
+              <FaultInjectionPanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />
+            )}
+          </div>
         </div>
       )}
     </div>

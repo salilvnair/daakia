@@ -322,10 +322,12 @@ export function DaakiaAiPanel() {
   const allTabs = useTabsStore(s => s.tabs);
   const previousTabId = useTabsStore(s => s.previousTabId);
   const contextTab = useMemo(() => {
-    // Prefer the previousTabId set by openDaakiaAiTab — it's the exact tab the user came from
+    // Prefer the tab the user explicitly came from — no URL requirement.
+    // A gRPC/SOAP/GQL tab with no URL yet should still be the context tab.
+    // showContextBar and buildContextBlock handle the empty-URL case downstream.
     const prev = previousTabId ? allTabs.find(t => t.id === previousTabId) : null;
-    if (prev && prev.type !== 'daakia-ai' && prev.url?.trim()) return prev;
-    // Fallback: any non-AI tab with a URL (sorted by tab order, not insertion order)
+    if (prev && prev.type !== 'daakia-ai') return prev;
+    // Fallback: last non-AI tab with a URL (when previousTabId is stale/missing)
     return allTabs.filter(t => t.type !== 'daakia-ai' && t.url?.trim()).at(-1) ?? null;
   }, [allTabs, previousTabId]);
 

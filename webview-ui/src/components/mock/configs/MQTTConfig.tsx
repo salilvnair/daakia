@@ -119,7 +119,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
           <button
             type="button"
             onClick={addTopic}
-            className="h-[26px] px-2.5 text-[10px] rounded cursor-pointer transition-colors border"
+            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
             style={{ color: 'var(--color-protocol-mqtt)', borderColor: 'color-mix(in srgb, var(--color-protocol-mqtt) 30%, transparent)' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-mqtt) 10%, transparent)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
