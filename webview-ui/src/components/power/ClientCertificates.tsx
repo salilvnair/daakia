@@ -96,7 +96,7 @@ export function ClientCertificates({ onClose }: Props) {
             <p className="text-[11px] text-[var(--color-text-muted)]">Configure per-domain client certificates for mutual TLS</p>
           </div>
           <button type="button" onClick={() => setAddMode(true)}
-            className="flex items-center gap-1 h-[28px] px-2.5 text-[10.5px] rounded-md cursor-pointer text-white"
+            className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded cursor-pointer text-white"
             style={{ backgroundColor: 'var(--color-success)' }}>
             <PlusIcon size={10} />Add Certificate
           </button>
@@ -115,7 +115,7 @@ export function ClientCertificates({ onClose }: Props) {
                   No certificates configured
                 </p>
                 <button type="button" onClick={() => setAddMode(true)}
-                  className="text-[10.5px] px-3 py-1 rounded-md cursor-pointer text-white"
+                  className="text-[11px] px-3 py-1 rounded cursor-pointer text-white"
                   style={{ backgroundColor: 'var(--color-success)' }}>
                   Add First Certificate
                 </button>
@@ -182,12 +182,12 @@ export function ClientCertificates({ onClose }: Props) {
 
                 <div className="flex gap-2 mt-1">
                   <button type="button" onClick={() => { setAddMode(false); setEditing({}); }}
-                    className="h-[30px] px-3 text-[11px] rounded-md cursor-pointer"
+                    className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer"
                     style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}>
                     Cancel
                   </button>
                   <button type="button" onClick={addCert}
-                    className="h-[30px] px-3 text-[11px] font-medium rounded-md cursor-pointer text-white"
+                    className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer text-white"
                     style={{ backgroundColor: 'var(--color-success)' }}>
                     Add Certificate
                   </button>
@@ -213,7 +213,7 @@ export function ClientCertificates({ onClose }: Props) {
                 ))}
 
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10.5px]" style={{ color: selectedCert.enabled ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                  <span className="text-[11px]" style={{ color: selectedCert.enabled ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
                     {selectedCert.enabled ? '✓ Active for this domain' : '○ Disabled'}
                   </span>
                   {selectedCert.verified === true && <span className="text-[10px]" style={{ color: 'var(--color-success)' }}>✓ Certificate verified</span>}
@@ -232,7 +232,7 @@ export function ClientCertificates({ onClose }: Props) {
 
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
             Close
           </button>
         </div>

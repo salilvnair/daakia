@@ -11,6 +11,9 @@ import { SaveIcon, SendIcon, DownloadIcon, CopyIcon, CodeIcon, RefreshIcon, Stop
 import { logUiEvent } from '../../../store/ui-audit-store';
 import { AiPreflightPopover, countPreflightIssues } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
+import { AiNlRequestBuilderModal } from '../../ai/AiNlRequestBuilderModal';
+import { AiAdaptiveLoadTesterModal } from '../../ai/AiAdaptiveLoadTesterModal';
+import { AiSchemaDriftModal } from '../../ai/AiSchemaDriftModal';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 
 const METHOD_OPTIONS: DropdownOption[] = [
@@ -32,6 +35,9 @@ export function UrlBar() {
   const [showPreflight, setShowPreflight] = useState(false);
   const [showOverflow, setShowOverflow] = useState(false);
   const [showPatternStatus, setShowPatternStatus] = useState(false);
+  const [showNlRequestBuilder, setShowNlRequestBuilder] = useState(false);
+  const [showAdaptiveLoadTester, setShowAdaptiveLoadTester] = useState(false);
+  const [showSchemaDrift, setShowSchemaDrift] = useState(false);
   const [overflowDir, setOverflowDir] = useState<'down' | 'up'>('down');
   const overflowRef = useRef<HTMLDivElement>(null);
   const overflowBtnRef = useRef<HTMLButtonElement>(null);
@@ -246,6 +252,48 @@ export function UrlBar() {
                 Pattern Baseline
               </button>
             )}
+
+            {/* NL Request Builder — Sprint 11.2 */}
+            {aiEnabled('nlRequestBuilder') && (
+              <button type="button"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
+                style={{ color: 'var(--color-protocol-ai)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                onClick={() => { setShowNlRequestBuilder(true); setShowOverflow(false); }}
+              >
+                <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                NL Request Builder ✦
+              </button>
+            )}
+
+            {/* Adaptive Load Tester — Sprint 11.8 */}
+            {tab.url.trim() && aiEnabled('adaptiveLoadTester') && (
+              <button type="button"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
+                style={{ color: 'var(--color-protocol-rest)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-rest) 8%, transparent)`; }}
+                onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                onClick={() => { setShowAdaptiveLoadTester(true); setShowOverflow(false); }}
+              >
+                <SparkleIcon size={12} style={{ color: 'var(--color-protocol-rest)', flexShrink: 0 }} />
+                Adaptive Load Tester ✦
+              </button>
+            )}
+
+            {/* Schema Drift Monitor — Sprint 11.7 */}
+            {aiEnabled('schemaDriftMonitor') && (
+              <button type="button"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
+                style={{ color: 'var(--color-warning)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-warning) 8%, transparent)`; }}
+                onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                onClick={() => { setShowSchemaDrift(true); setShowOverflow(false); }}
+              >
+                <SparkleIcon size={12} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
+                Schema Drift Monitor ✦
+              </button>
+            )}
           </div>
         )}
 
@@ -268,6 +316,19 @@ export function UrlBar() {
       {/* Modals */}
       <GenerateCodeModal open={showGenerateCode} tab={tab} onClose={() => setShowGenerateCode(false)} />
       <ImportCurlModal open={showImportCurl} onClose={() => setShowImportCurl(false)} />
+      {showNlRequestBuilder && (
+        <AiNlRequestBuilderModal
+          protocol="rest"
+          currentUrl={tab.url}
+          onClose={() => setShowNlRequestBuilder(false)}
+        />
+      )}
+      {showAdaptiveLoadTester && (
+        <AiAdaptiveLoadTesterModal onClose={() => setShowAdaptiveLoadTester(false)} />
+      )}
+      {showSchemaDrift && (
+        <AiSchemaDriftModal onClose={() => setShowSchemaDrift(false)} />
+      )}
     </div>
   );
 }

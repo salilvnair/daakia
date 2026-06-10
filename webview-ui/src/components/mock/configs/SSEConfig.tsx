@@ -118,7 +118,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
           <button
             type="button"
             onClick={addEvent}
-            className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
+            className="h-[26px] px-2.5 text-[10px] rounded cursor-pointer transition-colors border"
             style={{ color: 'var(--color-protocol-sse)', borderColor: 'color-mix(in srgb, var(--color-protocol-sse) 30%, transparent)' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-sse) 10%, transparent)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -128,7 +128,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
               type="button"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Events"
-              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
             >
               <TrashIcon size={12} />
             </button>
@@ -204,7 +204,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
                   value={event.eventName}
                   onChange={(e) => updateEvent(event.id, { eventName: e.target.value })}
                   placeholder="Event name"
-                  className="flex-1 h-[28px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  className="flex-1 h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
                 />
                 <DurationInput
                   value={event.intervalMs}

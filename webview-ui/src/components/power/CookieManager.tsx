@@ -137,17 +137,17 @@ export function CookieManager({ onClose }: Props) {
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={exportCookies}
-              className="flex items-center gap-1 h-[28px] px-2.5 text-[10.5px] rounded-md border cursor-pointer"
+              className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded border cursor-pointer"
               style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
               <CopyIcon size={10} />Export
             </button>
             <button type="button" onClick={() => setShowImport(true)}
-              className="flex items-center gap-1 h-[28px] px-2.5 text-[10.5px] rounded-md border cursor-pointer"
+              className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded border cursor-pointer"
               style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
               Import
             </button>
             <button type="button" onClick={addCookie}
-              className="flex items-center gap-1 h-[28px] px-2.5 text-[10.5px] rounded-md cursor-pointer text-white"
+              className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded cursor-pointer text-white"
               style={{ backgroundColor: 'var(--color-success)' }}>
               <PlusIcon size={10} />Add
             </button>
@@ -235,7 +235,7 @@ export function CookieManager({ onClose }: Props) {
                 </div>
 
                 <button type="button" onClick={() => saveCookie(selectedCookie.id)}
-                  className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer text-white self-start"
+                  className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer text-white self-start"
                   style={{ backgroundColor: 'var(--color-success)' }}>
                   Save Cookie
                 </button>
@@ -252,17 +252,17 @@ export function CookieManager({ onClose }: Props) {
               <p className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Import Cookies</p>
               <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Paste Netscape format cookies (from browser devtools or curl --cookie-jar)</p>
               <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={8}
-                className="w-full px-3 py-2 rounded text-[10.5px] font-mono resize-none outline-none"
+                className="w-full px-3 py-2 rounded text-[11px] font-mono resize-none outline-none"
                 placeholder="# Netscape HTTP Cookie File&#10;.example.com TRUE / FALSE 0 session_id abc123"
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
               <div className="flex gap-2 justify-end">
                 <button type="button" onClick={() => { setShowImport(false); setImportText(''); }}
-                  className="h-[30px] px-3 text-[11px] rounded-md cursor-pointer"
+                  className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer"
                   style={{ color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
                   Cancel
                 </button>
                 <button type="button" onClick={importCookies} disabled={!importText.trim()}
-                  className="h-[30px] px-3 text-[11px] font-medium rounded-md cursor-pointer text-white disabled:opacity-40"
+                  className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer text-white disabled:opacity-40"
                   style={{ backgroundColor: 'var(--color-info)' }}>
                   Import
                 </button>
@@ -273,7 +273,7 @@ export function CookieManager({ onClose }: Props) {
 
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
             Close
           </button>
         </div>

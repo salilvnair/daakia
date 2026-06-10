@@ -135,7 +135,7 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
               <div className="flex gap-1">
                 {['GET', 'POST', 'PUT'].map(m => (
                   <button key={m} type="button" onClick={() => setConfig(c => ({ ...c, method: m }))}
-                    className="px-2.5 py-1 text-[10.5px] rounded border cursor-pointer"
+                    className="px-2.5 py-1 text-[11px] rounded border cursor-pointer"
                     style={{
                       borderColor: config.method === m ? 'var(--color-info)' : 'var(--color-surface-border)',
                       color: config.method === m ? 'var(--color-info)' : 'var(--color-text-secondary)',
@@ -166,7 +166,7 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
           {/* Progress */}
           {running && (
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-[10.5px]">
+              <div className="flex items-center justify-between text-[11px]">
                 <span style={{ color: 'var(--color-text-secondary)' }}>Progress</span>
                 <span style={{ color: 'var(--color-text-muted)' }}>{progress}%</span>
               </div>
@@ -199,7 +199,7 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
 
               {/* Status code distribution */}
               <div className="rounded-lg border p-3" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
-                <p className="text-[10.5px] font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Status code distribution</p>
+                <p className="text-[11px] font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Status code distribution</p>
                 <div className="flex gap-3 flex-wrap">
                   {Object.entries(result.statusCodes).sort().map(([status, count]) => (
                     <div key={status} className="flex items-center gap-1.5">
@@ -224,7 +224,7 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
                 const max = Math.max(...counts.map(c => c.count));
                 return (
                   <div className="rounded-lg border p-3" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
-                    <p className="text-[10.5px] font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Response time distribution</p>
+                    <p className="text-[11px] font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Response time distribution</p>
                     <div className="flex flex-col gap-1.5">
                       {counts.map(({ label, count }) => (
                         <div key={label} className="flex items-center gap-2 text-[10px]">
@@ -247,18 +247,18 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
           {running && (
             <button type="button" onClick={stop}
-              className="h-[30px] px-3 text-[11px] rounded-md cursor-pointer"
+              className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer"
               style={{ backgroundColor: 'var(--color-error)', color: 'white' }}>
               Stop
             </button>
           )}
           <button type="button" onClick={run} disabled={running || !config.url.trim()}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
             style={{ backgroundColor: 'var(--color-success)' }}>
             ▶ Start Load Test
           </button>
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
             Close
           </button>
         </div>

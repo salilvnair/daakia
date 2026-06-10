@@ -213,7 +213,7 @@ export function GrpcClientPanel({ onClose }: Props) {
         <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-hover)' }}>
           <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0">
             <input type="checkbox" checked={tlsEnabled} onChange={e => setTlsEnabled(e.target.checked)} />
-            <span className="text-[10.5px] font-mono font-bold" style={{ color: tlsEnabled ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+            <span className="text-[11px] font-mono font-bold" style={{ color: tlsEnabled ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
               {tlsEnabled ? 'https://' : 'http://'}
             </span>
           </label>
@@ -230,12 +230,12 @@ export function GrpcClientPanel({ onClose }: Props) {
               <p className="text-[11px] font-semibold mb-2" style={{ color: 'var(--color-text-secondary)' }}>Proto Definition</p>
               <div className="flex gap-1.5">
                 <button type="button" onClick={() => fileRef.current?.click()}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md cursor-pointer border flex-1 justify-center"
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] rounded cursor-pointer border flex-1 justify-center"
                   style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
                   📂 {protoFile || 'Load .proto'}
                 </button>
                 <button type="button" onClick={() => { setProtoContent(EXAMPLE_PROTO); setTab('proto'); }}
-                  className="px-2 py-1 text-[10px] rounded-md cursor-pointer border"
+                  className="px-2 py-1 text-[10px] rounded cursor-pointer border"
                   style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-info)' }}>
                   Example
                 </button>
@@ -243,7 +243,7 @@ export function GrpcClientPanel({ onClose }: Props) {
               <input ref={fileRef} type="file" accept=".proto" className="hidden" onChange={loadFromFile} />
               {protoContent && (
                 <button type="button" onClick={parseProto}
-                  className="w-full mt-1.5 py-1 text-[10.5px] font-medium rounded-md cursor-pointer text-white"
+                  className="w-full mt-1.5 py-1 text-[11px] font-medium rounded cursor-pointer text-white"
                   style={{ backgroundColor: 'var(--color-info)' }}>
                   Parse Proto
                 </button>
@@ -253,7 +253,7 @@ export function GrpcClientPanel({ onClose }: Props) {
             <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
               {services.length === 0 && (
                 <div className="p-3 text-center">
-                  <p className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>No services. Load a .proto and click Parse.</p>
+                  <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>No services. Load a .proto and click Parse.</p>
                 </div>
               )}
               {services.map(svc => (
@@ -302,7 +302,7 @@ export function GrpcClientPanel({ onClose }: Props) {
               ))}
               <div className="flex-1" />
               <button type="button" onClick={sendRequest} disabled={sending}
-                className="my-1.5 px-4 text-[11px] font-semibold rounded-md cursor-pointer text-white disabled:opacity-50"
+                className="my-1.5 px-4 text-[11px] font-semibold rounded cursor-pointer text-white disabled:opacity-50"
                 style={{ backgroundColor: sending ? 'var(--color-surface-border)' : 'var(--color-info)' }}>
                 {sending ? (isStreaming ? '◼ Streaming…' : '⏳ Sending…') : (isStreaming ? '▶ Start Stream' : '▶ Send')}
               </button>
@@ -323,11 +323,11 @@ export function GrpcClientPanel({ onClose }: Props) {
                       <div key={i} className="flex gap-2 items-center">
                         <input type="checkbox" checked={h.enabled} onChange={e => setHeaders(prev => prev.map((hh, j) => j === i ? { ...hh, enabled: e.target.checked } : hh))} />
                         <input value={h.key} onChange={e => setHeaders(prev => prev.map((hh, j) => j === i ? { ...hh, key: e.target.value } : hh))}
-                          className="flex-1 px-2 py-1 rounded text-[10.5px] outline-none font-mono"
+                          className="flex-1 px-2 py-1 rounded text-[11px] outline-none font-mono"
                           placeholder="key"
                           style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
                         <input value={h.value} onChange={e => setHeaders(prev => prev.map((hh, j) => j === i ? { ...hh, value: e.target.value } : hh))}
-                          className="flex-1 px-2 py-1 rounded text-[10.5px] outline-none"
+                          className="flex-1 px-2 py-1 rounded text-[11px] outline-none"
                           placeholder="value"
                           style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
                         <button type="button" onClick={() => setHeaders(prev => prev.filter((_, j) => j !== i))}
@@ -335,7 +335,7 @@ export function GrpcClientPanel({ onClose }: Props) {
                       </div>
                     ))}
                     <button type="button" onClick={() => setHeaders(prev => [...prev, { key: '', value: '', enabled: true }])}
-                      className="flex items-center gap-1 text-[10.5px] cursor-pointer w-fit"
+                      className="flex items-center gap-1 text-[11px] cursor-pointer w-fit"
                       style={{ color: 'var(--color-info)' }}>
                       <PlusIcon size={10} />Add Header
                     </button>
@@ -354,7 +354,7 @@ export function GrpcClientPanel({ onClose }: Props) {
               <div className="h-[220px] flex-shrink-0 border-t flex flex-col" style={{ borderColor: 'var(--color-surface-border)' }}>
                 <div className="flex items-center gap-2.5 px-3 py-1.5 flex-shrink-0"
                   style={{ backgroundColor: 'var(--color-surface-hover)', borderBottom: '1px solid var(--color-surface-border)' }}>
-                  <span className="text-[10.5px] font-semibold" style={{ color: 'var(--color-text-secondary)' }}>Response</span>
+                  <span className="text-[11px] font-semibold" style={{ color: 'var(--color-text-secondary)' }}>Response</span>
                   {response && (
                     <>
                       <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)', color: statusColor }}>
@@ -369,7 +369,7 @@ export function GrpcClientPanel({ onClose }: Props) {
                     </>
                   )}
                 </div>
-                <div className="flex-1 overflow-y-auto p-3 font-mono text-[10.5px]" style={{ color: 'var(--color-text-primary)' }}>
+                <div className="flex-1 overflow-y-auto p-3 font-mono text-[11px]" style={{ color: 'var(--color-text-primary)' }}>
                   {!response && <p style={{ color: 'var(--color-text-muted)' }}>Send a request to see the response</p>}
                   {response?.status === 'error' && (
                     <p style={{ color: 'var(--color-error)' }}>{response.message || 'Unknown error'}</p>

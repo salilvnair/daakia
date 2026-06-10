@@ -78,7 +78,7 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
           <button
             type="button"
             onClick={onAddRoute}
-            className="h-[28px] px-2.5 text-[11px] rounded-md cursor-pointer transition-colors border"
+            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
             style={{ color: REST_COLOR, borderColor: `color-mix(in srgb, ${REST_COLOR} 30%, transparent)` }}
             onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${REST_COLOR} 10%, transparent)`; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -90,7 +90,7 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
               type="button"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Routes"
-              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
             >
               <TrashIcon size={12} />
             </button>

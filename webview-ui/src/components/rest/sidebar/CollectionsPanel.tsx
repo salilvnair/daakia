@@ -28,6 +28,11 @@ import { AiApiRegressionDetector } from '../../ai/AiApiRegressionDetector';
 import { AiMultiRequestOptimizer } from '../../ai/AiMultiRequestOptimizer';
 import { AiRequestFromScreenshotModal } from '../../ai/AiRequestFromScreenshotModal';
 import { AiRequestFromLogsModal } from '../../ai/AiRequestFromLogsModal';
+import { AiDeepSecurityAuditModal } from '../../ai/AiDeepSecurityAuditModal';
+import { AiSequenceComposerModal } from '../../ai/AiSequenceComposerModal';
+import { AiCompatibilityScorerModal } from '../../ai/AiCompatibilityScorerModal';
+import { AiDocGeneratorModal } from '../../ai/AiDocGeneratorModal';
+import { AiSmartTestSuiteModal } from '../../ai/AiSmartTestSuiteModal';
 import { InsomniaImportModal } from '../../power/InsomniaImportModal';
 
 // ────────────── Main Component ──────────────
@@ -114,6 +119,16 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [showScreenshotImport, setShowScreenshotImport] = useState(false);
   const [showLogsImport, setShowLogsImport] = useState(false);
   const [showInsomniaImport, setShowInsomniaImport] = useState(false);
+  // Sprint 11 state
+  const [showSequenceComposer, setShowSequenceComposer] = useState(false);
+  const [knowledgeGraphNode, setKnowledgeGraphNode] = useState<CollectionTreeNode | null>(null);
+  const [regressionGuardNode, setRegressionGuardNode] = useState<CollectionTreeNode | null>(null);
+  const [collectionOptimizerNode, setCollectionOptimizerNode] = useState<CollectionTreeNode | null>(null);
+  // Sprint 12 state
+  const [compatibilityScorerNode, setCompatibilityScorerNode] = useState<CollectionTreeNode | null>(null);
+  const [securityAuditNode, setSecurityAuditNode] = useState<CollectionTreeNode | null>(null);
+  const [docGeneratorNode, setDocGeneratorNode] = useState<CollectionTreeNode | null>(null);
+  const [smartTestSuiteNode, setSmartTestSuiteNode] = useState<CollectionTreeNode | null>(null);
 
   // Scroll position persistence
   const scrollRef = useScrollRestore(`collections.${protocol}`);
@@ -489,30 +504,62 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       { id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon />,   iconColor: 'var(--color-ctx-duplicate)' },
       { id: 'sep3', label: '', separator: true },
       ...((() => {
-        // Build AI Actions submenu — only include items enabled by their individual flag
-        const g1: ContextMenuItem[] = [
+        // Build AI Actions nested submenu — 5 categories, each spawns its own flyout.
+        // Category: Workflow & Organization
+        const catWorkflow: ContextMenuItem[] = [
           ...(aiEnabled('extractVariables')  ? [{ id: 'ai-extract-env',    label: 'Extract Variables',   shortcut: 'V', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-success)', disabled: !hasReqs }] : []),
           ...(aiEnabled('organizeWithAi')    ? [{ id: 'ai-organize',        label: 'Organize with AI',    shortcut: 'O', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-warning)', disabled: !hasReqs }] : []),
           ...(aiEnabled('buildApiFlow')      ? [{ id: 'ai-flow-builder',    label: 'Build API Flow',      shortcut: 'F', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-primary)' }] : []),
           ...(aiEnabled('testWithAiAgent')   ? [{ id: 'ai-agent-workflow',  label: 'Test with AI Agent',  shortcut: 'T', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-success)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('collectionOptimizer') ? [{ id: 'ai-collection-optimizer', label: 'AI Optimize ✦', shortcut: 'A', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-protocol-ai)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('sequenceComposer')    ? [{ id: 'ai-sequence-composer',    label: 'Sequence Composer ✦', shortcut: 'Q', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-primary)', disabled: !hasReqs }] : []),
         ];
-        const g2: ContextMenuItem[] = [
+        // Category: Analysis & Docs
+        const catAnalysis: ContextMenuItem[] = [
           ...(aiEnabled('generateChangelog') ? [{ id: 'ai-changelog',       label: 'Generate Changelog',  shortcut: 'C', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-warning)', disabled: !hasReqs }] : []),
           ...(aiEnabled('dependencyGraph')   ? [{ id: 'ai-dependency-graph',label: 'Dependency Graph',    shortcut: 'G', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-info)',    disabled: !hasReqs }] : []),
           ...(aiEnabled('checkCompliance')   ? [{ id: 'ai-compliance',      label: 'Check Compliance',    shortcut: 'L', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-error)',   disabled: !hasReqs }] : []),
-        ];
-        const g3: ContextMenuItem[] = [
           ...(aiEnabled('generateSdk')       ? [{ id: 'ai-sdk-generator',   label: 'Generate SDK',        shortcut: 'K', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-success)', disabled: !hasReqs }] : []),
-          ...(aiEnabled('optimizeRequests')  ? [{ id: 'ai-optimizer',       label: 'Optimize Requests',   shortcut: 'Z', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-warning)', disabled: !hasReqs }] : []),
-          ...(aiEnabled('regressionDetector')? [{ id: 'ai-regression',      label: 'Regression Detector', shortcut: 'E', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-error)',   disabled: !hasReqs }] : []),
+          ...(aiEnabled('docAutoGenerator')  ? [{ id: 'ai-doc-generator',   label: 'Generate Docs ✦',     shortcut: 'D', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-success)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('apiChangelogMonitor') ? [{ id: 'ai-changelog-monitor', label: 'Changelog Monitor ✦', shortcut: 'M', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-warning)', disabled: !hasReqs }] : []),
         ];
+        // Category: Security & Quality
+        const catSecurity: ContextMenuItem[] = [
+          ...(aiEnabled('deepSecurityAudit')   ? [{ id: 'ai-security-audit',    label: 'Security Audit ✦',      shortcut: 'U', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-error)',   disabled: !hasReqs }] : []),
+          ...(aiEnabled('compatibilityScorer') ? [{ id: 'ai-compatibility',     label: 'Compare Versions ✦',    shortcut: 'Y', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-info)',    disabled: !hasReqs }] : []),
+          ...(aiEnabled('optimizeRequests')    ? [{ id: 'ai-optimizer',         label: 'Optimize Requests',     shortcut: 'Z', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-warning)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('regressionDetector')  ? [{ id: 'ai-regression',        label: 'Regression Detector',   shortcut: 'E', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-error)',   disabled: !hasReqs }] : []),
+          ...(aiEnabled('regressionGuardian')  ? [{ id: 'ai-regression-guard',  label: 'Regression Guard ✦',    shortcut: 'R', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-error)',   disabled: !hasReqs }] : []),
+        ];
+        // Category: Testing
+        const catTesting: ContextMenuItem[] = [
+          ...(aiEnabled('smartTestSuiteGen')   ? [{ id: 'ai-smart-test-suite',  label: 'Smart Test Suite ✦',    shortcut: 'X', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-success)', disabled: !hasReqs }] : []),
+          ...(aiEnabled('apiKnowledgeGraph')   ? [{ id: 'ai-knowledge-graph',   label: 'API Knowledge Graph ✦', shortcut: 'H', icon: <SparkleIcon size={13} />, iconColor: 'var(--color-info)',    disabled: !hasReqs }] : []),
+        ];
+
+        // Build category submenu items — only include categories that have at least one enabled action
         const sub: ContextMenuItem[] = [];
-        if (g1.length) sub.push(...g1);
-        if (g1.length && g2.length) sub.push({ id: 'sep-ai1', label: '', separator: true });
-        if (g2.length) sub.push(...g2);
-        if ((g1.length || g2.length) && g3.length) sub.push({ id: 'sep-ai2', label: '', separator: true });
-        if (g3.length) sub.push(...g3);
-        // Only show the AI Actions parent menu if at least one sub-action is enabled
+        if (catWorkflow.length) sub.push({
+          id: 'ai-cat-workflow', label: 'Workflow & Organization',
+          icon: <SparkleIcon size={13} />, iconColor: 'var(--color-primary)',
+          submenu: catWorkflow,
+        });
+        if (catAnalysis.length) sub.push({
+          id: 'ai-cat-analysis', label: 'Analysis & Docs',
+          icon: <SparkleIcon size={13} />, iconColor: 'var(--color-warning)',
+          submenu: catAnalysis,
+        });
+        if (catSecurity.length) sub.push({
+          id: 'ai-cat-security', label: 'Security & Quality',
+          icon: <SparkleIcon size={13} />, iconColor: 'var(--color-error)',
+          submenu: catSecurity,
+        });
+        if (catTesting.length) sub.push({
+          id: 'ai-cat-testing', label: 'Testing & Intelligence',
+          icon: <SparkleIcon size={13} />, iconColor: 'var(--color-success)',
+          submenu: catTesting,
+        });
+
         if (sub.length === 0) return [];
         return [{
           id: 'ai-actions',
@@ -655,6 +702,52 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
         if (node) setRegressionNode(node);
         break;
       }
+      // Sprint 11
+      case 'ai-collection-optimizer': {
+        const node = findNodeById(tree, targetId);
+        if (node) setCollectionOptimizerNode(node);
+        break;
+      }
+      case 'ai-knowledge-graph': {
+        const node = findNodeById(tree, targetId);
+        if (node) setKnowledgeGraphNode(node);
+        break;
+      }
+      case 'ai-regression-guard': {
+        const node = findNodeById(tree, targetId);
+        if (node) setRegressionGuardNode(node);
+        break;
+      }
+      case 'ai-sequence-composer': {
+        setShowSequenceComposer(true);
+        break;
+      }
+      // Sprint 12
+      case 'ai-changelog-monitor': {
+        const node = findNodeById(tree, targetId);
+        if (node) setChangelogNode(node);
+        break;
+      }
+      case 'ai-security-audit': {
+        const node = findNodeById(tree, targetId);
+        if (node) setSecurityAuditNode(node);
+        break;
+      }
+      case 'ai-compatibility': {
+        const node = findNodeById(tree, targetId);
+        if (node) setCompatibilityScorerNode(node);
+        break;
+      }
+      case 'ai-doc-generator': {
+        const node = findNodeById(tree, targetId);
+        if (node) setDocGeneratorNode(node);
+        break;
+      }
+      case 'ai-smart-test-suite': {
+        const node = findNodeById(tree, targetId);
+        if (node) setSmartTestSuiteNode(node);
+        break;
+      }
       case 'export-daakia':
         postMsg({ type: 'exportCollectionDaakia', collectionId: targetId });
         break;
@@ -795,10 +888,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
             <PlusIcon size={14} />
             <span>New</span>
           </button>
+          {aiEnabled('autoDiscovery') && (
           <button
             type="button"
             onClick={() => setShowDiscovery(true)}
-            title="AI API Discovery — probe a base URL to discover endpoints"
+            title="AI Auto-Discovery Agent — probe a base URL to discover endpoints"
             className="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors"
             style={{ color: 'var(--color-protocol-ai)' }}
             onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--color-protocol-ai) 12%, transparent)')}
@@ -806,6 +900,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           >
             <SparkleIcon size={12} />
           </button>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 relative">
@@ -1117,6 +1212,58 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       {showInsomniaImport && (
         <InsomniaImportModal
           onClose={() => setShowInsomniaImport(false)}
+        />
+      )}
+
+      {/* Sprint 11 modals */}
+      {collectionOptimizerNode && (
+        <AiCollectionOrganizerModal
+          collectionNode={collectionOptimizerNode}
+          protocol={protocol}
+          onClose={() => setCollectionOptimizerNode(null)}
+          onApplied={() => setCollectionOptimizerNode(null)}
+        />
+      )}
+      {knowledgeGraphNode && (
+        <AiApiDependencyGraph
+          onClose={() => setKnowledgeGraphNode(null)}
+        />
+      )}
+      {regressionGuardNode && (
+        <AiApiRegressionDetector
+          onClose={() => setRegressionGuardNode(null)}
+        />
+      )}
+      {showSequenceComposer && (
+        <AiSequenceComposerModal
+          protocol={protocol}
+          onClose={() => setShowSequenceComposer(false)}
+        />
+      )}
+
+      {/* Sprint 12 modals */}
+      {securityAuditNode && (
+        <AiDeepSecurityAuditModal
+          collectionNode={securityAuditNode}
+          onClose={() => setSecurityAuditNode(null)}
+        />
+      )}
+      {compatibilityScorerNode && (
+        <AiCompatibilityScorerModal
+          collectionNode={compatibilityScorerNode}
+          onClose={() => setCompatibilityScorerNode(null)}
+        />
+      )}
+      {docGeneratorNode && (
+        <AiDocGeneratorModal
+          collectionNode={docGeneratorNode}
+          onClose={() => setDocGeneratorNode(null)}
+        />
+      )}
+      {smartTestSuiteNode && (
+        <AiSmartTestSuiteModal
+          collectionNode={smartTestSuiteNode}
+          onClose={() => setSmartTestSuiteNode(null)}
         />
       )}
     </div>

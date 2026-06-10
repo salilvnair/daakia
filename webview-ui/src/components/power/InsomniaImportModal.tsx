@@ -133,7 +133,7 @@ export function InsomniaImportModal({ onClose }: Props) {
           </div>
 
           <textarea value={text} onChange={e => handleTextChange(e.target.value)} rows={10}
-            className="w-full px-3 py-2 rounded-lg text-[10.5px] font-mono resize-none outline-none"
+            className="w-full px-3 py-2 rounded-lg text-[11px] font-mono resize-none outline-none"
             placeholder='{"_type":"export","__export_format":4,"__export_source":"insomnia.desktop.app:v2022.7.5","resources":[...]}'
             style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
 
@@ -145,7 +145,7 @@ export function InsomniaImportModal({ onClose }: Props) {
               <CheckIcon size={16} style={{ color: 'var(--color-success)', marginTop: '1px' }} />
               <div>
                 <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{preview.name}</p>
-                <p className="text-[10.5px]" style={{ color: 'var(--color-text-secondary)' }}>
+                <p className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
                   {preview.requestCount} requests in {preview.folderCount} folder{preview.folderCount !== 1 ? 's' : ''}
                 </p>
               </div>
@@ -154,7 +154,7 @@ export function InsomniaImportModal({ onClose }: Props) {
 
           <div className="rounded-lg border p-3" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
             <p className="text-[11px] font-semibold mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>How to export from Insomnia</p>
-            <ol className="text-[10.5px] flex flex-col gap-0.5 list-decimal list-inside" style={{ color: 'var(--color-text-muted)' }}>
+            <ol className="text-[11px] flex flex-col gap-0.5 list-decimal list-inside" style={{ color: 'var(--color-text-muted)' }}>
               <li>In Insomnia, go to the Application menu → Preferences → Data</li>
               <li>Or: right-click your collection → Export</li>
               <li>Choose "Insomnia v4" format (JSON)</li>
@@ -166,12 +166,12 @@ export function InsomniaImportModal({ onClose }: Props) {
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
           <button type="button" onClick={importCollection}
             disabled={!preview || importing || imported}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white flex items-center gap-1.5"
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer hover:opacity-90 disabled:opacity-40 text-white flex items-center gap-1.5"
             style={{ backgroundColor: imported ? 'var(--color-success)' : 'var(--color-info)' }}>
             {imported ? <><CheckIcon size={12} />Imported!</> : importing ? 'Importing…' : 'Import Collection'}
           </button>
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
             Close
           </button>
         </div>

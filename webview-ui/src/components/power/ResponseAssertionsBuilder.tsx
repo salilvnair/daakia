@@ -75,10 +75,10 @@ function JsonNode({ path, value, depth, onAssert, hovered, setHovered }: JsonNod
       onClick={() => onAssert(path, value)}
       title={`Click to assert: ${path} = ${JSON.stringify(value)}`}
     >
-      <span className="text-[10.5px] font-mono" style={{ color: 'var(--color-text-secondary)' }}>
+      <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-secondary)' }}>
         {pathKey}:
       </span>
-      <span className="text-[10.5px] font-mono">{renderValue()}</span>
+      <span className="text-[11px] font-mono">{renderValue()}</span>
       {isHovered && (
         <span className="text-[9px] px-1.5 py-0.5 rounded ml-auto"
           style={{ backgroundColor: 'var(--color-info)', color: 'white' }}>
@@ -162,14 +162,14 @@ export function ResponseAssertionsBuilder({ responseBody, tabId }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b text-[10.5px] flex-shrink-0"
+      <div className="px-3 py-2 border-b text-[11px] flex-shrink-0"
         style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}>
         Click any field to add an assertion
       </div>
 
       <div className="flex flex-1 min-h-0">
         {/* JSON tree */}
-        <div className="flex-1 overflow-auto p-3 text-[10.5px] font-mono">
+        <div className="flex-1 overflow-auto p-3 text-[11px] font-mono">
           {parsedBody !== null && (
             <JsonNode
               path=""
@@ -185,7 +185,7 @@ export function ResponseAssertionsBuilder({ responseBody, tabId }: Props) {
         {/* Assertions panel */}
         {assertions.length > 0 && (
           <div className="w-[260px] flex-shrink-0 border-l flex flex-col" style={{ borderColor: 'var(--color-surface-border)' }}>
-            <div className="px-3 py-2 border-b text-[10.5px] font-medium flex items-center justify-between"
+            <div className="px-3 py-2 border-b text-[11px] font-medium flex items-center justify-between"
               style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}>
               <span>Assertions ({assertions.length})</span>
               <button type="button" onClick={() => setAssertions([])} className="text-[9px] cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>Clear all</button>
@@ -204,13 +204,13 @@ export function ResponseAssertionsBuilder({ responseBody, tabId }: Props) {
             </div>
             <div className="p-2 border-t flex gap-1" style={{ borderColor: 'var(--color-surface-border)' }}>
               <button type="button" onClick={copyScript}
-                className="flex-1 h-[28px] text-[10.5px] rounded-md cursor-pointer border flex items-center justify-center gap-1"
+                className="flex-1 h-[26px] text-[11px] rounded cursor-pointer border flex items-center justify-center gap-1"
                 style={{ borderColor: 'var(--color-surface-border)', color: copied ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
                 <CopyIcon size={10} />
                 {copied ? 'Copied!' : 'Copy'}
               </button>
               <button type="button" onClick={applyToScript}
-                className="flex-1 h-[28px] text-[10.5px] rounded-md cursor-pointer text-white flex items-center justify-center gap-1"
+                className="flex-1 h-[26px] text-[11px] rounded cursor-pointer text-white flex items-center justify-center gap-1"
                 style={{ backgroundColor: applied ? 'var(--color-success)' : 'var(--color-info)' }}>
                 {applied ? <><CheckIcon size={10} />Applied</> : 'Apply to Script'}
               </button>

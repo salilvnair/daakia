@@ -33,7 +33,7 @@ function JsonTable({ data }: { data: Record<string, unknown>[] }) {
 
   return (
     <div className="overflow-auto h-full">
-      <table className="w-full text-[10.5px] border-collapse">
+      <table className="w-full text-[11px] border-collapse">
         <thead>
           <tr style={{ backgroundColor: 'var(--color-surface-hover)' }}>
             <th className="px-2 py-1.5 text-left border-b font-semibold sticky top-0"
@@ -107,7 +107,7 @@ export function ResponseVisualization({ responseBody, contentType }: Props) {
         <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>No visualization available for this response type</p>
         <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Works with: JSON arrays, images (PNG/JPG), PDFs</p>
         <button type="button" onClick={() => setManualMode('table')}
-          className="text-[10.5px] px-3 py-1 rounded-md border cursor-pointer"
+          className="text-[11px] px-3 py-1 rounded border cursor-pointer"
           style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
           Try as table anyway
         </button>
@@ -170,7 +170,7 @@ export function ResponseVisualization({ responseBody, contentType }: Props) {
                 const url = URL.createObjectURL(blob);
                 window.open(url);
               }}
-              className="text-[10.5px] px-3 py-1 rounded-md border cursor-pointer"
+              className="text-[11px] px-3 py-1 rounded border cursor-pointer"
               style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
               Open PDF
             </button>

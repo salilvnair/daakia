@@ -75,7 +75,7 @@ function ProxyInput({ value, onChange, placeholder, type = 'text' }: {
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full h-[30px] px-2.5 rounded-lg text-[11px] outline-none transition-all font-mono"
+      className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none transition-all font-mono"
       style={{
         backgroundColor: 'rgba(255,255,255,0.04)',
         border: '1px solid rgba(255,255,255,0.1)',
@@ -182,20 +182,20 @@ export function RequestInterceptorPanel({ onClose }: Props) {
           </div>
           {!running ? (
             <button type="button" onClick={startInterceptor}
-              className="h-[30px] px-4 text-[11px] font-semibold rounded-lg cursor-pointer text-white flex items-center gap-1.5 transition-all hover:brightness-110"
+              className="h-[26px] px-2.5 text-[11px] font-semibold rounded cursor-pointer text-white flex items-center gap-1.5 transition-all hover:brightness-110"
               style={{ background: `linear-gradient(135deg, var(--color-success), color-mix(in srgb, var(--color-success) 70%, #000))`, boxShadow: `0 2px 8px color-mix(in srgb, var(--color-success) 30%, transparent)` }}>
               ▶ Start Proxy
             </button>
           ) : (
             <button type="button" onClick={stopInterceptor}
-              className="h-[30px] px-4 text-[11px] font-semibold rounded-lg cursor-pointer text-white flex items-center gap-1.5 transition-all hover:brightness-110"
+              className="h-[26px] px-2.5 text-[11px] font-semibold rounded cursor-pointer text-white flex items-center gap-1.5 transition-all hover:brightness-110"
               style={{ background: `linear-gradient(135deg, var(--color-error), color-mix(in srgb, var(--color-error) 70%, #000))`, boxShadow: `0 2px 8px color-mix(in srgb, var(--color-error) 30%, transparent)` }}>
               <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
               Stop Proxy
             </button>
           )}
           <button type="button" onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]">
+            className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]">
             <CloseIcon size={12} />
           </button>
         </div>
@@ -246,7 +246,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                           style={{ left: config.excludeStaticAssets ? 'calc(100% - 14px)' : '2px' }}
                         />
                       </div>
-                      <span className="text-[10.5px]" style={{ color: 'var(--color-text-secondary)' }}>
+                      <span className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
                         Exclude static assets (.js/.css/.png…)
                       </span>
                     </label>
@@ -305,7 +305,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
               {captured.length === 0 ? (
                 <div className="p-6 text-center flex flex-col items-center gap-2">
                   <span className="text-[24px] opacity-20">🔌</span>
-                  <p className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+                  <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
                     {running ? 'Waiting for requests…' : 'Start the proxy, then browse your app.'}
                   </p>
                 </div>
@@ -403,7 +403,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                 <div className="px-4 py-2.5 border-t flex-shrink-0 flex gap-2" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                   <button type="button"
                     onClick={() => { addTab({ method: selectedReq.method, url: selectedReq.url, headers: Object.entries(selectedReq.headers).map(([key, value]) => ({ key, value, enabled: true })), bodyRaw: selectedReq.body || '', bodyType: selectedReq.body ? 'json' : 'none' }); addToast({ type: 'success', message: 'Opened as new tab' }); }}
-                    className="h-[28px] px-3 text-[10.5px] font-semibold rounded-lg cursor-pointer text-white transition-all hover:brightness-110"
+                    className="h-[26px] px-2.5 text-[11px] font-semibold rounded cursor-pointer text-white transition-all hover:brightness-110"
                     style={{ background: `linear-gradient(135deg, var(--color-info), color-mix(in srgb, var(--color-info) 70%, #000))` }}>
                     Open as Tab
                   </button>
@@ -431,17 +431,17 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                 <input
                   value={collectionName}
                   onChange={e => setCollectionName(e.target.value)}
-                  className="h-[30px] px-2.5 rounded-lg text-[11px] outline-none transition-all w-[200px]"
+                  className="h-[26px] px-2.5 rounded text-[11px] outline-none transition-all w-[200px]"
                   placeholder="Collection name"
                   style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--color-text-primary)' }}
                 />
                 <button type="button" onClick={importAsCollection}
-                  className="h-[30px] px-3 text-[10.5px] font-semibold rounded-lg cursor-pointer text-white transition-all hover:brightness-110 flex-shrink-0"
+                  className="h-[26px] px-2.5 text-[11px] font-semibold rounded cursor-pointer text-white transition-all hover:brightness-110 flex-shrink-0"
                   style={{ background: `linear-gradient(135deg, var(--color-success), color-mix(in srgb, var(--color-success) 70%, #000))` }}>
                   Import {selectedCount} as Collection
                 </button>
                 <button type="button" onClick={openSelected}
-                  className="h-[30px] px-3 text-[10.5px] font-semibold rounded-lg cursor-pointer text-white transition-all hover:brightness-110 flex-shrink-0"
+                  className="h-[26px] px-2.5 text-[11px] font-semibold rounded cursor-pointer text-white transition-all hover:brightness-110 flex-shrink-0"
                   style={{ background: `linear-gradient(135deg, var(--color-info), color-mix(in srgb, var(--color-info) 70%, #000))` }}>
                   Open {Math.min(selectedCount, 20)} as Tabs
                 </button>
@@ -450,7 +450,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
           )}
           {selectedCount === 0 && <div className="flex-1" />}
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-lg cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.08)]"
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.08)]"
             style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'var(--color-text-secondary)', border: '1px solid rgba(255,255,255,0.08)' }}>
             Close
           </button>

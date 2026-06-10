@@ -56,13 +56,9 @@ interface SubmenuProps {
 
 function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSelect }: SubmenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [openNestedId, setOpenNestedId] = useState<string | null>(null);
+  const [nestedAnchor, setNestedAnchor] = useState<DOMRect | null>(null);
 
-  /**
-   * Smart positioning — runs before paint (no flicker).
-   * Prefers LEFT when the anchor is in the right half of the viewport
-   * so submenus from right-side panels always open towards the centre.
-   * Falls back to the other side if there is not enough space.
-   */
   useLayoutEffect(() => {
     const menu = ref.current;
     if (!menu) return;
@@ -70,28 +66,21 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // Prefer left when anchor is in the right half of the screen
     const anchorMidX = anchorRect.left + anchorRect.width / 2;
     const preferLeft = anchorMidX > vw / 2;
 
     let left: number;
     if (preferLeft) {
-      // Open to the left — right edge of submenu touches left edge of anchor
       left = anchorRect.left - rect.width - 4;
-      if (left < 4) left = anchorRect.right + 4; // not enough space left → fallback right
+      if (left < 4) left = anchorRect.right + 4;
     } else {
-      // Open to the right — left edge of submenu touches right edge of anchor
       left = anchorRect.right + 4;
-      if (left + rect.width > vw) left = Math.max(4, anchorRect.left - rect.width - 4); // fallback left
+      if (left + rect.width > vw) left = Math.max(4, anchorRect.left - rect.width - 4);
     }
-    // Final clamp so it never escapes the viewport
     left = Math.max(4, Math.min(left, vw - rect.width - 4));
 
-    // Vertical: align top to anchor row top, push up if it bleeds off-screen
     let top = anchorRect.top;
-    if (top + rect.height > vh) {
-      top = Math.max(4, vh - rect.height - 4);
-    }
+    if (top + rect.height > vh) top = Math.max(4, vh - rect.height - 4);
 
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
@@ -109,6 +98,43 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
       {items.map(item =>
         item.separator ? (
           <div key={item.id} className="my-1 border-t border-[var(--color-surface-border)]" />
+        ) : item.submenu ? (
+          /* Nested submenu trigger inside flyout */
+          <div
+            key={item.id}
+            className={`relative flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] cursor-pointer transition-colors select-none ${
+              item.disabled
+                ? 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
+                : 'text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
+            } ${openNestedId === item.id ? 'bg-[var(--color-item-hover-bg)]' : ''}`}
+            onMouseEnter={e => {
+              if (item.disabled) return;
+              setOpenNestedId(item.id);
+              setNestedAnchor((e.currentTarget as HTMLElement).getBoundingClientRect());
+            }}
+          >
+            {/* Checkmark column */}
+            <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
+              {item.checked ? <CheckIcon size={11} strokeWidth={3} style={{ color: 'var(--color-success)' }} /> : null}
+            </span>
+            {item.icon && (
+              <span className="w-4 h-4 flex items-center justify-center shrink-0"
+                style={{ color: item.iconColor || 'var(--color-text-muted)' }}>
+                {item.icon}
+              </span>
+            )}
+            <span className="flex-1">{item.label}</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] ml-1">▶</span>
+            {openNestedId === item.id && nestedAnchor && (
+              <SubmenuFlyout
+                items={item.submenu}
+                anchorRect={nestedAnchor}
+                onSelect={subId => onSelect(subId)}
+                onCloseAll={onCloseAll}
+                keepOpenOnSelect={keepOpenOnSelect}
+              />
+            )}
+          </div>
         ) : (
           <button
             key={item.id}
@@ -120,6 +146,7 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
               onSelect(item.id);
               if (!keepOpenOnSelect) onCloseAll();
             }}
+            onMouseEnter={() => setOpenNestedId(null)}
             className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] text-left cursor-pointer transition-colors ${
               item.danger
                 ? 'text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]'
@@ -128,9 +155,8 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
                   : 'text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
             }`}
           >
-            {/* Checkmark column */}
             <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
-              {item.checked ? <CheckIcon size={11} strokeWidth={3} style={{ color: '#22c55e' }} /> : null}
+              {item.checked ? <CheckIcon size={11} strokeWidth={3} style={{ color: 'var(--color-success)' }} /> : null}
             </span>
             {item.icon && (
               <span className="w-4 h-4 flex items-center justify-center shrink-0"

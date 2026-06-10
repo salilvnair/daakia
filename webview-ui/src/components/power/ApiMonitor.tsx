@@ -123,7 +123,7 @@ export function ApiMonitor({ onClose }: Props) {
             <p className="text-[11px] text-[var(--color-text-muted)]">Schedule periodic checks — get VS Code notifications on failure</p>
           </div>
           <button type="button" onClick={() => setAdding(true)}
-            className="flex items-center gap-1 h-[28px] px-2.5 text-[10.5px] rounded-md cursor-pointer text-white"
+            className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded cursor-pointer text-white"
             style={{ backgroundColor: 'var(--color-success)' }}>
             <PlusIcon size={10} />Add Monitor
           </button>
@@ -138,7 +138,7 @@ export function ApiMonitor({ onClose }: Props) {
               <p className="text-[12px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>No monitors configured</p>
               <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Add monitors to track API uptime and performance</p>
               <button type="button" onClick={() => setAdding(true)}
-                className="mt-2 h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer text-white"
+                className="mt-2 h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer text-white"
                 style={{ backgroundColor: 'var(--color-success)' }}>
                 <PlusIcon size={11} className="inline mr-1" />Add First Monitor
               </button>
@@ -200,12 +200,12 @@ export function ApiMonitor({ onClose }: Props) {
 
               <div className="flex gap-2 justify-end">
                 <button type="button" onClick={() => setAdding(false)}
-                  className="h-[30px] px-3 text-[11px] rounded-md cursor-pointer"
+                  className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer"
                   style={{ color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
                   Cancel
                 </button>
                 <button type="button" onClick={addRule}
-                  className="h-[30px] px-3 text-[11px] font-medium rounded-md cursor-pointer text-white"
+                  className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer text-white"
                   style={{ backgroundColor: 'var(--color-success)' }}>
                   Add Monitor
                 </button>
@@ -235,7 +235,7 @@ export function ApiMonitor({ onClose }: Props) {
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: 'var(--color-info)' }}>{rule.method}</span>
                   <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>every {rule.intervalMinutes >= 60 ? '1h' : `${rule.intervalMinutes}m`}</span>
                 </div>
-                <p className="text-[10.5px] font-mono truncate mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{rule.url}</p>
+                <p className="text-[11px] font-mono truncate mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{rule.url}</p>
                 {rule.lastRunAt && (
                   <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-muted)' }}>
                     Last: <span style={{ color: STATUS_COLOR(rule.lastStatus) }}>{rule.lastStatus || '?'}</span>
@@ -267,7 +267,7 @@ export function ApiMonitor({ onClose }: Props) {
 
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
             Close
           </button>
         </div>

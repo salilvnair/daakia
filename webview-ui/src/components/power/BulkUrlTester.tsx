@@ -125,7 +125,7 @@ export function BulkUrlTester({ onClose }: Props) {
             <div>
               <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>URLs (one per line)</label>
               <textarea value={input} onChange={e => setInput(e.target.value)} rows={12}
-                className="w-full px-2 py-1.5 rounded text-[10.5px] font-mono resize-none outline-none"
+                className="w-full px-2 py-1.5 rounded text-[11px] font-mono resize-none outline-none"
                 placeholder={`https://api.example.com/users\nGET https://api.example.com/products\nhttps://api.example.com/health`}
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
               />
@@ -151,7 +151,7 @@ export function BulkUrlTester({ onClose }: Props) {
             <div>
               <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Headers (Key: Value)</label>
               <textarea value={headers} onChange={e => setHeaders(e.target.value)} rows={3}
-                className="w-full px-2 py-1.5 rounded text-[10.5px] font-mono resize-none outline-none"
+                className="w-full px-2 py-1.5 rounded text-[11px] font-mono resize-none outline-none"
                 placeholder={`Authorization: Bearer token123\nAccept: application/json`}
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
               />
@@ -159,13 +159,13 @@ export function BulkUrlTester({ onClose }: Props) {
 
             <div className="flex gap-2">
               <button type="button" onClick={runAll} disabled={running || !input.trim()}
-                className="flex-1 h-[32px] text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
+                className="flex-1 h-[26px] text-[11px] font-medium rounded cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
                 style={{ backgroundColor: 'var(--color-success)' }}>
                 ▶ Run All ({parseUrls(input).length})
               </button>
               {running && (
                 <button type="button" onClick={stop}
-                  className="h-[32px] px-3 text-[11px] rounded-md cursor-pointer"
+                  className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer"
                   style={{ backgroundColor: 'var(--color-error)', color: 'white' }}>
                   Stop
                 </button>
@@ -177,7 +177,7 @@ export function BulkUrlTester({ onClose }: Props) {
           <div className="flex flex-col flex-1">
             {/* Summary bar */}
             {doneResults.length > 0 && (
-              <div className="flex items-center gap-4 px-4 py-2 border-b text-[10.5px]"
+              <div className="flex items-center gap-4 px-4 py-2 border-b text-[11px]"
                 style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-hover)' }}>
                 <span style={{ color: 'var(--color-success)' }}>✓ {successCount} passed</span>
                 <span style={{ color: 'var(--color-error)' }}>✗ {failCount} failed</span>
@@ -193,7 +193,7 @@ export function BulkUrlTester({ onClose }: Props) {
                 </div>
               )}
               {results.map((r, i) => (
-                <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b text-[10.5px] transition-colors"
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b text-[11px] transition-colors"
                   style={{ borderColor: 'var(--color-surface-border)', backgroundColor: r.state === 'running' ? 'color-mix(in srgb, var(--color-info) 5%, transparent)' : 'transparent' }}>
 
                   {/* Status indicator */}
@@ -231,7 +231,7 @@ export function BulkUrlTester({ onClose }: Props) {
 
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
             Close
           </button>
         </div>

@@ -106,7 +106,7 @@ export function ProxySettings({ onClose }: Props) {
               <div className="flex gap-2">
                 {(['http', 'https', 'socks4', 'socks5'] as const).map(t => (
                   <button key={t} type="button" onClick={() => update({ type: t })}
-                    className="px-3 py-1 text-[10.5px] rounded border cursor-pointer"
+                    className="px-3 py-1 text-[11px] rounded border cursor-pointer"
                     style={{
                       borderColor: config.type === t ? 'var(--color-info)' : 'var(--color-surface-border)',
                       color: config.type === t ? 'var(--color-info)' : 'var(--color-text-secondary)',
@@ -176,12 +176,12 @@ export function ProxySettings({ onClose }: Props) {
 
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
           <button type="button" onClick={save}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 text-white flex items-center gap-1.5"
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer hover:opacity-90 text-white flex items-center gap-1.5"
             style={{ backgroundColor: saved ? 'var(--color-success)' : 'var(--color-info)' }}>
             {saved ? <><CheckIcon size={12} />Saved!</> : 'Save Settings'}
           </button>
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
             Close
           </button>
         </div>

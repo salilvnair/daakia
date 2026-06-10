@@ -144,7 +144,7 @@ function CustomToolCard({
             value={draft.description}
             onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
             placeholder="What this tool does..."
-            className="w-full h-[26px] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-md px-2 text-[11px] focus:outline-none focus:border-[var(--color-protocol-mcp)] text-[var(--color-text-primary)]"
+            className="w-full h-[26px] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded px-2 text-[11px] focus:outline-none focus:border-[var(--color-protocol-mcp)] text-[var(--color-text-primary)]"
           />
         </div>
 
@@ -155,7 +155,7 @@ function CustomToolCard({
             type="number"
             value={draft.delay}
             onChange={e => setDraft(d => ({ ...d, delay: Math.max(0, parseInt(e.target.value) || 0) }))}
-            className="w-20 h-[24px] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded px-2 text-[11px] focus:outline-none text-[var(--color-text-primary)]"
+            className="w-20 h-[26px] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded px-2 text-[11px] focus:outline-none text-[var(--color-text-primary)]"
           />
           <span className="text-[9px] text-[var(--color-text-muted)]">ms</span>
         </div>
@@ -167,7 +167,7 @@ function CustomToolCard({
             value={draft.inputSchema}
             onChange={e => setDraft(d => ({ ...d, inputSchema: e.target.value }))}
             rows={4}
-            className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] rounded-md px-2 py-1.5 text-[10px] font-mono focus:outline-none focus:border-[var(--color-protocol-mcp)] text-[var(--color-text-primary)] resize-y"
+            className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] rounded px-2 py-1.5 text-[10px] font-mono focus:outline-none focus:border-[var(--color-protocol-mcp)] text-[var(--color-text-primary)] resize-y"
             placeholder={'{\n  "type": "object",\n  "properties": {}\n}'}
           />
         </div>
@@ -179,7 +179,7 @@ function CustomToolCard({
             value={draft.response}
             onChange={e => setDraft(d => ({ ...d, response: e.target.value }))}
             rows={4}
-            className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] rounded-md px-2 py-1.5 text-[10px] font-mono focus:outline-none focus:border-[var(--color-protocol-mcp)] text-[var(--color-text-primary)] resize-y"
+            className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] rounded px-2 py-1.5 text-[10px] font-mono focus:outline-none focus:border-[var(--color-protocol-mcp)] text-[var(--color-text-primary)] resize-y"
             placeholder="{ }"
           />
         </div>
@@ -190,7 +190,7 @@ function CustomToolCard({
             type="button"
             onClick={() => onSave(draft)}
             disabled={!draft.name.trim()}
-            className="px-3 py-1 text-[11px] rounded font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-[26px] px-3 text-[11px] rounded font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ backgroundColor: 'rgba(99,102,241,0.18)', color: MCP_COLOR, border: '1px solid rgba(99,102,241,0.3)' }}
           >
             Save
@@ -198,7 +198,7 @@ function CustomToolCard({
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1 text-[11px] rounded cursor-pointer transition-colors opacity-60 hover:opacity-100"
+            className="h-[26px] px-3 text-[11px] rounded cursor-pointer transition-colors opacity-60 hover:opacity-100"
             style={{ color: 'var(--color-text-muted)', border: '1px solid rgba(255,255,255,0.08)' }}
           >
             Cancel
@@ -365,7 +365,7 @@ export function McpMockConfig({ server, onUpdate }: Props) {
           <button
             type="button"
             onClick={() => { setAddingNew(true); setEditingId(null); }}
-            className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors self-start border"
+            className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] rounded cursor-pointer transition-colors border"
             style={{ color: MCP_COLOR, borderColor: `color-mix(in srgb, ${MCP_COLOR} 30%, transparent)`, background: 'transparent' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${MCP_COLOR} 10%, transparent)`; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -378,7 +378,7 @@ export function McpMockConfig({ server, onUpdate }: Props) {
               type="button"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Custom Tools"
-              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
             >
               <TrashIcon size={12} />
             </button>

@@ -122,7 +122,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
           <button
             type="button"
             onClick={addHandler}
-            className="h-[28px] px-2.5 text-[10px] rounded-md cursor-pointer transition-colors border"
+            className="h-[26px] px-2.5 text-[10px] rounded cursor-pointer transition-colors border"
             style={{ color: 'var(--color-protocol-socketio)', borderColor: 'color-mix(in srgb, var(--color-protocol-socketio) 30%, transparent)' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-socketio) 10%, transparent)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -134,7 +134,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
               type="button"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Handlers"
-              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
             >
               <TrashIcon size={12} />
             </button>
@@ -210,7 +210,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
                   value={handler.eventName}
                   onChange={(e) => updateHandler(handler.id, { eventName: e.target.value })}
                   placeholder="Listen event name"
-                  className="flex-1 h-[28px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  className="flex-1 h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
                 />
                 <span className="text-[10px] text-[var(--color-text-muted)]">→</span>
                 <input
@@ -218,14 +218,14 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
                   value={handler.responseEvent}
                   onChange={(e) => updateHandler(handler.id, { responseEvent: e.target.value })}
                   placeholder="Emit event name"
-                  className="flex-1 h-[28px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  className="flex-1 h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
                 />
                 <input
                   type="text"
                   value={handler.room || ''}
                   onChange={(e) => updateHandler(handler.id, { room: e.target.value })}
                   placeholder="Room (optional)"
-                  className="w-[100px] h-[28px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  className="w-[100px] h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
                 />
               </div>
               <ResizablePanel id={`mock.io.handler.${handler.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>

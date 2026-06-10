@@ -27,6 +27,10 @@ import { AiSecurityAuditModal } from './AiSecurityAuditModal';
 import { AiPostmanTranslatorModal } from './AiPostmanTranslatorModal';
 import { AiWebhookDebuggerModal } from './AiWebhookDebuggerModal';
 import { AiRequestClusteringModal } from './AiRequestClusteringModal';
+import { AiCrossProtocolOrchestratorModal } from './AiCrossProtocolOrchestratorModal';
+import { AiChaosEngineeringModal } from './AiChaosEngineeringModal';
+import { AiContractNegotiatorModal } from './AiContractNegotiatorModal';
+import { AiLiveTrafficMirrorModal } from './AiLiveTrafficMirrorModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_LABELS, type AiPromptTemplateKey } from '../../store/prompt-template';
 
@@ -82,26 +86,50 @@ const DAAKIA_RENDERER_PROVIDERS = [
 
 // ─── Context helpers ──────────────────────────────────────────────────────────
 
-/** Build a system prompt context block from a request tab */
+/** Build a system prompt context block — protocol-aware */
 function buildContextBlock(
-  method: string,
-  url: string,
-  response: ResponseData | null,
+  tab: { protocol: string; method: string; url: string; grpcMethod?: string; soapOperation?: string; soapService?: string; response: ResponseData | null },
   envName: string | null,
   envVarCount: number,
 ): string {
-  if (!url) return '';
+  if (!tab.url) return '';
+  const { protocol, url, method } = tab;
+  const proto = (protocol || 'rest').toLowerCase();
 
   const lines: string[] = [
     '## Current API Context (auto-injected)',
     'The user is actively working with this request in their editor:',
-    `- Method: ${method}`,
-    `- URL: ${url}`,
+    `- Protocol: ${proto.toUpperCase()}`,
   ];
 
-  if (response) {
-    const statusLine = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
-    const timeStr = response.time ? ` (${response.time}ms)` : '';
+  if (proto === 'rest' || proto === 'soap') {
+    lines.push(`- Method: ${method}`);
+  }
+  if (proto === 'grpc') {
+    lines.push(`- Server: ${url}`);
+    if (tab.grpcMethod) lines.push(`- RPC Method: ${tab.grpcMethod}`);
+    else lines.push(`- Endpoint: ${url}`);
+  } else if (proto === 'soap') {
+    lines.push(`- Endpoint: ${url}`);
+    if (tab.soapOperation) lines.push(`- Operation: ${tab.soapOperation}`);
+    if (tab.soapService) lines.push(`- Service: ${tab.soapService}`);
+  } else if (proto === 'graphql') {
+    lines.push(`- Endpoint: ${url}`);
+  } else if (proto === 'websocket' || proto === 'ws') {
+    lines.push(`- WebSocket URL: ${url}`);
+  } else if (proto === 'sse') {
+    lines.push(`- SSE URL: ${url}`);
+  } else if (proto === 'mqtt') {
+    lines.push(`- Broker URL: ${url}`);
+  } else if (proto === 'socketio') {
+    lines.push(`- Socket.IO URL: ${url}`);
+  } else {
+    lines.push(`- URL: ${url}`);
+  }
+
+  if (tab.response) {
+    const statusLine = `${tab.response.status}${tab.response.statusText ? ` ${tab.response.statusText}` : ''}`;
+    const timeStr = tab.response.time ? ` (${tab.response.time}ms)` : '';
     lines.push(`- Last Response: ${statusLine}${timeStr}`);
   } else {
     lines.push('- Last Response: None yet');
@@ -111,32 +139,47 @@ function buildContextBlock(
     lines.push(`- Active Environment: ${envName}${envVarCount > 0 ? ` (${envVarCount} variables)` : ''}`);
   }
 
-  lines.push('', 'When the user asks about "this request", "my API", "the response", etc., refer to the context above.');
+  lines.push('', 'When the user asks about "this request", "my API", "the endpoint", "the response", etc., refer to the context above.');
   return lines.join('\n');
 }
 
-/** Compact context indicator shown below the hero banner */
+/** Compact context indicator shown below the hero banner — protocol-aware */
 function AiContextBar({
-  method,
-  url,
-  response,
+  tab,
   envName,
   tabId,
 }: {
-  method: string;
-  url: string;
-  response: ResponseData | null;
+  tab: { protocol: string; method: string; url: string; grpcMethod?: string; soapOperation?: string; response: ResponseData | null };
   envName: string | null;
   tabId: string;
 }) {
   const setActiveTab = useTabsStore(s => s.setActiveTab);
+  const { protocol, method, url, grpcMethod, soapOperation, response } = tab;
+  const proto = (protocol || 'rest').toLowerCase();
+
   const statusColor = response
     ? response.status < 300 ? 'var(--color-success)'
     : response.status < 400 ? 'var(--color-warning)'
     : 'var(--color-error)'
     : 'var(--color-text-muted)';
 
-  const truncatedUrl = url.length > 40 ? url.slice(0, 37) + '…' : url;
+  const truncatedUrl = url.length > 38 ? url.slice(0, 35) + '…' : url;
+
+  const protoBadge = proto === 'rest' ? method
+    : proto === 'graphql' ? 'GQL'
+    : proto === 'grpc' ? 'gRPC'
+    : proto === 'soap' ? 'SOAP'
+    : proto === 'websocket' || proto === 'ws' ? 'WS'
+    : proto === 'sse' ? 'SSE'
+    : proto === 'mqtt' ? 'MQTT'
+    : proto === 'socketio' ? 'SIO'
+    : proto.toUpperCase();
+
+  const detail = proto === 'grpc' && grpcMethod
+    ? grpcMethod.split('/').pop() ?? grpcMethod
+    : proto === 'soap' && soapOperation
+    ? soapOperation
+    : null;
 
   return (
     <div
@@ -151,13 +194,18 @@ function AiContextBar({
         Context
       </span>
 
-      {/* Method + URL + status */}
+      {/* Protocol badge + URL + optional detail */}
       <span className="font-mono font-bold flex-shrink-0 text-[10px]" style={{ color: 'var(--color-protocol-ai)' }}>
-        {method}
+        {protoBadge}
       </span>
       <span className="truncate flex-1 font-mono text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>
         {truncatedUrl}
       </span>
+      {detail && (
+        <span className="flex-shrink-0 text-[9px] px-1.5 py-px rounded font-mono" style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)', color: 'var(--color-protocol-ai)' }}>
+          {detail}
+        </span>
+      )}
       {response && (
         <span className="flex-shrink-0 font-semibold text-[10px] px-1.5 py-0.5 rounded" style={{ color: statusColor, backgroundColor: `color-mix(in srgb, ${statusColor} 12%, transparent)` }}>
           {response.status}
@@ -305,9 +353,7 @@ export function DaakiaAiPanel() {
     const basePrompt = DAAKIA_ASSISTANT_SYSTEM_PROMPT;
     const contextBlock = showContextBar && contextTab
       ? buildContextBlock(
-          contextTab.method,
-          contextTab.url,
-          contextTab.response,
+          contextTab,
           contextEnv?.name ?? null,
           contextEnv?.variables?.length ?? 0,
         )
@@ -339,6 +385,11 @@ export function DaakiaAiPanel() {
   const [showPostmanTranslator, setShowPostmanTranslator] = useState(false);
   const [showWebhookDebugger, setShowWebhookDebugger] = useState(false);
   const [showRequestClustering, setShowRequestClustering] = useState(false);
+  // ── Sprint 14 platform tools ──────────────────────────────────────────────
+  const [showCrossProtocol, setShowCrossProtocol] = useState(false);
+  const [showChaosEngineering, setShowChaosEngineering] = useState(false);
+  const [showContractNegotiator, setShowContractNegotiator] = useState(false);
+  const [showLiveTrafficMirror, setShowLiveTrafficMirror] = useState(false);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   // ── AI Suggestion Chips (4.5.5) ──────────────────────────────────────────
@@ -513,6 +564,37 @@ export function DaakiaAiPanel() {
             title="AI Request Clustering — auto-organize into collections"
           >Cluster ✦</button>
         )}
+        {(aiEnabled('crossProtocolOrchestrator') || aiEnabled('chaosEngineeringPlanner') || aiEnabled('contractNegotiator') || aiEnabled('liveTrafficMirror')) && (
+          <div className="w-px h-4 mx-0.5 flex-shrink-0" style={{ backgroundColor: 'var(--color-surface-border)' }} />
+        )}
+        {aiEnabled('crossProtocolOrchestrator') && (
+          <button type="button" onClick={() => setShowCrossProtocol(true)}
+            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+            title="Cross-Protocol Orchestrator — multi-protocol journey planner"
+          >Orchestrate ✦</button>
+        )}
+        {aiEnabled('chaosEngineeringPlanner') && (
+          <button type="button" onClick={() => setShowChaosEngineering(true)}
+            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+            title="Chaos Engineering Planner — failure scenario designer"
+          >Chaos ✦</button>
+        )}
+        {aiEnabled('contractNegotiator') && (
+          <button type="button" onClick={() => setShowContractNegotiator(true)}
+            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+            title="Contract Negotiator — resolve API contract conflicts between teams"
+          >Contracts ✦</button>
+        )}
+        {aiEnabled('liveTrafficMirror') && (
+          <button type="button" onClick={() => setShowLiveTrafficMirror(true)}
+            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+            title="Live Traffic Mirror — proxy & AI analysis across all protocols"
+          >Traffic ✦</button>
+        )}
       </div>
 
       {/* 10.9: Prompt Library quick-picker */}
@@ -543,9 +625,7 @@ export function DaakiaAiPanel() {
       {/* Context bar — shows current tab context */}
       {showContextBar && contextTab && (
         <AiContextBar
-          method={contextTab.method}
-          url={contextTab.url}
-          response={contextTab.response}
+          tab={contextTab}
           envName={contextEnv?.name ?? null}
           tabId={contextTab.id}
         />
@@ -634,6 +714,11 @@ export function DaakiaAiPanel() {
       {showPostmanTranslator && <AiPostmanTranslatorModal onClose={() => setShowPostmanTranslator(false)} />}
       {showWebhookDebugger && <AiWebhookDebuggerModal onClose={() => setShowWebhookDebugger(false)} />}
       {showRequestClustering && <AiRequestClusteringModal onClose={() => setShowRequestClustering(false)} />}
+      {/* Sprint 14: Cross-protocol & advanced platform tools */}
+      {showCrossProtocol && <AiCrossProtocolOrchestratorModal onClose={() => setShowCrossProtocol(false)} />}
+      {showChaosEngineering && <AiChaosEngineeringModal onClose={() => setShowChaosEngineering(false)} />}
+      {showContractNegotiator && <AiContractNegotiatorModal onClose={() => setShowContractNegotiator(false)} />}
+      {showLiveTrafficMirror && <AiLiveTrafficMirrorModal onClose={() => setShowLiveTrafficMirror(false)} />}
     </div>
   );
 }

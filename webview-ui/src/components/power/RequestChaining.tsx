@@ -111,7 +111,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
 
       {!collapsed && (
         <div className="p-3 flex flex-col gap-2">
-          <p className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+          <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
             Extract values from the response and inject them as environment variables for use in subsequent requests.
           </p>
 
@@ -143,7 +143,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
                 onChange={e => updateExtraction(ex.id, { path: e.target.value })}
                 placeholder={ex.source === 'header' ? 'Authorization' : ex.source === 'status' ? '(status code)' : 'data.user.id'}
                 disabled={ex.source === 'status'}
-                className="flex-1 px-2 py-1 rounded text-[10.5px] font-mono outline-none"
+                className="flex-1 px-2 py-1 rounded text-[11px] font-mono outline-none"
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
               />
 
@@ -155,7 +155,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
                 value={ex.variableName}
                 onChange={e => updateExtraction(ex.id, { variableName: e.target.value })}
                 placeholder="variableName"
-                className="w-[120px] px-2 py-1 rounded text-[10.5px] font-mono outline-none"
+                className="w-[120px] px-2 py-1 rounded text-[11px] font-mono outline-none"
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
               />
 
@@ -179,7 +179,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
 
           <div className="flex items-center gap-2">
             <button type="button" onClick={addExtraction}
-              className="flex items-center gap-1 text-[10.5px] px-2.5 py-1 rounded-md cursor-pointer border transition-all"
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded cursor-pointer border transition-all"
               style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
               <PlusIcon size={10} />
               Add Extraction
@@ -187,7 +187,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
 
             {extractions.length > 0 && responseBody && (
               <button type="button" onClick={applyExtractions}
-                className="flex items-center gap-1 text-[10.5px] px-2.5 py-1 rounded-md cursor-pointer text-white"
+                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded cursor-pointer text-white"
                 style={{ backgroundColor: 'var(--color-success)' }}>
                 ⛓ Apply to Environment
               </button>

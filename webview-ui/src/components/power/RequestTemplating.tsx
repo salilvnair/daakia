@@ -152,7 +152,7 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
             <div className="flex gap-2">
               {(['csv', 'json', 'manual'] as const).map(m => (
                 <button key={m} type="button" onClick={() => setDataMode(m)}
-                  className="px-3 py-1 text-[10.5px] rounded border cursor-pointer"
+                  className="px-3 py-1 text-[11px] rounded border cursor-pointer"
                   style={{
                     borderColor: dataMode === m ? 'var(--color-info)' : 'var(--color-surface-border)',
                     color: dataMode === m ? 'var(--color-info)' : 'var(--color-text-secondary)',
@@ -170,7 +170,7 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
                   <button type="button" onClick={() => setCsvData(EXAMPLE_CSV)} className="text-[10px] cursor-pointer" style={{ color: 'var(--color-info)' }}>Load example</button>
                 </div>
                 <textarea value={csvData} onChange={e => setCsvData(e.target.value)} rows={5}
-                  className="w-full px-3 py-2 rounded-lg text-[10.5px] font-mono resize-none outline-none"
+                  className="w-full px-3 py-2 rounded-lg text-[11px] font-mono resize-none outline-none"
                   placeholder={`name,email,role\nJohn,john@example.com,admin`}
                   style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
               </div>
@@ -183,7 +183,7 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
                   <button type="button" onClick={() => setJsonData(EXAMPLE_JSON)} className="text-[10px] cursor-pointer" style={{ color: 'var(--color-info)' }}>Load example</button>
                 </div>
                 <textarea value={jsonData} onChange={e => setJsonData(e.target.value)} rows={5}
-                  className="w-full px-3 py-2 rounded-lg text-[10.5px] font-mono resize-none outline-none"
+                  className="w-full px-3 py-2 rounded-lg text-[11px] font-mono resize-none outline-none"
                   placeholder='[{"id": 1, "name": "John"}, {"id": 2, "name": "Jane"}]'
                   style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
               </div>
@@ -200,14 +200,14 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
                         updated[i] = { ...updated[i], [v]: e.target.value };
                         setManualRows(updated);
                       }}
-                        className="flex-1 px-2 py-1 rounded text-[10.5px] outline-none"
+                        className="flex-1 px-2 py-1 rounded text-[11px] outline-none"
                         placeholder={`{{${v}}}`}
                         style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
                     ))}
                   </div>
                 ))}
                 <button type="button" onClick={() => setManualRows([...manualRows, {}])}
-                  className="flex items-center gap-1 text-[10.5px] cursor-pointer"
+                  className="flex items-center gap-1 text-[11px] cursor-pointer"
                   style={{ color: 'var(--color-info)' }}>
                   <PlusIcon size={10} />Add row
                 </button>
@@ -229,7 +229,7 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
               {preview && (
                 <div className="mt-2 flex flex-col gap-1">
                   {previewRequests.map((req, i) => (
-                    <div key={i} className="flex gap-2 items-start text-[10.5px] p-2 rounded border"
+                    <div key={i} className="flex gap-2 items-start text-[11px] p-2 rounded border"
                       style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
                       <span className="font-bold flex-shrink-0" style={{ color: 'var(--color-info)' }}>{method}</span>
                       <span className="font-mono truncate" style={{ color: 'var(--color-text-primary)' }}>{req.url}</span>
@@ -245,12 +245,12 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
           <button type="button" onClick={generateRequests}
             disabled={rows.length === 0 || !urlTemplate.trim() || generated}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
             style={{ backgroundColor: generated ? 'var(--color-success)' : 'var(--color-info)' }}>
             {generated ? `✓ Generated` : `Generate ${rows.length} Request${rows.length !== 1 ? 's' : ''}`}
           </button>
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
             Close
           </button>
         </div>

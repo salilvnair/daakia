@@ -113,12 +113,12 @@ export function ResponseDiffModal({ onClose }: Props) {
               </p>
             )}
           </div>
-          <label className="flex items-center gap-1.5 cursor-pointer text-[10.5px]" style={{ color: 'var(--color-text-secondary)' }}>
+          <label className="flex items-center gap-1.5 cursor-pointer text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
             <input type="checkbox" checked={pretty} onChange={e => setPretty(e.target.checked)} />
             Pretty JSON
           </label>
           <button type="button" onClick={() => setShowDiff(p => !p)}
-            className="h-[28px] px-3 text-[10.5px] font-medium rounded-md cursor-pointer text-white"
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer text-white"
             style={{ backgroundColor: showDiff ? 'var(--color-surface-border)' : 'var(--color-info)', color: showDiff ? 'var(--color-text-secondary)' : 'white' }}>
             {showDiff ? 'Edit' : 'Compare'}
           </button>
@@ -130,7 +130,7 @@ export function ResponseDiffModal({ onClose }: Props) {
         {/* Tab source pickers */}
         {responseTabs.length > 0 && (
           <div className="flex px-4 py-2 gap-3 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-hover)' }}>
-            <div className="flex items-center gap-2 text-[10.5px]">
+            <div className="flex items-center gap-2 text-[11px]">
               <span style={{ color: 'var(--color-text-muted)' }}>A from:</span>
               <div className="flex gap-1 flex-wrap">
                 {responseTabs.slice(0, 5).map(t => (
@@ -142,7 +142,7 @@ export function ResponseDiffModal({ onClose }: Props) {
                 ))}
               </div>
             </div>
-            <div className="flex items-center gap-2 text-[10.5px]">
+            <div className="flex items-center gap-2 text-[11px]">
               <span style={{ color: 'var(--color-text-muted)' }}>B from:</span>
               <div className="flex gap-1 flex-wrap">
                 {responseTabs.slice(0, 5).map(t => (
@@ -169,7 +169,7 @@ export function ResponseDiffModal({ onClose }: Props) {
                   {bodyA && <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>{bodyA.length} chars</span>}
                 </div>
                 <textarea value={bodyA} onChange={e => setBodyA(e.target.value)}
-                  className="flex-1 p-3 text-[10.5px] font-mono resize-none outline-none"
+                  className="flex-1 p-3 text-[11px] font-mono resize-none outline-none"
                   placeholder="Paste response A here…"
                   style={{ backgroundColor: 'var(--color-panel)', color: 'var(--color-text-primary)' }} />
               </div>
@@ -180,7 +180,7 @@ export function ResponseDiffModal({ onClose }: Props) {
                   {bodyB && <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>{bodyB.length} chars</span>}
                 </div>
                 <textarea value={bodyB} onChange={e => setBodyB(e.target.value)}
-                  className="flex-1 p-3 text-[10.5px] font-mono resize-none outline-none"
+                  className="flex-1 p-3 text-[11px] font-mono resize-none outline-none"
                   placeholder="Paste response B here…"
                   style={{ backgroundColor: 'var(--color-panel)', color: 'var(--color-text-primary)' }} />
               </div>
@@ -188,7 +188,7 @@ export function ResponseDiffModal({ onClose }: Props) {
           ) : (
             <>
               {/* Diff mode — synchronized scrolling */}
-              <div ref={leftRef} className="flex-1 overflow-auto border-r font-mono text-[10.5px]" style={{ borderColor: 'var(--color-surface-border)' }}>
+              <div ref={leftRef} className="flex-1 overflow-auto border-r font-mono text-[11px]" style={{ borderColor: 'var(--color-surface-border)' }}>
                 <div className="px-3 py-1.5 border-b sticky top-0 text-[11px] font-medium font-sans"
                   style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}>
                   {labelA}
@@ -206,7 +206,7 @@ export function ResponseDiffModal({ onClose }: Props) {
                   </div>
                 ))}
               </div>
-              <div ref={rightRef} className="flex-1 overflow-auto font-mono text-[10.5px]">
+              <div ref={rightRef} className="flex-1 overflow-auto font-mono text-[11px]">
                 <div className="px-3 py-1.5 border-b sticky top-0 text-[11px] font-medium font-sans"
                   style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}>
                   {labelB}
@@ -232,7 +232,7 @@ export function ResponseDiffModal({ onClose }: Props) {
 
         <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
+            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
             Close
           </button>
         </div>

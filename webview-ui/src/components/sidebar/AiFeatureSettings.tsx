@@ -13,27 +13,31 @@ const ACCENT = 'var(--color-protocol-ai)';
 
 // Group display order (matches AI_FEATURE_LABELS group names in ai-features-store.ts)
 const GROUP_ORDER = [
-  'Core AI',
-  'REST',
-  'GraphQL',
-  'gRPC',
-  'SOAP',
+  'Response & Diagnostics',
+  'REST Toolkit',
+  'Schema & Contracts',
+  'Collections & Workflow',
+  'Import & Reverse Engineer',
+  'Mock Generation',
+  'GraphQL AI',
+  'gRPC AI',
+  'SOAP AI',
   'Realtime Protocols',
-  'Collections',
-  'Mock Server AI',
-  'Platform AI',
+  'MCP & Platform AI',
 ];
 
 const GROUP_COLORS: Record<string, string> = {
-  'Core AI':           'var(--color-protocol-ai)',
-  'REST':              'var(--color-protocol-rest)',
-  'GraphQL':           'var(--color-protocol-graphql)',
-  'gRPC':              'var(--color-protocol-grpc)',
-  'SOAP':              'var(--color-protocol-soap)',
-  'Realtime Protocols':'var(--color-protocol-websocket)',
-  'Collections':       'var(--color-primary)',
-  'Mock Server AI':    'var(--color-mock-server)',
-  'Platform AI':       '#a855f7',
+  'Response & Diagnostics': 'var(--color-protocol-ai)',
+  'REST Toolkit':            'var(--color-protocol-rest)',
+  'Schema & Contracts':      'var(--color-success)',
+  'Collections & Workflow':  'var(--color-primary)',
+  'Import & Reverse Engineer':'var(--color-warning)',
+  'Mock Generation':         'var(--color-mock-server)',
+  'GraphQL AI':              'var(--color-protocol-graphql)',
+  'gRPC AI':                 'var(--color-protocol-grpc)',
+  'SOAP AI':                 'var(--color-protocol-soap)',
+  'Realtime Protocols':      'var(--color-protocol-websocket)',
+  'MCP & Platform AI':       'var(--color-protocol-ai)',
 };
 
 // ── Feature row ───────────────────────────────────────────────────────────────

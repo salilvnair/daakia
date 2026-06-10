@@ -116,7 +116,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
               const ops = server.graphqlOperations || [];
               onUpdate({ graphqlOperations: [...ops, { id: crypto.randomUUID(), operationType: 'query', operationName: '', response: '{\n  "data": {}\n}', statusCode: 200, delay: 0, enabled: true }] });
             }}
-            className="h-[28px] px-2.5 text-[11px] rounded-md cursor-pointer transition-colors border"
+            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
             style={{ color: GQL_COLOR, borderColor: `color-mix(in srgb, ${GQL_COLOR} 30%, transparent)` }}
             onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${GQL_COLOR} 10%, transparent)`; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -128,7 +128,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
               type="button"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Operations"
-              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
             >
               <TrashIcon size={12} />
             </button>
@@ -187,7 +187,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
                 onUpdate({ graphqlOperations: ops });
               }}
               placeholder="Operation name (optional)"
-              className="flex-1 h-[28px] px-2.5 text-[12px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+              className="flex-1 h-[26px] px-2.5 text-[12px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
             />
             {gqlUrl && op.enabled !== false && (
               <button

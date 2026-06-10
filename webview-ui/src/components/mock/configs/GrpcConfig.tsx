@@ -238,7 +238,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
           <button
             type="button"
             onClick={addService}
-            className="h-[28px] px-2.5 text-[11px] rounded-md cursor-pointer transition-colors border"
+            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
             style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)`, background: 'transparent' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 10%, transparent)`; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -250,7 +250,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
               type="button"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Services"
-              className="h-[28px] w-[28px] flex items-center justify-center rounded-md cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
+              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
             >
               <TrashIcon size={12} />
             </button>
@@ -336,7 +336,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                         type="text"
                         value={group.service}
                         onChange={(e) => renameService(group.service, e.target.value)}
-                        className="flex-1 h-[26px] px-2 rounded-md text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
+                        className="flex-1 h-[26px] px-2 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
                       />
                     </div>
 
@@ -356,7 +356,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                     <button
                       type="button"
                       onClick={() => addMethodToService(group.service)}
-                      className="h-[26px] px-2 text-[10px] rounded-md cursor-pointer transition-colors self-start border border-dashed"
+                      className="h-[26px] px-2 text-[10px] rounded cursor-pointer transition-colors self-start border border-dashed"
                       style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: 'transparent' }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -495,7 +495,7 @@ function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }
                 type="text"
                 value={m.method}
                 onChange={(e) => onUpdate({ method: e.target.value })}
-                className="w-full h-[28px] px-2.5 rounded-md text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
+                className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
               />
             </div>
             <div>
@@ -529,7 +529,7 @@ function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }
                 inputMode="numeric"
                 value={m.statusCode}
                 onChange={(e) => onUpdate({ statusCode: parseInt(e.target.value) || 0 })}
-                className="w-[56px] h-[28px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-[56px] h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 title="gRPC status code (0=OK, 1=CANCELLED, 2=UNKNOWN, ...)"
               />
             </div>
