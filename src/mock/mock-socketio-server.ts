@@ -1,16 +1,19 @@
 /**
  * Socket.IO Mock Server - handles Socket.IO connections, event matching, and responses.
- * Uses socket.io server (peer of socket.io-client).
+ * Sprint 13.26-13.30: sequences, payload regex, fault injection, rate limiting, state machines + namespace/room.
  */
 import * as http from 'http';
+import * as crypto from 'crypto';
 import type { MockServerConfig, SocketIOMockHandler, MockLogEntry } from './mock-types';
 import { resolveAll } from '../services/variables';
+import {
+  pickSequenceItem, evaluateFault, checkRateLimit, getState, setState, sleep,
+} from './mock-protocol-helpers';
 
 export type LogCallback = (entry: MockLogEntry) => void;
 
 // We use the ws-based approach: Socket.IO protocol over raw WS
 // Since we already have 'ws' as a dependency, we emulate Socket.IO protocol handshake
-// For simplicity, we use a lightweight Socket.IO-compatible approach using 'ws'
 import { WebSocketServer, WebSocket } from 'ws';
 
 interface ConnectedClient {
@@ -64,33 +67,17 @@ export function createSocketIOServer(server: http.Server, config: MockServerConf
       clientId,
     });
 
-    // Fire connection handlers
+    // Fire connection handlers (Sprint 13.26-13.30)
     const currentConfig = getConfig();
     const connHandlers = (currentConfig.socketioHandlers || []).filter(h => h.enabled && h.event === 'connection');
     for (const handler of connHandlers) {
-      const send = () => {
-        const resolved = resolveAll(handler.response);
-        const packet = `42${JSON.stringify([handler.emitEvent, safeJsonParse(resolved)])}`;
-        if (handler.broadcast) {
-          const clients = serverClients.get(config.id) || [];
-          clients.forEach(c => { if (c.ws.readyState === WebSocket.OPEN) c.ws.send(packet); });
-        } else {
-          ws.send(packet);
-        }
-
-        onLog?.({
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          serverId: config.id,
-          direction: 'outgoing',
-          protocol: 'socketio',
-          event: handler.emitEvent,
-          body: resolved,
-          clientId,
-        });
-      };
-      if (handler.delay > 0) setTimeout(send, handler.delay);
-      else send();
+      // Sprint 13.30: state machine gate
+      if (handler.stateMachineState) {
+        if (getState(config.id, clientId) !== handler.stateMachineState) continue;
+      }
+      sendHandlerResponse(handler, ws, config.id, clientId, serverClients, onLog, 'connection', getConfig).then(() => {
+        if (handler.nextState) setState(config.id, clientId, handler.nextState);
+      });
     }
 
     ws.on('message', (data: Buffer | string) => {
@@ -157,36 +144,38 @@ export function createSocketIOServer(server: http.Server, config: MockServerConf
             clientId,
           });
 
-          // Match handlers
+          // Match handlers (Sprint 13.26-13.30)
           const liveConfig = getConfig();
           const msgHandlers = (liveConfig.socketioHandlers || []).filter(
             h => h.enabled && h.event === 'message' && h.listenEvent === eventName
           );
 
           for (const handler of msgHandlers) {
-            const send = () => {
-              const resolved = resolveAll(handler.response);
-              const packet = `42${JSON.stringify([handler.emitEvent, safeJsonParse(resolved)])}`;
-              if (handler.broadcast) {
-                const clients = serverClients.get(config.id) || [];
-                clients.forEach(c => { if (c.ws.readyState === WebSocket.OPEN) c.ws.send(packet); });
-              } else {
-                ws.send(packet);
+            // Sprint 13.27: payload regex matching
+            if (handler.payloadMatchRegex) {
+              try {
+                const payloadStr = eventData !== undefined ? JSON.stringify(eventData) : '';
+                if (!new RegExp(handler.payloadMatchRegex, 's').test(payloadStr)) continue;
+              } catch {
+                // Invalid regex — skip match, allow handler
               }
+            }
 
-              onLog?.({
-                id: crypto.randomUUID(),
-                timestamp: Date.now(),
-                serverId: config.id,
-                direction: 'outgoing',
-                protocol: 'socketio',
-                event: handler.emitEvent,
-                body: resolved,
-                clientId,
-              });
-            };
-            if (handler.delay > 0) setTimeout(send, handler.delay);
-            else send();
+            // Sprint 13.30: state machine gate
+            if (handler.stateMachineState) {
+              if (getState(config.id, clientId) !== handler.stateMachineState) continue;
+            }
+
+            // Sprint 13.29: rate limiting
+            if (!checkRateLimit(handler.id, handler.rateLimit)) {
+              ws.send(`44${JSON.stringify({ message: 'RATE_LIMITED', retryAfterMs: handler.rateLimit?.windowMs })}`);
+              continue;
+            }
+
+            const nextState = handler.nextState;
+            sendHandlerResponse(handler, ws, config.id, clientId, serverClients, onLog, 'message', getConfig).then(() => {
+              if (nextState) setState(config.id, clientId, nextState);
+            });
           }
       }
     });
@@ -253,6 +242,56 @@ export function cleanupSocketIOClients(serverId: string) {
     });
     serverClients.delete(serverId);
   }
+}
+
+async function sendHandlerResponse(
+  handler: SocketIOMockHandler,
+  ws: WebSocket,
+  serverId: string,
+  clientId: string,
+  clients: Map<string, ConnectedClient[]>,
+  onLog: LogCallback | undefined,
+  eventContext: string,
+  getConfig: () => MockServerConfig,
+) {
+  // Sprint 13.28: fault injection
+  const fault = evaluateFault(handler.fault);
+  if (fault.delayMs > 0) await sleep(fault.delayMs);
+  if (fault.triggered && fault.errorMessage) {
+    ws.send(`44${JSON.stringify({ message: fault.errorMessage })}`);
+    return;
+  }
+
+  if (handler.delay > 0) await sleep(handler.delay);
+
+  // Sprint 13.26: sequences
+  const seqItem = handler.responses?.length
+    ? pickSequenceItem(handler.id, handler.responses, handler.sequenceMode)
+    : null;
+  const resolved = seqItem ? resolveAll(seqItem.body) : resolveAll(handler.response);
+  const packet = `42${JSON.stringify([handler.emitEvent, safeJsonParse(resolved)])}`;
+
+  const send = (target: WebSocket) => {
+    if (target.readyState === WebSocket.OPEN) target.send(packet);
+  };
+
+  if (handler.broadcast) {
+    const serverClientList = clients.get(serverId) || [];
+    serverClientList.forEach(c => send(c.ws));
+  } else {
+    send(ws);
+  }
+
+  onLog?.({
+    id: crypto.randomUUID(),
+    timestamp: Date.now(),
+    serverId,
+    direction: 'outgoing',
+    protocol: 'socketio',
+    event: handler.emitEvent,
+    body: resolved,
+    clientId,
+  });
 }
 
 function generateSocketId(): string {

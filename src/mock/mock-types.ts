@@ -226,6 +226,17 @@ export interface GraphQLMockOperation {
   statusCode: number;
   delay: number;
   enabled: boolean;
+  // Sprint 13.1-13.5: advanced matching + sequences + fault
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  headerMatchers?: MatchRule[];
+  queryParamMatchers?: MatchRule[];
+  cookieMatchers?: MatchRule[];
+  bodyMatcher?: BodyMatcher;
+  compositeLogic?: 'AND' | 'OR';
+  priority?: number;
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
 }
 
 export interface WebSocketMockHandler {
@@ -236,6 +247,13 @@ export interface WebSocketMockHandler {
   delay: number;
   enabled: boolean;
   broadcast: boolean; // send to all connected clients
+  // Sprint 13.6-13.10: sequences + fault + state machine
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
+  stateMachineState?: string; // only match when mock is in this state
+  nextState?: string; // transition to this state after responding
 }
 
 export interface SSEMockEvent {
@@ -246,6 +264,13 @@ export interface SSEMockEvent {
   delay: number; // initial delay before first send
   enabled: boolean;
   repeat: boolean; // if true, keeps sending at intervalMs
+  // Sprint 13.21-13.25: sequences + matching + reconnect simulation
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  dataMatchRegex?: string; // match on event data (regex)
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
+  reconnectAfterN?: number; // send 204 after N events to force client reconnect
 }
 
 export interface SocketIOMockHandler {
@@ -257,6 +282,16 @@ export interface SocketIOMockHandler {
   delay: number;
   enabled: boolean;
   broadcast: boolean; // emit to all connected clients
+  // Sprint 13.26-13.30: sequences + matching + state machines
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  payloadMatchRegex?: string; // match on event payload (regex)
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
+  namespace?: string; // Socket.IO namespace (e.g., '/chat')
+  room?: string; // emit to specific room
+  stateMachineState?: string;
+  nextState?: string;
 }
 
 export interface MQTTMockTopic {
@@ -267,6 +302,16 @@ export interface MQTTMockTopic {
   payload: string; // default publish payload (JSON or text)
   intervalMs: number; // auto-publish interval (0 = only on subscribe)
   enabled: boolean;
+  // Sprint 13.16-13.20: sequences + wildcard matching + state machines
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  payloadMatchRegex?: string; // match incoming MQTT payload (regex / JSONPath)
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
+  stateMachineState?: string;
+  nextState?: string;
+  lastWillTopic?: string; // LWT topic when client disconnects
+  lastWillPayload?: string;
 }
 
 export interface GrpcMockMethod {
@@ -279,6 +324,15 @@ export interface GrpcMockMethod {
   streamResponses?: Array<{ data: string; delayMs: number }>;
   enabled: boolean;
   serviceEnabled?: boolean;
+  // Sprint 13.11-13.15: advanced matching + sequences + fault
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  headerMatchers?: MatchRule[];
+  bodyMatcher?: BodyMatcher;
+  compositeLogic?: 'AND' | 'OR';
+  priority?: number;
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
 }
 
 export interface SoapMockOperation {
@@ -294,6 +348,31 @@ export interface SoapMockOperation {
   delay: number;
   enabled: boolean;
   serviceEnabled?: boolean;
+  // Sprint 13 (SOAP parity): sequences + matching + fault
+  responses?: ResponseSequenceItem[];
+  sequenceMode?: SequenceMode;
+  headerMatchers?: MatchRule[];
+  bodyMatcher?: BodyMatcher;
+  compositeLogic?: 'AND' | 'OR';
+  priority?: number;
+  fault?: FaultConfig;
+  rateLimit?: RateLimitConfig;
+}
+
+/** Sprint 13.32: per-server webhook callback fired when any protocol handler matches */
+export interface ProtocolWebhookConfig {
+  url: string;
+  delayMs?: number;
+  /** Retry attempts on failure (max 3, default 1) */
+  retries?: number;
+  /** ms between retries (default 1000) */
+  retryDelayMs?: number;
+  /** Bearer token or full Authorization header value */
+  authHeader?: string;
+  /** Optional extra headers */
+  headers?: Record<string, string>;
+  /** Filter to specific event types: 'connection' | 'message' | 'publish' | 'all' */
+  eventFilter?: string;
 }
 
 export interface MockServerConfig {
@@ -315,6 +394,8 @@ export interface MockServerConfig {
   aiScenarios?: AiMockScenario[];
   mcpTools?: McpMockTool[];
   port?: number;
+  /** Sprint 13.32: HTTP callbacks to fire when any non-REST protocol handler matches */
+  protocolWebhooks?: ProtocolWebhookConfig[];
 
   // State machine (6A.11-6A.12)
   stateMachine?: StateMachineConfig;
@@ -348,4 +429,9 @@ export interface MockLogEntry {
   duration?: number; // ms
   clientId?: string; // for WS/SSE/SocketIO connections
   event?: string; // event type
+  /** Sprint 13.33: which handler was matched (for non-REST protocols) */
+  matchedHandlerId?: string;
+  matchedHandlerName?: string;
+  /** Sprint 13.33: template variables extracted from the payload */
+  extractedVars?: Record<string, string>;
 }

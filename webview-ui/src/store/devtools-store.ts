@@ -63,7 +63,7 @@ export interface NetworkEntry {
   blobMimeType?: string;
 }
 
-export type DevToolsTab = 'console' | 'network' | 'performance';
+export type DevToolsTab = 'console' | 'network' | 'performance' | 'ai-insights';
 
 export type LogFilter = 'all' | LogLevel;
 

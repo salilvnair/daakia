@@ -396,6 +396,7 @@ export function MockServerPanel() {
                 onDeleteRoute={(routeId) => deleteRoute(activeServer.id, routeId)}
                 editingRoute={editingRoute}
                 onEditRoute={setEditingRoute}
+                logs={serverLogs}
               />
             </div>
 

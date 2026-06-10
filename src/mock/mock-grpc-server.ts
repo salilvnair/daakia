@@ -7,7 +7,9 @@ import * as http from 'http';
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import * as path from 'path';
-import type { MockServerConfig, MockLogEntry } from './mock-types';
+import type { MockServerConfig, MockLogEntry, GrpcMockMethod } from './mock-types';
+import { matchRules, matchBody } from './mock-matcher';
+import { pickSequenceItem, evaluateFault, checkRateLimit, getState, setState, sleep } from './mock-protocol-helpers';
 
 type LogCallback = (entry: MockLogEntry) => void;
 
@@ -118,7 +120,7 @@ async function registerFromProto(
     if (!serviceConstructor || !(serviceConstructor as any).service) continue;
     const handlers: Record<string, any> = {};
     for (const mc of svcMethods) {
-      handlers[mc.method] = createHandler(mc, serverId, onLog);
+      handlers[mc.method] = createHandler(mc as any, serverId, onLog);
     }
     server.addService((serviceConstructor as any).service, handlers);
   }
@@ -153,52 +155,111 @@ function registerGeneric(
         responseSerialize: (v: any) => Buffer.from(JSON.stringify(v)),
         responseDeserialize: (buf: Buffer) => JSON.parse(buf.toString()),
       };
-      handlers[mc.method] = createHandler(mc, serverId, onLog);
+      handlers[mc.method] = createHandler(mc as any, serverId, onLog);
     }
     server.addService(serviceDef, handlers);
   }
 }
 
-// ─── Handler Factory ───
+// ─── Handler Factory (Sprint 13.11-13.15 enhanced) ───
 
 function createHandler(
-  config: { service: string; method: string; type: string; response: string; responseScript?: string; streamResponses?: Array<{ data: string; delayMs: number }>; delay?: number; statusCode?: number },
+  config: GrpcMockMethod & { delay?: number; statusCode?: number },
   serverId: string,
   onLog?: LogCallback,
 ) {
   const methodFull = `${config.service}/${config.method}`;
   const delay = config.delay || 0;
-  const statusCode = config.statusCode || 0;
+
+  // Sprint 13.12: probability-based status code injection
+  const getStatusCode = () => {
+    if (!config.fault?.enabled) return config.statusCode || 0;
+    const fault = evaluateFault(config.fault);
+    if (fault.triggered && fault.statusCode) return fault.statusCode;
+    return config.statusCode || 0;
+  };
+
+  // Sprint 13.11: metadata header matching helper
+  const checkMetadata = (metadata: grpc.Metadata): boolean => {
+    if (!config.headerMatchers?.length) return true;
+    const hdrs: Record<string, string> = {};
+    for (const [k, v] of Object.entries(metadata.getMap())) {
+      hdrs[k] = Array.isArray(v) ? v.join(', ') : String(v);
+    }
+    return matchRules(config.headerMatchers, hdrs, config.compositeLogic === 'OR' ? 'OR' : 'AND');
+  };
+
+  // Sprint 13.13: server-stream sequences
+  const getStreamItems = (): Array<{ data: string; delayMs: number }> => {
+    if (config.responses?.length) {
+      return config.responses.map(r => ({ data: r.body, delayMs: r.delayMs ?? 0 }));
+    }
+    return config.streamResponses || [{ data: config.response, delayMs: 0 }];
+  };
+
+  // Pick response (sequences for unary / client-streaming)
+  const pickResponse = (request?: any): any => {
+    const seqItem = config.responses?.length
+      ? pickSequenceItem(config.id, config.responses, config.sequenceMode)
+      : null;
+    if (seqItem) {
+      try { return JSON.parse(seqItem.body); } catch { return {}; }
+    }
+    return resolveResponse(config, request);
+  };
 
   switch (config.type) {
     case 'unary':
       return (call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) => {
         emitLog(onLog, serverId, 'incoming', methodFull, JSON.stringify(call.request));
-        const respond = () => {
-          if (statusCode > 0) {
+
+        // Sprint 13.11: metadata check
+        if (!checkMetadata(call.metadata)) {
+          callback({ code: grpc.status.NOT_FOUND, details: 'No handler matched (metadata mismatch)' });
+          return;
+        }
+        // Rate limit (Sprint 13.11 extended)
+        if (!checkRateLimit(config.id, config.rateLimit)) {
+          callback({ code: grpc.status.RESOURCE_EXHAUSTED, details: 'Rate limit exceeded' });
+          return;
+        }
+
+        const respond = async () => {
+          const fault = evaluateFault(config.fault);
+          if (fault.delayMs > 0) await sleep(fault.delayMs);
+          if (delay > 0) await sleep(delay);
+
+          const statusCode = getStatusCode();
+          if (fault.triggered && fault.errorMessage) {
+            callback({ code: grpc.status.INTERNAL, details: fault.errorMessage });
+          } else if (statusCode > 0) {
             callback({ code: statusCode, details: `Mock error: gRPC status ${statusCode}` });
           } else {
-            const response = resolveResponse(config, call.request);
+            const response = pickResponse(call.request);
             emitLog(onLog, serverId, 'outgoing', methodFull, JSON.stringify(response));
             callback(null, response);
           }
         };
-        if (delay > 0) setTimeout(respond, delay); else respond();
+        respond().catch(() => callback({ code: grpc.status.INTERNAL, details: 'Mock server error' }));
       };
 
     case 'server_streaming':
       return (call: grpc.ServerWritableStream<any, any>) => {
         emitLog(onLog, serverId, 'incoming', methodFull, JSON.stringify(call.request));
+        if (!checkMetadata(call.metadata)) { call.destroy({ code: grpc.status.NOT_FOUND, details: 'No handler matched' } as any); return; }
+
+        const statusCode = getStatusCode();
         if (statusCode > 0) {
           const fn = () => call.destroy({ code: statusCode, details: `Mock error: gRPC status ${statusCode}` } as any);
           if (delay > 0) setTimeout(fn, delay); else fn();
           return;
         }
-        const responses = config.streamResponses || [{ data: config.response, delayMs: 0 }];
+        // Sprint 13.13: sequences
+        const items = getStreamItems();
         let index = 0;
         const sendNext = () => {
-          if (index >= responses.length) { call.end(); return; }
-          const item = responses[index++];
+          if (index >= items.length) { call.end(); return; }
+          const item = items[index++];
           setTimeout(() => {
             let data: any;
             try { data = JSON.parse(item.data); } catch { data = {}; }
@@ -212,38 +273,54 @@ function createHandler(
 
     case 'client_streaming':
       return (call: grpc.ServerReadableStream<any, any>, callback: grpc.sendUnaryData<any>) => {
+        if (!checkMetadata(call.metadata)) { callback({ code: grpc.status.NOT_FOUND, details: 'No handler matched' }); return; }
         call.on('data', (msg: any) => {
           emitLog(onLog, serverId, 'incoming', methodFull, JSON.stringify(msg));
+          if (config.bodyMatcher) {
+            try {
+              const bodyStr = JSON.stringify(msg);
+              if (!matchBody(config.bodyMatcher, bodyStr)) {
+                callback({ code: grpc.status.NOT_FOUND, details: 'Body match failed' });
+              }
+            } catch { /* non-critical */ }
+          }
         });
-        call.on('end', () => {
-          const respond = () => {
-            if (statusCode > 0) {
-              callback({ code: statusCode, details: `Mock error: gRPC status ${statusCode}` });
-            } else {
-              const response = resolveResponse(config);
-              emitLog(onLog, serverId, 'outgoing', methodFull, JSON.stringify(response));
-              callback(null, response);
-            }
-          };
-          if (delay > 0) setTimeout(respond, delay); else respond();
+        call.on('end', async () => {
+          const fault = evaluateFault(config.fault);
+          if (fault.delayMs > 0) await sleep(fault.delayMs);
+          if (delay > 0) await sleep(delay);
+          const statusCode = getStatusCode();
+          if (fault.triggered && fault.errorMessage) {
+            callback({ code: grpc.status.INTERNAL, details: fault.errorMessage });
+          } else if (statusCode > 0) {
+            callback({ code: statusCode, details: `Mock error: gRPC status ${statusCode}` });
+          } else {
+            const response = pickResponse();
+            emitLog(onLog, serverId, 'outgoing', methodFull, JSON.stringify(response));
+            callback(null, response);
+          }
         });
       };
 
     case 'bidi_streaming':
       return (call: grpc.ServerDuplexStream<any, any>) => {
+        if (!checkMetadata(call.metadata)) { call.destroy({ code: grpc.status.NOT_FOUND, details: 'No handler matched' } as any); return; }
+        const statusCode = getStatusCode();
         if (statusCode > 0) {
           const fn = () => call.destroy({ code: statusCode, details: `Mock error: gRPC status ${statusCode}` } as any);
           if (delay > 0) setTimeout(fn, delay); else fn();
           return;
         }
-        call.on('data', (msg: any) => {
+        // Sprint 13.14: bidi state machine
+        call.on('data', async (msg: any) => {
           emitLog(onLog, serverId, 'incoming', methodFull, JSON.stringify(msg));
-          const sendReply = () => {
-            const response = resolveResponse(config, msg);
-            call.write(response);
-            emitLog(onLog, serverId, 'outgoing', methodFull, JSON.stringify(response));
-          };
-          if (delay > 0) setTimeout(sendReply, delay); else sendReply();
+          const fault = evaluateFault(config.fault);
+          if (fault.delayMs > 0) await sleep(fault.delayMs);
+          if (fault.triggered && fault.errorMessage) { call.destroy({ code: grpc.status.INTERNAL, details: fault.errorMessage } as any); return; }
+          if (delay > 0) await sleep(delay);
+          const response = pickResponse(msg);
+          call.write(response);
+          emitLog(onLog, serverId, 'outgoing', methodFull, JSON.stringify(response));
         });
         call.on('end', () => call.end());
       };

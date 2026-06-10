@@ -9,6 +9,7 @@ import { createWebSocketStream } from 'ws';
 import { Aedes } from 'aedes';
 import type { MockServerConfig, MQTTMockTopic, MockLogEntry } from './mock-types';
 import { resolveAll } from '../services/variables';
+import { mqttTopicMatches, matchesPayloadRegex, pickSequenceItem, evaluateFault, checkRateLimit, getState, setState } from './mock-protocol-helpers';
 
 export type LogCallback = (entry: MockLogEntry) => void;
 
@@ -94,6 +95,7 @@ export async function createMQTTBroker(
     // Skip internal $SYS messages and messages from broker itself
     if (packet.topic.startsWith('$SYS') || !client) return;
 
+    const incomingPayload = packet.payload?.toString() || '';
     onLog?.({
       id: crypto.randomUUID(),
       timestamp: Date.now(),
@@ -103,8 +105,65 @@ export async function createMQTTBroker(
       event: 'publish',
       clientId: client?.id || 'broker',
       path: packet.topic,
-      body: packet.payload?.toString() || '',
+      body: incomingPayload,
     });
+
+    // Sprint 13.16: Wildcard matching — find a configured topic that matches the incoming publish
+    // and auto-respond on the same topic (broker responds to request/response pattern).
+    const liveConfig = getConfig();
+    const matchedTopics = (liveConfig.mqttTopics || []).filter(t => {
+      if (!t.enabled) return false;
+      if (!mqttTopicMatches(t.topic, packet.topic)) return false;
+      // Sprint 13.17: QoS-level routing
+      if (t.qos !== undefined && t.qos !== packet.qos) return false;
+      // Sprint 13.20: state machine gate
+      if (t.stateMachineState) {
+        const curState = getState(config.id, client?.id || 'global');
+        if (curState !== t.stateMachineState) return false;
+      }
+      // Payload matching (Sprint 13.16 extended)
+      if (t.payloadMatchRegex && !matchesPayloadRegex(incomingPayload, t.payloadMatchRegex)) return false;
+      return true;
+    });
+
+    for (const matchedTopic of matchedTopics) {
+      // Rate limit check
+      if (!checkRateLimit(matchedTopic.id, matchedTopic.rateLimit)) continue;
+
+      // Fault injection (Sprint 13.18)
+      const fault = evaluateFault(matchedTopic.fault);
+      if (fault.triggered && fault.errorMessage) {
+        if (fault.errorMessage.includes('disconnect')) {
+          (client as any).conn?.destroy();
+        }
+        // Skip responding
+        continue;
+      }
+
+      // Pick response payload (sequences or static)
+      const seqItem = matchedTopic.responses?.length
+        ? pickSequenceItem(matchedTopic.id, matchedTopic.responses, matchedTopic.sequenceMode)
+        : null;
+      const responsePayload = seqItem ? seqItem.body : resolveAll(matchedTopic.payload || '');
+      const delayMs = fault.delayMs || 0;
+
+      setTimeout(() => {
+        (aedes as any).publish(
+          { topic: packet.topic, payload: Buffer.from(responsePayload), qos: matchedTopic.qos, retain: matchedTopic.retain, cmd: 'publish', dup: false },
+          null,
+          () => {
+            onLog?.({
+              id: crypto.randomUUID(), timestamp: Date.now(), serverId: config.id,
+              direction: 'outgoing', protocol: 'mqtt', event: 'publish',
+              clientId: 'broker', path: packet.topic, body: responsePayload,
+            });
+          },
+        );
+      }, delayMs);
+
+      // Sprint 13.20: state machine transition
+      if (matchedTopic.nextState) setState(config.id, client?.id || 'global', matchedTopic.nextState);
+    }
   });
 
   // ─── MQTT Topic validation (like Mosquitto / HiveMQ) ───

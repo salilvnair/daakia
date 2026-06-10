@@ -1,57 +1,79 @@
 /**
- * TrafficInspectorPanel — Record/playback + live traffic inspector (6A.16-6A.18).
+ * TrafficInspectorPanel — Record/playback + live traffic inspector (6A.16-6A.18 + Sprint 13.33).
  */
 import { useState } from 'react';
 import { TrashIcon, ChevronDownIcon } from '../../../icons';
-import type { MockServer, RecordedRequest } from '../mock-types';
+import type { MockServer, RecordedRequest, MockLogEntry } from '../mock-types';
+import { ProtocolTrafficInspector } from '../ProtocolTrafficInspector';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
+const NON_REST = new Set(['websocket', 'graphql', 'mqtt', 'sse', 'socketio', 'grpc', 'soap']);
 
 interface Props {
   server: MockServer;
   onUpdate: (patch: Partial<MockServer>) => void;
   onClearTraffic?: () => void;
   onImportRecorded?: (requests: RecordedRequest[]) => void;
+  /** Sprint 13.33: live activity logs for Protocol Traffic Inspector */
+  logs?: MockLogEntry[];
 }
 
-export function TrafficInspectorPanel({ server, onUpdate, onClearTraffic, onImportRecorded }: Props) {
-  const [tab, setTab] = useState<'recording' | 'traffic'>('recording');
+export function TrafficInspectorPanel({ server, onUpdate, onClearTraffic, onImportRecorded, logs = [] }: Props) {
+  const isNonRest = NON_REST.has(server.protocol ?? '');
+  type TrafficTab = 'recording' | 'traffic' | 'protocol';
+  const [tab, setTab] = useState<TrafficTab>(isNonRest ? 'protocol' : 'recording');
   const recorded = server.recordedTraffic ?? [];
+  const protocolLogs = logs.filter(l => NON_REST.has(l.protocol));
 
   const toggleRecording = () => {
     onUpdate({ recordingMode: !server.recordingMode });
   };
 
+  const tabs: { key: TrafficTab; label: string }[] = [
+    { key: 'recording', label: 'Record & Proxy' },
+    { key: 'traffic', label: `Recorded (${recorded.length})` },
+    ...(isNonRest ? [{ key: 'protocol' as TrafficTab, label: `Protocol Traffic (${protocolLogs.length})` }] : []),
+  ];
+
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Tab bar */}
-      <div className="flex items-center gap-0">
-        {(['recording', 'traffic'] as const).map(t => (
+      <div className="flex items-center gap-0 border-b border-[var(--color-surface-border)] flex-shrink-0">
+        {tabs.map(t => (
           <button
-            key={t}
+            key={t.key}
             type="button"
-            onClick={() => setTab(t)}
-            className="h-[28px] px-3 text-[11px] font-medium cursor-pointer transition-colors capitalize"
+            onClick={() => setTab(t.key)}
+            className="h-[28px] px-3 text-[11px] font-medium cursor-pointer transition-colors"
             style={{
-              borderBottom: tab === t ? `2px solid ${MOCK_ACCENT}` : '2px solid transparent',
-              color: tab === t ? MOCK_ACCENT : 'var(--color-text-muted)',
+              borderBottom: tab === t.key ? `2px solid ${MOCK_ACCENT}` : '2px solid transparent',
+              color: tab === t.key ? MOCK_ACCENT : 'var(--color-text-muted)',
             }}
           >
-            {t === 'recording' ? 'Record & Proxy' : `Traffic (${recorded.length})`}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {tab === 'recording' && (
-        <RecordingConfig server={server} onUpdate={onUpdate} onToggle={toggleRecording} />
-      )}
+      <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] min-h-0 p-3">
+        {tab === 'recording' && (
+          <RecordingConfig server={server} onUpdate={onUpdate} onToggle={toggleRecording} />
+        )}
+        {tab === 'traffic' && (
+          <TrafficLog recorded={recorded} onClear={onClearTraffic} onImport={onImportRecorded} />
+        )}
+      </div>
 
-      {tab === 'traffic' && (
-        <TrafficLog
-          recorded={recorded}
-          onClear={onClearTraffic}
-          onImport={onImportRecorded}
-        />
+      {tab === 'protocol' && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <ProtocolTrafficInspector
+            logs={logs}
+            onClear={() => {
+              // Clear is handled by the parent MockLogPanel's clear
+              if (onClearTraffic) onClearTraffic();
+            }}
+          />
+        </div>
       )}
     </div>
   );

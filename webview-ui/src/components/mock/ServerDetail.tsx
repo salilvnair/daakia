@@ -11,7 +11,9 @@ import { RestRoutesConfig, GraphQLConfig, WebSocketConfig, SSEConfig, SocketIOCo
 import { postMsg } from '../../vscode';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { StateMachineEditor } from './wiremock/StateMachinePanel';
+import { MockStateMachineEditor } from './MockStateMachineEditor';
 import { TrafficInspectorPanel } from './wiremock/TrafficInspectorPanel';
+import type { MockLogEntry } from './mock-types';
 import { ImportPanel } from './wiremock/ImportPanel';
 import { ExportPanel } from './wiremock/ExportPanel';
 import { ChaosPanel } from './wiremock/ChaosPanel';
@@ -55,9 +57,11 @@ interface ServerDetailProps {
   onDeleteRoute: (routeId: string) => void;
   editingRoute: string | null;
   onEditRoute: (id: string | null) => void;
+  /** Sprint 13.33: live activity logs for the Protocol Traffic Inspector */
+  logs?: MockLogEntry[];
 }
 
-export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAddRoute, onAddGeneratedRoutes, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute }: ServerDetailProps) {
+export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAddRoute, onAddGeneratedRoutes, onUpdateRoute, onDeleteRoute, editingRoute, onEditRoute, logs = [] }: ServerDetailProps) {
   const [urlCopied, setUrlCopied] = useState(false);
   const [wsdlCopied, setWsdlCopied] = useState(false);
   const [serverTab, setServerTab] = useState<ServerTab>('routes');
@@ -236,16 +240,25 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
 
       {/* ── Shared WireMock tabs (all tabbed protocols) ──────────────────── */}
       {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'state' && (
-        <StateMachineEditor
-          config={server.stateMachine}
-          onUpdate={cfg => onUpdate({ stateMachine: cfg })}
-        />
+        <div className="flex flex-col gap-4 p-3">
+          {/* Sprint 13.34: Visual drag-drop state machine editor */}
+          <MockStateMachineEditor
+            config={server.stateMachine}
+            onUpdate={cfg => onUpdate({ stateMachine: cfg })}
+          />
+          {/* Legacy form editor (still useful for quick text editing) */}
+          <StateMachineEditor
+            config={server.stateMachine}
+            onUpdate={cfg => onUpdate({ stateMachine: cfg })}
+          />
+        </div>
       )}
 
       {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'traffic' && (
         <TrafficInspectorPanel
           server={server}
           onUpdate={onUpdate}
+          logs={logs}
           onClearTraffic={() => onUpdate({ recordedTraffic: [] })}
           onImportRecorded={reqs => {
             const newRoutes: MockRoute[] = reqs.map(r => ({

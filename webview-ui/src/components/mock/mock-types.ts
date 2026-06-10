@@ -368,6 +368,11 @@ export interface MockLogEntry {
   duration?: number;
   clientId?: string;
   event?: string;
+  /** Sprint 13.33: which handler was matched (for non-REST protocols) */
+  matchedHandlerId?: string;
+  matchedHandlerName?: string;
+  /** Sprint 13.33: template variables extracted from the payload */
+  extractedVars?: Record<string, string>;
 }
 
 // ────────── Helpers ──────────

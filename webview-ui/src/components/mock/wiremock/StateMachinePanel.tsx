@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { PlusIcon, TrashIcon, ChevronDownIcon } from '../../../icons';
 import type { MockRoute, StateMachineConfig, StateNode, StateTransition } from '../mock-types';
+import { StyledDropdown } from '../../shared/controls/StyledDropdown';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
 
@@ -235,13 +236,12 @@ export function RouteStatePanel({ route, onUpdate, availableStates = [] }: Route
 
 function StateSelect({ value, states, onChange }: { value: string; states: string[]; onChange: (v: string) => void }) {
   return (
-    <select
+    <StyledDropdown
       value={value}
-      onChange={e => onChange(e.target.value)}
-      className="h-[24px] px-1.5 text-[10px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] cursor-pointer focus:outline-none"
-    >
-      {states.map(s => <option key={s} value={s}>{s}</option>)}
-    </select>
+      options={states.map(s => ({ value: s, label: s }))}
+      onChange={onChange}
+      size="xs"
+    />
   );
 }
 

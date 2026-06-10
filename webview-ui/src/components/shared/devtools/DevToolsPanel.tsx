@@ -11,6 +11,9 @@ import { useTabsStore } from '../../../store/tabs-store';
 import { ConsoleTab } from './ConsoleTab';
 import { NetworkTab } from './NetworkTab';
 import { PerformanceTab } from './PerformanceTab';
+import { AiInsightsTab } from './AiInsightsTab';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { SparkleIcon } from '../../../icons';
 
 const MIN_HEIGHT = 120;
 const MAX_HEIGHT = 500;
@@ -23,6 +26,7 @@ export function DevToolsPanel() {
   const close = useDevToolsStore(s => s.close);
   const clearLogs = useDevToolsStore(s => s.clearLogs);
   const clearNetwork = useDevToolsStore(s => s.clearNetwork);
+  const intelligenceDashboardEnabled = useAiFeaturesStore(s => s.isEnabled('intelligenceDashboard'));
   const logs = useDevToolsStore(s => s.logs);
   const networkEntries = useDevToolsStore(s => s.networkEntries);
   const panelHeight = useDevToolsStore(s => s.panelHeight);
@@ -75,6 +79,7 @@ export function DevToolsPanel() {
     { key: 'console', label: 'Console', icon: <TerminalIcon size={13} /> },
     { key: 'network', label: 'Network', icon: <NetworkIcon size={13} /> },
     { key: 'performance', label: 'Performance', icon: <GaugeIcon size={13} /> },
+    ...(intelligenceDashboardEnabled ? [{ key: 'ai-insights' as const, label: 'AI Insights', icon: <SparkleIcon size={13} /> }] : []),
   ];
 
   return (
@@ -129,7 +134,7 @@ export function DevToolsPanel() {
         <div className="flex-1" />
 
         {/* Actions */}
-        {activeTab !== 'performance' && (
+        {activeTab !== 'performance' && activeTab !== 'ai-insights' && (
           <button
             className={`flex items-center justify-center w-[22px] h-[22px] rounded transition-colors ${
               (activeTab === 'console' ? logs.length > 0 : networkEntries.length > 0)
@@ -157,6 +162,7 @@ export function DevToolsPanel() {
         {activeTab === 'console' && <ConsoleTab />}
         {activeTab === 'network' && <NetworkTab />}
         {activeTab === 'performance' && <PerformanceTab />}
+        {activeTab === 'ai-insights' && <AiInsightsTab />}
       </div>
     </div>
   );

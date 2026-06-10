@@ -1,10 +1,14 @@
 /**
  * SSE Mock Server - serves Server-Sent Events streams to connected clients.
+ * Sprint 13.21-13.25: sequences, rate limiting, fault injection, data-regex filter, reconnect simulation.
  */
 import * as http from 'http';
 import * as crypto from 'crypto';
 import type { MockServerConfig, SSEMockEvent, MockLogEntry } from './mock-types';
 import { resolveAll } from '../services/variables';
+import {
+  pickSequenceItem, evaluateFault, checkRateLimit, sleep,
+} from './mock-protocol-helpers';
 
 export type LogCallback = (entry: MockLogEntry) => void;
 
@@ -90,9 +94,45 @@ export function createSSEHandler(config: MockServerConfig, getConfig: () => Mock
     const events = (currentConfig.sseEvents || []).filter(e => e.enabled);
 
     for (const evt of events) {
-      const sendEvent = () => {
+      // Sprint 13.24: filter by URL query param matching dataMatchRegex
+      if (evt.dataMatchRegex) {
+        try {
+          const pattern = new RegExp(evt.dataMatchRegex, 'i');
+          if (!pattern.test(req.url || '')) continue;
+        } catch {
+          // Invalid regex — skip matching, allow event
+        }
+      }
+
+      let eventCount = 0;
+
+      const sendEvent = async () => {
         if (res.destroyed) return;
-        const resolvedData = resolveAll(evt.data);
+
+        // Sprint 13.22: rate limiting
+        if (!checkRateLimit(evt.id, evt.rateLimit)) {
+          res.write(`event: rate_limited\ndata: ${JSON.stringify({ error: 'RATE_LIMITED' })}\n\n`);
+          return;
+        }
+
+        // Sprint 13.23: fault injection
+        const fault = evaluateFault(evt.fault);
+        if (fault.delayMs > 0) await sleep(fault.delayMs);
+        if (fault.triggered && fault.errorMessage) {
+          if (fault.errorMessage.includes('reset') || fault.errorMessage.includes('disconnect')) {
+            if (!res.destroyed) res.end();
+            return;
+          }
+          res.write(`event: error\ndata: ${JSON.stringify({ error: fault.errorMessage })}\n\n`);
+          return;
+        }
+
+        // Sprint 13.21: sequences — pick from responses[] if populated
+        const seqItem = evt.responses?.length
+          ? pickSequenceItem(evt.id, evt.responses, evt.sequenceMode)
+          : null;
+        const resolvedData = seqItem ? resolveAll(seqItem.body) : resolveAll(evt.data);
+
         const lines: string[] = [];
         if (evt.eventName && evt.eventName !== 'message') {
           lines.push(`event: ${evt.eventName}`);
@@ -101,8 +141,8 @@ export function createSSEHandler(config: MockServerConfig, getConfig: () => Mock
         lines.push(`id: ${Date.now()}`);
         lines.push('');
         lines.push('');
-
         res.write(lines.join('\n'));
+        eventCount++;
 
         onLog?.({
           id: crypto.randomUUID(),
@@ -114,6 +154,12 @@ export function createSSEHandler(config: MockServerConfig, getConfig: () => Mock
           body: resolvedData,
           clientId,
         });
+
+        // Sprint 13.25: reconnect simulation — close with 204-like signal after N events
+        if (evt.reconnectAfterN && eventCount >= evt.reconnectAfterN) {
+          res.write('event: reconnect\ndata: {"reason":"scheduled_reconnect"}\n\n');
+          if (!res.destroyed) res.end();
+        }
       };
 
       if (evt.repeat && evt.intervalMs > 0) {
