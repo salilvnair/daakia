@@ -174,7 +174,7 @@ export function ClientCertificates({ onClose }: Props) {
                       onChange={e => setEditing(prev => ({ ...prev, [field]: e.target.value }))}
                       placeholder={placeholder}
                       type={field === 'passphrase' ? 'password' : 'text'}
-                      className="w-full px-3 py-1.5 rounded-lg text-[11.5px] outline-none"
+                      className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
                       style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
                     />
                   </div>

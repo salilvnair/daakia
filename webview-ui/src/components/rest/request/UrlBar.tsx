@@ -8,6 +8,7 @@ import { postMsg } from '../../../vscode';
 import { sendRequest, sendAndDownloadRequest, cancelRequest, saveRequest } from '../../../services/request';
 import { METHOD_COLORS } from '../../../colors';
 import { SaveIcon, SendIcon, DownloadIcon, CopyIcon, CodeIcon, RefreshIcon, StopSquareIcon, SparkleIcon, MoreVerticalIcon } from '../../../icons';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import { AiPreflightPopover, countPreflightIssues } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
@@ -63,16 +64,19 @@ export function UrlBar() {
       }
       return;
     }
+    logUiEvent('rest.send', { method: tab.method, url: tab.url });
     sendRequest(tab);
     updateTab(tab.id, { loading: true });
   };
 
   const handleSendAndDownload = () => {
+    logUiEvent('rest.download', { method: tab.method, url: tab.url });
     sendAndDownloadRequest(tab);
     updateTab(tab.id, { loading: true });
   };
 
   const handleClearAll = () => {
+    logUiEvent('rest.clear');
     updateTab(tab.id, {
       url: '',
       headers: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
@@ -88,6 +92,7 @@ export function UrlBar() {
   };
 
   const handleSave = () => {
+    logUiEvent('rest.save', { url: tab.url });
     const savedInPlace = saveRequest(tab);
     if (savedInPlace) updateTab(tab.id, { dirty: false });
   };

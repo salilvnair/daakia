@@ -12,6 +12,7 @@ import { AiPreflightPopover } from '../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../ai/AiRequestPatternStatus';
 import { AiGrpcProtoExplainerModal } from '../ai/AiGrpcProtoExplainerModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 const saveItems: SplitButtonItem[] = [
   { id: 'save-as', label: 'Save as', icon: <SaveIcon size={12} />, iconColor: 'var(--color-ctx-close-saved)', onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }) },
@@ -91,6 +92,8 @@ export function GrpcUrlBar() {
     if (!activeTab) return;
     const endpoint = activeTab.url.trim();
     if (!endpoint) return;
+
+    logUiEvent('grpc.invoke', { url: endpoint, method: activeTab.grpcMethod });
 
     let rpcType: string = 'unary';
     const method = activeTab.grpcMethod || '';

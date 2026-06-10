@@ -13,6 +13,7 @@ import { AiBodyGenerate } from '../ai/AiBodyGenerate';
 import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
 import { AiGqlQueryBuilderModal } from '../ai/AiGqlQueryBuilderModal';
 import { AiGqlSchemaExplainerModal } from '../ai/AiGqlSchemaExplainerModal';
+import { logUiEvent } from '../../store/ui-audit-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import type { AiBodyGenerateHandle } from '../ai/AiBodyGenerate';
 
@@ -59,6 +60,7 @@ export function GraphQLEditor() {
     const endpoint = activeTab.url.trim();
     if (!endpoint) return;
 
+    logUiEvent('graphql.send', { url: endpoint });
     updateTab(activeTab.id, { loading: true });
     postMsg({
       type: 'executeGraphQL',

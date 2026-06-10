@@ -18,6 +18,7 @@ import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
 import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 // ---------- Constants ----------
 
@@ -288,6 +289,7 @@ export function MQTTPanel() {
     if (!activeTab) return;
     const url = activeTab.url.trim();
     if (!url) return;
+    logUiEvent('mqtt.connect', { url });
     setConnState('connecting');
     setError(null);
     postMsg({
@@ -314,6 +316,7 @@ export function MQTTPanel() {
 
   const handleDisconnect = useCallback(() => {
     if (!activeTab) return;
+    logUiEvent('mqtt.disconnect', { url: activeTab.url });
     postMsg({ type: 'mqtt:disconnect', tabId: activeTab.id });
     setConnState('disconnected');
   }, [activeTab]);

@@ -11,27 +11,29 @@ import type { AiPromptTemplateKey } from '../../store/prompt-template';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
-// Group display order
+// Group display order (matches AI_FEATURE_LABELS group names in ai-features-store.ts)
 const GROUP_ORDER = [
   'Core AI',
-  'Response Explain & Follow-ups',
-  'Response Actions',
-  'Request Helpers',
-  'Script & Dev',
-  'Collection AI',
+  'REST',
+  'GraphQL',
+  'gRPC',
+  'SOAP',
+  'Realtime Protocols',
+  'Collections',
   'Mock Server AI',
-  'AI Chat & Panels',
+  'Platform AI',
 ];
 
 const GROUP_COLORS: Record<string, string> = {
-  'Core AI':                       'var(--color-protocol-ai)',
-  'Response Explain & Follow-ups': '#38bdf8',
-  'Response Actions':              '#06b6d4',
-  'Request Helpers':               '#10b981',
-  'Script & Dev':                  '#a855f7',
-  'Collection AI':                 '#f97316',
-  'Mock Server AI':                '#f59e0b',
-  'AI Chat & Panels':              '#ec4899',
+  'Core AI':           'var(--color-protocol-ai)',
+  'REST':              'var(--color-protocol-rest)',
+  'GraphQL':           'var(--color-protocol-graphql)',
+  'gRPC':              'var(--color-protocol-grpc)',
+  'SOAP':              'var(--color-protocol-soap)',
+  'Realtime Protocols':'var(--color-protocol-websocket)',
+  'Collections':       'var(--color-primary)',
+  'Mock Server AI':    'var(--color-mock-server)',
+  'Platform AI':       '#a855f7',
 };
 
 // ── Feature row ───────────────────────────────────────────────────────────────
@@ -153,8 +155,13 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                 <p className="text-[13px] font-medium text-[var(--color-text-primary)]">AI Features</p>
                 {/* Master toggle */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[9.5px] text-[var(--color-text-muted)]">
-                    {allEnabled ? 'All ON' : enabledCount === 0 ? 'All OFF' : `${enabledCount}/${featureKeys.length}`}
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full tabular-nums"
+                    style={{
+                      color: allEnabled ? ACCENT : enabledCount === 0 ? 'var(--color-error)' : ACCENT,
+                      backgroundColor: allEnabled ? `color-mix(in srgb, ${ACCENT} 12%, transparent)` : enabledCount === 0 ? 'color-mix(in srgb, var(--color-error) 10%, transparent)' : `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
+                      border: `1px solid color-mix(in srgb, ${allEnabled ? ACCENT : enabledCount === 0 ? 'var(--color-error)' : ACCENT} 22%, transparent)`,
+                    }}>
+                    {enabledCount}/{featureKeys.length}
                   </span>
                   <button
                     type="button"

@@ -22,6 +22,7 @@ import { PerformanceTab } from '../shared/devtools/PerformanceTab';
 import { AuditLogTab } from '../settings/devtools/AuditLogTab';
 import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
+import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 
 type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'wiki' | 'wiki-new' | 'power-features';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
@@ -711,13 +712,14 @@ const [showDiff, setShowDiff] = useState(false);
 
 // ────────── Developer Tools Settings Page ──────────
 
-type DevToolsSubtab = 'memory' | 'audit' | 'db' | 'snapshot';
+type DevToolsSubtab = 'memory' | 'audit' | 'db' | 'snapshot' | 'audit-config';
 
 const DEVTOOLS_TABS: { id: DevToolsSubtab; label: string }[] = [
-  { id: 'memory',   label: 'Memory Footprint' },
-  { id: 'audit',    label: 'Audit Log' },
-  { id: 'db',       label: 'DB Explorer' },
-  { id: 'snapshot', label: 'Debug Snapshot' },
+  { id: 'memory',       label: 'Memory Footprint' },
+  { id: 'audit',        label: 'Audit Log' },
+  { id: 'audit-config', label: 'Audit Config' },
+  { id: 'db',           label: 'DB Explorer' },
+  { id: 'snapshot',     label: 'Debug Snapshot' },
 ];
 
 function DevToolsSettingsPage() {
@@ -745,6 +747,7 @@ function DevToolsSettingsPage() {
       <div className="flex-1 min-h-0 overflow-hidden">
         {active === 'memory' && <PerformanceTab />}
         {active === 'audit' && <AuditLogTab />}
+        {active === 'audit-config' && <AuditConfigTab />}
         {active === 'db' && <DbExplorerTab />}
         {active === 'snapshot' && <DebugSnapshotTab />}
       </div>

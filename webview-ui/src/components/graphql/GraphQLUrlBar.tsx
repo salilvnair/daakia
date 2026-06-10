@@ -10,6 +10,7 @@ import { AiPreflightPopover } from '../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../ai/AiRequestPatternStatus';
 import { AiGqlFederationModal } from '../ai/AiGqlFederationModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 /**
  * GraphQL URL bar — endpoint input + Connect/Disconnect button + AI Tools ⋮ menu.
@@ -48,6 +49,7 @@ export function GraphQLUrlBar() {
     const endpoint = activeTab.url.trim();
     if (!endpoint) return;
 
+    logUiEvent('graphql.introspect', { url: endpoint });
     updateTab(activeTab.id, { authData: { ...activeTab.authData, gql_connected: 'connecting' } });
     postMsg({
       type: 'graphql:connect',

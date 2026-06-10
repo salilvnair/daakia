@@ -23,26 +23,29 @@ function fmtBytes(b: number): string {
 }
 
 const TILE_META = [
-  { key: 'node',    label: 'Node.js',      color: '#10b981', emoji: '⬡' },
-  { key: 'pid',     label: 'Process ID',   color: '#06b6d4', emoji: '⚙' },
-  { key: 'heap',    label: 'Heap Used',    color: '#818cf8', emoji: '◈' },
-  { key: 'tables',  label: 'DB Tables',    color: '#a855f7', emoji: '⊞' },
-  { key: 'errors',  label: 'Recent Errors',color: '#ef4444', emoji: '⚠' },
+  { key: 'node',    label: 'Node.js Version', color: '#10b981', emoji: '⬡' },
+  { key: 'pid',     label: 'Process ID',      color: '#06b6d4', emoji: '⚙' },
+  { key: 'heap',    label: 'Heap Used',        color: '#818cf8', emoji: '◈' },
+  { key: 'tables',  label: 'DB Tables',        color: '#a855f7', emoji: '⊞' },
+  { key: 'errors',  label: 'Recent Errors',    color: '#ef4444', emoji: '⚠' },
 ];
 
-function SummaryTile({ label, value, color, emoji }: { label: string; value: string; color: string; emoji: string }) {
+function MemoryCard({ label, value, color, emoji }: { label: string; value: string; color: string; emoji: string }) {
   return (
     <div
-      className="flex flex-col gap-1 px-4 py-3 rounded-xl border min-w-[100px] flex-1"
-      style={{ borderColor: `color-mix(in srgb, ${color} 22%, transparent)`, background: `color-mix(in srgb, ${color} 6%, var(--color-surface))` }}
+      className="flex items-center gap-4 px-4 py-3 rounded-xl border w-full"
+      style={{ borderColor: `color-mix(in srgb, ${color} 22%, transparent)`, background: `color-mix(in srgb, ${color} 5%, var(--color-surface))` }}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: `color-mix(in srgb, ${color} 80%, var(--color-text-muted))` }}>
-          {label}
-        </span>
-        <span className="text-[14px] opacity-40" style={{ color }}>{emoji}</span>
+      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-[18px]"
+        style={{ backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`, color }}>
+        {emoji}
       </div>
-      <span className="text-[15px] font-mono font-bold" style={{ color }}>{value}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: `color-mix(in srgb, ${color} 75%, var(--color-text-muted))` }}>
+          {label}
+        </p>
+        <p className="text-[16px] font-mono font-bold mt-0.5 leading-none" style={{ color }}>{value}</p>
+      </div>
     </div>
   );
 }
@@ -142,11 +145,11 @@ export function DebugSnapshotTab() {
         </div>
       </div>
 
-      {/* Summary tiles */}
+      {/* Memory cards — full-width column layout */}
       {tileValues && !loading && (
-        <div className="flex gap-2 flex-wrap shrink-0">
+        <div className="flex flex-col gap-2 shrink-0">
           {TILE_META.map(({ key, label, color, emoji }) => (
-            <SummaryTile key={key} label={label} value={tileValues[key as keyof typeof tileValues]} color={color} emoji={emoji} />
+            <MemoryCard key={key} label={label} value={tileValues[key as keyof typeof tileValues]} color={color} emoji={emoji} />
           ))}
         </div>
       )}

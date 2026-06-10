@@ -7,6 +7,7 @@ import { SplitButton, HighlightedInput } from '../shared';
 import type { SplitButtonItem } from '../shared';
 import { saveRequest } from '../../services/request';
 import { SoapWsdlImport } from './SoapWsdlImport';
+import { logUiEvent } from '../../store/ui-audit-store';
 import { SoapOperationSelector } from './SoapOperationSelector';
 import { useMockSuggestions } from '../../hooks/useMockSuggestions';
 import { AiPreflightPopover } from '../ai/AiPreflightPopover';
@@ -81,6 +82,7 @@ export function SoapUrlBar() {
     const endpoint = activeTab.url.trim();
     if (!endpoint) return;
 
+    logUiEvent('soap.invoke', { url: endpoint, operation: activeTab.soapOperation });
     const envelope = activeTab.soapEnvelope || (soapVersion === '1.2' ? DEFAULT_ENVELOPE_12 : DEFAULT_ENVELOPE_11);
 
     // Collect enabled attachments for MTOM

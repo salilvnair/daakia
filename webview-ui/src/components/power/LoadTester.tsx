@@ -126,7 +126,7 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
             <div>
               <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>URL</label>
               <input value={config.url} onChange={e => setConfig(c => ({ ...c, url: e.target.value }))}
-                className="w-full px-2 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono outline-none"
                 placeholder="https://api.example.com/endpoint"
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
             </div>

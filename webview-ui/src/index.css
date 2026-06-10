@@ -294,44 +294,46 @@ body {
   box-shadow: none;
 }
 
-/* ─── Global input styling ─── */
+/* ─── Global input styling (in @layer base so Tailwind utilities can override) ─── */
 
-input[type="text"],
-input[type="password"],
-input[type="url"],
-input[type="email"],
-input[type="number"],
-textarea {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  padding: 9px 12px;
-  background: var(--color-input-bg);
-  border: 1px solid var(--color-input-border);
-  border-radius: var(--radius);
-  color: var(--color-text-primary);
-  transition: border-color 140ms, box-shadow 140ms, background 140ms;
-}
+@layer base {
+  input[type="text"],
+  input[type="password"],
+  input[type="url"],
+  input[type="email"],
+  input[type="number"],
+  textarea {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    padding: 9px 12px;
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
+    border-radius: 4px;
+    color: var(--color-text-primary);
+    transition: border-color 140ms, box-shadow 140ms, background 140ms;
+  }
 
-input[type="text"]::placeholder,
-input[type="password"]::placeholder,
-textarea::placeholder {
-  color: var(--color-text-muted);
-}
+  input[type="text"]::placeholder,
+  input[type="password"]::placeholder,
+  textarea::placeholder {
+    color: var(--color-text-muted);
+  }
 
-input[type="text"]:hover,
-input[type="password"]:hover,
-textarea:hover {
-  border-color: #505050;
-  background: var(--color-input-hover);
-}
+  input[type="text"]:hover,
+  input[type="password"]:hover,
+  textarea:hover {
+    border-color: #505050;
+    background: var(--color-input-hover);
+  }
 
-input[type="text"]:focus,
-input[type="password"]:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--color-accent, var(--color-primary));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, var(--color-primary)) 25%, transparent);
-  background: var(--color-input-focus);
+  input[type="text"]:focus,
+  input[type="password"]:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--color-accent, var(--color-primary));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent, var(--color-primary)) 25%, transparent);
+    background: var(--color-input-focus);
+  }
 }
 
 /* ─── Unified URL Bar ─── */

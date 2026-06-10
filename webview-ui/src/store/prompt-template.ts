@@ -293,7 +293,52 @@ export type AiPromptTemplateKey =
   | 'mock.scenario.manager.system'
   // ── Master Agent ──────────────────────────────────────────────────────────
   | 'agent.master'
-  | 'agent.master.system';
+  | 'agent.master.system'
+  // ── GraphQL — Sprint 8 AI ─────────────────────────────────────────────────
+  | 'gql.query.builder'
+  | 'gql.query.builder.system'
+  | 'gql.schema.explainer'
+  | 'gql.schema.explainer.system'
+  // ── gRPC — Sprint 8 AI ────────────────────────────────────────────────────
+  | 'grpc.proto.explainer'
+  | 'grpc.proto.explainer.system'
+  // ── SOAP — Sprint 8 AI ────────────────────────────────────────────────────
+  | 'soap.wsdl.explainer'
+  | 'soap.wsdl.explainer.system'
+  // ── WebSocket — Sprint 9 AI ───────────────────────────────────────────────
+  | 'ws.traffic.analyzer'
+  | 'ws.traffic.analyzer.system'
+  // ── SSE — Sprint 9 AI ─────────────────────────────────────────────────────
+  | 'sse.traffic.analyzer'
+  | 'sse.traffic.analyzer.system'
+  | 'sse.event.suggester'
+  | 'sse.event.suggester.system'
+  // ── MQTT — Sprint 9 AI ────────────────────────────────────────────────────
+  | 'mqtt.topic.suggester'
+  | 'mqtt.topic.suggester.system'
+  // ── Socket.IO — Sprint 9 AI ───────────────────────────────────────────────
+  | 'sio.traffic.analyzer'
+  | 'sio.traffic.analyzer.system'
+  // ── MCP — Sprint 10 AI ────────────────────────────────────────────────────
+  | 'mcp.prompt.builder'
+  | 'mcp.prompt.builder.system'
+  // ── Platform AI — Sprint 10 ───────────────────────────────────────────────
+  | 'platform.openapi.generator'
+  | 'platform.openapi.generator.system'
+  | 'platform.security.audit'
+  | 'platform.security.audit.system'
+  | 'platform.mock.intelligence'
+  | 'platform.mock.intelligence.system'
+  | 'platform.postman.translator'
+  | 'platform.postman.translator.system'
+  | 'platform.soap.to.rest'
+  | 'platform.soap.to.rest.system'
+  | 'platform.gql.federation'
+  | 'platform.gql.federation.system'
+  | 'platform.webhook.debugger'
+  | 'platform.webhook.debugger.system'
+  | 'platform.request.clustering'
+  | 'platform.request.clustering.system';
 
 // ─── Default templates ────────────────────────────────────────────────────────
 
@@ -544,6 +589,87 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `Classify this user message and route it to the most appropriate AI agent.\n\nUser message: {userMessage}\nActive context: {context}\n\nAvailable agents:\n- request: Build or modify HTTP requests from natural language\n- mock: Design mock API endpoints and response data\n- test: Generate dk.* test assertions from responses\n- curl: Convert cURL commands to Daakia requests\n- explain: Explain HTTP responses, status codes, API concepts\n- general: Answer API-related questions and provide guidance\n\nReturn ONLY a JSON object:\n{"agent": "request|mock|test|curl|explain|general", "confidence": 0.0-1.0, "reason": "one sentence why"}`,
   'agent.master.system':
     `You are the master routing agent for Daakia AI. Classify user messages and route them to the correct specialized agent. Return ONLY valid JSON with agent name, confidence score (0.0-1.0), and a one-sentence reason. If ambiguous, prefer "explain" for questions and "request" for action requests.`,
+  // ── GraphQL — Sprint 8 AI ──────────────────────────────────────────────────
+  'gql.query.builder':
+    `Build a GraphQL operation from this description:\n{description}\n\nEndpoint: {endpoint}\nAvailable schema context: {schemaContext}\n\nGenerate:\n1. The complete GraphQL operation (query/mutation/subscription)\n2. Example variables JSON if the operation takes variables\n3. Brief explanation of what the operation does`,
+  'gql.query.builder.system':
+    `You are a GraphQL query construction expert. Translate plain-English descriptions into valid GraphQL queries, mutations, and subscriptions. Always output valid GraphQL syntax. Infer field names from the description and schema context. For mutations, include appropriate input variables. Format output in a \`\`\`graphql code block, then add a brief explanation.`,
+  'gql.schema.explainer':
+    `Explain this GraphQL schema in plain English:\n\n{schema}\n\nFor each type:\n1. What real-world entity or concept it represents\n2. What each field means and its data type\n3. Relationships to other types (references, lists, nested objects)\n4. Which queries/mutations use this type\n\nBe concise and practical — explain like you're onboarding a new team member.`,
+  'gql.schema.explainer.system':
+    `You are a GraphQL schema educator. Explain GraphQL types, fields, relationships, queries, and mutations in plain, developer-friendly English — avoiding jargon where possible, or explaining it when necessary. Structure your explanation by type, starting with root types (Query, Mutation) then data types.`,
+  // ── gRPC — Sprint 8 AI ─────────────────────────────────────────────────────
+  'grpc.proto.explainer':
+    `Explain this gRPC service definition in plain English:\n\n{protoContent}\n\nFor each service:\n1. What the service does overall\n2. Each RPC method: what it takes as input, what it returns, whether it streams, and what it's used for\n3. Each message type: what it represents and what each field means\n4. Streaming patterns if any (server-streaming, client-streaming, bidirectional)\n\nBe practical — explain as if you're writing internal API docs for a developer.`,
+  'grpc.proto.explainer.system':
+    `You are a gRPC and Protocol Buffers expert. Explain proto service definitions, RPC methods, and message types in plain English. Avoid unnecessary jargon — use it when needed but always explain it. Structure by service, then methods, then message types. Be concise and practical.`,
+  // ── SOAP — Sprint 8 AI ─────────────────────────────────────────────────────
+  'soap.wsdl.explainer':
+    `Explain this WSDL definition in plain English:\n\n{wsdlContent}\n\nCover:\n1. What this web service does overall\n2. Each operation: inputs required, output returned, what it does\n3. Authentication or SOAPAction requirements\n4. The target namespace and endpoint URL\n5. Any complex data types used\n\nUse plain language. Translate WSDL jargon (portType → operations list, binding → protocol details, etc.).`,
+  'soap.wsdl.explainer.system':
+    `You are a SOAP/WSDL expert who explains web service definitions in plain, modern English. Translate WSDL concepts (portType, binding, message, part) into developer-friendly language. Make SOAP services approachable for REST-first developers. Structure by service, then operations, then types.`,
+  // ── WebSocket — Sprint 9 AI ────────────────────────────────────────────────
+  'ws.traffic.analyzer':
+    `Analyze this WebSocket message stream:\n\n{messages}\n\nProvide:\n1. Detected message schema (field names, data types, recurring structures)\n2. Message patterns (event types, request-response pairs, heartbeats)\n3. Anomalies or outlier messages that deviate from the pattern\n4. Message statistics: total count, average size, most frequent field values\n5. Protocol format: JSON, binary, custom text?\n6. Recommendations for what to test or watch for`,
+  'ws.traffic.analyzer.system':
+    `You are a WebSocket traffic analysis expert. Analyze WebSocket message streams to detect schemas, patterns, anomalies, and message frequencies. Present findings in a clear, structured format with actionable insights for API developers.`,
+  // ── SSE — Sprint 9 AI ──────────────────────────────────────────────────────
+  'sse.traffic.analyzer':
+    `Analyze this Server-Sent Events (SSE) stream:\n\n{events}\n\nProvide:\n1. Event types observed (event: names) and their frequency\n2. Data payload schema for each event type (field names, types, patterns)\n3. Schema evolution: did payload structure change across events?\n4. Anomalies: events with unexpected fields, missing data, or unusual values\n5. Event delivery patterns: timing, batching, retry headers\n6. Recommendations for subscribing, filtering, or testing this stream`,
+  'sse.traffic.analyzer.system':
+    `You are a Server-Sent Events analysis expert. Analyze SSE event streams to detect patterns, event types, data payload schemas, and anomalies. Present findings clearly with actionable insights for API developers.`,
+  'sse.event.suggester':
+    `Based on these observed SSE events, suggest related events and subscriptions:\n\nObserved events:\n{events}\n\nEndpoint: {endpoint}\n\nSuggest:\n1. Related event types this API probably supports (based on naming patterns)\n2. Query parameters or headers that might filter/scope the events\n3. Event types from the same domain that commonly pair with the observed ones\n4. How to subscribe to specific events or namespaces if the API supports it\n\nBe specific — use the actual event names and patterns you observed above.`,
+  'sse.event.suggester.system':
+    `You are an SSE event discovery assistant. Analyze observed SSE events and suggest related event types, subscription parameters, or filter values the API likely supports. Base suggestions on observable patterns and common SSE API conventions. Be specific and use real event names from the observed stream.`,
+  // ── MQTT — Sprint 9 AI ─────────────────────────────────────────────────────
+  'mqtt.topic.suggester':
+    `Based on these subscribed MQTT topics, suggest related topics to explore:\n\nCurrent subscriptions:\n{topics}\n\nBroker: {broker}\n\nSuggest:\n1. Wildcard variants (e.g. replace specific segment with +)\n2. Sibling topics (same level, different leaf)\n3. Parent hierarchy topics\n4. Related domain topics from the same namespace\n5. Common MQTT patterns for this domain (telemetry, command, status, config)\n\nFor each suggestion, explain why it's likely to exist and what data it might carry.`,
+  'mqtt.topic.suggester.system':
+    `You are an MQTT topic expert. Analyze subscribed topics and suggest related topics using MQTT wildcard conventions (+ single-level, # multi-level), sibling topics, parent topics, and common IoT/messaging patterns. Be specific and explain the likely data each suggestion would carry.`,
+  // ── Socket.IO — Sprint 9 AI ───────────────────────────────────────────────
+  'sio.traffic.analyzer':
+    `Analyze this Socket.IO event session:\n\n{events}\n\nProvide:\n1. Event types observed (both client→server and server→client)\n2. Payload schema for each event type (field names, types)\n3. Session flow: what sequence of events typically occurs?\n4. Namespace and room patterns if visible\n5. Anomalies: events with unexpected payloads or out-of-sequence events\n6. Recommendations for testing this Socket.IO API`,
+  'sio.traffic.analyzer.system':
+    `You are a Socket.IO session analysis expert. Analyze Socket.IO event logs to detect session patterns, event schemas, anomalies, and communication flows between client and server. Be structured and actionable.`,
+  // ── MCP — Sprint 10 AI ────────────────────────────────────────────────────
+  'mcp.prompt.builder':
+    `Build an MCP prompt for this task:\n{description}\n\nAvailable tools:\n{tools}\n\nGenerate:\n1. A system prompt that gives the AI the right context and constraints\n2. The tool call sequence with exact parameter names and example values\n3. Error handling: what the AI should do if a tool call fails\n4. Context window tips: what information to include vs exclude\n\nOutput as structured JSON with fields: systemPrompt, toolSequence, errorHandling, notes.`,
+  'mcp.prompt.builder.system':
+    `You are an MCP (Model Context Protocol) prompt engineering expert. Translate natural language task descriptions into structured MCP prompts with precise tool call sequences, parameter specifications, and context window optimization. Return valid JSON with systemPrompt, toolSequence, errorHandling, and notes fields.`,
+  // ── Platform AI — Sprint 10 ───────────────────────────────────────────────
+  'platform.openapi.generator':
+    `Generate an OpenAPI 3.1 specification from this API collection:\n\n{collectionName}: {requests}\n\nBase URL: {baseUrl}\n\nInclude:\n1. Info section with title, version, and description\n2. All endpoints with accurate operation summaries and descriptions\n3. Request body schemas (JSON Schema format) with examples\n4. Response schemas for all status codes returned\n5. Security schemes (Bearer, API key, Basic Auth as appropriate)\n6. Reusable components for shared schemas\n\nOutput valid OpenAPI 3.1 YAML.`,
+  'platform.openapi.generator.system':
+    `You are an OpenAPI 3.1 specification expert. Generate complete, standards-compliant OpenAPI 3.1 specs from API collections. Include realistic schemas, examples, security definitions, and response types. Output valid YAML. Follow the OpenAPI 3.1.0 specification exactly.`,
+  'platform.security.audit':
+    `Perform a security audit on these API requests and configurations:\n\n{requests}\n\nCheck for:\n1. Missing or weak authentication (no auth, Basic over HTTP, long-lived tokens)\n2. Secrets in headers, query params, or request bodies (API keys, passwords, tokens)\n3. Non-HTTPS endpoints transmitting sensitive data\n4. Exposed PII (email, SSN, credit card numbers in request/response)\n5. Missing security headers (CORS, CSP, HSTS)\n6. Overly permissive scopes or permissions\n\nFor each issue: severity (critical/high/medium/low), what was found, and exact fix.`,
+  'platform.security.audit.system':
+    `You are a security auditor specialized in API security. Scan API configurations for common vulnerabilities: missing authentication, plaintext secrets, unencrypted endpoints, exposed PII, overly permissive CORS, insecure token handling. Be specific and actionable — name the request, the exact field, and the concrete fix.`,
+  'platform.mock.intelligence':
+    `Learn from these real API responses and generate mock rules:\n\n{responses}\n\nGenerate mock rules that:\n1. Capture the exact data structure of each response\n2. Use realistic values (not "string1", "value2" — actual domain-appropriate data)\n3. Include error cases: 404 when resource not found, 401 when auth fails, 422 for validation errors\n4. Match query parameters and path variables to appropriate responses\n5. Capture data relationships (IDs that reference other resources)\n\nOutput as Daakia mock route config JSON with method, path, statusCode, body, and condition matchers.`,
+  'platform.mock.intelligence.system':
+    `You are a mock server intelligence expert. Analyze real API responses to generate realistic, production-quality mock rules that capture data structure, value patterns, edge cases, and status code distributions. Return ONLY valid JSON — no explanation, no fences.`,
+  'platform.postman.translator':
+    `Translate this Postman test script to Daakia dk.* format:\n\n\`\`\`javascript\n{postmanScript}\n\`\`\`\n\nDaakia API equivalents:\n- pm.test("name", fn) → dk.test("name", fn)\n- pm.expect(val).to.equal(x) → dk.expect(val).toBe(x)\n- pm.expect(val).to.include(x) → dk.expect(val).toContain(x)\n- pm.response.json() → JSON.parse(dk.response.body)\n- pm.response.code → dk.response.status\n- pm.environment.set(k,v) → dk.setVariable(k,v)\n- pm.environment.get(k) → dk.getVariable(k)\n\nOutput only the translated Daakia script. Add a comment above any line where the translation is non-obvious.`,
+  'platform.postman.translator.system':
+    `You are a Postman to Daakia migration expert. Translate Postman pm.* test scripts into equivalent Daakia dk.* assertions. You know all Postman test APIs and their Daakia equivalents. When there's no direct equivalent, implement the same behavior using Daakia's available APIs. Return ONLY the translated JavaScript — no markdown fences, no explanation outside of inline comments.`,
+  'platform.soap.to.rest':
+    `Convert these SOAP operations to REST endpoints:\n\nWSDL:\n{wsdlContent}\n\nFor each SOAP operation:\n1. Map to the appropriate HTTP method (GET for reads, POST for creates/actions, PUT/PATCH for updates, DELETE for deletes)\n2. Design a RESTful path (noun-based resources, not verb-based like SOAP actions)\n3. Convert XML request/response types to JSON schema\n4. Map SOAPFault error codes to HTTP status codes and JSON error bodies\n5. Document the original SOAPAction for reference\n\nOutput as OpenAPI 3.1 YAML paths section.`,
+  'platform.soap.to.rest.system':
+    `You are a SOAP to REST migration expert. Analyze SOAP WSDL operations and generate equivalent RESTful endpoint designs with OpenAPI 3.1 output. Map SOAP concepts to REST conventions: operations → resources + HTTP verbs, XML types → JSON schemas, fault codes → HTTP status codes + error bodies.`,
+  'platform.gql.federation':
+    `Analyze this federated GraphQL setup and explain how it works:\n\nSchema:\n{schema}\n\nQuery/Operation:\n{operation}\n\nExplain:\n1. Which subgraphs own which types (based on @key directives)\n2. How this query is split across subgraphs by the Router\n3. Entity resolution: which service provides which fields for shared entities\n4. Any @external, @requires, or @provides annotations and what they mean\n5. Potential N+1 issues or cross-service joins that could be slow\n6. How to debug if part of the federated query returns null`,
+  'platform.gql.federation.system':
+    `You are a GraphQL Federation expert. Explain federated GraphQL architecture: how subgraphs compose, how @key and @external directives work, how entity references are resolved across services, and how to debug cross-subgraph queries. Be specific about which subgraph owns what and why queries might be slow or return null.`,
+  'platform.webhook.debugger':
+    `Debug this webhook payload and configuration:\n\nPayload:\n{payload}\n\nHeaders:\n{headers}\n\nSecret (for HMAC validation): {secret}\n\nAnalyze:\n1. Which service sent this webhook (identify from payload structure and headers)\n2. Event type and what triggered it\n3. Validate the HMAC signature if a secret is provided (show the calculation steps)\n4. Explain every field in the payload in plain English\n5. What action should your system take in response to this event?\n6. Common failure reasons for this event type and how to handle them`,
+  'platform.webhook.debugger.system':
+    `You are a webhook debugging expert. Analyze webhook payloads, validate HMAC signatures, explain event structures, and help identify why webhooks fail. You understand common webhook patterns from Stripe, GitHub, Shopify, Twilio, and other major platforms. Be specific about signature validation steps and response handling.`,
+  'platform.request.clustering':
+    `Cluster these API requests into logical groups and suggest a collection structure:\n\nRequest history:\n{requests}\n\nGroup by:\n1. Resource domain (users, orders, products, payments, etc.)\n2. Authentication and initialization flows\n3. CRUD patterns (list/get/create/update/delete on the same resource)\n4. Microservice or API boundaries (different base URLs)\n5. Workflow sequences (requests that are always called together)\n\nFor each cluster: suggest a collection name, folder structure, and which requests belong. Output as JSON with collectionName, folders (name + requestIds), and ungrouped remainder.`,
+  'platform.request.clustering.system':
+    `You are an API request clustering expert. Group API request histories into logical domains and resource families, then suggest collection names and folder structures. Identify patterns: authentication flows, CRUD operations on the same resource, related microservice calls. Return ONLY valid JSON — no explanation, no fences.`,
 };
 
 // ─── Labels for UI ────────────────────────────────────────────────────────────
@@ -650,6 +776,51 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'mock.websocket.system':   { label: 'WebSocket — System', description: 'AI behavioral rules for WebSocket handler generation' },
   'mock.socketio.system':    { label: 'Socket.IO — System', description: 'AI behavioral rules for Socket.IO event generation' },
   'mock.mqtt.system':        { label: 'MQTT — System',      description: 'AI behavioral rules for MQTT topic generation' },
+  // ── GraphQL — Sprint 8 ────────────────────────────────────────────────────
+  'gql.query.builder':             { label: 'GQL Query Builder',             description: 'GraphQL tab → query editor toolbar → "Query Builder ✦" button: generates queries/mutations from plain English' },
+  'gql.query.builder.system':      { label: 'GQL Query Builder — System',   description: 'Behavioral rules for the GraphQL query builder (output valid graphql in code block)' },
+  'gql.schema.explainer':          { label: 'GQL Schema Explainer',          description: 'GraphQL tab → schema/docs area → "Schema Explainer ✦" button: explains types, fields, relationships' },
+  'gql.schema.explainer.system':   { label: 'GQL Schema Explainer — System', description: 'Behavioral rules for the GraphQL schema explainer (plain English, by type)' },
+  // ── gRPC — Sprint 8 ───────────────────────────────────────────────────────
+  'grpc.proto.explainer':          { label: 'gRPC Proto Explainer',          description: 'gRPC tab → URL bar ⋮ AI Tools menu → "Proto Explainer ✦": explains services, RPCs, message types' },
+  'grpc.proto.explainer.system':   { label: 'gRPC Proto Explainer — System', description: 'Behavioral rules for the gRPC proto explainer (structured by service then method)' },
+  // ── SOAP — Sprint 8 ───────────────────────────────────────────────────────
+  'soap.wsdl.explainer':           { label: 'SOAP WSDL Explainer',           description: 'SOAP tab → URL bar ⋮ AI Tools menu → "WSDL Explainer ✦": explains operations, bindings, types' },
+  'soap.wsdl.explainer.system':    { label: 'SOAP WSDL Explainer — System',  description: 'Behavioral rules for the SOAP WSDL explainer (plain language, avoid SOAP jargon)' },
+  // ── WebSocket — Sprint 9 ──────────────────────────────────────────────────
+  'ws.traffic.analyzer':           { label: 'WS Traffic Analyzer',           description: 'WebSocket tab → message log toolbar → "Traffic Analyzer ✦" button: schema, patterns, anomalies' },
+  'ws.traffic.analyzer.system':    { label: 'WS Traffic Analyzer — System',  description: 'Behavioral rules for the WebSocket traffic analyzer' },
+  // ── SSE — Sprint 9 ────────────────────────────────────────────────────────
+  'sse.traffic.analyzer':          { label: 'SSE Traffic Analyzer',          description: 'SSE tab → event log toolbar → "Traffic Analyzer ✦" button: event types, schema, anomalies' },
+  'sse.traffic.analyzer.system':   { label: 'SSE Traffic Analyzer — System', description: 'Behavioral rules for the SSE traffic analyzer' },
+  'sse.event.suggester':           { label: 'SSE Event Suggester',           description: 'SSE tab → event log toolbar → "Event Suggester ✦" button: suggests related event types to subscribe' },
+  'sse.event.suggester.system':    { label: 'SSE Event Suggester — System',  description: 'Behavioral rules for the SSE event suggester' },
+  // ── MQTT — Sprint 9 ───────────────────────────────────────────────────────
+  'mqtt.topic.suggester':          { label: 'MQTT Topic Suggester',          description: 'MQTT tab → subscribe/publish toolbar → "Topic Suggester ✦" button: wildcard, sibling, parent topics' },
+  'mqtt.topic.suggester.system':   { label: 'MQTT Topic Suggester — System', description: 'Behavioral rules for the MQTT topic suggester' },
+  // ── Socket.IO — Sprint 9 ──────────────────────────────────────────────────
+  'sio.traffic.analyzer':          { label: 'Socket.IO Traffic Analyzer',          description: 'Socket.IO tab → event log toolbar → "Traffic Analyzer ✦" button: session patterns, schemas, anomalies' },
+  'sio.traffic.analyzer.system':   { label: 'Socket.IO Traffic Analyzer — System', description: 'Behavioral rules for the Socket.IO traffic analyzer' },
+  // ── MCP — Sprint 10 ───────────────────────────────────────────────────────
+  'mcp.prompt.builder':            { label: 'MCP Prompt Builder',            description: 'MCP tab → tools area → "Prompt Builder ✦" button: builds structured MCP prompts with tool sequences' },
+  'mcp.prompt.builder.system':     { label: 'MCP Prompt Builder — System',   description: 'Behavioral rules for the MCP prompt builder (return JSON with systemPrompt, toolSequence)' },
+  // ── Platform AI — Sprint 10 ───────────────────────────────────────────────
+  'platform.openapi.generator':        { label: 'OpenAPI Generator',             description: 'Daakia AI tab → platform tools → "OpenAPI ✦" button: generates full OpenAPI 3.1 spec from collection' },
+  'platform.openapi.generator.system': { label: 'OpenAPI Generator — System',    description: 'Behavioral rules for the OpenAPI 3.1 generator (valid YAML, all schemas, security)' },
+  'platform.security.audit':        { label: 'Security Audit',                   description: 'Daakia AI tab → platform tools → "Security Audit ✦" button: scans for auth gaps, secrets, PII' },
+  'platform.security.audit.system': { label: 'Security Audit — System',         description: 'Behavioral rules for the API security auditor (severity levels, specific fixes)' },
+  'platform.mock.intelligence':        { label: 'Mock Intelligence',             description: 'Mock Server tab → AI config panel → "Mock Intelligence ✦": learns from real responses, generates mock rules' },
+  'platform.mock.intelligence.system': { label: 'Mock Intelligence — System',    description: 'Behavioral rules for mock intelligence (JSON only, realistic values, condition matchers)' },
+  'platform.postman.translator':        { label: 'Postman Translator',           description: 'Daakia AI tab → platform tools → "pm→dk ✦" button: translates Postman pm.* scripts to dk.*' },
+  'platform.postman.translator.system': { label: 'Postman Translator — System',  description: 'Behavioral rules for the Postman script translator (code only, inline comments for non-obvious mappings)' },
+  'platform.soap.to.rest':        { label: 'SOAP → REST Migrator',               description: 'SOAP tab → URL bar ⋮ AI Tools menu → "SOAP→REST ✦": converts WSDL ops to OpenAPI 3.1 REST design' },
+  'platform.soap.to.rest.system': { label: 'SOAP → REST Migrator — System',      description: 'Behavioral rules for the SOAP to REST migrator (OpenAPI 3.1 YAML paths section)' },
+  'platform.gql.federation':        { label: 'GraphQL Federation Explorer',      description: 'GraphQL tab → URL bar ⋮ AI Tools menu → "Federation ✦": explains cross-subgraph queries, @key directives' },
+  'platform.gql.federation.system': { label: 'GraphQL Federation — System',      description: 'Behavioral rules for the GraphQL Federation explorer (subgraph ownership, entity resolution)' },
+  'platform.webhook.debugger':        { label: 'Webhook Debugger',               description: 'Daakia AI tab → platform tools → "Webhook ✦" button: analyzes payloads, validates HMAC, explains structure' },
+  'platform.webhook.debugger.system': { label: 'Webhook Debugger — System',      description: 'Behavioral rules for the webhook debugger (HMAC validation steps, field explanations)' },
+  'platform.request.clustering':        { label: 'Request Clustering',           description: 'Daakia AI tab → platform tools → "Cluster ✦" button: groups request history into logical API domains' },
+  'platform.request.clustering.system': { label: 'Request Clustering — System',  description: 'Behavioral rules for the request clustering engine (JSON only, collectionName + folders + requestIds)' },
 };
 
 // ─── Variables available per template ────────────────────────────────────────
@@ -756,6 +927,42 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'mock.websocket.system':   [],
   'mock.socketio.system':    [],
   'mock.mqtt.system':        [],
+  'gql.query.builder':             ['{description}', '{endpoint}', '{schemaContext}'],
+  'gql.query.builder.system':      [],
+  'gql.schema.explainer':          ['{schema}'],
+  'gql.schema.explainer.system':   [],
+  'grpc.proto.explainer':          ['{protoContent}'],
+  'grpc.proto.explainer.system':   [],
+  'soap.wsdl.explainer':           ['{wsdlContent}'],
+  'soap.wsdl.explainer.system':    [],
+  'ws.traffic.analyzer':           ['{messages}'],
+  'ws.traffic.analyzer.system':    [],
+  'sse.traffic.analyzer':          ['{events}'],
+  'sse.traffic.analyzer.system':   [],
+  'sse.event.suggester':           ['{events}', '{endpoint}'],
+  'sse.event.suggester.system':    [],
+  'mqtt.topic.suggester':          ['{topics}', '{broker}'],
+  'mqtt.topic.suggester.system':   [],
+  'sio.traffic.analyzer':          ['{events}'],
+  'sio.traffic.analyzer.system':   [],
+  'mcp.prompt.builder':            ['{description}', '{tools}'],
+  'mcp.prompt.builder.system':     [],
+  'platform.openapi.generator':        ['{collectionName}', '{requests}', '{baseUrl}'],
+  'platform.openapi.generator.system': [],
+  'platform.security.audit':        ['{requests}'],
+  'platform.security.audit.system': [],
+  'platform.mock.intelligence':        ['{responses}'],
+  'platform.mock.intelligence.system': [],
+  'platform.postman.translator':        ['{postmanScript}'],
+  'platform.postman.translator.system': [],
+  'platform.soap.to.rest':        ['{wsdlContent}'],
+  'platform.soap.to.rest.system': [],
+  'platform.gql.federation':        ['{schema}', '{operation}'],
+  'platform.gql.federation.system': [],
+  'platform.webhook.debugger':        ['{payload}', '{headers}', '{secret}'],
+  'platform.webhook.debugger.system': [],
+  'platform.request.clustering':        ['{requests}'],
+  'platform.request.clustering.system': [],
 };
 
 // ─── Prompt Library sidebar categories ───────────────────────────────────────
@@ -771,255 +978,101 @@ export const AI_TEMPLATE_CATEGORIES: {
   kind: 'template' | 'mock';
   keys: AiPromptTemplateKey[];
 }[] = [
+  // ── Response & Diagnostics ─────────────────────────────────────────────────
   {
-    id: 'diagnostics',
+    id: 'response-diagnostics',
     label: 'Response & Diagnostics',
-    kind: 'mock',   // dual-tab: System + User — identical to Agent prompts layout
-    keys: ['askAiWhy', 'explainWithAi', 'followupWithAi'],
+    kind: 'mock',
+    keys: ['askAiWhy', 'explainWithAi', 'followupWithAi', 'rest.performance.insights', 'rest.response.diff', 'rest.smart.retry'],
   },
+  // ── REST Toolkit ───────────────────────────────────────────────────────────
   {
-    id: 'mock-generate',
-    label: 'Mock Server — Generate',
+    id: 'rest-toolkit',
+    label: 'REST Toolkit',
+    kind: 'mock',
+    keys: [
+      'rest.headers.suggest.generate', 'rest.body.generate', 'rest.env.extract',
+      'rest.assert.generate', 'rest.preflight', 'rest.request.fuzz',
+      'rest.code.import', 'rest.response.transform', 'rest.script.autocomplete',
+      'rest.pattern.baseline', 'rest.record.baseline', 'rest.curl.explain',
+    ],
+  },
+  // ── Schema & Contracts ─────────────────────────────────────────────────────
+  {
+    id: 'schema-contracts',
+    label: 'Schema & Contracts',
+    kind: 'mock',
+    keys: ['rest.schema.validate', 'rest.semantic.validate', 'rest.contract.test'],
+  },
+  // ── Collections & Workflow ─────────────────────────────────────────────────
+  {
+    id: 'collections-workflow',
+    label: 'Collections & Workflow',
+    kind: 'mock',
+    keys: [
+      'data.generate', 'rest.collection.organize', 'rest.collection.search',
+      'rest.changelog.generate', 'rest.api.flow', 'rest.agent.workflow',
+      'collection.dependency.graph', 'collection.compliance',
+      'collection.sdk.generate', 'collection.optimize', 'collection.regression',
+    ],
+  },
+  // ── Import & Reverse Engineer ──────────────────────────────────────────────
+  {
+    id: 'import-reverse',
+    label: 'Import & Reverse Engineer',
+    kind: 'mock',
+    keys: ['import.screenshot', 'import.logs', 'import.describe.workflow', 'import.scenario.generate', 'import.reverse.engineer'],
+  },
+  // ── Mock Generation ────────────────────────────────────────────────────────
+  {
+    id: 'mock-generation',
+    label: 'Mock Generation',
     kind: 'mock',
     keys: [
       'mock.rest.generate', 'mock.graphql.generate', 'mock.grpc.generate',
       'mock.soap.generate', 'mock.sse.generate', 'mock.websocket.generate',
-      'mock.socketio.generate', 'mock.mqtt.generate',
+      'mock.socketio.generate', 'mock.mqtt.generate', 'mock.scenario.manager',
     ],
   },
+  // ── GraphQL AI ─────────────────────────────────────────────────────────────
   {
-    id: 'headers-suggest',
-    label: 'REST — Headers',
+    id: 'graphql-ai',
+    label: 'GraphQL AI',
     kind: 'mock',
-    keys: ['rest.headers.suggest.generate'],
+    keys: ['gql.query.builder', 'gql.schema.explainer', 'graphql.schema.view'],
   },
+  // ── gRPC AI ────────────────────────────────────────────────────────────────
   {
-    id: 'body-generate',
-    label: 'REST — Body',
+    id: 'grpc-ai',
+    label: 'gRPC AI',
     kind: 'mock',
-    keys: ['rest.body.generate'],
+    keys: ['grpc.proto.explainer', 'grpc.schema.view'],
   },
+  // ── SOAP AI ────────────────────────────────────────────────────────────────
   {
-    id: 'env-extract',
-    label: 'REST — Env Extractor',
+    id: 'soap-ai',
+    label: 'SOAP AI',
     kind: 'mock',
-    keys: ['rest.env.extract'],
+    keys: ['soap.wsdl.explainer', 'soap.schema.view'],
   },
+  // ── Realtime Protocols ─────────────────────────────────────────────────────
   {
-    id: 'data-generate',
-    label: 'Data Generator',
+    id: 'realtime-ai',
+    label: 'Realtime Protocols',
     kind: 'mock',
-    keys: ['data.generate'],
+    keys: ['ws.traffic.analyzer', 'sse.traffic.analyzer', 'sse.event.suggester', 'mqtt.topic.suggester', 'sio.traffic.analyzer'],
   },
+  // ── MCP & Platform AI ─────────────────────────────────────────────────────
   {
-    id: 'collection-organize',
-    label: 'Collection Organizer',
+    id: 'mcp-platform',
+    label: 'MCP & Platform AI',
     kind: 'mock',
-    keys: ['rest.collection.organize'],
-  },
-  {
-    id: 'curl-explain',
-    label: 'cURL Explainer',
-    kind: 'mock',
-    keys: ['rest.curl.explain'],
-  },
-  {
-    id: 'script-autocomplete',
-    label: 'Script Autocomplete',
-    kind: 'mock',
-    keys: ['rest.script.autocomplete'],
-  },
-  {
-    id: 'contract-test',
-    label: 'Contract Test Generator',
-    kind: 'mock',
-    keys: ['rest.contract.test'],
-  },
-  {
-    id: 'response-diff',
-    label: 'Response Diff Analyzer',
-    kind: 'mock',
-    keys: ['rest.response.diff'],
-  },
-  {
-    id: 'schema-validate',
-    label: 'Schema Validator',
-    kind: 'mock',
-    keys: ['rest.schema.validate'],
-  },
-  {
-    id: 'code-import',
-    label: 'Code to Request',
-    kind: 'mock',
-    keys: ['rest.code.import'],
-  },
-  {
-    id: 'performance-insights',
-    label: 'Performance Insights',
-    kind: 'mock',
-    keys: ['rest.performance.insights'],
-  },
-  {
-    id: 'collection-search',
-    label: 'NL Collection Search',
-    kind: 'mock',
-    keys: ['rest.collection.search'],
-  },
-  {
-    id: 'changelog-generate',
-    label: 'Changelog Generator',
-    kind: 'mock',
-    keys: ['rest.changelog.generate'],
-  },
-  {
-    id: 'api-flow-builder',
-    label: 'API Flow Builder',
-    kind: 'mock',
-    keys: ['rest.api.flow'],
-  },
-  {
-    id: 'agent-workflow',
-    label: 'AI Agent Workflow',
-    kind: 'mock',
-    keys: ['rest.agent.workflow'],
-  },
-  {
-    id: 'assert-generate',
-    label: 'Assert Generation',
-    kind: 'mock',
-    keys: ['rest.assert.generate'],
-  },
-  {
-    id: 'semantic-validate',
-    label: 'Semantic Validator',
-    kind: 'mock',
-    keys: ['rest.semantic.validate'],
-  },
-  {
-    id: 'response-transform',
-    label: 'Response Transformer',
-    kind: 'mock',
-    keys: ['rest.response.transform'],
-  },
-  {
-    id: 'pattern-baseline',
-    label: 'Pattern Baseline',
-    kind: 'mock',
-    keys: ['rest.pattern.baseline'],
-  },
-  {
-    id: 'record-baseline',
-    label: 'Record Baseline',
-    kind: 'mock',
-    keys: ['rest.record.baseline'],
-  },
-  {
-    id: 'request-fuzz',
-    label: 'Request Fuzzer',
-    kind: 'mock',
-    keys: ['rest.request.fuzz'],
-  },
-  {
-    id: 'preflight',
-    label: 'Pre-flight Check',
-    kind: 'mock',
-    keys: ['rest.preflight'],
-  },
-  {
-    id: 'smart-retry',
-    label: 'Smart Retry Advisor',
-    kind: 'mock',
-    keys: ['rest.smart.retry'],
-  },
-  {
-    id: 'graphql-schema',
-    label: 'Schema Viewer (GraphQL)',
-    kind: 'mock',
-    keys: ['graphql.schema.view'],
-  },
-  {
-    id: 'soap-schema',
-    label: 'Schema Viewer (SOAP)',
-    kind: 'mock',
-    keys: ['soap.schema.view'],
-  },
-  {
-    id: 'grpc-schema',
-    label: 'Schema Viewer (gRPC)',
-    kind: 'mock',
-    keys: ['grpc.schema.view'],
-  },
-  {
-    id: 'dependency-graph',
-    label: 'Dependency Graph',
-    kind: 'mock',
-    keys: ['collection.dependency.graph'],
-  },
-  {
-    id: 'compliance',
-    label: 'Check Compliance',
-    kind: 'mock',
-    keys: ['collection.compliance'],
-  },
-  {
-    id: 'sdk-generate',
-    label: 'Generate SDK',
-    kind: 'mock',
-    keys: ['collection.sdk.generate'],
-  },
-  {
-    id: 'optimize-requests',
-    label: 'Optimize Requests',
-    kind: 'mock',
-    keys: ['collection.optimize'],
-  },
-  {
-    id: 'regression-detector',
-    label: 'Regression Detector',
-    kind: 'mock',
-    keys: ['collection.regression'],
-  },
-  {
-    id: 'import-screenshot',
-    label: 'Import from Screenshot',
-    kind: 'mock',
-    keys: ['import.screenshot'],
-  },
-  {
-    id: 'import-logs',
-    label: 'Import from Server Logs',
-    kind: 'mock',
-    keys: ['import.logs'],
-  },
-  {
-    id: 'describe-workflow',
-    label: 'Describe Workflow',
-    kind: 'mock',
-    keys: ['import.describe.workflow'],
-  },
-  {
-    id: 'scenario-generate',
-    label: 'Generate Scenario',
-    kind: 'mock',
-    keys: ['import.scenario.generate'],
-  },
-  {
-    id: 'reverse-engineer',
-    label: 'Reverse Engineer',
-    kind: 'mock',
-    keys: ['import.reverse.engineer'],
-  },
-  {
-    id: 'scenario-manager',
-    label: 'AI Scenario Manager',
-    kind: 'mock',
-    keys: ['mock.scenario.manager'],
-  },
-  {
-    id: 'master-agent',
-    label: 'Master Agent (Auto-Route)',
-    kind: 'mock',
-    keys: ['agent.master'],
+    keys: [
+      'mcp.prompt.builder', 'agent.master',
+      'platform.openapi.generator', 'platform.security.audit', 'platform.mock.intelligence',
+      'platform.postman.translator', 'platform.soap.to.rest', 'platform.gql.federation',
+      'platform.webhook.debugger', 'platform.request.clustering',
+    ],
   },
 ];
 
@@ -1125,6 +1178,43 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'mock.websocket.system':   '#f59e0b',
   'mock.socketio.system':    '#ef4444',
   'mock.mqtt.system':        '#06b6d4',
+  // ── Sprint 8-10 ───────────────────────────────────────────────────────────
+  'gql.query.builder':             '#ec4899',
+  'gql.query.builder.system':      '#ec4899',
+  'gql.schema.explainer':          '#a855f7',
+  'gql.schema.explainer.system':   '#a855f7',
+  'grpc.proto.explainer':          '#f97316',
+  'grpc.proto.explainer.system':   '#f97316',
+  'soap.wsdl.explainer':           '#8b5cf6',
+  'soap.wsdl.explainer.system':    '#8b5cf6',
+  'ws.traffic.analyzer':           '#f59e0b',
+  'ws.traffic.analyzer.system':    '#f59e0b',
+  'sse.traffic.analyzer':          '#10b981',
+  'sse.traffic.analyzer.system':   '#10b981',
+  'sse.event.suggester':           '#06b6d4',
+  'sse.event.suggester.system':    '#06b6d4',
+  'mqtt.topic.suggester':          '#3b82f6',
+  'mqtt.topic.suggester.system':   '#3b82f6',
+  'sio.traffic.analyzer':          '#ef4444',
+  'sio.traffic.analyzer.system':   '#ef4444',
+  'mcp.prompt.builder':            '#a855f7',
+  'mcp.prompt.builder.system':     '#a855f7',
+  'platform.openapi.generator':        '#0ea5e9',
+  'platform.openapi.generator.system': '#0ea5e9',
+  'platform.security.audit':        '#ef4444',
+  'platform.security.audit.system': '#ef4444',
+  'platform.mock.intelligence':        '#8b5cf6',
+  'platform.mock.intelligence.system': '#8b5cf6',
+  'platform.postman.translator':        '#f97316',
+  'platform.postman.translator.system': '#f97316',
+  'platform.soap.to.rest':        '#a78bfa',
+  'platform.soap.to.rest.system': '#a78bfa',
+  'platform.gql.federation':        '#ec4899',
+  'platform.gql.federation.system': '#ec4899',
+  'platform.webhook.debugger':        '#10b981',
+  'platform.webhook.debugger.system': '#10b981',
+  'platform.request.clustering':        '#06b6d4',
+  'platform.request.clustering.system': '#06b6d4',
 };
 
 // ─── Interpolation helper ─────────────────────────────────────────────────────

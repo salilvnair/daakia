@@ -12,6 +12,7 @@ import {
 } from '../../../icons';
 import { HighlightedInput, SplitButton } from '../../shared';
 import type { SplitButtonItem } from '../../shared';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
 import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
@@ -179,6 +180,7 @@ export function SSEPanel() {
     if (!activeTab) return;
     const url = activeTab.url.trim();
     if (!url) return;
+    logUiEvent('sse.connect', { url });
     setConnState('connecting');
     setError(null);
     postMsg({ type: 'sse:connect', tabId: activeTab.id, url, eventType, headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [], envId: activeTab.envId });
@@ -186,6 +188,7 @@ export function SSEPanel() {
 
   const handleDisconnect = useCallback(() => {
     if (!activeTab) return;
+    logUiEvent('sse.disconnect', { url: activeTab.url });
     postMsg({ type: 'sse:disconnect', tabId: activeTab.id });
     setConnState('disconnected');
   }, [activeTab]);

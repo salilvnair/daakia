@@ -252,6 +252,21 @@ function _createSchema(db: SqlJsDatabase): void {
   db.run(`CREATE INDEX IF NOT EXISTS idx_audit_stage ON ce_audit(stage)`);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS ui_audit (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT    NOT NULL,
+      module     TEXT    NOT NULL,
+      button     TEXT,
+      action     TEXT,
+      metadata   TEXT,
+      created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ui_audit_event  ON ui_audit(event_type)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ui_audit_module ON ui_audit(module)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_ui_audit_time   ON ui_audit(created_at DESC)`);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS prompt_library (
       scenario      TEXT    PRIMARY KEY,
       system_prompt TEXT    NOT NULL,
@@ -583,6 +598,45 @@ export function deleteAuditEntries(auditIds: number[]): void {
 export function clearAuditEntries(): void {
   if (!_db) { return; }
   _db.run('DELETE FROM ce_audit');
+  _scheduleSave();
+}
+
+// ────────────────────── UI Audit ──────────────────────
+
+export interface UiAuditEntry {
+  id: number;
+  event_type: string;
+  module: string;
+  button?: string;
+  action?: string;
+  metadata?: string;
+  created_at: string;
+}
+
+export function insertUiAudit(entry: Omit<UiAuditEntry, 'id' | 'created_at'>): void {
+  if (!_db) { return; }
+  _db.run(
+    'INSERT INTO ui_audit (event_type, module, button, action, metadata) VALUES (?, ?, ?, ?, ?)',
+    [entry.event_type, entry.module, entry.button ?? null, entry.action ?? null, entry.metadata ?? null]
+  );
+  _scheduleSave();
+}
+
+export function getUiAuditEntries(limit = 200): UiAuditEntry[] {
+  if (!_db) { return []; }
+  const stmt = _db.prepare('SELECT * FROM ui_audit ORDER BY created_at DESC LIMIT ?');
+  stmt.bind([limit]);
+  const results: UiAuditEntry[] = [];
+  while (stmt.step()) {
+    results.push(stmt.getAsObject() as unknown as UiAuditEntry);
+  }
+  stmt.free();
+  return results;
+}
+
+export function clearUiAuditEntries(): void {
+  if (!_db) { return; }
+  _db.run('DELETE FROM ui_audit');
   _scheduleSave();
 }
 

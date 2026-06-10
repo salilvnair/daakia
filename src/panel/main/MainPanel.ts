@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
+import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
 // Handler imports
@@ -707,6 +707,23 @@ export class MainPanel {
       }
       case 'aiAudit:clear':
         clearAuditEntries();
+        break;
+
+      // ── UI Audit ──
+      case 'uiAudit:log': {
+        const { event_type, module, button, action, metadata } = msg as { event_type: string; module: string; button?: string; action?: string; metadata?: Record<string, unknown> };
+        if (event_type && module) {
+          insertUiAudit({ event_type, module, button, action, metadata: metadata ? JSON.stringify(metadata) : undefined });
+        }
+        break;
+      }
+      case 'uiAudit:load': {
+        const limit = (msg as { limit?: number }).limit ?? 200;
+        this._post({ type: 'uiAudit:data', entries: getUiAuditEntries(limit) });
+        break;
+      }
+      case 'uiAudit:clear':
+        clearUiAuditEntries();
         break;
 
       // ── DB Explorer (7.4) ──

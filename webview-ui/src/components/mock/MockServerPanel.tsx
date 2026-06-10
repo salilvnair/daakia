@@ -9,6 +9,7 @@ import { useMockStore } from '../../store/mock-store';
 import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
 import { MOCK_PROTOCOL_COLORS, getMockProtocolBg, getMockProtocolLabel } from '../../colors';
 import { ServerIcon, WebSocketIcon, SSEIcon, SocketIOIcon, MQTTIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../icons';
+import { logUiEvent } from '../../store/ui-audit-store';
 import { ServerList } from './ServerList';
 import { ServerDetail } from './ServerDetail';
 import { MockLogPanel } from './MockLogPanel';
@@ -231,8 +232,10 @@ export function MockServerPanel() {
     const server = serversRef.current.find(s => s.id === id);
     if (!server) return;
     if (server.running) {
+      logUiEvent('mock.stop', { serverId: id, serverName: server.name });
       postMsg({ type: 'mockServer:stop', id });
     } else {
+      logUiEvent('mock.start', { serverId: id, serverName: server.name });
       postMsg({
         type: 'mockServer:start',
         config: {

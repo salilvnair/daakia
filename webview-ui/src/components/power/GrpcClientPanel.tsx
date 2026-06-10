@@ -218,7 +218,7 @@ export function GrpcClientPanel({ onClose }: Props) {
             </span>
           </label>
           <input value={serverUrl} onChange={e => setServerUrl(e.target.value)}
-            className="flex-1 px-3 py-1.5 rounded-lg text-[11.5px] font-mono outline-none"
+            className="flex-1 h-[26px] px-2.5 rounded text-[11px] font-mono outline-none"
             placeholder="localhost:50051"
             style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
         </div>

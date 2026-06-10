@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import type * as MonacoT from 'monaco-editor';
 import { postMsg } from '../../vscode';
-import { TrashIcon, ChevronRightIcon, SparkleIcon } from '../../icons';
+import { TrashIcon, ChevronRightIcon, SparkleIcon, SearchIcon, CloseIcon } from '../../icons';
 import { ConfirmDialog } from '../shared';
 import {
   AGENT_CATEGORIES, SCENARIO_LABELS, SCENARIO_DESCRIPTIONS, SCENARIO_COLORS, SCENARIO_GATES,
@@ -121,6 +121,9 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
   const sidebarContainerRef = useRef<HTMLDivElement>(null);
   const sidebarDragRef = useRef({ active: false });
 
+  // ── sidebar search ──
+  const [search, setSearch] = useState('');
+
   // ── category collapse within sections ──
   const [catCollapsed, setCatCollapsed] = useState<Set<string>>(new Set());
   const toggleCat = (id: string) => setCatCollapsed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -164,6 +167,25 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
   }, []);
 
   const entries = useMemo(() => ALL_AGENT_SCENARIOS.map(s => buildEntry(s, dbRows.find(r => r.scenario === s))), [dbRows]);
+
+  const searchQ = search.toLowerCase().trim();
+  const filteredScenarios = useMemo(() => {
+    if (!searchQ) return ALL_AGENT_SCENARIOS;
+    return ALL_AGENT_SCENARIOS.filter(s =>
+      SCENARIO_LABELS[s].toLowerCase().includes(searchQ) || SCENARIO_DESCRIPTIONS[s].toLowerCase().includes(searchQ)
+    );
+  }, [searchQ]);
+
+  const filteredCategories = useMemo(() => {
+    if (!searchQ) return AI_TEMPLATE_CATEGORIES;
+    return AI_TEMPLATE_CATEGORIES.map(cat => ({
+      ...cat,
+      keys: cat.keys.filter(k => {
+        const { label, description } = AI_PROMPT_TEMPLATE_LABELS[k];
+        return label.toLowerCase().includes(searchQ) || description.toLowerCase().includes(searchQ);
+      }),
+    })).filter(cat => cat.keys.length > 0);
+  }, [searchQ]);
 
   // Sync editor when selection changes
   useEffect(() => {
@@ -312,6 +334,33 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
         {/* ── Sidebar ─────────────────────────────────────────────────── */}
         <div ref={sidebarContainerRef} className="flex flex-col h-full border-r border-[var(--color-surface-border)] flex-shrink-0" style={{ width: sidebarWidth }}>
 
+          {/* ── Search box ── */}
+          <div className="flex items-center gap-1.5 border-b flex-shrink-0 px-2.5"
+            style={{ height: 28, borderColor: 'var(--color-surface-border)', backgroundColor: 'rgba(255,255,255,0.02)', outline: 'none' }}>
+            <SearchIcon size={10} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search prompts…"
+              autoComplete="off"
+              spellCheck={false}
+              className="flex-1 min-w-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
+              style={{ boxShadow: 'none', border: 'none' }}
+            />
+            {search ? (
+              <button type="button" onClick={() => setSearch('')}
+                className="w-4 h-4 flex items-center justify-center rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]">
+                <CloseIcon size={9} />
+              </button>
+            ) : (
+              <span className="text-[9px] font-mono tabular-nums px-1 rounded shrink-0"
+                style={{ color: 'var(--color-text-muted)', backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                {filteredScenarios.length + filteredCategories.reduce((s, c) => s + c.keys.length, 0)}
+              </span>
+            )}
+          </div>
+
           {/* Agent Prompts section */}
           <div
             className="flex flex-col overflow-hidden flex-shrink-0"
@@ -324,14 +373,16 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
               <span className={`transition-transform duration-150 ${agentCollapsed ? '' : 'rotate-90'}`}><ChevronRightIcon size={9} /></span>
               <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Agent Prompts</span>
               <span className="ml-auto text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-full" style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)` }}>
-                {ALL_AGENT_SCENARIOS.length}
+                {filteredScenarios.length}
               </span>
             </button>
 
             {!agentCollapsed && (
               <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] py-1">
                 {AGENT_CATEGORIES.map(cat => {
-                  const isOpen = !catCollapsed.has(cat.id);
+                  const catScenarios = cat.scenarios.filter(s => filteredScenarios.includes(s));
+                  if (catScenarios.length === 0) return null;
+                  const isOpen = searchQ ? true : !catCollapsed.has(cat.id);
                   return (
                     <div key={cat.id} className="mb-0.5">
                       <button type="button" onClick={() => toggleCat(cat.id)}
@@ -339,9 +390,9 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
                       >
                         <span className={`transition-transform duration-150 flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`}><ChevronRightIcon size={9} /></span>
                         {cat.label}
-                        <span className="ml-auto opacity-50">{cat.scenarios.length}</span>
+                        <span className="ml-auto opacity-50">{catScenarios.length}</span>
                       </button>
-                      {isOpen && cat.scenarios.map(s => {
+                      {isOpen && catScenarios.map(s => {
                         const row = dbRows.find(r => r.scenario === s);
                         const isAct = active?.kind === 'agent' && active.scenario === s;
                         const color = SCENARIO_COLORS[s];
@@ -396,14 +447,14 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
               <span className={`transition-transform duration-150 ${aiCollapsed ? '' : 'rotate-90'}`}><ChevronRightIcon size={9} /></span>
               <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">AI Actions</span>
               <span className="ml-auto text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-full" style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)` }}>
-                {AI_TEMPLATE_CATEGORIES.reduce((sum, cat) => sum + cat.keys.length, 0)}
+                {filteredCategories.reduce((sum, cat) => sum + cat.keys.length, 0)}
               </span>
             </button>
 
             {!aiCollapsed && (
               <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] py-1">
-                {AI_TEMPLATE_CATEGORIES.map(cat => {
-                  const isOpen = !catCollapsed.has(`tpl-${cat.id}`);
+                {filteredCategories.map(cat => {
+                  const isOpen = searchQ ? true : !catCollapsed.has(`tpl-${cat.id}`);
                   return (
                     <div key={cat.id} className="mb-0.5">
                       <button type="button" onClick={() => toggleCat(`tpl-${cat.id}`)}

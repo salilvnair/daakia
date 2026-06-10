@@ -12,6 +12,7 @@ import { SSEPanel } from '../sse/SSEPanel';
 import { SocketIOPanel } from '../sio/SocketIOPanel';
 import { MQTTPanel } from '../mqtt/MQTTPanel';
 import { WsLogEntry, type WsMessage } from './WsLogEntry';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import { WsProtocolsTab } from './WsProtocolsTab';
 import { WsTemplatesTab } from './WsTemplatesTab';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
@@ -218,6 +219,7 @@ export function WebSocketPanel() {
     const url = activeTab.url.trim();
     if (!url) return;
 
+    logUiEvent('ws.connect', { url });
     setConnState('connecting');
     postMsg({
       type: 'ws:connect',
@@ -230,6 +232,7 @@ export function WebSocketPanel() {
 
   const handleDisconnect = useCallback(() => {
     if (!activeTab) return;
+    logUiEvent('ws.disconnect', { url: activeTab.url });
     postMsg({ type: 'ws:disconnect', tabId: activeTab.id });
     setConnState('disconnected');
   }, [activeTab]);

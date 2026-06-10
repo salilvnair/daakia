@@ -159,7 +159,7 @@ export function CookieManager({ onClose }: Props) {
 
         <div className="px-4 py-2 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <input value={filter} onChange={e => setFilter(e.target.value)}
-            className="w-full px-3 py-1.5 rounded-lg text-[11.5px] outline-none"
+            className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
             placeholder="Filter by domain or name…"
             style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
           />
@@ -216,7 +216,7 @@ export function CookieManager({ onClose }: Props) {
                       value={(selectedCookie as unknown as Record<string, unknown>)[field] as string || ''}
                       onChange={e => updateCookie(selectedCookie.id, { [field]: e.target.value } as Partial<CookieEntry>)}
                       placeholder={placeholder}
-                      className="w-full px-3 py-1.5 rounded-lg text-[11.5px] outline-none"
+                      className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
                       style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
                     />
                   </div>
@@ -252,7 +252,7 @@ export function CookieManager({ onClose }: Props) {
               <p className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Import Cookies</p>
               <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Paste Netscape format cookies (from browser devtools or curl --cookie-jar)</p>
               <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={8}
-                className="w-full px-3 py-2 rounded-lg text-[10.5px] font-mono resize-none outline-none"
+                className="w-full px-3 py-2 rounded text-[10.5px] font-mono resize-none outline-none"
                 placeholder="# Netscape HTTP Cookie File&#10;.example.com TRUE / FALSE 0 session_id abc123"
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
               <div className="flex gap-2 justify-end">

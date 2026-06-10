@@ -130,12 +130,12 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
               ))}
             </div>
             <input value={urlTemplate} onChange={e => setUrlTemplate(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg text-[11.5px] font-mono outline-none"
+              className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono outline-none"
               placeholder="https://api.example.com/users/{{id}} or /api/{{resource}}/{{id}}"
               style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
             {method !== 'GET' && method !== 'DELETE' && (
               <textarea value={bodyTemplate} onChange={e => setBodyTemplate(e.target.value)} rows={3}
-                className="w-full px-3 py-2 rounded-lg text-[11px] font-mono resize-none outline-none"
+                className="w-full px-3 py-2 rounded text-[11px] font-mono resize-none outline-none"
                 placeholder={'{"name": "{{name}}", "email": "{{email}}", "role": "{{role}}"}'}
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
             )}

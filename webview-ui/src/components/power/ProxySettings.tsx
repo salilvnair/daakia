@@ -123,14 +123,14 @@ export function ProxySettings({ onClose }: Props) {
               <div className="flex-1">
                 <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Host</label>
                 <input value={config.host} onChange={e => update({ host: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg text-[11.5px] outline-none"
+                  className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
                   placeholder="proxy.example.com or 192.168.1.1"
                   style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
               </div>
               <div className="w-[80px]">
                 <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Port</label>
                 <input value={config.port} onChange={e => update({ port: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg text-[11.5px] outline-none"
+                  className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
                   placeholder="8080"
                   style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
               </div>
@@ -141,14 +141,14 @@ export function ProxySettings({ onClose }: Props) {
               <div className="flex-1">
                 <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Username (optional)</label>
                 <input value={config.username} onChange={e => update({ username: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg text-[11.5px] outline-none"
+                  className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
                   placeholder="proxy_user"
                   style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
               </div>
               <div className="flex-1">
                 <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Password (optional)</label>
                 <input type="password" value={config.password} onChange={e => update({ password: e.target.value })}
-                  className="w-full px-3 py-1.5 rounded-lg text-[11.5px] outline-none"
+                  className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
                   placeholder="••••••"
                   style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
               </div>
@@ -158,7 +158,7 @@ export function ProxySettings({ onClose }: Props) {
             <div className="mb-3">
               <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Bypass proxy for (comma-separated)</label>
               <input value={config.noProxy} onChange={e => update({ noProxy: e.target.value })}
-                className="w-full px-3 py-1.5 rounded-lg text-[11.5px] outline-none"
+                className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
                 placeholder="localhost, 127.0.0.1, *.internal.company.com"
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
             </div>

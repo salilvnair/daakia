@@ -155,7 +155,7 @@ export function ApiMonitor({ onClose }: Props) {
                 <div>
                   <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Name</label>
                   <input value={newRule.name || ''} onChange={e => setNewRule(r => ({ ...r, name: e.target.value }))}
-                    className="w-full px-2 py-1.5 rounded-lg text-[11.5px] outline-none"
+                    className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
                     placeholder="API Health Check"
                     style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
                 </div>
@@ -185,7 +185,7 @@ export function ApiMonitor({ onClose }: Props) {
                       </button>
                     ))}
                     <input value={newRule.url || ''} onChange={e => setNewRule(r => ({ ...r, url: e.target.value }))}
-                      className="flex-1 px-2 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                      className="flex-1 h-[26px] px-2.5 rounded text-[11px] font-mono outline-none"
                       placeholder="https://api.example.com/health"
                       style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
                   </div>
@@ -193,7 +193,7 @@ export function ApiMonitor({ onClose }: Props) {
                 <div>
                   <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Alert if slower than (ms)</label>
                   <input type="number" value={newRule.alertOnSlowMs || 3000} onChange={e => setNewRule(r => ({ ...r, alertOnSlowMs: Number(e.target.value) }))}
-                    className="w-full px-2 py-1.5 rounded-lg text-[11.5px] outline-none"
+                    className="w-[120px] h-[26px] px-2.5 rounded text-[11px] outline-none"
                     style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
                 </div>
               </div>
