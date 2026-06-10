@@ -20,6 +20,15 @@ import { GeneralAssistantIcon, SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
 import { AiPendingActions, parseDaakiaActions, type DaakiaAction } from './AiPendingActions';
+import { AiConversationToCollectionModal } from './AiConversationToCollectionModal';
+import { AiSessionExportModal } from './AiSessionExportModal';
+import { AiOpenApiGeneratorModal } from './AiOpenApiGeneratorModal';
+import { AiSecurityAuditModal } from './AiSecurityAuditModal';
+import { AiPostmanTranslatorModal } from './AiPostmanTranslatorModal';
+import { AiWebhookDebuggerModal } from './AiWebhookDebuggerModal';
+import { AiRequestClusteringModal } from './AiRequestClusteringModal';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
+import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_LABELS, type AiPromptTemplateKey } from '../../store/prompt-template';
 
 // ─── Suggestion chips ─────────────────────────────────────────────────────────
 
@@ -319,6 +328,19 @@ export function DaakiaAiPanel() {
     }
   }, [activeTab?.id, showContextBar, contextTab?.url, contextTab?.response?.status, contextEnv?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Sprint 10.7-10.9 panel actions ───────────────────────────────────────
+  const [showCollectionModal, setShowCollectionModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showPromptPicker, setShowPromptPicker] = useState(false);
+  const templates = useAiPromptTemplatesStore(s => s.templates);
+  // ── Sprint 10.10-10.17 platform tools ────────────────────────────────────
+  const [showOpenApiModal, setShowOpenApiModal] = useState(false);
+  const [showSecurityAudit, setShowSecurityAudit] = useState(false);
+  const [showPostmanTranslator, setShowPostmanTranslator] = useState(false);
+  const [showWebhookDebugger, setShowWebhookDebugger] = useState(false);
+  const [showRequestClustering, setShowRequestClustering] = useState(false);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+
   // ── AI Suggestion Chips (4.5.5) ──────────────────────────────────────────
   const [showChips, setShowChips] = useState(false);
 
@@ -431,6 +453,93 @@ export function DaakiaAiPanel() {
       {/* Colorful hero banner */}
       <DaakiaAiHero />
 
+      {/* 10.7-10.9: AI Panel action bar */}
+      <div className="flex items-center gap-1.5 px-3 py-1 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 3%, var(--color-panel))' }}>
+        <button type="button" onClick={() => setShowCollectionModal(true)}
+          className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+          style={{ color: 'var(--color-protocol-ai)', borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 30%, transparent)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' }}
+          title="Convert AI conversation to collection"
+        >
+          <SparkleIcon size={8} />→ Collection
+        </button>
+        <button type="button" onClick={() => setShowExportModal(true)}
+          className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+          style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+          title="Export session as markdown"
+        >
+          Export ✦
+        </button>
+        <button type="button" onClick={() => setShowPromptPicker(p => !p)}
+          className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+          style={{ color: showPromptPicker ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)', borderColor: showPromptPicker ? 'color-mix(in srgb, var(--color-protocol-ai) 30%, transparent)' : 'var(--color-surface-border)', backgroundColor: showPromptPicker ? 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' : 'transparent' }}
+          title="@ Prompt Library quick-insert"
+        >
+          @ Prompts
+        </button>
+        <div className="w-px h-4 mx-0.5 flex-shrink-0" style={{ backgroundColor: 'var(--color-surface-border)' }} />
+        {/* 10.10-10.17: Platform tools */}
+        {aiEnabled('openApiGenerator') && (
+          <button type="button" onClick={() => setShowOpenApiModal(true)}
+            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+            title="Generate OpenAPI 3.1 spec from collection"
+          >OpenAPI ✦</button>
+        )}
+        {aiEnabled('securityAudit') && (
+          <button type="button" onClick={() => setShowSecurityAudit(true)}
+            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+            title="AI Security Audit all tabs"
+          >Security ✦</button>
+        )}
+        {aiEnabled('postmanTranslator') && (
+          <button type="button" onClick={() => setShowPostmanTranslator(true)}
+            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+            title="Translate Postman pm.* to Daakia dk.*"
+          >pm→dk ✦</button>
+        )}
+        {aiEnabled('webhookDebugger') && (
+          <button type="button" onClick={() => setShowWebhookDebugger(true)}
+            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+            title="AI Webhook Debugger"
+          >Webhook ✦</button>
+        )}
+        {aiEnabled('requestClustering') && (
+          <button type="button" onClick={() => setShowRequestClustering(true)}
+            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
+            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+            title="AI Request Clustering — auto-organize into collections"
+          >Cluster ✦</button>
+        )}
+      </div>
+
+      {/* 10.9: Prompt Library quick-picker */}
+      {showPromptPicker && (
+        <div className="flex-shrink-0 border-b max-h-[160px] overflow-y-auto [scrollbar-gutter:stable]" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
+          <div className="px-3 pt-1.5 pb-0.5">
+            <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>Prompt Library · click to insert</p>
+          </div>
+          <div className="flex flex-wrap gap-1.5 px-3 py-1.5">
+            {(Object.keys(templates) as AiPromptTemplateKey[]).slice(0, 20).map(key => (
+              <button key={key} type="button"
+                onClick={() => {
+                  const text = templates[key];
+                  if (text && navigator.clipboard) navigator.clipboard.writeText(text);
+                  setShowPromptPicker(false);
+                }}
+                className="h-[22px] px-2 text-[10px] rounded-full border cursor-pointer transition-all whitespace-nowrap"
+                style={{ color: 'var(--color-text-secondary)', borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-raised)' }}
+                title={AI_PROMPT_TEMPLATE_LABELS[key]?.description || key}
+              >
+                {AI_PROMPT_TEMPLATE_LABELS[key]?.label || key}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Context bar — shows current tab context */}
       {showContextBar && contextTab && (
         <AiContextBar
@@ -514,6 +623,17 @@ export function DaakiaAiPanel() {
           </div>
         )}
       </div>
+
+      {/* 10.7: Save conversation to collection */}
+      {showCollectionModal && <AiConversationToCollectionModal onClose={() => setShowCollectionModal(false)} />}
+      {/* 10.8: Export session as markdown */}
+      {showExportModal && <AiSessionExportModal onClose={() => setShowExportModal(false)} />}
+      {/* 10.10-10.17: Platform tools */}
+      {showOpenApiModal && <AiOpenApiGeneratorModal onClose={() => setShowOpenApiModal(false)} />}
+      {showSecurityAudit && <AiSecurityAuditModal onClose={() => setShowSecurityAudit(false)} />}
+      {showPostmanTranslator && <AiPostmanTranslatorModal onClose={() => setShowPostmanTranslator(false)} />}
+      {showWebhookDebugger && <AiWebhookDebuggerModal onClose={() => setShowWebhookDebugger(false)} />}
+      {showRequestClustering && <AiRequestClusteringModal onClose={() => setShowRequestClustering(false)} />}
     </div>
   );
 }

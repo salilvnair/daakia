@@ -3,7 +3,7 @@ import { useTabsStore } from '../../../store/tabs-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { postMsg } from '../../../vscode';
-import { ConnectIcon, DisconnectIcon, SendIcon, TrashIcon, CheckCircleFilledIcon, ArrowUpIcon, ArrowDownIcon, AutoScrollIcon, SaveIcon } from '../../../icons';
+import { ConnectIcon, DisconnectIcon, SendIcon, TrashIcon, CheckCircleFilledIcon, ArrowUpIcon, ArrowDownIcon, AutoScrollIcon, SaveIcon, MoreVerticalIcon, SparkleIcon } from '../../../icons';
 import { CodeEditor, StyledDropdown, SplitButton, HighlightedInput } from '../../shared';
 import type { DropdownOption, SplitButtonItem } from '../../shared';
 import { saveRequest } from '../../../services/request';
@@ -15,6 +15,12 @@ import { WsLogEntry, type WsMessage } from './WsLogEntry';
 import { WsProtocolsTab } from './WsProtocolsTab';
 import { WsTemplatesTab } from './WsTemplatesTab';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
+import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
+import { AiBodyGenerate } from '../../ai/AiBodyGenerate';
+import type { AiBodyGenerateHandle } from '../../ai/AiBodyGenerate';
+import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
+import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
 
 // ────────── State Types ──────────
 
@@ -99,10 +105,20 @@ export function WebSocketPanel() {
   const [focusedPanel, setFocusedPanel] = useState<'request' | 'log' | null>(null);
   const [showSplitterTip, setShowSplitterTip] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [showAiOverflow, setShowAiOverflow] = useState(false);
+  const [aiOverflowDir, setAiOverflowDir] = useState<'down' | 'up'>('down');
+  const [showPreflight, setShowPreflight] = useState(false);
+  const [showPatternStatus, setShowPatternStatus] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
-  const reconnectAttemptRef = useRef(0); // tracks backoff attempt count
+  const aiOverflowRef = useRef<HTMLDivElement>(null);
+  const aiOverflowBtnRef = useRef<HTMLButtonElement>(null);
+  const bodyGenRef = useRef<AiBodyGenerateHandle>(null);
+  const reconnectAttemptRef = useRef(0);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const openDaakiaAiTab = useTabsStore(s => s.openDaakiaAiTab);
 
   // Scroll to bottom on new messages (when autoScroll is on)
   useEffect(() => {
@@ -110,6 +126,15 @@ export function WebSocketPanel() {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
   }, [messages, autoScroll]);
+
+  // Close AI overflow on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (aiOverflowRef.current && !aiOverflowRef.current.contains(e.target as Node)) setShowAiOverflow(false);
+    };
+    if (showAiOverflow) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAiOverflow]);
 
   // Listen for WebSocket events from extension
   useEffect(() => {
@@ -173,6 +198,7 @@ export function WebSocketPanel() {
         case 'ws:error':
           if (msg.tabId === activeTab.id) {
             setConnState('disconnected');
+            setLastError(msg.error || 'Connection error');
             setMessages(prev => [...prev, {
               id: crypto.randomUUID(),
               direction: 'error',
@@ -367,6 +393,66 @@ export function WebSocketPanel() {
           icon={<SaveIcon />}
           items={wsSaveItems}
         />
+
+        {/* 9.8: AI Tools ⋮ menu */}
+        <div className="flex-shrink-0 relative" ref={aiOverflowRef}>
+          <button ref={aiOverflowBtnRef} type="button"
+            onClick={() => {
+              if (!showAiOverflow && aiOverflowBtnRef.current) {
+                const rect = aiOverflowBtnRef.current.getBoundingClientRect();
+                setAiOverflowDir((window.innerHeight - rect.bottom) < 160 ? 'up' : 'down');
+              }
+              setShowAiOverflow(p => !p);
+            }}
+            title="AI tools"
+            className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
+            style={{ color: showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)', backgroundColor: showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent' }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
+          >
+            <MoreVerticalIcon size={15} />
+          </button>
+          {showAiOverflow && (
+            <div className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${aiOverflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
+              style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
+            >
+              <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
+                <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>AI Tools</p>
+              </div>
+              {activeTab.url.trim() && aiEnabled('preflightCheck') && (
+                <button type="button" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left" style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { setShowPreflight(true); setShowAiOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />Pre-flight Check
+                </button>
+              )}
+              {aiEnabled('daakiaAiChat') && (
+                <button type="button" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left" style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { openDaakiaAiTab(); setShowAiOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />Ask AI
+                </button>
+              )}
+              {activeTab.url.trim() && aiEnabled('patternBaseline') && (
+                <button type="button" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left" style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { setShowPatternStatus(p => !p); setShowAiOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />Pattern Baseline
+                </button>
+              )}
+            </div>
+          )}
+          {showPreflight && activeTab.url.trim() && <AiPreflightPopover tab={activeTab} onClose={() => setShowPreflight(false)} />}
+          {showPatternStatus && activeTab.url.trim() && aiEnabled('patternBaseline') && (
+            <PatternBaselinePopup method="WS" url={activeTab.url} onClose={() => setShowPatternStatus(false)} dir={aiOverflowDir} />
+          )}
+        </div>
       </div>
 
       {/* Vertical split: editor (top) / response log (bottom) */}
@@ -431,6 +517,17 @@ export function WebSocketPanel() {
                     />
                   </div>
                   <div className="flex items-center gap-1">
+                    {/* 9.6: Generate ✦ */}
+                    {aiEnabled('bodyGenerate') && (
+                      <button type="button"
+                        onClick={() => bodyGenRef.current?.open()}
+                        className="h-[26px] px-2 text-[10.5px] font-medium flex items-center gap-1 rounded-md cursor-pointer transition-all"
+                        style={{ color: 'var(--color-protocol-websocket)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-websocket) 8%, transparent)' }}
+                        title="AI: Generate message"
+                      >
+                        <SparkleIcon size={9} />Generate ✦
+                      </button>
+                    )}
                     {/* Send */}
                     <button
                       type="button"
@@ -462,6 +559,15 @@ export function WebSocketPanel() {
                     placeholder="Type a message to send..."
                   />
                 </div>
+                {/* 9.6: AiBodyGenerate drawer */}
+                <AiBodyGenerate
+                  ref={bodyGenRef}
+                  tabId={activeTab.id}
+                  method="WS"
+                  url={activeTab.url}
+                  contentType="application/json"
+                  onApply={(body) => setInputMsg(body)}
+                />
               </>
             )}
 
@@ -563,6 +669,17 @@ export function WebSocketPanel() {
               >
                 ⟳ Auto
               </button>
+              {/* 9.1-9.5, 9.7, 9.9: AI log actions */}
+              <AiRealtimeLogActions
+                tabId={activeTab.id}
+                url={activeTab.url || ''}
+                protocol="websocket"
+                messages={messages.filter(m => m.direction === 'received').map(m => m.data)}
+                hasError={!!lastError}
+                errorMsg={lastError || ''}
+                accentColor="var(--color-protocol-websocket)"
+                trafficAnalyzerFlag="wsTrafficAnalyzer"
+              />
             </div>
           </div>
 

@@ -8,6 +8,9 @@ import type { PillTab } from '../shared';
 import { SparkleIcon } from '../../icons';
 import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
 import { DataSchemaModal } from '../rest/response/DataSchemaModal';
+import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
+import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
+import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 
 const ACCENT = 'var(--color-protocol-soap)';
@@ -29,6 +32,7 @@ export function SoapResponsePanel() {
   const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'body');
   const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
+  const [showPatternLearning, setShowPatternLearning] = useState(false);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const setActiveSubTab = (tab: string) => {
     setActiveSubTabLocal(tab);
@@ -140,9 +144,47 @@ export function SoapResponsePanel() {
                 Schema
               </button>
             )}
+            {/* 8.19: Record Baseline ✦ */}
+            {aiEnabled('patternBaseline') && (
+              <button
+                type="button"
+                onClick={() => setShowPatternLearning(p => !p)}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
+                style={{
+                  color: showPatternLearning ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)',
+                  borderColor: showPatternLearning ? 'color-mix(in srgb, var(--color-protocol-ai) 35%, transparent)' : 'color-mix(in srgb, var(--color-text-muted) 25%, transparent)',
+                  backgroundColor: 'transparent',
+                }}
+                title="Record / compare response pattern baseline"
+              >
+                <SparkleIcon size={10} />
+                Baseline
+              </button>
+            )}
+            {/* 8.18: ⋮ AI Actions menu */}
+            {(aiEnabled('assertGeneration') || aiEnabled('semanticValidator') || aiEnabled('responseTransformer') || aiEnabled('responseDiff')) && (
+              <AiResponseActionsMenu
+                tabId={activeTab.id}
+                response={response}
+                requestMethod="SOAP"
+                requestUrl={activeTab.url || ''}
+              />
+            )}
           </div>
         )}
       </div>
+
+      {/* 8.19: Pattern Learning panel */}
+      {showPatternLearning && aiEnabled('patternBaseline') && (
+        <div className="border-b border-[var(--color-surface-border)]">
+          <AiResponsePatternLearning
+            responseBody={response.body || ''}
+            method="SOAP"
+            url={activeTab.url || ''}
+            status={response.status}
+          />
+        </div>
+      )}
 
       {/* Content */}
       <div className={`flex-1 min-h-0 flex flex-col ${activeSubTab === 'body' ? '' : 'overflow-y-auto [scrollbar-gutter:stable]'}`}>
@@ -166,6 +208,17 @@ export function SoapResponsePanel() {
                 height="100%"
               />
             </div>
+            {/* 8.20: Smart Retry Advisor — shown on SOAP fault or HTTP error */}
+            {(hasFault || response.status >= 400 || response.status === 0) && aiEnabled('smartRetryAdvisor') && (
+              <div className="border-t border-[var(--color-surface-border)] flex-shrink-0">
+                <AiSmartRetryAdvisor
+                  status={hasFault ? 500 : response.status}
+                  responseBody={response.body || ''}
+                  method="SOAP"
+                  url={activeTab.url || ''}
+                />
+              </div>
+            )}
           </>
         )}
 

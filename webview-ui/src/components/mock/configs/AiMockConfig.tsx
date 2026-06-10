@@ -11,6 +11,8 @@ import type { MockServer, AiMockScenario } from '../mock-types';
 import { createDefaultAiScenario } from '../mock-types';
 import { PlusIcon, TrashIcon, SparkleIcon, CloseIcon } from '../../../icons';
 import { ConfirmDialog } from '../../shared';
+import { AiMockIntelligenceModal } from '../../ai/AiMockIntelligenceModal';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
 
 interface Props {
   server: MockServer;
@@ -249,6 +251,8 @@ export function AiMockConfig({ server, onUpdate }: Props) {
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   /** The blank template for a new scenario */
   const [newDraft] = useState<AiMockScenario>(() => createDefaultAiScenario());
+  const [showMockIntelligence, setShowMockIntelligence] = useState(false);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   const toggleBuiltIn = (name: string) => {
     setExpandedBuiltIn(prev => (prev === name ? null : name));
@@ -277,14 +281,24 @@ export function AiMockConfig({ server, onUpdate }: Props) {
         style={{ backgroundColor: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)' }}
       >
         <SparkleIcon size={13} className="mt-0.5 flex-shrink-0" style={{ color: AI_COLOR }} />
-        <div className="text-[var(--color-text-muted)]">
+        <div className="text-[var(--color-text-muted)] flex-1">
           <span style={{ color: AI_COLOR }} className="font-semibold">OpenAI-compatible</span> mock server.
           Set your provider&apos;s base URL to <code className="font-mono text-[10px]">http://localhost:{'{port}'}/v1</code>.
           {scenarios.length === 0 && (
             <span> Using <strong style={{ color: AI_COLOR }}>15 built-in scenarios</strong> — add custom ones below to override.</span>
           )}
         </div>
+        {aiEnabled('mockIntelligence') && (
+          <button type="button" onClick={() => setShowMockIntelligence(true)}
+            className="flex items-center gap-1 h-[24px] px-2 rounded-lg text-[10px] font-medium cursor-pointer flex-shrink-0"
+            style={{ color: AI_COLOR, backgroundColor: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}
+            title="AI Mock Intelligence — learn from real API responses"
+          >
+            <SparkleIcon size={9} />Intelligence ✦
+          </button>
+        )}
       </div>
+      {showMockIntelligence && <AiMockIntelligenceModal onClose={() => setShowMockIntelligence(false)} />}
 
       {/* ── Built-in scenarios (always visible) ── */}
       <div className="flex flex-col gap-2">

@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { postMsg } from '../../../vscode';
-import { CodeEditor, SearchInput } from '../../shared';
+import { CodeEditor } from '../../shared';
 import { TrashIcon, RefreshIcon, SearchIcon, CloseIcon, ChevronDownIcon } from '../../../icons';
 
 interface AuditEntry {
@@ -245,41 +245,51 @@ export function AuditLogTab() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* ─── Toolbar ─── */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] shrink-0">
-        <SearchInput
-          value={search}
-          onChange={setSearch}
-          placeholder="Filter by stage, model, prompt…"
-          prefix={<SearchIcon size={11} />}
-          suffix={
-            search ? (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                className="w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:text-[var(--color-text-primary)] transition-colors"
-                title="Clear filter"
-              >
-                <CloseIcon size={10} />
-              </button>
-            ) : (
-              <span
-                className="text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded"
-                style={{ color: 'var(--color-text-muted)', backgroundColor: 'rgba(255,255,255,0.04)' }}
-              >
-                {filtered.length}
-              </span>
-            )
-          }
-        />
-        <button type="button" onClick={load} title="Refresh"
-          className="w-7 h-7 flex items-center justify-center rounded-md cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] transition-colors">
-          <RefreshIcon size={13} />
-        </button>
-        <button type="button" onClick={handleClear} title="Clear all"
-          className="w-7 h-7 flex items-center justify-center rounded-md cursor-pointer text-[var(--color-text-muted)] hover:text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)] transition-colors">
-          <TrashIcon size={13} />
-        </button>
+      {/* ─── Toolbar — h-[28px] matching KeyValueItem row height ─── */}
+      <div
+        className="flex items-center border-b shrink-0"
+        style={{ height: 28, borderColor: 'var(--color-surface-border)', backgroundColor: 'rgba(255,255,255,0.025)' }}
+      >
+        {/* Search — icon + input + badge all flush at the same height */}
+        <div className="flex items-center gap-1.5 flex-1 h-full px-2.5 border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <SearchIcon size={10} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Filter by stage, model, prompt…"
+            className="flex-1 min-w-0 bg-transparent border-none outline-none text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
+          />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              title="Clear filter"
+              className="w-4 h-4 flex items-center justify-center rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+            >
+              <CloseIcon size={9} />
+            </button>
+          ) : (
+            <span
+              className="text-[10px] font-mono tabular-nums px-1 rounded shrink-0 leading-none"
+              style={{ color: 'var(--color-text-muted)', backgroundColor: 'rgba(255,255,255,0.05)' }}
+            >
+              {filtered.length}
+            </span>
+          )}
+        </div>
+
+        {/* Action buttons — 24px to fit inside 28px strip */}
+        <div className="flex items-center px-1 shrink-0">
+          <button type="button" onClick={load} title="Refresh"
+            className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] transition-colors">
+            <RefreshIcon size={12} />
+          </button>
+          <button type="button" onClick={handleClear} title="Clear all"
+            className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)] transition-colors">
+            <TrashIcon size={12} />
+          </button>
+        </div>
       </div>
 
       {/* ─── Table ─── */}

@@ -1,7 +1,10 @@
 import { useCallback, useState } from 'react';
 import { useTabsStore, type McpToolDef } from '../../../store/tabs-store';
-import { McpToolIcon, ChevronRightIcon } from '../../../icons';
+import { McpToolIcon, ChevronRightIcon, SparkleIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
+import { AiRequestFuzzerModal } from '../../ai/AiRequestFuzzerModal';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { AiMcpSchemaViewerModal } from '../../ai/AiMcpSchemaViewerModal';
 
 /** Build a form value map from JSON Schema properties */
 function getDefaultArgs(inputSchema: Record<string, unknown>): Record<string, unknown> {
@@ -37,6 +40,9 @@ export function McpToolsTab() {
 
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
   const [toolArgs, setToolArgs] = useState<Record<string, Record<string, unknown>>>({});
+  const [showFuzzer, setShowFuzzer] = useState(false);
+  const [showSchemaViewer, setShowSchemaViewer] = useState(false);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   const getArgs = (toolName: string, schema: Record<string, unknown>) => {
     return toolArgs[toolName] || getDefaultArgs(schema);
@@ -105,11 +111,33 @@ export function McpToolsTab() {
 
   return (
     <div className="flex flex-col overflow-auto h-full">
-      <div className="px-3 pt-2.5 pb-1">
-        <span className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wide">
+      <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+        <span className="flex-1 text-[11px] text-[var(--color-text-muted)] uppercase tracking-wide">
           {tools.length} tool{tools.length !== 1 ? 's' : ''} discovered
         </span>
+        {/* 10.6: Schema Viewer ✦ */}
+        {aiEnabled('schemaRest') && tools.length > 0 && (
+          <button type="button" onClick={() => setShowSchemaViewer(true)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium cursor-pointer transition-all"
+            style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+            title="AI explains all tool schemas"
+          >
+            <SparkleIcon size={9} />Schema ✦
+          </button>
+        )}
+        {/* 10.5: Fuzz ✦ */}
+        {aiEnabled('requestFuzzer') && (
+          <button type="button" onClick={() => setShowFuzzer(true)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium cursor-pointer transition-all"
+            style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+            title="AI generates edge-case tool inputs"
+          >
+            <SparkleIcon size={9} />Fuzz ✦
+          </button>
+        )}
       </div>
+      {showFuzzer && <AiRequestFuzzerModal onClose={() => setShowFuzzer(false)} />}
+      {showSchemaViewer && <AiMcpSchemaViewerModal tools={tools} onClose={() => setShowSchemaViewer(false)} />}
 
       <div className="flex flex-col gap-0 pb-2">
         {tools.map((tool) => {

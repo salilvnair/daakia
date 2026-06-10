@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useTabsStore, type McpServerConfig } from '../../../store/tabs-store';
-import { TrashIcon, ConnectIcon, DisconnectIcon } from '../../../icons';
+import { TrashIcon, ConnectIcon, DisconnectIcon, CloseIcon } from '../../../icons';
 import { StyledDropdown, type DropdownOption } from '../../shared';
 import { postMsg } from '../../../vscode';
 
@@ -26,6 +26,7 @@ export function McpServersTab() {
   const servers: McpServerConfig[] = activeTab?.mcpServerConfigs || [];
   const serverStates = activeTab?.mcpServerStates || {};
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const setServers = useCallback((newServers: McpServerConfig[]) => {
     if (!activeTab) return;
@@ -158,14 +159,39 @@ export function McpServersTab() {
                   {state.connected || state.connecting ? <DisconnectIcon size={10} /> : <ConnectIcon size={10} />}
                   {state.connecting ? 'Cancel' : state.connected ? 'Disconnect' : 'Connect'}
                 </button>
-                {/* Remove */}
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); handleRemove(server.id); }}
-                  className="shrink-0 p-0.5 cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
-                >
-                  <TrashIcon size={12} />
-                </button>
+                {/* Remove — with inline confirm */}
+                {confirmDeleteId === server.id ? (
+                  <div
+                    className="flex items-center gap-1 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="text-[10px]" style={{ color: 'var(--color-error)' }}>Delete?</span>
+                    <button
+                      type="button"
+                      onClick={() => { handleRemove(server.id); setConfirmDeleteId(null); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors font-medium"
+                      style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 15%, transparent)', color: 'var(--color-error)' }}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="w-4 h-4 flex items-center justify-center rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+                    >
+                      <CloseIcon size={9} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(server.id); }}
+                    className="shrink-0 p-0.5 cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
+                    title="Remove server"
+                  >
+                    <TrashIcon size={12} />
+                  </button>
+                )}
               </div>
 
               {/* Error */}
@@ -196,6 +222,8 @@ export function McpServersTab() {
                       value={server.transport}
                       onChange={(val) => updateServer(server.id, { transport: val as 'stdio' | 'http' })}
                       accentColor={ACCENT}
+                      size="xs"
+                      className="w-[100px]"
                     />
                   </div>
                   {server.transport === 'stdio' ? (

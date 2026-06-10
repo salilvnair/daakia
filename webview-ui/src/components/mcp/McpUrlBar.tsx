@@ -1,9 +1,11 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { StyledDropdown, SplitButton, type DropdownOption, type SplitButtonItem } from '../shared';
-import { ProtocolMcpBadge, ConnectIcon, DisconnectIcon, SaveIcon } from '../../icons';
+import { ProtocolMcpBadge, ConnectIcon, DisconnectIcon, SaveIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { saveRequest } from '../../services/request';
+import { AiMcpPromptBuilderModal } from '../ai/AiMcpPromptBuilderModal';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
 
 const TRANSPORT_OPTIONS: DropdownOption[] = [
   { value: 'stdio', label: 'STDIO' },
@@ -20,6 +22,8 @@ const saveItems: SplitButtonItem[] = [
 export function McpUrlBar() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
+  const [showPromptBuilder, setShowPromptBuilder] = useState(false);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   const transport = activeTab?.mcpTransport || 'stdio';
   const command = activeTab?.mcpCommand || '';
@@ -155,7 +159,21 @@ export function McpUrlBar() {
         icon={<SaveIcon size={13} />}
         items={saveItems}
       />
+
+      {/* 10.4: Prompt Builder ✦ */}
+      {aiEnabled('mcpPromptBuilder') && (
+        <button
+          type="button"
+          onClick={() => setShowPromptBuilder(true)}
+          className="flex items-center gap-1.5 h-[36px] px-3 rounded-md text-[11.5px] font-medium cursor-pointer transition-all flex-shrink-0"
+          style={{ color: 'var(--color-protocol-mcp)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-mcp) 10%, transparent)' }}
+          title="AI Prompt Builder"
+        >
+          <SparkleIcon size={11} />Prompt Builder ✦
+        </button>
+      )}
     </div>
+    {showPromptBuilder && <AiMcpPromptBuilderModal onClose={() => setShowPromptBuilder(false)} />}
     </>
   );
 }

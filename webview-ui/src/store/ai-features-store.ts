@@ -66,6 +66,26 @@ export interface AiFeatureFlags {
   aiScenarioManager: boolean;
   // ── AI Chat & Panels ─────────────────────────────────────────────────────────
   daakiaAiChat: boolean;
+  // ── Protocol-Specific AI (Sprint 8-10) ───────────────────────────────────────
+  gqlQueryBuilder: boolean;
+  gqlSchemaExplainer: boolean;
+  grpcProtoExplainer: boolean;
+  soapWsdlExplainer: boolean;
+  wsTrafficAnalyzer: boolean;
+  sseTrafficAnalyzer: boolean;
+  sseEventSuggester: boolean;
+  mqttTopicSuggester: boolean;
+  sioTrafficAnalyzer: boolean;
+  mcpPromptBuilder: boolean;
+  // ── Platform AI (Sprint 10 platform tasks) ───────────────────────────────────
+  openApiGenerator: boolean;
+  securityAudit: boolean;
+  mockIntelligence: boolean;
+  postmanTranslator: boolean;
+  soapToRest: boolean;
+  gqlFederation: boolean;
+  webhookDebugger: boolean;
+  requestClustering: boolean;
 }
 
 export const AI_FEATURE_DEFAULTS: AiFeatureFlags = {
@@ -124,6 +144,26 @@ export const AI_FEATURE_DEFAULTS: AiFeatureFlags = {
   aiScenarioManager: true,
   // AI Chat & Panels
   daakiaAiChat: true,
+  // Protocol-Specific AI (Sprint 8-10)
+  gqlQueryBuilder: true,
+  gqlSchemaExplainer: true,
+  grpcProtoExplainer: true,
+  soapWsdlExplainer: true,
+  wsTrafficAnalyzer: true,
+  sseTrafficAnalyzer: true,
+  sseEventSuggester: true,
+  mqttTopicSuggester: true,
+  sioTrafficAnalyzer: true,
+  mcpPromptBuilder: true,
+  // Platform AI
+  openApiGenerator: true,
+  securityAudit: true,
+  mockIntelligence: true,
+  postmanTranslator: true,
+  soapToRest: true,
+  gqlFederation: true,
+  webhookDebugger: true,
+  requestClustering: true,
 };
 
 // ── Labels shown in Settings → AI Features ───────────────────────────────────
@@ -423,6 +463,116 @@ export const AI_FEATURE_LABELS: Record<keyof AiFeatureFlags, {
     description: 'The dedicated full-screen Daakia AI chat panel and "Ask AI" entry points',
     group: 'AI Chat & Panels',
     gates: 'Daakia AI chat icon in sidebar · "Ask AI" in URL bar AI Tools ⋮ menu',
+  },
+  // ── Protocol-Specific AI ─────────────────────────────────────────────────────
+  gqlQueryBuilder: {
+    label: 'GQL Query Builder ✦',
+    description: 'Describe a GraphQL operation in plain English → AI generates the exact query/mutation/subscription',
+    group: 'Response Actions',
+    gates: '"Query Builder ✦" button in GraphQL query editor toolbar',
+  },
+  gqlSchemaExplainer: {
+    label: 'GQL Schema Explainer ✦',
+    description: 'AI explains every type, field, and relationship in the GraphQL schema in plain English',
+    group: 'Response Actions',
+    gates: '"Schema Explainer ✦" button in GraphQL schema/docs area',
+  },
+  grpcProtoExplainer: {
+    label: 'gRPC Proto Explainer ✦',
+    description: 'AI explains every service, RPC method, and message type in the proto file in plain English',
+    group: 'Response Actions',
+    gates: '"Proto Explainer ✦" button in gRPC service info area',
+  },
+  soapWsdlExplainer: {
+    label: 'SOAP WSDL Explainer ✦',
+    description: 'AI explains every operation, binding, port, and type in the WSDL in plain English',
+    group: 'Response Actions',
+    gates: '"WSDL Explainer ✦" button in SOAP config area',
+  },
+  wsTrafficAnalyzer: {
+    label: 'WS Traffic Analyzer ✦',
+    description: 'AI analyzes the full WebSocket message stream: detects schema, patterns, anomalies, frequency',
+    group: 'AI Chat & Panels',
+    gates: '"Traffic Analyzer ✦" button in WebSocket message log toolbar',
+  },
+  sseTrafficAnalyzer: {
+    label: 'SSE Traffic Analyzer ✦',
+    description: 'AI analyzes SSE event stream for patterns, anomalies, and schema evolution',
+    group: 'AI Chat & Panels',
+    gates: '"Traffic Analyzer ✦" button in SSE event log toolbar',
+  },
+  sseEventSuggester: {
+    label: 'SSE Event Suggester ✦',
+    description: 'AI suggests related event types to subscribe to based on the observed event stream',
+    group: 'AI Chat & Panels',
+    gates: '"Event Suggester ✦" button in SSE toolbar',
+  },
+  mqttTopicSuggester: {
+    label: 'MQTT Topic Suggester ✦',
+    description: 'AI suggests related MQTT topic patterns (wildcards, siblings, parent topics)',
+    group: 'AI Chat & Panels',
+    gates: '"Topic Suggester ✦" button in MQTT subscribe/publish toolbar',
+  },
+  sioTrafficAnalyzer: {
+    label: 'Socket.IO Traffic Analyzer ✦',
+    description: 'AI analyzes Socket.IO event log: detects session patterns, anomalies, schema per event type',
+    group: 'AI Chat & Panels',
+    gates: '"Traffic Analyzer ✦" button in Socket.IO toolbar',
+  },
+  mcpPromptBuilder: {
+    label: 'MCP AI Prompt Builder ✦',
+    description: 'Natural language description → structured MCP prompt with tool call sequences',
+    group: 'AI Chat & Panels',
+    gates: '"Prompt Builder ✦" button in MCP panel',
+  },
+  // Platform AI
+  openApiGenerator: {
+    label: 'AI OpenAPI 3.1 Generator ✦',
+    description: 'Generate a full OpenAPI 3.1 spec from any collection with schemas, examples, auth',
+    group: 'Platform AI',
+    gates: '"OpenAPI ✦" in Daakia AI panel platform tools',
+  },
+  securityAudit: {
+    label: 'AI Security Audit ✦',
+    description: 'Scan all open tabs for missing auth, plain-text secrets, no HTTPS, exposed PII',
+    group: 'Platform AI',
+    gates: '"Security Audit ✦" in Daakia AI panel platform tools',
+  },
+  mockIntelligence: {
+    label: 'AI Mock Intelligence ✦',
+    description: 'Learn from real API responses and auto-generate realistic mock rules',
+    group: 'Platform AI',
+    gates: '"Mock Intelligence ✦" in Mock Server panel',
+  },
+  postmanTranslator: {
+    label: 'AI Postman Script Translator ✦',
+    description: 'Translate Postman pm.* test scripts to Daakia dk.* automatically',
+    group: 'Platform AI',
+    gates: '"Translate ✦" in Daakia AI panel platform tools',
+  },
+  soapToRest: {
+    label: 'AI SOAP → REST Migrator ✦',
+    description: 'Convert SOAP WSDL operations to equivalent REST endpoints with OpenAPI 3.1 output',
+    group: 'Platform AI',
+    gates: '"SOAP→REST ✦" button in SOAP URL bar',
+  },
+  gqlFederation: {
+    label: 'AI GraphQL Federation Explorer ✦',
+    description: 'Understand cross-subgraph queries, entity resolution, @key directives',
+    group: 'Platform AI',
+    gates: '"Federation ✦" button in GraphQL panel',
+  },
+  webhookDebugger: {
+    label: 'AI Webhook Debugger ✦',
+    description: 'Analyze webhook payloads, validate HMAC signatures, explain structure',
+    group: 'Platform AI',
+    gates: '"Webhook ✦" in Daakia AI panel platform tools',
+  },
+  requestClustering: {
+    label: 'AI Request Clustering ✦',
+    description: 'AI groups request history into logical API domains → auto-organize into collections',
+    group: 'Platform AI',
+    gates: '"Cluster ✦" in Daakia AI panel platform tools',
   },
 };
 

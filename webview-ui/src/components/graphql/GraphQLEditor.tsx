@@ -1,13 +1,20 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { CodeEditor, KeyValueTable, AuthEditor, ScriptsEditor } from '../shared';
 import { postMsg } from '../../vscode';
-import { PlayIcon, CopyIcon, WrapLinesIcon, WandIcon, PlusIcon } from '../../icons';
+import { PlayIcon, CopyIcon, WrapLinesIcon, WandIcon, PlusIcon, SparkleIcon } from '../../icons';
 import { setGraphQLSchema, setActiveGraphQLTab } from '../../services/graphql-completion';
 import { formatGraphQLQuery } from '../../services/graphql-formatter';
 import { GraphQLSubscription } from './GraphQLSubscription';
 import { GraphQLQueryTabs, initMultiQuery } from './GraphQLQueryTabs';
+import { AiHeaderSuggest } from '../ai/AiHeaderSuggest';
+import { AiBodyGenerate } from '../ai/AiBodyGenerate';
+import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
+import { AiGqlQueryBuilderModal } from '../ai/AiGqlQueryBuilderModal';
+import { AiGqlSchemaExplainerModal } from '../ai/AiGqlSchemaExplainerModal';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
+import type { AiBodyGenerateHandle } from '../ai/AiBodyGenerate';
 
 type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'scripts' | 'subscription';
 
@@ -20,6 +27,13 @@ export function GraphQLEditor() {
   const updateTab = useTabsStore(s => s.updateTab);
   const storedSubTab = useUiStateStore(s => s.prefs[`gql.subtab.${activeTabId}`]);
   const [activeSubTab, setActiveSubTabLocal] = useState<EditorTab>((storedSubTab as EditorTab) || 'query');
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const bodyGenRef = useRef<AiBodyGenerateHandle>(null);
+
+  // Modal state
+  const [showFuzzer, setShowFuzzer] = useState(false);
+  const [showQueryBuilder, setShowQueryBuilder] = useState(false);
+  const [showSchemaExplainer, setShowSchemaExplainer] = useState(false);
 
   useEffect(() => {
     const pref = useUiStateStore.getState().getPref(`gql.subtab.${activeTabId}`, 'query') as EditorTab;
@@ -120,6 +134,32 @@ export function GraphQLEditor() {
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
               <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Query</span>
               <div className="flex items-center gap-1">
+                {/* 8.8: Query Builder ✦ */}
+                {aiEnabled('gqlQueryBuilder') && (
+                  <button
+                    type="button"
+                    onClick={() => setShowQueryBuilder(true)}
+                    className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
+                    style={{ color: 'var(--color-protocol-graphql)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-graphql) 8%, transparent)' }}
+                    title="AI Query Builder — describe what you want, AI writes the query"
+                  >
+                    <SparkleIcon size={10} />
+                    Query Builder
+                  </button>
+                )}
+                {/* 8.9: Schema Explainer ✦ */}
+                {aiEnabled('gqlSchemaExplainer') && activeTab.authData?.['gql_schema'] && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSchemaExplainer(true)}
+                    className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
+                    style={{ color: 'var(--color-protocol-graphql)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-graphql) 8%, transparent)' }}
+                    title="Schema Explainer — AI explains all types and operations"
+                  >
+                    <SparkleIcon size={10} />
+                    Schema Explainer
+                  </button>
+                )}
                 {/* Run */}
                 <button
                   type="button"
@@ -181,26 +221,96 @@ export function GraphQLEditor() {
         )}
 
         {activeSubTab === 'variables' && (
-          <CodeEditor
-            value={variablesJson}
-            onChange={(val) => updateTab(activeTab.id, { authData: { ...activeTab.authData, gql_variables: val } })}
-            language="json"
-            height="100%"
-            placeholder='{"key": "value"}'
-          />
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* 8.6 & 8.7: Variables toolbar */}
+            {(aiEnabled('bodyGenerator') || aiEnabled('requestFuzzer')) && (
+              <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
+                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Variables (JSON)</span>
+                <div className="flex items-center gap-1">
+                  {aiEnabled('bodyGenerator') && (
+                    <button
+                      type="button"
+                      onClick={() => bodyGenRef.current?.open()}
+                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
+                      style={{ color: 'var(--color-protocol-graphql)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-graphql) 8%, transparent)' }}
+                      title="AI Variable Generator"
+                    >
+                      <SparkleIcon size={10} />
+                      Generate ✦
+                    </button>
+                  )}
+                  {aiEnabled('requestFuzzer') && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFuzzer(true)}
+                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
+                      style={{ color: 'var(--color-protocol-graphql)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-graphql) 8%, transparent)' }}
+                      title="AI Variable Fuzzer"
+                    >
+                      <SparkleIcon size={10} />
+                      Fuzz ✦
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="flex-1 min-h-0">
+              <CodeEditor
+                value={variablesJson}
+                onChange={(val) => updateTab(activeTab.id, { authData: { ...activeTab.authData, gql_variables: val } })}
+                language="json"
+                height="100%"
+                placeholder='{"key": "value"}'
+              />
+            </div>
+            {/* 8.6: Body/Variable generator (renders inline as a drawer) */}
+            {aiEnabled('bodyGenerator') && (
+              <AiBodyGenerate
+                ref={bodyGenRef}
+                tabId={activeTab.id}
+                method="GQL"
+                url={activeTab.url || ''}
+                contentType="application/json"
+                onApply={(body) => updateTab(activeTab.id, { authData: { ...activeTab.authData, gql_variables: body } })}
+              />
+            )}
+          </div>
         )}
 
         {activeSubTab === 'headers' && (
-          <div className="h-full overflow-y-auto [scrollbar-gutter:stable] px-3 py-2">
-            <KeyValueTable
-              rows={activeTab.headers}
-              onChange={(rows) => updateTab(activeTab.id, { headers: rows })}
-              placeholder={{ key: 'Header', value: 'Value' }}
-              autocompleteKeys
-              maskSensitive
-              label="Header List"
-              accentColor="var(--color-protocol-graphql)"
-            />
+          <div className="h-full flex flex-col overflow-hidden">
+            {/* 8.5: Header Suggest ✦ */}
+            {aiEnabled('headerAutocomplete') && (
+              <AiHeaderSuggest
+                tabId={activeTab.id}
+                method="GQL"
+                url={activeTab.url || ''}
+                bodyContentType="application/json"
+                authType={activeTab.authType}
+                existingHeaders={activeTab.headers}
+                onAddHeader={(key, value) => {
+                  const rows = [...activeTab.headers];
+                  const empty = rows.findIndex(r => !r.key);
+                  if (empty >= 0) {
+                    rows[empty] = { ...rows[empty], key, value, enabled: true };
+                  } else {
+                    rows.push({ id: crypto.randomUUID(), key, value, enabled: true });
+                  }
+                  updateTab(activeTab.id, { headers: rows });
+                }}
+              />
+            )}
+            <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-3 py-2">
+              <KeyValueTable
+                rows={activeTab.headers}
+                onChange={(rows) => updateTab(activeTab.id, { headers: rows })}
+                placeholder={{ key: 'Header', value: 'Value' }}
+                autocompleteKeys
+                maskSensitive
+                label="Header List"
+                accentColor="var(--color-protocol-graphql)"
+              />
+            </div>
           </div>
         )}
 
@@ -232,6 +342,18 @@ export function GraphQLEditor() {
           <GraphQLSubscription />
         )}
       </div>
+
+      {/* Modals */}
+      {showFuzzer && <AiRequestFuzzerModal onClose={() => setShowFuzzer(false)} />}
+      {showQueryBuilder && (
+        <AiGqlQueryBuilderModal
+          onClose={() => setShowQueryBuilder(false)}
+          onApply={(q) => updateTab(activeTab.id, { bodyRaw: q })}
+        />
+      )}
+      {showSchemaExplainer && (
+        <AiGqlSchemaExplainerModal onClose={() => setShowSchemaExplainer(false)} />
+      )}
     </div>
   );
 }

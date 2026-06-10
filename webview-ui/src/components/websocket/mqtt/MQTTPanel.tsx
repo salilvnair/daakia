@@ -7,13 +7,17 @@ import { saveRequest } from '../../../services/request';
 import {
   ConnectIcon, DisconnectIcon, SendIcon, TrashIcon, PlusIcon,
   ArrowUpIcon, ArrowDownIcon, AutoScrollIcon,
-  ChevronDownIcon, SaveIcon,
+  ChevronDownIcon, SaveIcon, MoreVerticalIcon, SparkleIcon,
 } from '../../../icons';
 import { HighlightedInput, SplitButton, StyledDropdown, CodeEditor, Checkbox } from '../../shared';
 import type { SplitButtonItem, DropdownOption } from '../../shared';
 import { MqttMessageRow, type MqttMessage, type MqttSubscription } from './MqttMessageRow';
 import { MqttSubscriptionModal, SUB_COLORS } from './MqttSubscriptionModal';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
+import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
+import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
+import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
 
 // ---------- Constants ----------
 
@@ -144,9 +148,17 @@ export function MQTTPanel() {
   const [isDragging, setIsDragging] = useState(false);
   const [focusedPanel, setFocusedPanel] = useState<'request' | 'log' | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [showAiOverflow, setShowAiOverflow] = useState(false);
+  const [aiOverflowDir, setAiOverflowDir] = useState<'down' | 'up'>('down');
+  const [showPreflight, setShowPreflight] = useState(false);
+  const [showPatternStatus, setShowPatternStatus] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const aiOverflowRef = useRef<HTMLDivElement>(null);
+  const aiOverflowBtnRef = useRef<HTMLButtonElement>(null);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const openDaakiaAiTab = useTabsStore(s => s.openDaakiaAiTab);
 
   // Auto-scroll
   useEffect(() => {
@@ -154,6 +166,15 @@ export function MQTTPanel() {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
   }, [messages, autoScroll]);
+
+  // Close AI overflow on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (aiOverflowRef.current && !aiOverflowRef.current.contains(e.target as Node)) setShowAiOverflow(false);
+    };
+    if (showAiOverflow) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAiOverflow]);
 
   // Listen for MQTT events from extension
   useEffect(() => {
@@ -461,6 +482,66 @@ export function MQTTPanel() {
           variant="secondary"
           icon={<SaveIcon size={13} />}
         />
+
+        {/* 9.23: AI Tools ⋮ menu */}
+        <div className="flex-shrink-0 relative" ref={aiOverflowRef}>
+          <button ref={aiOverflowBtnRef} type="button"
+            onClick={() => {
+              if (!showAiOverflow && aiOverflowBtnRef.current) {
+                const rect = aiOverflowBtnRef.current.getBoundingClientRect();
+                setAiOverflowDir((window.innerHeight - rect.bottom) < 160 ? 'up' : 'down');
+              }
+              setShowAiOverflow(p => !p);
+            }}
+            title="AI tools"
+            className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
+            style={{ color: showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)', backgroundColor: showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent' }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
+          >
+            <MoreVerticalIcon size={15} />
+          </button>
+          {showAiOverflow && (
+            <div className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${aiOverflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
+              style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
+            >
+              <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
+                <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>AI Tools</p>
+              </div>
+              {activeTab.url.trim() && aiEnabled('preflightCheck') && (
+                <button type="button" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left" style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { setShowPreflight(true); setShowAiOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />Pre-flight Check
+                </button>
+              )}
+              {aiEnabled('daakiaAiChat') && (
+                <button type="button" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left" style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { openDaakiaAiTab(); setShowAiOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />Ask AI
+                </button>
+              )}
+              {activeTab.url.trim() && aiEnabled('patternBaseline') && (
+                <button type="button" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left" style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { setShowPatternStatus(p => !p); setShowAiOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />Pattern Baseline
+                </button>
+              )}
+            </div>
+          )}
+          {showPreflight && activeTab.url.trim() && <AiPreflightPopover tab={activeTab} onClose={() => setShowPreflight(false)} />}
+          {showPatternStatus && activeTab.url.trim() && aiEnabled('patternBaseline') && (
+            <PatternBaselinePopup method="MQTT" url={activeTab.url} onClose={() => setShowPatternStatus(false)} dir={aiOverflowDir} />
+          )}
+        </div>
       </div>
 
       {/* Main content � vertical split */}
@@ -631,7 +712,7 @@ export function MQTTPanel() {
             <button type="button" onClick={handleClear} className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer" title="Clear log">
               <TrashIcon size={12} />
             </button>
-            <button type="button" className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer" title="Scroll to top" onClick={() => { /* scroll top */ }}>
+            <button type="button" className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer" title="Scroll to top" onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>
               <ArrowUpIcon size={12} />
             </button>
             <button type="button" className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer" title="Scroll to bottom" onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }}>
@@ -645,6 +726,18 @@ export function MQTTPanel() {
             >
               <AutoScrollIcon size={12} />
             </button>
+            {/* 9.17-9.22: AI log actions */}
+            <AiRealtimeLogActions
+              tabId={activeTab.id}
+              url={activeTab.url || ''}
+              protocol="mqtt"
+              messages={messages.filter(m => m.direction === 'received').map(m => m.payload)}
+              hasError={!!error}
+              errorMsg={error || ''}
+              accentColor="var(--color-protocol-mqtt)"
+              showTopicSuggester={true}
+              subscribedTopics={subscriptions.map(s => s.topic)}
+            />
           </div>
 
           {/* Messages log */}

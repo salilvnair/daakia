@@ -4,6 +4,9 @@ import { CodeEditor, RequestProgressOverlay, CopyButton } from '../shared';
 import { cancelRequest } from '../../services/request';
 import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
 import { DataSchemaModal } from '../rest/response/DataSchemaModal';
+import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
+import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
+import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { SparkleIcon } from '../../icons';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 
@@ -14,6 +17,7 @@ export function GraphQLResponse() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
+  const [showPatternLearning, setShowPatternLearning] = useState(false);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   if (!activeTab) return null;
@@ -58,6 +62,8 @@ export function GraphQLResponse() {
   } catch {
     // Non-JSON response
   }
+
+  const isFailure = response.status >= 400 || hasErrors;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[var(--color-panel)]">
@@ -116,9 +122,50 @@ export function GraphQLResponse() {
             Schema
           </button>
           )}
+          {/* 8.2: Record Baseline ✦ */}
+          {aiEnabled('patternBaseline') && (
+            <button
+              type="button"
+              onClick={() => setShowPatternLearning(p => !p)}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
+              style={{
+                color: showPatternLearning ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)',
+                borderColor: showPatternLearning
+                  ? 'color-mix(in srgb, var(--color-protocol-ai) 35%, transparent)'
+                  : 'color-mix(in srgb, var(--color-text-muted) 25%, transparent)',
+                backgroundColor: 'transparent',
+              }}
+              title="Record / compare response pattern baseline"
+            >
+              <SparkleIcon size={10} />
+              Baseline
+            </button>
+          )}
+          {/* 8.1: ⋮ AI Actions menu */}
+          {aiEnabled('assertGeneration') || aiEnabled('semanticValidator') || aiEnabled('responseTransformer') || aiEnabled('responseDiff') ? (
+            <AiResponseActionsMenu
+              tabId={activeTab.id}
+              response={response}
+              requestMethod="GQL"
+              requestUrl={activeTab.url || ''}
+            />
+          ) : null}
           <CopyButton text={response.body ? formatJson(response.body) : ''} size={14} />
         </div>
       </div>
+
+      {/* 8.2: Pattern Learning panel */}
+      {showPatternLearning && aiEnabled('patternBaseline') && (
+        <div className="border-b border-[var(--color-surface-border)]">
+          <AiResponsePatternLearning
+            responseBody={response.body}
+            method="GQL"
+            url={activeTab.url || ''}
+            status={response.status}
+          />
+        </div>
+      )}
+
       <div className="flex-1 min-h-0 overflow-hidden">
         <CodeEditor
           value={response.body ? formatJson(response.body) : ''}
@@ -128,6 +175,19 @@ export function GraphQLResponse() {
           readOnly
         />
       </div>
+
+      {/* 8.3: Smart Retry Advisor — shown on GQL errors or HTTP failure */}
+      {isFailure && aiEnabled('smartRetryAdvisor') && (
+        <div className="border-t border-[var(--color-surface-border)]">
+          <AiSmartRetryAdvisor
+            status={response.status}
+            responseBody={response.body}
+            method="GQL"
+            url={activeTab.url || ''}
+          />
+        </div>
+      )}
+
       {showSchema && <DataSchemaModal body={response.body} onClose={() => setShowSchema(false)} />}
     </div>
   );

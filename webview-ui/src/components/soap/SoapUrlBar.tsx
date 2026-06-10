@@ -1,14 +1,19 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
 import { postMsg } from '../../vscode';
-import { PlayIcon, SaveIcon, StopSquareIcon, UploadIcon } from '../../icons';
+import { PlayIcon, SaveIcon, StopSquareIcon, UploadIcon, MoreVerticalIcon, SparkleIcon } from '../../icons';
 import { SplitButton, HighlightedInput } from '../shared';
 import type { SplitButtonItem } from '../shared';
 import { saveRequest } from '../../services/request';
 import { SoapWsdlImport } from './SoapWsdlImport';
 import { SoapOperationSelector } from './SoapOperationSelector';
 import { useMockSuggestions } from '../../hooks/useMockSuggestions';
+import { AiPreflightPopover } from '../ai/AiPreflightPopover';
+import { PatternBaselinePopup } from '../ai/AiRequestPatternStatus';
+import { AiSoapToRestModal } from '../ai/AiSoapToRestModal';
+import { AiSoapWsdlExplainerModal } from '../ai/AiSoapWsdlExplainerModal';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
 
 const saveItems: SplitButtonItem[] = [
   { id: 'save-as', label: 'Save as', icon: <SaveIcon size={12} />, iconColor: 'var(--color-ctx-close-saved)', onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }) },
@@ -36,10 +41,30 @@ const DEFAULT_ENVELOPE_12 = `<?xml version="1.0" encoding="UTF-8"?>
  */
 export function SoapUrlBar() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
+  const openDaakiaAiTab = useTabsStore(s => s.openDaakiaAiTab);
   const updateTab = useTabsStore(s => s.updateTab);
   const urlSuggestions = useUrlSuggestionsStore(s => s.byProtocol.soap);
   const mockSuggestions = useMockSuggestions('soap');
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const [wsdlImportOpen, setWsdlImportOpen] = useState(false);
+  const [showOverflow, setShowOverflow] = useState(false);
+  const [overflowDir, setOverflowDir] = useState<'down' | 'up'>('down');
+  const [showPreflight, setShowPreflight] = useState(false);
+  const [showPatternStatus, setShowPatternStatus] = useState(false);
+  const [showSoapToRest, setShowSoapToRest] = useState(false);
+  const [showWsdlExplainer, setShowWsdlExplainer] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const overflowBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflow(false);
+      }
+    };
+    if (showOverflow) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showOverflow]);
 
   const soapVersion = activeTab?.soapVersion || '1.1';
   const soapAction = activeTab?.soapAction || '';
@@ -187,10 +212,119 @@ export function SoapUrlBar() {
           icon={<SaveIcon size={13} />}
           items={saveItems}
         />
+
+        {/* AI Tools ⋮ menu */}
+        <div className="flex-shrink-0 relative" ref={overflowRef}>
+          <button
+            ref={overflowBtnRef}
+            type="button"
+            onClick={() => {
+              if (!showOverflow && overflowBtnRef.current) {
+                const rect = overflowBtnRef.current.getBoundingClientRect();
+                setOverflowDir((window.innerHeight - rect.bottom) < 180 ? 'up' : 'down');
+              }
+              setShowOverflow(p => !p);
+            }}
+            title="AI tools"
+            className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
+            style={{ color: showOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)', backgroundColor: showOverflow ? 'rgba(255,255,255,0.08)' : 'transparent' }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = showOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
+          >
+            <MoreVerticalIcon size={15} />
+          </button>
+
+          {showOverflow && (
+            <div
+              className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${overflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
+              style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
+            >
+              <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
+                <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>AI Tools</p>
+              </div>
+              {activeTab.url.trim() && aiEnabled('preflightCheck') && (
+                <button type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { setShowPreflight(true); setShowOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                  Pre-flight Check
+                </button>
+              )}
+              {aiEnabled('daakiaAiChat') && (
+                <button type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { openDaakiaAiTab(); setShowOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                  Ask AI
+                </button>
+              )}
+              {activeTab.url.trim() && aiEnabled('patternBaseline') && (
+                <button type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { setShowPatternStatus(p => !p); setShowOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                  Pattern Baseline
+                </button>
+              )}
+              {aiEnabled('soapWsdlExplainer') && (
+                <button type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
+                  style={{ color: 'var(--color-protocol-soap)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-soap) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { setShowWsdlExplainer(true); setShowOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-soap)', flexShrink: 0 }} />
+                  WSDL Explainer ✦
+                </button>
+              )}
+              {aiEnabled('soapToRest') && (
+                <button type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
+                  style={{ color: 'var(--color-protocol-soap)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-soap) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { setShowSoapToRest(true); setShowOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-soap)', flexShrink: 0 }} />
+                  SOAP → REST Migrator ✦
+                </button>
+              )}
+            </div>
+          )}
+
+          {showPreflight && activeTab.url.trim() && (
+            <AiPreflightPopover tab={activeTab} onClose={() => setShowPreflight(false)} />
+          )}
+          {showPatternStatus && activeTab.url.trim() && aiEnabled('patternBaseline') && (
+            <PatternBaselinePopup
+              method="SOAP"
+              url={activeTab.url}
+              onClose={() => setShowPatternStatus(false)}
+              dir={overflowDir}
+            />
+          )}
+        </div>
       </div>
 
       {/* WSDL Import Modal */}
       <SoapWsdlImport open={wsdlImportOpen} onClose={() => setWsdlImportOpen(false)} />
+      {/* 8.25: SOAP WSDL Explainer */}
+      {showWsdlExplainer && <AiSoapWsdlExplainerModal onClose={() => setShowWsdlExplainer(false)} />}
+      {/* 10.14: SOAP → REST Migrator */}
+      {showSoapToRest && <AiSoapToRestModal onClose={() => setShowSoapToRest(false)} />}
     </>
   );
 }

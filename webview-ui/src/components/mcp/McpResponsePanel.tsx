@@ -1,7 +1,10 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { useTabsStore, type McpConversationEntry } from '../../store/tabs-store';
+import { useTabsStore, type McpConversationEntry, type ResponseData } from '../../store/tabs-store';
 import { TrashIcon } from '../../icons';
 import { JsonTreeViewer } from '../shared/display/JsonTreeViewer';
+import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
+import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
 
 /**
  * McpResponsePanel — Shows the MCP invocation log (tool calls, resource reads, prompt runs).
@@ -88,8 +91,23 @@ export function McpResponsePanel() {
 /** Individual log entry with Raw/JSON toggle for output */
 function McpLogEntry({ entry, typeColors, typeLabels }: { entry: McpConversationEntry; typeColors: Record<string, string>; typeLabels: Record<string, string> }) {
   const [viewMode, setViewMode] = useState<'raw' | 'json'>('json');
+  const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
   const parsedJson = tryParseJson(entry.output);
   const hasJson = parsedJson !== null;
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
+
+  const isToolResult = entry.type === 'tool-result';
+  const fakeResp: ResponseData = {
+    status: entry.success === false ? 500 : 200,
+    statusText: entry.success === false ? 'Error' : 'OK',
+    headers: {},
+    body: entry.output || '',
+    size: (entry.output || '').length,
+    time: entry.duration || 0,
+    contentType: hasJson ? 'application/json' : 'text/plain',
+    cookies: [],
+  };
 
   return (
     <div
@@ -112,6 +130,27 @@ function McpLogEntry({ entry, typeColors, typeLabels }: { entry: McpConversation
           <span className="text-[10px] text-[var(--color-text-muted)] shrink-0">
             {entry.duration}ms
           </span>
+        )}
+        {/* 10.1: Explain ✦ for tool-result */}
+        {isToolResult && entry.output && aiEnabled('explainRest') && (
+          <AiActionButton
+            mode="explain"
+            label="Explain"
+            response={fakeResp}
+            requestMethod="MCP"
+            requestUrl={entry.name}
+            open={activePopup === 'explain'}
+            onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
+          />
+        )}
+        {/* 10.2, 10.3: AI Actions ⋮ for tool-result */}
+        {isToolResult && entry.output && activeTab && (aiEnabled('semanticValidator') || aiEnabled('responseTransformer')) && (
+          <AiResponseActionsMenu
+            tabId={activeTab.id}
+            response={fakeResp}
+            requestMethod="MCP"
+            requestUrl={entry.name}
+          />
         )}
       </div>
 

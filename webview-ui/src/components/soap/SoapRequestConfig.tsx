@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { PillTabs, KeyValueTable, CodeEditor, AuthEditor, ScriptsEditor } from '../shared';
@@ -8,6 +8,13 @@ import { SoapHeadersEditor } from './SoapHeadersEditor';
 import { SoapAssertions } from './SoapAssertions';
 import { SoapWsdlBrowser } from './SoapWsdlBrowser';
 import { SoapAttachments } from './SoapAttachments';
+import { SparkleIcon } from '../../icons';
+import { AiHeaderSuggest } from '../ai/AiHeaderSuggest';
+import { AiBodyGenerate } from '../ai/AiBodyGenerate';
+import type { AiBodyGenerateHandle } from '../ai/AiBodyGenerate';
+import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
+import { AiSoapWsdlExplainerModal } from '../ai/AiSoapWsdlExplainerModal';
+import { useAiFeaturesStore } from '../../store/ai-features-store';
 
 const ACCENT = 'var(--color-protocol-soap)';
 
@@ -39,8 +46,12 @@ export function SoapRequestConfig() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const activeTabId = useTabsStore(s => s.activeTabId);
   const updateTab = useTabsStore(s => s.updateTab);
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const storedSubTab = useUiStateStore(s => s.prefs[`soap.subtab.${activeTabId}`]);
   const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'envelope');
+  const [showFuzzer, setShowFuzzer] = useState(false);
+  const [showWsdlExplainer, setShowWsdlExplainer] = useState(false);
+  const bodyGenRef = useRef<AiBodyGenerateHandle>(null);
 
   useEffect(() => {
     const pref = useUiStateStore.getState().getPref(`soap.subtab.${activeTabId}`, 'envelope');
@@ -86,15 +97,60 @@ export function SoapRequestConfig() {
       </div>
 
       {/* Content */}
-      <div className={`flex-1 min-h-0 ${activeSubTab === 'envelope' ? '' : 'overflow-y-auto [scrollbar-gutter:stable]'}`}>
+      <div className={`flex-1 min-h-0 ${activeSubTab === 'envelope' ? 'flex flex-col' : 'overflow-y-auto [scrollbar-gutter:stable]'}`}>
         {activeSubTab === 'envelope' && (
-          <div className="h-full">
-            <CodeEditor
-              value={activeTab.soapEnvelope || DEFAULT_ENVELOPE_11}
-              onChange={(val) => updateTab(activeTab.id, { soapEnvelope: val, dirty: true })}
-              language="xml"
-              height="100%"
-            />
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* 8.23 & 8.24: Envelope toolbar */}
+            {(aiEnabled('bodyGenerator') || aiEnabled('requestFuzzer')) && (
+              <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] flex-shrink-0">
+                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">SOAP Envelope (XML)</span>
+                <div className="flex items-center gap-1">
+                  {aiEnabled('bodyGenerator') && (
+                    <button
+                      type="button"
+                      onClick={() => bodyGenRef.current?.open()}
+                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
+                      style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+                      title="AI Envelope Generator"
+                    >
+                      <SparkleIcon size={10} />
+                      Generate ✦
+                    </button>
+                  )}
+                  {aiEnabled('requestFuzzer') && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFuzzer(true)}
+                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
+                      style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+                      title="AI XML Fuzzer"
+                    >
+                      <SparkleIcon size={10} />
+                      Fuzz ✦
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="flex-1 min-h-0">
+              <CodeEditor
+                value={activeTab.soapEnvelope || DEFAULT_ENVELOPE_11}
+                onChange={(val) => updateTab(activeTab.id, { soapEnvelope: val, dirty: true })}
+                language="xml"
+                height="100%"
+              />
+            </div>
+            {/* 8.23: Envelope generator drawer */}
+            {aiEnabled('bodyGenerator') && (
+              <AiBodyGenerate
+                ref={bodyGenRef}
+                tabId={activeTab.id}
+                method="SOAP"
+                url={activeTab.url || ''}
+                contentType="text/xml"
+                onApply={(body) => updateTab(activeTab.id, { soapEnvelope: body, dirty: true })}
+              />
+            )}
           </div>
         )}
 
@@ -103,14 +159,37 @@ export function SoapRequestConfig() {
         )}
 
         {activeSubTab === 'headers' && (
-          <div className="p-3">
-            <KeyValueTable
-              rows={activeTab.headers || [{ id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true }]}
-              onChange={handleHeadersChange}
-              showDescription={false}
-              placeholder={{ key: 'header-name', value: 'header-value' }}
-              accentColor={ACCENT}
-            />
+          <div className="h-full flex flex-col min-h-0">
+            {/* 8.22: Header Suggest ✦ */}
+            {aiEnabled('headerAutocomplete') && (
+              <AiHeaderSuggest
+                tabId={activeTab.id}
+                method="SOAP"
+                url={activeTab.url || ''}
+                bodyContentType="text/xml"
+                authType={activeTab.authType}
+                existingHeaders={activeTab.headers || []}
+                onAddHeader={(key, value) => {
+                  const rows = [...(activeTab.headers || [])];
+                  const empty = rows.findIndex(r => !r.key);
+                  if (empty >= 0) {
+                    rows[empty] = { ...rows[empty], key, value, enabled: true };
+                  } else {
+                    rows.push({ id: crypto.randomUUID(), key, value, description: '', enabled: true });
+                  }
+                  updateTab(activeTab.id, { headers: rows, dirty: true });
+                }}
+              />
+            )}
+            <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-3">
+              <KeyValueTable
+                rows={activeTab.headers || [{ id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true }]}
+                onChange={handleHeadersChange}
+                showDescription={false}
+                placeholder={{ key: 'header-name', value: 'header-value' }}
+                accentColor={ACCENT}
+              />
+            </div>
           </div>
         )}
 
@@ -151,9 +230,32 @@ export function SoapRequestConfig() {
         )}
 
         {activeSubTab === 'wsdl' && (
-          <SoapWsdlBrowser />
+          <div className="h-full flex flex-col min-h-0">
+            {/* 8.25: WSDL Explainer button */}
+            {aiEnabled('soapWsdlExplainer') && (activeTab.soapOperations?.length || activeTab.soapService) && (
+              <div className="flex items-center justify-end px-3 py-1.5 border-b border-[var(--color-surface-border)] flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowWsdlExplainer(true)}
+                  className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
+                  style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+                  title="AI WSDL Explainer — plain-English explanation of all operations"
+                >
+                  <SparkleIcon size={10} />
+                  WSDL Explainer ✦
+                </button>
+              </div>
+            )}
+            <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
+              <SoapWsdlBrowser />
+            </div>
+          </div>
         )}
       </div>
+
+      {/* Modals */}
+      {showFuzzer && <AiRequestFuzzerModal onClose={() => setShowFuzzer(false)} />}
+      {showWsdlExplainer && <AiSoapWsdlExplainerModal onClose={() => setShowWsdlExplainer(false)} />}
     </div>
   );
 }

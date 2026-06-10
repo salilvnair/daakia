@@ -9,6 +9,9 @@ import type { PillTab } from '../shared';
 import { ArrowUpIcon, ArrowDownIcon, SparkleIcon } from '../../icons';
 import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
 import { DataSchemaModal } from '../rest/response/DataSchemaModal';
+import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
+import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
+import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 
 const ACCENT = 'var(--color-protocol-grpc)';
@@ -31,6 +34,7 @@ export function GrpcResponsePanel() {
   const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'body');
   const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
+  const [showPatternLearning, setShowPatternLearning] = useState(false);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const setActiveSubTab = (tab: string) => {
     setActiveSubTabLocal(tab);
@@ -135,9 +139,47 @@ export function GrpcResponsePanel() {
                 Schema
               </button>
             )}
+            {/* 8.11: Record Baseline ✦ */}
+            {aiEnabled('patternBaseline') && (
+              <button
+                type="button"
+                onClick={() => setShowPatternLearning(p => !p)}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
+                style={{
+                  color: showPatternLearning ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)',
+                  borderColor: showPatternLearning ? 'color-mix(in srgb, var(--color-protocol-ai) 35%, transparent)' : 'color-mix(in srgb, var(--color-text-muted) 25%, transparent)',
+                  backgroundColor: 'transparent',
+                }}
+                title="Record / compare response pattern baseline"
+              >
+                <SparkleIcon size={10} />
+                Baseline
+              </button>
+            )}
+            {/* 8.10: ⋮ AI Actions menu */}
+            {(aiEnabled('assertGeneration') || aiEnabled('semanticValidator') || aiEnabled('responseTransformer') || aiEnabled('responseDiff')) && (
+              <AiResponseActionsMenu
+                tabId={activeTab.id}
+                response={response}
+                requestMethod="gRPC"
+                requestUrl={activeTab.url || ''}
+              />
+            )}
           </div>
         )}
       </div>
+
+      {/* 8.11: Pattern Learning panel */}
+      {showPatternLearning && response && aiEnabled('patternBaseline') && (
+        <div className="border-b border-[var(--color-surface-border)]">
+          <AiResponsePatternLearning
+            responseBody={response.body || ''}
+            method="gRPC"
+            url={activeTab.url || ''}
+            status={response.status}
+          />
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
@@ -156,6 +198,17 @@ export function GrpcResponsePanel() {
               className="h-full"
             />
             </div>
+            {/* 8.12: Smart Retry Advisor — shown on non-OK gRPC status */}
+            {response.status !== 0 && aiEnabled('smartRetryAdvisor') && (
+              <div className="border-t border-[var(--color-surface-border)] flex-shrink-0">
+                <AiSmartRetryAdvisor
+                  status={response.status}
+                  responseBody={response.body || ''}
+                  method="gRPC"
+                  url={activeTab.url || ''}
+                />
+              </div>
+            )}
           </div>
         )}
 
