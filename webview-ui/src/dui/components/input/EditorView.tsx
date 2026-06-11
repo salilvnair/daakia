@@ -36,15 +36,25 @@ export function EditorView({
   const resolvedHeight = typeof height === 'number' ? `${height}px` : height;
   const containerHeight = minHeight ? `max(${resolvedHeight}, ${minHeight}px)` : resolvedHeight;
 
-  // Force Monaco to recalculate layout after mount — needed when the editor
-  // lives inside an overflow:auto flex container where automaticLayout fails silently.
+  // Force Monaco to recalculate layout — needed in flex/overflow containers
+  // where automaticLayout can fail to detect the real width on first render.
   const handleMount: OnMount = useCallback((editor) => {
-    requestAnimationFrame(() => { editor.layout(); });
-    setTimeout(() => { editor.layout(); }, 100);
+    const relayout = () => editor.layout();
+    relayout();
+    requestAnimationFrame(relayout);
+    setTimeout(relayout, 50);
+    setTimeout(relayout, 200);
+    // ResizeObserver on the editor's parent for reliable width tracking
+    const parent = editor.getContainerDomNode().parentElement;
+    if (parent) {
+      const ro = new ResizeObserver(relayout);
+      ro.observe(parent);
+      editor.onDidDispose(() => ro.disconnect());
+    }
   }, []);
 
   return (
-    <div className={`relative ${className}`} style={{ height: containerHeight, position: 'relative' }}>
+    <div className={`relative ${className}`} style={{ height: containerHeight, width: '100%', position: 'relative' }}>
       {placeholder && !value && (
         <div
           style={{

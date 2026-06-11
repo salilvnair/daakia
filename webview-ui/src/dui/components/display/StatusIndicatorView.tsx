@@ -4,8 +4,12 @@ export type StatusSize = 'sm' | 'md' | 'lg';
 export interface StatusIndicatorViewProps {
   status: StatusState;
   label?: string;
+  /** Secondary text shown below the label */
+  subtext?: string;
   showLabel?: boolean;
   size?: StatusSize;
+  /** Override the dot + label color (CSS variable or value) */
+  accentColor?: string;
   className?: string;
 }
 
@@ -31,11 +35,13 @@ const FONT_SIZE: Record<StatusSize, string> = { sm: '10px', md: '11px', lg: '12p
 export function StatusIndicatorView({
   status,
   label,
+  subtext,
   showLabel = true,
   size = 'md',
+  accentColor,
   className = '',
 }: StatusIndicatorViewProps) {
-  const color = STATUS_COLOR[status];
+  const color = accentColor ?? STATUS_COLOR[status];
   const dot = DOT_SIZE[size];
   const font = FONT_SIZE[size];
   const displayLabel = label ?? STATUS_LABEL[status];
@@ -65,8 +71,15 @@ export function StatusIndicatorView({
         <span style={{ width: dot, height: dot, borderRadius: '50%', background: color, flexShrink: 0, position: 'relative' }} />
       </span>
       {showLabel && (
-        <span style={{ fontSize: font, color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-          {displayLabel}
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ fontSize: font, color: 'var(--color-text-secondary)', fontWeight: 500 }}>
+            {displayLabel}
+          </span>
+          {subtext && (
+            <span style={{ fontSize: '9px', color: 'var(--color-text-muted)', fontWeight: 400 }}>
+              {subtext}
+            </span>
+          )}
         </span>
       )}
     </div>

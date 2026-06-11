@@ -15,6 +15,12 @@ export interface ModalViewProps {
   showCloseIcon?: boolean;
   /** Optional CSS color value for a tinted header background (e.g. 'var(--color-protocol-rest)') */
   headerColor?: string;
+  /** Optional node rendered in the header right area, before the X button */
+  headerRight?: React.ReactNode;
+  /** When true, removes body padding (e.g. for full-bleed editor modals) */
+  noPadding?: boolean;
+  /** When true, uses var(--color-elevated) for the card background instead of var(--color-surface) */
+  elevated?: boolean;
   className?: string;
 }
 
@@ -35,6 +41,9 @@ export function ModalView({
   size = 'md',
   showCloseIcon = true,
   headerColor,
+  headerRight,
+  noPadding = false,
+  elevated = false,
 }: ModalViewProps) {
   useEffect(() => {
     if (!open) return;
@@ -61,7 +70,7 @@ export function ModalView({
     >
       <div
         style={{
-          background: 'var(--color-surface)',
+          background: elevated ? 'var(--color-elevated)' : 'var(--color-surface)',
           border: '1px solid var(--color-surface-border)',
           borderRadius: '10px',
           width: '100%',
@@ -98,37 +107,39 @@ export function ModalView({
                 {title}
               </span>
             )}
-            {showCloseIcon && (
-              <button
-                type="button"
-                onClick={onClose}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 24,
-                  height: 24,
-                  borderRadius: 4,
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  color: 'var(--color-error)',
-                  marginLeft: 'auto',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 12%, transparent)';
-                }}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                title="Close"
-              >
-                <CloseIcon size={14} />
-              </button>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+              {headerRight}
+              {showCloseIcon && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    borderRadius: 4,
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    color: 'var(--color-error)',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 12%, transparent)';
+                  }}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  title="Close"
+                >
+                  <CloseIcon size={14} />
+                </button>
+              )}
+            </div>
           </div>
         )}
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '18px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: noPadding ? 0 : '18px' }}>
           {children}
         </div>
 

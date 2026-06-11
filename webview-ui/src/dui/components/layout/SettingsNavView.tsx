@@ -53,12 +53,10 @@ export function SettingsNavView({
                     alignItems: 'center',
                     gap: '10px',
                     padding: '7px 10px',
-                    borderRadius: '5px',
+                    borderRadius: '6px',
                     cursor: 'pointer',
-                    borderLeft: isActive ? `2px solid ${accent}` : '2px solid transparent',
-                    paddingLeft: isActive ? '8px' : '10px',
                     background: isActive
-                      ? `color-mix(in srgb, ${accent} 10%, transparent)`
+                      ? `color-mix(in srgb, ${accent} 12%, var(--color-item-hover-bg))`
                       : 'transparent',
                     transition: 'background 100ms',
                   }}

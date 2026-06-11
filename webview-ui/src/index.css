@@ -114,6 +114,22 @@
   /* Component — Toggle */
   --color-toggle-on: var(--color-primary);
   --color-toggle-thumb: #ffffff;
+
+  /* Component — Variable pill ({{var}} tokens in PromptLibraryEditorView / HighlightedInputView) */
+  --color-var-pill-bg: rgba(139, 92, 246, 0.18);
+  --color-var-pill-text: #c084fc;
+  --color-var-pill-border: rgba(139, 92, 246, 0.38);
+
+  /* Component — PromptCardView */
+  --color-promptcard-avatar-bg: color-mix(in srgb, var(--color-protocol-ai) 20%, var(--color-surface));
+  --color-promptcard-avatar-text: var(--color-protocol-ai);
+  --color-promptcard-title: var(--color-text-primary);
+  --color-promptcard-body: var(--color-text-muted);
+  --color-promptcard-chip: var(--color-protocol-ai);
+  --color-promptcard-badge-bg: color-mix(in srgb, var(--color-protocol-ai) 15%, transparent);
+  --color-promptcard-badge-text: var(--color-protocol-ai);
+  --color-promptcard-action-icon: var(--color-text-muted);
+  --color-promptcard-delete-icon: var(--color-error);
 }
 
 /* ─── Light theme — VS Code Light+ / GitHub Light / Atom One Light blend ─── */
@@ -239,6 +255,20 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* StageView animations */
+@keyframes dui-stage-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes dui-stage-pulse-ring {
+  0%   { transform: scale(1);    opacity: 0.3; }
+  60%  { transform: scale(1.55); opacity: 0; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+@keyframes dui-stage-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
 }
 
 /* Breathing / glowing animation for connected state */
@@ -1335,6 +1365,17 @@ input[type="number"] {
 }
 [data-theme="light"] * {
   scrollbar-color: #d1d5db #f3f4f6;
+}
+
+/* ─── Variable pill mark — used in HighlightedTextarea backdrop ─────────────── */
+.graphify-var-mark {
+  background: var(--color-var-pill-bg);
+  color: var(--color-var-pill-text);
+  border: 1px solid var(--color-var-pill-border);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-weight: 600;
+  font-style: normal;
 }
 
 /* ─── Light theme: input / textarea base styles ───────────────────────────────

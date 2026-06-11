@@ -37,6 +37,7 @@ export interface CodeBlockViewProps {
   maxHeight?: string;
   accentColor?: string;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export function CodeBlockView({
@@ -47,6 +48,7 @@ export function CodeBlockView({
   maxHeight = '300px',
   accentColor,
   className = '',
+  style,
 }: CodeBlockViewProps) {
   const [copied, setCopied] = useState(false);
   const accent = accentColor || 'var(--color-primary)';
@@ -80,6 +82,7 @@ export function CodeBlockView({
         background: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)',
         border: '1px solid var(--color-surface-border)',
         borderRadius: '6px',
+        ...style,
         overflow: 'hidden',
         fontSize: '12px',
         fontFamily: 'monospace',

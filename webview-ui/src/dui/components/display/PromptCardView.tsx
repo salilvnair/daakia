@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CopyIcon, RenameIcon, TrashIcon, SparkleIcon } from '../../../icons';
+import { CopyIcon, RenameIcon, TrashIcon, SparkleIcon, CheckIcon } from '../../../icons';
 import { ChipView } from '../chips/ChipView';
 
 export interface PromptCardViewProps {
@@ -14,9 +14,25 @@ export interface PromptCardViewProps {
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onCopy?: (id: string) => void;
+  onClick?: (id: string) => void;
   accentColor?: string;
   selected?: boolean;
   className?: string;
+  /** Override CSS variables for fine-grained theme control */
+  colors?: {
+    avatarBg?: string;       // avatar background color
+    avatarText?: string;     // avatar text/icon color
+    titleText?: string;      // title text color
+    bodyText?: string;       // description / content preview color
+    customBadgeBg?: string;  // CUSTOM chip background
+    customBadgeText?: string; // CUSTOM chip text
+    chipColor?: string;      // protocol chip color override
+    actionIconColor?: string; // action icon default color
+    actionDeleteColor?: string; // delete icon color
+    rowBg?: string;          // background for the card row
+    rowBgHover?: string;     // hover background
+    rowBgSelected?: string;  // selected background
+  };
 }
 
 function getInitials(title: string): string {
@@ -37,18 +53,34 @@ export function PromptCardView({
   onEdit,
   onDelete,
   onCopy,
+  onClick,
   accentColor,
   selected = false,
+  colors,
   className = '',
 }: PromptCardViewProps) {
   const [hovered, setHovered] = useState(false);
+  const [copied, setCopied] = useState(false);
   const accent = accentColor || protocolColor || 'var(--color-protocol-ai)';
 
-  const rowBg = selected
-    ? `color-mix(in srgb, ${accent} 12%, transparent)`
-    : hovered
-    ? 'rgba(255,255,255,0.04)'
-    : 'transparent';
+  const rowBg = colors?.rowBgSelected && selected
+    ? colors.rowBgSelected
+    : colors?.rowBgHover && hovered
+    ? colors.rowBgHover
+    : colors?.rowBg ?? (
+        selected
+          ? `color-mix(in srgb, ${accent} 12%, transparent)`
+          : hovered
+          ? 'rgba(255,255,255,0.04)'
+          : 'transparent'
+      );
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onCopy?.(id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   return (
     <div
@@ -64,6 +96,7 @@ export function PromptCardView({
         transition: 'background 100ms',
         minWidth: 0,
       }}
+      onClick={() => onClick?.(id)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -76,8 +109,8 @@ export function PromptCardView({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: `color-mix(in srgb, ${accent} 20%, var(--color-surface))`,
-        color: accent,
+        background: colors?.avatarBg ?? `color-mix(in srgb, ${accent} 20%, var(--color-surface))`,
+        color: colors?.avatarText ?? accent,
         fontSize: '9px',
         fontWeight: 700,
         letterSpacing: '0.02em',
@@ -92,7 +125,7 @@ export function PromptCardView({
           <span style={{
             fontSize: '12px',
             fontWeight: 500,
-            color: 'var(--color-text-primary)',
+            color: colors?.titleText ?? 'var(--color-text-primary)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -107,8 +140,8 @@ export function PromptCardView({
               fontWeight: 700,
               padding: '1px 5px',
               borderRadius: 99,
-              background: `color-mix(in srgb, ${accent} 15%, transparent)`,
-              color: accent,
+              background: colors?.customBadgeBg ?? `color-mix(in srgb, ${accent} 15%, transparent)`,
+              color: colors?.customBadgeText ?? accent,
               flexShrink: 0,
               letterSpacing: '0.04em',
             }}>
@@ -119,7 +152,7 @@ export function PromptCardView({
         {(description || content) && (
           <div style={{
             fontSize: '10px',
-            color: 'var(--color-text-muted)',
+            color: colors?.bodyText ?? 'var(--color-text-muted)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -133,7 +166,7 @@ export function PromptCardView({
       {protocol && (
         <ChipView
           label={protocol}
-          color={protocolColor || 'var(--color-primary)'}
+          color={colors?.chipColor ?? protocolColor ?? 'var(--color-primary)'}
           size="xs"
           style={{ flexShrink: 0 }}
         />
@@ -143,16 +176,22 @@ export function PromptCardView({
       {hovered && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
           {onUse && (
-            <ActionBtn icon={<SparkleIcon size={11} />} onClick={() => onUse(id)} title="Use prompt" />
+            <ActionBtn icon={<SparkleIcon size={11} />} onClick={() => onUse(id)} title="Use prompt" iconColor={colors?.actionIconColor} />
           )}
           {onCopy && (
-            <ActionBtn icon={<CopyIcon size={11} />} onClick={() => onCopy(id)} title="Copy prompt" />
+            <ActionBtn
+              icon={copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+              onClick={handleCopy}
+              title={copied ? 'Copied!' : 'Copy prompt'}
+              iconColor={copied ? 'var(--color-success)' : colors?.actionIconColor}
+              copied={copied}
+            />
           )}
           {onEdit && (
-            <ActionBtn icon={<RenameIcon size={11} />} onClick={() => onEdit(id)} title="Edit prompt" />
+            <ActionBtn icon={<RenameIcon size={11} />} onClick={() => { onEdit(id); }} title="Edit prompt" iconColor={colors?.actionIconColor} />
           )}
           {onDelete && (
-            <ActionBtn icon={<TrashIcon size={11} />} onClick={() => onDelete(id)} title="Delete" danger />
+            <ActionBtn icon={<TrashIcon size={11} />} onClick={() => { onDelete(id); }} title="Delete" danger iconColor={colors?.actionDeleteColor} />
           )}
         </div>
       )}
@@ -160,27 +199,38 @@ export function PromptCardView({
   );
 }
 
-function ActionBtn({ icon, onClick, title, danger }: { icon: React.ReactNode; onClick: () => void; title: string; danger?: boolean }) {
+function ActionBtn({ icon, onClick, title, danger, iconColor, copied }: {
+  icon: React.ReactNode; onClick: (e: React.MouseEvent) => void; title: string;
+  danger?: boolean; iconColor?: string; copied?: boolean;
+}) {
+  const baseColor = copied
+    ? 'var(--color-success)'
+    : iconColor ?? (danger ? 'var(--color-error)' : 'var(--color-text-muted)');
   return (
     <button
       type="button"
-      onClick={e => { e.stopPropagation(); onClick(); }}
+      onClick={e => { e.stopPropagation(); onClick(e); }}
       title={title}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         width: 22, height: 22, borderRadius: '4px',
-        border: 'none', background: 'transparent',
+        border: 'none',
+        background: copied ? 'color-mix(in srgb, var(--color-success) 12%, transparent)' : 'transparent',
         cursor: 'pointer',
-        color: danger ? 'var(--color-error)' : 'var(--color-text-muted)',
-        transition: 'background 100ms',
+        color: baseColor,
+        transition: 'background 100ms, color 100ms',
       }}
       onMouseEnter={e => {
         (e.currentTarget as HTMLElement).style.background = danger
           ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
+          : copied
+          ? 'color-mix(in srgb, var(--color-success) 16%, transparent)'
           : 'var(--color-surface-hover)';
       }}
       onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.background = 'transparent';
+        (e.currentTarget as HTMLElement).style.background = copied
+          ? 'color-mix(in srgb, var(--color-success) 12%, transparent)'
+          : 'transparent';
       }}
     >
       {icon}

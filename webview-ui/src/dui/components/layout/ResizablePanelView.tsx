@@ -1,135 +1,93 @@
-import { useState, useRef } from 'react';
-
-export type ResizeDirection = 'horizontal' | 'vertical';
+import { useState, useRef, useCallback } from 'react';
 
 export interface ResizablePanelViewProps {
-  direction?: ResizeDirection;
-  first: React.ReactNode;
-  second: React.ReactNode;
-  defaultSplit?: number; // 0–100 percent for first panel
-  minFirst?: number;     // px min for first panel
-  minSecond?: number;    // px min for second panel
-  accentColor?: string;
-  onResize?: (split: number) => void;
+  defaultHeight: number;
+  minHeight?: number;
+  maxHeight?: number;
+  borderRadius?: number;
+  children: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export function ResizablePanelView({
-  direction = 'horizontal',
-  first,
-  second,
-  defaultSplit = 50,
-  minFirst = 80,
-  minSecond = 80,
-  accentColor,
-  onResize,
+  defaultHeight,
+  minHeight = 40,
+  maxHeight = 600,
+  borderRadius = 8,
+  children,
   className = '',
+  style,
 }: ResizablePanelViewProps) {
-  const [split, setSplit] = useState(defaultSplit);
-  const [dragging, setDragging] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef({ active: false, startPos: 0, startSplit: 0 });
-  const isHoriz = direction === 'horizontal';
-  const accent = accentColor || 'var(--color-primary)';
-  const pillActive = dragging || hovered;
+  const [height, setHeight] = useState(defaultHeight);
+  const [gripHovered, setGripHovered] = useState(false);
+  const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = {
-      active: true,
-      startPos: isHoriz ? e.clientX : e.clientY,
-      startSplit: split,
-    };
-    setDragging(true);
-  };
+    dragRef.current = { startY: e.clientY, startHeight: height };
+  }, [height]);
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!dragRef.current.active || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const total = isHoriz ? rect.width : rect.height;
-    const pos   = isHoriz ? e.clientX - rect.left : e.clientY - rect.top;
-    const pct = Math.max(
-      (minFirst  / total) * 100,
-      Math.min((1 - minSecond / total) * 100, (pos / total) * 100),
-    );
-    setSplit(pct);
-    onResize?.(pct);
-  };
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const delta = e.clientY - dragRef.current.startY;
+    const newH = Math.max(minHeight, Math.min(maxHeight, dragRef.current.startHeight + delta));
+    setHeight(newH);
+  }, [minHeight, maxHeight]);
 
-  const handlePointerUp = (e: React.PointerEvent) => {
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    dragRef.current.active = false;
-    setDragging(false);
-  };
-
-  const handleDoubleClick = () => {
-    setSplit(defaultSplit);
-    onResize?.(defaultSplit);
-  };
-
-  const firstStyle: React.CSSProperties = isHoriz
-    ? { width: `${split}%`, minWidth: minFirst, height: '100%', overflow: 'hidden' }
-    : { height: `${split}%`, minHeight: minFirst, width: '100%', overflow: 'hidden' };
-
-  const secondStyle: React.CSSProperties = isHoriz
-    ? { flex: 1, minWidth: minSecond, height: '100%', overflow: 'hidden' }
-    : { flex: 1, minHeight: minSecond, width: '100%', overflow: 'hidden' };
-
-  // Pill sizes — thin resting state, taller/wider on hover or drag (ditto PromptLibraryPanel)
-  const pillW = isHoriz ? 3 : (pillActive ? 80 : 44);
-  const pillH = isHoriz ? (pillActive ? 80 : 44) : 3;
+    dragRef.current = null;
+  }, []);
 
   return (
     <div
-      ref={containerRef}
       className={className}
-      style={{
-        display: 'flex',
-        flexDirection: isHoriz ? 'row' : 'column',
-        width: '100%',
-        height: '100%',
-        overflow: 'hidden',
-      }}
+      style={{ position: 'relative', height, ...style }}
     >
-      <div style={firstStyle}>{first}</div>
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+        borderRadius,
+        border: '1px solid var(--color-surface-border)',
+      }}>
+        {children}
+      </div>
 
-      {/* Drag area — 5px wide, transparent except for pill indicator */}
+      {/* Bottom-edge resize handle */}
       <div
         style={{
-          flexShrink: 0,
-          width: isHoriz ? 5 : '100%',
-          height: isHoriz ? '100%' : 5,
-          cursor: isHoriz ? 'col-resize' : 'row-resize',
-          position: 'relative',
-          userSelect: 'none',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 10,
+          cursor: 'ns-resize',
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        onDoubleClick={handleDoubleClick}
+        onMouseEnter={() => setGripHovered(true)}
+        onMouseLeave={() => setGripHovered(false)}
       >
-        {/* Pill indicator — same pattern as PromptLibraryPanel splitter */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: pillW,
-            height: pillH,
-            borderRadius: 9999,
-            background: pillActive ? accent : 'var(--color-surface-border)',
-            transition: `${isHoriz ? 'height' : 'width'} 150ms ease, background 150ms ease`,
-            pointerEvents: 'none',
-          }}
-        />
+        {/* Dashed grip indicator */}
+        <div style={{
+          width: 40,
+          height: 3,
+          borderRadius: 9999,
+          border: `1px dashed ${gripHovered ? 'var(--color-primary)' : 'var(--color-text-muted)'}`,
+          opacity: gripHovered ? 0.7 : 0.3,
+          transition: 'opacity 150ms ease, border-color 150ms ease',
+          pointerEvents: 'none',
+        }} />
       </div>
-
-      <div style={secondStyle}>{second}</div>
     </div>
   );
 }

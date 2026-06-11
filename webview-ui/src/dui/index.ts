@@ -20,8 +20,14 @@ export type { TextInputViewProps, TextInputSize } from './components/input/TextI
 export { SelectInputView } from './components/input/SelectInputView';
 export type { SelectInputViewProps, SelectOption, SelectInputSize } from './components/input/SelectInputView';
 
+export { SelectTextInputView } from './components/input/SelectTextInputView';
+export type { SelectTextInputViewProps, SelectTextOption, SelectTextInputSize } from './components/input/SelectTextInputView';
+
 export { KeyValueItemView } from './components/input/KeyValueItemView';
 export type { KeyValueItemViewProps } from './components/input/KeyValueItemView';
+
+export { HiddenKeyValueItemView } from './components/input/HiddenKeyValueItemView';
+export type { HiddenKeyValueItemViewProps } from './components/input/HiddenKeyValueItemView';
 
 export { TabView } from './components/input/TabView';
 export type { TabViewProps, TabItem, TabViewVariant } from './components/input/TabView';
@@ -57,6 +63,9 @@ export type { StatusIndicatorViewProps, StatusIndicatorState } from './component
 
 export { InfoPopupView } from './components/modal/InfoPopupView';
 export type { InfoPopupViewProps } from './components/modal/InfoPopupView';
+
+export { SplitPanelView } from './components/layout/SplitPanelView';
+export type { SplitPanelViewProps, SplitDirection } from './components/layout/SplitPanelView';
 
 export { ResizablePanelView } from './components/layout/ResizablePanelView';
 export type { ResizablePanelViewProps } from './components/layout/ResizablePanelView';
@@ -102,3 +111,35 @@ export type { ToastViewProps, Toast, ToastVariant } from './components/display/T
 
 export { PromptCardView } from './components/display/PromptCardView';
 export type { PromptCardViewProps } from './components/display/PromptCardView';
+
+export { PromptLibraryListView } from './components/display/PromptLibraryListView';
+export type { PromptLibraryListViewProps, PromptLibraryItem, PromptLibraryCategory, PromptLibrarySection } from './components/display/PromptLibraryListView';
+
+export { PromptLibraryEditorView } from './components/display/PromptLibraryEditorView';
+export type { PromptLibraryEditorViewProps, PromptLibraryVariable, PromptLibraryEditorTab } from './components/display/PromptLibraryEditorView';
+
+export { StageCheck, StageSpin, StagePulse } from './components/display/StageView';
+export type { StageViewBaseProps } from './components/display/StageView';
+
+// ─── E6.176 — Superset DUI components matching shared/controls ───────────────
+
+export { SearchInputView } from './components/input/SearchInputView';
+export type { SearchInputViewProps } from './components/input/SearchInputView';
+
+export { DurationInputView } from './components/input/DurationInputView';
+export type { DurationInputViewProps, DurationUnit } from './components/input/DurationInputView';
+
+export { PillTabsView } from './components/input/PillTabsView';
+export type { PillTabsViewProps, PillTabItem, PillTabsVariant } from './components/input/PillTabsView';
+
+export { SplitButtonView } from './components/button/SplitButtonView';
+export type { SplitButtonViewProps, SplitButtonViewItem, SplitButtonViewVariant } from './components/button/SplitButtonView';
+
+export { HighlightedInputView } from './components/input/HighlightedInputView';
+export type { HighlightedInputViewProps } from './components/input/HighlightedInputView';
+
+export { KeyValueTableView } from './components/input/KeyValueTableView';
+export type { KeyValueTableViewProps, KeyValueTableRow } from './components/input/KeyValueTableView';
+
+export { MergedInputView, MergeDivider } from './components/input/MergedInputView';
+export type { MergedInputViewProps, MergedInputSegment, MergedSelectOption, MergedInputSize } from './components/input/MergedInputView';

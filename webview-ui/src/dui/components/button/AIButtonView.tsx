@@ -22,6 +22,28 @@ const ACTION_LABEL: Record<AIButtonAction, string> = {
   suggest:  'Suggest',
 };
 
+function LoadingSpinner({ size }: { size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      style={{ animation: 'spin 0.7s linear infinite', flexShrink: 0 }}
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray="22 6"
+      />
+    </svg>
+  );
+}
+
 export function AIButtonView({
   action = 'ask',
   label,
@@ -70,13 +92,10 @@ export function AIButtonView({
         (e.currentTarget as HTMLElement).style.borderColor = `color-mix(in srgb, ${accent} 35%, transparent)`;
       }}
     >
-      <SparkleIcon
-        size={compact ? 10 : 12}
-        style={{
-          animation: loading ? 'spin 1s linear infinite' : undefined,
-          flexShrink: 0,
-        }}
-      />
+      {loading
+        ? <LoadingSpinner size={compact ? 10 : 12} />
+        : <SparkleIcon size={compact ? 10 : 12} style={{ flexShrink: 0 }} />
+      }
       {loading ? 'Thinking…' : displayLabel}
     </button>
   );

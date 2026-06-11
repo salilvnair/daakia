@@ -901,9 +901,9 @@ export function FolderTransferIcon(props: IconProps) {
   );
 }
 
-export function DropdownArrowIcon({ className, style }: { className?: string; style?: React.CSSProperties }) {
+export function DropdownArrowIcon({ className, style, size = 12 }: { className?: string; style?: React.CSSProperties; size?: number }) {
   return (
-    <svg className={className} style={style} viewBox="0 0 12 7" fill="none">
+    <svg className={className} style={style} width={size} height={size} viewBox="0 0 12 7" fill="none">
       <path d="M1 1l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -1136,6 +1136,40 @@ export function SidebarLeftIcon(props: IconProps) {
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <line x1="9" y1="3" x2="9" y2="21" />
       <rect x="3" y="3" width="6" height="18" rx="2" fill="currentColor" stroke="none" fillOpacity={0.35} />
+    </svg>
+  );
+}
+
+export function SidebarRightIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="15" y1="3" x2="15" y2="21" />
+      <rect x="15" y="3" width="6" height="18" rx="2" fill="currentColor" stroke="none" fillOpacity={0.35} />
+    </svg>
+  );
+}
+
+export function SystemIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      {/* Bot/system icon — rectangular face + eyes */}
+      <rect x="3" y="11" width="18" height="10" rx="2" />
+      <path d="M12 11V7" />
+      <path d="M8 7h8" />
+      <circle cx="9" cy="16" r="1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="16" r="1" fill="currentColor" stroke="none" />
+      <path d="M9.5 19.5h5" />
+    </svg>
+  );
+}
+
+export function UserPromptIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      {/* Classic person — circle head + arc body */}
+      <circle cx="12" cy="8" r="4" />
+      <path d="M20 21a8 8 0 1 0-16 0" />
     </svg>
   );
 }

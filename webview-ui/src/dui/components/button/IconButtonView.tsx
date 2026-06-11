@@ -59,7 +59,8 @@ export function IconButtonView({
     opacity: disabled ? 0.45 : 1,
     ...(variant === 'filled'
       ? { background: active ? activeClr : `color-mix(in srgb, ${accent} 12%, transparent)`, color: active ? '#fff' : accent }
-      : { background: active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent', color: active ? activeClr : 'var(--color-text-muted)' }),
+      // Ghost: when accentColor explicitly provided, show it in resting state — otherwise muted
+      : { background: active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent', color: active ? activeClr : (accentColor ? accent : 'var(--color-text-muted)') }),
     ...style,
   };
 
@@ -86,7 +87,7 @@ export function IconButtonView({
           el.style.color = active ? '#fff' : accent;
         } else {
           el.style.background = active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent';
-          el.style.color = active ? activeClr : 'var(--color-text-muted)';
+          el.style.color = active ? activeClr : (accentColor ? accent : 'var(--color-text-muted)');
         }
       }}
       {...rest}

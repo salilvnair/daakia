@@ -16,6 +16,7 @@ export interface DataTableViewProps<T = Record<string, unknown>> {
   rows: T[];
   keyField?: string;
   onRowClick?: (row: T) => void;
+  renderExpanded?: (row: T) => React.ReactNode;
   emptyTitle?: string;
   emptyMessage?: string;
   striped?: boolean;
@@ -30,6 +31,7 @@ export function DataTableView<T extends Record<string, unknown>>({
   rows,
   keyField = 'id',
   onRowClick,
+  renderExpanded,
   emptyTitle = 'No data',
   emptyMessage,
   striped = false,
@@ -39,6 +41,7 @@ export function DataTableView<T extends Record<string, unknown>>({
 }: DataTableViewProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
   const handleSort = (col: DataTableColumn<T>) => {
     if (!col.sortable) return;
@@ -50,6 +53,15 @@ export function DataTableView<T extends Record<string, unknown>>({
     }
   };
 
+  const toggleExpand = (key: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedKeys(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
   const sorted = sortKey
     ? [...rows].sort((a, b) => {
         const av = a[sortKey];
@@ -59,8 +71,14 @@ export function DataTableView<T extends Record<string, unknown>>({
       })
     : rows;
 
+  const expandCol = renderExpanded ? '28px ' : '';
+  const colTemplate = expandCol + columns.map(c => c.width ?? '1fr').join(' ');
   const cellPad = compact ? '5px 10px' : '8px 12px';
   const fontSize = compact ? '11px' : '12px';
+
+  // When rows can expand, the table must grow naturally so expanded content
+  // pushes siblings down instead of scrolling them out of view.
+  const pushMode = !!renderExpanded;
 
   return (
     <div
@@ -69,19 +87,18 @@ export function DataTableView<T extends Record<string, unknown>>({
         border: '1px solid var(--color-surface-border)',
         borderRadius: '6px',
         overflow: 'hidden',
-        maxHeight,
-        display: 'flex',
-        flexDirection: 'column',
+        ...(pushMode ? {} : { maxHeight, display: 'flex', flexDirection: 'column' }),
       }}
     >
       {/* Header */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: columns.map(c => c.width ?? '1fr').join(' '),
+        gridTemplateColumns: colTemplate,
         background: 'var(--color-panel)',
         borderBottom: '1px solid var(--color-surface-border)',
         flexShrink: 0,
       }}>
+        {renderExpanded && <div />}
         {columns.map(col => (
           <div
             key={col.key}
@@ -111,51 +128,103 @@ export function DataTableView<T extends Record<string, unknown>>({
         ))}
       </div>
 
-      {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      {/* Body — push mode: natural flow so expanded rows push siblings; scroll mode: body scrolls within maxHeight */}
+      <div style={pushMode ? {} : { flex: 1, overflowY: 'auto' }}>
         {sorted.length === 0 ? (
           <EmptyStateView title={emptyTitle} message={emptyMessage} compact />
         ) : (
-          sorted.map((row, ri) => (
-            <div
-              key={String(row[keyField] ?? ri)}
-              onClick={() => onRowClick?.(row)}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: columns.map(c => c.width ?? '1fr').join(' '),
-                borderBottom: ri < sorted.length - 1 ? '1px solid var(--color-surface-border)' : 'none',
-                background: striped && ri % 2 === 1
-                  ? 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)'
-                  : 'transparent',
-                cursor: onRowClick ? 'pointer' : 'default',
-                transition: 'background 80ms',
-              }}
-              onMouseEnter={e => { if (onRowClick) (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; }}
-              onMouseLeave={e => { if (onRowClick) (e.currentTarget as HTMLElement).style.background = striped && ri % 2 === 1 ? 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)' : 'transparent'; }}
-            >
-              {columns.map(col => (
+          sorted.map((row, ri) => {
+            const rowKey = String(row[keyField] ?? ri);
+            const isExpanded = expandedKeys.has(rowKey);
+            const bgDefault = striped && ri % 2 === 1
+              ? 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)'
+              : 'transparent';
+
+            return (
+              <div
+                key={rowKey}
+                style={{
+                  borderBottom: ri < sorted.length - 1 ? '1px solid var(--color-surface-border)' : 'none',
+                }}
+              >
+                {/* Data row */}
                 <div
-                  key={col.key}
+                  onClick={() => onRowClick?.(row)}
                   style={{
-                    padding: cellPad,
-                    fontSize,
-                    color: 'var(--color-text-secondary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    textAlign: col.align ?? 'left',
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
+                    display: 'grid',
+                    gridTemplateColumns: colTemplate,
+                    background: bgDefault,
+                    cursor: onRowClick ? 'pointer' : 'default',
+                    transition: 'background 80ms',
+                  }}
+                  onMouseEnter={e => {
+                    if (onRowClick || renderExpanded) {
+                      (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (onRowClick || renderExpanded) {
+                      (e.currentTarget as HTMLElement).style.background = bgDefault;
+                    }
                   }}
                 >
-                  {col.renderCell
-                    ? col.renderCell(row, row[col.key])
-                    : <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(row[col.key] ?? '—')}</span>
-                  }
+                  {/* Expand toggle */}
+                  {renderExpanded && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                      onClick={e => toggleExpand(rowKey, e)}
+                    >
+                      <ChevronRightIcon
+                        size={12}
+                        style={{
+                          color: 'var(--color-text-muted)',
+                          transition: 'transform 120ms',
+                          transform: isExpanded ? 'rotate(90deg)' : 'none',
+                          flexShrink: 0,
+                        }}
+                      />
+                    </div>
+                  )}
+                  {columns.map(col => (
+                    <div
+                      key={col.key}
+                      style={{
+                        padding: cellPad,
+                        fontSize,
+                        color: 'var(--color-text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        textAlign: col.align ?? 'left',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {col.renderCell
+                        ? col.renderCell(row, row[col.key])
+                        : <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(row[col.key] ?? '—')}</span>
+                      }
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ))
+
+                {/* Expanded row */}
+                {renderExpanded && isExpanded && (
+                  <div style={{
+                    background: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)',
+                    borderTop: '1px solid var(--color-surface-border)',
+                  }}>
+                    {renderExpanded(row)}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>
