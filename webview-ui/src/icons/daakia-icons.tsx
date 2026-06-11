@@ -1130,6 +1130,16 @@ export function PanelRightIcon(props: IconProps) {
   );
 }
 
+export function SidebarLeftIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="9" y1="3" x2="9" y2="21" />
+      <rect x="3" y="3" width="6" height="18" rx="2" fill="currentColor" stroke="none" fillOpacity={0.35} />
+    </svg>
+  );
+}
+
 export function StepIntoIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

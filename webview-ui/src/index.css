@@ -98,93 +98,115 @@
   --color-ctx-close-batch: #fb923c;
   --color-ctx-close-saved: #4ade80;
   --color-ctx-close-all: #f43f5e;
+
+  /* Component — Button (granular per-state theming) */
+  --color-btn-primary-bg: var(--color-primary);
+  --color-btn-primary-hover: var(--color-primary-dark);
+  --color-btn-secondary-bg: var(--color-surface-hover);
+  --color-btn-secondary-hover: var(--color-surface-active);
+  --color-btn-secondary-border: var(--color-surface-border);
+  --color-btn-ghost-hover: var(--color-item-hover-bg);
+  --color-btn-danger-bg: var(--color-error);
+
+  /* Component — SideNav */
+  --color-sidenav-item-hover: var(--color-item-hover-bg);
+
+  /* Component — Toggle */
+  --color-toggle-on: var(--color-primary);
+  --color-toggle-thumb: #ffffff;
 }
 
-/* ─── Light theme overrides ─── */
+/* ─── Light theme — VS Code Light+ / GitHub Light / Atom One Light blend ─── */
 .vscode-light,
 [data-theme="light"] {
-  --color-primary: #4f46e5;
-  --color-primary-hover: #6366f1;
-  --color-primary-light: #818cf8;
+  /* Accent / primary — deeper indigo for light bg contrast */
+  --color-primary: #4338ca;
+  --color-primary-hover: #4f46e5;
+  --color-primary-light: #6366f1;
   --color-primary-dark: #3730a3;
 
+  /* Surface — white editor, light gray panel (VS Code Light sidebar: #f3f3f3) */
   --color-surface: #ffffff;
-  --color-surface-hover: #f9fafb;
-  --color-surface-active: #f3f4f6;
-  --color-surface-border: #e5e7eb;
+  --color-surface-hover: #f0f0f0;
+  --color-surface-active: #e8e8e8;
+  --color-surface-border: #d8d8d8;
 
-  --color-panel: #f9fafb;
-  --color-panel-border: #e5e7eb;
+  /* Panel / sidebar — VS Code Light #f3f3f3 */
+  --color-panel: #f3f3f3;
+  --color-panel-border: #d0d0d0;
 
+  /* Elevated — dialogs, dropdowns */
   --color-elevated: #ffffff;
-  --color-elevated-border: #d1d5db;
+  --color-elevated-border: #d0d0d0;
 
-  /* Surface background — used by modals and overlay panels */
   --color-surface-bg: #ffffff;
 
-  --color-input-bg: rgba(0, 0, 0, 0.02);
-  --color-input-border: rgba(0, 0, 0, 0.12);
-  --color-input-hover: rgba(0, 0, 0, 0.04);
-  --color-input-focus: rgba(0, 0, 0, 0.02);
+  /* Inputs — VS Code Light: white bg, #cecece border */
+  --color-input-bg: #ffffff;
+  --color-input-border: #d0d0d0;
+  --color-input-hover: #f5f5f5;
+  --color-input-focus: #ffffff;
 
   --color-icon-hover-bg: rgba(0, 0, 0, 0.06);
-  --color-item-hover-bg: rgba(0, 0, 0, 0.03);
+  --color-item-hover-bg: rgba(0, 0, 0, 0.04);
 
-  --color-text-primary: #1f2937;
-  --color-text-secondary: #475569;
-  --color-text-muted: #94a3b8;
+  /* Text — GitHub Light palette */
+  --color-text-primary: #1f2328;
+  --color-text-secondary: #57606a;
+  --color-text-muted: #8c959f;
 
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-error: #dc2626;
-  --color-info: #4f46e5;
+  --color-success: #1a7f37;
+  --color-warning: #b55e00;
+  --color-error: #cf222e;
+  --color-info: #4338ca;
 
-  --color-method-get: #16a34a;
-  --color-method-post: #d97706;
-  --color-method-put: #2563eb;
+  /* HTTP method colors — saturated for light bg visibility */
+  --color-method-get: #1a7f37;
+  --color-method-post: #b55e00;
+  --color-method-put: #1d6ae5;
   --color-method-patch: #7c3aed;
-  --color-method-delete: #dc2626;
+  --color-method-delete: #cf222e;
   --color-method-head: #0891b2;
-  --color-method-options: #db2777;
+  --color-method-options: #c026d3;
 
-  --color-sidebar-collections: #9333ea;
+  --color-sidebar-collections: #8b5cf6;
   --color-sidebar-history: #0d9488;
-  --color-sidebar-environments: #16a34a;
+  --color-sidebar-environments: #1a7f37;
 
-  --color-protocol-rest: #4f46e5;
-  --color-protocol-graphql: #c2185b;
-  --color-protocol-websocket: #2e7d32;
-  --color-protocol-sse: #d97706;
+  /* Protocol accents — deeper for light background readability */
+  --color-protocol-rest: #4338ca;
+  --color-protocol-graphql: #b91c8c;
+  --color-protocol-websocket: #15803d;
+  --color-protocol-sse: #b55e00;
   --color-protocol-socketio: #0d9488;
   --color-protocol-mqtt: #7c3aed;
-  --color-protocol-grpc: #009e9a;
-  --color-protocol-soap: #e85d5d;
-  --color-protocol-ai: #880D1E;
+  --color-protocol-grpc: #0891b2;
+  --color-protocol-soap: #dc2626;
+  --color-protocol-ai: #be123c;
   --color-protocol-mcp: #475569;
 
-  --color-mock-server: #d97706;
+  --color-mock-server: #b55e00;
   --color-mock-server-muted: #92400e;
-  --color-try-button: #4f46e5;
+  --color-try-button: #4338ca;
 
   --color-settings: #1f7a6e;
 
-  --color-time-fast: #16a34a;
-  --color-time-moderate: #d97706;
+  --color-time-fast: #1a7f37;
+  --color-time-moderate: #b55e00;
   --color-time-slow: #c2410c;
-  --color-time-critical: #dc2626;
+  --color-time-critical: #cf222e;
 
   --color-muted: #6b7280;
   --color-muted-fallback: #9ca3af;
   --color-status-5xx: #991b1b;
 
-  /* Context menu icon colors */
   --color-ctx-rename: #0891b2;
   --color-ctx-duplicate: #7c3aed;
-  --color-ctx-pin: #d97706;
-  --color-ctx-close: #dc2626;
+  --color-ctx-pin: #b55e00;
+  --color-ctx-close: #cf222e;
   --color-ctx-close-batch: #ea580c;
-  --color-ctx-close-saved: #16a34a;
-  --color-ctx-close-all: #be123c;
+  --color-ctx-close-saved: #1a7f37;
+  --color-ctx-close-all: #9f1239;
 }
 
 :root {

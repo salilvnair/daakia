@@ -272,7 +272,7 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
   }, [deleteTarget, provider.id, removeProvider, removeModel]);
 
   return (
-    <div className="rounded-lg overflow-hidden group/card" style={{ border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, backgroundColor: `color-mix(in srgb, ${accent} 4%, transparent)` }}>
+    <div className="rounded-lg overflow-hidden group/card" style={{ border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, backgroundColor: 'transparent' }}>
       {/* Provider header row */}
       <div className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors" onClick={() => setExpanded(!expanded)}>
         {expanded
@@ -465,7 +465,7 @@ function DaakiaMockProviderCard({ provider }: { provider: AiProviderConfig }) {
   }, [providers, provider, addProvider, updateProvider]);
 
   return (
-    <div className="rounded-lg overflow-hidden group/card" style={{ border: `1.5px solid color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 40%, transparent)`, backgroundColor: `color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 5%, transparent)` }}>
+    <div className="rounded-lg overflow-hidden group/card" style={{ border: `1.5px solid color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 40%, transparent)`, backgroundColor: 'transparent' }}>
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5">
         <DaakiaMockProviderIcon size={20} />
@@ -599,7 +599,7 @@ function CopilotProviderCard({ provider }: { provider: AiProviderConfig }) {
   }, [provider.models, setDefaultProvider]);
 
   return (
-    <div className="rounded-lg overflow-hidden border-2 group/card" style={{ borderColor: `color-mix(in srgb, ${COPILOT_ACCENT} 40%, transparent)`, backgroundColor: `color-mix(in srgb, ${COPILOT_ACCENT} 5%, transparent)` }}>
+    <div className="rounded-lg overflow-hidden border-2 group/card" style={{ borderColor: `color-mix(in srgb, ${COPILOT_ACCENT} 40%, transparent)`, backgroundColor: 'transparent' }}>
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         {expanded ? <ChevronDownIcon size={12} style={{ color: COPILOT_ACCENT }} /> : <ChevronRightIcon size={12} style={{ color: COPILOT_ACCENT }} />}
