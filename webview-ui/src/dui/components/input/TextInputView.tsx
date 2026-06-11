@@ -1,10 +1,13 @@
 import { forwardRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useInputBase } from '../../core/InputBase';
 
-export type TextInputSize = 'default' | 'sm' | 'md' | 'lg' | 'xl';
+/** `'default'` is kept for backwards-compat and resolves to context size. */
+export type TextInputSize = 'default' | DuiSize;
 
 export interface TextInputViewProps extends InputHTMLAttributes<HTMLInputElement> {
   size?: TextInputSize;
-  /** true = 4px radius (default), false = 0px square */
+  /** true = token border-radius (default), false = 0px square */
   rounded?: boolean;
   /** Override focus border / ring color (CSS var or raw) */
   accentColor?: string;
@@ -16,23 +19,16 @@ export interface TextInputViewProps extends InputHTMLAttributes<HTMLInputElement
   iconRight?: ReactNode;
 }
 
-const SIZE: Record<TextInputSize, { h: string; px: string; text: string }> = {
-  default: { h: '26px', px: '10px', text: '11px' },
-  sm:      { h: '22px', px: '8px',  text: '10px' },
-  md:      { h: '28px', px: '10px', text: '11px' },
-  lg:      { h: '32px', px: '12px', text: '12px' },
-  xl:      { h: '36px', px: '12px', text: '13px' },
-};
-
 export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
   function TextInputView(
     { size = 'default', rounded = true, accentColor, error = false, iconLeft, iconRight, style, className = '', onFocus, onBlur, ...rest },
     ref
   ) {
     const [focused, setFocused] = useState(false);
-    const { h, px, text } = SIZE[size] ?? SIZE.default;
+    // 'default' defers to DuiProvider context (or 'md' when no provider)
+    const base = useInputBase(size === 'default' ? undefined : size);
     const accent = accentColor || 'var(--color-primary)';
-    const radius = rounded ? '4px' : '0px';
+    const radius = rounded ? base.borderRadius : '0px';
 
     const borderColor = error
       ? 'var(--color-error)'
@@ -43,7 +39,7 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
     const containerStyle: React.CSSProperties = {
       display: 'inline-flex',
       alignItems: 'center',
-      height: h,
+      height: base.height,
       borderRadius: radius,
       border: `1px solid ${borderColor}`,
       background: 'var(--color-input-bg)',
@@ -56,7 +52,7 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
     return (
       <div style={containerStyle} className={className}>
         {iconLeft && (
-          <span style={{ paddingLeft: px, display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)', flexShrink: 0 }}>
+          <span style={{ paddingLeft: base.paddingX, display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)', flexShrink: 0 }}>
             {iconLeft}
           </span>
         )}
@@ -65,9 +61,9 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
           style={{
             flex: 1,
             height: '100%',
-            paddingLeft: iconLeft ? '6px' : px,
-            paddingRight: iconRight ? '6px' : px,
-            fontSize: text,
+            paddingLeft: iconLeft ? '6px' : base.paddingX,
+            paddingRight: iconRight ? '6px' : base.paddingX,
+            fontSize: base.fontSize,
             background: 'transparent',
             border: 'none',
             outline: 'none',
@@ -80,7 +76,7 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
           {...rest}
         />
         {iconRight && (
-          <span style={{ paddingRight: px, display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)', flexShrink: 0 }}>
+          <span style={{ paddingRight: base.paddingX, display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)', flexShrink: 0 }}>
             {iconRight}
           </span>
         )}

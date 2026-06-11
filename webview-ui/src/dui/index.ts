@@ -2,8 +2,35 @@
 // Unified, theme-aware component set for all Daakia screens.
 // All components use existing VS Code CSS variables — zero extra config needed.
 
+// ─── Core: size system, context, and category base hooks ─────────────────────
+export type { DuiSize, DuiRadius, DuiConfig } from './core/DuiTypes';
+export { DUI_HEIGHT, DUI_CHIP_HEIGHT, DUI_TOGGLE, DUI_ICON_SIZE, DUI_FONT_SIZE, DUI_PADDING_X, DUI_GAP, DUI_RADIUS_MAP, DUI_DEFAULT_RADIUS } from './core/DuiTokens';
+export { DuiProvider, useDui } from './core/DuiContext';
+export type { InputBaseConfig } from './core/InputBase';
+export { useInputBase } from './core/InputBase';
+export type { ButtonBaseConfig } from './core/ButtonBase';
+export { useButtonBase } from './core/ButtonBase';
+export type { NavBaseConfig } from './core/NavBase';
+export { useNavBase } from './core/NavBase';
+export type { ChipBaseConfig } from './core/ChipBase';
+export { useChipBase } from './core/ChipBase';
+export type { ToggleBaseConfig } from './core/ToggleBase';
+export { useToggleBase } from './core/ToggleBase';
+export type { MenuBaseConfig } from './core/MenuBase';
+export { useMenuBase } from './core/MenuBase';
+export type { TabBaseConfig } from './core/TabBase';
+export { useTabBase } from './core/TabBase';
+export type { TableBaseConfig } from './core/TableBase';
+export { useTableBase } from './core/TableBase';
+export type { DisplayBaseConfig } from './core/DisplayBase';
+export { useDisplayBase } from './core/DisplayBase';
+export type { OverlayBaseConfig } from './core/OverlayBase';
+export { useOverlayBase } from './core/OverlayBase';
+export type { CardBaseConfig } from './core/CardBase';
+export { useCardBase } from './core/CardBase';
+
 export { ChipView } from './components/chips/ChipView';
-export type { ChipViewProps } from './components/chips/ChipView';
+export type { ChipViewProps, ChipViewSize } from './components/chips/ChipView';
 
 export { ButtonView } from './components/button/ButtonView';
 export type { ButtonViewProps, ButtonVariant, ButtonSize } from './components/button/ButtonView';
@@ -88,7 +115,7 @@ export type { CodeBlockViewProps } from './components/display/CodeBlockView';
 export { AIButtonView } from './components/button/AIButtonView';
 export type { AIButtonViewProps, AIButtonAction } from './components/button/AIButtonView';
 
-export { SideNavView } from './components/layout/SideNavView';
+export { SideNavView, filterItems, countLeaves } from './components/layout/SideNavView';
 export type { SideNavViewProps, SideNavItem } from './components/layout/SideNavView';
 
 export { SettingsNavView } from './components/layout/SettingsNavView';

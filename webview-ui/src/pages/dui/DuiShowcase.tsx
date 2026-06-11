@@ -29,6 +29,9 @@ import {
   CodeBlockView,
   SelectTextInputView,
   SideNavView,
+  DuiProvider,
+  PillTabsView,
+  ToggleSwitchView,
 } from '../../dui';
 import type { TabItem, ContextMenuItem, TabBarTab, SelectTextOption, SideNavItem } from '../../dui';
 import { applyMonacoTheme } from '../../monaco-setup';
@@ -55,7 +58,7 @@ type CategoryId =
   | 'sidenav' | 'settingsnav' | 'themecardselector' | 'featurecategory'
   | 'taginput' | 'bottompanel' | 'toast' | 'promptcard' | 'promptlibrary' | 'iconsgallery' | 'themeconfig' | 'stageview'
   | 'searchinput' | 'durationinput' | 'pilltabs' | 'splitbutton' | 'highlightedinput' | 'keyvaluetable'
-  | 'mergedinput';
+  | 'mergedinput' | 'duiprovider';
 
 interface SidebarItem { id: CategoryId; label: string; icon: React.ReactNode }
 interface SidebarGroup { title: string; items: SidebarItem[] }
@@ -138,6 +141,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     title: 'More',
     items: [
+      { id: 'duiprovider',  label: 'DuiProvider (Size)',    icon: <LayersIcon size={13} /> },
       { id: 'patterns',     label: 'Patterns',              icon: <CodeBracketsIcon size={13} /> },
       { id: 'iconsgallery', label: 'Icons Gallery',         icon: <SearchIcon size={13} /> },
       { id: 'themeconfig',  label: 'Theme Customization',   icon: <WandIcon size={13} /> },
@@ -1303,7 +1307,7 @@ function TabBarPanel() {
 
   return (
     <div>
-      <Row label="Full tab bar — protocol badges · dirty dot · close on hover · add tab" noPad code={`<TabBarView\n  tabs={tabs}\n  activeTabId={activeId}\n  onTabClick={setActiveId}\n  onTabClose={closeTab}\n  onAddTab={addTab}\n  accentColor="var(--color-protocol-rest)"\n/>`}>
+      <Row label="Full tab bar — protocol badges · dirty dot · close on hover · add tab" noPad code={`// Each tab has a 'protocol' field — that's what drives the colored prefix badge\nconst tabs = [\n  { id: '1', label: 'GET /users',       type: 'request', protocol: 'rest',      method: 'GET'  },\n  { id: '2', label: 'POST /auth/login', type: 'request', protocol: 'rest',      method: 'POST', dirty: true },\n  { id: '3', label: 'getUsers',         type: 'request', protocol: 'graphql'                    },  // → shows "GQL"\n  { id: '4', label: 'Echo server',      type: 'request', protocol: 'websocket', rtProtocol: 'websocket' },\n  { id: '5', label: 'MQTT broker',      type: 'request', protocol: 'websocket', rtProtocol: 'mqtt' },\n  { id: '6', label: 'UserService.Get',  type: 'request', protocol: 'grpc'                       },  // → shows "gRPC"\n  { id: '7', label: 'Invoice.wsdl',     type: 'request', protocol: 'soap'                       },  // → shows "SOAP"\n  { id: '8', label: 'Settings',  type: 'settings'    },\n  { id: '9', label: 'Mock Server', type: 'mock-server' },\n];\n\n<TabBarView\n  tabs={tabs}\n  activeTabId={activeId}\n  onTabClick={setActiveId}\n  onTabClose={closeTab}\n  onAddTab={addTab}\n  accentColor="var(--color-protocol-rest)"\n/>`}>
         <div style={{ width: '100%' }}>
           <TabBarView
             tabs={tabs}
@@ -1328,7 +1332,7 @@ function TabBarPanel() {
         </div>
       </Row>
 
-      <Row label="Protocol-colored accents" align="flex-start" code={`<TabBarView tabs={gqlTabs} activeTabId="g1" accentColor="var(--color-protocol-graphql)" height={32} />\n<TabBarView tabs={sseTabs} activeTabId="w1" accentColor="var(--color-protocol-sse)"     height={32} />\n<TabBarView tabs={grpcTabs} activeTabId="r1" accentColor="var(--color-protocol-grpc)"    height={32} />`}>
+      <Row label="Protocol-colored accents — 'protocol' field controls badge label and color" align="flex-start" code={`// protocol field → badge label + color:\n//   'graphql'   → "GQL"  in var(--color-protocol-graphql)\n//   'grpc'      → "gRPC" in var(--color-protocol-grpc)\n//   'soap'      → "SOAP" in var(--color-protocol-soap)\n//   'ai'        → "AI"   in var(--color-protocol-ai)\n//   'mcp'       → "MCP"  in var(--color-protocol-mcp)\n//   'websocket' → "WS" or rtProtocol badge (SSE, SIO, MQTT)\n\nconst gqlTabs  = [{ id: 'g1', label: 'getUsers query', type: 'request', protocol: 'graphql' }];\nconst sseTabs  = [{ id: 'w1', label: 'SSE /events',    type: 'request', protocol: 'websocket', rtProtocol: 'sse' }];\nconst grpcTabs = [{ id: 'r1', label: 'Realtime.Chat',  type: 'request', protocol: 'grpc' }];\n\n// accentColor drives the active-tab top-border and the + button color\n<TabBarView tabs={gqlTabs}  activeTabId="g1" accentColor="var(--color-protocol-graphql)" height={32} />\n<TabBarView tabs={sseTabs}  activeTabId="w1" accentColor="var(--color-protocol-sse)"     height={32} />\n<TabBarView tabs={grpcTabs} activeTabId="r1" accentColor="var(--color-protocol-grpc)"    height={32} />`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
           {([
             { tabs: [{ id: 'g1', label: 'getUsers query',   type: 'request', protocol: 'graphql' }], accent: 'var(--color-protocol-graphql)' },
@@ -1409,6 +1413,56 @@ function StageViewPanel() {
   );
 }
 
+// ─── DuiProvider showcase ─────────────────────────────────────────────────────
+
+const SIZES_DEMO = ['sm', 'md', 'lg', 'xl'] as const;
+const PILL_TABS_DEMO = [
+  { id: 'body',    label: 'Body' },
+  { id: 'headers', label: 'Headers', badge: 3 },
+  { id: 'auth',    label: 'Auth' },
+];
+
+function DuiSizeBlock({ size }: { size: 'sm' | 'md' | 'lg' | 'xl' }) {
+  const [toggled, setToggled] = useState(false);
+  const [activeTab, setActiveTab] = useState('body');
+  const [inputVal, setInputVal] = useState('');
+  const accent = 'var(--color-primary)';
+  return (
+    <DuiProvider size={size}>
+      <div style={{
+        padding: '14px 16px', borderRadius: 8, border: '1px solid var(--color-surface-border)',
+        background: 'var(--color-panel)', display: 'flex', flexDirection: 'column', gap: 10,
+      }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: accent, marginBottom: 2 }}>
+          size="{size}"
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <ButtonView variant="primary" label="Send" accentColor={accent} />
+          <ButtonView variant="secondary" label="Cancel" />
+          <ButtonView variant="ghost" label="Reset" />
+        </div>
+        <TextInputView placeholder="Endpoint URL…" value={inputVal} onChange={e => setInputVal(e.target.value)} style={{ width: '100%' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <ToggleSwitchView checked={toggled} onChange={setToggled} label="Enable" />
+          <PillTabsView tabs={PILL_TABS_DEMO} activeTab={activeTab} onChange={setActiveTab} accentColor={accent} />
+        </div>
+      </div>
+    </DuiProvider>
+  );
+}
+
+function DuiProviderPanel() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <Row label="All four sizes — one provider wraps all components" code={`<DuiProvider size="sm">\n  <ButtonView label="Send" />\n  <TextInputView placeholder="URL…" />\n  <ToggleSwitchView checked label="Enable" />\n  <PillTabsView tabs={tabs} activeTab={tab} onChange={setTab} />\n</DuiProvider>`}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {SIZES_DEMO.map(s => <DuiSizeBlock key={s} size={s} />)}
+        </div>
+      </Row>
+    </div>
+  );
+}
+
 // ─── Panel map ────────────────────────────────────────────────────────────────
 
 const PANELS: Record<CategoryId, { title: string; desc: string; content: React.ReactNode; code?: string }> = {
@@ -1421,7 +1475,7 @@ const PANELS: Record<CategoryId, { title: string; desc: string; content: React.R
   dropdownbutton:    { title: 'DropDownButtonView',     desc: 'Split button — primary action + chevron dropdown — Save as, Export as, etc.',      content: <DropDownButtonPanel />,    code: `<DropDownButtonView\n  label="Save"\n  onClick={save}\n  items={[\n    { label: 'Save as JSON', onClick: saveJson },\n    { label: 'Save as YAML', onClick: saveYaml },\n  ]}\n/>` },
   contextmenu:       { title: 'ContextMenuView',        desc: 'Recursive context menu with submenus — portal rendered — collection tree style.',   content: <ContextMenuPanel />,       code: `<ContextMenuView\n  items={[\n    { label: 'New Request', icon: <PlusIcon />, onClick: addReq },\n    { label: 'Rename',      icon: <RenameIcon />, onClick: rename },\n    { separator: true },\n    { label: 'Delete',      icon: <TrashIcon />, danger: true, onClick: del },\n  ]}\n/>` },
   tabs:              { title: 'TabView',                desc: 'pill · underline · gql (closeable+scrollable+addable) — all with accentColor.',     content: <TabsPanel />,              code: `<TabView\n  variant="pill"\n  tabs={[\n    { id: 'params',  label: 'Params' },\n    { id: 'headers', label: 'Headers' },\n    { id: 'body',    label: 'Body' },\n  ]}\n  activeTab={activeTab}\n  onTabChange={setActiveTab}\n/>` },
-  tabbar:            { title: 'TabBarView',             desc: 'VS Code-style protocol tab bar — store-free, drag-free, scroll arrows, dirty dot.', content: <TabBarPanel />,            code: `<TabBarView\n  tabs={tabs}\n  activeTabId={activeId}\n  onTabClick={setActiveId}\n  onTabClose={closeTab}\n  onAddTab={addTab}\n  protocol="REST"\n/>` },
+  tabbar:            { title: 'TabBarView',             desc: 'VS Code-style protocol tab bar — store-free, drag-free, scroll arrows, dirty dot.', content: <TabBarPanel />,            code: `// 'protocol' on each tab controls the colored prefix badge (GQL, gRPC, SOAP…)\nconst tabs = [\n  { id: '1', label: 'GET /users', type: 'request', protocol: 'rest',    method: 'GET' },\n  { id: '2', label: 'getUsers',   type: 'request', protocol: 'graphql'  },  // → GQL\n  { id: '3', label: 'Chat.Send',  type: 'request', protocol: 'grpc'     },  // → gRPC\n];\n\n<TabBarView\n  tabs={tabs}\n  activeTabId={activeId}\n  onTabClick={setActiveId}\n  onTabClose={closeTab}\n  onAddTab={addTab}\n  accentColor="var(--color-protocol-rest)"\n/>` },
   keyvalue:          { title: 'KeyValueItemView',       desc: 'Single KV row — circle toggle · masked values · drag handle · delete on hover.',   content: <KeyValuePanel />,          code: `<KeyValueItemView\n  keyLabel="Authorization"\n  valueLabel="Bearer {{token}}"\n  enabled={true}\n  onEnabledChange={toggle}\n  onDelete={remove}\n/>` },
   editor:            { title: 'EditorView',             desc: 'Monaco editor wrapper — simplified props — JSON / GQL / XML / YAML etc.',           content: <EditorPanel />,            code: `<EditorView\n  value={body}\n  onChange={setBody}\n  language="json"\n  height={300}\n  readOnly={false}\n/>` },
   patterns:          { title: 'Real-world Patterns',    desc: 'How DUI components assemble into actual Daakia UI — URL bar · tabs · tree.',        content: <PatternsPanel /> },
@@ -1459,6 +1513,7 @@ const PANELS: Record<CategoryId, { title: string; desc: string; content: React.R
   highlightedinput:  { title: 'HighlightedInputView',   desc: '{{variable}} highlighted URL input with autocomplete dropdown — the Daakia URL bar.',   content: <HighlightedInputPanel />,  code: `<HighlightedInputView\n  value={url}\n  onChange={setUrl}\n  placeholder="https://api.example.com/{{env}}/users"\n  suggestions={urlHistory}\n/>` },
   keyvaluetable:     { title: 'KeyValueTableView',      desc: 'Full KV table with toolbar, row add/delete, bulk clear, enabled toggles — wraps KeyValueItemView rows.',  content: <KeyValueTablePanel />, code: `<KeyValueTableView\n  rows={headers}\n  onChange={setHeaders}\n  label="Request Headers"\n  accentColor="var(--color-protocol-rest)"\n  placeholder={{ key: 'Header name', value: 'Header value' }}\n/>` },
   mergedinput:       { title: 'MergedInputView',         desc: 'Unified single-border input bar — merge select dropdowns, text inputs, inline buttons, and dividers into one pill.',  content: <MergedInputViewPanel />, code: `<MergedInputView\n  segments={[\n    { type: 'select', value: version, options: SOAP_VERSIONS, onChange: setVersion, width: 96 },\n    { type: 'divider' },\n    { type: 'button', label: 'WSDL', icon: <UploadIcon size={10} />, onClick: openWsdl,\n      accentColor: 'var(--color-protocol-soap)' },\n    { type: 'divider' },\n    { type: 'text', value: url, onChange: setUrl, placeholder: 'https://service.example.com/endpoint' },\n  ]}\n  accentColor="var(--color-protocol-soap)"\n/>` },
+  duiprovider:       { title: 'DuiProvider — Size System', desc: 'Wrap any subtree with <DuiProvider size="sm|md|lg|xl"> and ALL nested DUI components inherit that size — buttons, inputs, toggles, tabs, nav items. No prop drilling.', content: <DuiProviderPanel /> },
 };
 
 // ─── Main showcase ────────────────────────────────────────────────────────────

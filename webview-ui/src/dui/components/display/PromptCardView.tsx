@@ -135,18 +135,16 @@ export function PromptCardView({
             {title}
           </span>
           {isCustom && (
-            <span style={{
-              fontSize: '9px',
-              fontWeight: 700,
-              padding: '1px 5px',
-              borderRadius: 99,
-              background: colors?.customBadgeBg ?? `color-mix(in srgb, ${accent} 15%, transparent)`,
-              color: colors?.customBadgeText ?? accent,
-              flexShrink: 0,
-              letterSpacing: '0.04em',
-            }}>
-              CUSTOM
-            </span>
+            <ChipView
+              label="CUSTOM"
+              color={colors?.customBadgeText ?? 'var(--color-text-muted)'}
+              size="xs"
+              style={{
+                flexShrink: 0,
+                background: colors?.customBadgeBg ?? 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--color-text-muted) 20%, transparent)',
+              }}
+            />
           )}
         </div>
         {(description || content) && (

@@ -1,4 +1,9 @@
 import type { CSSProperties } from 'react';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useChipBase } from '../../core/ChipBase';
+
+/** `'xs'` is a sub-sm alias kept for dense protocol badges. */
+export type ChipViewSize = 'xs' | DuiSize;
 
 export interface ChipViewProps {
   label: string;
@@ -6,8 +11,9 @@ export interface ChipViewProps {
   color?: string;
   /** Override background explicitly instead of deriving from color */
   bg?: string;
-  size?: 'xs' | 'sm' | 'md';
-  /** true = rounded-full (default), false = 4px corners */
+  /** Size — falls back to DuiProvider context when omitted (resolves to 'sm' equivalent). */
+  size?: ChipViewSize;
+  /** true = rounded-full (default), false = token border-radius */
   rounded?: boolean;
   onClick?: () => void;
   /** Filled background instead of translucent */
@@ -16,31 +22,34 @@ export interface ChipViewProps {
   style?: CSSProperties;
 }
 
-const SIZE: Record<string, { height: string; px: string; fontSize: string }> = {
-  xs: { height: '16px', px: '5px',  fontSize: '9px'  },
-  sm: { height: '18px', px: '7px',  fontSize: '10px' },
-  md: { height: '20px', px: '9px',  fontSize: '11px' },
-};
+const XS = { height: '16px', px: '5px', fontSize: '9px' };
 
 export function ChipView({
   label,
   color,
   bg,
-  size = 'sm',
+  size,
   rounded = true,
   onClick,
   active = false,
   className = '',
   style,
 }: ChipViewProps) {
-  const { height, px, fontSize } = SIZE[size] ?? SIZE.sm;
+  // 'xs' bypasses the size system — it's a fixed sub-sm preset for dense badges.
+  const isXs = size === 'xs';
+  // For DuiSize values (sm/md/lg/xl) or undefined (inherits from context), use the base hook.
+  const base = useChipBase(isXs ? 'sm' : (size as DuiSize | undefined));
+  const { height, px, fontSize } = isXs
+    ? XS
+    : { height: base.height, px: base.paddingX, fontSize: base.fontSize };
+
   const accent = color || 'var(--color-primary)';
   const borderRadius = rounded ? '9999px' : '4px';
 
   const background = active
     ? accent
     : (bg || `color-mix(in srgb, ${accent} 12%, transparent)`);
-  const textColor = active ? '#fff' : accent;
+  const textColor = active ? 'var(--color-btn-primary-text, #fff)' : accent;
   const borderColor = `color-mix(in srgb, ${accent} 30%, transparent)`;
 
   return (

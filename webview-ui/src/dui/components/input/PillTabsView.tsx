@@ -1,4 +1,6 @@
 import { useState, useRef, useLayoutEffect } from 'react';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useTabBase } from '../../core/TabBase';
 
 export interface PillTabItem {
   id: string;
@@ -15,7 +17,8 @@ export interface PillTabsViewProps {
   tabs: PillTabItem[];
   activeTab: string;
   onChange: (id: string) => void;
-  size?: 'sm' | 'md';
+  /** Falls back to DuiProvider context when omitted. */
+  size?: DuiSize;
   variant?: PillTabsVariant;
   accentColor?: string;
   className?: string;
@@ -25,11 +28,12 @@ export function PillTabsView({
   tabs,
   activeTab,
   onChange,
-  size = 'md',
+  size,
   variant = 'pill',
   accentColor,
   className = '',
 }: PillTabsViewProps) {
+  const base = useTabBase(size);
   const containerRef = useRef<HTMLDivElement>(null);
   const [ind, setInd] = useState({ left: 0, width: 0 });
 
@@ -40,9 +44,6 @@ export function PillTabsView({
   }, [activeTab, tabs]);
 
   const accent = accentColor || 'var(--color-primary)';
-  const fontSize = size === 'sm' ? 12 : 13;
-  const py = size === 'sm' ? '5px' : '7px';
-  const px = size === 'sm' ? '12px' : '16px';
 
   if (variant === 'underline') {
     return (
@@ -72,12 +73,12 @@ export function PillTabsView({
             style={{
               position: 'relative', zIndex: 1,
               paddingBottom: '10px', paddingTop: '4px',
-              paddingLeft: px, paddingRight: px,
-              fontSize, fontWeight: 500, cursor: 'pointer',
+              paddingLeft: base.paddingX, paddingRight: base.paddingX,
+              fontSize: base.fontSize, fontWeight: 500, cursor: 'pointer',
               background: 'transparent', border: 'none', fontFamily: 'inherit',
               color: tab.id === activeTab ? accent : 'var(--color-text-secondary)',
               transition: 'color 150ms',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
+              display: 'inline-flex', alignItems: 'center', gap: base.gap,
             }}
             onMouseEnter={e => { if (tab.id !== activeTab) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = tab.id === activeTab ? accent : 'var(--color-text-secondary)'; }}
@@ -120,12 +121,13 @@ export function PillTabsView({
           onClick={() => onChange(tab.id)}
           style={{
             position: 'relative', zIndex: 1,
-            padding: `${py} ${px}`,
-            fontSize, fontWeight: 500, cursor: 'pointer',
+            padding: `0 ${base.paddingX}`,
+            height: base.height,
+            fontSize: base.fontSize, fontWeight: 500, cursor: 'pointer',
             background: 'transparent', border: 'none', borderRadius: 5, fontFamily: 'inherit',
             color: tab.id === activeTab ? accent : 'var(--color-text-secondary)',
             transition: 'color 150ms',
-            display: 'inline-flex', alignItems: 'center', gap: 5,
+            display: 'inline-flex', alignItems: 'center', gap: base.gap,
           }}
           onMouseEnter={e => { if (tab.id !== activeTab) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = tab.id === activeTab ? accent : 'var(--color-text-secondary)'; }}
@@ -145,7 +147,7 @@ function TabBadge(tab: PillTabItem, accent: string) {
       : `color-mix(in srgb, ${accent} 15%, transparent)`;
     const color = tab.badgeColor || accent;
     return (
-      <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: bg, color, fontWeight: 700 }}>
+      <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: 99, background: bg, color, fontWeight: 700 }}>
         {tab.badge}
       </span>
     );

@@ -83,25 +83,25 @@ export function ToggleSwitchPanel() {
   const [v3, setV3] = useState(true);
   return (
     <div>
-      <Row label="Sizes sm / md / lg">
+      <Row label="Sizes sm / md / lg" code={`<ToggleSwitchView checked={v} onChange={setV} size="sm" label="Small" />\n<ToggleSwitchView checked={v} onChange={setV} size="md" label="Medium" />\n<ToggleSwitchView checked={v} onChange={setV} size="lg" label="Large" />`}>
         <ToggleSwitchView checked={v1} onChange={setV1} size="sm" label="Small" />
         <ToggleSwitchView checked={v1} onChange={setV1} size="md" label="Medium" />
         <ToggleSwitchView checked={v1} onChange={setV1} size="lg" label="Large" />
       </Row>
-      <Row label="On / Off state">
+      <Row label="On / Off state" code={`<ToggleSwitchView checked={true}  onChange={setV} label="Enabled" />\n<ToggleSwitchView checked={false} onChange={setV} label="Disabled" />`}>
         <ToggleSwitchView checked={true} onChange={() => {}} label="Enabled" />
         <ToggleSwitchView checked={false} onChange={() => {}} label="Disabled" />
       </Row>
-      <Row label="Disabled (dashed border)">
+      <Row label="Disabled (dashed border)" code={`<ToggleSwitchView checked={false} onChange={() => {}} disabled label="Disabled off" />\n<ToggleSwitchView checked={true}  onChange={() => {}} disabled label="Disabled on" />`}>
         <ToggleSwitchView checked={false} onChange={() => {}} disabled label="Disabled off" />
         <ToggleSwitchView checked={true} onChange={() => {}} disabled label="Disabled on" />
       </Row>
-      <Row label="Protocol accent colors">
+      <Row label="Protocol accent colors" code={`<ToggleSwitchView checked={v} onChange={setV} accentColor="var(--color-protocol-rest)" />\n<ToggleSwitchView checked={v} onChange={setV} accentColor="var(--color-protocol-graphql)" />\n<ToggleSwitchView checked={v} onChange={setV} accentColor="var(--color-success)" />`}>
         {(['var(--color-protocol-rest)', 'var(--color-protocol-graphql)', 'var(--color-protocol-websocket)', 'var(--color-success)'] as const).map(color => (
           <ToggleSwitchView key={color} checked={v1} onChange={setV1} accentColor={color} />
         ))}
       </Row>
-      <Row label="Label positions left / right">
+      <Row label="Label positions left / right" code={`<ToggleSwitchView checked={v} onChange={setV} label="Left label"  labelPosition="left" />\n<ToggleSwitchView checked={v} onChange={setV} label="Right label" labelPosition="right" />`}>
         <ToggleSwitchView checked={v2} onChange={setV2} label="Left label" labelPosition="left" />
         <ToggleSwitchView checked={v3} onChange={setV3} label="Right label" labelPosition="right" />
       </Row>
@@ -145,7 +145,7 @@ export function ModalPanel() {
   const [openLg, setOpenLg] = useState(false);
   return (
     <div>
-      <Row label="Sizes sm / md / lg — click X or Cancel to close (backdrop never closes)">
+      <Row label="Sizes sm / md / lg — click X or Cancel to close (backdrop never closes)" code={`<ModalView\n  open={open}\n  onClose={() => setOpen(false)}\n  title="Confirm Delete"\n  size="sm"\n  footerRight={<ButtonView label="Confirm" variant="primary" onClick={confirm} />}\n>\n  Are you sure?\n</ModalView>`}>
         <Block style={{ display: 'flex', gap: '10px', padding: '16px' }}>
           <button type="button" onClick={() => setOpenSm(true)} style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid var(--color-surface-border)', background: 'var(--color-surface)', cursor: 'pointer', color: 'var(--color-text-primary)', fontSize: '12px' }}>Open SM modal</button>
           <button type="button" onClick={() => setOpenMd(true)} style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid var(--color-surface-border)', background: 'var(--color-surface)', cursor: 'pointer', color: 'var(--color-text-primary)', fontSize: '12px' }}>Open MD modal</button>
@@ -185,7 +185,7 @@ export function LoaderPanel() {
   const [progress, setProgress] = useState(45);
   return (
     <div>
-      <Row label="Variants — spinner · dots · skeleton · pulse · progress-bar">
+      <Row label="Variants — spinner · dots · skeleton · pulse · progress-bar" code={`<LoaderView variant="spinner"  label="Loading…" />\n<LoaderView variant="dots" />\n<LoaderView variant="skeleton" width={200} height={14} />\n<LoaderView variant="pulse" />`}>
         <Block style={{ display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap', padding: '24px' }}>
           <LoaderView variant="spinner" label="Spinner" />
           <LoaderView variant="dots" label="Dots" />
@@ -193,20 +193,20 @@ export function LoaderPanel() {
           <LoaderView variant="pulse" />
         </Block>
       </Row>
-      <Row label="Progress bar (drag slider)">
+      <Row label="Progress bar (drag slider)" code={`<LoaderView variant="progress-bar" progress={progress} label={\`\${progress}%\`} />`}>
         <Block style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px', width: '100%' }}>
           <LoaderView variant="progress-bar" progress={progress} label={`${progress}%`} />
           <input type="range" min={0} max={100} value={progress} onChange={e => setProgress(+e.target.value)} style={{ width: '100%' }} />
         </Block>
       </Row>
-      <Row label="Sizes sm / md / lg">
+      <Row label="Sizes sm / md / lg" code={`<LoaderView variant="spinner" size="sm" />\n<LoaderView variant="spinner" size="md" />\n<LoaderView variant="spinner" size="lg" />`}>
         <Block style={{ display: 'flex', gap: '20px', alignItems: 'center', padding: '20px' }}>
           <LoaderView variant="spinner" size="sm" />
           <LoaderView variant="spinner" size="md" />
           <LoaderView variant="spinner" size="lg" />
         </Block>
       </Row>
-      <Row label="Protocol accent colors">
+      <Row label="Protocol accent colors" code={`<LoaderView variant="spinner" accentColor="var(--color-protocol-rest)" />\n<LoaderView variant="spinner" accentColor="var(--color-protocol-graphql)" />`}>
         <Block style={{ display: 'flex', gap: '20px', alignItems: 'center', padding: '20px', flexWrap: 'wrap' }}>
           {['var(--color-protocol-rest)', 'var(--color-protocol-graphql)', 'var(--color-protocol-websocket)', 'var(--color-protocol-grpc)', 'var(--color-protocol-ai)'].map(c => (
             <LoaderView key={c} variant="spinner" accentColor={c} size="md" />
@@ -222,7 +222,7 @@ export function LoaderPanel() {
 export function EmptyStatePanel() {
   return (
     <div>
-      <Row label="Standard empty state with action">
+      <Row label="Standard empty state with action" code={`<EmptyStateView\n  icon={<FolderIcon size={32} />}\n  title="No collections yet"\n  message="Create your first collection to get started."\n  action={{ label: '+ New Collection', onClick: create }}\n/>`}>
         <Block style={{ width: '100%' }}>
           <EmptyStateView
             icon={<FolderIcon size={32} />}
@@ -232,7 +232,7 @@ export function EmptyStatePanel() {
           />
         </Block>
       </Row>
-      <Row label="Compact (for panels/drawers)">
+      <Row label="Compact (for panels/drawers)" code={`<EmptyStateView\n  icon={<DocumentIcon size={20} />}\n  title="No requests"\n  message="Hit Send to get a response"\n  compact\n/>`}>
         <Block style={{ width: '100%' }}>
           <EmptyStateView
             icon={<DocumentIcon size={20} />}
@@ -242,7 +242,7 @@ export function EmptyStatePanel() {
           />
         </Block>
       </Row>
-      <Row label="Protocol accent colors">
+      <Row label="Protocol color reference" code={`// Use these CSS variables for accentColor / color props throughout Daakia\n// var(--color-protocol-rest)\n// var(--color-protocol-graphql)\n// var(--color-protocol-websocket)\n// var(--color-protocol-grpc)\n// var(--color-protocol-soap)\n// var(--color-protocol-ai)\n// var(--color-protocol-mcp)`}>
         <Block style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', padding: '16px' }}>
           {[
             { label: 'REST',      cssVar: '--color-protocol-rest'      },
@@ -278,7 +278,7 @@ export function EmptyStatePanel() {
 export function StatusIndicatorPanel() {
   return (
     <div>
-      <Row label="All states">
+      <Row label="All states" code={`<StatusIndicatorView status="idle"         label="Idle" />\n<StatusIndicatorView status="connecting"   label="Connecting…" />\n<StatusIndicatorView status="connected"    label="Connected" />\n<StatusIndicatorView status="disconnected" label="Disconnected" />\n<StatusIndicatorView status="error"        label="Error" />`}>
         <Block style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center', padding: '20px' }}>
           <StatusIndicatorView status="idle"         label="Idle" />
           <StatusIndicatorView status="connecting"   label="Connecting…" />
@@ -287,14 +287,14 @@ export function StatusIndicatorPanel() {
           <StatusIndicatorView status="error"        label="Error" />
         </Block>
       </Row>
-      <Row label="With subtext">
+      <Row label="With subtext" code={`<StatusIndicatorView status="connected" label="WebSocket" subtext="ws://localhost:8080" />\n<StatusIndicatorView status="error"     label="gRPC"      subtext="Connection refused" />`}>
         <Block style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', padding: '16px' }}>
           <StatusIndicatorView status="connected"  label="WebSocket" subtext="ws://localhost:8080" />
           <StatusIndicatorView status="error"      label="gRPC"      subtext="Connection refused" />
           <StatusIndicatorView status="connecting" label="MQTT"      subtext="mqtt://broker:1883" />
         </Block>
       </Row>
-      <Row label="Protocol accent">
+      <Row label="Protocol accent" code={`<StatusIndicatorView status="connected" label="REST" accentColor="var(--color-protocol-rest)" />\n<StatusIndicatorView status="connected" label="GQL"  accentColor="var(--color-protocol-graphql)" />`}>
         <Block style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', padding: '16px' }}>
           <StatusIndicatorView status="connected" label="REST" accentColor="var(--color-protocol-rest)" />
           <StatusIndicatorView status="connected" label="GQL"  accentColor="var(--color-protocol-graphql)" />
@@ -312,7 +312,7 @@ export function InfoPopupPanel() {
   const [anchor1, setAnchor1] = useState<HTMLElement | null>(null);
   return (
     <div>
-      <Row label="Click ? to open info popup">
+      <Row label="Click ? to open info popup" code={`<InfoPopupView\n  open={open}\n  onClose={() => setOpen(false)}\n  anchorEl={anchorEl}\n  title="Rate Limit"\n  description="Max requests per second."\n  items={[\n    { code: 'rateLimit',  description: 'Max requests/sec' },\n    { code: 'statusCode', description: 'HTTP status when limited (429)' },\n  ]}\n  footer="Applies per-client IP."\n  wikiHref="#"\n/>`}>
         <Block style={{ display: 'flex', gap: '12px', padding: '16px', alignItems: 'center' }}>
           <button
             type="button"
@@ -621,7 +621,7 @@ export function ResizablePanelPanel() {
 export function DottedCardPanel() {
   return (
     <div>
-      <Row label="Collapsed / expanded with title slot" gap={12}>
+      <Row label="Collapsed / expanded with title slot" gap={12} code={`<DottedCardView title="REST Headers" defaultExpanded>\n  <p>Content here</p>\n</DottedCardView>\n\n<DottedCardView\n  title="GraphQL Variables"\n  defaultExpanded\n  accentColor="var(--color-protocol-graphql)"\n>\n  <p>Variables JSON here</p>\n</DottedCardView>`}>
         <DottedCardView title="REST Headers" style={{ width: '100%' }}>
           <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-muted)' }}>Header key-value pairs for this request would appear here.</p>
         </DottedCardView>
@@ -629,7 +629,7 @@ export function DottedCardPanel() {
           <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-muted)' }}>Variables JSON would go here.</p>
         </DottedCardView>
       </Row>
-      <Row label="Protocol accent colors" gap={8}>
+      <Row label="Protocol accent colors" gap={8} code={`<DottedCardView accentColor="var(--color-protocol-rest)"      title="REST"   />\n<DottedCardView accentColor="var(--color-protocol-graphql)"   title="GQL"    />\n<DottedCardView accentColor="var(--color-protocol-websocket)" title="WS"     />`}>
         <DottedCardView accentColor="var(--color-protocol-rest)"      title="REST"   style={{ flex: 1 }}><div style={{ height: 24 }} /></DottedCardView>
         <DottedCardView accentColor="var(--color-protocol-graphql)"   title="GQL"    style={{ flex: 1 }}><div style={{ height: 24 }} /></DottedCardView>
         <DottedCardView accentColor="var(--color-protocol-websocket)" title="WS"     style={{ flex: 1 }}><div style={{ height: 24 }} /></DottedCardView>
@@ -644,7 +644,7 @@ export function DottedCardPanel() {
 export function ColoredTextPanel() {
   return (
     <div>
-      <Row label="HTTP status line tokens">
+      <Row label="HTTP status line tokens" code={`<ColoredTextView tokens={[\n  { text: 'HTTP/1.1 ', color: 'var(--color-text-muted)', mono: true },\n  { text: '200',      color: 'var(--color-success)',    bold: true, mono: true },\n  { text: ' OK',      color: 'var(--color-success)',    mono: true },\n]} />`}>
         <Block>
           <ColoredTextView tokens={[
             { text: 'HTTP/1.1 ', color: 'var(--color-text-muted)', mono: true },
@@ -653,7 +653,7 @@ export function ColoredTextPanel() {
           ]} />
         </Block>
       </Row>
-      <Row label="Error response">
+      <Row label="Error response" code={`<ColoredTextView tokens={[\n  { text: 'HTTP/1.1 ', color: 'var(--color-text-muted)', mono: true },\n  { text: '404',       color: 'var(--color-error)',      bold: true, mono: true },\n  { text: ' Not Found', color: 'var(--color-error)',     mono: true },\n]} />`}>
         <Block>
           <ColoredTextView tokens={[
             { text: 'HTTP/1.1 ', color: 'var(--color-text-muted)', mono: true },
@@ -662,7 +662,7 @@ export function ColoredTextPanel() {
           ]} />
         </Block>
       </Row>
-      <Row label="Copyable token">
+      <Row label="Copyable token" code={`<ColoredTextView tokens={[\n  { text: 'Bearer ', color: 'var(--color-text-muted)', mono: true },\n  { text: 'eyJhbGci…', color: 'var(--color-protocol-rest)', mono: true, copyable: true },\n]} />`}>
         <Block>
           <ColoredTextView tokens={[
             { text: 'Bearer ', color: 'var(--color-text-muted)', mono: true },
@@ -670,7 +670,7 @@ export function ColoredTextPanel() {
           ]} />
         </Block>
       </Row>
-      <Row label="gRPC status tokens">
+      <Row label="gRPC status tokens" code={`<ColoredTextView tokens={[{ text: 'Status: ', mono: true, color: 'var(--color-text-muted)' }, { text: 'OK', mono: true, color: 'var(--color-success)', bold: true }]} />\n<ColoredTextView tokens={[{ text: 'Status: ', mono: true, color: 'var(--color-text-muted)' }, { text: 'UNAVAILABLE', mono: true, color: 'var(--color-error)', bold: true }]} />`}>
         <Block style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <ColoredTextView tokens={[{ text: 'Status: ', mono: true, color: 'var(--color-text-muted)' }, { text: 'OK', mono: true, color: 'var(--color-success)', bold: true }]} />
           <ColoredTextView tokens={[{ text: 'Status: ', mono: true, color: 'var(--color-text-muted)' }, { text: 'UNAVAILABLE', mono: true, color: 'var(--color-error)', bold: true }]} />
@@ -686,7 +686,7 @@ export function ColoredTextPanel() {
 export function StatsCardPanel() {
   return (
     <div>
-      <Row label="Stats cards — requests/errors/latency metrics">
+      <Row label="Stats cards — requests/errors/latency metrics" code={`<StatsCardView\n  label="Response Time"\n  value="142"\n  unit="ms"\n  trend="down"\n  trendValue="8%"\n  accentColor="var(--color-success)"\n/>`}>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <StatsCardView label="Total Requests" value="1,284" trend="up"      trendValue="12%" accentColor="var(--color-protocol-rest)"      style={{ width: 160 }} />
           <StatsCardView label="Avg Latency"    value="142"   unit="ms"  trend="down"    trendValue="8%"  accentColor="var(--color-success)"           style={{ width: 160 }} />
@@ -694,7 +694,7 @@ export function StatsCardPanel() {
           <StatsCardView label="Active Clients" value="37"               trend="neutral"              accentColor="var(--color-protocol-websocket)" style={{ width: 160 }} />
         </div>
       </Row>
-      <Row label="With subValue">
+      <Row label="With subValue" code={`<StatsCardView\n  label="Requests / sec"\n  value="48.2"\n  subValue="peak: 312/s"\n  accentColor="var(--color-protocol-grpc)"\n/>`}>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <StatsCardView label="Requests / sec"    value="48.2" subValue="peak: 312/s"  accentColor="var(--color-protocol-grpc)"   style={{ width: 180 }} />
           <StatsCardView label="AI Tokens Used"    value="94.2k" subValue="$0.18 today"  accentColor="var(--color-protocol-ai)"    style={{ width: 180 }} />
@@ -815,18 +815,18 @@ export function DataTablePanel() {
 
   return (
     <div>
-      <Row label="Basic sortable table" gap={0}>
+      <Row label="Basic sortable table" gap={0} code={`<DataTableView\n  columns={[\n    { key: 'method', label: 'Method', width: '80px' },\n    { key: 'path',   label: 'Path', sortable: true },\n    { key: 'status', label: 'Status', width: '80px', align: 'center' },\n  ]}\n  rows={requests}\n  keyField="id"\n  onRowClick={r => openRequest(r)}\n/>`}>
         <Block style={{ padding: 0, overflow: 'hidden', width: '100%' }}>
           <DataTableView columns={TABLE_COLS} rows={TABLE_ROWS} keyField="id" maxHeight="220px" onRowClick={r => alert(`Clicked: ${r.method} ${r.path}`)} />
         </Block>
       </Row>
-      <Row label="Empty state" gap={0}>
+      <Row label="Empty state" gap={0} code={`<DataTableView\n  columns={columns}\n  rows={[]}\n  keyField="id"\n  emptyTitle="No requests yet"\n  emptyMessage="Send a request to see the log here."\n/>`}>
         <Block style={{ padding: 0, overflow: 'hidden', width: '100%' }}>
           <DataTableView columns={TABLE_COLS} rows={[]} keyField="id" emptyTitle="No requests yet" emptyMessage="Send a request to see the log here." />
         </Block>
       </Row>
 
-      <Row label="Audit Log — expandable rows (click ▶), drag bottom grip to resize, pill to adjust split" gap={0}>
+      <Row label="Audit Log — expandable rows (click ▶), drag bottom grip to resize, pill to adjust split" gap={0} code={`<DataTableView\n  columns={auditCols}\n  rows={auditRows}\n  keyField="id"\n  renderExpanded={row => (\n    <SplitPanelView\n      direction="horizontal"\n      first={<EditorView value={row.request} readOnly />}\n      second={<EditorView value={row.response} readOnly />}\n    />\n  )}\n/>`}>
         <Block style={{ padding: 0, width: '100%' }}>
           <DataTableView
             columns={AUDIT_COLS}
@@ -878,7 +878,7 @@ export function DataTablePanel() {
         </Block>
       </Row>
 
-      <Row label="DB Explorer — cells show JSON char count, click to open JSON Viewer modal" gap={0}>
+      <Row label="DB Explorer — cells show JSON char count, click to open JSON Viewer modal" gap={0} code={`// Custom renderCell for clickable JSON preview\nconst cols = [\n  { key: 'key',   label: 'Key' },\n  { key: 'value', label: 'Value',\n    renderCell: r => <button onClick={() => openModal(r.value)}>{r.value.slice(0,40)}…</button> },\n];\n<DataTableView columns={cols} rows={settings} keyField="id" />`}>
         <Block style={{ padding: 0, overflow: 'hidden', width: '100%' }}>
           <DataTableView
             columns={DB_COLS}
@@ -918,7 +918,7 @@ export function DataTablePanel() {
 export function CodeBlockPanel() {
   return (
     <div>
-      <Row label="JSON code block with line numbers + copy" gap={0}>
+      <Row label="JSON code block with line numbers + copy" gap={0} code={`<CodeBlockView\n  language="json"\n  code={responseBody}\n  showLineNumbers\n  showCopy\n/>`}>
         <Block style={{ padding: 0, overflow: 'hidden', width: '100%' }}>
           <CodeBlockView
             code={`{\n  "id": 42,\n  "name": "Alice",\n  "role": "admin"\n}`}
@@ -927,7 +927,7 @@ export function CodeBlockPanel() {
           />
         </Block>
       </Row>
-      <Row label="cURL snippet (no line numbers)" gap={0}>
+      <Row label="cURL snippet (no line numbers)" gap={0} code={`<CodeBlockView\n  language="bash"\n  code={\`curl -X POST https://api.example.com/users \\\\\n  -H 'Content-Type: application/json' \\\\\n  -d '{"name":"Alice"}'\`}\n/>`}>
         <Block style={{ padding: 0, overflow: 'hidden', width: '100%' }}>
           <CodeBlockView
             code={`curl -X POST https://api.example.com/users \\\n  -H 'Content-Type: application/json' \\\n  -d '{"name":"Alice"}'`}
@@ -935,7 +935,7 @@ export function CodeBlockPanel() {
           />
         </Block>
       </Row>
-      <Row label="Protocol colors">
+      <Row label="Protocol colors" code={`<CodeBlockView code={query} language="graphql"  accentColor="var(--color-protocol-graphql)" />\n<CodeBlockView code={proto} language="protobuf" accentColor="var(--color-protocol-grpc)" />`}>
         <Block style={{ display: 'flex', gap: '8px', padding: '8px', flexWrap: 'wrap' }}>
           <CodeBlockView code={`query { users { id name } }`}      language="graphql"  accentColor="var(--color-protocol-graphql)"   style={{ flex: 1 }} />
           <CodeBlockView code={`message UserRequest { string id = 1; }`} language="protobuf" accentColor="var(--color-protocol-grpc)" style={{ flex: 1 }} />
@@ -952,7 +952,7 @@ export function AIButtonPanel() {
   const simulate = () => { setLoading(true); setTimeout(() => setLoading(false), 1500); };
   return (
     <div>
-      <Row label="Action variants">
+      <Row label="Action variants" code={`<AIButtonView action="generate" />\n<AIButtonView action="fuzz" />\n<AIButtonView action="explain" />\n<AIButtonView action="fix" />\n<AIButtonView action="ask" />\n<AIButtonView action="suggest" />`}>
         <Block style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '16px', alignItems: 'center' }}>
           <AIButtonView action="generate" />
           <AIButtonView action="fuzz" />
@@ -962,20 +962,20 @@ export function AIButtonPanel() {
           <AIButtonView action="suggest" />
         </Block>
       </Row>
-      <Row label="Loading state (click to simulate)">
+      <Row label="Loading state (click to simulate)" code={`<AIButtonView action="generate" loading={isGenerating} onClick={handleGenerate} />`}>
         <Block style={{ display: 'flex', gap: '8px', padding: '16px', alignItems: 'center' }}>
           <AIButtonView action="generate" loading={loading} onClick={simulate} />
           <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Click the button to see "Thinking…" for 1.5s</span>
         </Block>
       </Row>
-      <Row label="Compact mode (22px height) vs normal (26px)">
+      <Row label="Compact mode (22px height) vs normal (26px)" code={`<AIButtonView action="generate" compact />\n<AIButtonView action="explain" compact />`}>
         <Block style={{ display: 'flex', gap: '8px', padding: '16px', alignItems: 'center' }}>
           <AIButtonView action="generate" compact />
           <AIButtonView action="explain" compact />
           <AIButtonView action="suggest" compact />
         </Block>
       </Row>
-      <Row label="Protocol accent colors">
+      <Row label="Protocol accent colors" code={`<AIButtonView action="generate" accentColor="var(--color-protocol-rest)" />\n<AIButtonView action="generate" accentColor="var(--color-protocol-graphql)" />\n<AIButtonView action="generate" accentColor="var(--color-protocol-grpc)" />`}>
         <Block style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '16px', alignItems: 'center' }}>
           {['var(--color-protocol-rest)', 'var(--color-protocol-graphql)', 'var(--color-protocol-grpc)', 'var(--color-protocol-soap)'].map(c => (
             <AIButtonView key={c} action="generate" accentColor={c} />
@@ -992,7 +992,7 @@ export function SideNavPanel() {
   const [active, setActive] = useState('collections');
   return (
     <div>
-      <Row label="Collapsible sidebar — click toggle at bottom to collapse to icon-only" gap={0}>
+      <Row label="Collapsible sidebar — click toggle at bottom to collapse to icon-only" gap={0} code={`<SideNavView\n  items={[\n    { id: 'collections', label: 'Collections', icon: <FolderIcon size={14} /> },\n    { id: 'environments', label: 'Environments', icon: <GlobeIcon size={14} /> },\n    {\n      id: 'settings', label: 'Settings', icon: <SettingsIcon size={14} />,\n      children: [\n        { id: 'general', label: 'General' },\n        { id: 'themes',  label: 'Themes' },\n      ],\n    },\n  ]}\n  activeId={activeId}\n  onSelect={setActiveId}\n  defaultOpenIds={['settings']}\n/>`}>
         <Block style={{ padding: 0, overflow: 'hidden', height: 360, display: 'flex' }}>
           <SideNavView
             items={[
@@ -1028,7 +1028,7 @@ export function SettingsNavPanel() {
   const [active, setActive] = useState('general');
   return (
     <div>
-      <Row label="Grouped settings navigation" gap={0}>
+      <Row label="Grouped settings navigation" gap={0} code={`<SettingsNavView\n  activeId={activeId}\n  onSelect={setActiveId}\n  groups={[\n    {\n      title: 'General',\n      items: [\n        { id: 'general',   label: 'General',   description: 'App preferences', icon: <SettingsIcon size={12} /> },\n        { id: 'shortcuts', label: 'Shortcuts',  badge: 'NEW' },\n      ],\n    },\n    {\n      title: 'AI & Copilot',\n      items: [\n        { id: 'ai-models', label: 'AI Models', icon: <SparkleIcon size={12} /> },\n      ],\n    },\n  ]}\n/>`}>
         <Block style={{ display: 'flex', gap: '0', padding: 0, overflow: 'hidden' }}>
           <div style={{ width: 220, borderRight: '1px solid var(--color-surface-border)', padding: '12px' }}>
             <SettingsNavView
@@ -1075,7 +1075,7 @@ export function ThemeCardSelectorPanel() {
   const [theme, setTheme] = useState('dark');
   return (
     <div>
-      <Row label="Theme card picker">
+      <Row label="Theme card picker" code={`<ThemeCardSelectorView\n  value={selectedTheme}\n  onChange={setTheme}\n  options={[\n    { value: 'dark',    label: 'Dark',    preview: { bg: '#1e1e1e', panel: '#252526', accent: '#0078d4', text: '#d4d4d4' } },\n    { value: 'light',   label: 'Light',   preview: { bg: '#f3f3f3', panel: '#ffffff', accent: '#0078d4', text: '#333333' } },\n    { value: 'monokai', label: 'Monokai', preview: { bg: '#272822', panel: '#3e3d32', accent: '#a6e22e', text: '#f8f8f2' } },\n  ]}\n/>`}>
         <ThemeCardSelectorView
           value={theme}
           onChange={setTheme}
@@ -1095,33 +1095,45 @@ export function ThemeCardSelectorPanel() {
 // ─── D1.38 — FeatureCategoryView ─────────────────────────────────────────────
 
 export function FeatureCategoryPanel() {
-  const [features, setFeatures] = useState([
-    { id: 'autoSave',     label: 'Auto-save',            description: 'Automatically save requests on change',    enabled: true },
-    { id: 'aiSuggest',    label: 'AI Suggestions',       description: 'Show AI completions in the URL bar',        enabled: false },
-    { id: 'responseFmt',  label: 'Response Formatting',  description: 'Auto-format JSON / XML responses',           enabled: true },
-    { id: 'history',      label: 'Request History',      description: 'Track all sent requests',                    enabled: true },
+  const [restFeatures, setRestFeatures] = useState([
+    { id: 'autoSave',    label: 'Auto-save',           description: 'Automatically save requests on change', enabled: true  },
+    { id: 'aiSuggest',   label: 'AI Suggestions',      description: 'Show AI completions in the URL bar',     enabled: false },
+    { id: 'responseFmt', label: 'Response Formatting', description: 'Auto-format JSON / XML responses',        enabled: true  },
+    { id: 'history',     label: 'Request History',     description: 'Track all sent requests',                 enabled: true  },
+  ]);
+  const [aiFeatures, setAiFeatures] = useState([
+    { id: 'explain', label: 'Explain Response', description: 'Let AI explain API responses',        enabled: true  },
+    { id: 'fuzz',    label: 'Fuzz Testing',     description: 'AI-generated edge case tests',        enabled: false },
+    { id: 'suggest', label: 'Smart Suggest',    description: 'Autocomplete headers and params',     enabled: true  },
+    { id: 'audit',   label: 'Audit Logging',    description: 'Log all AI interactions to console',  enabled: false },
   ]);
 
-  const toggle = (id: string) => setFeatures(fs => fs.map(f => f.id === id ? { ...f, enabled: !f.enabled } : f));
+  const toggleRest = (id: string) => setRestFeatures(fs => fs.map(f => f.id === id ? { ...f, enabled: !f.enabled } : f));
+  const toggleAi   = (id: string) => setAiFeatures(fs => fs.map(f => f.id === id ? { ...f, enabled: !f.enabled } : f));
+
+  const allAiEnabled = aiFeatures.every(f => f.enabled);
+  const toggleAllAi  = (on: boolean) => setAiFeatures(fs => fs.map(f => ({ ...f, enabled: on })));
 
   return (
     <div>
-      <Row label="Feature category — expandable with toggle list" gap={12}>
+      <Row label="With category toggle (right end) — turns ALL children on / off" gap={12} code={`<FeatureCategoryView\n  categoryLabel="AI Features"\n  categoryColor="var(--color-protocol-ai)"\n  categoryEnabled={allEnabled}\n  onCategoryToggle={enabled => toggleAll(enabled)}\n  features={features.map(f => ({ ...f, onToggle: () => toggle(f.id) }))}\n/>`}>
+        <FeatureCategoryView
+          categoryLabel="AI Features"
+          categoryColor="var(--color-protocol-ai)"
+          defaultExpanded
+          categoryEnabled={allAiEnabled}
+          onCategoryToggle={toggleAllAi}
+          style={{ width: '100%' }}
+          features={aiFeatures.map(f => ({ ...f, onToggle: () => toggleAi(f.id) }))}
+        />
+      </Row>
+      <Row label="Without category toggle — individual row toggles only" gap={12} code={`<FeatureCategoryView\n  categoryLabel="REST Features"\n  categoryColor="var(--color-protocol-rest)"\n  features={features.map(f => ({ ...f, onToggle: () => toggle(f.id) }))}\n/>`}>
         <FeatureCategoryView
           categoryLabel="REST Features"
           categoryColor="var(--color-protocol-rest)"
           defaultExpanded
           style={{ width: '100%' }}
-          features={features.map(f => ({ ...f, onToggle: () => toggle(f.id) }))}
-        />
-        <FeatureCategoryView
-          categoryLabel="AI Features"
-          categoryColor="var(--color-protocol-ai)"
-          style={{ width: '100%' }}
-          features={[
-            { id: 'explain', label: 'Explain Response', description: 'Let AI explain API responses', enabled: true, onToggle: () => {} },
-            { id: 'fuzz',    label: 'Fuzz Testing',     description: 'AI-generated edge case tests',  enabled: false, onToggle: () => {} },
-          ]}
+          features={restFeatures.map(f => ({ ...f, onToggle: () => toggleRest(f.id) }))}
         />
       </Row>
     </div>
@@ -1164,7 +1176,7 @@ export function TagInputPanel() {
 export function BottomPanelPanel() {
   return (
     <div>
-      <Row label="DevTools-style bottom panel — drag to resize, click tab to collapse" gap={0}>
+      <Row label="DevTools-style bottom panel — drag to resize, click tab to collapse" gap={0} code={`<BottomPanelView\n  defaultHeight={120}\n  tabs={[\n    { id: 'console', label: 'Console', icon: <TerminalIcon size={11} />, content: <ConsoleContent /> },\n    { id: 'network', label: 'Network', icon: <NetworkIcon size={11} />,  content: <NetworkContent /> },\n    { id: 'output',  label: 'Output',  icon: <OutputIcon size={11} />,   content: <OutputContent /> },\n  ]}\n/>`}>
         <Block style={{ padding: 0, overflow: 'hidden', height: 280, display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, padding: '12px', fontSize: '11px', color: 'var(--color-text-muted)' }}>
             ↑ Main content area (response viewer, etc.)
@@ -1194,7 +1206,7 @@ export function ToastPanel() {
   };
   return (
     <div>
-      <Row label="Toast notifications — click to trigger each type">
+      <Row label="Toast notifications — click to trigger each type" code={`const { toast } = useToast();\n\n// Success\ntoast({ message: 'Request saved', variant: 'success' });\n// Error\ntoast({ message: 'Connection failed', variant: 'error', duration: 5000 });\n// Warning\ntoast({ message: 'Rate limit exceeded', variant: 'warning' });\n// Info\ntoast({ message: 'Token refreshed', variant: 'info' });`}>
         <Block style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '16px' }}>
           <button type="button" onClick={() => add('success', 'Request saved', 'GET /api/users saved to collection.')} style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid var(--color-success)', background: 'color-mix(in srgb, var(--color-success) 12%, transparent)', cursor: 'pointer', color: 'var(--color-success)', fontSize: '12px' }}>✓ Success</button>
           <button type="button" onClick={() => add('error', 'Request failed', 'Connection refused on port 8080.')} style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid var(--color-error)', background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', cursor: 'pointer', color: 'var(--color-error)', fontSize: '12px' }}>✕ Error</button>
@@ -1507,7 +1519,7 @@ export function SearchInputPanel() {
   const [q2, setQ2] = useState('');
   return (
     <div>
-      <Row label="With prefix icon + clear suffix">
+      <Row label="With prefix icon + clear suffix" code={`<SearchInputView\n  value={q}\n  onChange={setQ}\n  placeholder="Search collections…"\n  prefix={<SearchIcon size={11} />}\n  suffix={q ? <button onClick={() => setQ('')}><XIcon size={10} /></button> : null}\n/>`}>
         <SearchInputView
           value={q1}
           onChange={setQ1}
@@ -1522,10 +1534,10 @@ export function SearchInputPanel() {
         />
         <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Type to see clear button</span>
       </Row>
-      <Row label="No prefix / suffix">
+      <Row label="No prefix / suffix" code={`<SearchInputView value={q} onChange={setQ} placeholder="Filter by name…" />`}>
         <SearchInputView value={q2} onChange={setQ2} placeholder="Filter by name…" style={{ maxWidth: 240 }} />
       </Row>
-      <Row label="Custom heights — 24px / 28px (default) / 32px">
+      <Row label="Custom heights — 24px / 28px (default) / 32px" code={`<SearchInputView value="" onChange={() => {}} placeholder="24px" height={24} />\n<SearchInputView value="" onChange={() => {}} placeholder="28px (default)" />\n<SearchInputView value="" onChange={() => {}} placeholder="32px" height={32} />`}>
         <SearchInputView value="" onChange={() => {}} placeholder="24px" height={24} prefix={<SearchIcon size={10} />} style={{ maxWidth: 180 }} />
         <SearchInputView value="" onChange={() => {}} placeholder="28px (default)" height={28} prefix={<SearchIcon size={11} />} style={{ maxWidth: 200 }} />
         <SearchInputView value="" onChange={() => {}} placeholder="32px" height={32} prefix={<SearchIcon size={12} />} style={{ maxWidth: 220 }} />
@@ -1542,15 +1554,15 @@ export function DurationInputPanel() {
   const [v3, setV3] = useState(120000);
   return (
     <div>
-      <Row label="Default (starts at 0 ms)" align="flex-start">
+      <Row label="Default (starts at 0 ms)" align="flex-start" code={`<DurationInputView value={timeout} onChange={setTimeout} />\n// value is always in milliseconds\n// unit dropdown: ms → s → m → hr`}>
         <DurationInputView value={v1} onChange={setV1} />
         <span style={{ fontSize: 11, color: 'var(--color-text-muted)', alignSelf: 'center' }}>= {v1} ms</span>
       </Row>
-      <Row label="Pre-set to 5 s — click unit dropdown to switch" align="flex-start">
+      <Row label="Pre-set to 5 s — click unit dropdown to switch" align="flex-start" code={`// 5 seconds = 5000 ms\n<DurationInputView value={5000} onChange={v => console.log(v + 'ms')} />`}>
         <DurationInputView value={v2} onChange={setV2} />
         <span style={{ fontSize: 11, color: 'var(--color-text-muted)', alignSelf: 'center' }}>= {v2} ms</span>
       </Row>
-      <Row label="Pre-set to 2 m" align="flex-start">
+      <Row label="Pre-set to 2 m" align="flex-start" code={`// 2 minutes = 120000 ms\n<DurationInputView value={120000} onChange={setTimeout} />`}>
         <DurationInputView value={v3} onChange={setV3} />
         <span style={{ fontSize: 11, color: 'var(--color-text-muted)', alignSelf: 'center' }}>= {v3} ms</span>
       </Row>
@@ -1574,19 +1586,19 @@ export function PillTabsPanel() {
   const [a4, setA4] = useState('params');
   return (
     <div>
-      <Row label='variant="pill" (default) — sliding background indicator'>
+      <Row label='variant="pill" (default) — sliding background indicator' code={`<PillTabsView\n  tabs={[\n    { id: 'params',  label: 'Params',  badge: 3 },\n    { id: 'headers', label: 'Headers', badge: 5 },\n    { id: 'body',    label: 'Body',    dot: true, dotColor: 'var(--color-warning)' },\n    { id: 'auth',    label: 'Auth' },\n  ]}\n  activeTab={active}\n  onChange={setActive}\n  variant="pill"\n/>`}>
         <PillTabsView tabs={PILL_TABS} activeTab={a1} onChange={setA1} />
       </Row>
-      <Row label='variant="underline" — sliding underline indicator'>
+      <Row label='variant="underline" — sliding underline indicator' code={`<PillTabsView tabs={tabs} activeTab={active} onChange={setActive} variant="underline" />`}>
         <PillTabsView tabs={PILL_TABS} activeTab={a2} onChange={setA2} variant="underline" />
       </Row>
-      <Row label="Protocol accent colors — pill variant">
+      <Row label="Protocol accent colors — pill variant" code={`<PillTabsView tabs={restTabs} activeTab={active} onChange={setActive} accentColor="var(--color-protocol-rest)" />\n<PillTabsView tabs={gqlTabs}  activeTab={active} onChange={setActive} accentColor="var(--color-protocol-graphql)" />`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <PillTabsView tabs={[{ id: 'a', label: 'Request' }, { id: 'b', label: 'Response' }, { id: 'c', label: 'Scripts' }]} activeTab={a3} onChange={setA3} accentColor="var(--color-protocol-rest)" />
           <PillTabsView tabs={[{ id: 'a', label: 'Query' }, { id: 'b', label: 'Variables' }, { id: 'c', label: 'Schema' }]} activeTab={a4} onChange={setA4} accentColor="var(--color-protocol-graphql)" />
         </div>
       </Row>
-      <Row label="Size sm vs md">
+      <Row label="Size sm vs md" code={`<PillTabsView tabs={tabs} activeTab={active} onChange={setActive} size="sm" />\n<PillTabsView tabs={tabs} activeTab={active} onChange={setActive} size="md" />`}>
         <PillTabsView tabs={PILL_TABS} activeTab={a1} onChange={setA1} size="sm" />
         <PillTabsView tabs={PILL_TABS} activeTab={a1} onChange={setA1} size="md" />
       </Row>
@@ -1605,16 +1617,16 @@ const SPLIT_ITEMS: SplitButtonViewItem[] = [
 export function SplitButtonPanel() {
   return (
     <div>
-      <Row label="Variants — primary / secondary / danger">
+      <Row label="Variants — primary / secondary / danger" code={`<SplitButtonView\n  label="Send"\n  variant="primary"\n  onClick={send}\n  items={[\n    { id: 'save-send', label: 'Save & Send', onClick: saveAndSend },\n    { id: 'dry-run',   label: 'Dry Run',     onClick: dryRun },\n    { id: 'schedule',  label: 'Schedule…',   dividerBefore: true, onClick: schedule },\n  ]}\n/>`}>
         <SplitButtonView label="Send"   variant="primary"   items={SPLIT_ITEMS} onClick={() => alert('Send!')} />
         <SplitButtonView label="Save"   variant="secondary" items={SPLIT_ITEMS} onClick={() => alert('Save!')} />
         <SplitButtonView label="Delete" variant="danger"    items={SPLIT_ITEMS} onClick={() => alert('Delete!')} />
       </Row>
-      <Row label="Sizes — sm / md">
+      <Row label="Sizes — sm / md" code={`<SplitButtonView label="Send" size="sm" items={items} onClick={send} />\n<SplitButtonView label="Send" size="md" items={items} onClick={send} />`}>
         <SplitButtonView label="Send" size="sm" items={SPLIT_ITEMS} onClick={() => alert('sm')} />
         <SplitButtonView label="Send" size="md" items={SPLIT_ITEMS} onClick={() => alert('md')} />
       </Row>
-      <Row label="Protocol accent color">
+      <Row label="Protocol accent color" code={`<SplitButtonView label="Send"    variant="primary" accentColor="var(--color-protocol-rest)"      items={items} onClick={send} />\n<SplitButtonView label="Run"     variant="primary" accentColor="var(--color-protocol-graphql)"   items={items} onClick={run} />\n<SplitButtonView label="Connect" variant="primary" accentColor="var(--color-protocol-websocket)" items={items} onClick={connect} />`}>
         <SplitButtonView label="Send"    variant="primary" accentColor="var(--color-protocol-rest)"      items={SPLIT_ITEMS} onClick={() => alert('REST')} />
         <SplitButtonView label="Run"     variant="primary" accentColor="var(--color-protocol-graphql)"   items={SPLIT_ITEMS} onClick={() => alert('GQL')} />
         <SplitButtonView label="Connect" variant="primary" accentColor="var(--color-protocol-websocket)" items={SPLIT_ITEMS} onClick={() => alert('WS')} />
@@ -1636,28 +1648,41 @@ const URL_SUGGESTIONS = [
 export function HighlightedInputPanel() {
   const [url1, setUrl1] = useState('https://api.example.com/{{env}}/users/{{userId}}');
   const [url2, setUrl2] = useState('');
+  const [url3, setUrl3] = useState('https://{{baseUrl}}/v{{version}}/items');
   return (
     <div>
-      <Row label="URL input with {{variable}} highlighting">
-        <div style={{ width: '100%' }}>
+      <Row label="URL bar style (height=36, borderRadius=0) — {{variable}} tokens highlighted" code={`<HighlightedInputView\n  value={url}\n  onChange={setUrl}\n  placeholder="https://api.example.com/{{env}}/users"\n  suggestions={urlHistory}\n/>`}>
+        <div style={{ width: '100%', display: 'flex' }}>
           <HighlightedInputView
             value={url1}
             onChange={setUrl1}
             placeholder="Enter URL…"
             suggestions={URL_SUGGESTIONS}
+            style={{ flex: 1 }}
           />
-          <div style={{ marginTop: 6, fontSize: 10, color: 'var(--color-text-muted)' }}>
-            Variables like <code style={{ background: 'color-mix(in srgb, var(--color-primary) 10%, transparent)', padding: '1px 4px', borderRadius: 3, color: 'var(--color-primary)' }}>{'{{env}}'}</code> are highlighted in the URL
-          </div>
         </div>
       </Row>
-      <Row label="With autocomplete — start typing a URL to see suggestions">
-        <div style={{ width: '100%' }}>
+      <Row label="Rounded variant (height=32, borderRadius=6) — for standalone use" code={`<HighlightedInputView\n  value={url}\n  onChange={setUrl}\n  height={32}\n  borderRadius={6}\n  placeholder="/{{version}}/users/{{id}}"\n/>`}>
+        <div style={{ width: '100%', display: 'flex' }}>
+          <HighlightedInputView
+            value={url3}
+            onChange={setUrl3}
+            placeholder="https://{{baseUrl}}/…"
+            height={32}
+            borderRadius={6}
+            suggestions={URL_SUGGESTIONS}
+            style={{ flex: 1 }}
+          />
+        </div>
+      </Row>
+      <Row label="With autocomplete — start typing a URL to see suggestions" code={`<HighlightedInputView\n  value={url}\n  onChange={setUrl}\n  placeholder="https://…"\n  suggestions={urlHistory}  // string[]\n/>`}>
+        <div style={{ width: '100%', display: 'flex' }}>
           <HighlightedInputView
             value={url2}
             onChange={setUrl2}
             placeholder="https://…"
             suggestions={URL_SUGGESTIONS}
+            style={{ flex: 1 }}
           />
         </div>
       </Row>
@@ -1684,7 +1709,7 @@ export function KeyValueTablePanel() {
   ]);
   return (
     <div>
-      <Row label="Request Headers table — add / enable / delete rows" gap={0} align="flex-start">
+      <Row label="Request Headers table — add / enable / delete rows" gap={0} align="flex-start" code={`<KeyValueTableView\n  rows={headers}\n  onChange={setHeaders}\n  label="Request Headers"\n  accentColor="var(--color-protocol-rest)"\n  placeholder={{ key: 'Header name', value: 'Header value' }}\n/>`}>
         <KeyValueTableView
           rows={headers}
           onChange={setHeaders}
@@ -1693,7 +1718,7 @@ export function KeyValueTablePanel() {
           placeholder={{ key: 'Header name', value: 'Header value' }}
         />
       </Row>
-      <Row label="Query Parameters table" gap={0} align="flex-start">
+      <Row label="Query Parameters table" gap={0} align="flex-start" code={`<KeyValueTableView\n  rows={params}\n  onChange={setParams}\n  label="Query Parameters"\n  accentColor="var(--color-protocol-graphql)"\n  placeholder={{ key: 'Parameter', value: 'Value' }}\n/>`}>
         <KeyValueTableView
           rows={params}
           onChange={setParams}
@@ -1702,7 +1727,7 @@ export function KeyValueTablePanel() {
           placeholder={{ key: 'Parameter', value: 'Value' }}
         />
       </Row>
-      <Row label="With description column" gap={0} align="flex-start">
+      <Row label="With description column" gap={0} align="flex-start" code={`<KeyValueTableView\n  rows={headers}\n  onChange={setHeaders}\n  showDescription\n  label="Headers (with description)"\n  placeholder={{ key: 'Name', value: 'Value', description: 'Description' }}\n/>`}>
         <KeyValueTableView
           rows={headers}
           onChange={setHeaders}

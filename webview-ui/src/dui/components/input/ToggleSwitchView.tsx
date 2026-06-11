@@ -1,11 +1,15 @@
 import type { CSSProperties } from 'react';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useToggleBase } from '../../core/ToggleBase';
 
-export type ToggleSwitchSize = 'sm' | 'md' | 'lg';
+/** Accepts all 4 canonical sizes (maps to DuiToggle tokens). */
+export type ToggleSwitchSize = DuiSize;
 
 export interface ToggleSwitchViewProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
+  /** Falls back to DuiProvider context when omitted. */
   size?: ToggleSwitchSize;
   accentColor?: string;
   label?: string;
@@ -13,24 +17,18 @@ export interface ToggleSwitchViewProps {
   className?: string;
 }
 
-const SIZES: Record<ToggleSwitchSize, { trackW: number; trackH: number; thumb: number; font: string }> = {
-  sm: { trackW: 28, trackH: 16, thumb: 12, font: '11px' },
-  md: { trackW: 36, trackH: 20, thumb: 16, font: '12px' },
-  lg: { trackW: 44, trackH: 24, thumb: 20, font: '13px' },
-};
-
 export function ToggleSwitchView({
   checked,
   onChange,
   disabled = false,
-  size = 'md',
+  size,
   accentColor,
   label,
   labelPosition = 'right',
   className = '',
 }: ToggleSwitchViewProps) {
   const accent = accentColor || 'var(--color-toggle-on)';
-  const { trackW, trackH, thumb, font } = SIZES[size];
+  const { trackW, trackH, thumb, fontSize } = useToggleBase(size);
   const thumbLeft = checked ? `calc(${trackW}px - ${thumb + 2}px)` : '2px';
 
   const trackStyle: CSSProperties = {
@@ -91,13 +89,13 @@ export function ToggleSwitchView({
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
       {labelPosition === 'left' && (
-        <span style={{ fontSize: font, color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)', userSelect: 'none' }}>
+        <span style={{ fontSize, color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)', userSelect: 'none' }}>
           {label}
         </span>
       )}
       {toggle}
       {labelPosition === 'right' && (
-        <span style={{ fontSize: font, color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)', userSelect: 'none' }}>
+        <span style={{ fontSize, color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)', userSelect: 'none' }}>
           {label}
         </span>
       )}

@@ -1,13 +1,16 @@
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { SpinnerIcon } from '../../../icons';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useButtonBase } from '../../core/ButtonBase';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-export type ButtonSize = 'default' | 'sm' | 'md' | 'lg' | 'xl';
+/** `'default'` is kept for backwards-compat and resolves to context size. */
+export type ButtonSize = 'default' | DuiSize;
 
 export interface ButtonViewProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  /** true = 4px radius (default), false = 0px (square) */
+  /** true = token border-radius (default), false = 0px (square) */
   rounded?: boolean;
   iconLeft?: ReactNode;
   iconRight?: ReactNode;
@@ -17,14 +20,6 @@ export interface ButtonViewProps extends ButtonHTMLAttributes<HTMLButtonElement>
   /** Alias for children — shown as button label text */
   label?: string;
 }
-
-const SIZE_CLS: Record<ButtonSize, { h: string; px: string; text: string; gap: string }> = {
-  default: { h: '26px', px: '10px', text: '11px', gap: '5px' },
-  sm:      { h: '22px', px: '8px',  text: '10px', gap: '4px' },
-  md:      { h: '28px', px: '10px', text: '11px', gap: '5px' },
-  lg:      { h: '32px', px: '12px', text: '12px', gap: '6px' },
-  xl:      { h: '36px', px: '16px', text: '13px', gap: '6px' },
-};
 
 export function ButtonView({
   variant = 'secondary',
@@ -41,17 +36,17 @@ export function ButtonView({
   className = '',
   ...rest
 }: ButtonViewProps) {
-  const { h, px, text, gap } = SIZE_CLS[size] ?? SIZE_CLS.default;
+  const base = useButtonBase(size === 'default' ? undefined : size);
   const accent = accentColor || 'var(--color-btn-primary-bg)';
-  const radius = rounded ? '4px' : '0px';
+  const radius = rounded ? base.borderRadius : '0px';
   const isDisabled = disabled || loading;
 
   const variantStyle: CSSProperties = (() => {
     switch (variant) {
       case 'primary':
-        return { background: accent, color: '#fff', border: '1px solid transparent' };
+        return { background: accent, color: 'var(--color-btn-primary-text, #fff)', border: '1px solid transparent' };
       case 'danger':
-        return { background: 'var(--color-btn-danger-bg)', color: '#fff', border: '1px solid transparent' };
+        return { background: 'var(--color-btn-danger-bg)', color: 'var(--color-btn-danger-text, #fff)', border: '1px solid transparent' };
       case 'ghost':
         return { background: 'transparent', color: 'var(--color-text-secondary)', border: '1px solid transparent' };
       default: // secondary
@@ -98,11 +93,11 @@ export function ButtonView({
       disabled={isDisabled}
       className={`inline-flex items-center justify-center font-medium cursor-pointer transition-colors select-none ${className}`}
       style={{
-        height: h,
-        paddingLeft: px,
-        paddingRight: px,
-        fontSize: text,
-        gap,
+        height: base.height,
+        paddingLeft: base.paddingX,
+        paddingRight: base.paddingX,
+        fontSize: base.fontSize,
+        gap: base.gap,
         borderRadius: radius,
         opacity: isDisabled ? 0.5 : 1,
         ...variantStyle,
@@ -114,7 +109,7 @@ export function ButtonView({
       onMouseUp={handleUp}
       {...rest}
     >
-      {loading ? <SpinnerIcon size={11} /> : iconLeft}
+      {loading ? <SpinnerIcon size={base.iconSize} /> : iconLeft}
       {label ?? children}
       {!loading && iconRight}
     </button>

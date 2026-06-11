@@ -120,10 +120,10 @@ export function CodeBlockView({
         )}
       </div>
 
-      {/* Code — hljs highlighted */}
-      <div style={{ overflowY: 'auto', maxHeight, overflowX: 'auto' }}>
+      {/* Code — hljs highlighted, word-wrapped */}
+      <div style={{ overflowY: 'auto', maxHeight }}>
         {showLineNumbers ? (
-          <pre style={{ margin: 0, padding: '10px 0', lineHeight: 1.55 }}>
+          <pre style={{ margin: 0, padding: '10px 0', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {lines.map((line, i) => (
               <div key={i} style={{ display: 'flex', gap: '0' }}>
                 <span style={{
@@ -142,7 +142,7 @@ export function CodeBlockView({
             ))}
           </pre>
         ) : highlighted ? (
-          <pre style={{ margin: 0, lineHeight: 1.55 }}>
+          <pre style={{ margin: 0, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             <code
               className="hljs"
               dangerouslySetInnerHTML={{ __html: highlighted.value }}
@@ -150,7 +150,7 @@ export function CodeBlockView({
             />
           </pre>
         ) : (
-          <pre style={{ margin: 0, padding: '10px 12px', color: 'var(--color-text-primary)', lineHeight: 1.55 }}>
+          <pre style={{ margin: 0, padding: '10px 12px', color: 'var(--color-text-primary)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {code}
           </pre>
         )}

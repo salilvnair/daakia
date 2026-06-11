@@ -11,6 +11,11 @@ export interface HighlightedInputViewProps {
   suggestions?: string[];
   disabled?: boolean;
   accentColor?: string;
+  /** Height of the input in px (default 36) */
+  height?: number;
+  /** Border radius of the input in px (default 0 — matches URL bar; set 6 for standalone rounded usage) */
+  borderRadius?: number;
+  style?: React.CSSProperties;
   className?: string;
 }
 
@@ -23,6 +28,9 @@ export function HighlightedInputView({
   suggestions = [],
   disabled,
   accentColor,
+  height = 36,
+  borderRadius = 0,
+  style,
   className = '',
 }: HighlightedInputViewProps) {
   const inputRef  = useRef<HTMLInputElement>(null);
@@ -79,12 +87,18 @@ export function HighlightedInputView({
 
   const showDrop = focused && filtered.length > 0;
 
+  const shapeStyle: React.CSSProperties = {
+    height,
+    lineHeight: `${height}px`,
+    borderRadius,
+  };
+
   return (
-    <div className={`highlighted-input-wrapper ${className}`}>
+    <div className={`highlighted-input-wrapper ${className}`} style={style}>
       <div
         ref={mirrorRef}
         className="highlighted-input-mirror"
-        style={{ transform: `translateX(-${scrollLeft}px)` }}
+        style={{ transform: `translateX(-${scrollLeft}px)`, ...shapeStyle }}
         dangerouslySetInnerHTML={{ __html: highlighted || `<span class="placeholder-text">${placeholder || ''}</span>` }}
       />
       <input
@@ -98,7 +112,7 @@ export function HighlightedInputView({
         placeholder={placeholder}
         disabled={disabled}
         className={`highlighted-input ${disabled ? 'opacity-60' : ''}`}
-        style={focused ? { borderColor: accent } as React.CSSProperties : undefined}
+        style={{ ...shapeStyle, ...(focused ? { borderColor: accent } : {}) } as React.CSSProperties}
       />
       {showDrop && createPortal(
         <div
