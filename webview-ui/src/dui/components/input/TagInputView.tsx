@@ -58,8 +58,8 @@ export function TagInputView({
         minHeight: '32px',
         padding: '4px 8px',
         borderRadius: '5px',
-        border: '1px solid color-mix(in srgb, var(--color-text-primary) 12%, transparent)',
-        background: 'color-mix(in srgb, var(--color-text-primary) 4%, transparent)',
+        border: '1px solid var(--color-input-border)',
+        background: 'var(--color-input-bg)',
         cursor: disabled ? 'not-allowed' : 'text',
         opacity: disabled ? 0.6 : 1,
         transition: 'border-color 120ms',
@@ -77,9 +77,9 @@ export function TagInputView({
             borderRadius: 99,
             fontSize: '11px',
             fontWeight: 500,
-            background: `color-mix(in srgb, ${accent} 15%, transparent)`,
-            color: accent,
-            border: `1px solid color-mix(in srgb, ${accent} 25%, transparent)`,
+            background: accentColor ? `color-mix(in srgb, ${accentColor} 15%, transparent)` : 'var(--color-tag-bg)',
+            color: accentColor ? accentColor : 'var(--color-tag-text)',
+            border: `1px solid ${accentColor ? `color-mix(in srgb, ${accentColor} 25%, transparent)` : 'var(--color-tag-border)'}`,
           }}
         >
           {tag}

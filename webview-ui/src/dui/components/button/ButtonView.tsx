@@ -57,7 +57,7 @@ export function ButtonView({
   const handleEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (isDisabled) return;
     const el = e.currentTarget;
-    if (variant === 'primary') el.style.background = accentColor ? `color-mix(in srgb, ${accentColor} 80%, #000)` : 'var(--color-btn-primary-hover)';
+    if (variant === 'primary') el.style.background = accentColor ? `color-mix(in srgb, ${accentColor} 80%, black)` : 'var(--color-btn-primary-hover)';
     else if (variant === 'danger') el.style.filter = 'brightness(1.1)';
     else if (variant === 'ghost') { el.style.background = 'var(--color-btn-ghost-hover)'; el.style.color = 'var(--color-text-primary)'; }
     else { el.style.background = 'var(--color-btn-secondary-hover)'; }
@@ -75,7 +75,7 @@ export function ButtonView({
   const handleDown = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (isDisabled) return;
     const el = e.currentTarget;
-    if (variant === 'primary') el.style.background = accentColor ? `color-mix(in srgb, ${accentColor} 80%, #000)` : 'var(--color-btn-primary-hover)';
+    if (variant === 'primary') el.style.background = accentColor ? `color-mix(in srgb, ${accentColor} 80%, black)` : 'var(--color-btn-primary-hover)';
     else if (variant === 'danger') el.style.filter = 'brightness(0.92)';
     (rest.onMouseDown as ((e: React.MouseEvent<HTMLButtonElement>) => void) | undefined)?.(e);
   };

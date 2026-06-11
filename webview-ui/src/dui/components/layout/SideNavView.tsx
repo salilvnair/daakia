@@ -132,23 +132,19 @@ export function SideNavView({
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: iconSquare, height: iconSquare, borderRadius: 8, margin: '1px auto',
           cursor: 'pointer',
-          background: isActive
-            ? `color-mix(in srgb, ${accent} 15%, var(--color-item-hover-bg, transparent))`
-            : 'transparent',
-          color: isActive ? accent : 'var(--color-text-secondary)',
+          background: isActive ? 'var(--color-sidenav-active-bg)' : 'transparent',
+          color: isActive ? 'var(--color-sidenav-active-text)' : 'var(--color-text-secondary)',
           transition: 'background 100ms, color 100ms',
         } : {
           display: 'flex', alignItems: 'center', gap: base.gap,
           height: base.itemHeight, borderRadius: base.borderRadius,
           padding: `0 8px 0 ${base.paddingX}`,
           cursor: 'pointer', marginBottom: 1,
-          background: isActive
-            ? `color-mix(in srgb, ${accent} 15%, var(--color-item-hover-bg, transparent))`
-            : 'transparent',
-          color: isActive ? accent : 'var(--color-text-secondary)',
+          background: isActive ? 'var(--color-sidenav-active-bg)' : 'transparent',
+          color: isActive ? 'var(--color-sidenav-active-text)' : 'var(--color-text-secondary)',
           transition: 'background 100ms, color 100ms',
         }}
-        onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; }}
+        onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--color-sidenav-hover-bg)'; }}
         onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
       >
         {item.icon && (

@@ -125,8 +125,8 @@ function BulkEditArea({
         style={{
           width: '100%', padding: '8px 10px',
           borderRadius: 6, resize: 'vertical',
-          background: 'color-mix(in srgb, var(--color-text-primary) 4%, transparent)',
-          border: `1px solid ${focused ? highlight : 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)'}`,
+          background: 'var(--color-input-bg)',
+          border: `1px solid ${focused ? highlight : 'var(--color-input-border)'}`,
           color: 'var(--color-text-primary)',
           fontSize: 12, fontFamily: 'monospace',
           outline: 'none', boxSizing: 'border-box',

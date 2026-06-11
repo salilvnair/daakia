@@ -148,6 +148,12 @@ export type { PromptLibraryEditorViewProps, PromptLibraryVariable, PromptLibrary
 export { StageCheck, StageSpin, StagePulse } from './components/display/StageView';
 export type { StageViewBaseProps } from './components/display/StageView';
 
+export { YamlKeyChip } from './components/display/YamlKeyChip';
+export type { YamlKeyChipProps } from './components/display/YamlKeyChip';
+
+export { LiveColorCustomizer } from './components/display/LiveColorCustomizer';
+export type { LiveColorCustomizerProps, LiveColorVar } from './components/display/LiveColorCustomizer';
+
 // ─── E6.176 — Superset DUI components matching shared/controls ───────────────
 
 export { SearchInputView } from './components/input/SearchInputView';

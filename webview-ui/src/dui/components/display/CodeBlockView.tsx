@@ -79,8 +79,8 @@ export function CodeBlockView({
       className={className}
       style={{
         position: 'relative',
-        background: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)',
-        border: '1px solid var(--color-surface-border)',
+        background: 'var(--color-codeblock-bg)',
+        border: '1px solid var(--color-codeblock-border)',
         borderRadius: '6px',
         ...style,
         overflow: 'hidden',
@@ -95,7 +95,7 @@ export function CodeBlockView({
         justifyContent: 'space-between',
         padding: '5px 10px',
         borderBottom: '1px solid var(--color-surface-border)',
-        background: 'color-mix(in srgb, var(--color-text-primary) 4%, transparent)',
+        background: 'var(--color-codeblock-header-bg)',
       }}>
         {language ? (
           <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>

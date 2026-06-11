@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ExternalLinkIcon } from '../../../icons';
 
@@ -33,14 +33,18 @@ export function InfoPopupView({
   width = 320,
 }: InfoPopupViewProps) {
   const popRef = useRef<HTMLDivElement>(null);
+  // Start hidden; made visible after we measure actual size
+  const [pos, setPos] = useState<{ top: number; left: number; visible: boolean }>({
+    top: -9999, left: -9999, visible: false,
+  });
 
+  // Outside-click and Escape listeners
   useEffect(() => {
     if (!open) return;
     const handle = (e: MouseEvent) => {
-      if (popRef.current && !popRef.current.contains(e.target as Node) &&
-          anchorEl && !anchorEl.contains(e.target as Node)) {
-        onClose();
-      }
+      if (popRef.current?.contains(e.target as Node)) return;
+      if (anchorEl?.contains(e.target as Node)) return;
+      onClose();
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('mousedown', handle);
@@ -51,25 +55,67 @@ export function InfoPopupView({
     };
   }, [open, onClose, anchorEl]);
 
-  if (!open) return null;
+  // Reset visibility when closed
+  useEffect(() => {
+    if (!open) setPos(p => ({ ...p, visible: false }));
+  }, [open]);
 
-  // Position near anchorEl or center
-  let pos: React.CSSProperties = { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' };
-  if (anchorEl) {
-    const rect = anchorEl.getBoundingClientRect();
-    pos = {
-      position: 'fixed',
-      top: rect.bottom + 6,
-      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+  // Render-then-measure: after popup mounts, compute viewport-safe position
+  useLayoutEffect(() => {
+    if (!open || !popRef.current) return;
+
+    const place = () => {
+      if (!popRef.current) return;
+      const pop = popRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      if (!anchorEl) {
+        // Centered fallback
+        setPos({
+          top: Math.max(8, (vh - pop.height) / 2),
+          left: Math.max(8, (vw - pop.width) / 2),
+          visible: true,
+        });
+        return;
+      }
+
+      const btn = anchorEl.getBoundingClientRect();
+
+      // Default: below-left aligned with anchor
+      let left = btn.left;
+      let top  = btn.bottom + 6;
+
+      // Flip right → left if overflows right edge
+      if (left + pop.width > vw - 8) {
+        left = btn.right - pop.width;
+      }
+      // Flip down → up if overflows bottom edge
+      if (top + pop.height > vh - 8) {
+        top = btn.top - pop.height - 6;
+      }
+      // Clamp so it never escapes the viewport
+      left = Math.max(8, Math.min(left, vw - pop.width - 8));
+      top  = Math.max(8, Math.min(top,  vh - pop.height - 8));
+
+      setPos({ top, left, visible: true });
     };
-  }
+
+    const id = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(id);
+  }, [open, anchorEl]);
+
+  if (!open) return null;
 
   const popup = (
     <div
       ref={popRef}
       style={{
-        ...pos,
+        position: 'fixed',
+        top: pos.top,
+        left: pos.left,
         width,
+        visibility: pos.visible ? 'visible' : 'hidden',
         background: 'var(--color-surface)',
         border: '1px solid var(--color-surface-border)',
         borderRadius: '10px',

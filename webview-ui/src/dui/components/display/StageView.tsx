@@ -26,7 +26,7 @@ export interface StageViewBaseProps {
 // ─── StageCheck ───────────────────────────────────────────────────────────────
 
 export function StageCheck({ label, sublabel, color, size = 20, textSize = 12, className = '' }: StageViewBaseProps) {
-  const c = color ?? 'var(--color-success)';
+  const c = color ?? 'var(--color-stage-check)';
   const r = size / 2 - 2;
   const cx = size / 2;
   const cy = size / 2;
@@ -59,7 +59,7 @@ export function StageCheck({ label, sublabel, color, size = 20, textSize = 12, c
 // ─── StageSpin ────────────────────────────────────────────────────────────────
 
 export function StageSpin({ label, sublabel, color, size = 20, textSize = 12, className = '' }: StageViewBaseProps) {
-  const c = color ?? 'var(--color-primary)';
+  const c = color ?? 'var(--color-stage-spin)';
   const r = size / 2 - 2;
   const cx = size / 2;
   const cy = size / 2;
@@ -100,7 +100,7 @@ export function StageSpin({ label, sublabel, color, size = 20, textSize = 12, cl
 // ─── StagePulse ───────────────────────────────────────────────────────────────
 
 export function StagePulse({ label, sublabel, color, size = 20, textSize = 12, className = '' }: StageViewBaseProps) {
-  const c = color ?? 'var(--color-text-muted)';
+  const c = color ?? 'var(--color-stage-pulse)';
   const cx = size / 2;
   const cy = size / 2;
   const dotR = size / 2 - 6;

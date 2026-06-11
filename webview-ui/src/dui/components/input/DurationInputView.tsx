@@ -122,12 +122,12 @@ export function DurationInputView({
               style={{
                 display: 'block', width: '100%', textAlign: 'right',
                 padding: '6px 12px', fontSize: 11, cursor: 'pointer',
-                background: unit === opt.value ? 'rgba(255,255,255,0.08)' : 'transparent',
+                background: unit === opt.value ? 'var(--color-dur-segment-selected)' : 'transparent',
                 border: 'none', color: opt.color, fontWeight: 600,
                 transition: 'background 80ms', fontFamily: 'inherit',
               }}
-              onMouseEnter={e => { if (unit !== opt.value) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = unit === opt.value ? 'rgba(255,255,255,0.08)' : 'transparent'; }}
+              onMouseEnter={e => { if (unit !== opt.value) (e.currentTarget as HTMLElement).style.background = 'var(--color-dur-segment-hover)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = unit === opt.value ? 'var(--color-dur-segment-selected)' : 'transparent'; }}
             >
               {opt.label}
             </button>

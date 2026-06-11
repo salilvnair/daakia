@@ -63,7 +63,7 @@ export function ModalView({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(0,0,0,0.55)',
+        background: 'var(--color-modal-backdrop)',
         backdropFilter: 'blur(2px)',
       }}
       // backdrop click intentionally does NOT close — per design rules

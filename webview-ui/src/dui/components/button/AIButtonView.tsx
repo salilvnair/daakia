@@ -1,4 +1,4 @@
-import { SparkleIcon } from '../../../icons';
+import { SparkleIcon, SpinnerIcon } from '../../../icons';
 
 export type AIButtonAction = 'generate' | 'fuzz' | 'explain' | 'fix' | 'ask' | 'suggest';
 
@@ -21,28 +21,6 @@ const ACTION_LABEL: Record<AIButtonAction, string> = {
   ask:      'Ask AI',
   suggest:  'Suggest',
 };
-
-function LoadingSpinner({ size }: { size: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      style={{ animation: 'spin 0.7s linear infinite', flexShrink: 0 }}
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeDasharray="22 6"
-      />
-    </svg>
-  );
-}
 
 export function AIButtonView({
   action = 'ask',
@@ -70,9 +48,9 @@ export function AIButtonView({
         height: compact ? '22px' : '26px',
         padding: compact ? '0 8px' : '0 10px',
         borderRadius: '5px',
-        border: `1px solid color-mix(in srgb, ${accent} 35%, transparent)`,
-        background: `color-mix(in srgb, ${accent} 10%, transparent)`,
-        color: accent,
+        border: accentColor ? `1px solid color-mix(in srgb, ${accentColor} 35%, transparent)` : '1px solid var(--color-aibtn-border)',
+        background: accentColor ? `color-mix(in srgb, ${accentColor} 10%, transparent)` : 'var(--color-aibtn-bg)',
+        color: accentColor ? accentColor : 'var(--color-aibtn-text)',
         fontSize: compact ? '10px' : '11px',
         fontWeight: 600,
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
@@ -83,17 +61,25 @@ export function AIButtonView({
       }}
       onMouseEnter={e => {
         if (!disabled && !loading) {
-          (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, ${accent} 18%, transparent)`;
-          (e.currentTarget as HTMLElement).style.borderColor = `color-mix(in srgb, ${accent} 55%, transparent)`;
+          (e.currentTarget as HTMLElement).style.background = accentColor
+            ? `color-mix(in srgb, ${accentColor} 18%, transparent)`
+            : 'var(--color-aibtn-bg-hover)';
+          (e.currentTarget as HTMLElement).style.borderColor = accentColor
+            ? `color-mix(in srgb, ${accentColor} 55%, transparent)`
+            : 'color-mix(in srgb, var(--color-aibtn-text) 55%, transparent)';
         }
       }}
       onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, ${accent} 10%, transparent)`;
-        (e.currentTarget as HTMLElement).style.borderColor = `color-mix(in srgb, ${accent} 35%, transparent)`;
+        (e.currentTarget as HTMLElement).style.background = accentColor
+          ? `color-mix(in srgb, ${accentColor} 10%, transparent)`
+          : 'var(--color-aibtn-bg)';
+        (e.currentTarget as HTMLElement).style.borderColor = accentColor
+          ? `color-mix(in srgb, ${accentColor} 35%, transparent)`
+          : 'var(--color-aibtn-border)';
       }}
     >
       {loading
-        ? <LoadingSpinner size={compact ? 10 : 12} />
+        ? <SpinnerIcon size={compact ? 10 : 12} style={{ flexShrink: 0 }} />
         : <SparkleIcon size={compact ? 10 : 12} style={{ flexShrink: 0 }} />
       }
       {loading ? 'Thinking…' : displayLabel}

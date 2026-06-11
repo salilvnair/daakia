@@ -69,7 +69,7 @@ function Skeleton({ size }: { size: LoaderSize }) {
             height: h,
             width: widths[i],
             borderRadius: 4,
-            background: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)',
+            background: 'var(--color-loader-track)',
           }}
         />
       ))}
@@ -125,7 +125,7 @@ export function LoaderView({
   progress,
   className = '',
 }: LoaderViewProps) {
-  const accent = accentColor || 'var(--color-primary)';
+  const accent = accentColor || 'var(--color-loader-accent)';
 
   const inner = (
     <div

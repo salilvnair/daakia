@@ -40,7 +40,7 @@ export function EmptyStateView({
     >
       {icon && (
         <div style={{
-          color: 'var(--color-text-muted)',
+          color: 'var(--color-emptystate-icon)',
           opacity: 0.5,
           marginBottom: compact ? 0 : '4px',
         }}>
@@ -52,14 +52,14 @@ export function EmptyStateView({
         <span style={{
           fontSize: compact ? '12px' : '13px',
           fontWeight: 500,
-          color: 'var(--color-text-secondary)',
+          color: 'var(--color-emptystate-title)',
         }}>
           {title}
         </span>
         {message && (
           <span style={{
             fontSize: compact ? '11px' : '12px',
-            color: 'var(--color-text-muted)',
+            color: 'var(--color-emptystate-desc)',
             lineHeight: 1.5,
             maxWidth: '320px',
           }}>

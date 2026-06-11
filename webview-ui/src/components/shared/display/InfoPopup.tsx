@@ -1,8 +1,8 @@
 /**
  * InfoPopup — Standard "?" help popup used across Daakia.
  * Dark card with white title, gray description, blue-badge code examples, HR dividers.
- * Auto-positions to stay within viewport (left/right/top/bottom).
- * 
+ * Viewport-aware: renders hidden, measures actual size, then flips left/up if needed.
+ *
  * Usage:
  *   <InfoPopup
  *     title="Section Title"
@@ -12,7 +12,7 @@
  *     wikiSlug="environments"
  *   />
  */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { HelpCircleIcon } from '../../../icons';
 import { useClickOutside } from '../../../hooks/useClickOutside';
@@ -31,59 +31,78 @@ interface InfoPopupProps {
   accentColor?: string;
 }
 
-type PopupPosition = { top: number; left: number };
-
 export function InfoPopup({ title, description, items, footer, wikiSlug, accentColor }: InfoPopupProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<PopupPosition>({ top: 0, left: 0 });
-  useClickOutside(ref, () => setOpen(false), open);
+  const popupRef = useRef<HTMLDivElement>(null);
+  // Start invisible at a provisional position; made visible after measurement
+  const [pos, setPos] = useState<{ top: number; left: number; visible: boolean }>({
+    top: -9999, left: -9999, visible: false,
+  });
 
-  const calculatePosition = useCallback(() => {
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const popupWidth = 300;
-    const popupHeight = 320; // estimate
+  useClickOutside(popupRef, () => setOpen(false), open);
 
-    let left = rect.left;
-    let top = rect.bottom + 6;
-
-    // Flip horizontal if overflows right
-    if (left + popupWidth > window.innerWidth) {
-      left = rect.right - popupWidth;
-    }
-    // Flip vertical if overflows bottom
-    if (top + popupHeight > window.innerHeight) {
-      top = rect.top - popupHeight - 6;
-    }
-    // Clamp
-    left = Math.max(4, Math.min(left, window.innerWidth - popupWidth - 4));
-    top = Math.max(4, top);
-
-    setPos({ top, left });
-  }, []);
-
+  // Reset visibility when closing so next open starts hidden
   useEffect(() => {
-    if (open) calculatePosition();
-  }, [open, calculatePosition]);
+    if (!open) setPos(p => ({ ...p, visible: false }));
+  }, [open]);
+
+  // Measure after the popup renders in the DOM, then snap to correct position
+  const reposition = useCallback(() => {
+    if (!open || !popupRef.current || !buttonRef.current) return;
+    const btn = buttonRef.current.getBoundingClientRect();
+    const pop = popupRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Default: below-left aligned with button
+    let left = btn.left;
+    let top = btn.bottom + 6;
+
+    // Flip right → left if popup would overflow right edge
+    if (left + pop.width > vw - 8) {
+      left = btn.right - pop.width;
+    }
+    // Flip down → up if popup would overflow bottom edge
+    if (top + pop.height > vh - 8) {
+      top = btn.top - pop.height - 6;
+    }
+    // Clamp so it never escapes the viewport
+    left = Math.max(8, Math.min(left, vw - pop.width - 8));
+    top  = Math.max(8, Math.min(top,  vh - pop.height - 8));
+
+    setPos({ top, left, visible: true });
+  }, [open]);
+
+  // Run after every paint when open changes (popup just mounted or unmounted)
+  useLayoutEffect(() => {
+    if (!open) return;
+    // rAF gives the browser one frame to lay out the popup before we measure
+    const id = requestAnimationFrame(reposition);
+    return () => cancelAnimationFrame(id);
+  }, [open, reposition]);
 
   return (
     <>
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen(v => !v)}
         className="w-5 h-5 flex items-center justify-center rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] cursor-pointer transition-colors"
         title="Help"
       >
         <HelpCircleIcon size={13} />
       </button>
+
       {open && createPortal(
         <div
-          ref={ref}
+          ref={popupRef}
           className="fixed z-[99999] w-[300px] bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-lg shadow-xl p-4"
-          style={{ top: pos.top, left: pos.left }}
+          style={{
+            top: pos.top,
+            left: pos.left,
+            visibility: pos.visible ? 'visible' : 'hidden',
+          }}
         >
           {/* Title */}
           <h4 className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-1">{title}</h4>

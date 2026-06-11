@@ -58,7 +58,7 @@ export function IconButtonView({
     transition: 'all 120ms ease',
     opacity: disabled ? 0.45 : 1,
     ...(variant === 'filled'
-      ? { background: active ? activeClr : `color-mix(in srgb, ${accent} 12%, transparent)`, color: active ? '#fff' : accent }
+      ? { background: active ? activeClr : `color-mix(in srgb, ${accent} 12%, transparent)`, color: active ? 'var(--color-btn-primary-text, white)' : accent }
       // Ghost: when accentColor explicitly provided, show it in resting state — otherwise muted
       : { background: active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent', color: active ? activeClr : (accentColor ? accent : 'var(--color-text-muted)') }),
     ...style,
@@ -76,7 +76,7 @@ export function IconButtonView({
         const el = e.currentTarget;
         el.style.background = active
           ? `color-mix(in srgb, ${activeClr} 20%, transparent)`
-          : 'var(--color-surface-hover)';
+          : 'var(--color-iconbtn-bg-hover, var(--color-surface-hover))';
         el.style.color = active ? activeClr : 'var(--color-text-primary)';
       }}
       onMouseLeave={e => {
@@ -84,7 +84,7 @@ export function IconButtonView({
         const el = e.currentTarget;
         if (variant === 'filled') {
           el.style.background = active ? activeClr : `color-mix(in srgb, ${accent} 12%, transparent)`;
-          el.style.color = active ? '#fff' : accent;
+          el.style.color = active ? 'var(--color-btn-primary-text, white)' : accent;
         } else {
           el.style.background = active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent';
           el.style.color = active ? activeClr : (accentColor ? accent : 'var(--color-text-muted)');

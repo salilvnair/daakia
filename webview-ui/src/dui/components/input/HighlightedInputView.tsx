@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { SearchIcon } from '../../../icons';
 
@@ -19,6 +19,48 @@ export interface HighlightedInputViewProps {
   className?: string;
 }
 
+const TOKEN_RE   = /(\{\{[\w.\-]+\}\}|\$\{[\w.\-]+\})/g;
+const ESCAPE_RE  = /(\$daakia_\{[\w.\-]+\}_\$)/g;
+
+function buildHTML(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(ESCAPE_RE, '<span class="var-escape-token">$1</span>')
+    .replace(TOKEN_RE,  '<span class="var-token">$1</span>');
+}
+
+function getCaretOffset(el: HTMLElement): number {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return 0;
+  const range = sel.getRangeAt(0);
+  const pre = range.cloneRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(range.endContainer, range.endOffset);
+  return pre.toString().length;
+}
+
+function setCaretOffset(el: HTMLElement, offset: number): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  let remaining = offset;
+  const walk = (node: Node): boolean => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.textContent?.length ?? 0;
+      if (remaining <= len) { range.setStart(node, remaining); range.collapse(true); return true; }
+      remaining -= len;
+      return false;
+    }
+    for (const child of Array.from(node.childNodes)) { if (walk(child)) return true; }
+    return false;
+  };
+  if (!walk(el)) { range.selectNodeContents(el); range.collapse(false); }
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 export function HighlightedInputView({
   value,
   onChange,
@@ -33,22 +75,33 @@ export function HighlightedInputView({
   style,
   className = '',
 }: HighlightedInputViewProps) {
-  const inputRef  = useRef<HTMLInputElement>(null);
-  const mirrorRef = useRef<HTMLDivElement>(null);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const [focused, setFocused]       = useState(false);
+  const editorRef  = useRef<HTMLDivElement>(null);
+  const composing  = useRef(false);
+  const lastValue  = useRef<string | null>(null);
+  const [focused,     setFocused]     = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+  const [dropPos,     setDropPos]     = useState({ top: 0, left: 0, width: 0 });
 
   const accent = accentColor || 'var(--color-primary)';
 
+  // Populate on mount
   useEffect(() => {
-    const input = inputRef.current;
-    if (!input) return;
-    const handle = () => setScrollLeft(input.scrollLeft);
-    input.addEventListener('scroll', handle);
-    return () => input.removeEventListener('scroll', handle);
-  }, []);
+    const el = editorRef.current;
+    if (!el) return;
+    el.innerHTML = buildHTML(value);
+    lastValue.current = value;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync when value is changed externally by parent
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el || lastValue.current === value) return;
+    lastValue.current = value;
+    const isFocused = document.activeElement === el;
+    const offset = isFocused ? getCaretOffset(el) : -1;
+    el.innerHTML = buildHTML(value);
+    if (isFocused && offset >= 0) setCaretOffset(el, offset);
+  }, [value]);
 
   const filtered = useMemo(() => {
     if (!focused) return [];
@@ -60,18 +113,41 @@ export function HighlightedInputView({
   useEffect(() => { setSelectedIdx(0); }, [filtered.length, value]);
 
   useEffect(() => {
-    if (filtered.length === 0 || !inputRef.current) return;
-    const r = inputRef.current.getBoundingClientRect();
+    if (filtered.length === 0 || !editorRef.current) return;
+    const r = editorRef.current.getBoundingClientRect();
     setDropPos({ top: r.bottom + 4, left: r.left, width: r.width });
   }, [filtered.length, focused]);
 
   const handleSelect = (url: string) => {
+    const el = editorRef.current;
+    if (el) {
+      el.innerHTML = buildHTML(url);
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+    }
+    lastValue.current = url;
     onChange(url);
     setFocused(false);
-    inputRef.current?.focus();
+    editorRef.current?.focus();
   };
 
+  const handleInput = useCallback(() => {
+    if (composing.current) return;
+    const el = editorRef.current;
+    if (!el) return;
+    const text = el.innerText.replace(/\n/g, '');
+    const offset = getCaretOffset(el);
+    el.innerHTML = buildHTML(text);
+    setCaretOffset(el, offset);
+    lastValue.current = text;
+    onChange(text);
+  }, [onChange]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') e.preventDefault();
     if (filtered.length > 0) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIdx(i => (i + 1) % filtered.length); return; }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setSelectedIdx(i => (i - 1 + filtered.length) % filtered.length); return; }
@@ -81,38 +157,35 @@ export function HighlightedInputView({
     onKeyDown?.(e);
   };
 
-  // Build highlighted HTML — {{var}} and ${var}
-  const highlighted = value
-    .replace(/(\{\{[\w.\-]+\}\}|\$\{[\w.\-]+\})/g, '<span class="var-highlight">$1</span>');
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+  };
 
   const showDrop = focused && filtered.length > 0;
 
-  const shapeStyle: React.CSSProperties = {
-    height,
-    lineHeight: `${height}px`,
-    borderRadius,
-  };
-
   return (
     <div className={`highlighted-input-wrapper ${className}`} style={style}>
+      {!value && placeholder && (
+        <span className="highlighted-input-placeholder" style={{ lineHeight: `${height}px` }}>
+          {placeholder}
+        </span>
+      )}
       <div
-        ref={mirrorRef}
-        className="highlighted-input-mirror"
-        style={{ transform: `translateX(-${scrollLeft}px)`, ...shapeStyle }}
-        dangerouslySetInnerHTML={{ __html: highlighted || `<span class="placeholder-text">${placeholder || ''}</span>` }}
-      />
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={e => onChange(e.target.value)}
+        ref={editorRef}
+        contentEditable={!disabled}
+        suppressContentEditableWarning
+        spellCheck={false}
+        onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onFocus={() => setFocused(true)}
         onBlur={() => { setTimeout(() => setFocused(false), 150); onBlur?.(); }}
-        placeholder={placeholder}
-        disabled={disabled}
-        className={`highlighted-input ${disabled ? 'opacity-60' : ''}`}
-        style={{ ...shapeStyle, ...(focused ? { borderColor: accent } : {}) } as React.CSSProperties}
+        onCompositionStart={() => { composing.current = true; }}
+        onCompositionEnd={() => { composing.current = false; handleInput(); }}
+        className={`highlighted-input-editor${disabled ? ' opacity-60' : ''}`}
+        style={{ height, lineHeight: `${height}px`, borderRadius, borderColor: focused ? accent : undefined }}
       />
       {showDrop && createPortal(
         <div

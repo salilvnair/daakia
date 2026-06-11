@@ -20,43 +20,55 @@ import {
   GraphQLIcon, SparkleIcon, TerminalIcon, OutputIcon, NetworkIcon,
   ClockIcon, GlobeIcon, CodeIcon, FolderIcon, DocumentIcon, CloseIcon,
   PlayIcon, SaveIcon, DownloadIcon, TrashIcon, CopyIcon, CheckIcon,
-  SystemIcon, UserPromptIcon, UploadIcon,
+  SystemIcon, UserPromptIcon, UploadIcon, CodeBracketsIcon,
 } from '../../../icons';
 
 // ─── Layout helpers (local) ───────────────────────────────────────────────────
 
-function Row({ label, children, gap = 10, code, align }: { label: string; children: React.ReactNode; gap?: number; code?: string; align?: string }) {
+function Row({ label, children, gap = 10, align, code }: { label: string; children: React.ReactNode; gap?: number; code?: string; align?: string }) {
   const [showCode, setShowCode] = useState(false);
   return (
-    <div style={{ marginBottom: '24px' }}>
+    <div style={{
+      marginBottom: 16,
+      border: '1px solid var(--color-surface-border)',
+      borderRadius: 10,
+      background: 'var(--color-surface)',
+      overflow: 'hidden',
+    }}>
       <div style={{
+        padding: '10px 16px 8px',
         fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted)',
-        textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px',
-        display: 'flex', alignItems: 'center', gap: '8px',
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        borderBottom: '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
       }}>
-        <span>{label}</span>
-        <div style={{ flex: 1, height: '1px', background: 'var(--color-surface-border)' }} />
+        {label}
       </div>
-      <div style={{ display: 'flex', alignItems: align ?? 'center', flexWrap: 'wrap', gap }}>
+      <div style={{ padding: '16px', display: 'flex', alignItems: align ?? 'center', flexWrap: 'wrap', gap }}>
         {children}
       </div>
       {code && (
-        <div style={{ marginTop: 8 }}>
+        <div>
           <button
             type="button"
             onClick={() => setShowCode(v => !v)}
             style={{
-              fontSize: 10, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--color-surface-border)',
-              background: showCode ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
-              color: showCode ? 'var(--color-primary)' : 'var(--color-text-muted)',
-              cursor: 'pointer', fontFamily: 'inherit',
-              transition: 'background 100ms, color 100ms',
+              width: '100%', textAlign: 'left', padding: '6px 16px',
+              fontSize: 10, fontWeight: 600, cursor: 'pointer',
+              color: 'var(--color-text-muted)', background: 'transparent', border: 'none',
+              borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
+              display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit',
             }}
-          >{showCode ? 'Hide Code' : 'Show Code'}</button>
+          >
+            <CodeIcon size={10} />
+            {showCode ? 'Hide code' : 'Show code'}
+          </button>
           {showCode && (
-            <div style={{ marginTop: 6 }}>
-              <CodeBlockView code={code} language="tsx" />
-            </div>
+            <CodeBlockView
+              language="tsx"
+              code={code}
+              showCopyButton
+              style={{ borderRadius: 0, borderTop: '1px solid var(--color-surface-border)' }}
+            />
           )}
         </div>
       )}
@@ -1176,17 +1188,52 @@ export function TagInputPanel() {
 export function BottomPanelPanel() {
   return (
     <div>
-      <Row label="DevTools-style bottom panel — drag to resize, click tab to collapse" gap={0} code={`<BottomPanelView\n  defaultHeight={120}\n  tabs={[\n    { id: 'console', label: 'Console', icon: <TerminalIcon size={11} />, content: <ConsoleContent /> },\n    { id: 'network', label: 'Network', icon: <NetworkIcon size={11} />,  content: <NetworkContent /> },\n    { id: 'output',  label: 'Output',  icon: <OutputIcon size={11} />,   content: <OutputContent /> },\n  ]}\n/>`}>
+      <Row label="DevTools-style bottom panel — drag to resize, click tab to collapse" gap={0} code={`<BottomPanelView\n  defaultHeight={120}\n  tabs={[\n    { id: 'console', label: 'Console', icon: <TerminalIcon size={11} />, content: <ConsoleOutput /> },\n    { id: 'network', label: 'Network', icon: <NetworkIcon size={11} />,  content: <NetworkLog /> },\n    { id: 'output',  label: 'Output',  icon: <OutputIcon size={11} />,   content: <OutputLog /> },\n  ]}\n/>`}>
         <Block style={{ padding: 0, overflow: 'hidden', height: 280, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, padding: '12px', fontSize: '11px', color: 'var(--color-text-muted)' }}>
-            ↑ Main content area (response viewer, etc.)
+          <div style={{ flex: 1, padding: '12px 14px', fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ opacity: 0.4 }}>▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓</span>
+            <span>Request / Response area</span>
           </div>
           <BottomPanelView
             defaultHeight={120}
             tabs={[
-              { id: 'console', label: 'Console',   icon: <TerminalIcon size={11} />, content: <pre style={{ margin: 0, fontSize: '11px', color: 'var(--color-success)', fontFamily: 'monospace' }}>{'[GET] /api/users → 200 OK (142ms)\n[POST] /api/auth → 201 Created (89ms)'}</pre> },
-              { id: 'network', label: 'Network',   icon: <NetworkIcon size={11} />,  content: <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Network requests will appear here.</div> },
-              { id: 'output',  label: 'Output',    icon: <OutputIcon size={11} />,   content: <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Extension output stream.</div> },
+              { id: 'console', label: 'Console', icon: <TerminalIcon size={11} />, content: <pre style={{ margin: 0, padding: '8px 12px', fontSize: '11px', color: 'var(--color-success)', fontFamily: 'monospace', lineHeight: 1.6 }}>{'[GET] /api/users → 200 OK (142ms)\n[POST] /api/auth → 201 Created (89ms)\n[DELETE] /api/session → 204 No Content (34ms)'}</pre> },
+              { id: 'network', label: 'Network',  icon: <NetworkIcon size={11} />, content: <div style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--color-text-muted)' }}>No network activity recorded.</div> },
+              { id: 'output',  label: 'Output',   icon: <OutputIcon size={11} />,  content: <div style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--color-text-muted)' }}>Extension output stream is empty.</div> },
+            ]}
+          />
+        </Block>
+      </Row>
+
+      <Row label="Collapsed by default — click any tab label to expand" gap={0} code={`<BottomPanelView\n  defaultCollapsed={true}\n  defaultHeight={160}\n  tabs={[\n    { id: 'logs', label: 'Logs', content: <LogOutput /> },\n    { id: 'ai',   label: 'AI',   content: <AIOutput /> },\n  ]}\n/>`}>
+        <Block style={{ padding: 0, overflow: 'hidden', height: 200, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, padding: '12px 14px', fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ opacity: 0.4 }}>▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓</span>
+            <span>Main content area</span>
+          </div>
+          <BottomPanelView
+            defaultCollapsed={true}
+            defaultHeight={160}
+            tabs={[
+              { id: 'logs', label: 'Logs', icon: <DocumentIcon size={11} />, content: <pre style={{ margin: 0, padding: '8px 12px', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'monospace', lineHeight: 1.6 }}>{'[INFO] Mock server started on :7070\n[WARN] No matching rule for GET /api/foo\n[INFO] Rule matched → 200 {"status":"ok"}'}</pre> },
+              { id: 'ai',   label: 'AI',   icon: <SparkleIcon size={11} />,  content: <div style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--color-text-muted)' }}>AI output will appear here after a request is sent.</div> },
+            ]}
+          />
+        </Block>
+      </Row>
+
+      <Row label="Accent color — tab indicator inherits protocol color" gap={0} code={`<BottomPanelView\n  accentColor="var(--color-protocol-rest)"\n  defaultHeight={100}\n  tabs={[\n    { id: 'response', label: 'Response', content: <ResponseBody /> },\n    { id: 'headers',  label: 'Headers',  content: <ResponseHeaders /> },\n  ]}\n/>`}>
+        <Block style={{ padding: 0, overflow: 'hidden', height: 220, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, padding: '12px 14px', fontSize: '11px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ opacity: 0.4 }}>▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓</span>
+            <span>Request editor</span>
+          </div>
+          <BottomPanelView
+            accentColor="var(--color-protocol-rest)"
+            defaultHeight={100}
+            tabs={[
+              { id: 'response', label: 'Response', icon: <CodeBracketsIcon size={11} />, content: <pre style={{ margin: 0, padding: '8px 12px', fontSize: '11px', color: 'var(--color-text-primary)', fontFamily: 'monospace', lineHeight: 1.6 }}>{'{\n  "id": 42,\n  "name": "Alice",\n  "role": "admin"\n}'}</pre> },
+              { id: 'headers',  label: 'Headers',  icon: <LayersIcon size={11} />,       content: <pre style={{ margin: 0, padding: '8px 12px', fontSize: '11px', color: 'var(--color-text-secondary)', fontFamily: 'monospace', lineHeight: 1.6 }}>{'content-type: application/json\nx-request-id: a1b2c3d4'}</pre> },
             ]}
           />
         </Block>
@@ -1848,7 +1895,11 @@ export function MergedInputViewPanel() {
         </div>
       </Row>
 
-      <Row label="Small size (sm)" align="flex-start">
+      <Row
+        label="Small size (sm)"
+        align="flex-start"
+        code={`<MergedInputView\n  segments={[\n    { type: 'select', value: version, options: SOAP_VERSIONS, onChange: setVersion, width: 80 },\n    { type: 'divider' },\n    { type: 'text', value: url, onChange: setUrl, placeholder: 'Endpoint URL' },\n  ]}\n  size="sm"\n  accentColor="var(--color-protocol-soap)"\n/>`}
+      >
         <div style={{ width: '100%', maxWidth: 400 }}>
           <MergedInputView
             segments={[
@@ -1862,7 +1913,11 @@ export function MergedInputViewPanel() {
         </div>
       </Row>
 
-      <Row label="Large size (lg)" align="flex-start">
+      <Row
+        label="Large size (lg)"
+        align="flex-start"
+        code={`<MergedInputView\n  segments={[\n    { type: 'select', value: method, options: GRPC_METHODS, onChange: setMethod, width: 90 },\n    { type: 'divider' },\n    { type: 'button', label: 'Proto', icon: <UploadIcon size={11} />,\n      onClick: openProto, accentColor: 'var(--color-protocol-grpc)' },\n    { type: 'divider' },\n    { type: 'text', value: service, onChange: setService, placeholder: 'localhost:50051' },\n  ]}\n  size="lg"\n  accentColor="var(--color-protocol-grpc)"\n/>`}
+      >
         <div style={{ width: '100%', maxWidth: 700 }}>
           <MergedInputView
             segments={[
@@ -1878,7 +1933,10 @@ export function MergedInputViewPanel() {
         </div>
       </Row>
 
-      <Row label="MergeDivider standalone (as visual separator reference)">
+      <Row
+        label="MergeDivider standalone (as visual separator reference)"
+        code={`// MergeDivider is the thin vertical separator used between segments\nimport { MergeDivider } from './MergedInputView';\n\n<div style={{ display: 'flex', alignItems: 'center', gap: 8,\n  border: '1px solid var(--color-input-border)', borderRadius: 6,\n  background: 'var(--color-input-bg)', padding: '0 8px', height: 34 }}>\n  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-protocol-rest)' }}>GET</span>\n  <MergeDivider />\n  <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>https://api.example.com/users</span>\n</div>`}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--color-input-border)', borderRadius: 6, background: 'var(--color-input-bg)', padding: '0 8px', height: 34 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-protocol-rest)' }}>GET</span>
           <MergeDivider />

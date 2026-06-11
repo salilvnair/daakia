@@ -137,7 +137,7 @@ export function DataTableView<T extends Record<string, unknown>>({
             const rowKey = String(row[keyField] ?? ri);
             const isExpanded = expandedKeys.has(rowKey);
             const bgDefault = striped && ri % 2 === 1
-              ? 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)'
+              ? 'var(--color-table-stripe)'
               : 'transparent';
 
             return (

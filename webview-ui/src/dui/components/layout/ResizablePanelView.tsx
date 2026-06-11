@@ -82,7 +82,7 @@ export function ResizablePanelView({
           width: 40,
           height: 3,
           borderRadius: 9999,
-          border: `1px dashed ${gripHovered ? 'var(--color-primary)' : 'var(--color-text-muted)'}`,
+          border: `1px dashed ${gripHovered ? 'var(--color-resizable-grip-hover)' : 'var(--color-resizable-grip)'}`,
           opacity: gripHovered ? 0.7 : 0.3,
           transition: 'opacity 150ms ease, border-color 150ms ease',
           pointerEvents: 'none',

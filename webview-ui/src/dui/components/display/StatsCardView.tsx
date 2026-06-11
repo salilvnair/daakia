@@ -28,15 +28,15 @@ export function StatsCardView({
   style,
 }: StatsCardViewProps) {
   const accent = accentColor || 'var(--color-primary)';
-  const trendColor = trend === 'up' ? 'var(--color-success)' : trend === 'down' ? 'var(--color-error)' : 'var(--color-text-muted)';
+  const trendColor = trend === 'up' ? 'var(--color-statscard-trend-up)' : trend === 'down' ? 'var(--color-statscard-trend-down)' : 'var(--color-text-muted)';
   const trendChar = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
 
   return (
     <div
       className={className}
       style={{
-        background: `color-mix(in srgb, ${accent} 8%, var(--color-surface))`,
-        border: `1px solid color-mix(in srgb, ${accent} 20%, transparent)`,
+        background: accentColor ? `color-mix(in srgb, ${accentColor} 8%, var(--color-surface))` : 'var(--color-statscard-bg)',
+        border: accentColor ? `1px solid color-mix(in srgb, ${accentColor} 20%, transparent)` : '1px solid var(--color-statscard-border)',
         borderRadius: '8px',
         padding: compact ? '10px 12px' : '14px 16px',
         display: 'flex',

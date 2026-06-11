@@ -76,12 +76,12 @@ export function PillTabsView({
               paddingLeft: base.paddingX, paddingRight: base.paddingX,
               fontSize: base.fontSize, fontWeight: 500, cursor: 'pointer',
               background: 'transparent', border: 'none', fontFamily: 'inherit',
-              color: tab.id === activeTab ? accent : 'var(--color-text-secondary)',
+              color: tab.id === activeTab ? (accentColor ? accent : 'var(--color-pilltab-text-active)') : 'var(--color-text-secondary)',
               transition: 'color 150ms',
               display: 'inline-flex', alignItems: 'center', gap: base.gap,
             }}
             onMouseEnter={e => { if (tab.id !== activeTab) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = tab.id === activeTab ? accent : 'var(--color-text-secondary)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = tab.id === activeTab ? (accentColor ? accent : 'var(--color-pilltab-text-active)') : 'var(--color-text-secondary)'; }}
           >
             {tab.label}
             {TabBadge(tab, accent)}
@@ -98,15 +98,15 @@ export function PillTabsView({
       className={className}
       style={{
         position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 2,
-        background: 'var(--color-surface)', borderRadius: 8, padding: 4,
+        background: 'var(--color-pilltab-track-bg, var(--color-surface))', borderRadius: 8, padding: 4,
       }}
     >
       <div
         aria-hidden="true"
         style={{
           position: 'absolute', top: 4, bottom: 4, borderRadius: 5,
-          background: `color-mix(in srgb, ${accent} 12%, transparent)`,
-          border: `1px solid color-mix(in srgb, ${accent} 25%, transparent)`,
+          background: accentColor ? `color-mix(in srgb, ${accentColor} 12%, transparent)` : 'var(--color-pilltab-indicator-bg)',
+          border: accentColor ? `1px solid color-mix(in srgb, ${accentColor} 25%, transparent)` : '1px solid var(--color-pilltab-indicator-border)',
           left: ind.left, width: ind.width,
           transition: 'left 200ms ease-out, width 200ms ease-out',
         }}
@@ -125,12 +125,12 @@ export function PillTabsView({
             height: base.height,
             fontSize: base.fontSize, fontWeight: 500, cursor: 'pointer',
             background: 'transparent', border: 'none', borderRadius: 5, fontFamily: 'inherit',
-            color: tab.id === activeTab ? accent : 'var(--color-text-secondary)',
+            color: tab.id === activeTab ? (accentColor ? accent : 'var(--color-pilltab-text-active)') : 'var(--color-text-secondary)',
             transition: 'color 150ms',
             display: 'inline-flex', alignItems: 'center', gap: base.gap,
           }}
           onMouseEnter={e => { if (tab.id !== activeTab) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = tab.id === activeTab ? accent : 'var(--color-text-secondary)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = tab.id === activeTab ? (accentColor ? accent : 'var(--color-pilltab-text-active)') : 'var(--color-text-secondary)'; }}
         >
           {tab.label}
           {TabBadge(tab, accent)}

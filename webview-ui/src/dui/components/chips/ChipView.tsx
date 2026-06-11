@@ -49,7 +49,7 @@ export function ChipView({
   const background = active
     ? accent
     : (bg || `color-mix(in srgb, ${accent} 12%, transparent)`);
-  const textColor = active ? 'var(--color-btn-primary-text, #fff)' : accent;
+  const textColor = active ? 'var(--color-chip-active-text)' : accent;
   const borderColor = `color-mix(in srgb, ${accent} 30%, transparent)`;
 
   return (
