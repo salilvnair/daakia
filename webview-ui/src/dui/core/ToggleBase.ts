@@ -7,17 +7,30 @@ export interface ToggleBaseConfig {
   trackH: number;
   thumb: number;
   fontSize: string;
+  activeColor: string | undefined;
+  color: string | undefined;
+}
+
+/** Local override props that any toggle/checkbox component can accept. */
+export interface ToggleContainerProps {
+  activeColor?: string;
+  color?: string;
 }
 
 /**
  * Category base for: ToggleSwitchView, CheckboxView, RadioButtonView.
- * Falls back to DuiProvider size when no local `size` prop is given.
+ * Falls back to DuiProvider values when no local prop is given.
  */
-export function useToggleBase(sizeProp?: DuiSize): ToggleBaseConfig {
-  const { size } = useDui();
-  const s = sizeProp ?? size;
+export function useToggleBase(
+  sizeProp?: DuiSize,
+  overrides: ToggleContainerProps = {}
+): ToggleBaseConfig {
+  const ctx = useDui();
+  const s = sizeProp ?? ctx.size;
   return {
     ...DUI_TOGGLE[s],
-    fontSize: DUI_FONT_SIZE[s],
+    fontSize:    DUI_FONT_SIZE[s],
+    activeColor: overrides.activeColor ?? ctx.activeColor,
+    color:       overrides.color ?? ctx.color,
   };
 }

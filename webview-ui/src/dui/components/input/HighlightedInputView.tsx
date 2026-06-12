@@ -1,6 +1,9 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { SearchIcon } from '../../../icons';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useInputBase } from '../../core/InputBase';
+import './HighlightedInputView.css';
 
 export interface HighlightedInputViewProps {
   value: string;
@@ -11,7 +14,9 @@ export interface HighlightedInputViewProps {
   suggestions?: string[];
   disabled?: boolean;
   accentColor?: string;
-  /** Height of the input in px (default 36) */
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
+  /** Raw height override in px — prefer `size` for token-aligned sizing. */
   height?: number;
   /** Border radius of the input in px (default 0 — matches URL bar; set 6 for standalone rounded usage) */
   borderRadius?: number;
@@ -27,8 +32,8 @@ function buildHTML(text: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(ESCAPE_RE, '<span class="var-escape-token">$1</span>')
-    .replace(TOKEN_RE,  '<span class="var-token">$1</span>');
+    .replace(ESCAPE_RE, '<span class="dui_highlighted-input__token--escape">$1</span>')
+    .replace(TOKEN_RE,  '<span class="dui_highlighted-input__token">$1</span>');
 }
 
 function getCaretOffset(el: HTMLElement): number {
@@ -70,11 +75,14 @@ export function HighlightedInputView({
   suggestions = [],
   disabled,
   accentColor,
-  height = 36,
+  size,
+  height,
   borderRadius = 0,
   style,
   className = '',
 }: HighlightedInputViewProps) {
+  const base = useInputBase(size);
+  const resolvedHeight = height ?? parseInt(base.height, 10);
   const editorRef  = useRef<HTMLDivElement>(null);
   const composing  = useRef(false);
   const lastValue  = useRef<string | null>(null);
@@ -166,9 +174,9 @@ export function HighlightedInputView({
   const showDrop = focused && filtered.length > 0;
 
   return (
-    <div className={`highlighted-input-wrapper ${className}`} style={style}>
+    <div className={`dui_highlighted-input ${className}`} style={style}>
       {!value && placeholder && (
-        <span className="highlighted-input-placeholder" style={{ lineHeight: `${height}px` }}>
+        <span className="dui_highlighted-input__placeholder" style={{ lineHeight: `${resolvedHeight}px` }}>
           {placeholder}
         </span>
       )}
@@ -184,8 +192,8 @@ export function HighlightedInputView({
         onBlur={() => { setTimeout(() => setFocused(false), 150); onBlur?.(); }}
         onCompositionStart={() => { composing.current = true; }}
         onCompositionEnd={() => { composing.current = false; handleInput(); }}
-        className={`highlighted-input-editor${disabled ? ' opacity-60' : ''}`}
-        style={{ height, lineHeight: `${height}px`, borderRadius, borderColor: focused ? accent : undefined }}
+        className={`dui_highlighted-input__editor${disabled ? ' opacity-60' : ''}`}
+        style={{ height: resolvedHeight, lineHeight: `${resolvedHeight}px`, borderRadius, borderColor: focused ? accent : undefined }}
       />
       {showDrop && createPortal(
         <div

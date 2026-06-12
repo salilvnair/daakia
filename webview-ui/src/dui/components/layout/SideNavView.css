@@ -1,0 +1,13 @@
+.dui_side-nav__item { transition: background 100ms, color 100ms; }
+.dui_side-nav__item:not(.dui_side-nav__item--active):hover {
+  background: var(--color-sidenav-hover-bg);
+}
+
+.dui_side-nav__clear-btn { transition: color 120ms; }
+.dui_side-nav__clear-btn:hover { color: var(--color-error); }
+
+.dui_side-nav__collapse-btn { transition: background 100ms, color 100ms; }
+.dui_side-nav__collapse-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}

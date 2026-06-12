@@ -1,0 +1,13 @@
+/* DUI shared utilities — classes used by DUI components that are also
+   used by protocol components (index.css). These are copied here so DUI
+   components own their CSS. The originals in index.css will be removed
+   one by one once protocol components are migrated. */
+
+/* Hide scrollbar while keeping scroll functionality */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

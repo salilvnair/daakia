@@ -9,7 +9,17 @@ import {
   SearchInputView, DurationInputView, PillTabsView, SplitButtonView,
   HighlightedInputView, KeyValueTableView,
   MergedInputView, MergeDivider,
+  HudView,
+  CollapsibleSectionView,
+  JsonTreeView,
+  ExpandableLogEntryView,
+  CopyButtonView,
+  MarkdownView,
+  FormDataTableView,
+  YamlKeyChip,
+  LiveColorCustomizer,
 } from '../../../dui';
+import type { HudItem, FormDataRow, LiveColorVar } from '../../../dui';
 import type { MergedInputSegment } from '../../../dui';
 import type {
   ContextMenuItem, PromptLibrarySection, PromptLibraryEditorTab,
@@ -21,6 +31,8 @@ import {
   ClockIcon, GlobeIcon, CodeIcon, FolderIcon, DocumentIcon, CloseIcon,
   PlayIcon, SaveIcon, DownloadIcon, TrashIcon, CopyIcon, CheckIcon,
   SystemIcon, UserPromptIcon, UploadIcon, CodeBracketsIcon,
+  StepOverIcon, StepIntoIcon, StepOutIcon, RestartIcon, StopSquareIcon, MuteBreakpointsIcon, RefreshIcon,
+  ArrowUpRightIcon, ArrowDownLeftIcon, InfoCircleIcon, ChevronRightIcon,
 } from '../../../icons';
 
 // ─── Layout helpers (local) ───────────────────────────────────────────────────
@@ -2004,6 +2016,513 @@ export function MergedInputViewPanel() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── HudView ─────────────────────────────────────────────────────────────────
+
+const DEBUG_HUD_ITEMS: HudItem[] = [
+  { id: 'continue', icon: <PlayIcon size={13} />, title: 'Continue (F5)' },
+  { id: 'step-over', icon: <StepOverIcon size={13} />, title: 'Step Over (F10)', separator: true },
+  { id: 'step-into', icon: <StepIntoIcon size={13} />, title: 'Step Into (F11)' },
+  { id: 'step-out', icon: <StepOutIcon size={13} />, title: 'Step Out (Shift+F11)' },
+  { id: 'restart', icon: <RestartIcon size={13} />, title: 'Restart (Ctrl+Shift+F5)', separator: true },
+  { id: 'stop', icon: <StopSquareIcon size={13} />, title: 'Stop (Shift+F5)' },
+];
+
+const TOOLBAR_HUD_ITEMS: HudItem[] = [
+  { id: 'save', icon: <SaveIcon size={13} />, title: 'Save' },
+  { id: 'copy', icon: <CopyIcon size={13} />, title: 'Copy' },
+  { id: 'refresh', icon: <RefreshIcon size={13} />, title: 'Refresh', separator: true },
+  { id: 'download', icon: <DownloadIcon size={13} />, title: 'Download' },
+  { id: 'trash', icon: <TrashIcon size={13} />, title: 'Delete', separator: true },
+];
+
+export function HudViewPanel() {
+  const [muteActive, setMuteActive] = useState(false);
+
+  const itemsWithMute: HudItem[] = [
+    ...DEBUG_HUD_ITEMS,
+    {
+      id: 'mute',
+      icon: <MuteBreakpointsIcon size={13} />,
+      title: muteActive ? 'Unmute Breakpoints' : 'Mute Breakpoints',
+      active: muteActive,
+      separator: true,
+      onClick: () => setMuteActive(v => !v),
+    },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      {/* Shared stage — all 3 HUDs visible at once, left / center / right */}
+      <div style={{
+        border: '1px dashed var(--color-surface-border)',
+        borderRadius: 8,
+        background: 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)',
+        padding: '28px 20px 16px',
+        position: 'relative',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        flexWrap: 'wrap',
+        gap: 16,
+      }}>
+        <span style={{
+          position: 'absolute', top: 8, left: 12,
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: 'var(--color-text-muted)',
+        }}>
+          In real use these float fixed to the viewport and are draggable
+        </span>
+
+        {/* ① Debug HUD — left */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+          <HudView items={itemsWithMute} status={muteActive ? 'Breakpoints muted' : 'Paused — Line 42'} contained />
+          <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>① Debug — click bug icon to toggle mute</span>
+        </div>
+
+        {/* ② Toolbar HUD — center */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <HudView items={TOOLBAR_HUD_ITEMS} status="3 files selected" contained />
+          <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>② Toolbar — default accentColor</span>
+        </div>
+
+        {/* ③ Custom accent — right */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <HudView
+            accentColor="var(--color-success)"
+            items={[
+              { id: 'play', icon: <PlayIcon size={13} />, title: 'Run' },
+              { id: 'stop', icon: <StopSquareIcon size={13} />, title: 'Stop', disabled: true },
+              { id: 'restart', icon: <RestartIcon size={13} />, title: 'Restart', separator: true },
+            ]}
+            status="Ready"
+            contained
+          />
+          <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>③ Custom accentColor</span>
+        </div>
+      </div>
+
+      {/* ① code */}
+      <Row
+        label="① Debug HUD — store-free counterpart of DebugHud, draggable in real use"
+        code={`const items: HudItem[] = [\n  { id: 'continue', icon: <PlayIcon size={13} />, title: 'Continue (F5)' },\n  { id: 'step-over', icon: <StepOverIcon size={13} />, title: 'Step Over (F10)', separator: true },\n  { id: 'step-into', icon: <StepIntoIcon size={13} />, title: 'Step Into (F11)' },\n  { id: 'restart', icon: <RestartIcon size={13} />, title: 'Restart', separator: true },\n  { id: 'stop', icon: <StopSquareIcon size={13} />, title: 'Stop (Shift+F5)' },\n  { id: 'mute', icon: <MuteBreakpointsIcon size={13} />, title: 'Mute BP', active: muted, onClick: () => setMuted(v => !v), separator: true },\n];\n\n// Drop anywhere — floats fixed to the viewport, drag the grip to reposition\n<HudView items={items} status="Paused — Line 42" />`}
+      >
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>See ① in the stage above</span>
+      </Row>
+
+      {/* ② code */}
+      <Row
+        label="② Generic toolbar — any icon + action set, uses --color-primary border"
+        code={`<HudView\n  items={[\n    { id: 'save',     icon: <SaveIcon size={13} />,     title: 'Save' },\n    { id: 'copy',     icon: <CopyIcon size={13} />,     title: 'Copy' },\n    { id: 'refresh',  icon: <RefreshIcon size={13} />,  title: 'Refresh', separator: true },\n    { id: 'download', icon: <DownloadIcon size={13} />, title: 'Download' },\n    { id: 'trash',    icon: <TrashIcon size={13} />,    title: 'Delete', separator: true },\n  ]}\n  status="3 files selected"\n/>`}
+      >
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>See ② in the stage above</span>
+      </Row>
+
+      {/* ③ code */}
+      <Row
+        label="③ Custom accentColor — border + glow + active tint all inherit the color"
+        code={`<HudView\n  accentColor="var(--color-success)"\n  items={[\n    { id: 'play',    icon: <PlayIcon size={13} />,        title: 'Run' },\n    { id: 'stop',    icon: <StopSquareIcon size={13} />,  title: 'Stop', disabled: true },\n    { id: 'restart', icon: <RestartIcon size={13} />,     title: 'Restart', separator: true },\n  ]}\n  status="Ready"\n/>`}
+      >
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>See ③ in the stage above</span>
+      </Row>
+
+    </div>
+  );
+}
+
+// ─── CollapsibleSectionView ───────────────────────────────────────────────────
+
+export function CollapsibleSectionPanel() {
+  const [varExpanded, setVarExpanded] = useState(true);
+  const [watchExpanded, setWatchExpanded] = useState(true);
+  const [bpExpanded, setBpExpanded] = useState(true);
+  const [plainExpanded, setPlainExpanded] = useState(true);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <Row
+        label="Colored chip title with badge — debugger-style sections"
+        code={`<CollapsibleSectionView\n  title="Variables"\n  expanded={true}\n  onToggle={() => {}}\n  accentColor="var(--color-debug-key)"\n  badge={3}\n>\n  {/* content */}\n</CollapsibleSectionView>`}
+      >
+        <div style={{ border: '1px solid var(--color-surface-border)', borderRadius: 6, overflow: 'hidden' }}>
+          <CollapsibleSectionView title="Variables" expanded={varExpanded} onToggle={() => setVarExpanded(v => !v)} accentColor="var(--color-debug-key)" badge={3}>
+            <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>Local variables appear here during debug</div>
+          </CollapsibleSectionView>
+          <CollapsibleSectionView title="Watch" expanded={watchExpanded} onToggle={() => setWatchExpanded(v => !v)} accentColor="var(--color-warning)" badge={2}
+            headerRight={
+              <button type="button" style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, border: 'none', background: 'transparent', color: 'var(--color-warning)', cursor: 'pointer', fontSize: 16, fontWeight: 700 }} title="Add expression">+</button>
+            }
+          >
+            <div style={{ padding: '6px 16px', fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>No expressions added</div>
+          </CollapsibleSectionView>
+          <CollapsibleSectionView title="Breakpoints" expanded={bpExpanded} onToggle={() => setBpExpanded(v => !v)} accentColor="var(--color-error)" badge={1}>
+            <div style={{ padding: '6px 16px', fontSize: 11, color: 'var(--color-text-muted)' }}>Line 12 — pre-request.js</div>
+          </CollapsibleSectionView>
+        </div>
+      </Row>
+
+      <Row
+        label="No accentColor — plain chevron section"
+        code={`<CollapsibleSectionView\n  title="Settings"\n  expanded={true}\n  onToggle={() => {}}\n>\n  {/* content */}\n</CollapsibleSectionView>`}
+      >
+        <div style={{ border: '1px solid var(--color-surface-border)', borderRadius: 6, overflow: 'hidden' }}>
+          <CollapsibleSectionView title="Settings" expanded={plainExpanded} onToggle={() => setPlainExpanded(v => !v)}>
+            <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--color-text-muted)' }}>Any content goes here</div>
+          </CollapsibleSectionView>
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── JsonTreeView ─────────────────────────────────────────────────────────────
+
+const SAMPLE_JSON = {
+  user: {
+    id: 42,
+    name: 'Alice',
+    roles: ['admin', 'editor'],
+    address: { city: 'Austin', zip: '78701' },
+    active: true,
+    notes: null,
+  },
+  meta: { version: '2.1.0', timestamp: 1718000000000 },
+};
+
+export function JsonTreeViewPanel() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <Row
+        label="Object tree — defaultExpandDepth=2 (nested up to depth 2 open by default)"
+        code={`<JsonTreeView\n  data={{\n    user: { id: 42, name: 'Alice', roles: ['admin', 'editor'], active: true, notes: null },\n    meta: { version: '2.1.0', timestamp: 1718000000000 },\n  }}\n  defaultExpandDepth={2}\n/>`}
+      >
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)', borderRadius: 6, padding: '8px 4px' }}>
+          <JsonTreeView data={SAMPLE_JSON} defaultExpandDepth={2} />
+        </div>
+      </Row>
+
+      <Row
+        label="Named root — single value with label"
+        code={`<JsonTreeView name="response" data={{ status: 200, body: { ok: true } }} defaultExpandDepth={1} />`}
+      >
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)', borderRadius: 6, padding: '8px 4px' }}>
+          <JsonTreeView name="response" data={{ status: 200, body: { ok: true, items: [1, 2, 3] } }} defaultExpandDepth={1} />
+        </div>
+      </Row>
+
+      <Row
+        label="Primitive values — type color mapping"
+        code={`<JsonTreeView data={{\n  str: 'hello world',\n  num: 3.14,\n  bool: false,\n  nil: null,\n  fn: '<Function: handler>',\n}} defaultExpandDepth={1} />`}
+      >
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)', borderRadius: 6, padding: '8px 4px' }}>
+          <JsonTreeView
+            data={{ str: 'hello world', num: 3.14, bool: false, nil: null, fn: '<Function: handler>' }}
+            defaultExpandDepth={1}
+          />
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── ExpandableLogEntryView ───────────────────────────────────────────────────
+
+const NOW = Date.now();
+
+export function ExpandableLogEntryPanel() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <Row
+        label="Network request log — Request Sent / Response Received / Summary"
+        code={`<ExpandableLogEntryView\n  icon={<ArrowUpRightIcon size={13} />}\n  title="Request Sent"\n  badge="POST"\n  badgeColor="var(--color-method-post)"\n  timestamp={Date.now()}\n>\n  {/* detail content */}\n</ExpandableLogEntryView>`}
+      >
+        <div style={{ border: '1px solid var(--color-surface-border)', borderRadius: 6, overflow: 'hidden' }}>
+          <ExpandableLogEntryView
+            icon={<ArrowUpRightIcon size={13} style={{ color: 'var(--color-protocol-websocket)' }} />}
+            title="Request Sent"
+            badge="POST"
+            badgeColor="var(--color-method-post)"
+            timestamp={NOW - 1200}
+            defaultExpanded
+          >
+            <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--color-text-primary)' }}>
+              POST https://api.example.com/v2/users
+            </div>
+          </ExpandableLogEntryView>
+          <ExpandableLogEntryView
+            icon={<ArrowDownLeftIcon size={13} style={{ color: 'var(--color-protocol-graphql)' }} />}
+            title="Response Received"
+            badge="201 Created"
+            badgeColor="var(--color-success)"
+            timestamp={NOW - 400}
+          >
+            <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--color-text-muted)' }}>
+              Content-Type: application/json · 342B
+            </div>
+          </ExpandableLogEntryView>
+          <ExpandableLogEntryView
+            icon={<InfoCircleIcon size={13} style={{ color: 'var(--color-success)' }} />}
+            title="Completed"
+            badge="812ms"
+            badgeColor="var(--color-success)"
+            timestamp={NOW}
+          >
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Duration: 812ms · Size: 342B</div>
+          </ExpandableLogEntryView>
+        </div>
+      </Row>
+
+      <Row
+        label="Error state — expanded by default (bad status)"
+        code={`<ExpandableLogEntryView\n  icon={<InfoCircleIcon size={13} style={{ color: 'var(--color-error)' }} />}\n  title="Failed"\n  badge="ECONNREFUSED"\n  badgeColor="var(--color-error)"\n  timestamp={Date.now()}\n  defaultExpanded\n>\n  {/* error detail */}\n</ExpandableLogEntryView>`}
+      >
+        <div style={{ border: '1px solid var(--color-surface-border)', borderRadius: 6, overflow: 'hidden' }}>
+          <ExpandableLogEntryView
+            icon={<InfoCircleIcon size={13} style={{ color: 'var(--color-error)' }} />}
+            title="Failed"
+            badge="ECONNREFUSED"
+            badgeColor="var(--color-error)"
+            timestamp={NOW}
+            defaultExpanded
+          >
+            <pre style={{ fontSize: 10, color: 'var(--color-error)', fontFamily: 'monospace', margin: 0, padding: '6px 8px', background: 'color-mix(in srgb, var(--color-error) 6%, transparent)', borderRadius: 4 }}>
+              AggregateError [ECONNREFUSED]: All promises were rejected
+            </pre>
+          </ExpandableLogEntryView>
+        </div>
+      </Row>
+
+      <Row
+        label="No timestamp — minimal usage"
+        code={`<ExpandableLogEntryView\n  icon={<ChevronRightIcon size={13} />}\n  title="Step completed"\n  badge="42ms"\n  badgeColor="var(--color-primary)"\n>\n  {/* detail */}\n</ExpandableLogEntryView>`}
+      >
+        <div style={{ border: '1px solid var(--color-surface-border)', borderRadius: 6, overflow: 'hidden' }}>
+          <ExpandableLogEntryView
+            icon={<ChevronRightIcon size={13} style={{ color: 'var(--color-primary)' }} />}
+            title="Step completed"
+            badge="42ms"
+            badgeColor="var(--color-primary)"
+          >
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Pre-request script ran successfully</div>
+          </ExpandableLogEntryView>
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── CopyButtonView panel ─────────────────────────────────────────────────────
+
+export function CopyButtonPanel() {
+  return (
+    <div>
+      <Row label="Default — copies text on click (check to clipboard)">
+        <CopyButtonView text="Hello, world!" />
+        <CopyButtonView text="import { CopyButtonView } from 'dui';" />
+        <CopyButtonView text="Bearer eyJhbGci..." title="Copy token" size={15} />
+      </Row>
+      <Row label="Accent colors">
+        <CopyButtonView text="primary" accentColor="var(--color-primary)" title="Copy (primary)" />
+        <CopyButtonView text="error" accentColor="var(--color-error)" title="Copy (error)" />
+        <CopyButtonView text="warning" accentColor="var(--color-warning)" title="Copy (warning)" />
+        <CopyButtonView text="success" accentColor="var(--color-success)" title="Copy (success)" />
+      </Row>
+      <Row label="Custom size">
+        <CopyButtonView text="small (10)" size={10} />
+        <CopyButtonView text="default (14)" size={14} />
+        <CopyButtonView text="large (18)" size={18} />
+        <CopyButtonView text="xl (22)" size={22} />
+      </Row>
+      <Row label="Inline usage — alongside a code snippet">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)', borderRadius: 6, padding: '4px 8px' }}>
+          <code style={{ fontSize: 11, color: 'var(--color-text-primary)', flex: 1 }}>npm install daakia</code>
+          <CopyButtonView text="npm install daakia" size={13} />
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── MarkdownView panel ───────────────────────────────────────────────────────
+
+const MD_SAMPLE = `## MarkdownView Demo
+
+This is a **bold** statement and _italic_ emphasis.
+
+### Code block (syntax highlighted)
+
+\`\`\`typescript
+interface DuiComponent {
+  style?: React.CSSProperties;
+  className?: string;
+  children?: React.ReactNode;
+}
+\`\`\`
+
+### Inline code
+
+Use \`var(--color-primary)\` for accent colors.
+
+### Table
+
+| Prop | Type | Default |
+|---|---|---|
+| content | string | — |
+| className | string | '' |
+| style | CSSProperties | — |
+
+### Task list
+
+- [x] No hardcoded colors
+- [x] No inline SVGs
+- [ ] Deploy to production
+
+> **Tip**: MarkdownView renders GFM (GitHub Flavored Markdown) with syntax highlighting via highlight.js.
+`;
+
+export function MarkdownViewPanel() {
+  const [content, setContent] = useState(MD_SAMPLE);
+  return (
+    <div>
+      <Row label="Rendered output — GFM + syntax highlighting + copy buttons" align="flex-start">
+        <MarkdownView content={content} style={{ flex: 1, minWidth: 0 }} />
+      </Row>
+      <Row label="Live edit — modify the markdown" align="flex-start">
+        <div style={{ display: 'flex', gap: 16, width: '100%', minWidth: 0 }}>
+          <textarea
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            style={{
+              flex: 1, minWidth: 0, minHeight: 300, fontFamily: 'monospace', fontSize: 11,
+              background: 'var(--color-surface)', color: 'var(--color-text-primary)',
+              border: '1px solid var(--color-surface-border)', borderRadius: 6,
+              padding: 12, resize: 'vertical', outline: 'none',
+            }}
+          />
+          <MarkdownView content={content} style={{ flex: 1, minWidth: 0 }} />
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── FormDataTableView panel ──────────────────────────────────────────────────
+
+const INIT_ROWS: FormDataRow[] = [
+  { id: '1', key: 'username', value: 'john_doe', type: 'text', enabled: true },
+  { id: '2', key: 'token', value: 'abc123', type: 'text', enabled: true },
+  { id: '3', key: 'avatar', value: '', type: 'file', enabled: true },
+];
+
+export function FormDataTablePanel() {
+  const [rows, setRows] = useState<FormDataRow[]>(INIT_ROWS);
+  const [disabledRows, setDisabledRows] = useState<FormDataRow[]>([
+    { id: 'd1', key: 'field_a', value: 'value_a', type: 'text', enabled: false },
+    { id: 'd2', key: 'upload', value: '', type: 'file', enabled: true },
+  ]);
+
+  return (
+    <div>
+      <Row label="Default — text + file rows with toolbar" align="flex-start">
+        <div style={{ width: '100%' }}>
+          <FormDataTableView rows={rows} onChange={setRows} label="Form Data" />
+        </div>
+      </Row>
+      <Row label="Disabled rows — toggle enabled state" align="flex-start">
+        <div style={{ width: '100%' }}>
+          <FormDataTableView rows={disabledRows} onChange={setDisabledRows} label="With disabled row" />
+        </div>
+      </Row>
+      <Row label="No toolbar (hideToolbar)" align="flex-start">
+        <div style={{ width: '100%' }}>
+          <FormDataTableView
+            rows={[{ id: 'x1', key: 'api_key', value: 'sk-...', type: 'text', enabled: true }]}
+            onChange={() => {}}
+            hideToolbar
+          />
+        </div>
+      </Row>
+      <Row label="Custom accent color" align="flex-start">
+        <div style={{ width: '100%' }}>
+          <FormDataTableView
+            rows={[
+              { id: 'g1', key: 'file', value: '', type: 'file', enabled: true },
+              { id: 'g2', key: 'name', value: '', type: 'text', enabled: true },
+            ]}
+            onChange={() => {}}
+            accentColor="var(--color-graphql)"
+            label="GraphQL Upload"
+          />
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── YamlKeyChip panel ────────────────────────────────────────────────────────
+
+export function YamlKeyChipPanel() {
+  return (
+    <div>
+      <Row label="Default — monospace theme-key badges">
+        <YamlKeyChip yamlKey="brand.primary" />
+        <YamlKeyChip yamlKey="component.button.bg" />
+        <YamlKeyChip yamlKey="surface.elevated" />
+        <YamlKeyChip yamlKey="text.muted" />
+      </Row>
+      <Row label="Custom accent colors">
+        <YamlKeyChip yamlKey="rest.accent" color="var(--color-rest)" />
+        <YamlKeyChip yamlKey="graphql.accent" color="var(--color-graphql)" />
+        <YamlKeyChip yamlKey="success.token" color="var(--color-success)" />
+        <YamlKeyChip yamlKey="error.token" color="var(--color-error)" />
+        <YamlKeyChip yamlKey="warning.token" color="var(--color-warning)" />
+      </Row>
+      <Row label="Clickable — used inside LiveColorCustomizer">
+        <YamlKeyChip yamlKey="brand.primary" color="var(--color-primary)" onClick={() => {}} />
+        <YamlKeyChip yamlKey="surface.panel" color="var(--color-text-muted)" onClick={() => {}} />
+      </Row>
+      <Row label="Inline usage — alongside color swatches">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {[
+            { key: 'brand.primary', color: 'var(--color-primary)', hex: '#6366f1' },
+            { key: 'status.success', color: 'var(--color-success)', hex: '#22c55e' },
+            { key: 'status.error', color: 'var(--color-error)', hex: '#ef4444' },
+          ].map(({ key, color, hex }) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 16, height: 16, borderRadius: 4, background: color, border: '1px solid var(--color-surface-border)', flexShrink: 0 }} />
+              <YamlKeyChip yamlKey={key} color={color} />
+              <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>{hex}</span>
+            </div>
+          ))}
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── LiveColorCustomizer panel ────────────────────────────────────────────────
+
+const DEMO_VARS: LiveColorVar[] = [
+  { cssVar: '--color-primary',      yamlKey: 'brand.primary',      label: 'Primary' },
+  { cssVar: '--color-success',      yamlKey: 'status.success',     label: 'Success' },
+  { cssVar: '--color-error',        yamlKey: 'status.error',       label: 'Error' },
+  { cssVar: '--color-warning',      yamlKey: 'status.warning',     label: 'Warning' },
+  { cssVar: '--color-text-primary', yamlKey: 'text.primary',       label: 'Text Primary' },
+  { cssVar: '--color-text-muted',   yamlKey: 'text.muted',         label: 'Text Muted' },
+  { cssVar: '--color-surface',      yamlKey: 'surface.default',    label: 'Surface' },
+  { cssVar: '--color-panel',        yamlKey: 'surface.panel',      label: 'Panel' },
+];
+
+export function LiveColorCustomizerPanel() {
+  return (
+    <div>
+      <Row label="Live color editor — changes apply immediately to the document" align="flex-start">
+        <LiveColorCustomizer vars={DEMO_VARS} />
+      </Row>
     </div>
   );
 }

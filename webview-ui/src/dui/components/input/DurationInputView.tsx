@@ -1,4 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useInputBase } from '../../core/InputBase';
+import './DurationInputView.css';
 
 export type DurationUnit = 'ms' | 's' | 'm' | 'hr';
 
@@ -18,6 +21,8 @@ export interface DurationInputViewProps {
   onChange: (ms: number) => void;
   placeholder?: string;
   accentColor?: string;
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
   width?: number;
   className?: string;
 }
@@ -26,9 +31,11 @@ export function DurationInputView({
   value,
   onChange,
   placeholder = '0',
+  size,
   width = 110,
   className = '',
 }: DurationInputViewProps) {
+  const base = useInputBase(size);
   const [unit, setUnit] = useState<DurationUnit>(() => {
     if (value === 0) return 'ms';
     if (value >= 3600000 && value % 3600000 === 0) return 'hr';
@@ -74,12 +81,12 @@ export function DurationInputView({
         placeholder={placeholder}
         style={{
           width,
-          height: 32,
+          height: parseInt(base.height, 10),
           paddingLeft: 10,
           paddingRight: 40,
-          fontSize: 12,
+          fontSize: base.fontSize,
           fontFamily: 'monospace',
-          borderRadius: 6,
+          borderRadius: base.borderRadius,
           border: '1px solid var(--color-input-border)',
           background: 'var(--color-input-bg)',
           color: 'var(--color-text-primary)',
@@ -119,15 +126,14 @@ export function DurationInputView({
               key={opt.value}
               type="button"
               onClick={() => handleUnitChange(opt.value)}
+              className={`dui_duration__unit-option${unit === opt.value ? ' dui_duration__unit-option--selected' : ''}`}
               style={{
                 display: 'block', width: '100%', textAlign: 'right',
                 padding: '6px 12px', fontSize: 11, cursor: 'pointer',
                 background: unit === opt.value ? 'var(--color-dur-segment-selected)' : 'transparent',
                 border: 'none', color: opt.color, fontWeight: 600,
-                transition: 'background 80ms', fontFamily: 'inherit',
+                fontFamily: 'inherit',
               }}
-              onMouseEnter={e => { if (unit !== opt.value) (e.currentTarget as HTMLElement).style.background = 'var(--color-dur-segment-hover)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = unit === opt.value ? 'var(--color-dur-segment-selected)' : 'transparent'; }}
             >
               {opt.label}
             </button>

@@ -24,6 +24,7 @@ import { ConfirmDialog } from '../modals/ConfirmDialog';
 import { NetworkSection } from './DebugNetworkSection';
 import { postMsg } from '../../../vscode';
 import { MethodBadge } from '../display/MethodBadge';
+import { CollapsibleSectionView } from '../../../dui';
 
 export function RunAndDebugPanel() {
   const active = useDebugStore(s => s.active);
@@ -83,7 +84,7 @@ export function RunAndDebugPanel() {
       <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
         <VariablesSection />
         <WatchSection />
-        <NetworkSection CollapsibleSection={CollapsibleSection} />
+        <NetworkSection />
         <CallStackSection />
         <BreakpointsSection />
       </div>
@@ -103,7 +104,7 @@ function VariablesSection() {
   const scriptGlobals = variables.filter(v => ['dk', 'console'].includes(v.name));
 
   return (
-    <CollapsibleSection title="Variables" expanded={expanded} onToggle={() => setExpanded(!expanded)} chipColor="#4fc3f7">
+    <CollapsibleSectionView title="Variables" expanded={expanded} onToggle={() => setExpanded(!expanded)} accentColor="var(--color-debug-key)">
       {!active ? (
         <div className="px-4 py-2 text-[11px] text-[var(--color-text-muted)] italic">Not debugging</div>
       ) : variables.length === 0 ? (
@@ -116,7 +117,7 @@ function VariablesSection() {
           )}
         </div>
       )}
-    </CollapsibleSection>
+    </CollapsibleSectionView>
   );
 }
 
@@ -273,11 +274,11 @@ function WatchSection() {
   }, [active, variables]);
 
   return (
-    <CollapsibleSection
+    <CollapsibleSectionView
       title="Watch"
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
-      chipColor="#ffa726"
+      accentColor="var(--color-warning)"
       badge={expressions.length || undefined}
       headerRight={
         <>
@@ -364,7 +365,7 @@ function WatchSection() {
           </div>
         )}
       </div>
-    </CollapsibleSection>
+    </CollapsibleSectionView>
   );
 }
 
@@ -439,7 +440,7 @@ function CallStackSection() {
   ) : [];
 
   return (
-    <CollapsibleSection title="Call Stack" expanded={expanded} onToggle={() => setExpanded(!expanded)} chipColor="#ab47bc">
+    <CollapsibleSectionView title="Call Stack" expanded={expanded} onToggle={() => setExpanded(!expanded)} accentColor="var(--color-debug-scope)">
       {!active ? (
         <div className="px-4 py-2 text-[11px] text-[var(--color-text-muted)] italic">Not debugging</div>
       ) : (
@@ -490,7 +491,7 @@ function CallStackSection() {
           )}
         </div>
       )}
-    </CollapsibleSection>
+    </CollapsibleSectionView>
   );
 }
 
@@ -533,12 +534,12 @@ function BreakpointsSection() {
   };
 
   return (
-    <CollapsibleSection
+    <CollapsibleSectionView
       title="Breakpoints"
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
       badge={allEntries.length || undefined}
-      chipColor="#ef5350"
+      accentColor="var(--color-error)"
       headerRight={
         <>
           {allEntries.length > 0 && (
@@ -583,7 +584,7 @@ function BreakpointsSection() {
           ))}
         </div>
       )}
-    </CollapsibleSection>
+    </CollapsibleSectionView>
   );
 }
 
@@ -653,70 +654,6 @@ function BreakpointRow({ entry }: { entry: { key: string; line: number; disabled
       >
         ×
       </button>
-    </div>
-  );
-}
-
-// ─── Shared CollapsibleSection ──────────────────────────────────────────────
-
-function CollapsibleSection({
-  title,
-  expanded,
-  onToggle,
-  badge,
-  chipColor,
-  headerRight,
-  children,
-}: {
-  title: string;
-  expanded: boolean;
-  onToggle: () => void;
-  badge?: number;
-  chipColor?: string;
-  headerRight?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border-b border-[var(--color-surface-border)]">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex items-center gap-1.5 w-full px-2 py-1.5 hover:bg-[var(--color-surface-hover)] cursor-pointer"
-      >
-        <ChevronRightIcon
-          size={12}
-          className="shrink-0 transition-transform text-[var(--color-text-muted)]"
-          style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-        />
-        <span
-          className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-[1px] rounded"
-          style={{
-            color: chipColor || 'var(--color-text-primary)',
-            backgroundColor: chipColor ? `color-mix(in srgb, ${chipColor} 12%, transparent)` : undefined,
-          }}
-        >
-          {title}
-        </span>
-        {/* Badge near label */}
-        {badge !== undefined && badge > 0 && (
-          <span
-            className="text-[9px] font-bold rounded-full px-1.5 min-w-[16px] h-4 inline-flex items-center justify-center"
-            style={{
-              backgroundColor: chipColor ? `color-mix(in srgb, ${chipColor} 20%, transparent)` : 'var(--color-accent)',
-              color: chipColor || 'white',
-            }}
-          >
-            {badge}
-          </span>
-        )}
-        {/* Actions pushed to the right */}
-        {headerRight && (
-          <span className="ml-auto inline-flex items-center gap-2.5">
-            {headerRight}
-          </span>
-        )}
-      </button>
-      {expanded && children}
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import './StageView.css';
+
 /**
  * StageView — stage status indicators for multi-step processes.
  *
@@ -73,7 +75,7 @@ export function StageSpin({ label, sublabel, color, size = 20, textSize = 12, cl
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         fill="none"
-        style={{ flexShrink: 0, marginTop: 1, animation: 'dui-stage-spin 0.9s linear infinite', transformOrigin: 'center' }}
+        style={{ flexShrink: 0, marginTop: 1, animation: 'dui_stage-spin 0.9s linear infinite', transformOrigin: 'center' }}
       >
         {/* Track */}
         <circle cx={cx} cy={cy} r={r} stroke={`color-mix(in srgb, ${c} 20%, transparent)`} strokeWidth={strokeW} />
@@ -117,13 +119,13 @@ export function StagePulse({ label, sublabel, color, size = 20, textSize = 12, c
           strokeWidth={strokeW}
           fill="none"
           opacity={0.25}
-          style={{ animation: 'dui-stage-pulse-ring 1.6s ease-out infinite' }}
+          style={{ animation: 'dui_stage-pulse-ring 1.6s ease-out infinite' }}
         />
         {/* Inner dot */}
         <circle
           cx={cx} cy={cy} r={dotR}
           fill={c}
-          style={{ animation: 'dui-stage-pulse-dot 1.6s ease-out infinite' }}
+          style={{ animation: 'dui_stage-pulse-dot 1.6s ease-out infinite' }}
         />
       </svg>
       {(label || sublabel) && (

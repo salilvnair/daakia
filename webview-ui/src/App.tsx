@@ -1874,8 +1874,11 @@ export default function App() {
     window.addEventListener('message', handler);
     getVsCodeApi().postMessage({ type: 'ready' });
     getVsCodeApi().postMessage({ type: 'getEnvironments' });
-    // Preload URL suggestions from history + collections on startup
-    getVsCodeApi().postMessage({ type: 'getHistory' });
+    // Preload URL suggestions from history + collections on startup — one request per protocol
+    // so sidebar-data-store cache is never contaminated with cross-protocol entries
+    (['rest', 'graphql', 'websocket', 'grpc', 'soap', 'mcp'] as const).forEach(p =>
+      getVsCodeApi().postMessage({ type: 'getHistory', protocol: p })
+    );
     getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'rest' });
     getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'graphql' });
     getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'websocket' });

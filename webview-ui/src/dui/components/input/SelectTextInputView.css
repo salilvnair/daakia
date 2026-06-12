@@ -1,0 +1,9 @@
+.dui_select-text__trigger { transition: background 100ms; }
+.dui_select-text__trigger:not(.dui_select-text__trigger--disabled):hover {
+  background: var(--color-surface-hover);
+}
+
+.dui_select-text__option { transition: background 100ms; }
+.dui_select-text__option:not(.dui_select-text__option--selected):hover {
+  background: var(--color-surface-hover);
+}

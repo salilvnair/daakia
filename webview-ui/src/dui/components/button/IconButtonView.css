@@ -1,0 +1,6 @@
+.dui_icon-button { transition: background 120ms ease, color 120ms ease; }
+
+.dui_icon-button:not(:disabled):hover {
+  background: var(--dui-hover-bg, var(--color-iconbtn-bg-hover, var(--color-surface-hover)));
+  color: var(--dui-hover-color, var(--color-text-primary));
+}

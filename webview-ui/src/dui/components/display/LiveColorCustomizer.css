@@ -1,0 +1,2 @@
+.dui_live-color__reset-btn { transition: color 100ms; }
+.dui_live-color__reset-btn:hover { color: var(--color-error); }

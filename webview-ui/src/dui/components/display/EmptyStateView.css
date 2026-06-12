@@ -1,0 +1,4 @@
+.dui_empty-state__action { transition: background 120ms; }
+.dui_empty-state__action:hover {
+  background: color-mix(in srgb, var(--dui-empty-accent, var(--color-primary)) 18%, transparent);
+}

@@ -544,8 +544,8 @@ export function StageCheckIcon(props: IconProps) {
   const { size = 16, ...rest } = props;
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className="flex-shrink-0" {...rest}>
-      <circle cx="8" cy="8" r="6" stroke="var(--color-accent)" strokeWidth="1.5" />
-      <path d="M5.5 8L7.2 9.7L10.5 6.3" stroke="var(--color-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="8" cy="8" r="6" stroke="var(--color-accent, var(--color-success))" strokeWidth="1.5" />
+      <path d="M5.5 8L7.2 9.7L10.5 6.3" stroke="var(--color-accent, var(--color-success))" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -576,7 +576,7 @@ export function StageSpinIcon(props: IconProps) {
   const { size = 16, ...rest } = props;
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" {...rest}>
-      <circle cx="8" cy="8" r="6" stroke="var(--color-accent)" strokeWidth="2" strokeDasharray="10 28" strokeLinecap="round">
+      <circle cx="8" cy="8" r="6" stroke="var(--color-accent, var(--color-primary))" strokeWidth="2" strokeDasharray="10 28" strokeLinecap="round">
         <animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="1s" repeatCount="indefinite" />
       </circle>
     </svg>
@@ -588,7 +588,8 @@ export function StagePulseIcon(props: IconProps) {
   const { size = 16, ...rest } = props;
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" {...rest}>
-      <circle cx="8" cy="8" r="6" stroke="var(--color-accent)" strokeWidth="1" opacity="0.2" />
+      <circle cx="8" cy="8" r="6" stroke="var(--color-accent, var(--color-text-muted))" strokeWidth="1" opacity="0.5" />
+      <circle cx="8" cy="8" r="3" fill="var(--color-accent, var(--color-text-muted))" opacity="0.4" />
     </svg>
   );
 }
@@ -1387,9 +1388,9 @@ export function DbgStopIcon(props: IconProps) {
 export function MuteBreakpointsIcon(props: IconProps) {
   const { size = 16, ...rest } = props;
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" {...rest}>
-      <circle cx="8" cy="8" r="5" fill="currentColor" opacity="0.3" />
-      <line x1="3" y1="13" x2="13" y2="3" strokeWidth="1.5" />
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" {...rest}>
+      <circle cx="8" cy="8" r="5.5" stroke="var(--color-error)" strokeWidth="1.4" />
+      <line x1="3.8" y1="12.2" x2="12.2" y2="3.8" stroke="var(--color-error)" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -2185,7 +2186,7 @@ export function PaletteIcon(props: IconProps) {
 export function DaakiaMockProviderIcon({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="24" height="24" rx="5.5" fill="#1c1917" />
+      <rect width="24" height="24" rx="5.5" fill="transparent" />
       {/* Top server bar */}
       <rect x="3.5" y="4.5" width="17" height="4.5" rx="1.5" stroke="#eab308" strokeWidth="1.4" />
       {/* Mid server bar */}

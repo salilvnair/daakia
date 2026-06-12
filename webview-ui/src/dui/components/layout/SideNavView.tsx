@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { SidebarLeftIcon, SidebarRightIcon, ChevronDownIcon, SearchIcon } from '../../../icons';
 import type { DuiSize } from '../../core/DuiTypes';
 import { useNavBase } from '../../core/NavBase';
+import './SideNavView.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -128,13 +129,13 @@ export function SideNavView({
         key={item.id}
         title={collapsed ? item.label : undefined}
         onClick={() => onSelect?.(item.id)}
+        className={`dui_side-nav__item${isActive ? ' dui_side-nav__item--active' : ''}`}
         style={collapsed ? {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: iconSquare, height: iconSquare, borderRadius: 8, margin: '1px auto',
           cursor: 'pointer',
           background: isActive ? 'var(--color-sidenav-active-bg)' : 'transparent',
           color: isActive ? 'var(--color-sidenav-active-text)' : 'var(--color-text-secondary)',
-          transition: 'background 100ms, color 100ms',
         } : {
           display: 'flex', alignItems: 'center', gap: base.gap,
           height: base.itemHeight, borderRadius: base.borderRadius,
@@ -142,10 +143,7 @@ export function SideNavView({
           cursor: 'pointer', marginBottom: 1,
           background: isActive ? 'var(--color-sidenav-active-bg)' : 'transparent',
           color: isActive ? 'var(--color-sidenav-active-text)' : 'var(--color-text-secondary)',
-          transition: 'background 100ms, color 100ms',
         }}
-        onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--color-sidenav-hover-bg)'; }}
-        onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
       >
         {item.icon && (
           <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: base.iconSize }}>
@@ -268,15 +266,13 @@ export function SideNavView({
               <button
                 type="button"
                 onClick={() => setSearch('')}
+                className="dui_side-nav__clear-btn"
                 style={{
                   border: 'none', cursor: 'pointer', padding: 0, display: 'flex',
                   alignItems: 'center', justifyContent: 'center',
                   width: 16, height: 16, borderRadius: 4, flexShrink: 0,
                   background: 'transparent', color: 'var(--color-text-muted)',
-                  transition: 'color 120ms',
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--color-error)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'; }}
                 title="Clear search"
               >
                 <span style={{ fontSize: '12px', lineHeight: 1, fontWeight: 500 }}>✕</span>
@@ -321,15 +317,13 @@ export function SideNavView({
           <button
             type="button"
             onClick={() => handleCollapse(!collapsed)}
+            className="dui_side-nav__collapse-btn"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 28, height: 28, borderRadius: 6, flexShrink: 0,
               background: 'transparent', border: 'none',
               color: 'var(--color-text-muted)', cursor: 'pointer',
-              transition: 'background 100ms, color 100ms',
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-surface-hover)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-primary)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-muted)'; }}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? <SidebarRightIcon size={14} /> : <SidebarLeftIcon size={14} />}

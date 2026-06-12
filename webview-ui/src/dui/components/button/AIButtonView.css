@@ -1,0 +1,16 @@
+.dui_ai-button {
+  transition: background 120ms, border-color 120ms, box-shadow 120ms, transform 80ms, filter 80ms;
+}
+
+.dui_ai-button:not(:disabled):hover {
+  background: var(--dui-aibtn-hover-bg, var(--color-aibtn-bg-hover));
+  border-color: var(--dui-aibtn-hover-border, color-mix(in srgb, var(--color-aibtn-text) 55%, transparent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-protocol-ai) 14%, transparent);
+}
+
+.dui_ai-button:not(:disabled):active {
+  transform: scale(0.95);
+  filter: brightness(0.85);
+  box-shadow: none;
+  transition: transform 60ms, filter 60ms, box-shadow 60ms;
+}

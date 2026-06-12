@@ -39,7 +39,7 @@ export function ConfirmDialog({
       role="presentation"
     >
       <div
-        className="bg-[#1e1e1e] border border-[rgba(255,255,255,0.1)] rounded-xl shadow-2xl min-w-[320px] max-w-[420px] p-5 animate-[confirm-in_150ms_ease-out]"
+        className="bg-[var(--color-panel)] border border-[var(--color-surface-border)] rounded-xl shadow-2xl min-w-[320px] max-w-[420px] p-5 animate-[confirm-in_150ms_ease-out]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -47,7 +47,7 @@ export function ConfirmDialog({
       >
         {/* Header */}
         <div className="flex items-center gap-3 mb-3">
-          <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${danger ? 'bg-[rgba(239,68,68,0.12)]' : 'bg-[rgba(99,102,241,0.12)]'}`}>
+          <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${danger ? 'bg-[color-mix(in_srgb,var(--color-error)_12%,transparent)]' : 'bg-[color-mix(in_srgb,var(--color-primary)_12%,transparent)]'}`}>
             <WarningTriangleIcon
               size={16}
               stroke={danger ? 'var(--color-error)' : 'var(--color-primary)'}
@@ -70,7 +70,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-[12.5px] font-medium rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] text-[#f87171] hover:bg-[rgba(239,68,68,0.15)] cursor-pointer transition-colors"
+            className="px-4 py-2 text-[12.5px] font-medium rounded-lg bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)] border border-[color-mix(in_srgb,var(--color-error)_25%,transparent)] text-[var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_15%,transparent)] cursor-pointer transition-colors"
           >
             {cancelLabel}
           </button>
@@ -80,7 +80,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             className={`px-4 py-2 text-[12.5px] font-medium rounded-lg cursor-pointer transition-colors ${
               danger
-                ? 'bg-[#ef4444] text-white hover:bg-[#dc2626]'
+                ? 'bg-[var(--color-error)] text-white hover:bg-[color-mix(in_srgb,var(--color-error)_85%,black)]'
                 : 'bg-[var(--color-primary)] text-white hover:opacity-90'
             }`}
           >

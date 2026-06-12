@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import MonacoEditor, { type OnMount } from '@monaco-editor/react';
 import { CodeIcon, RefreshIcon, PaletteIcon } from '../../../../icons';
-import { LiveColorCustomizer } from '../../../../dui';
+import { LiveColorCustomizer, ResizablePanelView } from '../../../../dui';
 import type { LiveColorVar } from '../../../../dui';
 import { ErrorBoundary } from './ErrorBoundary';
 import { buildAndEval } from './buildAndEval';
@@ -13,6 +13,15 @@ export interface LivePlaygroundProps {
   content: ReactNS.ReactNode;
   themeMode: 'light' | 'dark' | 'system';
   vars?: LiveColorVar[];
+}
+
+const LINE_HEIGHT = 19;
+const EDITOR_PADDING = 40;
+const EDITOR_MIN = 160;
+const EDITOR_MAX = 600;
+
+function calcEditorHeight(src: string) {
+  return Math.max(EDITOR_MIN, Math.min(src.split('\n').length * LINE_HEIGHT + EDITOR_PADDING, EDITOR_MAX));
 }
 
 export function LivePlayground({ code: initialCode, content, themeMode, vars }: LivePlaygroundProps) {
@@ -202,23 +211,17 @@ export function LivePlayground({ code: initialCode, content, themeMode, vars }: 
         </div>
       )}
 
-      {/* ── Split pane (Monaco + live preview) ── */}
+      {/* ── Stacked layout: Monaco editor then resizable preview ── */}
       {editorOpen && (
-        <div style={{
-          display: 'flex', flexDirection: 'row',
-          border: '1px solid var(--color-surface-border)',
-          borderRadius: 10, overflow: 'hidden',
-          minHeight: 300,
-        }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
-          {/* Monaco — left 50% */}
+          {/* Monaco editor — full width, auto-height */}
           <div style={{
-            flex: '0 0 50%', maxWidth: '50%', minWidth: 0,
-            borderRight: '1px solid var(--color-surface-border)',
-            display: 'flex', flexDirection: 'column',
+            border: '1px solid var(--color-surface-border)',
+            borderRadius: 10, overflow: 'hidden',
           }}>
             <div style={{
-              padding: '6px 12px', flexShrink: 0,
+              padding: '6px 12px',
               fontSize: 10, fontWeight: 600, letterSpacing: '0.05em',
               textTransform: 'uppercase', color: 'var(--color-text-muted)',
               background: isDark
@@ -228,71 +231,68 @@ export function LivePlayground({ code: initialCode, content, themeMode, vars }: 
             }}>
               JSX
             </div>
-            <div style={{ flex: 1 }}>
-              <MonacoEditor
-                height={340}
-                language="typescript"
-                value={code}
-                onChange={v => setCode(v ?? '')}
-                theme={isDark ? 'vs-dark' : 'light'}
-                onMount={handleMount}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 12,
-                  lineHeight: 19,
-                  scrollBeyondLastLine: false,
-                  wordWrap: 'on',
-                  lineNumbers: 'on',
-                  folding: false,
-                  renderLineHighlight: 'line',
-                  padding: { top: 12, bottom: 12 },
-                  automaticLayout: true,
-                  tabSize: 2,
-                  scrollbar: { vertical: 'auto', horizontal: 'hidden' },
-                  suggest: { showKeywords: false },
-                  quickSuggestions: false,
-                  overviewRulerLanes: 0,
-                }}
-              />
-            </div>
+            <MonacoEditor
+              height={calcEditorHeight(code)}
+              language="typescript"
+              value={code}
+              onChange={v => setCode(v ?? '')}
+              theme={isDark ? 'vs-dark' : 'light'}
+              onMount={handleMount}
+              options={{
+                minimap: { enabled: false },
+                fontSize: 12,
+                lineHeight: 19,
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                lineNumbers: 'on',
+                folding: false,
+                renderLineHighlight: 'line',
+                padding: { top: 12, bottom: 12 },
+                automaticLayout: true,
+                tabSize: 2,
+                scrollbar: { vertical: 'auto', horizontal: 'hidden' },
+                suggest: { showKeywords: false },
+                quickSuggestions: false,
+                overviewRulerLanes: 0,
+              }}
+            />
           </div>
 
-          {/* Live preview — right 50% */}
-          <div style={{
-            flex: '0 0 50%', maxWidth: '50%', minWidth: 0,
-            display: 'flex', flexDirection: 'column',
-            background: 'var(--color-panel)',
-          }}>
-            <div style={{
-              padding: '6px 12px', flexShrink: 0,
-              fontSize: 10, fontWeight: 600, letterSpacing: '0.05em',
-              textTransform: 'uppercase', color: 'var(--color-text-muted)',
-              background: 'var(--color-surface)',
-              borderBottom: '1px solid var(--color-surface-border)',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              Preview
-              {!error && PreviewComp && (
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: 'var(--color-success)',
-                  boxShadow: '0 0 0 2px color-mix(in srgb, var(--color-success) 25%, transparent)',
-                }} />
-              )}
-              {error && (
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-error)' }} />
-              )}
+          {/* Live preview — full width, user-resizable height */}
+          <ResizablePanelView defaultHeight={180} minHeight={80} maxHeight={700} borderRadius={10}>
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--color-panel)' }}>
+              <div style={{
+                padding: '6px 12px', flexShrink: 0,
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.05em',
+                textTransform: 'uppercase', color: 'var(--color-text-muted)',
+                background: 'var(--color-surface)',
+                borderBottom: '1px solid var(--color-surface-border)',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                Preview
+                {!error && PreviewComp && (
+                  <span style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: 'var(--color-success)',
+                    boxShadow: '0 0 0 2px color-mix(in srgb, var(--color-success) 25%, transparent)',
+                  }} />
+                )}
+                {error && (
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-error)' }} />
+                )}
+              </div>
+              {/* colorOverrides scoped — only this div and its children inherit them */}
+              <div style={{
+                flex: 1, padding: 20, overflow: 'auto',
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8,
+                paddingBottom: 24,
+                ...colorOverrides as React.CSSProperties,
+              }}>
+                {rightPane}
+              </div>
             </div>
+          </ResizablePanelView>
 
-            {/* colorOverrides applied as scoped inline CSS vars — ONLY this div and its children inherit them */}
-            <div style={{
-              flex: 1, padding: 20, overflow: 'auto',
-              display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8,
-              ...colorOverrides as React.CSSProperties,
-            }}>
-              {rightPane}
-            </div>
-          </div>
         </div>
       )}
     </div>

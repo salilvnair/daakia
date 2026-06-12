@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { DropdownArrowIcon, CheckIcon } from '../../../icons';
+import './SelectTextInputView.css';
 
 export interface SelectTextOption {
   value: string;
@@ -104,6 +105,7 @@ export function SelectTextInputView({
           ref={triggerRef}
           data-stiv-trigger
           onClick={openDropdown}
+          className={`dui_select-text__trigger${disabled ? ' dui_select-text__trigger--disabled' : ''}`}
           style={{
             display: 'flex', alignItems: 'center', gap: 4,
             padding: `0 ${size === 'sm' ? 7 : 10}px`,
@@ -116,10 +118,7 @@ export function SelectTextInputView({
             fontSize: dims.fontSize,
             letterSpacing: '0.02em',
             borderRadius: '5px 0 0 5px',
-            transition: 'background 100ms',
           }}
-          onMouseEnter={e => { if (!disabled) (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
         >
           <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {selectedOpt?.label ?? selectValue}
@@ -189,6 +188,7 @@ export function SelectTextInputView({
                   onSelectChange(opt.value);
                   setOpen(false);
                 }}
+                className={`dui_select-text__option${isSelected ? ' dui_select-text__option--selected' : ''}`}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: `${size === 'sm' ? '4px 8px' : '6px 10px'}`,
@@ -199,8 +199,6 @@ export function SelectTextInputView({
                     ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)'
                     : 'transparent',
                 }}
-                onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; }}
-                onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
               >
                 <span style={{ flex: 1 }}>{opt.label}</span>
                 {isSelected && <CheckIcon size={11} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />}

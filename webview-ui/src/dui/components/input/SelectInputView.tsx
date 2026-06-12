@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DropdownArrowIcon } from '../../../icons';
+import './SelectInputView.css';
 
 export interface SelectOption {
   value: string;
@@ -10,7 +11,7 @@ export interface SelectOption {
   isHeader?: boolean;
 }
 
-export type SelectInputSize = 'default' | 'sm' | 'md' | 'lg' | 'xl';
+export type SelectInputSize = 'xs' | 'default' | 'sm' | 'md' | 'lg' | 'xl';
 
 export interface SelectInputViewProps {
   options: SelectOption[];
@@ -28,6 +29,7 @@ export interface SelectInputViewProps {
 }
 
 const SIZE: Record<SelectInputSize, { h: string; px: string; text: string; itemPy: string; itemText: string }> = {
+  xs:      { h: '20px', px: '6px',  text: '10px', itemPy: '3px',  itemText: '10px' },
   default: { h: '26px', px: '10px', text: '11px', itemPy: '5px',  itemText: '11px' },
   sm:      { h: '22px', px: '8px',  text: '10px', itemPy: '4px',  itemText: '10px' },
   md:      { h: '28px', px: '10px', text: '11px', itemPy: '6px',  itemText: '11px' },
@@ -178,7 +180,8 @@ export function SelectInputView({
             borderRadius: rounded ? '7px' : '0px',
             padding: '4px',
             boxShadow: '0 12px 40px rgba(0,0,0,.35)',
-          }}
+            '--dui-select-accent': accent,
+          } as React.CSSProperties}
         >
           {options.map((opt, i) => opt.isHeader ? (
             <div key={`${opt.value}-${i}`} style={{ padding: '6px 10px 3px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', userSelect: 'none' }}>
@@ -190,6 +193,7 @@ export function SelectInputView({
               role="option"
               aria-selected={opt.value === value}
               onClick={() => handleSelect(opt.value)}
+              className={`dui_select__option${opt.value === value ? ' dui_select__option--selected' : ''}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -201,19 +205,7 @@ export function SelectInputView({
                 color: opt.value === value ? (accentColor || 'var(--color-primary-light)') : (opt.color || 'var(--color-text-secondary)'),
                 background: opt.value === value ? `color-mix(in srgb, ${accent} 15%, transparent)` : 'transparent',
                 cursor: 'pointer',
-                transition: 'all 100ms',
-              }}
-              onMouseEnter={e => {
-                if (opt.value !== value) {
-                  (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, ${accent} 10%, transparent)`;
-                  (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)';
-                }
-              }}
-              onMouseLeave={e => {
-                if (opt.value !== value) {
-                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-                  (e.currentTarget as HTMLElement).style.color = opt.color || 'var(--color-text-secondary)';
-                }
+                transition: 'background 100ms, color 100ms',
               }}
             >
               {opt.icon && <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{opt.icon}</span>}

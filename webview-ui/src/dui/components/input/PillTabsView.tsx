@@ -1,6 +1,7 @@
 import { useState, useRef, useLayoutEffect } from 'react';
-import type { DuiSize } from '../../core/DuiTypes';
+import type { DuiSize, DuiRadius, DuiWidth, DuiFontStyle } from '../../core/DuiTypes';
 import { useTabBase } from '../../core/TabBase';
+import './PillTabsView.css';
 
 export interface PillTabItem {
   id: string;
@@ -22,6 +23,14 @@ export interface PillTabsViewProps {
   variant?: PillTabsVariant;
   accentColor?: string;
   className?: string;
+  // ─── DUI container props ──────────────────────────────────────────────────
+  width?: DuiWidth;
+  borderRadius?: DuiRadius | number;
+  /** Text color for inactive tabs */
+  color?: string;
+  /** Color for the active tab indicator and text */
+  activeColor?: string;
+  fontStyle?: DuiFontStyle;
 }
 
 export function PillTabsView({
@@ -32,8 +41,13 @@ export function PillTabsView({
   variant = 'pill',
   accentColor,
   className = '',
+  width,
+  borderRadius,
+  color,
+  activeColor,
+  fontStyle,
 }: PillTabsViewProps) {
-  const base = useTabBase(size);
+  const base = useTabBase(size, { width, borderRadius, color, activeColor, fontStyle });
   const containerRef = useRef<HTMLDivElement>(null);
   const [ind, setInd] = useState({ left: 0, width: 0 });
 
@@ -43,7 +57,8 @@ export function PillTabsView({
     if (el) setInd({ left: el.offsetLeft, width: el.offsetWidth });
   }, [activeTab, tabs]);
 
-  const accent = accentColor || 'var(--color-primary)';
+  const accent = accentColor || base.activeColor || 'var(--color-primary)';
+  const inactiveColor = base.color || 'var(--color-text-secondary)';
 
   if (variant === 'underline') {
     return (
@@ -51,7 +66,13 @@ export function PillTabsView({
         ref={containerRef}
         role="tablist"
         className={className}
-        style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4 }}
+        style={{
+          position: 'relative',
+          display: base.width !== 'auto' ? 'flex' : 'inline-flex',
+          width: base.width !== 'auto' ? base.width : undefined,
+          alignItems: 'center',
+          gap: 4,
+        }}
       >
         <div
           aria-hidden="true"
@@ -70,18 +91,19 @@ export function PillTabsView({
             role="tab"
             aria-selected={tab.id === activeTab}
             onClick={() => onChange(tab.id)}
+            className={`dui_pill-tabs__btn${tab.id === activeTab ? ' dui_pill-tabs__btn--active' : ''}`}
             style={{
               position: 'relative', zIndex: 1,
               paddingBottom: '10px', paddingTop: '4px',
               paddingLeft: base.paddingX, paddingRight: base.paddingX,
               fontSize: base.fontSize, fontWeight: 500, cursor: 'pointer',
               background: 'transparent', border: 'none', fontFamily: 'inherit',
-              color: tab.id === activeTab ? (accentColor ? accent : 'var(--color-pilltab-text-active)') : 'var(--color-text-secondary)',
-              transition: 'color 150ms',
+              fontStyle: base.fontStyle,
+              color: tab.id === activeTab
+                ? (accentColor || base.activeColor ? accent : 'var(--color-pilltab-text-active)')
+                : inactiveColor,
               display: 'inline-flex', alignItems: 'center', gap: base.gap,
             }}
-            onMouseEnter={e => { if (tab.id !== activeTab) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = tab.id === activeTab ? (accentColor ? accent : 'var(--color-pilltab-text-active)') : 'var(--color-text-secondary)'; }}
           >
             {tab.label}
             {TabBadge(tab, accent)}
@@ -97,16 +119,26 @@ export function PillTabsView({
       role="tablist"
       className={className}
       style={{
-        position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 2,
-        background: 'var(--color-pilltab-track-bg, var(--color-surface))', borderRadius: 8, padding: 4,
+        position: 'relative',
+        display: base.width !== 'auto' ? 'flex' : 'inline-flex',
+        width: base.width !== 'auto' ? base.width : undefined,
+        alignItems: 'center',
+        gap: 2,
+        background: 'var(--color-pilltab-track-bg, var(--color-surface))',
+        borderRadius: base.borderRadius,
+        padding: 4,
       }}
     >
       <div
         aria-hidden="true"
         style={{
-          position: 'absolute', top: 4, bottom: 4, borderRadius: 5,
-          background: accentColor ? `color-mix(in srgb, ${accentColor} 12%, transparent)` : 'var(--color-pilltab-indicator-bg)',
-          border: accentColor ? `1px solid color-mix(in srgb, ${accentColor} 25%, transparent)` : '1px solid var(--color-pilltab-indicator-border)',
+          position: 'absolute', top: 4, bottom: 4, borderRadius: base.borderRadius,
+          background: accentColor || base.activeColor
+            ? `color-mix(in srgb, ${accent} 12%, transparent)`
+            : 'var(--color-pilltab-indicator-bg)',
+          border: accentColor || base.activeColor
+            ? `1px solid color-mix(in srgb, ${accent} 25%, transparent)`
+            : '1px solid var(--color-pilltab-indicator-border)',
           left: ind.left, width: ind.width,
           transition: 'left 200ms ease-out, width 200ms ease-out',
         }}
@@ -119,18 +151,19 @@ export function PillTabsView({
           role="tab"
           aria-selected={tab.id === activeTab}
           onClick={() => onChange(tab.id)}
+          className={`dui_pill-tabs__btn${tab.id === activeTab ? ' dui_pill-tabs__btn--active' : ''}`}
           style={{
             position: 'relative', zIndex: 1,
             padding: `0 ${base.paddingX}`,
             height: base.height,
             fontSize: base.fontSize, fontWeight: 500, cursor: 'pointer',
-            background: 'transparent', border: 'none', borderRadius: 5, fontFamily: 'inherit',
-            color: tab.id === activeTab ? (accentColor ? accent : 'var(--color-pilltab-text-active)') : 'var(--color-text-secondary)',
-            transition: 'color 150ms',
+            background: 'transparent', border: 'none', borderRadius: base.borderRadius,
+            fontFamily: 'inherit', fontStyle: base.fontStyle,
+            color: tab.id === activeTab
+              ? (accentColor || base.activeColor ? accent : 'var(--color-pilltab-text-active)')
+              : inactiveColor,
             display: 'inline-flex', alignItems: 'center', gap: base.gap,
           }}
-          onMouseEnter={e => { if (tab.id !== activeTab) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = tab.id === activeTab ? (accentColor ? accent : 'var(--color-pilltab-text-active)') : 'var(--color-text-secondary)'; }}
         >
           {tab.label}
           {TabBadge(tab, accent)}

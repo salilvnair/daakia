@@ -1,4 +1,5 @@
 import { CheckIcon } from '../../../icons';
+import './ThemeCardSelectorView.css';
 
 export interface ThemeOption {
   value: string;
@@ -34,6 +35,7 @@ export function ThemeCardSelectorView({
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
+            className={`dui_theme-card${isSelected ? ' dui_theme-card--selected' : ''}`}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -48,12 +50,9 @@ export function ThemeCardSelectorView({
                 ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)'
                 : 'var(--color-surface)',
               cursor: 'pointer',
-              transition: 'border-color 120ms, background 120ms',
               textAlign: 'left',
               position: 'relative',
             }}
-            onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-text-muted)'; }}
-            onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-surface-border)'; }}
           >
             {/* Preview swatch */}
             {opt.preview && (

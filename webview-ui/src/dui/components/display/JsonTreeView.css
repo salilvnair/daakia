@@ -1,0 +1,77 @@
+.dui_json-tree {
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+/* ── Row ─────────────────────────────────────────────────────────────────── */
+.dui_json-tree__row {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 1px 4px 1px 0;
+  min-height: 18px;
+  cursor: default;
+  border-radius: 2px;
+  transition: background 60ms;
+  white-space: nowrap;
+}
+
+.dui_json-tree__row--expandable {
+  cursor: pointer;
+}
+
+.dui_json-tree__row:hover {
+  background: var(--color-surface-hover);
+}
+
+/* ── Chevron ─────────────────────────────────────────────────────────────── */
+.dui_json-tree__chevron {
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 8px;
+  display: inline-flex;
+  align-items: center;
+  transition: transform 120ms;
+  transform: rotate(0deg);
+}
+
+.dui_json-tree__chevron--open {
+  transform: rotate(90deg);
+}
+
+.dui_json-tree__chevron-spacer {
+  width: 12px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* ── Key (variable name) ─────────────────────────────────────────────────── */
+.dui_json-tree__key {
+  color: var(--color-debug-key);
+  flex-shrink: 0;
+}
+
+.dui_json-tree__eq {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+/* ── Value type colors ───────────────────────────────────────────────────── */
+.dui_json-tree__value--string  { color: var(--color-debug-string); }
+.dui_json-tree__value--number  { color: var(--color-debug-number); }
+.dui_json-tree__value--boolean { color: var(--color-debug-boolean); }
+.dui_json-tree__value--null    { color: var(--color-debug-null); }
+.dui_json-tree__value--fn      { color: var(--color-debug-fn); }
+.dui_json-tree__value--object  { color: var(--color-debug-object); }
+.dui_json-tree__value--array   { color: var(--color-debug-object); }
+
+/* ── Length footer inside arrays ─────────────────────────────────────────── */
+.dui_json-tree__length {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 1px 4px 1px 0;
+}

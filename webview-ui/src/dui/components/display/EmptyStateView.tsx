@@ -1,3 +1,5 @@
+import './EmptyStateView.css';
+
 export interface EmptyStateAction {
   label: string;
   onClick: () => void;
@@ -72,6 +74,7 @@ export function EmptyStateView({
         <button
           type="button"
           onClick={action.onClick}
+          className="dui_empty-state__action"
           style={{
             marginTop: '4px',
             padding: '5px 14px',
@@ -83,10 +86,8 @@ export function EmptyStateView({
             background: `color-mix(in srgb, ${accent} 10%, transparent)`,
             color: accent,
             cursor: 'pointer',
-            transition: 'background 120ms',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = `color-mix(in srgb, ${accent} 18%, transparent)`)}
-          onMouseLeave={e => (e.currentTarget.style.background = `color-mix(in srgb, ${accent} 10%, transparent)`)}
+            '--dui-empty-accent': accent,
+          } as React.CSSProperties}
         >
           {action.label}
         </button>

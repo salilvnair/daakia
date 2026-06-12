@@ -1,0 +1,5 @@
+.dui_select__option { transition: background 100ms, color 100ms; }
+.dui_select__option:not(.dui_select__option--selected):hover {
+  background: color-mix(in srgb, var(--dui-select-accent, var(--color-primary)) 10%, transparent);
+  color: var(--color-text-primary);
+}

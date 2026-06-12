@@ -1,4 +1,9 @@
+import type { CSSProperties } from 'react';
 import { SparkleIcon, SpinnerIcon } from '../../../icons';
+import type { DuiSize, DuiRadius, DuiWidth, DuiFontStyle } from '../../core/DuiTypes';
+import { useButtonBase } from '../../core/ButtonBase';
+import { useDui, resolveBorderRadius } from '../../core/DuiContext';
+import './AIButtonView.css';
 
 export type AIButtonAction = 'generate' | 'fuzz' | 'explain' | 'fix' | 'ask' | 'suggest';
 
@@ -8,9 +13,17 @@ export interface AIButtonViewProps {
   onClick?: () => void;
   loading?: boolean;
   disabled?: boolean;
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
+  /** Shorthand for size="sm" — kept for backwards compat. */
   compact?: boolean;
   accentColor?: string;
   className?: string;
+  // ─── DUI container props ───────────────────────────────────────────────────
+  width?: DuiWidth;
+  borderRadius?: DuiRadius | number;
+  color?: string;
+  fontStyle?: DuiFontStyle;
 }
 
 const ACTION_LABEL: Record<AIButtonAction, string> = {
@@ -28,59 +41,59 @@ export function AIButtonView({
   onClick,
   loading = false,
   disabled = false,
+  size,
   compact = false,
   accentColor,
   className = '',
+  width,
+  borderRadius,
+  color,
+  fontStyle,
 }: AIButtonViewProps) {
-  const accent = accentColor || 'var(--color-protocol-ai)';
+  const ctx = useDui();
+  // `compact` maps to 'sm'; explicit `size` wins over compact
+  const resolvedSize: DuiSize | undefined = size ?? (compact ? 'sm' : undefined);
+  const base = useButtonBase(resolvedSize, { width, borderRadius, color, fontStyle });
+  const accent = accentColor || ctx.defaultColor || 'var(--color-protocol-ai)';
   const displayLabel = label ?? ACTION_LABEL[action];
+  const resolvedRadius = resolveBorderRadius(borderRadius ?? ctx.borderRadius, '5px');
 
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled || loading}
-      className={className}
+      className={`dui_ai-button ${className}`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: compact ? '3px' : '5px',
-        height: compact ? '22px' : '26px',
-        padding: compact ? '0 8px' : '0 10px',
-        borderRadius: '5px',
+        gap: base.gap,
+        height: base.height,
+        width: base.width !== 'auto' ? base.width : undefined,
+        paddingLeft: base.paddingX,
+        paddingRight: base.paddingX,
+        borderRadius: resolvedRadius,
         border: accentColor ? `1px solid color-mix(in srgb, ${accentColor} 35%, transparent)` : '1px solid var(--color-aibtn-border)',
         background: accentColor ? `color-mix(in srgb, ${accentColor} 10%, transparent)` : 'var(--color-aibtn-bg)',
-        color: accentColor ? accentColor : 'var(--color-aibtn-text)',
-        fontSize: compact ? '10px' : '11px',
+        color: base.color || (accentColor ? accentColor : 'var(--color-aibtn-text)'),
+        fontSize: base.fontSize,
         fontWeight: 600,
+        fontStyle: base.fontStyle,
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
-        transition: 'background 120ms, border-color 120ms',
         letterSpacing: '0.01em',
         fontFamily: 'inherit',
-      }}
-      onMouseEnter={e => {
-        if (!disabled && !loading) {
-          (e.currentTarget as HTMLElement).style.background = accentColor
-            ? `color-mix(in srgb, ${accentColor} 18%, transparent)`
-            : 'var(--color-aibtn-bg-hover)';
-          (e.currentTarget as HTMLElement).style.borderColor = accentColor
-            ? `color-mix(in srgb, ${accentColor} 55%, transparent)`
-            : 'color-mix(in srgb, var(--color-aibtn-text) 55%, transparent)';
-        }
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.background = accentColor
-          ? `color-mix(in srgb, ${accentColor} 10%, transparent)`
-          : 'var(--color-aibtn-bg)';
-        (e.currentTarget as HTMLElement).style.borderColor = accentColor
-          ? `color-mix(in srgb, ${accentColor} 35%, transparent)`
-          : 'var(--color-aibtn-border)';
-      }}
+        '--dui-aibtn-hover-bg': accentColor
+          ? `color-mix(in srgb, ${accentColor} 18%, transparent)`
+          : 'var(--color-aibtn-bg-hover)',
+        '--dui-aibtn-hover-border': accentColor
+          ? `color-mix(in srgb, ${accentColor} 55%, transparent)`
+          : 'color-mix(in srgb, var(--color-aibtn-text) 55%, transparent)',
+      } as CSSProperties}
     >
       {loading
-        ? <SpinnerIcon size={compact ? 10 : 12} style={{ flexShrink: 0 }} />
-        : <SparkleIcon size={compact ? 10 : 12} style={{ flexShrink: 0 }} />
+        ? <SpinnerIcon size={base.iconSize} style={{ flexShrink: 0 }} />
+        : <SparkleIcon size={base.iconSize} style={{ flexShrink: 0 }} />
       }
       {loading ? 'Thinking…' : displayLabel}
     </button>

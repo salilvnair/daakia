@@ -1,0 +1,4 @@
+.dui_feature-category__header { transition: background 100ms; }
+.dui_feature-category__header:hover {
+  background: color-mix(in srgb, var(--dui-category-color, var(--color-primary)) 8%, transparent);
+}

@@ -1,0 +1,4 @@
+.dui_pill-tabs__btn { transition: color 150ms; }
+.dui_pill-tabs__btn:not(.dui_pill-tabs__btn--active):hover {
+  color: var(--color-text-primary);
+}

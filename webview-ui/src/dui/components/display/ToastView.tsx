@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircleIcon, CloseIcon, WarningTriangleIcon, InfoCircleIcon, CloseCircleIcon } from '../../../icons';
+import './ToastView.css';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
 
@@ -75,7 +76,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
         background: cfg.bgVar,
         border: `1px solid color-mix(in srgb, ${cfg.color} 30%, transparent)`,
         boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-        animation: 'fadeInUp 180ms ease',
+        animation: 'dui_fade-in-up 180ms ease',
       }}
     >
       <span style={{ color: cfg.color, flexShrink: 0, marginTop: '1px' }}>
@@ -112,9 +113,7 @@ export function ToastView({ toasts, onDismiss, position = 'bottom-right' }: Toas
   const posStyle = POSITIONS[position] ?? POSITIONS['bottom-right'];
 
   return createPortal(
-    <>
-      <style>{`@keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
-      <div
+    <div
         style={{
           position: 'fixed',
           ...posStyle,
@@ -130,8 +129,7 @@ export function ToastView({ toasts, onDismiss, position = 'bottom-right' }: Toas
             <ToastItem toast={t} onDismiss={onDismiss} />
           </div>
         ))}
-      </div>
-    </>,
+      </div>,
     document.body
   );
 }

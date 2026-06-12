@@ -1,0 +1,13 @@
+.dui_tab-view__underline-btn { transition: color 150ms; }
+.dui_tab-view__underline-btn:not(.dui_tab-view__underline-btn--active):hover {
+  color: var(--color-text-primary);
+}
+
+.dui_tab-view__gql-close { transition: color 120ms; }
+.dui_tab-view__gql-close:hover { color: var(--color-text-primary); }
+
+.dui_tab-view__gql-add { transition: color 120ms, background 120ms; }
+.dui_tab-view__gql-add:hover {
+  color: var(--dui-tab-accent, var(--color-primary));
+  background: color-mix(in srgb, var(--dui-tab-accent, var(--color-primary)) 10%, transparent);
+}

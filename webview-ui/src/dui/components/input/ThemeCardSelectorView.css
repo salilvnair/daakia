@@ -1,0 +1,4 @@
+.dui_theme-card { transition: border-color 120ms, background 120ms; }
+.dui_theme-card:not(.dui_theme-card--selected):hover {
+  border-color: var(--color-text-muted);
+}

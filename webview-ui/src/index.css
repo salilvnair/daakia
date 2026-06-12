@@ -213,7 +213,7 @@
   --color-aibtn-bg: color-mix(in srgb, var(--color-protocol-ai) 10%, transparent);
   --color-aibtn-border: color-mix(in srgb, var(--color-protocol-ai) 25%, transparent);
   --color-aibtn-text: var(--color-protocol-ai);
-  --color-aibtn-bg-hover: color-mix(in srgb, var(--color-protocol-ai) 18%, transparent);
+  --color-aibtn-bg-hover: color-mix(in srgb, var(--color-protocol-ai) 24%, transparent);
 
   /* Component — Prompt Library avatars (12 per-category colors) */
   --color-prompt-avatar-rest: var(--color-protocol-rest);
@@ -228,6 +228,16 @@
   --color-prompt-avatar-suggest: var(--color-protocol-soap);
   --color-prompt-avatar-headers: var(--color-method-get);
   --color-prompt-avatar-body: var(--color-method-post);
+
+  /* JSON TREE / DEBUGGER TOKEN COLORS — VS Code Dark+ palette */
+  --color-debug-key:     #4fc3f7;
+  --color-debug-string:  #ce9178;
+  --color-debug-number:  #b5cea8;
+  --color-debug-boolean: #569cd6;
+  --color-debug-null:    #808080;
+  --color-debug-object:  #9cdcfe;
+  --color-debug-fn:      #808080;
+  --color-debug-scope:   #c586c0;
 }
 
 /* ─── Light theme — VS Code Light+ / GitHub Light / Atom One Light blend ─── */
@@ -353,20 +363,6 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* StageView animations */
-@keyframes dui-stage-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes dui-stage-pulse-ring {
-  0%   { transform: scale(1);    opacity: 0.3; }
-  60%  { transform: scale(1.55); opacity: 0; }
-  100% { transform: scale(1.55); opacity: 0; }
-}
-@keyframes dui-stage-pulse-dot {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.55; }
 }
 
 /* Breathing / glowing animation for connected state */
@@ -588,74 +584,77 @@ input[type="number"] {
 
 /* ── Highlighted Input (variable tokens) ── */
 
+/* Shared wrapper — used by the legacy shared HighlightedInput (REST/GQL/gRPC URL bars) */
 .highlighted-input-wrapper {
   position: relative;
   flex: 1;
-}
-
-.highlighted-input-placeholder {
-  position: absolute;
-  left: 12px;
-  top: 0;
-  pointer-events: none;
-  font-size: 13px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
   overflow: hidden;
 }
 
-.highlighted-input-editor {
+/* ── Legacy shared HighlightedInput (mirror + native input — used by REST/GQL/gRPC/etc. URL bars) ── */
+
+.highlighted-input-mirror {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 36px;
+  white-space: nowrap;
+  pointer-events: none;
+  color: transparent;
+  overflow: hidden;
+}
+
+.highlighted-input-mirror .var-highlight {
+  color: var(--color-primary);
+  font-weight: 500;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+.highlighted-input-mirror .var-escape-highlight {
+  color: var(--color-warning);
+  font-weight: 500;
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+.highlighted-input-mirror .placeholder-text {
+  color: var(--color-text-muted);
+}
+
+.highlighted-input {
   width: 100%;
   padding: 0 12px;
   font-size: 13px;
   background: var(--color-input-bg);
   border: 1px solid var(--color-input-border);
+  border-radius: 6px;
   color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  outline: none;
+  height: 36px;
+  min-height: unset;
+  position: relative;
   caret-color: var(--color-text-primary);
   box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  cursor: text;
 }
 
-.highlighted-input-editor:hover {
-  border-color: var(--color-input-border-hover, var(--color-surface-border));
+.highlighted-input::placeholder {
+  color: transparent;
 }
 
-.highlighted-input-editor:focus {
+.highlighted-input:hover {
+  border-color: #505050;
+}
+
+.highlighted-input:focus {
   outline: none;
   box-shadow: none;
-}
-
-.highlighted-input-editor .var-token {
-  display: inline-block;
-  color: var(--color-primary);
-  font-size: 12px;
-  font-weight: 600;
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
-  border-radius: 4px;
-  padding: 0 2px;
-  line-height: 17px;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-
-.highlighted-input-editor .var-escape-token {
-  display: inline-block;
-  color: var(--color-warning);
-  font-size: 12px;
-  font-weight: 600;
-  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-warning) 28%, transparent);
-  border-radius: 4px;
-  padding: 0 2px;
-  line-height: 17px;
-  vertical-align: middle;
-  white-space: nowrap;
+  border-color: var(--color-accent, var(--color-primary));
 }
 
 /* Smooth expand/collapse animation */
@@ -1466,16 +1465,7 @@ input[type="number"] {
   scrollbar-color: #d1d5db #f3f4f6;
 }
 
-/* ─── Variable pill mark — used in HighlightedTextarea backdrop ─────────────── */
-.graphify-var-mark {
-  background: var(--color-var-pill-bg);
-  color: var(--color-var-pill-text);
-  border: 1px solid var(--color-var-pill-border);
-  border-radius: 3px;
-  padding: 0 4px;
-  font-weight: 600;
-  font-style: normal;
-}
+/* .graphify-var-mark — moved to dui/components/display/PromptLibraryEditorView.css */
 
 /* ─── Light theme: input / textarea base styles ───────────────────────────────
    Many components hardcode rgba(255,255,255,0.04) / rgba(255,255,255,0.08)

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CopyIcon, RenameIcon, TrashIcon, SparkleIcon, CheckIcon } from '../../../icons';
 import { ChipView } from '../chips/ChipView';
+import './PromptCardView.css';
 
 export interface PromptCardViewProps {
   id: string;
@@ -209,6 +210,7 @@ function ActionBtn({ icon, onClick, title, danger, iconColor, copied }: {
       type="button"
       onClick={e => { e.stopPropagation(); onClick(e); }}
       title={title}
+      className={`dui_prompt-card__action-btn${danger ? ' dui_prompt-card__action-btn--danger' : ''}${copied ? ' dui_prompt-card__action-btn--copied' : ''}`}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         width: 22, height: 22, borderRadius: '4px',
@@ -216,19 +218,6 @@ function ActionBtn({ icon, onClick, title, danger, iconColor, copied }: {
         background: copied ? 'color-mix(in srgb, var(--color-success) 12%, transparent)' : 'transparent',
         cursor: 'pointer',
         color: baseColor,
-        transition: 'background 100ms, color 100ms',
-      }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLElement).style.background = danger
-          ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
-          : copied
-          ? 'color-mix(in srgb, var(--color-success) 16%, transparent)'
-          : 'var(--color-surface-hover)';
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLElement).style.background = copied
-          ? 'color-mix(in srgb, var(--color-success) 12%, transparent)'
-          : 'transparent';
       }}
     >
       {icon}

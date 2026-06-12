@@ -1,0 +1,118 @@
+.dui_hud {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  background: var(--color-surface-overlay, var(--color-elevated));
+  border: 1px solid var(--dui-hud-accent, var(--color-primary));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4),
+              0 0 0 1px color-mix(in srgb, var(--dui-hud-accent, var(--color-primary)) 15%, transparent);
+  backdrop-filter: blur(8px);
+  animation: dui_hud-in 200ms ease-out;
+  user-select: none;
+}
+
+@keyframes dui_hud-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Showcase / embedded mode — position:relative so it sits in normal flow */
+.dui_hud--contained {
+  position: relative;
+  top: unset;
+  left: unset;
+  transform: none;
+  z-index: auto;
+  animation: none;
+}
+
+/* Drag grip */
+.dui_hud__drag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 20px;
+  cursor: grab;
+  opacity: 0.5;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
+.dui_hud__drag:active { cursor: grabbing; }
+
+.dui_hud__grip {
+  display: block;
+  width: 6px;
+  height: 10px;
+  background: repeating-linear-gradient(
+    to bottom,
+    currentColor 0px,
+    currentColor 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.6;
+  color: var(--color-text-muted);
+}
+
+/* Buttons */
+.dui_hud__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 100ms, opacity 100ms;
+  flex-shrink: 0;
+}
+
+.dui_hud__btn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.dui_hud__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Active state — e.g. "mute breakpoints" toggled on */
+.dui_hud__btn--active {
+  background: color-mix(in srgb, var(--dui-hud-active-color, var(--color-error)) 22%, transparent);
+  color: var(--dui-hud-active-color, var(--color-error));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dui-hud-active-color, var(--color-error)) 35%, transparent);
+}
+
+.dui_hud__btn--active:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dui-hud-active-color, var(--color-error)) 32%, transparent);
+}
+
+/* Separator */
+.dui_hud__sep {
+  width: 1px;
+  height: 16px;
+  background: var(--color-surface-border);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+/* Status text */
+.dui_hud__status {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-left: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}

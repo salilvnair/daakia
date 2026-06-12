@@ -1,0 +1,4 @@
+.dui_duration__unit-option { transition: background 80ms; }
+.dui_duration__unit-option:not(.dui_duration__unit-option--selected):hover {
+  background: var(--color-dur-segment-hover);
+}

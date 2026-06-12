@@ -1,4 +1,6 @@
 import type { ReactNode, InputHTMLAttributes, CSSProperties } from 'react';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useInputBase } from '../../core/InputBase';
 
 export interface SearchInputViewProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'prefix'> {
   value: string;
@@ -7,7 +9,9 @@ export interface SearchInputViewProps extends Omit<InputHTMLAttributes<HTMLInput
   prefix?: ReactNode;
   /** Node shown right inside the bar (e.g. clear button) */
   suffix?: ReactNode;
-  /** Height in px (default 28) */
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
+  /** Raw height override in px — prefer `size` for token-aligned sizing. */
   height?: number;
   style?: CSSProperties;
   className?: string;
@@ -19,21 +23,24 @@ export function SearchInputView({
   prefix,
   suffix,
   placeholder,
-  height = 28,
+  size,
+  height,
   style,
   className = '',
   ...rest
 }: SearchInputViewProps) {
+  const base = useInputBase(size);
+  const resolvedHeight = height ?? parseInt(base.height, 10);
   return (
     <div
       className={className}
       style={{
-        height,
+        height: resolvedHeight,
         display: 'flex',
         alignItems: 'center',
         gap: 6,
         flex: 1,
-        borderRadius: 6,
+        borderRadius: base.borderRadius,
         border: '1px solid var(--color-input-border)',
         background: 'var(--color-input-bg)',
         paddingLeft: 8,
@@ -58,7 +65,7 @@ export function SearchInputView({
           background: 'transparent',
           border: 'none',
           outline: 'none',
-          fontSize: 11,
+          fontSize: base.fontSize,
           color: 'var(--color-text-primary)',
           fontFamily: 'inherit',
         }}

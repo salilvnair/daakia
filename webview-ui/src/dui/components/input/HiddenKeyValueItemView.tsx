@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LockIcon, TrashIcon, EyeIcon, EyeOffIcon } from '../../../icons';
+import './HiddenKeyValueItemView.css';
 
 export interface HiddenKeyValueItemViewProps {
   keyValue: string;
@@ -67,18 +68,14 @@ export function HiddenKeyValueItemView({
 
   return (
     <div
-      className={`group ${className}`}
+      className={`dui_hidden-kv-item group ${className}`}
       style={{
         display: 'grid',
         gridTemplateColumns: cols,
         gap: '8px',
         alignItems: 'center',
         minHeight: '28px',
-        opacity: 0.72,
-        transition: 'opacity 120ms',
       }}
-      onMouseEnter={e => (e.currentTarget.style.opacity = '0.92')}
-      onMouseLeave={e => (e.currentTarget.style.opacity = '0.72')}
     >
       {/* Lock / system icon */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -123,15 +120,13 @@ export function HiddenKeyValueItemView({
           <button
             type="button"
             onClick={() => setRevealed(v => !v)}
+            className="dui_hidden-kv-item__eye"
             style={{
               position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--color-text-muted)', cursor: 'pointer', padding: 2,
+              cursor: 'pointer', padding: 2,
               background: 'transparent', border: 'none',
-              transition: 'color 120ms', opacity: 0.7,
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-primary)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.7'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-muted)'; }}
             title={revealed ? 'Hide value' : 'Reveal value'}
           >
             {revealed ? <EyeIcon size={12} /> : <EyeOffIcon size={12} />}
@@ -149,15 +144,12 @@ export function HiddenKeyValueItemView({
             type="button"
             onClick={onDelete}
             title={deleteTitle ?? 'Remove'}
-            className="opacity-0 group-hover:opacity-100"
+            className="dui_hidden-kv-item__delete opacity-0 group-hover:opacity-100"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'var(--color-text-muted)', cursor: 'pointer', padding: 2,
               background: 'transparent', border: 'none',
-              transition: 'color 120ms, opacity 120ms',
             }}
-            onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-error)')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
           >
             <TrashIcon size={13} />
           </button>

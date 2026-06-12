@@ -1,0 +1,78 @@
+.dui_collapsible {
+  border-bottom: 1px solid var(--color-surface-border);
+}
+
+/* ── Header button ───────────────────────────────────────────────────────── */
+.dui_collapsible__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 80ms;
+}
+
+.dui_collapsible__header:hover {
+  background: var(--color-surface-hover);
+}
+
+/* ── Chevron ─────────────────────────────────────────────────────────────── */
+.dui_collapsible__chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform 150ms ease;
+  transform: rotate(0deg);
+}
+
+.dui_collapsible__chevron--open {
+  transform: rotate(90deg);
+}
+
+/* ── Colored title chip ──────────────────────────────────────────────────── */
+.dui_collapsible__title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--dui-collapse-accent, var(--color-text-primary));
+  background: color-mix(in srgb, var(--dui-collapse-accent, transparent) 12%, transparent);
+  white-space: nowrap;
+}
+
+/* ── Badge (count pill) ──────────────────────────────────────────────────── */
+.dui_collapsible__badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  min-width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 99px;
+  color: var(--dui-collapse-accent, var(--color-text-muted));
+  background: color-mix(in srgb, var(--dui-collapse-accent, var(--color-text-muted)) 20%, transparent);
+  flex-shrink: 0;
+}
+
+/* ── Right-side actions slot ─────────────────────────────────────────────── */
+.dui_collapsible__actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Expanded content ────────────────────────────────────────────────────── */
+.dui_collapsible__content {
+  /* no padding — consumer decides */
+}

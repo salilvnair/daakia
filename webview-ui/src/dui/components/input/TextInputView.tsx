@@ -1,5 +1,5 @@
 import { forwardRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
-import type { DuiSize } from '../../core/DuiTypes';
+import type { DuiSize, DuiRadius, DuiWidth, DuiFontStyle } from '../../core/DuiTypes';
 import { useInputBase } from '../../core/InputBase';
 
 /** `'default'` is kept for backwards-compat and resolves to context size. */
@@ -17,16 +17,24 @@ export interface TextInputViewProps extends InputHTMLAttributes<HTMLInputElement
   iconLeft?: ReactNode;
   /** Element rendered inside the right edge */
   iconRight?: ReactNode;
+  // ─── DUI container props ────────────────────────────────────────────────────
+  width?: DuiWidth;
+  borderRadius?: DuiRadius | number;
+  /** Text color override */
+  color?: string;
+  fontStyle?: DuiFontStyle;
 }
 
 export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
   function TextInputView(
-    { size = 'default', rounded = true, accentColor, error = false, iconLeft, iconRight, style, className = '', onFocus, onBlur, ...rest },
+    { size = 'default', rounded = true, accentColor, error = false, iconLeft, iconRight,
+      style, className = '', onFocus, onBlur,
+      width, borderRadius, color, fontStyle,
+      ...rest },
     ref
   ) {
     const [focused, setFocused] = useState(false);
-    // 'default' defers to DuiProvider context (or 'md' when no provider)
-    const base = useInputBase(size === 'default' ? undefined : size);
+    const base = useInputBase(size === 'default' ? undefined : size, { width, borderRadius, color, fontStyle });
     const accent = accentColor || 'var(--color-primary)';
     const radius = rounded ? base.borderRadius : '0px';
 
@@ -40,6 +48,7 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
       display: 'inline-flex',
       alignItems: 'center',
       height: base.height,
+      width: base.width !== 'auto' ? base.width : undefined,
       borderRadius: radius,
       border: `1px solid ${borderColor}`,
       background: 'var(--color-input-bg)',
@@ -67,7 +76,8 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
             background: 'transparent',
             border: 'none',
             outline: 'none',
-            color: 'var(--color-text-primary)',
+            color: base.color || 'var(--color-text-primary)',
+            fontStyle: base.fontStyle,
             minWidth: 0,
             fontFamily: 'inherit',
           }}

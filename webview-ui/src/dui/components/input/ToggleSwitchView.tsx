@@ -15,6 +15,11 @@ export interface ToggleSwitchViewProps {
   label?: string;
   labelPosition?: 'left' | 'right';
   className?: string;
+  // ─── DUI container props ───────────────────────────────────────────────────
+  /** Color when checked — alias for accentColor with context-level support */
+  activeColor?: string;
+  /** Label text color override */
+  color?: string;
 }
 
 export function ToggleSwitchView({
@@ -26,9 +31,13 @@ export function ToggleSwitchView({
   label,
   labelPosition = 'right',
   className = '',
+  activeColor,
+  color,
 }: ToggleSwitchViewProps) {
-  const accent = accentColor || 'var(--color-toggle-on)';
-  const { trackW, trackH, thumb, fontSize } = useToggleBase(size);
+  const base = useToggleBase(size, { activeColor, color });
+  const accent = accentColor || base.activeColor || 'var(--color-toggle-on)';
+  const labelColor = base.color || (disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)');
+  const { trackW, trackH, thumb, fontSize } = base;
   const thumbLeft = checked ? `calc(${trackW}px - ${thumb + 2}px)` : '2px';
 
   const trackStyle: CSSProperties = {
@@ -89,13 +98,13 @@ export function ToggleSwitchView({
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
       {labelPosition === 'left' && (
-        <span style={{ fontSize, color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)', userSelect: 'none' }}>
+        <span style={{ fontSize, color: labelColor, userSelect: 'none' }}>
           {label}
         </span>
       )}
       {toggle}
       {labelPosition === 'right' && (
-        <span style={{ fontSize, color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-primary)', userSelect: 'none' }}>
+        <span style={{ fontSize, color: labelColor, userSelect: 'none' }}>
           {label}
         </span>
       )}

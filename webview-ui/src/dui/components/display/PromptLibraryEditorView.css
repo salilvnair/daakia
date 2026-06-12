@@ -1,0 +1,16 @@
+/* Variable chip hover */
+.dui_prompt-editor__var-chip { transition: background 100ms; }
+.dui_prompt-editor__var-chip:hover {
+  background: color-mix(in srgb, var(--color-var-pill-bg) 150%, transparent);
+}
+
+/* Variable placeholder mark — {{var}} highlights in the editor textarea backdrop */
+.graphify-var-mark {
+  background: var(--color-var-pill-bg);
+  color: var(--color-var-pill-text);
+  border: 1px solid var(--color-var-pill-border);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-weight: 600;
+  font-style: normal;
+}

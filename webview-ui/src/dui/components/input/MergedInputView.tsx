@@ -1,10 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { DropdownArrowIcon, CheckIcon } from '../../../icons';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useDui } from '../../core/DuiContext';
+import { DUI_HEIGHT, DUI_FONT_SIZE, DUI_PADDING_X, DUI_ICON_SIZE } from '../../core/DuiTokens';
+import './MergedInputView.css';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type MergedInputSize = 'sm' | 'md' | 'lg';
+/** @deprecated Use `DuiSize` ('sm' | 'md' | 'lg' | 'xl') directly. */
+export type MergedInputSize = DuiSize;
 
 export interface MergedSelectOption {
   value: string;
@@ -39,17 +44,12 @@ export type MergedInputSegment =
 
 export interface MergedInputViewProps {
   segments: MergedInputSegment[];
-  size?: MergedInputSize;
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
   accentColor?: string;
   disabled?: boolean;
   className?: string;
 }
-
-const SIZES: Record<MergedInputSize, { height: number; fontSize: number; px: number; arrowSize: number }> = {
-  sm: { height: 26, fontSize: 11, px: 7,  arrowSize: 8  },
-  md: { height: 34, fontSize: 12, px: 10, arrowSize: 10 },
-  lg: { height: 40, fontSize: 13, px: 12, arrowSize: 11 },
-};
 
 // ─── Divider ──────────────────────────────────────────────────────────────────
 
@@ -69,9 +69,11 @@ export function MergeDivider() {
 
 // ─── Select segment ───────────────────────────────────────────────────────────
 
+interface MergedDims { height: number; fontSize: number; px: number; arrowSize: number }
+
 interface SegSelectProps {
   seg: Extract<MergedInputSegment, { type: 'select' }>;
-  dims: (typeof SIZES)[MergedInputSize];
+  dims: MergedDims;
   accent: string;
   disabled: boolean;
 }
@@ -110,6 +112,7 @@ function SegSelect({ seg, dims, accent, disabled }: SegSelectProps) {
         ref={triggerRef}
         data-miv-sel
         onClick={openDropdown}
+        className={`dui_merged__select-trigger${disabled ? ' dui_merged__select-trigger--disabled' : ''}`}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -123,11 +126,8 @@ function SegSelect({ seg, dims, accent, disabled }: SegSelectProps) {
           fontWeight: 700,
           fontSize: dims.fontSize,
           letterSpacing: '0.02em',
-          transition: 'background 100ms',
           borderRadius: '5px 0 0 5px',
         }}
-        onMouseEnter={e => { if (!disabled) (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
       >
         <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {selected?.label ?? seg.value}
@@ -165,6 +165,7 @@ function SegSelect({ seg, dims, accent, disabled }: SegSelectProps) {
               <div
                 key={opt.value}
                 onMouseDown={e => { e.preventDefault(); seg.onChange(opt.value); setOpen(false); }}
+                className={`dui_merged__select-option${isSel ? ' dui_merged__select-option--selected' : ''}`}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: `${dims.height <= 26 ? '4px 8px' : '6px 10px'}`,
@@ -175,8 +176,6 @@ function SegSelect({ seg, dims, accent, disabled }: SegSelectProps) {
                   color: opt.color ?? (isSel ? accent : 'var(--color-text-primary)'),
                   background: isSel ? `color-mix(in srgb, ${accent} 12%, transparent)` : 'transparent',
                 }}
-                onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; }}
-                onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
               >
                 <span style={{ flex: 1 }}>{opt.label}</span>
                 {isSel && <CheckIcon size={11} style={{ color: accent, flexShrink: 0 }} />}
@@ -194,7 +193,7 @@ function SegSelect({ seg, dims, accent, disabled }: SegSelectProps) {
 
 interface SegButtonProps {
   seg: Extract<MergedInputSegment, { type: 'button' }>;
-  dims: (typeof SIZES)[MergedInputSize];
+  dims: MergedDims;
   disabled: boolean;
 }
 
@@ -205,6 +204,7 @@ function SegButton({ seg, dims, disabled }: SegButtonProps) {
       type="button"
       disabled={disabled}
       onClick={seg.onClick}
+      className="dui_merged__button-seg"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -224,15 +224,8 @@ function SegButton({ seg, dims, disabled }: SegButtonProps) {
         transition: 'background 100ms, color 100ms',
         fontFamily: 'inherit',
         opacity: disabled ? 0.5 : 1,
-      }}
-      onMouseEnter={e => {
-        if (!disabled) {
-          (e.currentTarget as HTMLButtonElement).style.background = `color-mix(in srgb, ${accent} 20%, transparent)`;
-        }
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLButtonElement).style.background = `color-mix(in srgb, ${accent} 10%, transparent)`;
-      }}
+        '--dui-seg-accent': accent,
+      } as React.CSSProperties}
     >
       {seg.icon}
       {seg.label}
@@ -244,7 +237,7 @@ function SegButton({ seg, dims, disabled }: SegButtonProps) {
 
 export function MergedInputView({
   segments,
-  size = 'md',
+  size,
   accentColor,
   disabled = false,
   className = '',
@@ -252,7 +245,14 @@ export function MergedInputView({
   const [focused, setFocused] = useState(false);
   const [openSel, setOpenSel] = useState(false);
 
-  const dims = SIZES[size];
+  const ctx = useDui();
+  const s = size ?? ctx.size;
+  const dims = {
+    height:    DUI_HEIGHT.input[s],
+    fontSize:  parseInt(DUI_FONT_SIZE[s], 10),
+    px:        parseInt(DUI_PADDING_X[s], 10),
+    arrowSize: DUI_ICON_SIZE[s],
+  };
   const accent = accentColor ?? 'var(--color-primary)';
   const borderColor = focused || openSel ? accent : 'var(--color-input-border)';
   const boxShadow = (focused || openSel)

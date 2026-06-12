@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { ChevronRightIcon } from '../../icons';
 import type { SoapOperationDef } from '../../store/tabs-store';
+import { SelectInputView } from '../../dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
 
@@ -167,14 +168,16 @@ function FormField({ field, path, value, formData, onChange }: {
           className="accent-[var(--color-protocol-soap)]"
         />
       ) : field.enumValues && field.enumValues.length > 0 ? (
-        <select
+        <SelectInputView
+          options={[
+            { value: '', label: '-- Select --' },
+            ...field.enumValues.map(v => ({ value: v, label: v })),
+          ]}
           value={(value as string) || ''}
-          onChange={(e) => onChange(path, e.target.value)}
-          className="flex-1 h-[26px] px-2 text-[11px] rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
-        >
-          <option value="">-- Select --</option>
-          {field.enumValues.map(v => <option key={v} value={v}>{v}</option>)}
-        </select>
+          onChange={v => onChange(path, v)}
+          accentColor={ACCENT}
+          style={{ flex: 1 }}
+        />
       ) : (
         <input
           type={field.type === 'int' || field.type === 'float' ? 'number' : field.type === 'date' || field.type === 'dateTime' ? 'date' : 'text'}

@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { TrashIcon, DragHandleIcon, EyeIcon, EyeOffIcon, CheckCircleFilledIcon } from '../../../icons';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useInputBase } from '../../core/InputBase';
+import './KeyValueItemView.css';
 
 export interface KeyValueItemViewProps {
   enabled?: boolean;
@@ -14,6 +17,8 @@ export interface KeyValueItemViewProps {
   placeholder?: { key?: string; value?: string; description?: string };
   masked?: boolean;
   accentColor?: string;
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
   draggable?: boolean;
   readOnly?: boolean;
   className?: string;
@@ -32,6 +37,7 @@ export function KeyValueItemView({
   placeholder,
   masked = false,
   accentColor,
+  size,
   draggable = false,
   readOnly = false,
   className = '',
@@ -41,6 +47,7 @@ export function KeyValueItemView({
   const [valFocused, setValFocused] = useState(false);
   const [descFocused, setDescFocused] = useState(false);
 
+  const base = useInputBase(size);
   const accent = accentColor || 'var(--color-primary)';
 
   const hasDesc = onDescriptionChange !== undefined;
@@ -48,11 +55,11 @@ export function KeyValueItemView({
 
   const inputBase: React.CSSProperties = {
     width: '100%',
-    height: '28px',
-    paddingLeft: '10px',
-    paddingRight: '10px',
-    fontSize: '12px',
-    borderRadius: '4px',
+    height: base.height,
+    paddingLeft: base.paddingX,
+    paddingRight: base.paddingX,
+    fontSize: base.fontSize,
+    borderRadius: base.borderRadius,
     background: 'var(--color-input-bg)',
     border: '1px solid var(--color-input-border)',
     color: enabled ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
@@ -91,7 +98,7 @@ export function KeyValueItemView({
         gridTemplateColumns: cols,
         gap: '8px',
         alignItems: 'center',
-        minHeight: '28px',
+        minHeight: base.height,
         opacity: enabled ? 1 : 0.65,
         transition: 'opacity 120ms',
       }}
@@ -211,9 +218,7 @@ export function KeyValueItemView({
             opacity: 0,
             transition: 'color 120ms, opacity 120ms',
           }}
-          className="group-hover:opacity-100"
-          onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-error)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
+          className="dui_kv-item__delete group-hover:opacity-100"
           title="Remove row"
         >
           <TrashIcon size={13} />

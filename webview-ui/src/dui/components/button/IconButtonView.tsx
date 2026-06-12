@@ -1,4 +1,7 @@
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
+import type { DuiRadius } from '../../core/DuiTypes';
+import { useDui, resolveBorderRadius } from '../../core/DuiContext';
+import './IconButtonView.css';
 
 export type IconButtonSize = 'default' | 'sm' | 'md' | 'lg' | 'xl';
 export type IconButtonVariant = 'ghost' | 'filled';
@@ -16,6 +19,10 @@ export interface IconButtonViewProps extends ButtonHTMLAttributes<HTMLButtonElem
   activeColor?: string;
   /** Shows active state */
   active?: boolean;
+  // ─── DUI container props ─────────────────────────────────────────────────
+  borderRadius?: DuiRadius | number;
+  /** Text/icon color override */
+  color?: string;
 }
 
 const SIZE_PX: Record<IconButtonSize, string> = {
@@ -38,58 +45,53 @@ export function IconButtonView({
   disabled,
   style,
   className = '',
+  borderRadius,
+  color,
   ...rest
 }: IconButtonViewProps) {
+  const ctx = useDui();
   const dim = SIZE_PX[size] ?? SIZE_PX.default;
-  const accent = accentColor || 'var(--color-primary)';
-  const activeClr = activeColor || accent;
-  const radius = rounded ? '4px' : '0px';
+  const accent = accentColor || ctx.defaultColor || 'var(--color-primary)';
+  const activeClr = activeColor || ctx.activeColor || accent;
+  const resolvedRadius = rounded
+    ? resolveBorderRadius(borderRadius ?? ctx.borderRadius, '4px')
+    : '0px';
+  const resolvedColor = color || ctx.color;
 
   const baseStyle: CSSProperties = {
     width: dim,
     height: dim,
     minWidth: dim,
-    borderRadius: radius,
+    borderRadius: resolvedRadius,
     border: 'none',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     cursor: disabled ? 'default' : 'pointer',
-    transition: 'all 120ms ease',
     opacity: disabled ? 0.45 : 1,
     ...(variant === 'filled'
-      ? { background: active ? activeClr : `color-mix(in srgb, ${accent} 12%, transparent)`, color: active ? 'var(--color-btn-primary-text, white)' : accent }
-      // Ghost: when accentColor explicitly provided, show it in resting state — otherwise muted
-      : { background: active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent', color: active ? activeClr : (accentColor ? accent : 'var(--color-text-muted)') }),
+      ? {
+          background: active ? activeClr : `color-mix(in srgb, ${accent} 12%, transparent)`,
+          color: active ? 'var(--color-btn-primary-text, white)' : (resolvedColor || accent),
+        }
+      : {
+          background: active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent',
+          color: active ? activeClr : (resolvedColor || (accentColor ? accent : 'var(--color-text-muted)')),
+        }),
+    '--dui-hover-bg': active
+      ? `color-mix(in srgb, ${activeClr} 20%, transparent)`
+      : 'var(--color-iconbtn-bg-hover, var(--color-surface-hover))',
+    '--dui-hover-color': active ? activeClr : 'var(--color-text-primary)',
     ...style,
-  };
+  } as CSSProperties;
 
   return (
     <button
       type="button"
       title={tooltip}
       disabled={disabled}
-      className={`transition-all ${className}`}
+      className={`dui_icon-button transition-all ${className}`}
       style={baseStyle}
-      onMouseEnter={e => {
-        if (disabled) return;
-        const el = e.currentTarget;
-        el.style.background = active
-          ? `color-mix(in srgb, ${activeClr} 20%, transparent)`
-          : 'var(--color-iconbtn-bg-hover, var(--color-surface-hover))';
-        el.style.color = active ? activeClr : 'var(--color-text-primary)';
-      }}
-      onMouseLeave={e => {
-        if (disabled) return;
-        const el = e.currentTarget;
-        if (variant === 'filled') {
-          el.style.background = active ? activeClr : `color-mix(in srgb, ${accent} 12%, transparent)`;
-          el.style.color = active ? 'var(--color-btn-primary-text, white)' : accent;
-        } else {
-          el.style.background = active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent';
-          el.style.color = active ? activeClr : (accentColor ? accent : 'var(--color-text-muted)');
-        }
-      }}
       {...rest}
     >
       {icon}

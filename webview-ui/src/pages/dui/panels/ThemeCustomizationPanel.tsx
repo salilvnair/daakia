@@ -12,9 +12,13 @@ export function ThemeCustomizationPanel() {
   const [colors,    setColors]    = useState<Record<string, string>>({});
   const [activeVar, setActiveVar] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Set<string>>(new Set());
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef    = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setColors(readCurrentColors()); }, []);
+
+  const editorCallbackRef = useCallback((el: HTMLDivElement | null) => {
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  }, []);
 
   const showStatus = useCallback((type: 'success' | 'error', text: string) => {
     setStatus({ type, text });
@@ -110,19 +114,26 @@ export function ThemeCustomizationPanel() {
       {/* Color groups */}
       {grouped.map(({ group, entries }) => {
         const activeEntry = activeVar ? entries.find(e => e.cssVar === activeVar) : null;
+        const groupModified = entries.some(e => overrides.has(e.cssVar));
         return (
-          <div key={group} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div key={group} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {/* Group header */}
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)',
+              textTransform: 'uppercase', letterSpacing: '0.08em',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
               <span>{group.replace(/_/g, ' ')}</span>
-              {entries.some(e => overrides.has(e.cssVar)) && (
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-primary)', flexShrink: 0 }} />
-              )}
+              {groupModified && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-primary)', flexShrink: 0 }} />}
               <div style={{ flex: 1, height: 1, background: 'var(--color-surface-border)' }} />
             </div>
 
-            {/* Tiles */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {/* Tile grid — uniform columns, tiles snap to same width */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(192px, 1fr))',
+              gap: '6px',
+            }}>
               {entries.map(entry => {
                 const isActive   = activeVar === entry.cssVar;
                 const isModified = overrides.has(entry.cssVar);
@@ -133,39 +144,80 @@ export function ThemeCustomizationPanel() {
                     title={`${entry.cssVar}\n${colors[entry.cssVar] || ''}`}
                     onClick={() => setActiveVar(prev => prev === entry.cssVar ? null : entry.cssVar)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: '7px',
-                      background: isActive ? 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' : 'var(--color-surface)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '6px 10px 6px 8px',
+                      borderRadius: 7,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'inherit',
+                      background: isActive
+                        ? 'color-mix(in srgb, var(--color-primary) 10%, var(--color-surface))'
+                        : 'var(--color-surface)',
                       border: `1px solid ${isActive ? 'var(--color-primary)' : 'var(--color-surface-border)'}`,
-                      borderRadius: 6, padding: '5px 9px 5px 5px',
-                      cursor: 'pointer', textAlign: 'left',
+                      outline: 'none',
                       transition: 'border-color 100ms, background 100ms',
                     }}
-                    onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--color-primary) 40%, var(--color-surface-border))'; }}
-                    onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-surface-border)'; }}
+                    onMouseEnter={e => {
+                      if (!isActive) {
+                        e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--color-primary) 45%, var(--color-surface-border))';
+                        e.currentTarget.style.background = 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isActive) {
+                        e.currentTarget.style.borderColor = 'var(--color-surface-border)';
+                        e.currentTarget.style.background = 'var(--color-surface)';
+                      }
+                    }}
                   >
-                    <div style={{ width: 22, height: 22, borderRadius: 4, flexShrink: 0, background: `var(${entry.cssVar})`, border: '1px solid var(--color-surface-border)', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)' }} />
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {entry.key.replace(/_/g, ' ')}
-                        {isModified && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-primary)', flexShrink: 0 }} />}
+                    {/* Swatch */}
+                    <div style={{
+                      width: 26, height: 26, borderRadius: 5, flexShrink: 0,
+                      background: `var(${entry.cssVar})`,
+                      border: '1px solid color-mix(in srgb, var(--color-text-primary) 14%, transparent)',
+                      boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)',
+                    }} />
+
+                    {/* Labels */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 500,
+                          color: 'var(--color-text-primary)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {entry.key.replace(/_/g, ' ')}
+                        </span>
+                        {isModified && (
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-primary)', flexShrink: 0 }} />
+                        )}
                       </div>
-                      <div style={{ fontSize: 9, color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>{entry.cssVar}</div>
+                      <div style={{
+                        fontSize: 9, color: 'var(--color-text-muted)', fontFamily: 'monospace',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {colors[entry.cssVar] || entry.cssVar}
+                      </div>
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            {/* Inline editor */}
+            {/* Inline editor — shown below the grid when a tile is active */}
             {activeEntry && (
-              <ColorEditor
-                entry={activeEntry}
-                currentValue={colors[activeEntry.cssVar] || ''}
-                isOverridden={overrides.has(activeEntry.cssVar)}
-                onApply={v => applyLiveColor(activeEntry.cssVar, v)}
-                onReset={() => resetSingleVar(activeEntry.cssVar)}
-                onClose={() => setActiveVar(null)}
-              />
+              <div ref={editorCallbackRef}>
+                <ColorEditor
+                  entry={activeEntry}
+                  currentValue={colors[activeEntry.cssVar] || ''}
+                  isOverridden={overrides.has(activeEntry.cssVar)}
+                  onApply={v => applyLiveColor(activeEntry.cssVar, v)}
+                  onReset={() => resetSingleVar(activeEntry.cssVar)}
+                  onClose={() => setActiveVar(null)}
+                />
+              </div>
             )}
           </div>
         );

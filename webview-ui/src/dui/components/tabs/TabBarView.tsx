@@ -1,5 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { PlusIcon, CloseIcon, ChevronLeftIcon, ChevronRightIcon, SettingsIcon, ServerIcon } from '../../../icons';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useDui } from '../../core/DuiContext';
+import { DUI_HEIGHT, DUI_FONT_SIZE, DUI_ICON_SIZE } from '../../core/DuiTokens';
+import '../../shared/css/Shared.css';
+import './TabBarView.css';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +30,9 @@ export interface TabBarViewProps {
   onTabClose?: (id: string) => void;
   onAddTab?: () => void;
   accentColor?: string;
+  /** Falls back to DuiProvider size when omitted. Overrides `height`. */
+  size?: DuiSize;
+  /** Raw pixel height — prefer `size` for token-aligned sizing. */
   height?: number;
   className?: string;
 }
@@ -101,9 +109,16 @@ export function TabBarView({
   onTabClose,
   onAddTab,
   accentColor = 'var(--color-primary)',
-  height = 38,
+  size,
+  height,
   className = '',
 }: TabBarViewProps) {
+  const ctx = useDui();
+  const s = size ?? ctx.size;
+  // TabBar uses nav heights (taller than inputs for click comfort)
+  const resolvedHeight = height ?? DUI_HEIGHT.nav[s];
+  const fontSize = DUI_FONT_SIZE[s];
+  const iconSize = DUI_ICON_SIZE[s];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -135,7 +150,7 @@ export function TabBarView({
       style={{
         display: 'flex',
         alignItems: 'center',
-        height: `${height}px`,
+        height: `${resolvedHeight}px`,
         flexShrink: 0,
         background: 'var(--color-panel)',
         borderBottom: '1px solid var(--color-panel-border)',
@@ -147,13 +162,12 @@ export function TabBarView({
           type="button"
           onClick={() => scrollTabs('left')}
           title="Scroll tabs left"
+          className="dui_tab-bar__scroll-btn"
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: '24px', height: '100%', flexShrink: 0, cursor: 'pointer',
             color: 'var(--color-text-muted)', background: 'transparent', border: 'none',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'; }}
         >
           <ChevronLeftIcon size={11} />
         </button>
@@ -176,7 +190,7 @@ export function TabBarView({
           return (
             <div
               key={tab.id}
-              className="group"
+              className={`dui_tab-bar__tab group${isActive ? ' dui_tab-bar__tab--active' : ''}`}
               style={{
                 position: 'relative',
                 display: 'flex',
@@ -190,14 +204,11 @@ export function TabBarView({
                 flexShrink: 0,
                 maxWidth: '200px',
                 minWidth: '80px',
-                transition: 'background 120ms',
                 background: isActive
                   ? `color-mix(in srgb, ${tabAccent} 5%, transparent)`
                   : 'transparent',
               }}
               onClick={() => onTabClick(tab.id)}
-              onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; }}
-              onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             >
               {/* Active top border */}
               {isActive && (
@@ -212,7 +223,7 @@ export function TabBarView({
 
               {/* Label */}
               <span style={{
-                flex: 1, fontSize: '12px', color: 'var(--color-text-primary)',
+                flex: 1, fontSize, color: 'var(--color-text-primary)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {tab.label}
@@ -237,20 +248,17 @@ export function TabBarView({
                   type="button"
                   onClick={e => { e.stopPropagation(); onTabClose?.(tab.id); }}
                   title="Close tab"
+                  className="dui_tab-bar__close-btn group-hover:opacity-100"
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    width: '18px', height: '18px', borderRadius: '4px',
+                    width: `${iconSize + 6}px`, height: `${iconSize + 6}px`, borderRadius: '4px',
                     cursor: 'pointer', flexShrink: 0,
                     color: 'var(--color-error)',
                     background: 'transparent', border: 'none',
                     opacity: isNonCloseable ? 1 : 0,
-                    transition: 'opacity 120ms, background 120ms',
                   }}
-                  className="group-hover:opacity-100"
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-icon-hover-bg)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <CloseIcon size={16} />
+                  <CloseIcon size={iconSize + 4} />
                 </button>
               )}
             </div>
@@ -263,14 +271,12 @@ export function TabBarView({
             type="button"
             onClick={onAddTab}
             title="New Tab"
+            className="dui_tab-bar__add-btn"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: '36px', height: '100%', flexShrink: 0,
               color: accentColor, background: 'transparent', border: 'none', cursor: 'pointer',
-              transition: 'background 120ms',
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-hover)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           >
             <PlusIcon size={15} />
           </button>
@@ -283,13 +289,12 @@ export function TabBarView({
           type="button"
           onClick={() => scrollTabs('right')}
           title="Scroll tabs right"
+          className="dui_tab-bar__scroll-btn"
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             width: '24px', height: '100%', flexShrink: 0,
             color: 'var(--color-text-muted)', background: 'transparent', border: 'none', cursor: 'pointer',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'; }}
         >
           <ChevronRightIcon size={11} />
         </button>

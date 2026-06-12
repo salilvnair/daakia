@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronRightIcon } from '../../../icons';
+import './ContextMenuView.css';
 
 export interface ContextMenuItem {
   id: string;
@@ -81,6 +82,7 @@ function MenuItemRow({ item, onClose, rounded, accentColor }: { item: ContextMen
     >
       <div
         onClick={handleClick}
+        className={`dui_ctx-menu__item${danger ? ' dui_ctx-menu__item--danger' : ''}${item.disabled ? ' dui_ctx-menu__item--disabled' : ''}`}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -92,19 +94,7 @@ function MenuItemRow({ item, onClose, rounded, accentColor }: { item: ContextMen
           cursor: item.disabled ? 'default' : 'pointer',
           opacity: item.disabled ? 0.45 : 1,
           color: danger ? 'var(--color-error)' : 'var(--color-text-secondary)',
-          transition: 'all 100ms',
           userSelect: 'none',
-        }}
-        onMouseEnter={e => {
-          if (item.disabled) return;
-          const el = e.currentTarget as HTMLElement;
-          el.style.background = danger ? `color-mix(in srgb, var(--color-error) 10%, transparent)` : 'var(--color-surface-hover)';
-          el.style.color = danger ? 'var(--color-error)' : 'var(--color-text-primary)';
-        }}
-        onMouseLeave={e => {
-          const el = e.currentTarget as HTMLElement;
-          el.style.background = 'transparent';
-          el.style.color = danger ? 'var(--color-error)' : 'var(--color-text-secondary)';
         }}
       >
         {item.icon && (
@@ -229,10 +219,9 @@ export function ContextMenuView({
         borderRadius: rounded ? '8px' : '0px',
         padding: '4px',
         boxShadow: '0 12px 40px rgba(0,0,0,.35), 0 0 0 1px var(--color-panel-border, rgba(255,255,255,.04))',
-        animation: 'dui-menu-in 120ms ease-out',
+        animation: 'dui_menu-in 120ms ease-out',
       }}
     >
-      <style>{`@keyframes dui-menu-in { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }`}</style>
       {items.map(item => (
         <MenuItemRow key={item.id} item={item} onClose={onClose} rounded={rounded} />
       ))}

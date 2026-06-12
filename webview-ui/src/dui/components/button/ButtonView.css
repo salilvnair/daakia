@@ -1,0 +1,21 @@
+.dui_button { transition: background 100ms, filter 100ms, color 100ms; }
+
+.dui_button--primary {
+  background: var(--dui-btn-bg, var(--color-btn-primary-bg));
+}
+.dui_button--primary:not(:disabled):hover {
+  background: var(--dui-btn-hover-bg, var(--color-btn-primary-hover));
+}
+
+.dui_button--secondary { background: var(--color-btn-secondary-bg); }
+.dui_button--secondary:not(:disabled):hover { background: var(--color-btn-secondary-hover); }
+
+.dui_button--ghost { background: transparent; }
+.dui_button--ghost:not(:disabled):hover {
+  background: var(--color-btn-ghost-hover);
+  color: var(--color-text-primary);
+}
+
+.dui_button--danger { background: var(--color-btn-danger-bg); }
+.dui_button--danger:not(:disabled):hover { filter: brightness(1.1); }
+.dui_button--danger:not(:disabled):active { filter: brightness(0.92); }

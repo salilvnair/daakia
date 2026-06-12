@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDownIcon } from '../../../icons';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useButtonBase } from '../../core/ButtonBase';
+import './SplitButtonView.css';
 
 export interface SplitButtonViewItem {
   id: string;
@@ -21,7 +24,8 @@ export interface SplitButtonViewProps {
   items: SplitButtonViewItem[];
   onClick: () => void;
   disabled?: boolean;
-  size?: 'sm' | 'md';
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
   accentColor?: string;
 }
 
@@ -41,6 +45,7 @@ export function SplitButtonView({
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, minWidth: 0 });
 
+  const base = useButtonBase(size);
   const bg = accentColor
     ? accentColor
     : variant === 'danger'
@@ -50,8 +55,8 @@ export function SplitButtonView({
         : 'var(--color-surface-hover)';
 
   const textColor = variant === 'secondary' ? 'var(--color-text-primary)' : '#fff';
-  const h = size === 'sm' ? 28 : 36;
-  const fs = size === 'sm' ? 12 : 13;
+  const h = parseInt(base.height, 10);
+  const fs = base.fontSize;
   const dividerBg = variant === 'secondary' ? 'var(--color-surface-border)' : 'rgba(255,255,255,0.22)';
 
   useEffect(() => {
@@ -113,16 +118,14 @@ export function SplitButtonView({
         <button
           type="button"
           onClick={onClick}
+          className="dui_split-button__main"
           style={{
             display: 'flex', alignItems: 'center', gap: 6,
             height: '100%', padding: '0 16px',
             fontSize: fs, fontWeight: 500, cursor: 'pointer',
             background: 'transparent', border: 'none',
             color: textColor, fontFamily: 'inherit',
-            transition: 'filter 100ms',
           }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.filter = 'brightness(1.1)'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.filter = ''}
         >
           {icon && <span style={{ display: 'flex', alignItems: 'center' }}>{icon}</span>}
           {label}
@@ -133,14 +136,13 @@ export function SplitButtonView({
         <button
           type="button"
           onClick={() => setOpen(v => !v)}
+          className="dui_split-button__chevron"
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             height: '100%', padding: '0 8px',
             cursor: 'pointer', background: 'transparent', border: 'none',
-            color: textColor, transition: 'filter 100ms',
+            color: textColor,
           }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.filter = 'brightness(1.1)'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.filter = ''}
           aria-haspopup="true"
           aria-expanded={open}
         >
@@ -168,16 +170,14 @@ export function SplitButtonView({
               <button
                 type="button"
                 onClick={() => handleItem(item)}
+                className="dui_split-button__menu-item"
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                   padding: '9px 14px', fontSize: 12, textAlign: 'left',
                   cursor: 'pointer', border: 'none', fontFamily: 'inherit',
                   background: idx === focusIdx ? 'var(--color-item-hover-bg)' : 'transparent',
                   color: 'var(--color-text-primary)',
-                  transition: 'background 80ms',
                 }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-item-hover-bg)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = idx === focusIdx ? 'var(--color-item-hover-bg)' : 'transparent'}
               >
                 {item.icon && (
                   <span style={{ display: 'flex', alignItems: 'center', width: 16, color: item.iconColor || 'var(--color-text-muted)' }}>{item.icon}</span>

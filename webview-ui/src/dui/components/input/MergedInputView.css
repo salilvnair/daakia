@@ -1,0 +1,14 @@
+.dui_merged__select-trigger { transition: background 100ms; }
+.dui_merged__select-trigger:not(.dui_merged__select-trigger--disabled):hover {
+  background: var(--color-surface-hover);
+}
+
+.dui_merged__select-option { transition: background 100ms; }
+.dui_merged__select-option:not(.dui_merged__select-option--selected):hover {
+  background: var(--color-surface-hover);
+}
+
+.dui_merged__button-seg { transition: background 100ms, color 100ms; }
+.dui_merged__button-seg:not(:disabled):hover {
+  background: color-mix(in srgb, var(--dui-seg-accent, var(--color-primary)) 20%, transparent);
+}

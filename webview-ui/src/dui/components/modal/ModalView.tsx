@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CloseIcon } from '../../../icons';
+import './ModalView.css';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
 
@@ -113,6 +114,7 @@ export function ModalView({
                 <button
                   type="button"
                   onClick={onClose}
+                  className="dui_modal__close-btn"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -125,10 +127,6 @@ export function ModalView({
                     cursor: 'pointer',
                     color: 'var(--color-error)',
                   }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 12%, transparent)';
-                  }}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   title="Close"
                 >
                   <CloseIcon size={14} />

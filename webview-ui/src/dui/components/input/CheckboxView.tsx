@@ -1,37 +1,39 @@
 import type { CSSProperties } from 'react';
 import { CheckIcon } from '../../../icons';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useDui } from '../../core/DuiContext';
+import { DUI_CHECKBOX, DUI_FONT_SIZE } from '../../core/DuiTokens';
 
-export type CheckboxSize = 'sm' | 'md' | 'lg';
+/** @deprecated Use `DuiSize` directly. */
+export type CheckboxSize = DuiSize;
 
 export interface CheckboxViewProps {
   checked: boolean;
   onChange?: (checked: boolean) => void;
   disabled?: boolean;
   indeterminate?: boolean;
-  size?: CheckboxSize;
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
   accentColor?: string;
   label?: string;
   className?: string;
 }
-
-const SIZES: Record<CheckboxSize, { box: number; icon: number; font: string }> = {
-  sm: { box: 14, icon: 9,  font: '11px' },
-  md: { box: 16, icon: 11, font: '12px' },
-  lg: { box: 18, icon: 13, font: '13px' },
-};
 
 export function CheckboxView({
   checked,
   onChange,
   disabled = false,
   indeterminate = false,
-  size = 'md',
+  size,
   accentColor,
   label,
   className = '',
 }: CheckboxViewProps) {
+  const ctx = useDui();
+  const s = size ?? ctx.size;
   const accent = accentColor || 'var(--color-primary)';
-  const { box, icon, font } = SIZES[size];
+  const { box, icon } = DUI_CHECKBOX[s];
+  const font = DUI_FONT_SIZE[s];
   const isActive = checked || indeterminate;
 
   const boxStyle: CSSProperties = {

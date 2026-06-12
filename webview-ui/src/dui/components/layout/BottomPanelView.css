@@ -1,0 +1,2 @@
+.dui_bottom-panel__drag-handle { transition: background 120ms; }
+.dui_bottom-panel__drag-handle:hover { background: var(--color-primary); }

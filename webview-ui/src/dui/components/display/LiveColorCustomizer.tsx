@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PaletteIcon, RefreshIcon } from '../../../icons';
 import { YamlKeyChip } from './YamlKeyChip';
+import './LiveColorCustomizer.css';
 
 export interface LiveColorVar {
   /** CSS custom property name, e.g. "--color-primary" */
@@ -135,8 +136,7 @@ export function LiveColorCustomizer({ vars, title, forceOpen = false, onVarChang
                 color: 'var(--color-text-muted)', cursor: 'pointer', fontFamily: 'inherit',
                 transition: 'color 100ms',
               }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-error)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
+              className="dui_live-color__reset-btn"
               title="Reset all colors to theme defaults"
             >
               <RefreshIcon size={10} />
@@ -240,8 +240,7 @@ export function LiveColorCustomizer({ vars, title, forceOpen = false, onVarChang
                         background: 'transparent', cursor: 'pointer',
                         color: 'var(--color-text-muted)', transition: 'color 100ms',
                       }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-error)')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
+                      className="dui_live-color__reset-btn"
                       title="Reset to theme default"
                     >
                       <RefreshIcon size={10} />

@@ -1,8 +1,14 @@
+import type { ReactNode } from 'react';
+import type { DuiSize, DuiRadius, DuiFontStyle } from '../../core/DuiTypes';
+import { useDui, resolveBorderRadius } from '../../core/DuiContext';
+import { DUI_HEIGHT, DUI_FONT_SIZE } from '../../core/DuiTokens';
+import './SettingsNavView.css';
+
 export interface SettingsNavItem {
   id: string;
   label: string;
   description?: string;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   badge?: string;
 }
 
@@ -17,6 +23,15 @@ export interface SettingsNavViewProps {
   onSelect?: (id: string) => void;
   accentColor?: string;
   className?: string;
+  // ─── DUI container props ──────────────────────────────────────────────────
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
+  borderRadius?: DuiRadius | number;
+  /** Text color for inactive items */
+  color?: string;
+  /** Color for active item text and indicator */
+  activeColor?: string;
+  fontStyle?: DuiFontStyle;
 }
 
 export function SettingsNavView({
@@ -25,8 +40,20 @@ export function SettingsNavView({
   onSelect,
   accentColor,
   className = '',
+  size,
+  borderRadius,
+  color,
+  activeColor,
+  fontStyle,
 }: SettingsNavViewProps) {
-  const accent = accentColor || 'var(--color-primary)';
+  const ctx = useDui();
+  const s = size ?? ctx.size;
+  const accent = accentColor || activeColor || ctx.activeColor || 'var(--color-primary)';
+  const inactiveColor = color || ctx.color || 'var(--color-text-primary)';
+  const radius = resolveBorderRadius(borderRadius ?? ctx.borderRadius, '6px');
+  const fontStyleResolved = fontStyle || ctx.fontStyle;
+  const itemHeight = DUI_HEIGHT.nav[s];
+  const fontSize = DUI_FONT_SIZE[s];
 
   return (
     <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -48,20 +75,20 @@ export function SettingsNavView({
                 <div
                   key={item.id}
                   onClick={() => onSelect?.(item.id)}
+                  className={`dui_settings-nav__item${isActive ? ' dui_settings-nav__item--active' : ''}`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '10px',
-                    padding: '7px 10px',
-                    borderRadius: '6px',
+                    minHeight: `${itemHeight}px`,
+                    padding: '4px 10px',
+                    borderRadius: radius,
                     cursor: 'pointer',
+                    fontStyle: fontStyleResolved,
                     background: isActive
-                      ? `color-mix(in srgb, ${accent} 12%, var(--color-item-hover-bg))`
+                      ? `color-mix(in srgb, ${accent} 12%, var(--color-surface))`
                       : 'transparent',
-                    transition: 'background 100ms',
                   }}
-                  onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)'; }}
-                  onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
                   {item.icon && (
                     <span style={{ color: isActive ? accent : 'var(--color-text-muted)', flexShrink: 0 }}>
@@ -70,9 +97,9 @@ export function SettingsNavView({
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                      fontSize: '12px',
+                      fontSize,
                       fontWeight: isActive ? 600 : 400,
-                      color: isActive ? accent : 'var(--color-text-primary)',
+                      color: isActive ? accent : inactiveColor,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
                       {item.label}

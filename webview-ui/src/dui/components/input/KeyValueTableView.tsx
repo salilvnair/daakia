@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import { TrashIcon, PlusIcon, BulkEditIcon } from '../../../icons';
+import type { DuiSize } from '../../core/DuiTypes';
 import { KeyValueItemView } from './KeyValueItemView';
+import './KeyValueTableView.css';
 
 export interface KeyValueTableRow {
   id: string;
@@ -17,6 +19,8 @@ export interface KeyValueTableViewProps {
   placeholder?: { key?: string; value?: string; description?: string };
   label?: string;
   accentColor?: string;
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
   /** Wrap in a rounded border (default false — matches REST headers flat style) */
   bordered?: boolean;
   /** Show the bulk-edit textarea toggle (default true) */
@@ -47,8 +51,6 @@ function InsertRowDivider({ onInsert, accentColor }: InsertRowDividerProps) {
         opacity: 0, transition: 'opacity 150ms',
       }}
       className="group/divider hover:opacity-100"
-      onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
-      onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = '0'}
     >
       {/* Horizontal line */}
       <div style={{
@@ -146,6 +148,7 @@ export function KeyValueTableView({
   placeholder,
   label,
   accentColor,
+  size,
   bordered = false,
   bulkEdit: allowBulkEdit = true,
   toolbarExtra,
@@ -191,11 +194,12 @@ export function KeyValueTableView({
       className={className}
       style={{
         display: 'flex', flexDirection: 'column',
+        '--dui-kv-accent': accent,
         ...(bordered ? {
           border: '1px solid var(--color-surface-border)',
           borderRadius: 6, overflow: 'hidden',
         } : {}),
-      }}
+      } as React.CSSProperties}
     >
       {/* ── Toolbar ── */}
       <div style={{
@@ -242,9 +246,8 @@ export function KeyValueTableView({
               type="button"
               onClick={() => { if (hasRows) setShowClearConfirm(true); }}
               title="Clear all"
+              className="dui_kv-table__clear-btn"
               style={{ ...iconBtn, opacity: hasRows ? 1 : 0.3, cursor: hasRows ? 'pointer' : 'default' }}
-              onMouseEnter={e => { if (hasRows) (e.currentTarget as HTMLElement).style.color = 'var(--color-error)'; }}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'}
             >
               <TrashIcon size={13} />
             </button>
@@ -269,9 +272,8 @@ export function KeyValueTableView({
             type="button"
             onClick={addRow}
             title="Add row"
+            className="dui_kv-table__add-row-btn"
             style={iconBtn}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = accent}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'}
           >
             <PlusIcon size={13} />
           </button>
@@ -319,6 +321,7 @@ export function KeyValueTableView({
                     enabled={row.enabled}
                     placeholder={placeholder}
                     accentColor={accentColor}
+                    size={size}
                     onKeyChange={v => updateRow(idx, 'key', v)}
                     onValueChange={v => updateRow(idx, 'value', v)}
                     onDescriptionChange={showDescription ? v => updateRow(idx, 'description', v) : undefined}
@@ -335,6 +338,7 @@ export function KeyValueTableView({
           <button
             type="button"
             onClick={addRow}
+            className="dui_kv-table__add-row-footer"
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '5px 4px',
@@ -346,10 +350,7 @@ export function KeyValueTableView({
                 ? `1px dashed color-mix(in srgb, ${accent} 25%, transparent)`
                 : 'none',
               marginTop: 2,
-              transition: 'background 100ms',
             }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, ${accent} 5%, transparent)`}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
           >
             <PlusIcon size={11} />
             Add Row

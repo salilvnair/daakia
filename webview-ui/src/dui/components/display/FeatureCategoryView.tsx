@@ -2,6 +2,7 @@ import { useState, useRef, useLayoutEffect } from 'react';
 import { ChevronRightIcon } from '../../../icons';
 import { ToggleSwitchView } from '../input/ToggleSwitchView';
 import { ChipView } from '../chips/ChipView';
+import './FeatureCategoryView.css';
 
 export interface FeatureItem {
   id: string;
@@ -86,6 +87,7 @@ export function FeatureCategoryView({
       {/* Category header */}
       <div
         onClick={() => setExpanded(v => !v)}
+        className="dui_feature-category__header"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -96,10 +98,8 @@ export function FeatureCategoryView({
             ? `color-mix(in srgb, ${color} 6%, transparent)`
             : 'transparent',
           userSelect: 'none',
-          transition: 'background 100ms',
-        }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `color-mix(in srgb, ${color} 8%, transparent)`; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = expanded ? `color-mix(in srgb, ${color} 6%, transparent)` : 'transparent'; }}
+          '--dui-category-color': color,
+        } as React.CSSProperties}
       >
         {/* Single chevron that rotates — no component swap = no flicker */}
         <ChevronRightIcon

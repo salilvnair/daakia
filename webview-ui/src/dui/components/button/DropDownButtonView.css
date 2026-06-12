@@ -1,0 +1,6 @@
+.dui_dropdown-button__label:not(:disabled):hover {
+  background: var(--dui-hover-btn-bg, var(--color-surface-active));
+}
+.dui_dropdown-button__chevron:not(:disabled):hover {
+  background: var(--dui-hover-btn-bg, var(--color-surface-active));
+}

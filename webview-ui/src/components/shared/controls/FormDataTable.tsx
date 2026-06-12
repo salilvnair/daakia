@@ -106,7 +106,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
           <button
             type="button"
             onClick={() => setShowClearConfirm(true)}
-            className="text-[11px] px-2 py-0.5 rounded text-[var(--color-text-muted)] hover:text-[#ef4444] cursor-pointer transition-colors"
+            className="text-[11px] px-2 py-0.5 rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-colors"
           >
             Clear all
           </button>
@@ -184,7 +184,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
                 {row.files && row.files.length > 0 ? (
                   <span className="text-[12px] truncate flex-1 flex items-center gap-1.5">
                     {row.fileExists && row.fileExists.some(e => !e) ? (
-                      <span className="text-[#ef4444]" title="File moved or deleted — re-select to fix">⚠ {row.files.join(', ')}</span>
+                      <span className="text-[var(--color-error)]" title="File moved or deleted — re-select to fix">⚠ {row.files.join(', ')}</span>
                     ) : (
                       <span className="text-[var(--color-text-muted)]">{row.files.join(', ')}</span>
                     )}
@@ -217,7 +217,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
               <button
                 type="button"
                 onClick={() => removeRow(idx)}
-                className="opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-[#ef4444] cursor-pointer transition-all"
+                className="opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-all"
               >
                 <TrashIcon size={14} />
               </button>

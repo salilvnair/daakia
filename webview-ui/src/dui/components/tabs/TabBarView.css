@@ -1,0 +1,16 @@
+.dui_tab-bar__scroll-btn { transition: background 120ms, color 120ms; }
+.dui_tab-bar__scroll-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.dui_tab-bar__tab { transition: background 120ms; }
+.dui_tab-bar__tab:not(.dui_tab-bar__tab--active):hover {
+  background: var(--color-surface-hover);
+}
+
+.dui_tab-bar__close-btn { transition: opacity 120ms, background 120ms; }
+.dui_tab-bar__close-btn:hover { background: var(--color-icon-hover-bg); }
+
+.dui_tab-bar__add-btn { transition: background 120ms; }
+.dui_tab-bar__add-btn:hover { background: var(--color-surface-hover); }

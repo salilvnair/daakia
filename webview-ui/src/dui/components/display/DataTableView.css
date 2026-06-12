@@ -1,0 +1,2 @@
+.dui_data-table__row { transition: background 80ms; }
+.dui_data-table__row--clickable:hover { background: var(--color-surface-hover); }

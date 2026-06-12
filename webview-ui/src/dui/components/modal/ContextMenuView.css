@@ -1,0 +1,20 @@
+@keyframes dui_menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.dui_ctx-menu__item { transition: background 100ms, color 100ms; }
+.dui_ctx-menu__item:not(.dui_ctx-menu__item--disabled):hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+.dui_ctx-menu__item--danger:not(.dui_ctx-menu__item--disabled):hover {
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  color: var(--color-error);
+}

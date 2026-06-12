@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import './PromptLibraryEditorView.css';
 
 export interface PromptLibraryVariable {
   pill: string;    // displayed label, e.g. "{{curlCommand}}"
@@ -276,16 +277,14 @@ export function PromptLibraryEditorView({
               type="button"
               title={v.title}
               onClick={() => onVariableInsert?.(v.insert)}
+              className="dui_prompt-editor__var-chip"
               style={{
                 display: 'inline-block', borderRadius: 4, padding: '2px 7px',
                 background: 'var(--color-var-pill-bg)', color: 'var(--color-var-pill-text)',
                 border: '1px solid var(--color-var-pill-border)',
                 fontSize: 11, fontWeight: 600, fontFamily: 'Menlo, Monaco, monospace',
                 cursor: onVariableInsert ? 'pointer' : 'default',
-                transition: 'background 100ms',
               }}
-              onMouseEnter={e => { if (onVariableInsert) (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--color-var-pill-bg) 180%, transparent)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-var-pill-bg)'; }}
             >
               {v.pill}
             </button>

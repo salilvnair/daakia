@@ -1,0 +1,4 @@
+.dui_settings-nav__item { transition: background 100ms; }
+.dui_settings-nav__item:not(.dui_settings-nav__item--active):hover {
+  background: var(--color-surface-hover);
+}

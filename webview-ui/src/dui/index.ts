@@ -3,30 +3,30 @@
 // All components use existing VS Code CSS variables — zero extra config needed.
 
 // ─── Core: size system, context, and category base hooks ─────────────────────
-export type { DuiSize, DuiRadius, DuiConfig } from './core/DuiTypes';
-export { DUI_HEIGHT, DUI_CHIP_HEIGHT, DUI_TOGGLE, DUI_ICON_SIZE, DUI_FONT_SIZE, DUI_PADDING_X, DUI_GAP, DUI_RADIUS_MAP, DUI_DEFAULT_RADIUS } from './core/DuiTokens';
-export { DuiProvider, useDui } from './core/DuiContext';
-export type { InputBaseConfig } from './core/InputBase';
+export type { DuiSize, DuiRadius, DuiWidth, DuiFontStyle, DuiConfig } from './core/DuiTypes';
+export { DUI_HEIGHT, DUI_CHIP_HEIGHT, DUI_TOGGLE, DUI_CHECKBOX, DUI_ICON_SIZE, DUI_FONT_SIZE, DUI_PADDING_X, DUI_GAP, DUI_RADIUS_MAP, DUI_DEFAULT_RADIUS, DUI_WIDTH_MAP } from './core/DuiTokens';
+export { DuiProvider, useDui, useDuiStyle, resolveBorderRadius, resolveWidth } from './core/DuiContext';
+export type { InputBaseConfig, InputContainerProps } from './core/InputBase';
 export { useInputBase } from './core/InputBase';
-export type { ButtonBaseConfig } from './core/ButtonBase';
+export type { ButtonBaseConfig, ButtonContainerProps } from './core/ButtonBase';
 export { useButtonBase } from './core/ButtonBase';
-export type { NavBaseConfig } from './core/NavBase';
+export type { NavBaseConfig, NavContainerProps } from './core/NavBase';
 export { useNavBase } from './core/NavBase';
-export type { ChipBaseConfig } from './core/ChipBase';
+export type { ChipBaseConfig, ChipContainerProps } from './core/ChipBase';
 export { useChipBase } from './core/ChipBase';
-export type { ToggleBaseConfig } from './core/ToggleBase';
+export type { ToggleBaseConfig, ToggleContainerProps } from './core/ToggleBase';
 export { useToggleBase } from './core/ToggleBase';
-export type { MenuBaseConfig } from './core/MenuBase';
+export type { MenuBaseConfig, MenuContainerProps } from './core/MenuBase';
 export { useMenuBase } from './core/MenuBase';
-export type { TabBaseConfig } from './core/TabBase';
+export type { TabBaseConfig, TabContainerProps } from './core/TabBase';
 export { useTabBase } from './core/TabBase';
-export type { TableBaseConfig } from './core/TableBase';
+export type { TableBaseConfig, TableContainerProps } from './core/TableBase';
 export { useTableBase } from './core/TableBase';
-export type { DisplayBaseConfig } from './core/DisplayBase';
+export type { DisplayBaseConfig, DisplayContainerProps } from './core/DisplayBase';
 export { useDisplayBase } from './core/DisplayBase';
-export type { OverlayBaseConfig } from './core/OverlayBase';
+export type { OverlayBaseConfig, OverlayContainerProps } from './core/OverlayBase';
 export { useOverlayBase } from './core/OverlayBase';
-export type { CardBaseConfig } from './core/CardBase';
+export type { CardBaseConfig, CardContainerProps } from './core/CardBase';
 export { useCardBase } from './core/CardBase';
 
 export { ChipView } from './components/chips/ChipView';
@@ -74,7 +74,7 @@ export { ToggleSwitchView } from './components/input/ToggleSwitchView';
 export type { ToggleSwitchViewProps } from './components/input/ToggleSwitchView';
 
 export { CheckboxView } from './components/input/CheckboxView';
-export type { CheckboxViewProps } from './components/input/CheckboxView';
+export type { CheckboxViewProps, CheckboxSize } from './components/input/CheckboxView';
 
 export { ModalView } from './components/modal/ModalView';
 export type { ModalViewProps } from './components/modal/ModalView';
@@ -176,3 +176,24 @@ export type { KeyValueTableViewProps, KeyValueTableRow } from './components/inpu
 
 export { MergedInputView, MergeDivider } from './components/input/MergedInputView';
 export type { MergedInputViewProps, MergedInputSegment, MergedSelectOption, MergedInputSize } from './components/input/MergedInputView';
+
+export { HudView } from './components/display/HudView';
+export type { HudViewProps, HudItem } from './components/display/HudView';
+
+export { CollapsibleSectionView } from './components/layout/CollapsibleSectionView';
+export type { CollapsibleSectionViewProps } from './components/layout/CollapsibleSectionView';
+
+export { JsonTreeView } from './components/display/JsonTreeView';
+export type { JsonTreeViewProps } from './components/display/JsonTreeView';
+
+export { ExpandableLogEntryView } from './components/display/ExpandableLogEntryView';
+export type { ExpandableLogEntryViewProps } from './components/display/ExpandableLogEntryView';
+
+export { CopyButtonView } from './components/display/CopyButtonView';
+export type { CopyButtonViewProps } from './components/display/CopyButtonView';
+
+export { MarkdownView } from './components/display/MarkdownView';
+export type { MarkdownViewProps } from './components/display/MarkdownView';
+
+export { FormDataTableView } from './components/input/FormDataTableView';
+export type { FormDataTableViewProps, FormDataRow } from './components/input/FormDataTableView';

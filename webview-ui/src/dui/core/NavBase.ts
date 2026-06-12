@@ -1,5 +1,5 @@
-import type { DuiSize } from './DuiTypes';
-import { useDui } from './DuiContext';
+import type { DuiSize, DuiRadius, DuiFontStyle } from './DuiTypes';
+import { useDui, resolveBorderRadius } from './DuiContext';
 import { DUI_HEIGHT, DUI_ICON_SIZE, DUI_FONT_SIZE, DUI_GAP, DUI_DEFAULT_RADIUS } from './DuiTokens';
 
 export interface NavBaseConfig {
@@ -9,25 +9,42 @@ export interface NavBaseConfig {
   iconSize: number;
   borderRadius: string;
   gap: string;
-  /** Horizontal padding for icon+label inside nav row */
   paddingX: string;
+  color: string | undefined;
+  activeColor: string | undefined;
+  fontStyle: DuiFontStyle | undefined;
+}
+
+/** Local override props that any nav component can accept. */
+export interface NavContainerProps {
+  borderRadius?: DuiRadius | number;
+  color?: string;
+  activeColor?: string;
+  fontStyle?: DuiFontStyle;
 }
 
 /**
  * Category base for: SideNavView, SettingsNavView, BreadcrumbView, TabBarView,
  * and any future navigation component.
- * Nav items are intentionally taller than inputs for click-target comfort.
- * Falls back to DuiProvider size when no local `size` prop is given.
+ * Falls back to DuiProvider values when no local prop is given.
  */
-export function useNavBase(sizeProp?: DuiSize): NavBaseConfig {
-  const { size } = useDui();
-  const s = sizeProp ?? size;
+export function useNavBase(
+  sizeProp?: DuiSize,
+  overrides: NavContainerProps = {}
+): NavBaseConfig {
+  const ctx = useDui();
+  const s = sizeProp ?? ctx.size;
+  const sizeRadius = DUI_DEFAULT_RADIUS[s];
+  const paddingX = s === 'sm' ? '8px' : s === 'md' ? '10px' : s === 'lg' ? '12px' : '16px';
   return {
-    itemHeight:   `${DUI_HEIGHT.nav[s]}px`,
-    fontSize:     DUI_FONT_SIZE[s],
-    iconSize:     DUI_ICON_SIZE[s],
-    borderRadius: DUI_DEFAULT_RADIUS[s],
+    itemHeight:  `${DUI_HEIGHT.nav[s]}px`,
+    fontSize:    DUI_FONT_SIZE[s],
+    iconSize:    DUI_ICON_SIZE[s],
+    borderRadius: resolveBorderRadius(overrides.borderRadius ?? ctx.borderRadius, sizeRadius),
     gap:          DUI_GAP[s],
-    paddingX:     s === 'sm' ? '8px' : s === 'md' ? '10px' : s === 'lg' ? '12px' : '16px',
+    paddingX,
+    color:       overrides.color ?? ctx.color,
+    activeColor: overrides.activeColor ?? ctx.activeColor,
+    fontStyle:   overrides.fontStyle ?? ctx.fontStyle,
   };
 }

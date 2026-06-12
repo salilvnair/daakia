@@ -7,15 +7,7 @@
 import { useState } from 'react';
 import { useDebugStore, type DebugSubRequest } from '../../../store/debug-store';
 import { CopyIcon, CheckIcon, ChevronDownIcon, ArrowUpRightIcon, ArrowDownLeftIcon, InfoCircleIcon } from '../../../icons/daakia-icons';
-
-interface CollapsibleSectionProps {
-  title: string;
-  expanded: boolean;
-  onToggle: () => void;
-  badge?: number;
-  chipColor?: string;
-  children: React.ReactNode;
-}
+import { CollapsibleSectionView } from '../../../dui';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -32,23 +24,32 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-const methodColorMap: Record<string, string> = {
-  GET: '#22c55e', POST: '#f59e0b', PUT: '#3b82f6',
-  PATCH: '#a78bfa', DELETE: '#ef4444', HEAD: '#6b7280',
-  OPTIONS: '#06b6d4',
-};
+function methodColor(method: string): string {
+  const map: Record<string, string> = {
+    GET:     'var(--color-method-get)',
+    POST:    'var(--color-method-post)',
+    PUT:     'var(--color-method-put)',
+    PATCH:   'var(--color-method-patch)',
+    DELETE:  'var(--color-method-delete)',
+    HEAD:    'var(--color-method-head)',
+    OPTIONS: 'var(--color-method-options)',
+  };
+  return map[method.toUpperCase()] ?? 'var(--color-text-muted)';
+}
 
-// ─── Shared sub-components (identical to NetworkTab.tsx) ──────────────────────
+function statusColor(status: number): string {
+  if (status === 0)                       return 'var(--color-error)';
+  if (status >= 200 && status < 300)      return 'var(--color-success)';
+  if (status >= 300 && status < 400)      return 'var(--color-info)';
+  if (status >= 400 && status < 500)      return 'var(--color-warning)';
+  if (status >= 500)                      return 'var(--color-error)';
+  return 'var(--color-text-muted)';
+}
+
+// ─── Shared sub-components ────────────────────────────────────────────────────
 
 function StatusBadge({ status, statusText }: { status: number; statusText?: string }) {
-  let color = 'var(--color-text-muted)';
-  if (status === 0) color = '#ef4444';
-  else if (status >= 200 && status < 300) color = 'var(--color-success)';
-  else if (status >= 300 && status < 400) color = '#3b82f6';
-  else if (status >= 400 && status < 500) color = '#f59e0b';
-  else if (status >= 500) color = '#ef4444';
-
-  // Extract short error code from statusText (e.g., "ECONNREFUSED" from "AggregateError [ECONNREFUSED]: ...")
+  const color = statusColor(status);
   const shortError = status === 0 && statusText
     ? (statusText.match(/\[(E[A-Z_]+)\]/)?.[1] || statusText.match(/\b(E[A-Z_]{4,})\b/)?.[1] || statusText.match(/^(\w+Error)/)?.[1] || 'Error')
     : undefined;
@@ -61,9 +62,8 @@ function StatusBadge({ status, statusText }: { status: number; statusText?: stri
 }
 
 function MethodBadge({ method }: { method: string }) {
-  const color = methodColorMap[method.toUpperCase()] ?? 'var(--color-text-muted)';
   return (
-    <span className="font-mono text-[10px] font-bold w-[50px] flex-shrink-0" style={{ color }}>
+    <span className="font-mono text-[10px] font-bold w-[50px] flex-shrink-0" style={{ color: methodColor(method) }}>
       {method.toUpperCase()}
     </span>
   );
@@ -82,7 +82,7 @@ function CopyButton({ text, size = 13 }: { text: string; size?: number }) {
       type="button"
       onClick={handleCopy}
       className={`h-[22px] w-[22px] flex items-center justify-center cursor-pointer rounded transition-colors ${
-        copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
+        copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]'
       }`}
       title={copied ? 'Copied!' : 'Copy'}
     >
@@ -127,7 +127,7 @@ function NetworkLogEntry({ icon, title, badge, badgeColor, timestamp, defaultExp
     <div className="border-b border-[var(--color-surface-border)] last:border-b-0 group/logrow">
       <div
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2.5 px-3 py-[6px] cursor-pointer hover:bg-[var(--color-hover)] transition-colors"
+        className="w-full flex items-center gap-2.5 px-3 py-[6px] cursor-pointer hover:bg-[var(--color-surface-hover)] transition-colors"
       >
         {icon}
         <span className="text-[11px] font-medium text-[var(--color-text-primary)]">{title}</span>
@@ -155,30 +155,27 @@ function NetworkLogEntry({ icon, title, badge, badgeColor, timestamp, defaultExp
 
 // ─── Main Section ─────────────────────────────────────────────────────────────
 
-export function NetworkSection({ CollapsibleSection }: { CollapsibleSection: React.FC<CollapsibleSectionProps> }) {
+export function NetworkSection() {
   const [expanded, setExpanded] = useState(true);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const subRequests = useDebugStore(s => s.subRequests);
   const active = useDebugStore(s => s.active);
 
   return (
-    <CollapsibleSection title="Network" expanded={expanded} onToggle={() => setExpanded(!expanded)} badge={subRequests.length || undefined} chipColor="#66bb6a">
+    <CollapsibleSectionView title="Network" expanded={expanded} onToggle={() => setExpanded(!expanded)} badge={subRequests.length || undefined} accentColor="var(--color-success)">
       {!active && subRequests.length === 0 ? (
         <div className="px-4 py-2 text-[11px] text-[var(--color-text-muted)] italic">No sub-requests</div>
       ) : subRequests.length === 0 ? (
         <div className="px-4 py-2 text-[11px] text-[var(--color-text-muted)] italic">Waiting for dk.sendRequest()…</div>
       ) : (
         <div className="flex flex-col">
-          {/* Request list */}
           <div className="flex flex-col overflow-y-auto [scrollbar-gutter:stable]">
-            {/* Table header */}
             <div className="flex items-center px-3 py-[4px] border-b border-[var(--color-surface-border)] bg-[var(--color-input-bg)] text-[9px] text-[var(--color-text-muted)] uppercase tracking-wider flex-shrink-0">
               <span className="w-[50px] flex-shrink-0">Method</span>
               <span className="w-[90px] flex-shrink-0">Status</span>
               <span className="flex-1 pl-2">URL</span>
               <span className="w-[60px] text-right flex-shrink-0">Time</span>
             </div>
-            {/* Rows */}
             {subRequests.map((sr, idx) => (
               <RequestListRow
                 key={idx}
@@ -188,8 +185,6 @@ export function NetworkSection({ CollapsibleSection }: { CollapsibleSection: Rea
               />
             ))}
           </div>
-
-          {/* Detail panel below */}
           {selectedIdx !== null && subRequests[selectedIdx] && (
             <div className="border-t border-[var(--color-surface-border)]">
               <DetailPanel entry={subRequests[selectedIdx]} />
@@ -197,7 +192,7 @@ export function NetworkSection({ CollapsibleSection }: { CollapsibleSection: Rea
           )}
         </div>
       )}
-    </CollapsibleSection>
+    </CollapsibleSectionView>
   );
 }
 
@@ -217,19 +212,19 @@ function RequestListRow({ entry, isSelected, onSelect }: {
     }
   })();
 
+  const isError = entry.status === 0;
+
   return (
     <div
       onClick={onSelect}
       className={`cursor-pointer border-b border-[var(--color-surface-border)] text-[11px] transition-colors ${
-        isSelected
-          ? 'bg-[var(--color-input-bg)]'
-          : 'hover:bg-[var(--color-surface-hover)]'
+        isSelected ? 'bg-[var(--color-input-bg)]' : 'hover:bg-[var(--color-surface-hover)]'
       }`}
     >
       <div className="flex items-center px-3 py-[5px]">
         <MethodBadge method={entry.method} />
         <span className="w-[90px] flex-shrink-0"><StatusBadge status={entry.status} statusText={entry.statusText} /></span>
-        <span className={`flex-1 truncate pl-2 font-mono ${entry.status === 0 ? 'text-[#ef4444]' : 'text-[var(--color-text-primary)]'}`}>
+        <span className={`flex-1 truncate pl-2 font-mono ${isError ? 'text-[var(--color-error)]' : 'text-[var(--color-text-primary)]'}`}>
           {urlPath}
         </span>
         <span className="text-[10px] text-[var(--color-text-muted)] font-mono w-[60px] text-right flex-shrink-0">
@@ -240,14 +235,14 @@ function RequestListRow({ entry, isSelected, onSelect }: {
   );
 }
 
-// ─── Detail Panel (Request / Response / Network Logs) ─────────────────────────
+// ─── Detail Panel ─────────────────────────────────────────────────────────────
 
 type DetailTab = 'request' | 'response' | 'network-logs';
 
 function DetailPanel({ entry }: { entry: DebugSubRequest }) {
   const isError = entry.status === 0 || entry.status >= 400;
   const [tab, setTab] = useState<DetailTab>(isError ? 'response' : 'network-logs');
-  const statusColor = entry.status === 0 ? '#ef4444' : entry.status >= 200 && entry.status < 300 ? 'var(--color-success)' : entry.status < 400 ? '#f59e0b' : '#ef4444';
+  const sc = statusColor(entry.status);
 
   const tabs: { key: DetailTab; label: string }[] = [
     { key: 'request', label: 'Request' },
@@ -285,9 +280,7 @@ function DetailPanel({ entry }: { entry: DebugSubRequest }) {
         <div className="flex items-center gap-2 px-3 py-[5px]">
           <StatusBadge status={entry.status} statusText={entry.statusText} />
           {entry.status !== 0 && (
-            <span className="text-[10px] text-[var(--color-text-muted)] font-mono">
-              {entry.statusText}
-            </span>
+            <span className="text-[10px] text-[var(--color-text-muted)] font-mono">{entry.statusText}</span>
           )}
           <span className="text-[10px] text-[var(--color-text-primary)] font-semibold ml-1">
             {entry.method.toUpperCase()}
@@ -296,15 +289,14 @@ function DetailPanel({ entry }: { entry: DebugSubRequest }) {
             {formatDuration(entry.duration)}
           </span>
         </div>
-        {/* Error message shown directly in header */}
         {isError && entry.status === 0 && entry.statusText && (
-          <div className="px-3 pb-[5px] text-[10px] font-mono text-[#ef4444] truncate" title={entry.statusText.split('\n')[0]}>
+          <div className="px-3 pb-[5px] text-[10px] font-mono text-[var(--color-error)] truncate" title={entry.statusText.split('\n')[0]}>
             {entry.statusText.split('\n')[0].slice(0, 120)}
           </div>
         )}
       </div>
 
-      {/* Sub-tabs with copy */}
+      {/* Sub-tabs */}
       <div className="flex items-center gap-0 px-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
         {tabs.map(t => (
           <button
@@ -320,27 +312,22 @@ function DetailPanel({ entry }: { entry: DebugSubRequest }) {
             {t.label}
           </button>
         ))}
-        <div className="ml-auto">
-          <CopyButton text={getTabContent()} size={12} />
-        </div>
+        <div className="ml-auto"><CopyButton text={getTabContent()} size={12} /></div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
         {tab === 'request' && (
           <div className="flex flex-col gap-2 p-2">
-            {/* URL */}
             <div className="flex items-center gap-2 px-2 py-[4px]">
               <span
                 className="px-1.5 py-[1px] rounded text-[9px] font-bold font-mono flex-shrink-0"
-                style={{ color: methodColorMap[entry.method.toUpperCase()] ?? 'var(--color-text-muted)', backgroundColor: `color-mix(in srgb, ${methodColorMap[entry.method.toUpperCase()] ?? 'var(--color-text-muted)'} 12%, transparent)` }}
+                style={{ color: methodColor(entry.method), backgroundColor: `color-mix(in srgb, ${methodColor(entry.method)} 12%, transparent)` }}
               >
                 {entry.method.toUpperCase()}
               </span>
               <span className="text-[11px] text-[var(--color-text-primary)] font-mono break-all leading-[16px] select-all">{entry.url}</span>
             </div>
-
-            {/* Headers */}
             {entry.requestHeaders && Object.keys(entry.requestHeaders).length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-1 px-2">
@@ -352,8 +339,6 @@ function DetailPanel({ entry }: { entry: DebugSubRequest }) {
                 <HeadersTable headers={entry.requestHeaders} />
               </div>
             )}
-
-            {/* Body */}
             {entry.requestBody && (
               <div>
                 <div className="flex items-center gap-2 mb-1 px-2">
@@ -372,14 +357,10 @@ function DetailPanel({ entry }: { entry: DebugSubRequest }) {
 
         {tab === 'response' && (
           <div className="flex flex-col gap-2 p-2">
-            {/* Status + metrics */}
             <div className="flex items-center gap-2 px-2 py-[4px] flex-wrap">
               <span
                 className="px-1.5 py-[1px] rounded text-[9px] font-bold font-mono"
-                style={{
-                  color: statusColor,
-                  backgroundColor: `color-mix(in srgb, ${statusColor} 12%, transparent)`,
-                }}
+                style={{ color: sc, backgroundColor: `color-mix(in srgb, ${sc} 12%, transparent)` }}
               >
                 {entry.status === 0 ? (entry.statusText || 'Error') : `${entry.status} ${entry.statusText}`}
               </span>
@@ -392,20 +373,16 @@ function DetailPanel({ entry }: { entry: DebugSubRequest }) {
                 {formatDuration(entry.duration)}
               </span>
             </div>
-
-            {/* Error details (stack trace) */}
             {isError && entry.status === 0 && entry.statusText && (
               <div className="mx-2">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[9px] uppercase tracking-wider text-[#ef4444] font-medium">Error Details</span>
+                  <span className="text-[9px] uppercase tracking-wider text-[var(--color-error)] font-medium">Error Details</span>
                 </div>
-                <pre className="text-[11px] text-[#ef4444] font-mono whitespace-pre-wrap bg-[rgba(239,68,68,0.06)] rounded-md p-2 leading-[18px] border border-[rgba(239,68,68,0.15)] select-all">
+                <pre className="text-[11px] text-[var(--color-error)] font-mono whitespace-pre-wrap bg-[color-mix(in_srgb,var(--color-error)_6%,transparent)] rounded-md p-2 leading-[18px] border border-[color-mix(in_srgb,var(--color-error)_15%,transparent)] select-all">
                   {entry.statusText}
                 </pre>
               </div>
             )}
-
-            {/* Response Headers */}
             {entry.responseHeaders && Object.keys(entry.responseHeaders).length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-1 px-2">
@@ -417,8 +394,6 @@ function DetailPanel({ entry }: { entry: DebugSubRequest }) {
                 <HeadersTable headers={entry.responseHeaders} />
               </div>
             )}
-
-            {/* Response Body */}
             {entry.responseBody && (
               <div>
                 <div className="flex items-center gap-2 mb-1 px-2">
@@ -441,21 +416,20 @@ function DetailPanel({ entry }: { entry: DebugSubRequest }) {
   );
 }
 
-// ─── Network Logs View (expand/collapse entries) ──────────────────────────────
+// ─── Network Logs View ────────────────────────────────────────────────────────
 
 function NetworkLogsView({ entry }: { entry: DebugSubRequest }) {
-  const methodColor = methodColorMap[entry.method.toUpperCase()] ?? 'var(--color-text-muted)';
+  const mc = methodColor(entry.method);
   const isError = entry.status === 0 || entry.status >= 400;
-  const statusColor = entry.status === 0 ? '#ef4444' : entry.status >= 200 && entry.status < 300 ? 'var(--color-success)' : entry.status < 400 ? '#f59e0b' : '#ef4444';
+  const sc = statusColor(entry.status);
 
   return (
     <div className="flex flex-col">
-      {/* Request entry */}
       <NetworkLogEntry
         icon={<ArrowUpRightIcon size={13} className="flex-shrink-0 text-[var(--color-protocol-websocket)]" />}
         title="Request Sent"
         badge={entry.method.toUpperCase()}
-        badgeColor={methodColor}
+        badgeColor={mc}
         timestamp={entry.timestamp}
       >
         <div className="flex flex-col gap-1.5">
@@ -485,19 +459,17 @@ function NetworkLogsView({ entry }: { entry: DebugSubRequest }) {
         </div>
       </NetworkLogEntry>
 
-      {/* Response entry */}
       <NetworkLogEntry
         icon={<ArrowDownLeftIcon size={13} className="flex-shrink-0 text-[var(--color-protocol-graphql)]" />}
         title="Response Received"
         badge={entry.status === 0 ? (entry.statusText ? entry.statusText.split('\n')[0].slice(0, 60) : 'Error') : `${entry.status} ${entry.statusText}`}
-        badgeColor={statusColor}
+        badgeColor={sc}
         timestamp={entry.timestamp + entry.duration}
         defaultExpanded={isError}
       >
         <div className="flex flex-col gap-1.5">
-          {/* Error stack trace */}
           {isError && entry.status === 0 && entry.statusText && (
-            <pre className="text-[10px] text-[#ef4444] font-mono whitespace-pre-wrap bg-[rgba(239,68,68,0.06)] rounded p-2 leading-[16px] border border-[rgba(239,68,68,0.15)] select-all max-h-[200px] overflow-y-auto">
+            <pre className="text-[10px] text-[var(--color-error)] font-mono whitespace-pre-wrap bg-[color-mix(in_srgb,var(--color-error)_6%,transparent)] rounded p-2 leading-[16px] border border-[color-mix(in_srgb,var(--color-error)_15%,transparent)] select-all max-h-[200px] overflow-y-auto">
               {entry.statusText}
             </pre>
           )}
@@ -526,12 +498,11 @@ function NetworkLogsView({ entry }: { entry: DebugSubRequest }) {
         </div>
       </NetworkLogEntry>
 
-      {/* Summary entry */}
       <NetworkLogEntry
-        icon={<InfoCircleIcon size={13} className={`flex-shrink-0 ${isError ? 'text-[#ef4444]' : 'text-[var(--color-success)]'}`} />}
+        icon={<InfoCircleIcon size={13} className={`flex-shrink-0 ${isError ? 'text-[var(--color-error)]' : 'text-[var(--color-success)]'}`} />}
         title={isError ? 'Failed' : 'Completed'}
         badge={formatDuration(entry.duration)}
-        badgeColor={isError ? '#ef4444' : 'var(--color-success)'}
+        badgeColor={isError ? 'var(--color-error)' : 'var(--color-success)'}
         timestamp={entry.timestamp + entry.duration}
       >
         <div className="flex items-center gap-3 text-[10px] font-mono text-[var(--color-text-muted)]">

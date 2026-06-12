@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from '../../../icons';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useDui } from '../../core/DuiContext';
+import { DUI_HEIGHT, DUI_FONT_SIZE } from '../../core/DuiTokens';
 import { EmptyStateView } from './EmptyStateView';
+import './DataTableView.css';
 
 export interface DataTableColumn<T = Record<string, unknown>> {
   key: string;
@@ -20,7 +24,10 @@ export interface DataTableViewProps<T = Record<string, unknown>> {
   emptyTitle?: string;
   emptyMessage?: string;
   striped?: boolean;
+  /** Reduces padding to match 'sm' size. Prefer `size` for token-aligned sizing. */
   compact?: boolean;
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
   sortable?: boolean;
   maxHeight?: string;
   className?: string;
@@ -36,9 +43,12 @@ export function DataTableView<T extends Record<string, unknown>>({
   emptyMessage,
   striped = false,
   compact = false,
+  size,
   maxHeight,
   className = '',
 }: DataTableViewProps<T>) {
+  const ctx = useDui();
+  const s = compact ? 'sm' : (size ?? ctx.size);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
@@ -73,8 +83,9 @@ export function DataTableView<T extends Record<string, unknown>>({
 
   const expandCol = renderExpanded ? '28px ' : '';
   const colTemplate = expandCol + columns.map(c => c.width ?? '1fr').join(' ');
-  const cellPad = compact ? '5px 10px' : '8px 12px';
-  const fontSize = compact ? '11px' : '12px';
+  const rowH = DUI_HEIGHT.table[s];
+  const cellPad = `${Math.round((rowH - 16) / 2)}px 12px`;
+  const fontSize = DUI_FONT_SIZE[s];
 
   // When rows can expand, the table must grow naturally so expanded content
   // pushes siblings down instead of scrolling them out of view.
@@ -150,22 +161,12 @@ export function DataTableView<T extends Record<string, unknown>>({
                 {/* Data row */}
                 <div
                   onClick={() => onRowClick?.(row)}
+                  className={`dui_data-table__row${(onRowClick || renderExpanded) ? ' dui_data-table__row--clickable' : ''}`}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: colTemplate,
                     background: bgDefault,
                     cursor: onRowClick ? 'pointer' : 'default',
-                    transition: 'background 80ms',
-                  }}
-                  onMouseEnter={e => {
-                    if (onRowClick || renderExpanded) {
-                      (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-hover)';
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (onRowClick || renderExpanded) {
-                      (e.currentTarget as HTMLElement).style.background = bgDefault;
-                    }
                   }}
                 >
                   {/* Expand toggle */}

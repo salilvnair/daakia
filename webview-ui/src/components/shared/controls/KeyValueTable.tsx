@@ -136,7 +136,7 @@ export function KeyValueTable({
             onClick={() => { if (rows.some(r => r.key || r.value)) setShowClearConfirm(true); }}
             className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
               rows.some(r => r.key || r.value)
-                ? 'text-[var(--color-text-muted)] hover:text-[#ef4444] hover:bg-[rgba(239,68,68,0.08)]'
+                ? 'text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)]'
                 : 'text-[var(--color-text-muted)] opacity-30 cursor-default'
             }`}
             title="Clear all"
@@ -495,7 +495,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
         <button
           type="button"
           onClick={() => onRemove(idx)}
-          className="opacity-0 group-hover:opacity-100 p-1 text-[var(--color-text-muted)] hover:text-[#ef4444] cursor-pointer transition-all"
+          className="opacity-0 group-hover:opacity-100 p-1 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-all"
           title="Remove row"
           aria-label="Remove row"
         >

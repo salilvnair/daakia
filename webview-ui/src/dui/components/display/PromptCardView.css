@@ -1,0 +1,7 @@
+.dui_prompt-card__action-btn { transition: background 100ms, color 100ms; }
+.dui_prompt-card__action-btn:hover {
+  background: var(--dui-action-hover-bg, var(--color-surface-hover));
+}
+.dui_prompt-card__action-btn--copied:hover {
+  background: color-mix(in srgb, var(--color-success) 16%, transparent);
+}

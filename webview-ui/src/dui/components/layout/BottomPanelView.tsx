@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from '../../../icons';
+import './BottomPanelView.css';
 
 export interface BottomPanelTab {
   id: string;
@@ -70,13 +71,12 @@ export function BottomPanelView({
     >
       {/* Drag handle */}
       <div
+        className="dui_bottom-panel__drag-handle"
         style={{ height: 4, cursor: 'row-resize', background: 'transparent', flexShrink: 0 }}
         onMouseDown={e => {
           e.preventDefault();
           if (!collapsed) { setDragging(true); startY.current = e.clientY; startH.current = height; }
         }}
-        onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-primary)')}
-        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
       />
 
       {/* Tab bar */}

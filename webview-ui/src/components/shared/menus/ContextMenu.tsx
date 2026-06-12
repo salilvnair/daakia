@@ -328,7 +328,7 @@ export function ContextMenu({ items, position, onSelect, onClose }: ContextMenuP
           >
             {item.checked !== undefined && (
               <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
-                {item.checked ? <CheckIcon size={11} strokeWidth={3} style={{ color: '#22c55e' }} /> : null}
+                {item.checked ? <CheckIcon size={11} strokeWidth={3} style={{ color: 'var(--color-success)' }} /> : null}
               </span>
             )}
             {item.icon && (
