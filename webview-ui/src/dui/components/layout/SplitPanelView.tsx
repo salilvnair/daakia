@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export type SplitDirection = 'horizontal' | 'vertical';
 
@@ -6,83 +6,120 @@ export interface SplitPanelViewProps {
   direction?: SplitDirection;
   first: React.ReactNode;
   second: React.ReactNode;
-  defaultSplit?: number; // 0–100 percent for first panel
-  minFirst?: number;     // px min for first panel
-  minSecond?: number;    // px min for second panel
+  /** Initial split (0–100%) for the first panel. Uncontrolled default. */
+  defaultSplit?: number;
+  /** Controlled split value. When provided, overrides internal state — wire with onResize. */
+  split?: number;
+  /** Min px size for first panel */
+  minFirst?: number;
+  /** Min px size for second panel */
+  minSecond?: number;
   accentColor?: string;
+  /** Fired on every drag move and on double-click reset */
   onResize?: (split: number) => void;
-  /** Tooltip shown on the drag pill — e.g. "Drag to resize · Double-click to reset" */
-  pillTooltip?: string;
+  /** Fired once when drag ends (pointer up) or on double-click reset */
+  onResizeEnd?: (split: number) => void;
+  /**
+   * Tooltip shown on pill hover. Pass `null` to suppress.
+   * Defaults to "Double-click to reset Alt+/ / Drag to resize" with a styled kbd badge.
+   */
+  pillTooltip?: React.ReactNode | null;
   style?: React.CSSProperties;
   className?: string;
 }
+
+const KBD: React.CSSProperties = {
+  fontSize: 9,
+  padding: '1px 5px',
+  borderRadius: 3,
+  background: 'var(--color-panel)',
+  fontFamily: 'monospace',
+  border: '1px solid color-mix(in srgb, var(--color-text-primary) 15%, transparent)',
+};
+
+const DEFAULT_PILL_TOOLTIP = (
+  <>
+    <div>Double-click to reset <kbd style={KBD}>Alt+/</kbd></div>
+    <div>Drag to resize</div>
+  </>
+);
+
+const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 
 export function SplitPanelView({
   direction = 'horizontal',
   first,
   second,
   defaultSplit = 50,
+  split: splitProp,
   minFirst = 80,
   minSecond = 80,
   accentColor,
   onResize,
-  pillTooltip = 'Drag to resize\nDouble-click to reset  Alt+/',
+  onResizeEnd,
+  pillTooltip = DEFAULT_PILL_TOOLTIP,
   style,
   className = '',
 }: SplitPanelViewProps) {
-  const [split, setSplit] = useState(defaultSplit);
+  const [internalSplit, setInternalSplit] = useState(splitProp ?? defaultSplit);
   const [dragging, setDragging] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef({ active: false, startPos: 0, startSplit: 0 });
+  const dragActiveRef = useRef(false);
   const isHoriz = direction === 'horizontal';
   const accent = accentColor || 'var(--color-primary)';
   const pillActive = dragging || hovered;
 
+  // Sync internal split when controlled prop changes
+  useEffect(() => {
+    if (splitProp !== undefined) setInternalSplit(splitProp);
+  }, [splitProp]);
+
+  const currentSplit = splitProp !== undefined ? splitProp : internalSplit;
+
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = {
-      active: true,
-      startPos: isHoriz ? e.clientX : e.clientY,
-      startSplit: split,
-    };
+    dragActiveRef.current = true;
     setDragging(true);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    setMousePos({ x: e.clientX, y: e.clientY });
-    if (!dragRef.current.active || !containerRef.current) return;
+    if (!dragActiveRef.current || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const total = isHoriz ? rect.width : rect.height;
-    const pos   = isHoriz ? e.clientX - rect.left : e.clientY - rect.top;
+    const pos = isHoriz ? e.clientX - rect.left : e.clientY - rect.top;
     const pct = Math.max(
-      (minFirst  / total) * 100,
+      (minFirst / total) * 100,
       Math.min((1 - minSecond / total) * 100, (pos / total) * 100),
     );
-    setSplit(pct);
+    setInternalSplit(pct);
     onResize?.(pct);
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    dragRef.current.active = false;
+    dragActiveRef.current = false;
     setDragging(false);
+    onResizeEnd?.(internalSplit);
   };
 
   const handleDoubleClick = () => {
-    setSplit(defaultSplit);
+    setInternalSplit(defaultSplit);
     onResize?.(defaultSplit);
+    onResizeEnd?.(defaultSplit);
   };
 
   const firstStyle: React.CSSProperties = isHoriz
-    ? { width: `${split}%`, minWidth: minFirst, height: '100%', overflow: 'hidden' }
-    : { height: `${split}%`, minHeight: minFirst, width: '100%', overflow: 'hidden' };
+    ? { width: `${currentSplit}%`, minWidth: minFirst, height: '100%', overflow: 'hidden',
+        transition: dragging ? 'none' : `width 180ms ${EASE}` }
+    : { height: `${currentSplit}%`, minHeight: minFirst, width: '100%', overflow: 'hidden',
+        transition: dragging ? 'none' : `height 180ms ${EASE}` };
 
   const secondStyle: React.CSSProperties = isHoriz
     ? { flex: 1, minWidth: minSecond, height: '100%', overflow: 'hidden' }
-    : { flex: 1, minHeight: minSecond, width: '100%', overflow: 'hidden' };
+    : { flex: 1, minHeight: minSecond, width: '100%', overflow: 'hidden',
+        transition: dragging ? 'none' : `all 180ms ${EASE}` };
 
   const pillW = isHoriz ? 3 : (pillActive ? 80 : 44);
   const pillH = isHoriz ? (pillActive ? 80 : 44) : 3;
@@ -102,22 +139,24 @@ export function SplitPanelView({
     >
       <div style={firstStyle}>{first}</div>
 
-      {/* Drag area — 5px wide, transparent except for pill indicator */}
+      {/* Drag handle */}
       <div
         style={{
           flexShrink: 0,
-          width: isHoriz ? 5 : '100%',
-          height: isHoriz ? '100%' : 5,
+          width: isHoriz ? 6 : '100%',
+          height: isHoriz ? '100%' : 6,
           cursor: isHoriz ? 'col-resize' : 'row-resize',
           position: 'relative',
           userSelect: 'none',
+          zIndex: 10,
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onMouseEnter={e => { setHovered(true); setMousePos({ x: e.clientX, y: e.clientY }); }}
+        onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onDoubleClick={handleDoubleClick}
+        aria-label="Resize panels"
       >
         {/* Pill indicator */}
         <div
@@ -134,32 +173,33 @@ export function SplitPanelView({
             pointerEvents: 'none',
           }}
         />
-      </div>
 
-      {/* Custom floating tooltip — VS Code style dark box, mouse-tracked */}
-      {pillTooltip && hovered && !dragging && (
-        <div
-          style={{
-            position: 'fixed',
-            left: mousePos.x + (isHoriz ? 12 : 0),
-            top: mousePos.y + (isHoriz ? -12 : 12),
-            zIndex: 9999,
-            pointerEvents: 'none',
-            background: 'var(--color-tooltip-bg, #1e1e1e)',
-            color: 'var(--color-tooltip-text, #cccccc)',
-            border: '1px solid var(--color-tooltip-border, #454545)',
-            borderRadius: 6,
-            padding: '6px 10px',
-            fontSize: 11,
-            lineHeight: 1.6,
-            whiteSpace: 'pre-line',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-            maxWidth: 240,
-          }}
-        >
-          {pillTooltip}
-        </div>
-      )}
+        {/* Tooltip — anchored below pill (vertical) or to the right (horizontal) */}
+        {pillTooltip != null && hovered && !dragging && (
+          <div
+            style={{
+              position: 'absolute',
+              ...(isHoriz
+                ? { left: 'calc(100% + 4px)', top: '50%', transform: 'translateY(-50%)' }
+                : { left: '50%', top: 'calc(100% + 4px)', transform: 'translateX(-50%)' }
+              ),
+              background: 'var(--color-surface)',
+              color: 'var(--color-text-primary)',
+              fontSize: 11,
+              lineHeight: 1.7,
+              padding: '6px 10px',
+              borderRadius: 8,
+              border: '1px solid var(--color-surface-border)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              zIndex: 9999,
+            }}
+          >
+            {pillTooltip}
+          </div>
+        )}
+      </div>
 
       <div style={secondStyle}>{second}</div>
     </div>

@@ -1,9 +1,14 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { SearchIcon } from '../../../icons';
+import { SearchIcon, ServerIcon } from '../../../icons';
 import type { DuiSize } from '../../core/DuiTypes';
 import { useInputBase } from '../../core/InputBase';
 import './HighlightedInputView.css';
+
+export interface MockServerSuggestion {
+  url: string;
+  name: string;
+}
 
 export interface HighlightedInputViewProps {
   value: string;
@@ -12,6 +17,8 @@ export interface HighlightedInputViewProps {
   onBlur?: () => void;
   placeholder?: string;
   suggestions?: string[];
+  /** Running mock server URLs — shown at the top with a server icon */
+  mockServers?: MockServerSuggestion[];
   disabled?: boolean;
   accentColor?: string;
   /** Falls back to DuiProvider size when omitted. */
@@ -73,6 +80,7 @@ export function HighlightedInputView({
   onBlur,
   placeholder,
   suggestions = [],
+  mockServers = [],
   disabled,
   accentColor,
   size,
@@ -118,13 +126,20 @@ export function HighlightedInputView({
     return suggestions.filter(s => s.toLowerCase().includes(lower) && s !== value).slice(0, 8);
   }, [value, focused, suggestions]);
 
-  useEffect(() => { setSelectedIdx(0); }, [filtered.length, value]);
+  const filteredMockServers = useMemo(() => {
+    if (!focused || !mockServers.length) return [];
+    const lower = value.toLowerCase().trim();
+    if (!lower) return mockServers.slice(0, 8);
+    return mockServers.filter(s => s.url.toLowerCase().includes(lower) || s.name.toLowerCase().includes(lower)).slice(0, 8);
+  }, [value, focused, mockServers]);
+
+  useEffect(() => { setSelectedIdx(0); }, [filtered.length, filteredMockServers.length, value]);
 
   useEffect(() => {
-    if (filtered.length === 0 || !editorRef.current) return;
+    if ((filtered.length === 0 && filteredMockServers.length === 0) || !editorRef.current) return;
     const r = editorRef.current.getBoundingClientRect();
     setDropPos({ top: r.bottom + 4, left: r.left, width: r.width });
-  }, [filtered.length, focused]);
+  }, [filtered.length, filteredMockServers.length, focused]);
 
   const handleSelect = (url: string) => {
     const el = editorRef.current;
@@ -154,12 +169,17 @@ export function HighlightedInputView({
     onChange(text);
   }, [onChange]);
 
+  const allDropItems = useMemo(() => [
+    ...filteredMockServers.map(s => s.url),
+    ...filtered,
+  ], [filteredMockServers, filtered]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') e.preventDefault();
-    if (filtered.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIdx(i => (i + 1) % filtered.length); return; }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); setSelectedIdx(i => (i - 1 + filtered.length) % filtered.length); return; }
-      if (e.key === 'Enter' && filtered[selectedIdx] !== value) { e.preventDefault(); handleSelect(filtered[selectedIdx]); return; }
+    if (allDropItems.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIdx(i => (i + 1) % allDropItems.length); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setSelectedIdx(i => (i - 1 + allDropItems.length) % allDropItems.length); return; }
+      if (e.key === 'Enter' && allDropItems[selectedIdx] !== value) { e.preventDefault(); handleSelect(allDropItems[selectedIdx]); return; }
       if (e.key === 'Escape')    { setFocused(false); return; }
     }
     onKeyDown?.(e);
@@ -171,7 +191,7 @@ export function HighlightedInputView({
     document.execCommand('insertText', false, text);
   };
 
-  const showDrop = focused && filtered.length > 0;
+  const showDrop = focused && (filtered.length > 0 || filteredMockServers.length > 0);
 
   return (
     <div className={`dui_highlighted-input ${className}`} style={style}>
@@ -206,24 +226,48 @@ export function HighlightedInputView({
             overflow: 'hidden',
           }}
         >
-          {filtered.map((url, idx) => (
+          {/* Mock server suggestions at top */}
+          {filteredMockServers.length > 0 && filteredMockServers.map((s, idx) => (
             <button
-              key={url}
+              key={s.url}
               type="button"
-              onMouseDown={e => { e.preventDefault(); handleSelect(url); }}
+              onMouseDown={e => { e.preventDefault(); handleSelect(s.url); }}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                 padding: '8px 14px', fontSize: 12.5, textAlign: 'left',
                 cursor: 'pointer', border: 'none', fontFamily: 'inherit',
-                background: idx === selectedIdx ? 'var(--color-item-hover-bg)' : 'transparent',
-                color: idx === selectedIdx ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                background: idx === selectedIdx ? 'color-mix(in srgb, var(--color-mock-server) 12%, transparent)' : 'transparent',
+                color: 'var(--color-mock-server)',
                 transition: 'background 80ms',
               }}
             >
-              <SearchIcon size={12} style={{ flexShrink: 0, color: 'var(--color-text-muted)' }} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</span>
+              <ServerIcon size={12} style={{ flexShrink: 0, color: 'var(--color-mock-server)' }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{s.url}</span>
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--color-text-muted)', flexShrink: 0 }}>{s.name}</span>
             </button>
           ))}
+          {/* URL history suggestions */}
+          {filtered.length > 0 && filtered.map((url, idx) => {
+            const globalIdx = filteredMockServers.length + idx;
+            return (
+              <button
+                key={url}
+                type="button"
+                onMouseDown={e => { e.preventDefault(); handleSelect(url); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 14px', fontSize: 12.5, textAlign: 'left',
+                  cursor: 'pointer', border: 'none', fontFamily: 'inherit',
+                  background: globalIdx === selectedIdx ? 'var(--color-item-hover-bg)' : 'transparent',
+                  color: globalIdx === selectedIdx ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                  transition: 'background 80ms',
+                }}
+              >
+                <SearchIcon size={12} style={{ flexShrink: 0, color: 'var(--color-text-muted)' }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</span>
+              </button>
+            );
+          })}
         </div>,
         document.body
       )}

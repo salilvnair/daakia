@@ -1,5 +1,36 @@
+/* ─── Option rows ─────────────────────────────────────────────────────────── */
+
 .dui_select__option { transition: background 100ms, color 100ms; }
+
+/* Selected row — reads accent from container CSS var (always inherited) */
+.dui_select__option--selected {
+  background: color-mix(in srgb, var(--dui-select-accent, var(--color-primary)) 15%, transparent);
+}
+
+/* Hover only on non-selected rows */
 .dui_select__option:not(.dui_select__option--selected):hover {
   background: color-mix(in srgb, var(--dui-select-accent, var(--color-primary)) 10%, transparent);
   color: var(--color-text-primary);
+}
+
+/* ─── Menu container ──────────────────────────────────────────────────────── */
+
+@keyframes dui-select-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.dui_select__menu {
+  animation: dui-select-menu-in 120ms ease-out;
+}
+
+/* Accent-tinted scrollbar matching StyledDropdown */
+.dui_select__menu::-webkit-scrollbar { width: 4px; }
+.dui_select__menu::-webkit-scrollbar-track { background: transparent; }
+.dui_select__menu::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--dui-select-accent, var(--color-primary)) 35%, transparent);
+  border-radius: 4px;
+}
+.dui_select__menu::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--dui-select-accent, var(--color-primary)) 55%, transparent);
 }

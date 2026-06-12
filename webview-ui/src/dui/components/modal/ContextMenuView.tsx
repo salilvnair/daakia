@@ -28,6 +28,12 @@ export interface ContextMenuViewProps {
   matchAnchorWidth?: boolean;
   /** Position override for context menus triggered at a specific coordinate */
   position?: { x: number; y: number };
+  /**
+   * 'auto' (default) — left-aligns when the popup fits in the viewport, right-aligns when it would overflow.
+   * 'left' — always anchors popup's left edge to anchor's left edge.
+   * 'right' — always anchors popup's right edge to anchor's right edge.
+   */
+  align?: 'auto' | 'left' | 'right';
 }
 
 const WIDTH_MAP: Record<string, string> = { auto: 'max-content', sm: '140px', md: '180px', lg: '220px' };
@@ -145,6 +151,7 @@ export function ContextMenuView({
   rounded = true,
   matchAnchorWidth = false,
   position,
+  align = 'auto',
 }: ContextMenuViewProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -177,22 +184,35 @@ export function ContextMenuView({
       const menuH = menu.scrollHeight;
 
       let left: number, top: number;
+      let anchorTop = 0;
 
       if (position) {
         left = position.x;
         top = position.y;
+        anchorTop = position.y;
       } else if (anchorEl) {
         const r = anchorEl.getBoundingClientRect();
-        left = r.left;
+        if (align === 'right') {
+          left = r.right - menuW;
+        } else if (align === 'left') {
+          left = r.left;
+        } else {
+          // auto: left-align if it fits, right-align if it would overflow
+          left = r.left + menuW <= window.innerWidth - 8 ? r.left : r.right - menuW;
+        }
         top = r.bottom + 4;
+        anchorTop = r.top;
         if (matchAnchorWidth) menu.style.width = r.width + 'px';
       } else {
         return;
       }
 
-      // Flip if off-screen
+      // Final clamp — keep within viewport on both sides
       if (left + menuW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - menuW - 8);
-      if (top + menuH > window.innerHeight - 8) top = Math.max(8, (position?.y ?? (anchorEl?.getBoundingClientRect().top ?? 0)) - menuH - 4);
+      if (left < 8) left = 8;
+
+      // Flip vertically if not enough space below
+      if (top + menuH > window.innerHeight - 8) top = Math.max(8, anchorTop - menuH - 4);
 
       menu.style.left = left + 'px';
       menu.style.top = top + 'px';
@@ -200,7 +220,7 @@ export function ContextMenuView({
     place();
     const raf = requestAnimationFrame(place);
     return () => cancelAnimationFrame(raf);
-  }, [open, anchorEl, position, matchAnchorWidth]);
+  }, [open, anchorEl, position, matchAnchorWidth, align]);
 
   if (!open) return null;
 

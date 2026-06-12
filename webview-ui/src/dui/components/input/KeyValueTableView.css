@@ -1,12 +1,1 @@
-.dui_kv-table__clear-btn { transition: color 100ms, background 100ms; }
-.dui_kv-table__clear-btn:hover { color: var(--color-error); }
-
-.dui_kv-table__add-row-btn { transition: color 100ms; }
-.dui_kv-table__add-row-btn:hover {
-  color: var(--dui-kv-accent, var(--color-primary));
-}
-
-.dui_kv-table__add-row-footer { transition: background 100ms; }
-.dui_kv-table__add-row-footer:hover {
-  background: color-mix(in srgb, var(--dui-kv-accent, var(--color-primary)) 5%, transparent);
-}
+/* KeyValueTableView — hover states handled via Tailwind group/hover utilities */

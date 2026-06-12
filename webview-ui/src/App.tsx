@@ -6,10 +6,11 @@ import { installKeyboardListener } from './services/keyboard';
 // Install bridges before any React render so ConvEngineChat fetch/EventSource is ready
 installDaakiaBridges();
 import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
+import { SplitPanelView } from './dui';
 import { TabBar } from './components/tabs/TabBar';
 import { UrlBar } from './components/rest/request/UrlBar';
 import { SaveRequestModal, RightClickMenu } from './components/shared';
-import { RequestConfig } from './components/rest/request/RequestConfig';
+import { RequestPanel } from './components/rest/request/RequestPanel';
 import { ResponsePanel } from './components/rest/response/ResponsePanel';
 import { SqliteBanner, ToastContainer } from './components/shared';
 import { sendRequest, saveRequest } from './services/request';
@@ -311,15 +312,12 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarDragging, setSidebarDragging] = useState(false);
   const [showSplitterTip, setShowSplitterTip] = useState(false);
-  const [showReqSplitterTip, setShowReqSplitterTip] = useState(false);
   const sidebarDragRef = useRef({ startX: 0, startWidth: 0, moved: false });
 
   // Resizable split: percentage of height for request panel (10-90)
   const storedSplit = useUiStateStore(s => s.panelHeights['split.rest.main']);
   const [splitPercent, setSplitPercent] = useState(storedSplit ?? 50);
-  const [isDragging, setIsDragging] = useState(false);
   const [focusedPanel, setFocusedPanel] = useState<FocusedPanel>(null);
-  const splitContainerRef = useRef<HTMLDivElement>(null);
   const prevResponseRef = useRef<string | null>(null);
 
   // Track response arrival → auto-maximize response
@@ -452,28 +450,15 @@ export default function App() {
     }
   }, []);
 
-  // ── Req/Resp splitter drag ──
-  const handleSplitterPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  // ── Req/Resp split callbacks ──
+  const handleSplitResize = useCallback((pct: number) => {
+    setSplitPercent(pct);
+    setFocusedPanel(null);
   }, []);
 
-  const handleSplitterPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging || !splitContainerRef.current) return;
-    const rect = splitContainerRef.current.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const percent = Math.min(90, Math.max(10, (y / rect.height) * 100));
-    setSplitPercent(percent);
-    setFocusedPanel(null);
-  }, [isDragging]);
-
-  const handleSplitterPointerUp = useCallback((e: React.PointerEvent) => {
-    setIsDragging(false);
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    // Persist the manually-chosen split
-    useUiStateStore.getState().setHeight('split.rest.main', splitPercent);
-  }, [splitPercent]);
+  const handleSplitResizeEnd = useCallback((pct: number) => {
+    useUiStateStore.getState().setHeight('split.rest.main', pct);
+  }, []);
 
   // Focus request when user starts typing in body
   const handleRequestFocus = useCallback(() => {
@@ -490,12 +475,6 @@ export default function App() {
       setSplitPercent(25);
     }
   }, [focusedPanel]);
-
-  // Double-click splitter to reset to 50/50
-  const handleSplitterDoubleClick = useCallback(() => {
-    setSplitPercent(50);
-    setFocusedPanel(null);
-  }, []);
 
   // Listen for messages from extension host
   useEffect(() => {
@@ -2121,65 +2100,27 @@ export default function App() {
             <UrlBar />
 
             {/* Resizable split: request (top) / response (bottom) */}
-            <div
-              ref={splitContainerRef}
-              className="flex-1 flex flex-col min-h-0 relative"
-            >
-              {/* Request configuration panel */}
-              <div
-                className="overflow-hidden flex flex-col"
-                style={{
-                  height: `${splitPercent}%`,
-                  minHeight: 60,
-                  transition: isDragging ? 'none' : 'height 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-                }}
-                onFocus={handleRequestFocus}
-              >
-                <RequestConfig />
-              </div>
-
-              {/* Splitter handle */}
-              <div
-                className="relative h-[6px] flex-shrink-0 cursor-row-resize group select-none"
-                onPointerDown={handleSplitterPointerDown}
-                onPointerMove={handleSplitterPointerMove}
-                onPointerUp={handleSplitterPointerUp}
-                onDoubleClick={handleSplitterDoubleClick}
-                onMouseEnter={() => setShowReqSplitterTip(true)}
-                onMouseLeave={() => setShowReqSplitterTip(false)}
-                aria-label="Resize request/response split"
-              >
-                {/* Pill grip */}
-                <div
-                  className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[3px] rounded-full transition-all duration-150 ${
-                    isDragging
-                      ? 'w-[80px]'
-                      : 'w-[44px] bg-[var(--color-surface-border)] group-hover:w-[80px]'
-                  }`}
-                  style={{ backgroundColor: isDragging ? protocolAccent : undefined }}
-                  onMouseEnter={(e) => { if (!isDragging) (e.currentTarget as HTMLElement).style.backgroundColor = protocolAccent; }}
-                  onMouseLeave={(e) => { if (!isDragging) (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}
-                />
-                {/* Tooltip */}
-                {showReqSplitterTip && !isDragging && (
-                  <div className="absolute left-1/2 top-4 -translate-x-1/2 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[11px] px-2.5 py-1.5 rounded-lg border border-[var(--color-surface-border)] shadow-lg whitespace-nowrap pointer-events-none z-50 flex flex-col gap-0.5 leading-tight">
-                    <div>Double-click to reset <kbd className="text-[9px] px-1 py-0.5 rounded bg-[var(--color-panel)] font-mono">Alt+/</kbd></div>
-                    <div>Drag to resize</div>
-                  </div>
-                )}
-              </div>
-
-              {/* Response panel */}
-              <div
-                className="flex-1 min-h-[60px] flex flex-col overflow-hidden"
-                style={{
-                  transition: isDragging ? 'none' : 'all 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-                }}
-                onFocus={handleResponseFocus}
-              >
-                <ResponsePanel />
-              </div>
-            </div>
+            <SplitPanelView
+              direction="vertical"
+              split={splitPercent}
+              defaultSplit={50}
+              minFirst={60}
+              minSecond={60}
+              accentColor={protocolAccent}
+              onResize={handleSplitResize}
+              onResizeEnd={handleSplitResizeEnd}
+              style={{ flex: 1, minHeight: 0 }}
+              first={
+                <div className="flex flex-col h-full overflow-hidden" onFocus={handleRequestFocus}>
+                  <RequestPanel />
+                </div>
+              }
+              second={
+                <div className="flex flex-col h-full overflow-hidden" onFocus={handleResponseFocus}>
+                  <ResponsePanel />
+                </div>
+              }
+            />
           </>
           )
         ) : (activeTab?.protocol || activeProtocol) === 'graphql' ? (

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { DropdownArrowIcon, CheckIcon, SearchIcon } from '../../../icons';
+import { DropdownArrowIcon, CheckIcon, SearchIcon, ServerIcon } from '../../../icons';
 import type { DuiSize, DuiRadius, DuiWidth, DuiFontStyle } from '../../core/DuiTypes';
 import { useInputBase } from '../../core/InputBase';
 import { useDui } from '../../core/DuiContext';
@@ -11,6 +11,12 @@ export interface SelectTextOption {
   label: string;
   /** Accent color for this option — e.g. HTTP methods */
   color?: string;
+}
+
+/** Running mock server entry — shown at top of suggestions with server icon */
+export interface MockServerSuggestion {
+  url: string;
+  name: string;
 }
 
 export interface SelectTextInputViewProps {
@@ -29,6 +35,8 @@ export interface SelectTextInputViewProps {
   selectWidth?: number;
   /** URL / text autocomplete suggestions */
   suggestions?: string[];
+  /** Running mock server URLs — shown at the top with a server icon */
+  mockServers?: MockServerSuggestion[];
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   // ─── DUI container props ──────────────────────────────────────────────────
   width?: DuiWidth;
@@ -55,6 +63,7 @@ export function SelectTextInputView({
   accentColor,
   selectWidth,
   suggestions = [],
+  mockServers = [],
   onKeyDown,
   width,
   borderRadius,
@@ -76,6 +85,7 @@ export function SelectTextInputView({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const suppressRef = useRef(false);
   const [methodDropPos, setMethodDropPos] = useState({ top: 0, left: 0, width: 0 });
   const [suggDropPos, setSuggDropPos] = useState({ top: 0, left: 0, width: 0 });
 
@@ -89,6 +99,13 @@ export function SelectTextInputView({
     const lower = inputValue.toLowerCase();
     return suggestions.filter(s => s.toLowerCase().includes(lower) && s !== inputValue).slice(0, 8);
   }, [inputValue, suggestions]);
+
+  const filteredMockServers = useMemo(() => {
+    if (!mockServers.length) return [];
+    if (!inputValue.trim()) return mockServers.slice(0, 8);
+    const lower = inputValue.toLowerCase();
+    return mockServers.filter(s => s.url.toLowerCase().includes(lower) || s.name.toLowerCase().includes(lower)).slice(0, 8);
+  }, [inputValue, mockServers]);
 
   // ── Method dropdown ────────────────────────────────────────────────────────
 
@@ -114,8 +131,10 @@ export function SelectTextInputView({
   // ── Suggestions dropdown ────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (filteredSuggestions.length > 0 && focused) {
-      const el = wrapperRef.current;
+    // Suppress reopening immediately after user selects a suggestion
+    if (suppressRef.current) return;
+    if ((filteredSuggestions.length > 0 || filteredMockServers.length > 0) && focused) {
+      const el = inputRef.current;
       if (el) {
         const rect = el.getBoundingClientRect();
         setSuggDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
@@ -125,20 +144,28 @@ export function SelectTextInputView({
     } else {
       setShowSuggestions(false);
     }
-  }, [filteredSuggestions, focused]);
+  }, [filteredSuggestions, filteredMockServers, focused]);
 
   const handleSuggestionSelect = (val: string) => {
+    suppressRef.current = true;
     onInputChange(val);
     setShowSuggestions(false);
     setHighlightedIdx(-1);
     inputRef.current?.focus();
+    // Reset after one event-loop tick — long enough for the effect to have run
+    setTimeout(() => { suppressRef.current = false; }, 150);
   };
 
+  const allItems = useMemo(() => [
+    ...filteredMockServers.map(s => s.url),
+    ...filteredSuggestions,
+  ], [filteredMockServers, filteredSuggestions]);
+
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (showSuggestions && filteredSuggestions.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedIdx(i => Math.min(i + 1, filteredSuggestions.length - 1)); return; }
+    if (showSuggestions && allItems.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedIdx(i => Math.min(i + 1, allItems.length - 1)); return; }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setHighlightedIdx(i => Math.max(i - 1, -1)); return; }
-      if (e.key === 'Enter' && highlightedIdx >= 0) { e.preventDefault(); handleSuggestionSelect(filteredSuggestions[highlightedIdx]); return; }
+      if (e.key === 'Enter' && highlightedIdx >= 0) { e.preventDefault(); handleSuggestionSelect(allItems[highlightedIdx]); return; }
       if (e.key === 'Escape')    { setShowSuggestions(false); setHighlightedIdx(-1); return; }
     }
     onKeyDown?.(e);
@@ -262,7 +289,7 @@ export function SelectTextInputView({
       )}
 
       {/* Suggestions autocomplete portal */}
-      {showSuggestions && filteredSuggestions.length > 0 && createPortal(
+      {showSuggestions && (filteredSuggestions.length > 0 || filteredMockServers.length > 0) && createPortal(
         <div
           data-stiv-suggestions
           style={{
@@ -274,35 +301,85 @@ export function SelectTextInputView({
             zIndex: 9998, padding: 3, overflow: 'hidden',
           }}
         >
-          <div style={{ padding: `4px ${base.paddingX} 6px`, borderBottom: '1px solid var(--color-surface-border)' }}>
-            <p style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
-              Suggestions
-            </p>
-          </div>
-          {filteredSuggestions.map((s, i) => (
-            <div
-              key={s}
-              onMouseDown={e => { e.preventDefault(); handleSuggestionSelect(s); }}
-              onMouseEnter={() => setHighlightedIdx(i)}
-              onMouseLeave={() => setHighlightedIdx(-1)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: `6px ${base.paddingX}`,
-                borderRadius: 5, cursor: 'pointer',
-                fontSize: base.fontSize,
-                color: 'var(--color-text-primary)',
-                background: i === highlightedIdx
-                  ? `color-mix(in srgb, ${accent} 10%, transparent)`
-                  : 'transparent',
-                transition: 'background 80ms',
-              }}
-            >
-              <SearchIcon size={base.iconSize - 2} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
-                {s}
-              </span>
-            </div>
-          ))}
+          {/* Mock server suggestions — shown at top */}
+          {filteredMockServers.length > 0 && (
+            <>
+              <div style={{ padding: `4px ${base.paddingX} 6px`, borderBottom: '1px solid var(--color-surface-border)' }}>
+                <p style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+                  Mock Servers
+                </p>
+              </div>
+              <div style={{ padding: '4px 3px 3px' }}>
+              {filteredMockServers.map((s, i) => (
+                <div
+                  key={s.url}
+                  onMouseDown={e => { e.preventDefault(); handleSuggestionSelect(s.url); }}
+                  onMouseEnter={() => setHighlightedIdx(i)}
+                  onMouseLeave={() => setHighlightedIdx(-1)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: `6px ${base.paddingX}`,
+                    borderRadius: 5, cursor: 'pointer',
+                    fontSize: base.fontSize,
+                    color: 'var(--color-text-primary)',
+                    background: i === highlightedIdx
+                      ? 'color-mix(in srgb, var(--color-mock-server) 12%, transparent)'
+                      : 'transparent',
+                    transition: 'background 80ms',
+                  }}
+                >
+                  <ServerIcon size={base.iconSize - 2} style={{ color: 'var(--color-mock-server)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', color: 'var(--color-mock-server)' }}>
+                    {s.url}
+                  </span>
+                  <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', flexShrink: 0 }}>
+                    {s.name}
+                  </span>
+                </div>
+              ))}
+              </div>
+            </>
+          )}
+
+          {/* URL history suggestions */}
+          {filteredSuggestions.length > 0 && (
+            <>
+              <div style={{ padding: `4px ${base.paddingX} 6px`, borderBottom: '1px solid var(--color-surface-border)', marginTop: filteredMockServers.length > 0 ? 4 : 0 }}>
+                <p style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+                  Suggestions
+                </p>
+              </div>
+              <div style={{ padding: '4px 3px 3px' }}>
+              {filteredSuggestions.map((s, i) => {
+                const globalIdx = filteredMockServers.length + i;
+                return (
+                  <div
+                    key={s}
+                    onMouseDown={e => { e.preventDefault(); handleSuggestionSelect(s); }}
+                    onMouseEnter={() => setHighlightedIdx(globalIdx)}
+                    onMouseLeave={() => setHighlightedIdx(-1)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: `6px ${base.paddingX}`,
+                      borderRadius: 5, cursor: 'pointer',
+                      fontSize: base.fontSize,
+                      color: 'var(--color-text-primary)',
+                      background: globalIdx === highlightedIdx
+                        ? `color-mix(in srgb, ${accent} 10%, transparent)`
+                        : 'transparent',
+                      transition: 'background 80ms',
+                    }}
+                  >
+                    <SearchIcon size={base.iconSize - 2} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
+                      {s}
+                    </span>
+                  </div>
+                );
+              })}
+              </div>
+            </>
+          )}
         </div>,
         document.body
       )}

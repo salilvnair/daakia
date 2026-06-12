@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { CloseIcon } from '../../../icons';
+import { CloseCircleIcon } from '../../../icons';
 import './ModalView.css';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
@@ -9,6 +9,10 @@ export interface ModalViewProps {
   open: boolean;
   onClose: () => void;
   title?: string;
+  /** Secondary text shown below the title in the header */
+  subtitle?: string;
+  /** Node rendered to the left of the title block — e.g. a coloured icon circle */
+  headerIcon?: React.ReactNode;
   children?: React.ReactNode;
   footerLeft?: React.ReactNode;
   footerRight?: React.ReactNode;
@@ -16,6 +20,8 @@ export interface ModalViewProps {
   showCloseIcon?: boolean;
   /** Optional CSS color value for a tinted header background (e.g. 'var(--color-protocol-rest)') */
   headerColor?: string;
+  /** When true, renders the header as a left→right gradient (accent tint → surface) instead of a flat tint */
+  headerGradient?: boolean;
   /** Optional node rendered in the header right area, before the X button */
   headerRight?: React.ReactNode;
   /** When true, removes body padding (e.g. for full-bleed editor modals) */
@@ -36,12 +42,15 @@ export function ModalView({
   open,
   onClose,
   title,
+  subtitle,
+  headerIcon,
   children,
   footerLeft,
   footerRight,
   size = 'md',
   showCloseIcon = true,
   headerColor,
+  headerGradient = false,
   headerRight,
   noPadding = false,
   elevated = false,
@@ -89,26 +98,41 @@ export function ModalView({
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            gap: 12,
             padding: '14px 18px',
             borderBottom: '1px solid var(--color-surface-border)',
             flexShrink: 0,
-            ...(headerColor ? {
-              background: `color-mix(in srgb, ${headerColor} 12%, var(--color-surface))`,
-              borderBottom: `1px solid color-mix(in srgb, ${headerColor} 30%, var(--color-surface-border))`,
-            } : {}),
+            ...(headerColor ? (() => {
+              const surfaceBase = elevated ? 'var(--color-elevated)' : 'var(--color-surface)';
+              return {
+                background: headerGradient
+                  ? `linear-gradient(to right, color-mix(in srgb, ${headerColor} 15%, ${surfaceBase}), ${surfaceBase})`
+                  : `color-mix(in srgb, ${headerColor} 12%, ${surfaceBase})`,
+                borderBottom: `1px solid color-mix(in srgb, ${headerColor} 30%, var(--color-surface-border))`,
+              };
+            })() : {}),
           }}>
-            {title && (
-              <span style={{
-                fontSize: '14px', fontWeight: 600,
-                color: headerColor
-                  ? `color-mix(in srgb, ${headerColor} 80%, var(--color-text-primary))`
-                  : 'var(--color-text-primary)',
-              }}>
-                {title}
-              </span>
+            {headerIcon && (
+              <div style={{ flexShrink: 0 }}>{headerIcon}</div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+            {title && (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: '14px', fontWeight: 600,
+                  color: headerColor
+                    ? `color-mix(in srgb, ${headerColor} 80%, var(--color-text-primary))`
+                    : 'var(--color-text-primary)',
+                }}>
+                  {title}
+                </div>
+                {subtitle && (
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: 1 }}>
+                    {subtitle}
+                  </div>
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
               {headerRight}
               {showCloseIcon && (
                 <button
@@ -121,15 +145,15 @@ export function ModalView({
                     justifyContent: 'center',
                     width: 24,
                     height: 24,
-                    borderRadius: 4,
+                    borderRadius: 6,
                     border: 'none',
                     background: 'transparent',
                     cursor: 'pointer',
-                    color: 'var(--color-error)',
+                    color: 'var(--color-text-muted)',
                   }}
                   title="Close"
                 >
-                  <CloseIcon size={14} />
+                  <CloseCircleIcon size={16} />
                 </button>
               )}
             </div>

@@ -15,6 +15,8 @@ import { useTabsStore, type ResponseData } from '../../store/tabs-store';
 import { SparkleIcon, CloseIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared';
+import type { DuiSize } from '../../dui';
+import { useButtonBase } from '../../dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -369,8 +371,10 @@ interface AiActionButtonProps {
   onOpen: () => void;
   /** Override the accent color for this specific button */
   accentColor?: string;
-  /** compact=true → small rectangular style for response panel toolbar */
+  /** compact=true → xs size (20px) for response panel toolbars */
   compact?: boolean;
+  /** Explicit DUI size — overrides the compact default. */
+  size?: DuiSize;
 }
 
 export function AiActionButton({
@@ -384,18 +388,27 @@ export function AiActionButton({
   onOpen,
   accentColor,
   compact,
+  size,
 }: AiActionButtonProps) {
   const btnAccent = accentColor ?? ACCENT;
+  const resolvedSize: DuiSize = size ?? (compact ? 'xs' : 'sm');
+  const base = useButtonBase(resolvedSize);
+  const borderRadius = compact ? '4px' : '6px';
+
   return (
     <div className="relative">
       <button
         type="button"
         onClick={onOpen}
-        className={compact
-          ? 'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] cursor-pointer transition-all border'
-          : 'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-medium cursor-pointer transition-all border'
-        }
+        className="flex items-center cursor-pointer transition-all border"
         style={{
+          height: base.height,
+          paddingLeft: base.paddingX,
+          paddingRight: base.paddingX,
+          gap: base.gap,
+          fontSize: base.fontSize,
+          fontWeight: compact ? 400 : 500,
+          borderRadius,
           color: btnAccent,
           borderColor: open
             ? `color-mix(in srgb, ${btnAccent} 45%, var(--color-surface-border))`
@@ -416,7 +429,7 @@ export function AiActionButton({
         }}
         title={label}
       >
-        <SparkleIcon size={compact ? 8 : 10} style={{ color: btnAccent }} />
+        <SparkleIcon size={base.iconSize} style={{ color: btnAccent }} />
         {label}
       </button>
 

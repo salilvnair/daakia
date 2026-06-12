@@ -2,7 +2,8 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTabsStore, type HttpMethod } from '../../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { useDebugStore } from '../../../store/debug-store';
-import { StyledDropdown, SplitButton, GenerateCodeModal, ImportCurlModal, HighlightedInput, type DropdownOption, type SplitButtonItem } from '../../shared';
+import { GenerateCodeModal, ImportCurlModal } from '../../shared';
+import { SelectTextInputView, DropDownButtonView, ButtonView, IconButtonView, type ContextMenuItem } from '../../../dui';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 import { postMsg } from '../../../vscode';
 import { sendRequest, sendAndDownloadRequest, cancelRequest, saveRequest } from '../../../services/request';
@@ -16,7 +17,7 @@ import { AiAdaptiveLoadTesterModal } from '../../ai/AiAdaptiveLoadTesterModal';
 import { AiSchemaDriftModal } from '../../ai/AiSchemaDriftModal';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 
-const METHOD_OPTIONS: DropdownOption[] = [
+const METHOD_OPTIONS = [
   { value: 'GET', label: 'GET', color: METHOD_COLORS.GET },
   { value: 'POST', label: 'POST', color: METHOD_COLORS.POST },
   { value: 'PUT', label: 'PUT', color: METHOD_COLORS.PUT },
@@ -40,7 +41,6 @@ export function UrlBar() {
   const [showSchemaDrift, setShowSchemaDrift] = useState(false);
   const [overflowDir, setOverflowDir] = useState<'down' | 'up'>('down');
   const overflowRef = useRef<HTMLDivElement>(null);
-  const overflowBtnRef = useRef<HTMLButtonElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const tab = tabs.find(t => t.id === activeTabId);
 
@@ -103,15 +103,17 @@ export function UrlBar() {
     if (savedInPlace) updateTab(tab.id, { dirty: false });
   };
 
-  const sendItems: SplitButtonItem[] = [
-    { id: 'send-download', label: 'Send and Download', icon: <DownloadIcon />, onClick: handleSendAndDownload },
-    { id: 'import-curl', label: 'Import cURL', icon: <CopyIcon style={{ color: '#ffa726' }} />, shortcut: 'C', dividerBefore: true, onClick: () => setShowImportCurl(true) },
-    { id: 'show-code', label: 'Show code', icon: <CodeIcon style={{ color: '#4fc3f7' }} />, shortcut: 'S', onClick: () => setShowGenerateCode(true) },
-    { id: 'clear-all', label: 'Clear all', icon: <RefreshIcon style={{ color: '#ef5350' }} />, shortcut: '⌫', dividerBefore: true, onClick: handleClearAll },
+  const sendItems: ContextMenuItem[] = [
+    { id: 'send-download', label: 'Send and Download', icon: <DownloadIcon size={13} />, onClick: handleSendAndDownload },
+    { id: 'sep-1', label: '', separator: true },
+    { id: 'import-curl', label: 'Import cURL', icon: <CopyIcon size={13} />, onClick: () => setShowImportCurl(true) },
+    { id: 'show-code', label: 'Show code', icon: <CodeIcon size={13} />, onClick: () => setShowGenerateCode(true) },
+    { id: 'sep-2', label: '', separator: true },
+    { id: 'clear-all', label: 'Clear all', icon: <RefreshIcon size={13} />, onClick: handleClearAll },
   ];
 
-  const saveItems: SplitButtonItem[] = [
-    { id: 'save-as', label: 'Save as', icon: <SaveIcon />, iconColor: 'var(--color-ctx-close-saved)', onClick: () => postMsg({ type: 'openSaveAs', tabId: tab.id }) },
+  const saveItems: ContextMenuItem[] = [
+    { id: 'save-as', label: 'Save as', icon: <SaveIcon size={13} />, onClick: () => postMsg({ type: 'openSaveAs', tabId: tab.id }) },
   ];
 
   // Pre-flight internals for dropdown item color
@@ -127,80 +129,66 @@ export function UrlBar() {
 
   return (
     <div className="url-bar">
-      {/* Method selector */}
-      <StyledDropdown
-        options={METHOD_OPTIONS}
-        value={tab.method}
-        onChange={(v) => updateTab(tab.id, { method: v as HttpMethod })}
-        className="url-bar-method"
-      />
-
-      {/* URL input */}
+      {/* Method + URL — unified DUI component */}
       <div className="flex-[2] min-w-0">
-        <HighlightedInput
-          value={tab.url}
-          onChange={(v) => updateTab(tab.id, { url: v })}
+        <SelectTextInputView
+          selectOptions={METHOD_OPTIONS}
+          selectValue={tab.method}
+          onSelectChange={(v) => updateTab(tab.id, { method: v as HttpMethod })}
+          inputValue={tab.url}
+          onInputChange={(v) => updateTab(tab.id, { url: v })}
           onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
           placeholder="Enter a URL or paste a cURL command"
           suggestions={urlSuggestions}
           mockServers={mockSuggestions}
+          accentColor={METHOD_COLORS[tab.method] || 'var(--color-primary)'}
+          size="lg"
+          width="fullWidth"
         />
       </div>
 
-      {/* ── Send / Cancel ── */}
+      {/* Send / Cancel */}
       {tab.loading ? (
-        <button
-          type="button"
-          onClick={handleSend}
-          className="h-[36px] px-4 text-[13px] font-medium rounded-md bg-[var(--color-error)] text-white hover:brightness-110 cursor-pointer transition-all flex items-center gap-1.5 select-none"
-        >
-          <StopSquareIcon size={13} />
-          <span>Cancel</span>
-        </button>
+        <ButtonView variant="danger" size="lg" onClick={handleSend} iconLeft={<StopSquareIcon size={14} />}>
+          Cancel
+        </ButtonView>
       ) : (
-        <SplitButton
+        <DropDownButtonView
           label="Send"
+          icon={<SendIcon size={13} />}
           variant="primary"
-          onClick={handleSend}
+          size="lg"
+          onPrimaryClick={handleSend}
           disabled={!tab.url.trim()}
-          icon={<SendIcon size={14} />}
           items={sendItems}
         />
       )}
 
-      {/* ── Save ── */}
-      <SplitButton
+      {/* Save */}
+      <DropDownButtonView
         label="Save"
+        icon={<SaveIcon size={13} />}
         variant="secondary"
-        onClick={handleSave}
-        icon={<SaveIcon />}
+        size="lg"
+        onPrimaryClick={handleSave}
         items={saveItems}
       />
 
-      {/* ── AI Tools ⋮ — always visible, no border, hover gray ─────────────── */}
+      {/* AI Tools ⋮ */}
       <div className="flex-shrink-0 relative" ref={overflowRef}>
-        <button
-          ref={overflowBtnRef}
-          type="button"
+        <IconButtonView
+          icon={<MoreVerticalIcon size={15} />}
+          title="AI tools"
+          size="lg"
+          active={showOverflow}
           onClick={() => {
-            if (!showOverflow && overflowBtnRef.current) {
-              const rect = overflowBtnRef.current.getBoundingClientRect();
-              const spaceBelow = window.innerHeight - rect.bottom;
-              setOverflowDir(spaceBelow < 180 ? 'up' : 'down');
+            if (!showOverflow && overflowRef.current) {
+              const rect = overflowRef.current.getBoundingClientRect();
+              setOverflowDir(window.innerHeight - rect.bottom < 180 ? 'up' : 'down');
             }
             setShowOverflow(p => !p);
           }}
-          title="AI tools"
-          className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
-          style={{
-            color: showOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-            backgroundColor: showOverflow ? 'rgba(255,255,255,0.08)' : 'transparent',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
-          onMouseLeave={e => { e.currentTarget.style.backgroundColor = showOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
-        >
-          <MoreVerticalIcon size={15} />
-        </button>
+        />
 
         {showOverflow && (
           <div

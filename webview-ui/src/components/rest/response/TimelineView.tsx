@@ -5,6 +5,7 @@ import { METHOD_COLORS } from '../../../colors';
 import { CopyIcon, CheckIcon, ChevronDownIcon, InfoCircleIcon, ArrowUpRightIcon, ArrowDownLeftIcon } from '../../../icons';
 import { RequestBodyDisplay } from '../../shared/display/RequestBodyDisplay';
 import { SubRequestRow } from './SubRequestRow';
+import { TabView } from '../../../dui';
 
 type TimelineSubTab = 'request' | 'response' | 'network-logs';
 
@@ -214,12 +215,6 @@ export function TimelineView({ tab, response }: { tab: RequestTab; response: Res
   })();
   const requestBody = response.requestBody || tab.bodyRaw || undefined;
 
-  const subTabs: { key: TimelineSubTab; label: string }[] = [
-    { key: 'request', label: 'Request' },
-    { key: 'response', label: 'Response' },
-    { key: 'network-logs', label: 'Network Logs' },
-  ];
-
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header: status + method + URL + duration */}
@@ -227,8 +222,8 @@ export function TimelineView({ tab, response }: { tab: RequestTab; response: Res
         <span
           className="px-1.5 py-[1px] rounded text-[10px] font-bold font-mono"
           style={{
-            color: response.status === 0 ? '#ef4444' : response.status < 300 ? 'var(--color-success)' : response.status < 400 ? '#f59e0b' : '#ef4444',
-            backgroundColor: response.status === 0 ? 'rgba(239,68,68,0.12)' : response.status < 300 ? 'color-mix(in srgb, var(--color-success) 12%, transparent)' : response.status < 400 ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)',
+            color: response.status === 0 ? 'var(--color-error)' : response.status < 300 ? 'var(--color-success)' : response.status < 400 ? 'var(--color-warning)' : 'var(--color-error)',
+            backgroundColor: response.status === 0 ? 'color-mix(in srgb, var(--color-error) 12%, transparent)' : response.status < 300 ? 'color-mix(in srgb, var(--color-success) 12%, transparent)' : response.status < 400 ? 'color-mix(in srgb, var(--color-warning) 12%, transparent)' : 'color-mix(in srgb, var(--color-error) 12%, transparent)',
           }}
         >
           {response.status === 0 ? (response.statusText || 'Error') : `${response.status} ${response.statusText}`}
@@ -243,24 +238,20 @@ export function TimelineView({ tab, response }: { tab: RequestTab; response: Res
         <span className="px-1.5 py-[1px] rounded text-[9px] font-mono bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] text-[var(--color-success)] font-semibold flex-shrink-0">{response.time}ms</span>
       </div>
 
-      {/* Sub-tabs with copy button */}
-      <div className="flex items-center gap-0 px-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
-        {subTabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setSubTab(t.key)}
-            className={`px-3 py-[5px] text-[11px] cursor-pointer border-b-2 transition-colors ${
-              subTab === t.key
-                ? 'text-[var(--color-text-primary)] border-[var(--color-accent)]'
-                : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-        <div className="ml-auto">
-          <TimelineCopyButton text={getTimelineTabContent(tab, response, subTab, requestHeaders, requestBody)} />
-        </div>
+      {/* Sub-tabs + copy button */}
+      <div className="flex items-center justify-between px-3 pt-1 border-b border-[var(--color-surface-border)] flex-shrink-0">
+        <TabView
+          tabs={[
+            { id: 'request',      label: 'Request' },
+            { id: 'response',     label: 'Response' },
+            { id: 'network-logs', label: 'Network Logs' },
+          ]}
+          activeTab={subTab}
+          onChange={(v) => setSubTab(v as TimelineSubTab)}
+          size="md"
+          variant="underline"
+        />
+        <TimelineCopyButton text={getTimelineTabContent(tab, response, subTab, requestHeaders, requestBody)} />
       </div>
 
       {/* Content */}

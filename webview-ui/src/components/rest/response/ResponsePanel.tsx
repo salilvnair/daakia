@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
-import { PillTabs, ScriptResultsView, RequestProgressOverlay } from '../../shared';
+import { ScriptResultsView, RequestProgressOverlay } from '../../shared';
+import { TabView } from '../../../dui';
 import { cancelRequest } from '../../../services/request';
 import { ResponseStatusBar } from './ResponseStatusBar';
 import { JsonResponseView } from './JsonResponseView';
@@ -11,9 +12,7 @@ import { HeadersView } from './HeadersView';
 import { CookiesView } from './CookiesView';
 import { TimelineView } from './TimelineView';
 import { AiSmartRetryAdvisor } from '../../ai/AiSmartRetryAdvisor';
-import { AiActionButton, type AssistMode } from '../../ai/AiAssistPopover';
-import { AiResponsePatternLearning } from '../../ai/AiResponsePatternLearning';
-import { AiResponseActionsMenu } from './AiResponseActionsMenu';
+import { ResponseAiToolbar } from './ResponseAiToolbar';
 import { postMsg } from '../../../vscode';
 import { useDebugStore } from '../../../store/debug-store';
 
@@ -27,7 +26,6 @@ export function ResponsePanel() {
   const [wrapLines, setWrapLines] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
   const [showFilter, setShowFilter] = useState(false);
-  const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   useEffect(() => {
@@ -111,7 +109,7 @@ export function ResponsePanel() {
 
       {/* Response tabs + AI inline action buttons (right side) */}
       <div className="flex items-center justify-between px-3 pt-2 pb-0 border-b border-[var(--color-surface-border)]">
-        <PillTabs
+        <TabView
           tabs={[
             { id: 'json', label: 'JSON' },
             { id: 'raw', label: 'Raw' },
@@ -122,58 +120,16 @@ export function ResponsePanel() {
           ]}
           activeTab={activeView}
           onChange={(v) => setActiveView(v as ResponseView)}
-          size="sm"
+          size="md"
           variant="underline"
         />
 
-        {/* AI inline actions — same small pill buttons as original */}
-        <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
-          {aiEnabled('explainRest') && (
-            <AiActionButton
-              compact
-              mode="explain"
-              label="Explain"
-              response={response}
-              requestMethod={requestMethod}
-              requestUrl={requestUrl}
-              open={activePopup === 'explain'}
-              onOpen={() => { setActivePopup(p => p === 'explain' ? null : 'explain'); }}
-            />
-          )}
-
-          {aiEnabled('followUpsRest') && (
-            <AiActionButton
-              compact
-              mode="follow-up"
-              label="Follow-ups"
-              response={response}
-              requestMethod={requestMethod}
-              requestUrl={requestUrl}
-              open={activePopup === 'follow-up'}
-              onOpen={() => { setActivePopup(p => p === 'follow-up' ? null : 'follow-up'); }}
-            />
-          )}
-
-          {/* Record Baseline — gated by recordBaseline flag */}
-          {aiEnabled('recordBaseline') && (
-            <div className="relative">
-              <AiResponsePatternLearning
-                responseBody={response.body || ''}
-                method={requestMethod}
-                url={requestUrl}
-                status={response.status}
-              />
-            </div>
-          )}
-
-          {/* AI Actions 3-dot — Assert, Semantic Validate, Transform, Compare, Schema */}
-          <AiResponseActionsMenu
-            tabId={tab.id}
-            response={response}
-            requestMethod={requestMethod}
-            requestUrl={requestUrl}
-          />
-        </div>
+        <ResponseAiToolbar
+          tabId={tab.id}
+          response={response}
+          requestMethod={requestMethod}
+          requestUrl={requestUrl}
+        />
       </div>
 
       {/* Response content */}
@@ -225,6 +181,7 @@ export function ResponsePanel() {
           />
         </div>
       )}
+
     </div>
   );
 }

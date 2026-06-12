@@ -6,9 +6,9 @@
  * Shows an alert badge when something looks "off".
  */
 import { useState, useEffect, useRef } from 'react';
-import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
+import { AIButtonView } from '../../dui';
 
 interface PatternRecord {
   url: string;
@@ -120,33 +120,18 @@ export function AiResponsePatternLearning({ responseBody, method, url, status }:
         </button>
       )}
 
-      {/* Record Baseline — compact pill, same height as Explain/Follow-ups, SOAP red tint */}
+      {/* Record Baseline — AIButtonView xs, dynamic accent (soap red → success green on record) */}
       {(() => {
         const c = recorded ? 'var(--color-success)' : 'var(--color-protocol-soap)';
         const label = recorded ? 'Recorded!' : checking ? 'Checking…' : hasBaseline.current ? 'Update Baseline' : 'Record Baseline';
         return (
-          <button
-            type="button"
+          <AIButtonView
+            action="ask"
+            label={label}
+            size="xs"
+            accentColor={c}
             onClick={recordBaseline}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] cursor-pointer transition-all border"
-            style={{
-              color: c,
-              borderColor: `color-mix(in srgb, ${c} 25%, var(--color-surface-border))`,
-              backgroundColor: 'transparent',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.backgroundColor = `color-mix(in srgb, ${c} 10%, var(--color-surface))`;
-              e.currentTarget.style.borderColor = `color-mix(in srgb, ${c} 45%, var(--color-surface-border))`;
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.borderColor = `color-mix(in srgb, ${c} 25%, var(--color-surface-border))`;
-            }}
-            title="Record this response as the baseline pattern for anomaly detection"
-          >
-            <SparkleIcon size={8} style={{ color: c }} />
-            {label}
-          </button>
+          />
         );
       })()}
 

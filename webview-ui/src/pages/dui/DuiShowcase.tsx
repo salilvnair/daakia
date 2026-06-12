@@ -5,7 +5,7 @@ import {
   ColoredTextPanel, StatsCardPanel, DataTablePanel, CodeBlockPanel, AIButtonPanel,
   SideNavPanel, SettingsNavPanel, ThemeCardSelectorPanel, FeatureCategoryPanel,
   TagInputPanel, BottomPanelPanel, ToastPanel, PromptCardPanel, PromptLibraryPanel,
-  SearchInputPanel, DurationInputPanel, PillTabsPanel, SplitButtonPanel,
+  SearchInputPanel, DurationInputPanel, TabsPanel,
   HighlightedInputPanel, KeyValueTablePanel, MergedInputViewPanel,
   HudViewPanel, CollapsibleSectionPanel, JsonTreeViewPanel, ExpandableLogEntryPanel,
   CopyButtonPanel, MarkdownViewPanel, FormDataTablePanel,
@@ -22,8 +22,6 @@ import {
   DropDownButtonView,
   TextInputView,
   SelectInputView,
-  KeyValueItemView,
-  HiddenKeyValueItemView,
   TabView,
   EditorView,
   ContextMenuView,
@@ -35,11 +33,11 @@ import {
   SelectTextInputView,
   SideNavView,
   DuiProvider,
-  PillTabsView,
   ToggleSwitchView,
 } from '../../dui';
-import type { TabItem, ContextMenuItem, TabBarTab, SelectTextOption, SideNavItem, LiveColorVar } from '../../dui';
+import type { TabItem, ContextMenuItem, TabBarTab, SelectTextOption, SelectOption, SideNavItem, LiveColorVar } from '../../dui';
 import { applyMonacoTheme } from '../../monaco-setup';
+import { SCHEMA_LANG_OPTIONS } from '../../services/response';
 import {
   TrashIcon, PlusIcon, SearchIcon, SettingsIcon, SparkleIcon,
   MoreHorizontalIcon, MoreVerticalIcon, CopyIcon, RefreshIcon, DownloadIcon,
@@ -56,13 +54,13 @@ import {
 type CategoryId =
   | 'chips' | 'textinput' | 'selectinput' | 'selecttextinput' | 'button'
   | 'iconbutton' | 'dropdownbutton' | 'contextmenu'
-  | 'tabs' | 'tabbar' | 'keyvalue' | 'editor' | 'patterns'
+  | 'tabs' | 'tabbar' | 'editor' | 'patterns'
   | 'toggle' | 'checkbox' | 'modal' | 'loader' | 'emptystate'
   | 'statusindicator' | 'infopopup' | 'resizablepanel' | 'splitpanel' | 'dottedcard'
   | 'coloredtext' | 'statscard' | 'datatable' | 'codeblock' | 'aibutton'
   | 'sidenav' | 'settingsnav' | 'themecardselector' | 'featurecategory'
   | 'taginput' | 'bottompanel' | 'toast' | 'promptcard' | 'promptlibrary' | 'iconsgallery' | 'themeconfig' | 'themeaddvar' | 'stageview'
-  | 'searchinput' | 'durationinput' | 'pilltabs' | 'splitbutton' | 'highlightedinput' | 'keyvaluetable'
+  | 'searchinput' | 'durationinput' | 'highlightedinput' | 'keyvaluetable'
   | 'mergedinput' | 'duiprovider' | 'hudview'
   | 'collapsiblesection' | 'jsontree' | 'logentry'
   | 'copybutton' | 'markdownview' | 'formdatatable' | 'yamlkeychip' | 'livecolorpanel' | 'spacerview';
@@ -77,7 +75,6 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'textinput',         label: 'TextInputView',         icon: <KeyIcon size={13} /> },
       { id: 'selectinput',       label: 'SelectInputView',       icon: <FilterIcon size={13} /> },
       { id: 'selecttextinput',   label: 'SelectTextInputView',   icon: <GlobeIcon size={13} /> },
-      { id: 'keyvalue',          label: 'KeyValueItemView',      icon: <LayersIcon size={13} /> },
       { id: 'taginput',          label: 'TagInputView',          icon: <PlusIcon size={13} /> },
       { id: 'checkbox',          label: 'CheckboxView',          icon: <CheckIcon size={13} /> },
       { id: 'toggle',            label: 'ToggleSwitchView',      icon: <RefreshIcon size={13} /> },
@@ -85,7 +82,6 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'editor',            label: 'EditorView',            icon: <CodeIcon size={13} /> },
       { id: 'searchinput',       label: 'SearchInputView',       icon: <SearchIcon size={13} /> },
       { id: 'durationinput',     label: 'DurationInputView',     icon: <TerminalIcon size={13} /> },
-      { id: 'pilltabs',          label: 'PillTabsView',          icon: <LayersIcon size={13} /> },
       { id: 'highlightedinput',  label: 'HighlightedInputView',  icon: <GlobeIcon size={13} /> },
       { id: 'keyvaluetable',     label: 'KeyValueTableView',     icon: <FilterIcon size={13} /> },
       { id: 'mergedinput',       label: 'MergedInputView',       icon: <LayersIcon size={13} /> },
@@ -97,7 +93,6 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'button',         label: 'ButtonView',         icon: <PlayIcon size={13} /> },
       { id: 'iconbutton',     label: 'IconButtonView',     icon: <SparkleIcon size={13} /> },
       { id: 'dropdownbutton', label: 'DropDownButtonView', icon: <ChevronDownIcon size={13} /> },
-      { id: 'splitbutton',    label: 'SplitButtonView',    icon: <ChevronDownIcon size={13} /> },
       { id: 'aibutton',       label: 'AIButtonView',       icon: <WandIcon size={13} /> },
     ],
   },
@@ -234,7 +229,7 @@ function Row({
             <CodeBlockView
               language="tsx"
               code={code}
-              showCopy
+              showCopyButton
               style={{ borderRadius: 0, borderTop: '1px solid var(--color-surface-border)' }}
             />
           )}
@@ -283,13 +278,6 @@ const METHOD_OPTIONS = [
   { value: 'DELETE', label: 'DELETE', color: 'var(--color-method-delete)' },
 ];
 
-const PROTOCOL_OPTIONS = [
-  { value: 'rest',  label: 'REST'      },
-  { value: 'gql',   label: 'GraphQL'   },
-  { value: 'ws',    label: 'WebSocket' },
-  { value: 'grpc',  label: 'gRPC'      },
-  { value: 'soap',  label: 'SOAP'      },
-];
 
 const PILL_TABS: TabItem[] = [
   { id: 'params',  label: 'Params',  badge: 2 },
@@ -299,12 +287,6 @@ const PILL_TABS: TabItem[] = [
   { id: 'scripts', label: 'Scripts' },
 ];
 
-const GQL_TABS_INIT: TabItem[] = [
-  { id: 'q1', label: 'Query 1',      closeable: true },
-  { id: 'q2', label: 'getUsers',     closeable: true },
-  { id: 'q3', label: 'createOrder',  closeable: true },
-  { id: 'q4', label: 'deleteProduct', closeable: true },
-];
 
 const CONTEXT_ITEMS: ContextMenuItem[] = [
   { id: 'rename',    label: 'Rename',    icon: <RenameIcon size={13} />, shortcut: '⌘R', onClick: () => alert('Rename') },
@@ -425,10 +407,11 @@ function TextInputPanel() {
   );
 }
 
+
 function SelectInputPanel() {
   const [method, setMethod] = useState('GET');
-  const [protocol, setProtocol] = useState('rest');
   const [method2, setMethod2] = useState('POST');
+  const [schemaLang, setSchemaLang] = useState('typescript');
   return (
     <div>
       <Row label="Sizes  default · sm · md · lg · xl" code={`<SelectInputView options={options} value={val} onChange={setVal} size="default" />\n<SelectInputView options={options} value={val} onChange={setVal} size="sm" />\n<SelectInputView options={options} value={val} onChange={setVal} size="md" />\n<SelectInputView options={options} value={val} onChange={setVal} size="lg" />\n<SelectInputView options={options} value={val} onChange={setVal} size="xl" />`}>
@@ -441,10 +424,13 @@ function SelectInputPanel() {
       <Row label="Colored options (HTTP methods)" code={`const options = [\n  { value: 'GET',    label: 'GET',    color: 'var(--color-method-get)' },\n  { value: 'POST',   label: 'POST',   color: 'var(--color-method-post)' },\n  { value: 'DELETE', label: 'DELETE', color: 'var(--color-method-delete)' },\n];\n<SelectInputView options={options} value={method} onChange={setMethod} />`}>
         <SelectInputView options={METHOD_OPTIONS} value={method2} onChange={setMethod2} style={{ width: 130 }} />
       </Row>
-      <Row label="Group headers" code={`const options = [\n  { value: 'h', label: 'Request Protocols', isHeader: true },\n  { value: 'rest', label: 'REST' },\n  { value: 'gql',  label: 'GraphQL' },\n];\n<SelectInputView options={options} value={val} onChange={setVal} />`}>
+      <Row label="Grouped with badge chips (Data Schema Generator style)" code={`const options = [\n  { value: 'h1', label: 'TypeScript', isHeader: true },\n  { value: 'typescript', label: 'TypeScript / Interfaces', badge: { label: 'TS', color: 'var(--color-method-put)' } },\n  { value: 'zod', label: 'TypeScript / Zod', badge: { label: 'ZOD', color: 'var(--color-protocol-mqtt)' } },\n  { value: 'h2', label: 'JavaScript', isHeader: true },\n  { value: 'js', label: 'JavaScript / JSDoc', badge: { label: 'JS', color: 'var(--color-warning)' } },\n];\n<SelectInputView options={options} value={val} onChange={setVal} accentColor="var(--color-protocol-ai)" />`}>
         <SelectInputView
-          options={[{ value: 'h', label: 'Request Protocols', isHeader: true }, ...PROTOCOL_OPTIONS]}
-          value={protocol} onChange={setProtocol} style={{ width: 170 }}
+          options={SCHEMA_LANG_OPTIONS as SelectOption[]}
+          value={schemaLang}
+          onChange={setSchemaLang}
+          style={{ width: 260 }}
+          accentColor="var(--color-protocol-ai)"
         />
       </Row>
       <Row label="Custom accentColor" code={`<SelectInputView options={options} value={val} onChange={setVal} accentColor="var(--color-protocol-graphql)" />\n<SelectInputView options={options} value={val} onChange={setVal} accentColor="var(--color-protocol-soap)" />`}>
@@ -919,295 +905,6 @@ function ContextMenuPanel() {
   );
 }
 
-function TabsPanel() {
-  const [pillTab, setPillTab] = useState('params');
-  const [underlineTab, setUnderlineTab] = useState('params');
-  const [gqlTabs, setGqlTabs] = useState(GQL_TABS_INIT);
-  const [gqlActive, setGqlActive] = useState('q1');
-
-  const addGqlTab = () => {
-    const id = `q${Date.now()}`;
-    setGqlTabs(t => [...t, { id, label: `Query ${t.length + 1}`, closeable: true }]);
-    setGqlActive(id);
-  };
-
-  const closeGqlTab = (id: string) => {
-    setGqlTabs(t => {
-      const next = t.filter(x => x.id !== id);
-      if (gqlActive === id && next.length > 0) setGqlActive(next[next.length - 1].id);
-      return next;
-    });
-  };
-
-  return (
-    <div>
-      <Row label='variant="pill"  (default) — sliding background indicator' align="flex-start" code={`<TabView\n  tabs={tabs}\n  active={activeTab}\n  onChange={setActiveTab}\n  variant="pill"\n  accentColor="var(--color-protocol-rest)"\n/>`}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
-          <TabView tabs={PILL_TABS} active={pillTab} onChange={setPillTab} accentColor="var(--color-protocol-rest)" />
-          <TabView tabs={PILL_TABS} active={pillTab} onChange={setPillTab} accentColor="var(--color-protocol-graphql)" />
-          <TabView tabs={PILL_TABS} active={pillTab} onChange={setPillTab} size="sm" accentColor="var(--color-protocol-grpc)" />
-        </div>
-      </Row>
-      <Row label='variant="underline" — sliding 2px bottom border' align="flex-start" code={`<TabView\n  tabs={tabs}\n  active={activeTab}\n  onChange={setActiveTab}\n  variant="underline"\n  accentColor="var(--color-protocol-rest)"\n/>`}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-          <TabView tabs={PILL_TABS} active={underlineTab} onChange={setUnderlineTab} variant="underline" accentColor="var(--color-protocol-rest)" />
-          <TabView tabs={PILL_TABS} active={underlineTab} onChange={setUnderlineTab} variant="underline" size="sm" accentColor="var(--color-protocol-graphql)" />
-        </div>
-      </Row>
-      <Row label='variant="gql" — closeable + scrollable + addable (click × to close, + to add)' noPad code={`<TabView\n  tabs={gqlTabs}\n  active={gqlActive}\n  onChange={setGqlActive}\n  onClose={closeTab}\n  onAdd={addTab}\n  variant="gql"\n  accentColor="var(--color-protocol-graphql)"\n/>`}>
-        <div style={{ width: '100%' }}>
-          <TabView
-            tabs={gqlTabs}
-            active={gqlActive}
-            onChange={setGqlActive}
-            onClose={closeGqlTab}
-            onAdd={addGqlTab}
-            variant="gql"
-            accentColor="var(--color-protocol-graphql)"
-          />
-          <div style={{ padding: '12px 16px', fontSize: '11px', color: 'var(--color-text-muted)' }}>
-            Active: <strong style={{ color: 'var(--color-text-primary)' }}>{gqlTabs.find(t => t.id === gqlActive)?.label}</strong>
-            <span style={{ marginLeft: '12px', opacity: 0.6 }}>({gqlTabs.length} tab{gqlTabs.length !== 1 ? 's' : ''})</span>
-          </div>
-        </div>
-      </Row>
-    </div>
-  );
-}
-
-// Hover-to-insert divider — matching KeyValueTable's InsertRowDivider
-function KvInsertDivider({ onClick }: { onClick: () => void }) {
-  const color = 'var(--color-protocol-rest)';
-  return (
-    <div
-      className="group relative h-[14px] flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
-      onClick={onClick}
-    >
-      <div
-        className="absolute inset-x-4 top-1/2 h-px"
-        style={{ background: `color-mix(in srgb, ${color} 25%, transparent)` }}
-      />
-      <button
-        type="button"
-        className="relative z-10 flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium pointer-events-none"
-        style={{
-          background: `color-mix(in srgb, ${color} 10%, transparent)`,
-          color,
-          border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
-        }}
-      >
-        <PlusIcon size={10} /> Row
-      </button>
-    </div>
-  );
-}
-
-// Column header row matching KeyValueTable layout
-function KvColumnHeader({ showDesc }: { showDesc?: boolean }) {
-  const cols = showDesc ? '32px 1fr 1fr 1fr 32px' : '32px 1fr 1fr 32px';
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '8px', padding: '0 4px 4px' }}>
-      <div />
-      <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px' }}>KEY</div>
-      <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px' }}>VALUE</div>
-      {showDesc && <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: '10px' }}>DESCRIPTION</div>}
-      <div />
-    </div>
-  );
-}
-
-function KeyValuePanel() {
-  const nextId = useRef(10);
-  const [rows, setRows] = useState([
-    { id: '1', key: 'Authorization', value: 'Bearer abc123', enabled: true },
-    { id: '2', key: 'Content-Type',  value: 'application/json', enabled: true },
-    { id: '3', key: 'X-Request-ID',  value: '', enabled: false },
-    { id: '4', key: '',              value: '', enabled: true },
-  ]);
-
-  const addRow = (afterIdx?: number) => {
-    const r = { id: String(nextId.current++), key: '', value: '', enabled: true };
-    if (afterIdx !== undefined) {
-      setRows(rs => { const n = [...rs]; n.splice(afterIdx + 1, 0, r); return n; });
-    } else {
-      setRows(rs => [...rs, r]);
-    }
-  };
-  const removeRow  = (i: number) => setRows(rs => rs.length > 1 ? rs.filter((_, j) => j !== i) : rs);
-  const toggleRow  = (i: number) => setRows(rs => rs.map((r, j) => j === i ? { ...r, enabled: !r.enabled } : r));
-  const setRowKey  = (i: number, k: string) => setRows(rs => rs.map((r, j) => j === i ? { ...r, key: k } : r));
-  const setRowVal  = (i: number, v: string) => setRows(rs => rs.map((r, j) => j === i ? { ...r, value: v } : r));
-
-  return (
-    <div>
-      {/* Pattern 1: ditto Headers tab — flat rows, transparent inputs, + Add row at bottom */}
-      <Row label="Ditto Headers tab — flat rows · transparent inputs · + Add row at bottom" gap={0} code={`{rows.map((row, i) => (\n  <KeyValueItemView\n    key={row.id}\n    enabled={row.enabled}\n    onToggleEnabled={() => toggle(i)}\n    keyValue={row.key}   onKeyChange={k => setKey(i, k)}\n    value={row.value}   onValueChange={v => setVal(i, v)}\n    onDelete={() => remove(i)}\n    accentColor="var(--color-protocol-rest)"\n    draggable\n  />\n))}`}>
-        <div style={{ width: '100%' }}>
-          <KvColumnHeader />
-          {rows.map((row, i) => (
-            <div key={row.id} style={{ padding: '4px' }}>
-              <KeyValueItemView
-                enabled={row.enabled}
-                onToggleEnabled={() => toggleRow(i)}
-                keyValue={row.key}
-                onKeyChange={k => setRowKey(i, k)}
-                value={row.value}
-                onValueChange={v => setRowVal(i, v)}
-                onDelete={() => removeRow(i)}
-                masked={row.key.toLowerCase() === 'authorization'}
-                accentColor="var(--color-protocol-rest)"
-                draggable
-              />
-            </div>
-          ))}
-          <div style={{ paddingLeft: '36px', paddingTop: '6px' }}>
-            <ButtonView variant="ghost" size="sm" iconLeft={<PlusIcon size={10} />} onClick={() => addRow()}>
-              Add row
-            </ButtonView>
-          </div>
-        </div>
-      </Row>
-
-      {/* Pattern 2: Insert-between hover divider (hover between rows to see + Row) */}
-      <Row label="Insert-between hover pattern — hover between rows to see ＋ Row" gap={0} code={`{rows.map((row, i) => (\n  <div key={row.id}>\n    <KeyValueItemView {...rowProps} />\n    <KvInsertDivider onClick={() => addRow(i)} />\n  </div>\n))}`}>
-        <div style={{ width: '100%' }}>
-          <KvColumnHeader />
-          {rows.map((row, i) => (
-            <div key={row.id}>
-              <div style={{ padding: '4px' }}>
-                <KeyValueItemView
-                  enabled={row.enabled}
-                  onToggleEnabled={() => toggleRow(i)}
-                  keyValue={row.key}
-                  onKeyChange={k => setRowKey(i, k)}
-                  value={row.value}
-                  onValueChange={v => setRowVal(i, v)}
-                  onDelete={() => removeRow(i)}
-                  masked={row.key.toLowerCase() === 'authorization'}
-                  accentColor="var(--color-protocol-rest)"
-                  draggable
-                />
-              </div>
-              <KvInsertDivider onClick={() => addRow(i)} />
-            </div>
-          ))}
-        </div>
-      </Row>
-
-      {/* Pattern 3: with description column */}
-      <Row label="With description column" code={`<KeyValueItemView\n  enabled\n  keyValue="X-Custom-Header"\n  value="my-value"\n  description="Required for auth flow"\n  onDescriptionChange={setDesc}\n  accentColor="var(--color-protocol-graphql)"\n/>`}>
-        <KeyValueItemView
-          enabled
-          keyValue="X-Custom-Header"
-          onKeyChange={() => {}}
-          value="my-value"
-          onValueChange={() => {}}
-          description="Required for auth flow"
-          onDescriptionChange={() => {}}
-          accentColor="var(--color-protocol-graphql)"
-        />
-      </Row>
-
-      {/* Pattern 4: masked value */}
-      <Row label="Masked value — click 👁 to reveal" code={`<KeyValueItemView\n  enabled\n  keyValue="Authorization"\n  value="Bearer supersecrettoken_xyz123"\n  masked\n  accentColor="var(--color-protocol-rest)"\n/>`}>
-        <KeyValueItemView
-          enabled
-          keyValue="Authorization"
-          onKeyChange={() => {}}
-          value="Bearer supersecrettoken_xyz123"
-          onValueChange={() => {}}
-          masked
-          accentColor="var(--color-protocol-rest)"
-        />
-      </Row>
-
-      {/* HiddenKeyValueItemView — system/auto-computed rows */}
-      <Row label="HiddenKeyValueItemView — system-managed rows (lock icon · dashed border · read-only)" align="flex-start" code={`// "hidden" = Postman's terminology for auto-generated headers\n// Dashed border + lock icon = read-only, system-managed\n<HiddenKeyValueItemView\n  keyValue="Authorization"\n  value="Bearer eyJhbGciOiJIUzI1Ni..."\n  badge="auth"\n  badgeColor="var(--color-primary)"\n  masked  // shows dots + eye toggle\n  onDelete={() => clearAuth()}\n  deleteTitle="Clear auth"\n/>`}>
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
-          {/* Column headers — match KeyValueTable style */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: '32px 1fr 1fr 32px', gap: 8,
-            padding: '0 0 6px 0', marginBottom: 2,
-            borderBottom: '1px solid color-mix(in srgb, var(--color-text-primary) 8%, transparent)',
-          }}>
-            <div />
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 10 }}>Key</div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 10 }}>Value</div>
-            <div />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 4 }}>
-            <HiddenKeyValueItemView
-              keyValue="Authorization"
-              value="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NSJ9"
-              badge="auth"
-              badgeColor="var(--color-primary)"
-              masked
-              onDelete={() => {}}
-              deleteTitle="Clear auth (sets auth type to None)"
-            />
-            <HiddenKeyValueItemView
-              keyValue="Cookie"
-              value="session_id=abc123xyz; csrf_token=def456"
-              badge="cookie"
-              badgeColor="var(--color-warning)"
-              masked
-            />
-            <HiddenKeyValueItemView
-              keyValue="Content-Type"
-              value="application/json"
-            />
-          </div>
-        </div>
-      </Row>
-
-      <Row label="HiddenKeyValueItemView — inline in Daakia Headers tab (matches ComputedHeaderList pattern)" align="flex-start" code={`// In Daakia's Headers tab, system headers appear above user-defined rows.\n// Section header shows "Headers  2 hidden" badge — Postman-style terminology.\n// Below that: HiddenKeyValueItemView rows, then separator, then KeyValueItemView rows.\n<ComputedHeaderList rows={computedRows} />\n{userRows.map(row => <KeyValueItemView key={row.id} {...row} />)}`}>
-        <div style={{
-          width: '100%', background: 'var(--color-panel)',
-          border: '1px solid var(--color-surface-border)', borderRadius: 8, overflow: 'hidden',
-        }}>
-          {/* Simulated section header */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px',
-            borderBottom: '1px solid color-mix(in srgb, var(--color-text-primary) 8%, transparent)',
-          }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 500 }}>Headers</span>
-            <span style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              fontSize: 10, padding: '1px 7px', borderRadius: 99,
-              background: 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)',
-              color: 'var(--color-text-muted)',
-            }}>
-              <span style={{ opacity: 0.6 }}>2</span>
-              <span style={{ opacity: 0.45 }}>hidden</span>
-            </span>
-          </div>
-          {/* Hidden rows */}
-          <div style={{ padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <HiddenKeyValueItemView
-              keyValue="Authorization"
-              value="Bearer eyJhbGciOiJIUzI1NiJ9..."
-              badge="auth"
-              badgeColor="var(--color-primary)"
-              masked
-              onDelete={() => {}}
-              deleteTitle="Clear auth"
-            />
-            <HiddenKeyValueItemView
-              keyValue="Content-Type"
-              value="application/json"
-            />
-          </div>
-          {/* Separator */}
-          <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '0 12px' }} />
-          {/* User header rows below */}
-          <div style={{ padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <KeyValueItemView enabled keyValue="X-Api-Key" onKeyChange={() => {}} value="{{api_key}}" onValueChange={() => {}} accentColor="var(--color-protocol-rest)" />
-          </div>
-        </div>
-      </Row>
-    </div>
-  );
-}
 
 function EditorPanel() {
   const [json, setJson] = useState(SAMPLE_JSON);
@@ -1245,7 +942,7 @@ function PatternsPanel() {
       <Row label="Request config tab bar + toolbar (underline tabs + icon buttons at same height)" noPad code={`<div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid ...' }}>\n  <TabView variant="underline" size="sm" accentColor="..." className="flex-1" />\n  <IconButtonView icon={<FilterIcon size={12} />} size="sm" />\n  <IconButtonView icon={<RefreshIcon size={12} />} size="sm" />\n</div>`}>
         <div style={{ width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', paddingLeft: '8px', borderBottom: '1px solid var(--color-surface-border)' }}>
-            <TabView tabs={PILL_TABS} active={pillTab} onChange={setPillTab} variant="underline" size="sm" accentColor="var(--color-protocol-rest)" className="flex-1" />
+            <TabView tabs={PILL_TABS} activeTab={pillTab} onChange={setPillTab} variant="underline" size="sm" accentColor="var(--color-protocol-rest)" className="flex-1" />
             <div style={{ display: 'flex', gap: '2px', paddingRight: '6px' }}>
               <IconButtonView icon={<FilterIcon size={12} />} size="sm" tooltip="Filter" />
               <IconButtonView icon={<RefreshIcon size={12} />} size="sm" tooltip="Clear" />
@@ -1460,7 +1157,7 @@ function DuiSizeBlock({ size }: { size: 'sm' | 'md' | 'lg' | 'xl' }) {
         <TextInputView placeholder="Endpoint URL…" value={inputVal} onChange={e => setInputVal(e.target.value)} style={{ width: '100%' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <ToggleSwitchView checked={toggled} onChange={setToggled} label="Enable" />
-          <PillTabsView tabs={PILL_TABS_DEMO} activeTab={activeTab} onChange={setActiveTab} accentColor={accent} />
+          <TabView tabs={PILL_TABS_DEMO} activeTab={activeTab} onChange={setActiveTab} accentColor={accent} />
         </div>
       </div>
     </DuiProvider>
@@ -1470,7 +1167,7 @@ function DuiSizeBlock({ size }: { size: 'sm' | 'md' | 'lg' | 'xl' }) {
 function DuiProviderPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <Row label="All four sizes — one provider wraps all components" code={`<DuiProvider size="sm">\n  <ButtonView label="Send" />\n  <TextInputView placeholder="URL…" />\n  <ToggleSwitchView checked label="Enable" />\n  <PillTabsView tabs={tabs} activeTab={tab} onChange={setTab} />\n</DuiProvider>`}>
+      <Row label="All four sizes — one provider wraps all components" code={`<DuiProvider size="sm">\n  <ButtonView label="Send" />\n  <TextInputView placeholder="URL…" />\n  <ToggleSwitchView checked label="Enable" />\n  <TabView tabs={tabs} activeTab={tab} onChange={setTab} />\n</DuiProvider>`}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           {SIZES_DEMO.map(s => <DuiSizeBlock key={s} size={s} />)}
         </div>
@@ -1550,9 +1247,8 @@ const PANELS: Record<CategoryId, { title: string; desc: string; content: React.R
   iconbutton:        { title: 'IconButtonView',         desc: 'Square icon-only buttons — ghost / filled — toggle support — all sizes.',          vars: VARS_ICONBTN,    content: <IconButtonPanel />,        code: `function Preview() {\n  const [copied, setCopied] = useState(false);\n  const handleClick = () => {\n    setCopied(true);\n    setTimeout(() => setCopied(false), 1500);\n  };\n  return (\n    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>\n      <IconButtonView\n        icon={copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}\n        variant="ghost"\n        size="sm"\n        title={copied ? 'Copied!' : 'Copy'}\n        onClick={handleClick}\n        active={copied}\n      />\n      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>\n        {copied ? 'Copied!' : 'Click to copy'}\n      </span>\n    </div>\n  );\n}` },
   dropdownbutton:    { title: 'DropDownButtonView',     desc: 'Split button — primary action + chevron dropdown — Save as, Export as, etc.',      vars: VARS_BTN,        content: <DropDownButtonPanel />,    code: `<DropDownButtonView\n  label="Save"\n  onClick={save}\n  items={[\n    { label: 'Save as JSON', onClick: saveJson },\n    { label: 'Save as YAML', onClick: saveYaml },\n  ]}\n/>` },
   contextmenu:       { title: 'ContextMenuView',        desc: 'Recursive context menu with submenus — portal rendered — collection tree style.',   vars: VARS_ACCENT,     content: <ContextMenuPanel />,       code: `function Preview() {\n  const [anchor, setAnchor] = useState(null);\n  const [open, setOpen] = useState(false);\n  return (\n    <div>\n      <ButtonView\n        variant="secondary"\n        onClick={e => { setAnchor(e.currentTarget); setOpen(true); }}\n      >\n        Open context menu\n      </ButtonView>\n      <ContextMenuView\n        anchorEl={anchor}\n        open={open}\n        onClose={() => setOpen(false)}\n        items={[\n          { id: 'new',    label: 'New Request', icon: <PlusIcon size={13} />,   onClick: () => setOpen(false) },\n          { id: 'rename', label: 'Rename',      icon: <RenameIcon size={13} />, onClick: () => setOpen(false) },\n          { id: 'sep', label: '', separator: true },\n          { id: 'del',    label: 'Delete',      icon: <TrashIcon size={13} />, danger: true, onClick: () => setOpen(false) },\n        ]}\n      />\n    </div>\n  );\n}` },
-  tabs:              { title: 'TabView',                desc: 'pill · underline · gql (closeable+scrollable+addable) — all with accentColor.',     vars: VARS_ACCENT,     content: <TabsPanel />,              code: `function Preview() {\n  const [active, setActive] = useState('params');\n  return (\n    <TabView\n      variant="pill"\n      tabs={[\n        { id: 'params',  label: 'Params',  badge: 2 },\n        { id: 'headers', label: 'Headers', badge: 4 },\n        { id: 'body',    label: 'Body' },\n        { id: 'auth',    label: 'Auth', dot: true, dotColor: 'var(--color-success)' },\n      ]}\n      active={active}\n      onChange={setActive}\n    />\n  );\n}` },
+  tabs:              { title: 'TabView',                desc: 'pill · underline variants — sliding indicator, badges, dots — all with accentColor.',  vars: VARS_PILLTAB,   content: <TabsPanel />,              code: `function Preview() {\n  const [active, setActive] = useState('params');\n  return (\n    <TabView\n      variant="pill"\n      tabs={[\n        { id: 'params',  label: 'Params',  badge: 2 },\n        { id: 'headers', label: 'Headers', badge: 4 },\n        { id: 'body',    label: 'Body' },\n        { id: 'auth',    label: 'Auth', dot: true, dotColor: 'var(--color-success)' },\n      ]}\n      activeTab={active}\n      onChange={setActive}\n    />\n  );\n}` },
   tabbar:            { title: 'TabBarView',             desc: 'VS Code-style protocol tab bar — store-free, drag-free, scroll arrows, dirty dot.', vars: VARS_ACCENT,     content: <TabBarPanel />,            code: `function Preview() {\n  const [tabs, setTabs] = useState([\n    { id: '1', label: 'GET /users', type: 'request', protocol: 'rest',    method: 'GET' },\n    { id: '2', label: 'getUsers',   type: 'request', protocol: 'graphql' },\n    { id: '3', label: 'Chat.Send',  type: 'request', protocol: 'grpc'    },\n  ]);\n  const [activeId, setActiveId] = useState('1');\n  return (\n    <TabBarView\n      tabs={tabs}\n      activeTabId={activeId}\n      onTabClick={setActiveId}\n      onTabClose={id => {\n        const remaining = tabs.filter(t => t.id !== id);\n        setTabs(remaining);\n        if (activeId === id) setActiveId(remaining[0]?.id ?? '');\n      }}\n      onAddTab={() => {\n        const id = String(Date.now());\n        setTabs(t => [...t, { id, label: 'New Request', type: 'request', protocol: 'rest', method: 'GET' }]);\n        setActiveId(id);\n      }}\n      accentColor="var(--color-protocol-rest)"\n    />\n  );\n}` },
-  keyvalue:          { title: 'KeyValueItemView',       desc: 'Single KV row — circle toggle · masked values · drag handle · delete on hover.',   vars: VARS_INPUT,      content: <KeyValuePanel />,          code: `function Preview() {\n  const [enabled, setEnabled] = useState(true);\n  const [k, setK] = useState('Authorization');\n  const [v, setV] = useState('Bearer {{token}}');\n  return (\n    <KeyValueItemView\n      keyValue={k}\n      onKeyChange={setK}\n      value={v}\n      onValueChange={setV}\n      enabled={enabled}\n      onToggleEnabled={() => setEnabled(x => !x)}\n      onDelete={() => {}}\n    />\n  );\n}` },
   editor:            { title: 'EditorView',             desc: 'Monaco editor wrapper — simplified props — JSON / GQL / XML / YAML etc.',           vars: VARS_ACCENT,     content: <EditorPanel />,            code: `function Preview() {\n  const [body, setBody] = useState('{ "name": "Alice", "role": "admin" }');\n  return (\n    <EditorView\n      value={body}\n      onChange={setBody}\n      language="json"\n      height={300}\n      readOnly={false}\n    />\n  );\n}` },
   patterns:          { title: 'Real-world Patterns',    desc: 'How DUI components assemble into actual Daakia UI — URL bar · tabs · tree.',        content: <PatternsPanel />, noExamplesHeader: true },
   toggle:            { title: 'ToggleSwitchView',       desc: 'On/off toggle with sm/md/lg sizes, accent color, label positions, disabled state.', vars: VARS_TOGGLE,     content: <ToggleSwitchPanel />,      code: `function Preview() {\n  const [enabled, setEnabled] = useState(true);\n  return (\n    <ToggleSwitchView\n      checked={enabled}\n      onChange={setEnabled}\n      label="Enable SSL"\n      size="md"\n    />\n  );\n}` },
@@ -1583,12 +1279,10 @@ const PANELS: Record<CategoryId, { title: string; desc: string; content: React.R
   iconsgallery:      { title: 'Icons Gallery',          desc: 'All Daakia icons — searchable by name — click to copy icon name.',                   content: <IconsGalleryPanel />, noExamplesHeader: true },
   themeconfig:       { title: 'Theme Customization',    desc: 'Export / upload YAML theme files — all 63 CSS color vars, live hot-swap, no rebuild.', content: <ThemeCustomizationPanel />, noExamplesHeader: true },
   themeaddvar:       { title: 'Add Theme Variable',     desc: 'Step-by-step guide: register a new CSS color variable in SCHEMA, declare it in index.css, use it in any DUI component, and test it live.', content: <ThemeAddVarGuidePanel />, noExamplesHeader: true },
-  searchinput:       { title: 'SearchInputView',        desc: 'URL-bar style search input with optional prefix icon and suffix clear button.',        vars: VARS_INPUT,      content: <SearchInputPanel />,       code: `function Preview() {\n  const [q, setQ] = useState('');\n  return (\n    <SearchInputView\n      value={q}\n      onChange={setQ}\n      placeholder="Search collections…"\n      prefix={<SearchIcon size={11} />}\n      suffix={q ? <button onClick={() => setQ('')}><CloseIcon size={10} /></button> : null}\n    />\n  );\n}` },
+  searchinput:       { title: 'SearchInputView',        desc: 'URL-bar style search input with optional prefix icon and suffix clear button.',        vars: VARS_INPUT,      content: <SearchInputPanel />,       code: `function Preview() {\n  const [q, setQ] = useState('');\n  return (\n    <div style={{height: 11, width: '20vw'}}>\n\t\t <SearchInputView\n      value={q}\n      onChange={setQ}\n      placeholder="Search collections…"\n      prefix={<SearchIcon size={11} />}\n      suffix={q ? <button onClick={() => setQ('')}><CloseIcon size={10} /></button> : null}\n    />\n\t\t</div>\n  );\n}` },
   durationinput:     { title: 'DurationInputView',      desc: 'Number input with ms / s / m / hr unit selector dropdown.',                           vars: VARS_DUR,        content: <DurationInputPanel />,     code: `function Preview() {\n  const [timeout, setTimeout] = useState(5000);\n  return (\n    <DurationInputView\n      value={timeout}\n      onChange={setTimeout}\n    />\n  );\n}` },
-  pilltabs:          { title: 'PillTabsView',           desc: 'Sliding-indicator tabs — pill (background) and underline variants — with badges and dots.',  vars: VARS_PILLTAB, content: <PillTabsPanel />, code: `function Preview() {\n  const [active, setActive] = useState('body');\n  return (\n    <PillTabsView\n      tabs={[\n        { id: 'body',    label: 'Body' },\n        { id: 'headers', label: 'Headers', badge: 3 },\n        { id: 'auth',    label: 'Auth', dot: true },\n      ]}\n      activeTab={active}\n      onChange={setActive}\n      variant="pill"\n    />\n  );\n}` },
-  splitbutton:       { title: 'SplitButtonView',        desc: 'Primary action + chevron dropdown — separate click zones, keyboard nav, portal menu.',  vars: VARS_BTN,    content: <SplitButtonPanel />,       code: `function Preview() {\n  const [lastAction, setLastAction] = useState('—');\n  return (\n    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>\n      <SplitButtonView\n        label="Send"\n        variant="primary"\n        onClick={() => setLastAction('Send clicked')}\n        items={[\n          { id: 'save', label: 'Save & Send', onClick: () => setLastAction('Save & Send') },\n          { id: 'dry',  label: 'Dry Run',     onClick: () => setLastAction('Dry Run') },\n        ]}\n      />\n      <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Last: {lastAction}</span>\n    </div>\n  );\n}` },
   highlightedinput:  { title: 'HighlightedInputView',   desc: '{{variable}} highlighted URL input with autocomplete dropdown — the Daakia URL bar.',   vars: VARS_INPUT,  content: <HighlightedInputPanel />,  code: `function Preview() {\n  const [url, setUrl] = useState('https://api.example.com/{{env}}/users/{{userId}}');\n  return (\n    <HighlightedInputView\n      value={url}\n      onChange={setUrl}\n      placeholder="https://api.example.com/{{env}}/users"\n      suggestions={urlHistory}\n    />\n  );\n}` },
-  keyvaluetable:     { title: 'KeyValueTableView',      desc: 'Full KV table with toolbar, row add/delete, bulk clear, enabled toggles — wraps KeyValueItemView rows.',  vars: VARS_TABLE, content: <KeyValueTablePanel />, code: `function Preview() {\n  const [rows, setRows] = useState([\n    { id: '1', key: 'Authorization', value: 'Bearer {{token}}', enabled: true },\n    { id: '2', key: 'Content-Type',  value: 'application/json', enabled: true },\n    { id: '3', key: 'X-Request-Id',  value: '{{requestId}}',    enabled: false },\n  ]);\n  return (\n    <KeyValueTableView\n      rows={rows}\n      onChange={setRows}\n      label="Request Headers"\n      accentColor="var(--color-protocol-rest)"\n      placeholder={{ key: 'Header name', value: 'Header value' }}\n    />\n  );\n}` },
+  keyvaluetable:     { title: 'KeyValueTableView',      desc: 'KV table — toolbar · add/delete/bulk-clear · enable toggle · maskSensitive · autocompleteKeys · showDescription · pinnedTopRows · HiddenKeyValueItemView.',  vars: VARS_TABLE, content: <KeyValueTablePanel />, code: `function Preview() {\n  const [rows, setRows] = useState([\n    { id: '1', key: 'Authorization', value: 'Bearer {{token}}', enabled: true },\n    { id: '2', key: 'Content-Type',  value: 'application/json', enabled: true },\n    { id: '3', key: 'X-Request-Id',  value: '{{requestId}}',    enabled: false },\n  ]);\n  return (\n    <KeyValueTableView\n      rows={rows}\n      onChange={setRows}\n      label="Request Headers"\n      maskSensitive\n      autocompleteKeys\n      accentColor="var(--color-protocol-rest)"\n      placeholder={{ key: 'Header', value: 'Value' }}\n    />\n  );\n}` },
   mergedinput:       { title: 'MergedInputView',         desc: 'Unified single-border input bar — merge select dropdowns, text inputs, inline buttons, and dividers into one pill.',  vars: VARS_INPUT, content: <MergedInputViewPanel />, code: `function Preview() {\n  const [version, setVersion] = useState('1.1');\n  const [url, setUrl] = useState('https://service.example.com/endpoint');\n  const soapVersions = [\n    { label: 'SOAP 1.1', value: '1.1' },\n    { label: 'SOAP 1.2', value: '1.2' },\n  ];\n  return (\n    <MergedInputView\n      segments={[\n        { type: 'select', value: version, options: soapVersions, onChange: setVersion, width: 96 },\n        { type: 'divider' },\n        { type: 'button', label: 'WSDL', onClick: openWsdl,\n          accentColor: 'var(--color-protocol-soap)' },\n        { type: 'divider' },\n        { type: 'text', value: url, onChange: setUrl, placeholder: 'https://service.example.com/endpoint' },\n      ]}\n      accentColor="var(--color-protocol-soap)"\n    />\n  );\n}` },
   duiprovider:       { title: 'DuiProvider — Size System', desc: 'Wrap any subtree with <DuiProvider size="sm|md|lg|xl"> and ALL nested DUI components inherit that size — buttons, inputs, toggles, tabs, nav items. No prop drilling.', vars: VARS_ACCENT, content: <DuiProviderPanel />, noExamplesHeader: true },
   hudview:           { title: 'HudView', desc: 'Generic floating draggable toolbar — store-free counterpart of DebugHud. Pass items[] (icon + onClick + optional active/disabled/separator) and an optional status string. Drag grip lets users reposition it.', vars: VARS_ACCENT, content: <HudViewPanel />, code: `function Preview() {\n  const [muted, setMuted] = useState(false);\n  return (\n    <HudView\n      items={[\n        { id: 'continue', icon: <PlayIcon size={13} />, title: 'Continue (F5)' },\n        { id: 'step-over', icon: <StepOverIcon size={13} />, title: 'Step Over', separator: true },\n        { id: 'mute', icon: <MuteBreakpointsIcon size={13} />, title: muted ? 'Unmute breakpoints' : 'Mute all breakpoints', active: muted, onClick: () => setMuted(v => !v) },\n      ]}\n      status="Paused — Line 42"\n    />\n  );\n}` },

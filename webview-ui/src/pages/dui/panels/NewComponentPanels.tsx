@@ -6,8 +6,8 @@ import {
   SideNavView, SettingsNavView, ThemeCardSelectorView, FeatureCategoryView,
   TagInputView, BottomPanelView, ToastView, PromptCardView,
   PromptLibraryListView, PromptLibraryEditorView, EditorView,
-  SearchInputView, DurationInputView, PillTabsView, SplitButtonView,
-  HighlightedInputView, KeyValueTableView,
+  SearchInputView, DurationInputView, TabView,
+  HighlightedInputView, KeyValueTableView, HiddenKeyValueItemView,
   MergedInputView, MergeDivider,
   HudView,
   CollapsibleSectionView,
@@ -24,7 +24,7 @@ import type { HudItem, FormDataRow, LiveColorVar } from '../../../dui';
 import type { MergedInputSegment } from '../../../dui';
 import type {
   ContextMenuItem, PromptLibrarySection, PromptLibraryEditorTab,
-  KeyValueTableRow, SplitButtonViewItem, PillTabItem,
+  KeyValueTableRow, PinnedKeyValueRow, TabItem,
 } from '../../../dui';
 import {
   SearchIcon, SettingsIcon, ServerIcon, LayersIcon, RestApiIcon,
@@ -139,21 +139,30 @@ export function ToggleSwitchPanel() {
 export function CheckboxPanel() {
   const [c1, setC1] = useState(true);
   const [c2, setC2] = useState(false);
+  const [pkce, setPkce] = useState(false);
   return (
     <div>
-      <Row label="States checked / unchecked / indeterminate / disabled" code={`<CheckboxView checked={true}  onChange={setChecked} label="Checked" />\n<CheckboxView checked={false} onChange={setChecked} label="Unchecked" />\n<CheckboxView checked="indeterminate" onChange={setChecked} label="Indeterminate" />\n<CheckboxView checked={false} onChange={() => {}} disabled label="Disabled" />`}>
+      <Row label="States checked / unchecked / indeterminate / disabled" code={`<CheckboxView checked={true}  onChange={setChecked} label="Checked" />\n<CheckboxView checked={false} onChange={setChecked} label="Unchecked" />\n<CheckboxView checked={false} indeterminate onChange={setChecked} label="Indeterminate" />\n<CheckboxView checked={false} onChange={() => {}} disabled label="Disabled" />`}>
         <CheckboxView checked={true}  onChange={() => {}} label="Checked" />
         <CheckboxView checked={false} onChange={() => {}} label="Unchecked" />
         <CheckboxView checked={false} indeterminate onChange={() => {}} label="Indeterminate" />
         <CheckboxView checked={false} onChange={() => {}} disabled label="Disabled" />
         <CheckboxView checked={true}  onChange={() => {}} disabled label="Disabled checked" />
       </Row>
-      <Row label="Sizes sm / md / lg" code={`<CheckboxView checked={checked} onChange={setChecked} size="sm" label="Small" />\n<CheckboxView checked={checked} onChange={setChecked} size="md" label="Medium" />\n<CheckboxView checked={checked} onChange={setChecked} size="lg" label="Large" />`}>
-        <CheckboxView checked={c1} onChange={setC1} size="sm" label="Small" />
-        <CheckboxView checked={c1} onChange={setC1} size="md" label="Medium" />
-        <CheckboxView checked={c1} onChange={setC1} size="lg" label="Large" />
+      <Row label="Sizes xxs / xs / sm / md / lg — label font steps down one size for compact look" code={`<CheckboxView checked={checked} onChange={setChecked} size="xs"  label="Extra small" />\n<CheckboxView checked={checked} onChange={setChecked} size="sm"  label="Small" />\n<CheckboxView checked={checked} onChange={setChecked} size="md"  label="Medium" />\n<CheckboxView checked={checked} onChange={setChecked} size="lg"  label="Large" />`}>
+        <CheckboxView checked={c1} onChange={setC1} size="xxs" label="XXS" />
+        <CheckboxView checked={c1} onChange={setC1} size="xs"  label="Extra small" />
+        <CheckboxView checked={c1} onChange={setC1} size="sm"  label="Small" />
+        <CheckboxView checked={c1} onChange={setC1} size="md"  label="Medium" />
+        <CheckboxView checked={c1} onChange={setC1} size="lg"  label="Large" />
       </Row>
-      <Row label="Protocol accent colors" code={`// Pass any CSS variable or hex to accentColor\n<CheckboxView checked={v} onChange={setV} accentColor="var(--color-protocol-rest)"  label="REST" />\n<CheckboxView checked={v} onChange={setV} accentColor="var(--color-protocol-graphql)" label="GQL" />\n<CheckboxView checked={v} onChange={setV} accentColor="var(--color-success)"  label="OK" />\n<CheckboxView checked={v} onChange={setV} accentColor="var(--color-warning)"  label="Warn" />`}>
+      <Row label="Form field usage — checkbox inline in a settings row (like Auth → Use PKCE)" code={`// Inline in a label-row pattern\n<div style={{ display:'flex', alignItems:'center', gap:8 }}>\n  <span style={{ fontSize:12, color:'var(--color-text-muted)', width:120 }}>Use PKCE</span>\n  <CheckboxView checked={pkce} onChange={setPkce} size="md" label="Enable PKCE (S256)" />\n</div>`}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px' }}>
+          <span style={{ fontSize: 12, color: 'var(--color-text-muted)', width: 120, flexShrink: 0 }}>Use PKCE</span>
+          <CheckboxView checked={pkce} onChange={setPkce} size="md" label="Enable PKCE (S256)" />
+        </div>
+      </Row>
+      <Row label="Protocol accent colors" code={`<CheckboxView checked={v} onChange={setV} accentColor="var(--color-protocol-rest)"    label="REST" />\n<CheckboxView checked={v} onChange={setV} accentColor="var(--color-protocol-graphql)" label="GQL" />\n<CheckboxView checked={v} onChange={setV} accentColor="var(--color-success)"          label="OK" />\n<CheckboxView checked={v} onChange={setV} accentColor="var(--color-warning)"          label="Warn" />`}>
         {(['var(--color-protocol-rest)', 'var(--color-protocol-graphql)', 'var(--color-success)', 'var(--color-warning)'] as const).map(color => (
           <CheckboxView key={color} checked={c2} onChange={setC2} accentColor={color} label="Check me" />
         ))}
@@ -993,7 +1002,14 @@ export function AIButtonPanel() {
           <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Click the button to see "Thinking…" for 1.5s</span>
         </Block>
       </Row>
-      <Row label="Compact mode (22px height) vs normal (26px)" code={`<AIButtonView action="generate" compact />\n<AIButtonView action="explain" compact />`}>
+      <Row label="Size scale — sm (24px) / xs (20px) / xxs (16px)" code={`<AIButtonView action="generate" size="sm" />\n<AIButtonView action="explain" size="xs" />\n<AIButtonView action="suggest" size="xxs" />`}>
+        <Block style={{ display: 'flex', gap: '8px', padding: '16px', alignItems: 'center' }}>
+          <AIButtonView action="generate" size="sm" />
+          <AIButtonView action="explain" size="xs" />
+          <AIButtonView action="suggest" size="xxs" />
+        </Block>
+      </Row>
+      <Row label="compact prop → xs (20px)" code={`<AIButtonView action="generate" compact />\n<AIButtonView action="explain" compact />`}>
         <Block style={{ display: 'flex', gap: '8px', padding: '16px', alignItems: 'center' }}>
           <AIButtonView action="generate" compact />
           <AIButtonView action="explain" compact />
@@ -1630,66 +1646,37 @@ export function DurationInputPanel() {
   );
 }
 
-// ─── E6.176 — PillTabsView ────────────────────────────────────────────────────
+// ─── E6.176 — TabView ─────────────────────────────────────────────────────────
 
-const PILL_TABS: PillTabItem[] = [
+const PILL_TABS: TabItem[] = [
   { id: 'params',  label: 'Params',  badge: 3 },
   { id: 'headers', label: 'Headers', badge: 5 },
   { id: 'body',    label: 'Body',    dot: true, dotColor: 'var(--color-warning)' },
   { id: 'auth',    label: 'Auth' },
 ];
 
-export function PillTabsPanel() {
+export function TabsPanel() {
   const [a1, setA1] = useState('params');
   const [a2, setA2] = useState('params');
   const [a3, setA3] = useState('params');
   const [a4, setA4] = useState('params');
   return (
     <div>
-      <Row label='variant="pill" (default) — sliding background indicator' code={`<PillTabsView\n  tabs={[\n    { id: 'params',  label: 'Params',  badge: 3 },\n    { id: 'headers', label: 'Headers', badge: 5 },\n    { id: 'body',    label: 'Body',    dot: true, dotColor: 'var(--color-warning)' },\n    { id: 'auth',    label: 'Auth' },\n  ]}\n  activeTab={active}\n  onChange={setActive}\n  variant="pill"\n/>`}>
-        <PillTabsView tabs={PILL_TABS} activeTab={a1} onChange={setA1} />
+      <Row label='variant="pill" (default) — sliding background indicator' code={`<TabView\n  tabs={[\n    { id: 'params',  label: 'Params',  badge: 3 },\n    { id: 'headers', label: 'Headers', badge: 5 },\n    { id: 'body',    label: 'Body',    dot: true, dotColor: 'var(--color-warning)' },\n    { id: 'auth',    label: 'Auth' },\n  ]}\n  activeTab={active}\n  onChange={setActive}\n  variant="pill"\n/>`}>
+        <TabView tabs={PILL_TABS} activeTab={a1} onChange={setA1} />
       </Row>
-      <Row label='variant="underline" — sliding underline indicator' code={`<PillTabsView tabs={tabs} activeTab={active} onChange={setActive} variant="underline" />`}>
-        <PillTabsView tabs={PILL_TABS} activeTab={a2} onChange={setA2} variant="underline" />
+      <Row label='variant="underline" — sliding underline indicator' code={`<TabView tabs={tabs} activeTab={active} onChange={setActive} variant="underline" />`}>
+        <TabView tabs={PILL_TABS} activeTab={a2} onChange={setA2} variant="underline" />
       </Row>
-      <Row label="Protocol accent colors — pill variant" code={`<PillTabsView tabs={restTabs} activeTab={active} onChange={setActive} accentColor="var(--color-protocol-rest)" />\n<PillTabsView tabs={gqlTabs}  activeTab={active} onChange={setActive} accentColor="var(--color-protocol-graphql)" />`}>
+      <Row label="Protocol accent colors — pill variant" code={`<TabView tabs={restTabs} activeTab={active} onChange={setActive} accentColor="var(--color-protocol-rest)" />\n<TabView tabs={gqlTabs}  activeTab={active} onChange={setActive} accentColor="var(--color-protocol-graphql)" />`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <PillTabsView tabs={[{ id: 'a', label: 'Request' }, { id: 'b', label: 'Response' }, { id: 'c', label: 'Scripts' }]} activeTab={a3} onChange={setA3} accentColor="var(--color-protocol-rest)" />
-          <PillTabsView tabs={[{ id: 'a', label: 'Query' }, { id: 'b', label: 'Variables' }, { id: 'c', label: 'Schema' }]} activeTab={a4} onChange={setA4} accentColor="var(--color-protocol-graphql)" />
+          <TabView tabs={[{ id: 'a', label: 'Request' }, { id: 'b', label: 'Response' }, { id: 'c', label: 'Scripts' }]} activeTab={a3} onChange={setA3} accentColor="var(--color-protocol-rest)" />
+          <TabView tabs={[{ id: 'a', label: 'Query' }, { id: 'b', label: 'Variables' }, { id: 'c', label: 'Schema' }]} activeTab={a4} onChange={setA4} accentColor="var(--color-protocol-graphql)" />
         </div>
       </Row>
-      <Row label="Size sm vs md" code={`<PillTabsView tabs={tabs} activeTab={active} onChange={setActive} size="sm" />\n<PillTabsView tabs={tabs} activeTab={active} onChange={setActive} size="md" />`}>
-        <PillTabsView tabs={PILL_TABS} activeTab={a1} onChange={setA1} size="sm" />
-        <PillTabsView tabs={PILL_TABS} activeTab={a1} onChange={setA1} size="md" />
-      </Row>
-    </div>
-  );
-}
-
-// ─── E6.176 — SplitButtonView ─────────────────────────────────────────────────
-
-const SPLIT_ITEMS: SplitButtonViewItem[] = [
-  { id: 'save-send', label: 'Save & Send', onClick: () => alert('Save & Send') },
-  { id: 'dry-run',   label: 'Dry Run',     onClick: () => alert('Dry Run') },
-  { id: 'schedule',  label: 'Schedule…',   dividerBefore: true, onClick: () => alert('Schedule') },
-];
-
-export function SplitButtonPanel() {
-  return (
-    <div>
-      <Row label="Variants — primary / secondary / danger" code={`<SplitButtonView\n  label="Send"\n  variant="primary"\n  onClick={send}\n  items={[\n    { id: 'save-send', label: 'Save & Send', onClick: saveAndSend },\n    { id: 'dry-run',   label: 'Dry Run',     onClick: dryRun },\n    { id: 'schedule',  label: 'Schedule…',   dividerBefore: true, onClick: schedule },\n  ]}\n/>`}>
-        <SplitButtonView label="Send"   variant="primary"   items={SPLIT_ITEMS} onClick={() => alert('Send!')} />
-        <SplitButtonView label="Save"   variant="secondary" items={SPLIT_ITEMS} onClick={() => alert('Save!')} />
-        <SplitButtonView label="Delete" variant="danger"    items={SPLIT_ITEMS} onClick={() => alert('Delete!')} />
-      </Row>
-      <Row label="Sizes — sm / md" code={`<SplitButtonView label="Send" size="sm" items={items} onClick={send} />\n<SplitButtonView label="Send" size="md" items={items} onClick={send} />`}>
-        <SplitButtonView label="Send" size="sm" items={SPLIT_ITEMS} onClick={() => alert('sm')} />
-        <SplitButtonView label="Send" size="md" items={SPLIT_ITEMS} onClick={() => alert('md')} />
-      </Row>
-      <Row label="Protocol accent color" code={`<SplitButtonView label="Send"    variant="primary" accentColor="var(--color-protocol-rest)"      items={items} onClick={send} />\n<SplitButtonView label="Run"     variant="primary" accentColor="var(--color-protocol-graphql)"   items={items} onClick={run} />\n<SplitButtonView label="Connect" variant="primary" accentColor="var(--color-protocol-websocket)" items={items} onClick={connect} />`}>
-        <SplitButtonView label="Send"    variant="primary" accentColor="var(--color-protocol-rest)"      items={SPLIT_ITEMS} onClick={() => alert('REST')} />
-        <SplitButtonView label="Run"     variant="primary" accentColor="var(--color-protocol-graphql)"   items={SPLIT_ITEMS} onClick={() => alert('GQL')} />
-        <SplitButtonView label="Connect" variant="primary" accentColor="var(--color-protocol-websocket)" items={SPLIT_ITEMS} onClick={() => alert('WS')} />
+      <Row label="Size sm vs md" code={`<TabView tabs={tabs} activeTab={active} onChange={setActive} size="sm" />\n<TabView tabs={tabs} activeTab={active} onChange={setActive} size="md" />`}>
+        <TabView tabs={PILL_TABS} activeTab={a1} onChange={setA1} size="sm" />
+        <TabView tabs={PILL_TABS} activeTab={a1} onChange={setA1} size="md" />
       </Row>
     </div>
   );
@@ -1754,11 +1741,16 @@ export function HighlightedInputPanel() {
 
 function newKvRow(): KeyValueTableRow { return { id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true }; }
 
+const PINNED_ROWS: PinnedKeyValueRow[] = [
+  { id: 'auth', key: 'Authorization', value: 'Bearer eyJhbGciOiJIUzI1NiJ9...', description: 'Set via Auth tab', masked: true, deletable: true },
+  { id: 'ct',   key: 'Content-Type',  value: 'application/json',               description: 'Set by body type' },
+];
+
 export function KeyValueTablePanel() {
   const [headers, setHeaders] = useState<KeyValueTableRow[]>([
-    { id: '1', key: 'Content-Type',  value: 'application/json',  enabled: true },
-    { id: '2', key: 'Authorization', value: 'Bearer {{token}}',  enabled: true },
-    { id: '3', key: 'X-Request-ID',  value: '{{requestId}}',     enabled: false },
+    { id: '1', key: 'Content-Type',  value: 'application/json', description: 'Sets the content type of the request body', enabled: true },
+    { id: '2', key: 'Authorization', value: 'Bearer {{token}}', description: 'JWT auth token for protected endpoints',    enabled: true },
+    { id: '3', key: 'X-Request-ID',  value: '{{requestId}}',    description: 'Unique request correlation ID',             enabled: false },
     newKvRow(),
   ]);
   const [params, setParams] = useState<KeyValueTableRow[]>([
@@ -1767,18 +1759,29 @@ export function KeyValueTablePanel() {
     { id: 'p3', key: 'sort',  value: 'name', enabled: false },
     newKvRow(),
   ]);
+  const [pinnedRows] = useState<PinnedKeyValueRow[]>(PINNED_ROWS);
+  const [userRows, setUserRows] = useState<KeyValueTableRow[]>([
+    { id: 'h1', key: 'X-Api-Key', value: '{{api_key}}', enabled: true },
+    newKvRow(),
+  ]);
+
   return (
     <div>
-      <Row label="Request Headers table — add / enable / delete rows" gap={0} align="flex-start" code={`<KeyValueTableView\n  rows={headers}\n  onChange={setHeaders}\n  label="Request Headers"\n  accentColor="var(--color-protocol-rest)"\n  placeholder={{ key: 'Header name', value: 'Header value' }}\n/>`}>
+      {/* Request Headers — maskSensitive + autocompleteKeys + accentColor */}
+      <Row label="Request Headers — maskSensitive · autocompleteKeys · InsertRowDivider on hover" gap={0} align="flex-start" code={`<KeyValueTableView\n  rows={headers}\n  onChange={setHeaders}\n  label="Request Headers"\n  maskSensitive\n  autocompleteKeys\n  accentColor="var(--color-protocol-rest)"\n  placeholder={{ key: 'Header', value: 'Value' }}\n/>`}>
         <KeyValueTableView
           rows={headers}
           onChange={setHeaders}
           label="Request Headers"
+          maskSensitive
+          autocompleteKeys
           accentColor="var(--color-protocol-rest)"
-          placeholder={{ key: 'Header name', value: 'Header value' }}
+          placeholder={{ key: 'Header', value: 'Value' }}
         />
       </Row>
-      <Row label="Query Parameters table" gap={0} align="flex-start" code={`<KeyValueTableView\n  rows={params}\n  onChange={setParams}\n  label="Query Parameters"\n  accentColor="var(--color-protocol-graphql)"\n  placeholder={{ key: 'Parameter', value: 'Value' }}\n/>`}>
+
+      {/* Query Parameters — different accent color */}
+      <Row label="Query Parameters" gap={0} align="flex-start" code={`<KeyValueTableView\n  rows={params}\n  onChange={setParams}\n  label="Query Parameters"\n  accentColor="var(--color-protocol-graphql)"\n  placeholder={{ key: 'Parameter', value: 'Value' }}\n/>`}>
         <KeyValueTableView
           rows={params}
           onChange={setParams}
@@ -1787,14 +1790,56 @@ export function KeyValueTablePanel() {
           placeholder={{ key: 'Parameter', value: 'Value' }}
         />
       </Row>
-      <Row label="With description column" gap={0} align="flex-start" code={`<KeyValueTableView\n  rows={headers}\n  onChange={setHeaders}\n  showDescription\n  label="Headers (with description)"\n  placeholder={{ key: 'Name', value: 'Value', description: 'Description' }}\n/>`}>
+
+      {/* showDescription — 3-column Key / Value / Description layout */}
+      <Row label="showDescription — 3-column layout · Key · Value · Description (stored in DB, not sent in request)" gap={0} align="flex-start" code={`<KeyValueTableView\n  rows={headers}\n  onChange={setHeaders}\n  showDescription\n  maskSensitive\n  label="Headers"\n  placeholder={{ key: 'Header', value: 'Value' }}\n/>`}>
         <KeyValueTableView
           rows={headers}
           onChange={setHeaders}
           showDescription
-          label="Headers (with description)"
-          placeholder={{ key: 'Name', value: 'Value' }}
+          maskSensitive
+          label="Headers"
+          placeholder={{ key: 'Header', value: 'Value' }}
         />
+      </Row>
+
+      {/* pinnedTopRows — computed system headers above editable list */}
+      <Row label="pinnedTopRows — auto-computed rows · eye toggle · lock icon · dashed border · optional deletable" gap={0} align="flex-start" code={`const pinnedRows: PinnedKeyValueRow[] = [\n  { id: 'auth', key: 'Authorization', value: 'Bearer ...', masked: true, deletable: true },\n  { id: 'ct',   key: 'Content-Type',  value: 'application/json' },\n];\n<KeyValueTableView\n  rows={userRows}\n  onChange={setUserRows}\n  maskSensitive\n  pinnedTopRows={pinnedRows}\n  onPinnedRemove={id => removePinned(id)}\n  label="Headers"\n/>`}>
+        <KeyValueTableView
+          rows={userRows}
+          onChange={setUserRows}
+          maskSensitive
+          pinnedTopRows={pinnedRows}
+          onPinnedRemove={() => {}}
+          label="Headers"
+          accentColor="var(--color-protocol-rest)"
+        />
+      </Row>
+
+      {/* HiddenKeyValueItemView — standalone read-only system rows */}
+      <Row label="HiddenKeyValueItemView — lock icon · dashed border · masked · badge · delete action" align="flex-start" code={`<HiddenKeyValueItemView\n  keyValue="Authorization"\n  value="Bearer eyJhbGci..."\n  badge="auth"\n  badgeColor="var(--color-primary)"\n  masked\n  onDelete={() => clearAuth()}\n  deleteTitle="Clear auth"\n/>`}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+          <HiddenKeyValueItemView
+            keyValue="Authorization"
+            value="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NSJ9"
+            badge="auth"
+            badgeColor="var(--color-primary)"
+            masked
+            onDelete={() => {}}
+            deleteTitle="Clear auth (sets auth type to None)"
+          />
+          <HiddenKeyValueItemView
+            keyValue="Cookie"
+            value="session_id=abc123xyz; csrf_token=def456"
+            badge="cookie"
+            badgeColor="var(--color-warning)"
+            masked
+          />
+          <HiddenKeyValueItemView
+            keyValue="Content-Type"
+            value="application/json"
+          />
+        </div>
       </Row>
     </div>
   );

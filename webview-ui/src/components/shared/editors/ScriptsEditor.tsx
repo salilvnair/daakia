@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
-import { PillTabs } from '../controls/PillTabs';
-import { CodeEditor } from './CodeEditor';
+import { TabView, EditorView } from '../../../dui';
 import { SnippetsPanel } from './SnippetsPanel';
 import { useDebugStore } from '../../../store/debug-store';
 import { useTabsStore } from '../../../store/tabs-store';
@@ -135,14 +134,14 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
       <div className="flex items-center justify-between border-b border-[var(--color-surface-border)]">
-        <PillTabs
+        <TabView
           tabs={[
             { id: 'pre-request', label: 'Pre-request', dot: !!preRequestScript.trim() },
             { id: 'post-response', label: 'Post-response', dot: !!postResponseScript.trim() },
           ]}
           activeTab={activeScript}
           onChange={setActiveScript}
-          size="sm"
+          size="md"
           variant="underline"
           accentColor={accentColor}
         />
@@ -171,7 +170,7 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
                 ? 'text-[var(--color-text-primary)]'
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
             }`}
-            style={aiEnabled ? { backgroundColor: 'color-mix(in srgb, #a78bfa 18%, transparent)', color: '#a78bfa' } : undefined}
+            style={aiEnabled ? { backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 18%, transparent)', color: 'var(--color-protocol-ai)' } : undefined}
           >
             <SparkleIcon size={10} />
             <span>AI</span>
@@ -184,7 +183,7 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
               title={aiMode === 'on-demand' ? 'On-demand mode (Ctrl+Alt+Space) — click for auto' : 'Auto mode (triggers after idle) — click for on-demand'}
               onClick={() => setAiMode(m => m === 'on-demand' ? 'on-type' : 'on-demand')}
               className="px-1.5 py-1 text-[9px] font-medium rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-              style={{ backgroundColor: 'color-mix(in srgb, #a78bfa 8%, transparent)', color: '#a78bfa' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)', color: 'var(--color-protocol-ai)' }}
             >
               {aiMode === 'on-demand' ? '⌃⌥Space' : 'auto'}
             </button>
@@ -212,13 +211,12 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
 
       <div className="flex flex-1 min-h-[200px] gap-0">
         <div className="flex-1 min-w-0 relative">
-            <CodeEditor
+            <EditorView
               key={`${activeTabId}-${currentPhase}`}
               value={activeScript === 'pre-request' ? preRequestScript : postResponseScript}
               onChange={(val) => {
                 if (activeScript === 'pre-request') onPreRequestScriptChange(val);
                 else onPostResponseScriptChange(val);
-                // Prune breakpoints that exceed new line count
                 const newLineCount = val.split('\n').length;
                 if (activeTabId) {
                   useDebugStore.getState().pruneBreakpoints(activeTabId, currentPhase, newLineCount);
@@ -228,6 +226,8 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
               readOnly={isDebuggingThisScript}
               placeholder={`// ${activeScript === 'pre-request' ? 'Pre-request script (JavaScript)...' : 'Post-response script — runs after the response is received...'}`}
               height="100%"
+              bordered
+              debugSupported
               breakpoints={breakpoints}
               disabledBreakpoints={disabledBreakpoints}
               conditionalBreakpointLines={conditionalLines}

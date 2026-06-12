@@ -2,14 +2,6 @@
  * Eight canonical sizes for all DUI components.
  * DuiProvider is the "parent" — every component inherits from it unless overridden.
  *
- *  xxs  → 16 px   (micro / dense badges)
- *  xs   → 20 px   (compact chips / inline controls)
- *  sm   → 24 px   (small toolbar buttons / table rows)
- *  md   → 28 px   (default / form inputs)            ← DuiProvider default
- *  lg   → 32 px   (comfortable / settings panels)
- *  xl   → 40 px   (prominent CTA / hero buttons)
- *  xxl  → 48 px   (large display / cards)
- *  xxxl → 56 px   (extra-large headings / splash controls)
  */
 export type DuiSize = 'xxs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'xxl' | 'xxxl';
 

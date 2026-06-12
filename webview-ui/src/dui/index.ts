@@ -4,7 +4,7 @@
 
 // ─── Core: size system, context, and category base hooks ─────────────────────
 export type { DuiSize, DuiRadius, DuiWidth, DuiFontStyle, DuiConfig } from './core/DuiTypes';
-export { DUI_HEIGHT, DUI_CHIP_HEIGHT, DUI_TOGGLE, DUI_CHECKBOX, DUI_ICON_SIZE, DUI_FONT_SIZE, DUI_PADDING_X, DUI_GAP, DUI_RADIUS_MAP, DUI_DEFAULT_RADIUS, DUI_WIDTH_MAP } from './core/DuiTokens';
+export { DUI_HEIGHT, DUI_CHIP_HEIGHT, DUI_TOGGLE, DUI_CHECKBOX, DUI_ICON_SIZE, DUI_FONT_SIZE, DUI_EDITOR_FONT_SIZE, DUI_PADDING_X, DUI_GAP, DUI_RADIUS_MAP, DUI_DEFAULT_RADIUS, DUI_WIDTH_MAP, DUI_SELECT_ITEM_PY } from './core/DuiTokens';
 export { DuiProvider, useDui, useDuiStyle, resolveBorderRadius, resolveWidth } from './core/DuiContext';
 export type { InputBaseConfig, InputContainerProps } from './core/InputBase';
 export { useInputBase } from './core/InputBase';
@@ -28,6 +28,10 @@ export type { OverlayBaseConfig, OverlayContainerProps } from './core/OverlayBas
 export { useOverlayBase } from './core/OverlayBase';
 export type { CardBaseConfig, CardContainerProps } from './core/CardBase';
 export { useCardBase } from './core/CardBase';
+export type { EditorBaseConfig, EditorContainerProps } from './core/EditorBase';
+export { useEditorBase } from './core/EditorBase';
+export type { SelectBaseConfig, SelectContainerProps } from './core/SelectBase';
+export { useSelectBase } from './core/SelectBase';
 
 export { ChipView } from './components/chips/ChipView';
 export type { ChipViewProps, ChipViewSize } from './components/chips/ChipView';
@@ -48,16 +52,13 @@ export { SelectInputView } from './components/input/SelectInputView';
 export type { SelectInputViewProps, SelectOption, SelectInputSize } from './components/input/SelectInputView';
 
 export { SelectTextInputView } from './components/input/SelectTextInputView';
-export type { SelectTextInputViewProps, SelectTextOption, SelectTextInputSize } from './components/input/SelectTextInputView';
-
-export { KeyValueItemView } from './components/input/KeyValueItemView';
-export type { KeyValueItemViewProps } from './components/input/KeyValueItemView';
+export type { SelectTextInputViewProps, SelectTextOption, SelectTextInputSize, MockServerSuggestion } from './components/input/SelectTextInputView';
 
 export { HiddenKeyValueItemView } from './components/input/HiddenKeyValueItemView';
 export type { HiddenKeyValueItemViewProps } from './components/input/HiddenKeyValueItemView';
 
 export { TabView } from './components/input/TabView';
-export type { TabViewProps, TabItem, TabViewVariant } from './components/input/TabView';
+export type { TabViewProps, TabItem, TabVariant } from './components/input/TabView';
 
 export { EditorView } from './components/input/EditorView';
 export type { EditorViewProps, EditorLanguage } from './components/input/EditorView';
@@ -162,8 +163,6 @@ export type { SearchInputViewProps } from './components/input/SearchInputView';
 export { DurationInputView } from './components/input/DurationInputView';
 export type { DurationInputViewProps, DurationUnit } from './components/input/DurationInputView';
 
-export { PillTabsView } from './components/input/PillTabsView';
-export type { PillTabsViewProps, PillTabItem, PillTabsVariant } from './components/input/PillTabsView';
 
 export { SplitButtonView } from './components/button/SplitButtonView';
 export type { SplitButtonViewProps, SplitButtonViewItem, SplitButtonViewVariant } from './components/button/SplitButtonView';
@@ -172,7 +171,10 @@ export { HighlightedInputView } from './components/input/HighlightedInputView';
 export type { HighlightedInputViewProps } from './components/input/HighlightedInputView';
 
 export { KeyValueTableView } from './components/input/KeyValueTableView';
-export type { KeyValueTableViewProps, KeyValueTableRow } from './components/input/KeyValueTableView';
+export type { KeyValueTableViewProps, KeyValueTableRow, PinnedKeyValueRow } from './components/input/KeyValueTableView';
+
+export { KeyValueTableRowView } from './components/input/KeyValueTableRowView';
+export type { KeyValueTableRowViewProps } from './components/input/KeyValueTableRowView';
 
 export { MergedInputView, MergeDivider } from './components/input/MergedInputView';
 export type { MergedInputViewProps, MergedInputSegment, MergedSelectOption, MergedInputSize } from './components/input/MergedInputView';

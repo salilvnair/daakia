@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DropdownArrowIcon } from '../../../icons';
+import type { DuiSize, DuiRadius, DuiWidth } from '../../core/DuiTypes';
+import { useSelectBase } from '../../core/SelectBase';
 import './SelectInputView.css';
 
 export interface SelectOption {
@@ -9,16 +11,19 @@ export interface SelectOption {
   icon?: React.ReactNode;
   color?: string;
   isHeader?: boolean;
+  /** Colored pill chip rendered before the label — { label: 'TS', color: 'var(--color-primary)' } */
+  badge?: { label: string; color: string };
 }
 
-export type SelectInputSize = 'xs' | 'default' | 'sm' | 'md' | 'lg' | 'xl';
+/** Backward-compatible size alias — accepts all DuiSize values plus legacy "default" (maps to "md"). */
+export type SelectInputSize = DuiSize | 'default';
 
 export interface SelectInputViewProps {
   options: SelectOption[];
   value: string;
   onChange: (value: string) => void;
   size?: SelectInputSize;
-  /** true = 4px radius (default), false = 0px */
+  /** true = size-derived radius (default), false = 0px */
   rounded?: boolean;
   placeholder?: string;
   accentColor?: string;
@@ -26,16 +31,32 @@ export interface SelectInputViewProps {
   className?: string;
   style?: React.CSSProperties;
   width?: string | number;
+  borderRadius?: DuiRadius | number;
 }
 
-const SIZE: Record<SelectInputSize, { h: string; px: string; text: string; itemPy: string; itemText: string }> = {
-  xs:      { h: '20px', px: '6px',  text: '10px', itemPy: '3px',  itemText: '10px' },
-  default: { h: '26px', px: '10px', text: '11px', itemPy: '5px',  itemText: '11px' },
-  sm:      { h: '22px', px: '8px',  text: '10px', itemPy: '4px',  itemText: '10px' },
-  md:      { h: '28px', px: '10px', text: '11px', itemPy: '6px',  itemText: '11px' },
-  lg:      { h: '32px', px: '12px', text: '12px', itemPy: '7px',  itemText: '12px' },
-  xl:      { h: '36px', px: '12px', text: '13px', itemPy: '9px',  itemText: '13px' },
-};
+function resolveSelectSize(size: SelectInputSize): DuiSize {
+  return size === 'default' ? 'md' : size;
+}
+
+function BadgeChip({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      style={{
+        fontSize: '8px',
+        fontWeight: 700,
+        padding: '1px 4px',
+        borderRadius: '3px',
+        lineHeight: 1,
+        flexShrink: 0,
+        letterSpacing: '0.03em',
+        backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`,
+        color,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
 
 export function SelectInputView({
   options,
@@ -49,15 +70,18 @@ export function SelectInputView({
   className = '',
   style,
   width,
+  borderRadius,
 }: SelectInputViewProps) {
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const { h, px, text, itemPy, itemText } = SIZE[size] ?? SIZE.default;
+  const duiSize = resolveSelectSize(size);
+  const base = useSelectBase(duiSize, { borderRadius });
+
   const accent = accentColor || 'var(--color-primary)';
-  const radius = rounded ? '4px' : '0px';
+  const radius = rounded ? base.borderRadius : '0px';
   const selected = options.find(o => o.value === value && !o.isHeader);
 
   // Portal positioning
@@ -119,7 +143,7 @@ export function SelectInputView({
   return (
     <div
       className={`relative inline-block ${className}`}
-      style={{ width }}
+      style={{ width, ...style }}
       onKeyDown={handleKey}
     >
       <button
@@ -133,12 +157,12 @@ export function SelectInputView({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '6px',
+          gap: base.gap,
           width: '100%',
-          height: h,
-          paddingLeft: px,
-          paddingRight: px,
-          fontSize: text,
+          height: base.height,
+          paddingLeft: base.paddingX,
+          paddingRight: base.paddingX,
+          fontSize: base.fontSize,
           background: 'var(--color-input-bg)',
           border: `1px solid ${borderColor}`,
           borderRadius: radius,
@@ -154,12 +178,16 @@ export function SelectInputView({
         aria-haspopup="listbox"
         aria-expanded={open}
       >
+        {/* Badge chip takes priority over icon in trigger */}
+        {selected?.badge && !selected?.icon && (
+          <BadgeChip label={selected.badge.label} color={selected.badge.color} />
+        )}
         {selected?.icon && <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{selected.icon}</span>}
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selected?.color }}>
           {selected?.label ?? placeholder ?? value}
         </span>
         <DropdownArrowIcon
-          size={10}
+          size={base.iconSize - 2}
           style={{ flexShrink: 0, transition: 'transform 140ms', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', color: open ? accent : 'var(--color-text-muted)' }}
         />
       </button>
@@ -168,6 +196,7 @@ export function SelectInputView({
         <div
           ref={menuRef}
           role="listbox"
+          className="dui_select__menu"
           style={{
             position: 'fixed',
             zIndex: 99999,
@@ -183,35 +212,47 @@ export function SelectInputView({
             '--dui-select-accent': accent,
           } as React.CSSProperties}
         >
-          {options.map((opt, i) => opt.isHeader ? (
-            <div key={`${opt.value}-${i}`} style={{ padding: '6px 10px 3px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', userSelect: 'none' }}>
-              {opt.label}
-            </div>
-          ) : (
-            <div
-              key={opt.value}
-              role="option"
-              aria-selected={opt.value === value}
-              onClick={() => handleSelect(opt.value)}
-              className={`dui_select__option${opt.value === value ? ' dui_select__option--selected' : ''}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '7px',
-                padding: `${itemPy} 10px`,
-                borderRadius: rounded ? '5px' : '0px',
-                fontSize: itemText,
-                fontWeight: 500,
-                color: opt.value === value ? (accentColor || 'var(--color-primary-light)') : (opt.color || 'var(--color-text-secondary)'),
-                background: opt.value === value ? `color-mix(in srgb, ${accent} 15%, transparent)` : 'transparent',
-                cursor: 'pointer',
-                transition: 'background 100ms, color 100ms',
-              }}
-            >
-              {opt.icon && <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{opt.icon}</span>}
-              <span>{opt.label}</span>
-            </div>
-          ))}
+          {options.map((opt, i) => {
+            if (opt.isHeader) {
+              return (
+                <div key={`${opt.value}-${i}`}>
+                  {/* Auto-divider before every group header except the first */}
+                  {i > 0 && (
+                    <div style={{ height: '1px', background: 'var(--color-surface-border)', margin: '3px 4px' }} />
+                  )}
+                  <div style={{ padding: `5px ${base.paddingX} 3px`, fontSize: '9px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-muted)', userSelect: 'none' }}>
+                    {opt.label}
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div
+                key={opt.value}
+                role="option"
+                aria-selected={opt.value === value}
+                onClick={() => handleSelect(opt.value)}
+                className={`dui_select__option${opt.value === value ? ' dui_select__option--selected' : ''}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: base.gap,
+                  padding: `${base.itemPy} ${base.paddingX}`,
+                  borderRadius: rounded ? '5px' : '0px',
+                  fontSize: base.fontSize,
+                  fontWeight: 500,
+                  color: opt.value === value ? (accentColor || 'var(--color-primary-light)') : (opt.color || 'var(--color-text-secondary)'),
+                  cursor: 'pointer',
+                }}
+              >
+                {opt.badge && !opt.icon && (
+                  <BadgeChip label={opt.badge.label} color={opt.badge.color} />
+                )}
+                {opt.icon && <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{opt.icon}</span>}
+                <span>{opt.label}</span>
+              </div>
+            );
+          })}
         </div>,
         document.body
       )}

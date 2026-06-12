@@ -8,6 +8,8 @@ import './DropDownButtonView.css';
 
 export interface DropDownButtonViewProps {
   label: string;
+  /** Optional icon shown to the left of the label text */
+  icon?: React.ReactNode;
   variant?: ButtonVariant;
   /** Falls back to DuiProvider size when omitted or 'default'. */
   size?: ButtonSize;
@@ -21,6 +23,7 @@ export interface DropDownButtonViewProps {
 
 export function DropDownButtonView({
   label,
+  icon,
   variant = 'secondary',
   size = 'default',
   rounded = true,
@@ -31,7 +34,7 @@ export function DropDownButtonView({
   className = '',
 }: DropDownButtonViewProps) {
   const [open, setOpen] = useState(false);
-  const chevronRef = useRef<HTMLButtonElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const accent = accentColor || 'var(--color-primary)';
   const base = useButtonBase(size === 'default' ? undefined : size);
   const h = base.height;
@@ -42,7 +45,7 @@ export function DropDownButtonView({
   const isPrimary = variant === 'primary';
   const isDanger  = variant === 'danger';
 
-  const baseColor = isPrimary ? '#fff' : isDanger ? '#fff' : 'var(--color-text-primary)';
+  const baseColor = isPrimary ? 'var(--color-btn-primary-text, #fff)' : isDanger ? 'var(--color-btn-danger-text, #fff)' : 'var(--color-text-primary)';
 
   const wrapperBg = isPrimary ? accent
     : isDanger ? 'var(--color-error)'
@@ -53,12 +56,12 @@ export function DropDownButtonView({
     ? '1px solid transparent'
     : '1px solid var(--color-surface-border)';
 
-  // CSS custom prop for hover bg on label/chevron buttons
   const hoverBtnBg = isPrimary || isDanger ? 'rgba(0,0,0,0.12)' : 'var(--color-surface-active)';
 
   return (
     <>
       <div
+        ref={wrapperRef}
         className={`inline-flex items-center ${className}`}
         style={{
           height: h, borderRadius: radius, overflow: 'hidden',
@@ -66,7 +69,6 @@ export function DropDownButtonView({
           background: wrapperBg, border: wrapperBorder,
           color: baseColor, padding: 0,
           transition: 'background 120ms',
-          // CSS custom prop for button hover
           '--dui-hover-btn-bg': hoverBtnBg,
         } as React.CSSProperties}
       >
@@ -77,13 +79,19 @@ export function DropDownButtonView({
           onClick={onPrimaryClick}
           className="dui_dropdown-button__label"
           style={{
-            height: '100%', paddingLeft: px, paddingRight: '8px',
+            height: '100%',
+            paddingLeft: px, paddingRight: '8px',
+            display: 'flex', alignItems: 'center', gap: base.gap,
             fontSize: text, fontWeight: 500,
-            background: 'transparent', border: 'none', color: 'inherit',
+            border: 'none', color: 'inherit',
             cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit',
-            transition: 'background 100ms',
           }}
         >
+          {icon && (
+            <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              {icon}
+            </span>
+          )}
           {label}
         </button>
 
@@ -95,17 +103,15 @@ export function DropDownButtonView({
 
         {/* Chevron dropdown side */}
         <button
-          ref={chevronRef}
           type="button"
           disabled={disabled}
-          onClick={() => setOpen(v => !v)}
+          onClick={() => !disabled && setOpen(v => !v)}
           className="dui_dropdown-button__chevron"
           style={{
             height: '100%', paddingLeft: '6px', paddingRight: '7px',
             display: 'flex', alignItems: 'center',
-            background: 'transparent', border: 'none', color: 'inherit',
+            border: 'none', color: 'inherit',
             cursor: disabled ? 'default' : 'pointer',
-            transition: 'background 100ms',
           }}
         >
           <ChevronDownIcon size={10} style={{ transition: 'transform 140ms', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }} />
@@ -114,7 +120,7 @@ export function DropDownButtonView({
 
       <ContextMenuView
         items={items}
-        anchorEl={chevronRef.current}
+        anchorEl={wrapperRef.current}
         open={open}
         onClose={() => setOpen(false)}
         rounded={rounded}

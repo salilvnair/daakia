@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
-import { CodeEditor, CopyButton } from '../../shared';
+import { CopyButton } from '../../shared';
+import { EditorView } from '../../../dui';
 import { useClickOutside } from '../../../hooks/useClickOutside';
 import { applyJqFilter, formatBody, getResponseLanguage, downloadBlob, getExtensionForContentType } from '../../../services/response';
 import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, HelpCircleIcon, CloseCircleIcon } from '../../../icons';
@@ -80,20 +81,20 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
           {/* Copy */}
           <CopyButton text={formattedBody} size={14} title="Copy response" className="w-7 h-7" />
 
-          {/* ⋮ More menu — Clear Response only; AI actions moved to sparkle 3-dot next to Record Baseline */}
+          {/* ⋮ More menu */}
           <div className="relative" ref={moreMenuRef}>
             <ToolbarBtn title="More options" onClick={() => setShowMoreMenu(!showMoreMenu)}>
               <MoreVerticalIcon size={14} />
             </ToolbarBtn>
             {showMoreMenu && (
               <div
-                className="absolute top-full right-0 z-50 mt-1 rounded-xl border shadow-2xl overflow-hidden min-w-[190px]"
+                className="absolute top-full right-0 z-50 mt-1 rounded-xl border shadow-2xl overflow-hidden min-w-[200px]"
                 style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
               >
                 <button type="button"
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-[11.5px] cursor-pointer transition-colors text-left"
                   style={{ color: 'var(--color-text-primary)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#ef4444'; }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = 'var(--color-error)'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
                   onClick={() => {
                     setShowMoreMenu(false);
@@ -170,9 +171,9 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
         </div>
       )}
 
-      {/* Code editor */}
+      {/* Editor */}
       <div className="flex-1 min-h-0">
-        <CodeEditor
+        <EditorView
           value={filteredBody}
           language={getResponseLanguage(response.contentType)}
           readOnly

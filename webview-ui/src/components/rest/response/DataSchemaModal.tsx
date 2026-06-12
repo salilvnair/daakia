@@ -9,10 +9,10 @@
  */
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { CodeEditor } from '../../shared';
-import { StyledDropdown, type DropdownOption } from '../../shared';
+import { SelectInputView, type SelectOption } from '../../../dui';
 import { useAiProvidersStore } from '../../../store/ai-providers-store';
 import { useTabsStore } from '../../../store/tabs-store';
-import { generateSchema, downloadBlob, SCHEMA_LANG_META, LANG_GROUP_ORDER, GROUP_BADGE_COLORS, buildSchemaPrompt, type SchemaLang } from '../../../services/response';
+import { generateSchema, downloadBlob, SCHEMA_LANG_META, SCHEMA_LANG_OPTIONS, buildSchemaPrompt, type SchemaLang } from '../../../services/response';
 import { WrapLinesIcon, DownloadIcon, CopyIcon, CloseIcon, SparkleIcon } from '../../../icons';
 import { ToolbarBtn } from './ToolbarBtn';
 import { useAiStream } from '../../../hooks/useAiStream';
@@ -30,42 +30,9 @@ function getBodyFingerprint(body: string): string {
   return `${body.length}:${body.slice(0, 150)}`;
 }
 
-// ─── Build dropdown options with group headers ────────────────────────────────
-
-function buildLangOptions(): DropdownOption[] {
-  const groups: Record<string, SchemaLang[]> = {};
-  for (const [lang, meta] of Object.entries(SCHEMA_LANG_META) as [SchemaLang, typeof SCHEMA_LANG_META[SchemaLang]][]) {
-    if (!groups[meta.group]) groups[meta.group] = [];
-    groups[meta.group].push(lang);
-  }
-
-  const opts: DropdownOption[] = [];
-  for (const groupName of LANG_GROUP_ORDER) {
-    const langs = groups[groupName];
-    if (!langs?.length) continue;
-    opts.push({ value: `__header__${groupName}`, label: groupName, isHeader: true });
-    for (const lang of langs) {
-      const meta = SCHEMA_LANG_META[lang];
-      const color = GROUP_BADGE_COLORS[groupName] ?? '#6366f1';
-      opts.push({
-        value: lang,
-        label: meta.label,
-        color,
-        icon: (
-          <span
-            className="text-[8px] font-bold px-1 py-px rounded-sm leading-none"
-            style={{ backgroundColor: color + '22', color }}
-          >
-            {meta.badge}
-          </span>
-        ),
-      });
-    }
-  }
-  return opts;
-}
-
-const LANG_OPTIONS = buildLangOptions();
+// SCHEMA_LANG_OPTIONS is the single source of truth — shared with DuiShowcase.
+// Cast is safe: the plain objects are structurally compatible with SelectOption[].
+const LANG_OPTIONS = SCHEMA_LANG_OPTIONS as SelectOption[];
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -195,7 +162,10 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded text-[#ef4444] hover:text-[#dc2626] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
+            style={{ color: 'var(--color-error)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 10%, transparent)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = ''; }}
           >
             <CloseIcon size={16} />
           </button>
@@ -205,12 +175,13 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
         <div className="flex items-center gap-3 px-5 py-3 border-b border-[var(--color-surface-border)]">
           {/* Language picker */}
           <div className="flex-1 max-w-[280px]">
-            <StyledDropdown
+            <SelectInputView
               options={LANG_OPTIONS}
               value={lang}
               onChange={handleLangChange}
               size="sm"
               accentColor={AI_ACCENT}
+              style={{ width: '100%' }}
             />
           </div>
 

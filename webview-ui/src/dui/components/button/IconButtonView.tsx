@@ -58,6 +58,14 @@ export function IconButtonView({
     : '0px';
   const resolvedColor = color || ctx.color;
 
+  const baseBg = variant === 'filled'
+    ? (active ? activeClr : `color-mix(in srgb, ${accent} 12%, transparent)`)
+    : (active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent');
+
+  const baseColor = variant === 'filled'
+    ? (active ? 'var(--color-btn-primary-text, white)' : (resolvedColor || accent))
+    : (active ? activeClr : (resolvedColor || (accentColor ? accent : 'var(--color-text-muted)')));
+
   const baseStyle: CSSProperties = {
     width: dim,
     height: dim,
@@ -69,15 +77,8 @@ export function IconButtonView({
     justifyContent: 'center',
     cursor: disabled ? 'default' : 'pointer',
     opacity: disabled ? 0.45 : 1,
-    ...(variant === 'filled'
-      ? {
-          background: active ? activeClr : `color-mix(in srgb, ${accent} 12%, transparent)`,
-          color: active ? 'var(--color-btn-primary-text, white)' : (resolvedColor || accent),
-        }
-      : {
-          background: active ? `color-mix(in srgb, ${activeClr} 14%, transparent)` : 'transparent',
-          color: active ? activeClr : (resolvedColor || (accentColor ? accent : 'var(--color-text-muted)')),
-        }),
+    '--dui-icon-bg': baseBg,
+    '--dui-icon-color': baseColor,
     '--dui-hover-bg': active
       ? `color-mix(in srgb, ${activeClr} 20%, transparent)`
       : 'var(--color-iconbtn-bg-hover, var(--color-surface-hover))',

@@ -51,8 +51,8 @@ export function AIButtonView({
   fontStyle,
 }: AIButtonViewProps) {
   const ctx = useDui();
-  // `compact` maps to 'sm'; explicit `size` wins over compact
-  const resolvedSize: DuiSize | undefined = size ?? (compact ? 'sm' : undefined);
+  // `compact` maps to 'xs' (20px); explicit `size` wins over compact
+  const resolvedSize: DuiSize | undefined = size ?? (compact ? 'xs' : undefined);
   const base = useButtonBase(resolvedSize, { width, borderRadius, color, fontStyle });
   const accent = accentColor || ctx.defaultColor || 'var(--color-protocol-ai)';
   const displayLabel = label ?? ACTION_LABEL[action];
@@ -73,8 +73,6 @@ export function AIButtonView({
         paddingLeft: base.paddingX,
         paddingRight: base.paddingX,
         borderRadius: resolvedRadius,
-        border: accentColor ? `1px solid color-mix(in srgb, ${accentColor} 35%, transparent)` : '1px solid var(--color-aibtn-border)',
-        background: accentColor ? `color-mix(in srgb, ${accentColor} 10%, transparent)` : 'var(--color-aibtn-bg)',
         color: base.color || (accentColor ? accentColor : 'var(--color-aibtn-text)'),
         fontSize: base.fontSize,
         fontWeight: 600,
@@ -83,12 +81,19 @@ export function AIButtonView({
         opacity: disabled ? 0.5 : 1,
         letterSpacing: '0.01em',
         fontFamily: 'inherit',
+        // Resting bg + border as CSS vars — CSS class reads them so :hover rule can override
+        '--dui-aibtn-bg': accentColor
+          ? `color-mix(in srgb, ${accentColor} 10%, transparent)`
+          : 'var(--color-aibtn-bg)',
+        '--dui-aibtn-border-color': accentColor
+          ? `color-mix(in srgb, ${accentColor} 35%, transparent)`
+          : 'var(--color-aibtn-border)',
         '--dui-aibtn-hover-bg': accentColor
-          ? `color-mix(in srgb, ${accentColor} 18%, transparent)`
-          : 'var(--color-aibtn-bg-hover)',
+          ? `color-mix(in srgb, ${accentColor} 10%, var(--color-surface))`
+          : `color-mix(in srgb, var(--color-protocol-ai) 10%, var(--color-surface))`,
         '--dui-aibtn-hover-border': accentColor
-          ? `color-mix(in srgb, ${accentColor} 55%, transparent)`
-          : 'color-mix(in srgb, var(--color-aibtn-text) 55%, transparent)',
+          ? `color-mix(in srgb, ${accentColor} 45%, var(--color-surface-border))`
+          : `color-mix(in srgb, var(--color-protocol-ai) 45%, var(--color-surface-border))`,
       } as CSSProperties}
     >
       {loading

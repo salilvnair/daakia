@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDownIcon } from '../../../icons';
-import { HiddenKeyValueItemView } from '../../../dui';
+import { HiddenKeyValueItemView, IconButtonView } from '../../../dui';
 
 export interface ComputedHeader {
   id: string;
@@ -28,23 +28,32 @@ export function ComputedHeaderList({ rows, showDescription = false }: Props) {
     <div className="mb-2">
       {/* Section header */}
       <div className="flex items-center justify-between mb-1.5 px-1">
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => setExpanded(v => !v)}
-          className="flex items-center gap-1.5 cursor-pointer group"
+          onKeyDown={e => e.key === 'Enter' && setExpanded(v => !v)}
+          className="flex items-center gap-1 cursor-pointer group"
         >
-          <span
-            className="transition-transform duration-150"
-            style={{ display: 'inline-flex', transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}
-          >
-            <ChevronDownIcon size={12} style={{ color: 'var(--color-text-muted)', opacity: 0.6 }} />
-          </span>
-          <span className="text-[12px] text-[var(--color-text-muted)] font-medium group-hover:text-[var(--color-text-primary)] transition-colors">
+          <IconButtonView
+            icon={
+              <ChevronDownIcon
+                size={11}
+                style={{
+                  transition: 'transform 150ms',
+                  transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                }}
+              />
+            }
+            size="sm"
+            color="var(--color-text-muted)"
+          />
+          <span className="text-[12px] text-[var(--color-text-muted)] font-medium group-hover:text-[var(--color-text-primary)] transition-colors select-none">
             Headers
           </span>
-          {/* "N hidden" badge — Postman-style terminology */}
+          {/* "N hidden" badge */}
           <span
-            className="text-[10px] px-1.5 py-0.5 rounded font-medium flex items-center gap-1"
+            className="text-[10px] px-1.5 py-0.5 rounded font-medium flex items-center gap-1 select-none"
             style={{
               background: 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)',
               color: 'var(--color-text-muted)',
@@ -53,7 +62,7 @@ export function ComputedHeaderList({ rows, showDescription = false }: Props) {
             <span style={{ opacity: 0.6 }}>{rows.length}</span>
             <span style={{ opacity: 0.5 }}>hidden</span>
           </span>
-        </button>
+        </div>
       </div>
 
       {expanded && (

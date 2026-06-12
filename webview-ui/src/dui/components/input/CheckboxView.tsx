@@ -4,6 +4,8 @@ import type { DuiSize } from '../../core/DuiTypes';
 import { useDui } from '../../core/DuiContext';
 import { DUI_CHECKBOX, DUI_FONT_SIZE } from '../../core/DuiTokens';
 
+const DUI_SIZES: DuiSize[] = ['xxs', 'xs', 'sm', 'md', 'lg', 'xl', 'xxl', 'xxxl'];
+
 /** @deprecated Use `DuiSize` directly. */
 export type CheckboxSize = DuiSize;
 
@@ -33,7 +35,9 @@ export function CheckboxView({
   const s = size ?? ctx.size;
   const accent = accentColor || 'var(--color-primary)';
   const { box, icon } = DUI_CHECKBOX[s];
-  const font = DUI_FONT_SIZE[s];
+  // Label font is one size step smaller than the checkbox box size for compact look
+  const labelS = DUI_SIZES[Math.max(0, DUI_SIZES.indexOf(s) - 1)];
+  const font = DUI_FONT_SIZE[labelS];
   const isActive = checked || indeterminate;
 
   const boxStyle: CSSProperties = {

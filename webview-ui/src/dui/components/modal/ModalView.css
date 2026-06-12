@@ -1,4 +1,12 @@
-.dui_modal__close-btn { transition: background 120ms; }
+.dui_modal__close-btn {
+  transition: background 120ms, transform 80ms, color 120ms;
+}
 .dui_modal__close-btn:hover {
   background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error);
+}
+.dui_modal__close-btn:active {
+  background: color-mix(in srgb, var(--color-error) 22%, transparent);
+  transform: scale(0.88);
+  transition: background 60ms, transform 60ms;
 }

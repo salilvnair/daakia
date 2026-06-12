@@ -8,17 +8,17 @@ import type { DuiSize, DuiRadius, DuiWidth } from './DuiTypes';
 /** Heights (px) per size × category */
 export const DUI_HEIGHT = {
   /** Standard form controls: text input, select, duration, search, highlighted input */
-  input:  { xxs: 16, xs: 20, sm: 24, md: 28, lg: 34, xl: 40, xxl: 48, xxxl: 56 },
+  input:  { xxs: 16, xs: 20, sm: 24, md: 28, lg: 36, xl: 40, xxl: 48, xxxl: 56 },
   /** Push buttons (primary, secondary, ghost, danger) */
-  button: { xxs: 16, xs: 20, sm: 24, md: 28, lg: 34, xl: 40, xxl: 48, xxxl: 56 },
+  button: { xxs: 16, xs: 20, sm: 24, md: 28, lg: 36, xl: 40, xxl: 48, xxxl: 56 },
   /** Pill tabs, segment controls */
-  tab:    { xxs: 16, xs: 20, sm: 24, md: 28, lg: 34, xl: 40, xxl: 48, xxxl: 56 },
+  tab:    { xxs: 16, xs: 20, sm: 24, md: 28, lg: 36, xl: 40, xxl: 48, xxxl: 56 },
   /** Sidebar nav items, settings nav links */
   nav:    { xxs: 20, xs: 24, sm: 28, md: 32, lg: 36, xl: 44, xxl: 52, xxxl: 60 },
   /** Context-menu items, dropdown options, sub-menu rows */
   menu:   { xxs: 14, xs: 18, sm: 22, md: 26, lg: 30, xl: 36, xxl: 42, xxxl: 48 },
   /** Table / KV-table rows */
-  table:  { xxs: 18, xs: 22, sm: 26, md: 30, lg: 34, xl: 40, xxl: 46, xxxl: 54 },
+  table:  { xxs: 18, xs: 22, sm: 26, md: 30, lg: 36, xl: 40, xxl: 46, xxxl: 54 },
   /** Card container min-height (loosely applied) */
   card:   { xxs: 28, xs: 36, sm: 48, md: 64, lg: 80, xl: 96, xxl: 112, xxxl: 128 },
 } as const satisfies Record<string, Record<DuiSize, number>>;
@@ -63,6 +63,16 @@ export const DUI_ICON_SIZE: Record<DuiSize, number> = {
 /** Font sizes (px) */
 export const DUI_FONT_SIZE: Record<DuiSize, string> = {
   xxs: '8px', xs: '9px', sm: '10px', md: '11px', lg: '12px', xl: '13px', xxl: '14px', xxxl: '16px',
+};
+
+/** Vertical padding (px) for dropdown / select option rows */
+export const DUI_SELECT_ITEM_PY: Record<DuiSize, string> = {
+  xxs: '2px', xs: '3px', sm: '4px', md: '5px', lg: '7px', xl: '9px', xxl: '11px', xxxl: '14px',
+};
+
+/** Editor (Monaco) font sizes (px) — larger than DUI_FONT_SIZE since code is harder to read at label sizes */
+export const DUI_EDITOR_FONT_SIZE: Record<DuiSize, number> = {
+  xxs: 10, xs: 11, sm: 11, md: 12, lg: 13, xl: 14, xxl: 15, xxxl: 16,
 };
 
 /** Horizontal padding (px) */

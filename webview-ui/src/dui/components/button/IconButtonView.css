@@ -1,6 +1,17 @@
-.dui_icon-button { transition: background 120ms ease, color 120ms ease; }
+.dui_icon-button {
+  background: var(--dui-icon-bg, transparent);
+  color: var(--dui-icon-color, var(--color-text-muted));
+  transition: background 120ms ease, color 120ms ease, transform 80ms, box-shadow 80ms;
+}
 
 .dui_icon-button:not(:disabled):hover {
   background: var(--dui-hover-bg, var(--color-iconbtn-bg-hover, var(--color-surface-hover)));
   color: var(--dui-hover-color, var(--color-text-primary));
+}
+
+.dui_icon-button:not(:disabled):active {
+  transform: scale(0.92);
+  filter: brightness(0.85);
+  box-shadow: none;
+  transition: transform 60ms, filter 60ms, box-shadow 60ms;
 }

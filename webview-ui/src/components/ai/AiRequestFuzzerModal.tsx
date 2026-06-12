@@ -3,16 +3,13 @@
  * to discover bugs, crashes, and unexpected behavior.
  *
  * Feature 4.6.4 — AI Request Fuzzer
- *
- * Generates and runs variations of the current request with edge-case payloads:
- * empty strings, huge numbers, SQL injection, XSS, unicode, type mismatches, etc.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
-import { SparkleIcon, CloseCircleIcon, PlayIcon } from '../../icons';
+import { SparkleIcon, PlayIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
+import { ModalView, ButtonView } from '../../dui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,7 +26,7 @@ interface FuzzResult {
   statusText: string;
   duration: number;
   body: string;
-  anomaly?: string; // AI-detected anomaly
+  anomaly?: string;
 }
 
 type Phase = 'idle' | 'generating' | 'generated' | 'running' | 'done' | 'analyzing' | 'analyzed';
@@ -97,24 +94,22 @@ export function AiRequestFuzzerModal({ onClose }: Props) {
   const currentRunRef = useRef<number>(0);
 
   const categories = [
-    { id: 'sql-injection', label: 'SQL Injection', color: '#ef4444' },
-    { id: 'xss', label: 'XSS', color: '#f97316' },
-    { id: 'empty-fields', label: 'Empty Fields', color: '#eab308' },
-    { id: 'huge-values', label: 'Huge Values', color: '#3b82f6' },
-    { id: 'type-mismatch', label: 'Type Mismatch', color: '#8b5cf6' },
-    { id: 'unicode', label: 'Unicode', color: '#06b6d4' },
-    { id: 'null-values', label: 'Null Values', color: '#6b7280' },
-    { id: 'boundary', label: 'Boundary', color: '#10b981' },
+    { id: 'sql-injection', label: 'SQL Injection', color: 'var(--color-error)' },
+    { id: 'xss', label: 'XSS', color: 'var(--color-protocol-soap)' },
+    { id: 'empty-fields', label: 'Empty Fields', color: 'var(--color-warning)' },
+    { id: 'huge-values', label: 'Huge Values', color: 'var(--color-method-put)' },
+    { id: 'type-mismatch', label: 'Type Mismatch', color: 'var(--color-protocol-mqtt)' },
+    { id: 'unicode', label: 'Unicode', color: 'var(--color-method-head)' },
+    { id: 'null-values', label: 'Null Values', color: 'var(--color-text-muted)' },
+    { id: 'boundary', label: 'Boundary', color: 'var(--color-success)' },
   ];
 
-  // Listen for events
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data as Record<string, unknown>;
       if (!msg || typeof msg !== 'object') return;
 
       switch (msg.type) {
-        // Extension host HTTP response for fuzz run
         case 'fuzz:result': {
           if (msg.runId !== currentRunRef.current) return;
           const result = msg as unknown as FuzzResult & { runId: number };
@@ -123,16 +118,13 @@ export function AiRequestFuzzerModal({ onClose }: Props) {
           if ((msg.done as boolean)) setPhase('done');
           break;
         }
-        // AI streaming for generation and analysis
         case 'ai:chunk': {
           const reqId = msg.reqId as string | undefined;
           if (reqId !== reqIdRef.current) return;
           const chunk = msg.chunk as { delta?: { content?: string } } | string;
           const delta = typeof chunk === 'string' ? chunk : (chunk?.delta?.content ?? '');
           accRef.current += delta;
-          if (phase === 'generating') {
-            // live preview not needed for JSON generation
-          } else if (phase === 'analyzing') {
+          if (phase === 'analyzing') {
             setAnalysis(accRef.current);
           }
           break;
@@ -207,7 +199,6 @@ Generate the fuzz payloads:`;
     setCurrentIndex(0);
     setPhase('running');
 
-    // Send all fuzz payloads to extension host for sequential execution
     postMsg({
       type: 'fuzz:run',
       runId,
@@ -248,209 +239,215 @@ Generate the fuzz payloads:`;
 
   const filtered = payloads.filter(p => selectedCategories.has(p.category));
 
-  return createPortal(
-    <div
-      className="fixed inset-0 flex items-center justify-center"
-      style={{ zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.6)' }}
-    >
-      <div
-        className="flex flex-col rounded-xl border overflow-hidden"
-        style={{
-          width: 760,
-          maxHeight: '90vh',
-          backgroundColor: 'var(--color-panel)',
-          borderColor: 'var(--color-surface-border)',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
-        }}
+  const handleReset = () => { setPhase('idle'); setPayloads([]); setResults([]); setAnalysis(''); };
+
+  const footerLeft = (() => {
+    if (phase === 'idle') return (
+      <ButtonView
+        variant="danger"
+        size="sm"
+        iconLeft={<SparkleIcon size={11} />}
+        onClick={handleGenerate}
+        disabled={!activeTab?.bodyRaw?.trim() || selectedCategories.size === 0}
       >
-        {/* Header */}
-        <div
-          className="flex items-center gap-3 px-5 py-3 border-b flex-shrink-0"
-          style={{
-            borderColor: 'var(--color-surface-border)',
-            background: 'linear-gradient(135deg, color-mix(in srgb, #ef4444 10%, var(--color-panel)) 0%, var(--color-panel) 100%)',
-          }}
+        Generate Payloads with AI
+      </ButtonView>
+    );
+    if (phase === 'generating') return (
+      <span className="animate-pulse" style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+        Generating fuzz payloads…
+      </span>
+    );
+    if (phase === 'generated' || phase === 'done') return (
+      <>
+        <ButtonView
+          variant="danger"
+          size="sm"
+          iconLeft={<PlayIcon size={11} />}
+          onClick={handleRunFuzz}
+          disabled={phase === 'running' || payloads.length === 0}
         >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#ef4444' }}>
-            <SparkleIcon size={15} className="text-white" />
-          </div>
+          Run Fuzz Tests ({filtered.length})
+        </ButtonView>
+        {phase === 'done' && (
+          <ButtonView
+            variant="ghost"
+            size="sm"
+            iconLeft={<SparkleIcon size={11} />}
+            onClick={handleAnalyze}
+            style={{
+              border: '1px solid var(--color-error)',
+              color: 'var(--color-error)',
+              backgroundColor: 'color-mix(in srgb, var(--color-error) 6%, transparent)',
+            }}
+          >
+            Analyze Results
+          </ButtonView>
+        )}
+      </>
+    );
+    return undefined;
+  })();
+
+  const footerRight = (phase === 'generated' || phase === 'done')
+    ? <ButtonView variant="secondary" size="sm" onClick={handleReset}>Reset</ButtonView>
+    : undefined;
+
+  const headerIcon = (
+    <div style={{
+      width: 32, height: 32, borderRadius: 8,
+      backgroundColor: 'var(--color-error)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0,
+    }}>
+      <SparkleIcon size={15} style={{ color: 'var(--color-btn-primary-text, #fff)' }} />
+    </div>
+  );
+
+  return (
+    <ModalView
+      open={true}
+      onClose={onClose}
+      title="AI Request Fuzzer"
+      subtitle={`Generate edge-case payloads to find API bugs • ${activeTab?.method} ${activeTab?.url?.slice(0, 40) || 'No request'}`}
+      headerIcon={headerIcon}
+      headerColor="var(--color-error)"
+      headerGradient
+      size="lg"
+      footerLeft={footerLeft}
+      footerRight={footerRight}
+    >
+      <div className="flex flex-col gap-4">
+        {/* Category selector */}
+        {(phase === 'idle' || phase === 'generated') && (
           <div>
-            <h2 className="text-[14px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>AI Request Fuzzer</h2>
-            <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-              Generate edge-case payloads to find API bugs • {activeTab?.method} {activeTab?.url?.slice(0, 40) || 'No request'}
-            </p>
-          </div>
-          <button type="button" onClick={onClose} className="ml-auto cursor-pointer hover:opacity-70" style={{ color: 'var(--color-text-muted)' }}>
-            <CloseCircleIcon size={18} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] min-h-0 p-5 flex flex-col gap-4">
-          {/* Category selector */}
-          {(phase === 'idle' || phase === 'generated') && (
-            <div>
-              <label className="text-[11px] font-medium mb-2 block" style={{ color: 'var(--color-text-muted)' }}>
-                Attack categories to fuzz:
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {categories.map(cat => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => {
-                      const next = new Set(selectedCategories);
-                      if (next.has(cat.id)) next.delete(cat.id);
-                      else next.add(cat.id);
-                      setSelectedCategories(next);
-                    }}
-                    className="h-[22px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer transition-all"
-                    style={{
-                      borderColor: selectedCategories.has(cat.id) ? cat.color : 'var(--color-surface-border)',
-                      color: selectedCategories.has(cat.id) ? cat.color : 'var(--color-text-muted)',
-                      backgroundColor: selectedCategories.has(cat.id) ? `${cat.color}18` : 'transparent',
-                    }}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {!activeTab?.bodyRaw?.trim() && (
-            <div
-              className="rounded-lg p-3 text-[11px] text-center"
-              style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
-            >
-              ⚠️ No request body found. Open a request with a JSON body, then come back to fuzz it.
-            </div>
-          )}
-
-          {parseError && (
-            <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{parseError}</p>
-          )}
-
-          {/* Generated payloads list */}
-          {(phase === 'generated' || phase === 'running' || phase === 'done' || phase === 'analyzing' || phase === 'analyzed') && payloads.length > 0 && (
-            <div>
-              <div className="text-[11px] font-semibold mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                {payloads.length} fuzz payloads generated
-              </div>
-              <div className="overflow-y-auto rounded-lg border" style={{ maxHeight: 220, borderColor: 'var(--color-surface-border)' }}>
-                {filtered.map((p, i) => {
-                  const result = results[i];
-                  const cat = categories.find(c => c.id === p.category);
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 px-3 py-1.5 border-b text-[11px]"
-                      style={{ borderColor: 'var(--color-surface-border)' }}
-                    >
-                      <span className="flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: `${cat?.color ?? '#888'}18`, color: cat?.color ?? '#888' }}>
-                        {p.category}
-                      </span>
-                      <span className="flex-1 truncate" style={{ color: 'var(--color-text-primary)' }}>{p.name}</span>
-                      {result ? (
-                        <span className="flex-shrink-0 font-mono font-bold text-[10px]" style={{ color: result.status < 500 ? 'var(--color-text-muted)' : '#ef4444' }}>
-                          {result.status}
-                        </span>
-                      ) : phase === 'running' && currentIndex === i ? (
-                        <span className="flex-shrink-0 text-[10px] animate-pulse" style={{ color: 'var(--color-text-muted)' }}>running…</span>
-                      ) : null}
-                      {result?.anomaly && (
-                        <span className="flex-shrink-0 text-[9.5px] truncate max-w-[160px]" style={{ color: result.anomaly.startsWith('⚠️') ? '#ef4444' : 'var(--color-success)' }}>
-                          {result.anomaly}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Progress bar during run */}
-          {phase === 'running' && (
-            <div>
-              <div className="flex justify-between text-[11px] mb-1" style={{ color: 'var(--color-text-muted)' }}>
-                <span>Running fuzz tests…</span>
-                <span>{currentIndex} / {payloads.length}</span>
-              </div>
-              <div className="h-[4px] rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-surface-border)' }}>
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${(currentIndex / payloads.length) * 100}%`, backgroundColor: '#ef4444' }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* AI analysis */}
-          {(phase === 'analyzing' || phase === 'analyzed') && analysis && (
-            <div className="rounded-lg border p-3" style={{ borderColor: 'color-mix(in srgb, #ef4444 25%, var(--color-surface-border))' }}>
-              <div className="text-[11px] font-semibold mb-2 flex items-center gap-1.5" style={{ color: '#ef4444' }}>
-                <SparkleIcon size={12} />
-                Security Analysis
-                {phase === 'analyzing' && <span className="text-[10px] animate-pulse ml-1" style={{ color: 'var(--color-text-muted)' }}>analyzing…</span>}
-              </div>
-              <div className="text-[12px]"><MdViewer content={analysis} /></div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-2 px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          {phase === 'idle' && (
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={!activeTab?.bodyRaw?.trim() || selectedCategories.size === 0}
-              className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ backgroundColor: '#ef4444', color: '#fff' }}
-            >
-              <SparkleIcon size={11} style={{ display: 'inline', marginRight: 4 }} />
-              Generate Payloads with AI
-            </button>
-          )}
-          {phase === 'generating' && (
-            <span className="text-[11px] animate-pulse" style={{ color: 'var(--color-text-muted)' }}>Generating fuzz payloads…</span>
-          )}
-          {(phase === 'generated' || phase === 'done') && (
-            <>
-              <button
-                type="button"
-                onClick={handleRunFuzz}
-                disabled={phase === 'running' || payloads.length === 0}
-                className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-                style={{ backgroundColor: '#ef4444', color: '#fff' }}
-              >
-                <PlayIcon size={11} />
-                Run Fuzz Tests ({filtered.length})
-              </button>
-              {phase === 'done' && (
+            <label className="text-[11px] font-medium mb-2 block" style={{ color: 'var(--color-text-muted)' }}>
+              Attack categories to fuzz:
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {categories.map(cat => (
                 <button
+                  key={cat.id}
                   type="button"
-                  onClick={handleAnalyze}
-                  className="h-[30px] px-3 text-[11px] font-medium rounded-md border cursor-pointer hover:opacity-90"
-                  style={{ borderColor: '#ef4444', color: '#ef4444', backgroundColor: '#ef444410' }}
+                  onClick={() => {
+                    const next = new Set(selectedCategories);
+                    if (next.has(cat.id)) next.delete(cat.id);
+                    else next.add(cat.id);
+                    setSelectedCategories(next);
+                  }}
+                  className="h-[22px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer transition-all"
+                  style={{
+                    borderColor: selectedCategories.has(cat.id) ? cat.color : 'var(--color-surface-border)',
+                    color: selectedCategories.has(cat.id) ? cat.color : 'var(--color-text-muted)',
+                    backgroundColor: selectedCategories.has(cat.id)
+                      ? `color-mix(in srgb, ${cat.color} 9%, transparent)`
+                      : 'transparent',
+                  }}
                 >
-                  <SparkleIcon size={11} style={{ display: 'inline', marginRight: 4 }} />
-                  Analyze Results
+                  {cat.label}
                 </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!activeTab?.bodyRaw?.trim() && (
+          <div
+            className="rounded-lg p-3 text-[11px] text-center"
+            style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
+          >
+            ⚠️ No request body found. Open a request with a JSON body, then come back to fuzz it.
+          </div>
+        )}
+
+        {parseError && (
+          <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{parseError}</p>
+        )}
+
+        {/* Generated payloads list */}
+        {(phase === 'generated' || phase === 'running' || phase === 'done' || phase === 'analyzing' || phase === 'analyzed') && payloads.length > 0 && (
+          <div>
+            <div className="text-[11px] font-semibold mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              {payloads.length} fuzz payloads generated
+            </div>
+            <div className="overflow-y-auto rounded-lg border" style={{ maxHeight: 220, borderColor: 'var(--color-surface-border)' }}>
+              {filtered.map((p, i) => {
+                const result = results[i];
+                const cat = categories.find(c => c.id === p.category);
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 px-3 py-1.5 border-b text-[11px]"
+                    style={{ borderColor: 'var(--color-surface-border)' }}
+                  >
+                    <span
+                      className="flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium"
+                      style={{
+                        backgroundColor: `color-mix(in srgb, ${cat?.color ?? 'var(--color-text-muted)'} 12%, transparent)`,
+                        color: cat?.color ?? 'var(--color-text-muted)',
+                      }}
+                    >
+                      {p.category}
+                    </span>
+                    <span className="flex-1 truncate" style={{ color: 'var(--color-text-primary)' }}>{p.name}</span>
+                    {result ? (
+                      <span
+                        className="flex-shrink-0 font-mono font-bold text-[10px]"
+                        style={{ color: result.status < 500 ? 'var(--color-text-muted)' : 'var(--color-error)' }}
+                      >
+                        {result.status}
+                      </span>
+                    ) : phase === 'running' && currentIndex === i ? (
+                      <span className="flex-shrink-0 text-[10px] animate-pulse" style={{ color: 'var(--color-text-muted)' }}>running…</span>
+                    ) : null}
+                    {result?.anomaly && (
+                      <span
+                        className="flex-shrink-0 text-[9.5px] truncate max-w-[160px]"
+                        style={{ color: result.anomaly.startsWith('⚠️') ? 'var(--color-error)' : 'var(--color-success)' }}
+                      >
+                        {result.anomaly}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Progress bar during run */}
+        {phase === 'running' && (
+          <div>
+            <div className="flex justify-between text-[11px] mb-1" style={{ color: 'var(--color-text-muted)' }}>
+              <span>Running fuzz tests…</span>
+              <span>{currentIndex} / {payloads.length}</span>
+            </div>
+            <div className="h-[4px] rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-surface-border)' }}>
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${(currentIndex / payloads.length) * 100}%`, backgroundColor: 'var(--color-error)' }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* AI analysis */}
+        {(phase === 'analyzing' || phase === 'analyzed') && analysis && (
+          <div
+            className="rounded-lg border p-3"
+            style={{ borderColor: 'color-mix(in srgb, var(--color-error) 25%, var(--color-surface-border))' }}
+          >
+            <div className="text-[11px] font-semibold mb-2 flex items-center gap-1.5" style={{ color: 'var(--color-error)' }}>
+              <SparkleIcon size={12} />
+              Security Analysis
+              {phase === 'analyzing' && (
+                <span className="text-[10px] animate-pulse ml-1" style={{ color: 'var(--color-text-muted)' }}>analyzing…</span>
               )}
-              <button
-                type="button"
-                onClick={() => { setPhase('idle'); setPayloads([]); setResults([]); setAnalysis(''); }}
-                className="h-[30px] px-3 text-[11px] rounded-md border cursor-pointer hover:opacity-70 ml-auto"
-                style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-muted)', backgroundColor: 'var(--color-panel)' }}
-              >
-                Reset
-              </button>
-            </>
-          )}
-        </div>
+            </div>
+            <div className="text-[12px]"><MdViewer content={analysis} /></div>
+          </div>
+        )}
       </div>
-    </div>,
-    document.body,
+    </ModalView>
   );
 }

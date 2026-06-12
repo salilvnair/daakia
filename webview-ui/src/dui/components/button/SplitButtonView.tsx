@@ -54,7 +54,7 @@ export function SplitButtonView({
         ? 'var(--color-primary)'
         : 'var(--color-surface-hover)';
 
-  const textColor = variant === 'secondary' ? 'var(--color-text-primary)' : '#fff';
+  const textColor = variant === 'secondary' ? 'var(--color-text-primary)' : variant === 'danger' ? 'var(--color-btn-danger-text, #fff)' : 'var(--color-btn-primary-text, #fff)';
   const h = parseInt(base.height, 10);
   const fs = base.fontSize;
   const dividerBg = variant === 'secondary' ? 'var(--color-surface-border)' : 'rgba(255,255,255,0.22)';
@@ -113,7 +113,9 @@ export function SplitButtonView({
           border: variant === 'secondary' ? '1px solid var(--color-surface-border)' : 'none',
           pointerEvents: disabled ? 'none' : 'auto',
           userSelect: 'none', cursor: 'pointer',
-        }}
+          // Hover overlay color inherited by inner buttons via CSS var
+          '--dui-split-hover-bg': variant === 'secondary' ? 'var(--color-surface-active)' : 'rgba(0,0,0,0.1)',
+        } as React.CSSProperties}
       >
         <button
           type="button"
@@ -123,7 +125,7 @@ export function SplitButtonView({
             display: 'flex', alignItems: 'center', gap: 6,
             height: '100%', padding: '0 16px',
             fontSize: fs, fontWeight: 500, cursor: 'pointer',
-            background: 'transparent', border: 'none',
+            border: 'none',
             color: textColor, fontFamily: 'inherit',
           }}
         >
@@ -140,7 +142,7 @@ export function SplitButtonView({
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             height: '100%', padding: '0 8px',
-            cursor: 'pointer', background: 'transparent', border: 'none',
+            cursor: 'pointer', border: 'none',
             color: textColor,
           }}
           aria-haspopup="true"

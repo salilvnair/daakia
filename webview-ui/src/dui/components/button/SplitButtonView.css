@@ -1,5 +1,8 @@
-.dui_split-button__main:hover { filter: brightness(1.1); }
-.dui_split-button__chevron:hover { filter: brightness(1.1); }
+.dui_split-button__main { background: transparent; transition: background 120ms; }
+.dui_split-button__chevron { background: transparent; transition: background 120ms; }
+
+.dui_split-button__main:hover { background: var(--dui-split-hover-bg, rgba(0,0,0,0.1)); }
+.dui_split-button__chevron:hover { background: var(--dui-split-hover-bg, rgba(0,0,0,0.1)); }
 
 .dui_split-button__menu-item { transition: background 80ms; }
 .dui_split-button__menu-item:hover { background: var(--color-item-hover-bg); }

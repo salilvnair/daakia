@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
-import { TrashIcon, PlusIcon, BulkEditIcon } from '../../../icons';
+import { useState, useRef } from 'react';
+import { ConfirmDialog } from '../../../components/shared/modals/ConfirmDialog';
+import { TrashIcon, BulkEditIcon, PlusIcon, EyeIcon, EyeOffIcon } from '../../../icons';
 import type { DuiSize } from '../../core/DuiTypes';
-import { KeyValueItemView } from './KeyValueItemView';
-import './KeyValueTableView.css';
+import { KeyValueTableRowView } from './KeyValueTableRowView';
 
 export interface KeyValueTableRow {
   id: string;
@@ -10,24 +10,55 @@ export interface KeyValueTableRow {
   value: string;
   description?: string;
   enabled: boolean;
+  type?: 'text' | 'file';
+  files?: string[];
+  filePaths?: string[];
+  fileData?: string[];
+  fileMimeTypes?: string[];
+  fileExists?: boolean[];
+}
+
+/** A computed/auto-generated row shown above editable rows — read-only, lock icon on left */
+export interface PinnedKeyValueRow {
+  id: string;
+  key: string;
+  value: string;
+  description?: string;
+  /** If true, a trash icon appears on hover and the row can be removed via onPinnedRemove */
+  deletable?: boolean;
+  /** If true (or auto-detected via SENSITIVE_HEADERS), value is masked with eye-toggle */
+  masked?: boolean;
 }
 
 export interface KeyValueTableViewProps {
   rows: KeyValueTableRow[];
   onChange: (rows: KeyValueTableRow[]) => void;
   showDescription?: boolean;
-  placeholder?: { key?: string; value?: string; description?: string };
-  label?: string;
-  accentColor?: string;
-  /** Falls back to DuiProvider size when omitted. */
-  size?: DuiSize;
-  /** Wrap in a rounded border (default false — matches REST headers flat style) */
-  bordered?: boolean;
-  /** Show the bulk-edit textarea toggle (default true) */
-  bulkEdit?: boolean;
-  /** Extra toolbar buttons rendered before the trash icon */
-  toolbarExtra?: React.ReactNode;
+  placeholder?: { key?: string; value?: string };
   className?: string;
+  /** Show HTTP header key autocomplete + value suggestions */
+  autocompleteKeys?: boolean;
+  /** Mask values for known sensitive keys (Authorization, token, etc.) */
+  maskSensitive?: boolean;
+  /** Hide the toolbar row entirely */
+  hideToolbar?: boolean;
+  /** Left-side label text */
+  label?: string;
+  /** Accent color for InsertRowDivider and toolbar highlights */
+  accentColor?: string;
+  /** Extra nodes rendered in toolbar right side (before trash icon) */
+  toolbarExtra?: React.ReactNode;
+  /** DUI size token — controls input height and font size. Falls back to DuiProvider or 'md'. */
+  size?: DuiSize;
+  /** Wrap in a rounded border panel */
+  bordered?: boolean;
+  /**
+   * Computed/auto-generated rows — shown as the first N rows with lock icon + dotted border.
+   * Hidden by default; revealed via the eye icon next to the label.
+   */
+  pinnedTopRows?: PinnedKeyValueRow[];
+  /** Called when a deletable pinned row is removed */
+  onPinnedRemove?: (id: string) => void;
 }
 
 function makeRow(): KeyValueTableRow {
@@ -36,41 +67,19 @@ function makeRow(): KeyValueTableRow {
 
 // ─── Insert Row Divider ────────────────────────────────────────────────────────
 
-interface InsertRowDividerProps {
-  onInsert: () => void;
-  accentColor?: string;
-}
-
-function InsertRowDivider({ onInsert, accentColor }: InsertRowDividerProps) {
-  const color = accentColor || 'var(--color-primary)';
+function InsertRowDivider({ onInsert, accentColor }: { onInsert: () => void; accentColor?: string }) {
+  const color = accentColor || 'rgb(99,102,241)';
   return (
-    <div
-      style={{
-        position: 'relative', height: 14,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        opacity: 0, transition: 'opacity 150ms',
-      }}
-      className="group/divider hover:opacity-100"
-    >
-      {/* Horizontal line */}
-      <div style={{
-        position: 'absolute', left: 16, right: 16, top: '50%',
-        height: 1,
-        background: `color-mix(in srgb, ${color} 25%, transparent)`,
-      }} />
-      {/* + Row pill */}
+    <div className="group/divider relative h-[14px] flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-150">
+      <div className="absolute inset-x-4 top-1/2 h-px" style={{ background: `color-mix(in srgb, ${color} 25%, transparent)` }} />
       <button
         type="button"
         onClick={onInsert}
+        className="relative z-10 flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium cursor-pointer transition-all"
         style={{
-          position: 'relative', zIndex: 1,
-          display: 'flex', alignItems: 'center', gap: 4,
-          padding: '1px 10px', borderRadius: 99,
-          fontSize: 11, fontWeight: 500,
-          color: color,
-          background: `color-mix(in srgb, ${color} 10%, var(--color-surface, transparent))`,
+          background: `color-mix(in srgb, ${color} 10%, transparent)`,
+          color,
           border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
-          cursor: 'pointer', fontFamily: 'inherit',
         }}
       >
         <PlusIcon size={10} />
@@ -82,58 +91,35 @@ function InsertRowDivider({ onInsert, accentColor }: InsertRowDividerProps) {
 
 // ─── Bulk Edit Textarea ────────────────────────────────────────────────────────
 
-function BulkEditArea({
-  rows, onApply, accentColor,
-}: {
-  rows: KeyValueTableRow[];
-  onApply: (rows: KeyValueTableRow[]) => void;
+function BulkEditArea({ defaultValue, onChangeRef, accentColor }: {
+  defaultValue: string;
+  onChangeRef: React.MutableRefObject<string>;
   accentColor?: string;
 }) {
-  const highlight = accentColor || 'var(--color-primary)';
-  const [text, setText] = useState(() =>
-    rows.filter(r => r.key || r.value)
-      .map(r => `${!r.enabled ? '# ' : ''}${r.key}: ${r.value}`)
-      .join('\n')
-  );
+  const [text, setText] = useState(defaultValue);
   const [focused, setFocused] = useState(false);
-
-  const apply = () => {
-    const parsed = text.split('\n').map(line => {
-      const disabled = line.startsWith('# ');
-      const clean = disabled ? line.slice(2) : line;
-      const colon = clean.indexOf(':');
-      const key = colon >= 0 ? clean.slice(0, colon).trim() : clean.trim();
-      const value = colon >= 0 ? clean.slice(colon + 1).trim() : '';
-      return { id: crypto.randomUUID(), key, value, description: '', enabled: !disabled };
-    }).filter(r => r.key || r.value);
-    onApply(parsed.length ? parsed : [makeRow()]);
-  };
+  onChangeRef.current = text;
+  const hl = accentColor || 'var(--color-primary)';
 
   return (
-    <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: 0 }}>
-        One entry per line.&nbsp;
-        <code style={{ color: highlight }}>Key: Value</code>.&nbsp;
-        Prefix&nbsp;<code style={{ color: highlight }}>#</code>&nbsp;to disable.
+    <div className="flex flex-col gap-1">
+      <p className="text-[11px] text-[var(--color-text-muted)] px-1">
+        Entries are separated by newline. Keys and values are separated by{' '}
+        <code style={{ color: hl }}>:</code>. Prepend <code style={{ color: hl }}>#</code> to disable a row.
       </p>
       <textarea
         value={text}
         onChange={e => setText(e.target.value)}
         onFocus={() => setFocused(true)}
-        onBlur={() => { setFocused(false); apply(); }}
-        rows={6}
-        spellCheck={false}
-        placeholder={`Content-Type: application/json\nAuthorization: Bearer token\n# X-Debug: true`}
+        onBlur={() => setFocused(false)}
+        className="w-full min-h-[160px] px-3 py-2.5 rounded-md text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-y"
         style={{
-          width: '100%', padding: '8px 10px',
-          borderRadius: 6, resize: 'vertical',
           background: 'var(--color-input-bg)',
-          border: `1px solid ${focused ? highlight : 'var(--color-input-border)'}`,
-          color: 'var(--color-text-primary)',
-          fontSize: 12, fontFamily: 'monospace',
-          outline: 'none', boxSizing: 'border-box',
+          border: `1px solid ${focused ? hl : 'var(--color-input-border)'}`,
           transition: 'border-color 120ms',
         }}
+        placeholder={`Content-Type: application/json\nAuthorization: Bearer token123\n# X-Debug: true`}
+        spellCheck={false}
       />
     </div>
   );
@@ -146,237 +132,210 @@ export function KeyValueTableView({
   onChange,
   showDescription = false,
   placeholder,
+  className = '',
+  autocompleteKeys = false,
+  maskSensitive = false,
+  hideToolbar = false,
   label,
   accentColor,
+  toolbarExtra,
   size,
   bordered = false,
-  bulkEdit: allowBulkEdit = true,
-  toolbarExtra,
-  className = '',
+  pinnedTopRows,
+  onPinnedRemove,
 }: KeyValueTableViewProps) {
-  const [isBulkEdit, setIsBulkEdit] = useState(false);
+  const [bulkEdit, setBulkEdit] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showPinned, setShowPinned] = useState(false);
+  const bulkTextRef = useRef('');
   const accent = accentColor || 'var(--color-primary)';
+  const hasPinned = pinnedTopRows && pinnedTopRows.length > 0;
 
-  const updateRow = useCallback((idx: number, field: keyof KeyValueTableRow, val: string | boolean) => {
+  const updateRow = (idx: number, field: keyof KeyValueTableRow, value: string | boolean) => {
     const updated = [...rows];
-    updated[idx] = { ...updated[idx], [field]: val };
+    updated[idx] = { ...updated[idx], [field]: value };
     onChange(updated);
-  }, [rows, onChange]);
+  };
 
-  const addRow = useCallback(() => onChange([...rows, makeRow()]), [rows, onChange]);
+  const addRow = () => onChange([...rows, makeRow()]);
 
-  const insertRowAt = useCallback((idx: number) => {
+  const insertRowAt = (idx: number) => {
     const updated = [...rows];
-    updated.splice(idx + 1, 0, makeRow());
+    updated.splice(idx, 0, makeRow());
     onChange(updated);
-  }, [rows, onChange]);
+  };
 
-  const removeRow = useCallback((idx: number) => {
+  const removeRow = (idx: number) => {
     if (rows.length <= 1) { onChange([makeRow()]); return; }
     onChange(rows.filter((_, i) => i !== idx));
-  }, [rows, onChange]);
+  };
 
-  const clearAll = useCallback(() => {
-    onChange([makeRow()]);
-    setShowClearConfirm(false);
-  }, [onChange]);
+  const toBulkText = () =>
+    rows.filter(r => r.key || r.value)
+      .map(r => `${!r.enabled ? '# ' : ''}${r.key}: ${r.value}`)
+      .join('\n');
 
-  const enabledCount = rows.filter(r => r.enabled && (r.key || r.value)).length;
+  const fromBulkText = (text: string) => {
+    const parsed = text.split('\n').map(line => {
+      const disabled = line.startsWith('# ');
+      const clean = disabled ? line.slice(2) : line;
+      const ci = clean.indexOf(':');
+      const key = ci >= 0 ? clean.slice(0, ci).trim() : clean.trim();
+      const value = ci >= 0 ? clean.slice(ci + 1).trim() : '';
+      return { id: crypto.randomUUID(), key, value, description: '', enabled: !disabled };
+    }).filter(r => r.key || r.value);
+    onChange(parsed.length ? parsed : [makeRow()]);
+  };
 
-  const hasBulkEdit = allowBulkEdit;
+  const handleClearAll = () => { onChange([makeRow()]); setShowClearConfirm(false); setBulkEdit(false); };
   const hasRows = rows.some(r => r.key || r.value);
-
-  const gridCols = `32px 1fr 1fr${showDescription ? ' 1fr' : ''} 32px`;
+  const gridCols = showDescription ? 'grid-cols-[32px_1fr_1fr_1fr_32px]' : 'grid-cols-[32px_1fr_1fr_32px]';
 
   return (
-    <div
-      className={className}
-      style={{
-        display: 'flex', flexDirection: 'column',
-        '--dui-kv-accent': accent,
-        ...(bordered ? {
-          border: '1px solid var(--color-surface-border)',
-          borderRadius: 6, overflow: 'hidden',
-        } : {}),
-      } as React.CSSProperties}
-    >
-      {/* ── Toolbar ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: bordered ? 0 : 6,
-        padding: bordered ? '6px 10px' : '0 2px',
-        ...(bordered ? {
-          background: 'var(--color-panel)',
-          borderBottom: '1px solid var(--color-surface-border)',
-        } : {}),
-      }}>
-        {/* Label + count */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {label && (
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)' }}>
-              {label}
-            </span>
-          )}
-          {enabledCount > 0 && (
-            <span style={{
-              fontSize: 10, padding: '1px 6px', borderRadius: 99, fontWeight: 600,
-              background: `color-mix(in srgb, ${accent} 12%, transparent)`,
-              color: accent,
-            }}>
-              {enabledCount}
-            </span>
-          )}
-        </div>
-
-        {/* Icon buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          {toolbarExtra}
-
-          {/* Confirm clear */}
-          {showClearConfirm ? (
-            <>
-              <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginRight: 4 }}>Clear all?</span>
-              <button type="button" onClick={clearAll} style={dangerBtn}>Yes</button>
-              <button type="button" onClick={() => setShowClearConfirm(false)} style={muteBtn}>No</button>
-            </>
-          ) : (
+    <div className={`text-[13px] ${bordered ? 'border border-[var(--color-surface-border)] rounded-md overflow-hidden' : ''} ${className}`}>
+      {/* Toolbar: label left, icon buttons right */}
+      {!hideToolbar && (
+        <div className="flex items-center justify-between mb-2 px-1">
+          <div className="flex items-center gap-1.5">
+            {hasPinned && (
+              <button
+                type="button"
+                onClick={() => setShowPinned(p => !p)}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium cursor-pointer transition-all"
+                style={{
+                  color: showPinned ? accent : 'var(--color-text-muted)',
+                  background: showPinned ? `color-mix(in srgb, ${accent} 10%, transparent)` : 'transparent',
+                  border: `1px solid ${showPinned ? `color-mix(in srgb, ${accent} 25%, transparent)` : 'transparent'}`,
+                }}
+                title={showPinned ? 'Hide computed headers' : 'Show computed headers'}
+              >
+                {showPinned
+                  ? <EyeIcon size={12} />
+                  : <EyeOffIcon size={12} />}
+                <span>{pinnedTopRows!.length} hidden</span>
+              </button>
+            )}
+            {!hasPinned && <div />}
+          </div>
+          <div className="flex items-center gap-1">
+            {toolbarExtra}
             <button
               type="button"
               onClick={() => { if (hasRows) setShowClearConfirm(true); }}
+              className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
+                hasRows
+                  ? 'text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)]'
+                  : 'text-[var(--color-text-muted)] opacity-30 cursor-default'
+              }`}
               title="Clear all"
-              className="dui_kv-table__clear-btn"
-              style={{ ...iconBtn, opacity: hasRows ? 1 : 0.3, cursor: hasRows ? 'pointer' : 'default' }}
             >
-              <TrashIcon size={13} />
+              <TrashIcon size={14} />
             </button>
-          )}
-
-          {hasBulkEdit && (
             <button
               type="button"
-              onClick={() => setIsBulkEdit(v => !v)}
+              onClick={() => { if (bulkEdit) fromBulkText(bulkTextRef.current); setBulkEdit(!bulkEdit); }}
+              className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
+                bulkEdit
+                  ? 'bg-[rgba(99,102,241,0.12)]'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]'
+              }`}
+              style={bulkEdit ? { color: accent } : undefined}
               title="Bulk edit"
-              style={{
-                ...iconBtn,
-                color: isBulkEdit ? accent : 'var(--color-text-muted)',
-                background: isBulkEdit ? `color-mix(in srgb, ${accent} 12%, transparent)` : 'transparent',
-              }}
             >
-              <BulkEditIcon size={13} />
+              <BulkEditIcon size={14} />
             </button>
-          )}
-
-          <button
-            type="button"
-            onClick={addRow}
-            title="Add row"
-            className="dui_kv-table__add-row-btn"
-            style={iconBtn}
-          >
-            <PlusIcon size={13} />
-          </button>
+            <button
+              type="button"
+              onClick={addRow}
+              className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] cursor-pointer transition-colors hover:bg-[rgba(99,102,241,0.08)]"
+              onMouseEnter={e => (e.currentTarget.style.color = accent)}
+              onMouseLeave={e => (e.currentTarget.style.color = '')}
+              title="Add new row"
+            >
+              <PlusIcon size={14} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* ── Bulk edit mode ── */}
-      {isBulkEdit ? (
-        <BulkEditArea
-          rows={rows}
-          accentColor={accentColor}
-          onApply={r => { onChange(r); setIsBulkEdit(false); }}
-        />
+      {bulkEdit ? (
+        <BulkEditArea defaultValue={toBulkText()} onChangeRef={bulkTextRef} accentColor={accentColor} />
       ) : (
         <>
-          {/* ── Column headers ── */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: gridCols,
-            gap: 8,
-            padding: '0 2px 4px',
-          }}>
+          {/* Column headers */}
+          <div className={`grid ${gridCols} gap-2 px-1 mb-1.5 items-center`}>
             <div />
-            {['Key', 'Value', ...(showDescription ? ['Description'] : [])].map(h => (
-              <div key={h} style={{
-                paddingLeft: 10, fontSize: 9, fontWeight: 700,
-                textTransform: 'uppercase', letterSpacing: '0.07em',
-                color: 'var(--color-text-muted)',
-              }}>
-                {h}
-              </div>
-            ))}
+            <div className="text-[var(--color-text-muted)] font-medium text-[10px] uppercase tracking-wide px-2.5">{label || 'Key'}</div>
+            <div className="text-[var(--color-text-muted)] font-medium text-[10px] uppercase tracking-wide px-2.5">Value</div>
+            {showDescription && (
+              <div className="text-[var(--color-text-muted)] font-medium text-[10px] uppercase tracking-wide px-2.5">Description</div>
+            )}
             <div />
           </div>
 
-          {/* ── Rows + InsertRowDivider ── */}
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {/* Pinned (computed) rows — shown first when eye is toggled on */}
+          {hasPinned && showPinned && (
+            <div className="flex flex-col mb-1.5">
+              {pinnedTopRows!.map(pRow => (
+                <KeyValueTableRowView
+                  key={pRow.id}
+                  rowKey={pRow.key}
+                  value={pRow.value}
+                  description={pRow.description}
+                  readOnly
+                  masked={pRow.masked}
+                  maskSensitive
+                  deletable={pRow.deletable}
+                  showDescription={showDescription}
+                  size={size}
+                  onRemove={pRow.deletable && onPinnedRemove ? () => onPinnedRemove(pRow.id) : undefined}
+                />
+              ))}
+              <div className="my-1.5 border-b border-dashed" style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 10%, transparent)' }} />
+            </div>
+          )}
+
+          {/* Rows with InsertRowDivider between them */}
+          <div className="flex flex-col gap-0">
             {rows.map((row, idx) => (
               <div key={row.id}>
-                <div style={{ padding: '2px 2px' }}>
-                  <KeyValueItemView
-                    keyValue={row.key}
+                <div className="py-1">
+                  <KeyValueTableRowView
+                    rowKey={row.key}
                     value={row.value}
-                    description={showDescription ? (row.description ?? '') : undefined}
+                    description={row.description}
                     enabled={row.enabled}
+                    maskSensitive={maskSensitive}
+                    showDescription={showDescription}
                     placeholder={placeholder}
-                    accentColor={accentColor}
+                    autocompleteKeys={autocompleteKeys}
                     size={size}
-                    onKeyChange={v => updateRow(idx, 'key', v)}
-                    onValueChange={v => updateRow(idx, 'value', v)}
-                    onDescriptionChange={showDescription ? v => updateRow(idx, 'description', v) : undefined}
-                    onToggleEnabled={() => updateRow(idx, 'enabled', !row.enabled)}
-                    onDelete={() => removeRow(idx)}
+                    accentColor={accentColor}
+                    deletable
+                    onKeyChange={val => updateRow(idx, 'key', val)}
+                    onValueChange={val => updateRow(idx, 'value', val)}
+                    onDescriptionChange={val => updateRow(idx, 'description', val)}
+                    onEnabledChange={enabled => updateRow(idx, 'enabled', enabled)}
+                    onRemove={() => removeRow(idx)}
                   />
                 </div>
-                <InsertRowDivider onInsert={() => insertRowAt(idx)} accentColor={accentColor} />
+                <InsertRowDivider onInsert={() => insertRowAt(idx + 1)} accentColor={accentColor} />
               </div>
             ))}
           </div>
-
-          {/* ── Add Row footer ── */}
-          <button
-            type="button"
-            onClick={addRow}
-            className="dui_kv-table__add-row-footer"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 4px',
-              fontSize: 10, fontWeight: 600,
-              textTransform: 'uppercase', letterSpacing: '0.05em',
-              color: accent, cursor: 'pointer', border: 'none',
-              background: 'transparent', fontFamily: 'inherit',
-              borderTop: bordered
-                ? `1px dashed color-mix(in srgb, ${accent} 25%, transparent)`
-                : 'none',
-              marginTop: 2,
-            }}
-          >
-            <PlusIcon size={11} />
-            Add Row
-          </button>
         </>
+      )}
+
+      {showClearConfirm && (
+        <ConfirmDialog
+          title="Clear All?"
+          message="All entries will be permanently deleted. This cannot be undone."
+          confirmLabel="Clear All"
+          danger
+          onConfirm={handleClearAll}
+          onCancel={() => setShowClearConfirm(false)}
+        />
       )}
     </div>
   );
 }
-
-const iconBtn: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  width: 24, height: 24, borderRadius: 4, border: 'none',
-  background: 'transparent', cursor: 'pointer',
-  color: 'var(--color-text-muted)',
-  transition: 'color 100ms, background 100ms',
-};
-
-const dangerBtn: React.CSSProperties = {
-  fontSize: 10, padding: '2px 7px', borderRadius: 3,
-  border: '1px solid var(--color-error)', background: 'transparent',
-  color: 'var(--color-error)', cursor: 'pointer', fontFamily: 'inherit',
-};
-
-const muteBtn: React.CSSProperties = {
-  fontSize: 10, padding: '2px 7px', borderRadius: 3,
-  border: '1px solid var(--color-surface-border)', background: 'transparent',
-  color: 'var(--color-text-muted)', cursor: 'pointer', fontFamily: 'inherit',
-};
