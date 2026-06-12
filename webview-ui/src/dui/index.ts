@@ -197,3 +197,6 @@ export type { MarkdownViewProps } from './components/display/MarkdownView';
 
 export { FormDataTableView } from './components/input/FormDataTableView';
 export type { FormDataTableViewProps, FormDataRow } from './components/input/FormDataTableView';
+
+export { SpacerView } from './components/layout/SpacerView';
+export type { SpacerViewProps } from './components/layout/SpacerView';

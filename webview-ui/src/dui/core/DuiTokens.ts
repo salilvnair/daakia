@@ -8,11 +8,11 @@ import type { DuiSize, DuiRadius, DuiWidth } from './DuiTypes';
 /** Heights (px) per size × category */
 export const DUI_HEIGHT = {
   /** Standard form controls: text input, select, duration, search, highlighted input */
-  input:  { xxs: 16, xs: 20, sm: 24, md: 28, lg: 32, xl: 40, xxl: 48, xxxl: 56 },
+  input:  { xxs: 16, xs: 20, sm: 24, md: 28, lg: 34, xl: 40, xxl: 48, xxxl: 56 },
   /** Push buttons (primary, secondary, ghost, danger) */
-  button: { xxs: 16, xs: 20, sm: 24, md: 28, lg: 32, xl: 40, xxl: 48, xxxl: 56 },
+  button: { xxs: 16, xs: 20, sm: 24, md: 28, lg: 34, xl: 40, xxl: 48, xxxl: 56 },
   /** Pill tabs, segment controls */
-  tab:    { xxs: 16, xs: 20, sm: 24, md: 28, lg: 32, xl: 40, xxl: 48, xxxl: 56 },
+  tab:    { xxs: 16, xs: 20, sm: 24, md: 28, lg: 34, xl: 40, xxl: 48, xxxl: 56 },
   /** Sidebar nav items, settings nav links */
   nav:    { xxs: 20, xs: 24, sm: 28, md: 32, lg: 36, xl: 44, xxl: 52, xxxl: 60 },
   /** Context-menu items, dropdown options, sub-menu rows */

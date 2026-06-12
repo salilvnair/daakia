@@ -18,6 +18,7 @@ import {
   FormDataTableView,
   YamlKeyChip,
   LiveColorCustomizer,
+  SpacerView,
 } from '../../../dui';
 import type { HudItem, FormDataRow, LiveColorVar } from '../../../dui';
 import type { MergedInputSegment } from '../../../dui';
@@ -2498,6 +2499,74 @@ export function YamlKeyChipPanel() {
               <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>{hex}</span>
             </div>
           ))}
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── SpacerView panel ─────────────────────────────────────────────────────────
+
+export function SpacerViewPanel() {
+  return (
+    <div>
+      <Row
+        label="Horizontal — divides groups in a vertical icon rail"
+        code={`<SpacerView />\n// or explicitly:\n<SpacerView orientation="horizontal" spacing="md" />`}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '6px 8px', background: 'var(--color-surface)', borderRadius: 8, border: '1px solid var(--color-surface-border)' }}>
+          {['var(--color-protocol-rest)', 'var(--color-protocol-graphql)', 'var(--color-protocol-websocket)'].map((c, i) => (
+            <div key={i} style={{ width: 36, height: 36, borderRadius: 8, background: `color-mix(in srgb, ${c} 20%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 30%, transparent)`, flexShrink: 0 }} />
+          ))}
+          <SpacerView orientation="horizontal" spacing="md" />
+          {['var(--color-protocol-ai)', 'var(--color-protocol-mcp)'].map((c, i) => (
+            <div key={i} style={{ width: 36, height: 36, borderRadius: 8, background: `color-mix(in srgb, ${c} 20%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 30%, transparent)`, flexShrink: 0 }} />
+          ))}
+        </div>
+      </Row>
+
+      <Row
+        label="Vertical — divides groups in a horizontal toolbar"
+        code={`<SpacerView orientation="vertical" spacing="md" />`}
+      >
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 4, padding: '6px 8px', background: 'var(--color-surface)', borderRadius: 8, border: '1px solid var(--color-surface-border)' }}>
+          {['var(--color-method-get)', 'var(--color-method-post)', 'var(--color-method-put)'].map((c, i) => (
+            <div key={i} style={{ width: 36, height: 28, borderRadius: 6, background: `color-mix(in srgb, ${c} 20%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 30%, transparent)`, flexShrink: 0 }} />
+          ))}
+          <SpacerView orientation="vertical" spacing="md" />
+          {['var(--color-method-delete)', 'var(--color-method-patch)'].map((c, i) => (
+            <div key={i} style={{ width: 36, height: 28, borderRadius: 6, background: `color-mix(in srgb, ${c} 20%, transparent)`, border: `1px solid color-mix(in srgb, ${c} 30%, transparent)`, flexShrink: 0 }} />
+          ))}
+        </div>
+      </Row>
+
+      <Row
+        label="Spacing sizes — sm / md / lg"
+        code={`<SpacerView orientation="horizontal" spacing="sm" />\n<SpacerView orientation="horizontal" spacing="md" />\n<SpacerView orientation="horizontal" spacing="lg" />`}
+      >
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: 24 }}>
+          {(['sm', 'md', 'lg'] as const).map(s => (
+            <div key={s} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />
+              <SpacerView orientation="horizontal" spacing={s} />
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />
+              <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4 }}>{s}</span>
+            </div>
+          ))}
+        </div>
+      </Row>
+
+      <Row
+        label="Real-world: sidebar icon rail with two groups"
+        code={`// Icon rail — two groups separated by a spacer\n<div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>\n  <IconButtonView icon={<RestApiIcon size={14} />} title="REST" />\n  <IconButtonView icon={<GraphQLIcon size={14} />} title="GraphQL" />\n  <SpacerView />\n  <IconButtonView icon={<SettingsIcon size={14} />} title="Settings" />\n</div>`}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '8px 6px', background: 'var(--color-panel)', borderRadius: 8, border: '1px solid var(--color-surface-border)', width: 48 }}>
+          <div title="REST" style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-protocol-rest) 15%, transparent)', color: 'var(--color-protocol-rest)', fontSize: 11, fontWeight: 700 }}>R</div>
+          <div title="GQL" style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-protocol-graphql) 12%, transparent)', color: 'var(--color-protocol-graphql)', fontSize: 11, fontWeight: 700 }}>G</div>
+          <div title="WS" style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-protocol-websocket) 12%, transparent)', color: 'var(--color-protocol-websocket)', fontSize: 11, fontWeight: 700 }}>W</div>
+          <SpacerView orientation="horizontal" spacing="md" />
+          <div title="Settings" style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)', color: 'var(--color-text-muted)', fontSize: 11, fontWeight: 700 }}>⚙</div>
+          <div title="DevTools" style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)', color: 'var(--color-text-muted)', fontSize: 11, fontWeight: 700 }}>{'</>'}</div>
         </div>
       </Row>
     </div>

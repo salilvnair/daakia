@@ -9,10 +9,11 @@ import {
   HighlightedInputPanel, KeyValueTablePanel, MergedInputViewPanel,
   HudViewPanel, CollapsibleSectionPanel, JsonTreeViewPanel, ExpandableLogEntryPanel,
   CopyButtonPanel, MarkdownViewPanel, FormDataTablePanel,
-  YamlKeyChipPanel, LiveColorCustomizerPanel,
+  YamlKeyChipPanel, LiveColorCustomizerPanel, SpacerViewPanel,
 } from './panels/NewComponentPanels';
 import { IconsGalleryPanel } from './panels/IconsGalleryPanel';
 import { ThemeCustomizationPanel } from './panels/ThemeCustomizationPanel';
+import { ThemeAddVarGuidePanel } from './panels/ThemeAddVarGuidePanel';
 import { LivePlayground } from './panels/LivePlayground';
 import {
   ChipView,
@@ -60,11 +61,11 @@ type CategoryId =
   | 'statusindicator' | 'infopopup' | 'resizablepanel' | 'splitpanel' | 'dottedcard'
   | 'coloredtext' | 'statscard' | 'datatable' | 'codeblock' | 'aibutton'
   | 'sidenav' | 'settingsnav' | 'themecardselector' | 'featurecategory'
-  | 'taginput' | 'bottompanel' | 'toast' | 'promptcard' | 'promptlibrary' | 'iconsgallery' | 'themeconfig' | 'stageview'
+  | 'taginput' | 'bottompanel' | 'toast' | 'promptcard' | 'promptlibrary' | 'iconsgallery' | 'themeconfig' | 'themeaddvar' | 'stageview'
   | 'searchinput' | 'durationinput' | 'pilltabs' | 'splitbutton' | 'highlightedinput' | 'keyvaluetable'
   | 'mergedinput' | 'duiprovider' | 'hudview'
   | 'collapsiblesection' | 'jsontree' | 'logentry'
-  | 'copybutton' | 'markdownview' | 'formdatatable' | 'yamlkeychip' | 'livecolorpanel';
+  | 'copybutton' | 'markdownview' | 'formdatatable' | 'yamlkeychip' | 'livecolorpanel' | 'spacerview';
 
 interface SidebarItem { id: CategoryId; label: string; icon: React.ReactNode }
 interface SidebarGroup { title: string; items: SidebarItem[] }
@@ -150,6 +151,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'bottompanel',        label: 'BottomPanelView',         icon: <TerminalIcon size={13} /> },
       { id: 'featurecategory',    label: 'FeatureCategoryView',     icon: <FilterIcon size={13} /> },
       { id: 'collapsiblesection', label: 'CollapsibleSectionView',  icon: <ChevronRightIcon size={13} /> },
+      { id: 'spacerview',         label: 'SpacerView',              icon: <LayersIcon size={13} /> },
     ],
   },
   {
@@ -160,6 +162,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'patterns',       label: 'Patterns',            icon: <CodeBracketsIcon size={13} /> },
       { id: 'iconsgallery',   label: 'Icons Gallery',       icon: <SearchIcon size={13} /> },
       { id: 'themeconfig',    label: 'Theme Customization', icon: <WandIcon size={13} /> },
+      { id: 'themeaddvar',   label: 'Add Theme Variable',  icon: <CodeBracketsIcon size={13} /> },
     ],
   },
 ];
@@ -1579,6 +1582,7 @@ const PANELS: Record<CategoryId, { title: string; desc: string; content: React.R
   stageview:         { title: 'StageCheck / StageSpin / StagePulse', desc: 'Step-level status indicators — completed (check), active (spin), pending (pulse) — for multi-step pipelines and request flows.', vars: VARS_STAGE, content: <StageViewPanel />, code: `<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>\n  <StageCheck label="Auth verified"   sublabel="Token valid" />\n  <StageSpin  label="Sending request" sublabel="Waiting for response…" />\n  <StagePulse label="Parse response"  sublabel="Queued" />\n</div>` },
   iconsgallery:      { title: 'Icons Gallery',          desc: 'All Daakia icons — searchable by name — click to copy icon name.',                   content: <IconsGalleryPanel />, noExamplesHeader: true },
   themeconfig:       { title: 'Theme Customization',    desc: 'Export / upload YAML theme files — all 63 CSS color vars, live hot-swap, no rebuild.', content: <ThemeCustomizationPanel />, noExamplesHeader: true },
+  themeaddvar:       { title: 'Add Theme Variable',     desc: 'Step-by-step guide: register a new CSS color variable in SCHEMA, declare it in index.css, use it in any DUI component, and test it live.', content: <ThemeAddVarGuidePanel />, noExamplesHeader: true },
   searchinput:       { title: 'SearchInputView',        desc: 'URL-bar style search input with optional prefix icon and suffix clear button.',        vars: VARS_INPUT,      content: <SearchInputPanel />,       code: `function Preview() {\n  const [q, setQ] = useState('');\n  return (\n    <SearchInputView\n      value={q}\n      onChange={setQ}\n      placeholder="Search collections…"\n      prefix={<SearchIcon size={11} />}\n      suffix={q ? <button onClick={() => setQ('')}><CloseIcon size={10} /></button> : null}\n    />\n  );\n}` },
   durationinput:     { title: 'DurationInputView',      desc: 'Number input with ms / s / m / hr unit selector dropdown.',                           vars: VARS_DUR,        content: <DurationInputPanel />,     code: `function Preview() {\n  const [timeout, setTimeout] = useState(5000);\n  return (\n    <DurationInputView\n      value={timeout}\n      onChange={setTimeout}\n    />\n  );\n}` },
   pilltabs:          { title: 'PillTabsView',           desc: 'Sliding-indicator tabs — pill (background) and underline variants — with badges and dots.',  vars: VARS_PILLTAB, content: <PillTabsPanel />, code: `function Preview() {\n  const [active, setActive] = useState('body');\n  return (\n    <PillTabsView\n      tabs={[\n        { id: 'body',    label: 'Body' },\n        { id: 'headers', label: 'Headers', badge: 3 },\n        { id: 'auth',    label: 'Auth', dot: true },\n      ]}\n      activeTab={active}\n      onChange={setActive}\n      variant="pill"\n    />\n  );\n}` },
@@ -1596,6 +1600,7 @@ const PANELS: Record<CategoryId, { title: string; desc: string; content: React.R
   formdatatable:      { title: 'FormDataTableView', desc: 'Multipart/form-data key-value table with file upload support. Rows have: enabled toggle, key input, type dropdown (Text | File), value/file picker, and delete button. No store or postMsg deps — fully controlled via rows + onChange props.', vars: VARS_ACCENT, content: <FormDataTablePanel />, code: `function Preview() {\n  const [rows, setRows] = useState([\n    { id: '1', key: 'username', value: 'alice', type: 'text', enabled: true },\n    { id: '2', key: 'avatar',   value: '',      type: 'file', enabled: true },\n    { id: '3', key: 'role',     value: 'admin', type: 'text', enabled: false },\n  ]);\n  return (\n    <FormDataTableView\n      rows={rows}\n      onChange={setRows}\n      label="Form Data"\n      accentColor="var(--color-primary)"\n    />\n  );\n}` },
   yamlkeychip:        { title: 'YamlKeyChip', desc: 'Compact type-labeled chip for YAML/JSON keys. Shows the key name with a small colored type badge (string, number, boolean, object, array, null). Used inside JsonTreeView nodes.', vars: VARS_ACCENT, content: <YamlKeyChipPanel />, code: `<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>\n  <YamlKeyChip yamlKey="brand.primary" />\n  <YamlKeyChip yamlKey="component_button.primary_bg" color="var(--color-success)" />\n  <YamlKeyChip yamlKey="surface.border" color="var(--color-warning)" />\n</div>` },
   livecolorpanel:     { title: 'LiveColorCustomizer', desc: 'Interactive color editor that applies CSS custom property changes directly to the document root in real time. Useful for live-theming the webview without a reload. Takes an array of LiveColorVar objects (cssVar, yamlKey, label).', vars: VARS_ACCENT, content: <LiveColorCustomizerPanel />, noExamplesHeader: true, code: `<LiveColorCustomizer vars={[\n  { cssVar: '--color-primary', yamlKey: 'primary', label: 'Primary' },\n  { cssVar: '--color-success', yamlKey: 'success', label: 'Success' },\n  { cssVar: '--color-error',   yamlKey: 'error',   label: 'Error' },\n]} />` },
+  spacerview:         { title: 'SpacerView', desc: 'macOS/iOS-style thin divider line for separating groups in icon rails, toolbars, or any flex container. Props: orientation (horizontal | vertical), spacing (sm | md | lg). No interaction — purely visual, pointer-events: none.', vars: VARS_ACCENT, content: <SpacerViewPanel />, code: `function Preview() {\n  const [orientation, setOrientation] = useState('horizontal');\n  const [spacing, setSpacing] = useState('md');\n  return (\n    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>\n      <div style={{ display: 'flex', gap: 6 }}>\n        <SelectInputView\n          value={orientation}\n          onChange={setOrientation}\n          options={[{ value: 'horizontal', label: 'horizontal' }, { value: 'vertical', label: 'vertical' }]}\n          size="sm"\n        />\n        <SelectInputView\n          value={spacing}\n          onChange={setSpacing}\n          options={[{ value: 'sm', label: 'sm' }, { value: 'md', label: 'md' }, { value: 'lg', label: 'lg' }]}\n          size="sm"\n        />\n      </div>\n      <div style={{ display: 'flex', flexDirection: orientation === 'horizontal' ? 'column' : 'row', alignItems: 'center', padding: 8, gap: 4, background: 'var(--color-surface)', borderRadius: 8, border: '1px solid var(--color-surface-border)' }}>\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />\n        <SpacerView orientation={orientation} spacing={spacing} />\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'color-mix(in srgb, var(--color-primary) 20%, transparent)', flexShrink: 0 }} />\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />\n      </div>\n    </div>\n  );\n}` },
 };
 
 // ─── Main showcase ────────────────────────────────────────────────────────────

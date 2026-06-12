@@ -1,6 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { DropdownArrowIcon, CheckIcon } from '../../../icons';
+import { DropdownArrowIcon, CheckIcon, SearchIcon } from '../../../icons';
+import type { DuiSize, DuiRadius, DuiWidth, DuiFontStyle } from '../../core/DuiTypes';
+import { useInputBase } from '../../core/InputBase';
+import { useDui } from '../../core/DuiContext';
 import './SelectTextInputView.css';
 
 export interface SelectTextOption {
@@ -10,8 +13,6 @@ export interface SelectTextOption {
   color?: string;
 }
 
-export type SelectTextInputSize = 'sm' | 'md' | 'lg';
-
 export interface SelectTextInputViewProps {
   selectValue: string;
   selectOptions: SelectTextOption[];
@@ -19,19 +20,27 @@ export interface SelectTextInputViewProps {
   inputValue: string;
   onInputChange: (value: string) => void;
   placeholder?: string;
-  size?: SelectTextInputSize;
+  /** Falls back to DuiProvider size when omitted. */
+  size?: DuiSize;
   disabled?: boolean;
   /** Accent border color on focus */
   accentColor?: string;
   /** Override the select section width in px */
   selectWidth?: number;
+  /** URL / text autocomplete suggestions */
+  suggestions?: string[];
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  // ─── DUI container props ──────────────────────────────────────────────────
+  width?: DuiWidth;
+  borderRadius?: DuiRadius | number;
+  color?: string;
+  fontStyle?: DuiFontStyle;
   className?: string;
 }
 
-const SIZES: Record<SelectTextInputSize, { height: number; fontSize: number; inputFont: number; arrowSize: number }> = {
-  sm: { height: 26, fontSize: 11, inputFont: 11, arrowSize: 8  },
-  md: { height: 34, fontSize: 12, inputFont: 12, arrowSize: 10 },
-  lg: { height: 40, fontSize: 13, inputFont: 13, arrowSize: 11 },
+/** Select section width per size — sized to fit longest HTTP method label ("OPTIONS") */
+const SELECT_WIDTH: Record<DuiSize, number> = {
+  xxs: 44, xs: 52, sm: 64, md: 80, lg: 96, xl: 112, xxl: 128, xxxl: 148,
 };
 
 export function SelectTextInputView({
@@ -41,58 +50,113 @@ export function SelectTextInputView({
   inputValue,
   onInputChange,
   placeholder = 'Enter URL or paste text',
-  size = 'md',
+  size,
   disabled = false,
   accentColor,
   selectWidth,
+  suggestions = [],
+  onKeyDown,
+  width,
+  borderRadius,
+  color,
+  fontStyle,
   className = '',
 }: SelectTextInputViewProps) {
-  const [open, setOpen] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
-  const dims = SIZES[size];
-  const selWidth = selectWidth ?? (size === 'sm' ? 72 : size === 'lg' ? 106 : 88);
+  const ctx = useDui();
+  const resolvedSize: DuiSize = size ?? ctx.size;
+  const base = useInputBase(size, { width, borderRadius, color, fontStyle });
+  const selWidth = selectWidth ?? SELECT_WIDTH[resolvedSize];
   const accent = accentColor ?? 'var(--color-primary)';
+
+  const [methodOpen, setMethodOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightedIdx, setHighlightedIdx] = useState(-1);
+
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [methodDropPos, setMethodDropPos] = useState({ top: 0, left: 0, width: 0 });
+  const [suggDropPos, setSuggDropPos] = useState({ top: 0, left: 0, width: 0 });
 
   const selectedOpt = selectOptions.find(o => o.value === selectValue);
   const selectColor = selectedOpt?.color ?? 'var(--color-text-primary)';
 
-  const openDropdown = () => {
+  // ── Filtered suggestions ──────────────────────────────────────────────────
+
+  const filteredSuggestions = useMemo(() => {
+    if (!inputValue.trim() || !suggestions.length) return [];
+    const lower = inputValue.toLowerCase();
+    return suggestions.filter(s => s.toLowerCase().includes(lower) && s !== inputValue).slice(0, 8);
+  }, [inputValue, suggestions]);
+
+  // ── Method dropdown ────────────────────────────────────────────────────────
+
+  const openMethodDropdown = () => {
     if (disabled) return;
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    setDropPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 120) });
-    setOpen(v => !v);
+    setMethodDropPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 120) });
+    setMethodOpen(v => !v);
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!methodOpen) return;
     const handler = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
-      if (!t.closest('[data-stiv-dropdown]') && !t.closest('[data-stiv-trigger]')) {
-        setOpen(false);
-      }
+      if (!t.closest('[data-stiv-method]') && !t.closest('[data-stiv-trigger]')) setMethodOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [methodOpen]);
 
-  const borderColor = focused || open
-    ? accent
-    : 'var(--color-input-border)';
+  // ── Suggestions dropdown ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (filteredSuggestions.length > 0 && focused) {
+      const el = wrapperRef.current;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        setSuggDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      }
+      setShowSuggestions(true);
+      setHighlightedIdx(-1);
+    } else {
+      setShowSuggestions(false);
+    }
+  }, [filteredSuggestions, focused]);
+
+  const handleSuggestionSelect = (val: string) => {
+    onInputChange(val);
+    setShowSuggestions(false);
+    setHighlightedIdx(-1);
+    inputRef.current?.focus();
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && filteredSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedIdx(i => Math.min(i + 1, filteredSuggestions.length - 1)); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setHighlightedIdx(i => Math.max(i - 1, -1)); return; }
+      if (e.key === 'Enter' && highlightedIdx >= 0) { e.preventDefault(); handleSuggestionSelect(filteredSuggestions[highlightedIdx]); return; }
+      if (e.key === 'Escape')    { setShowSuggestions(false); setHighlightedIdx(-1); return; }
+    }
+    onKeyDown?.(e);
+  };
+
+  const borderColor = focused || methodOpen ? accent : 'var(--color-input-border)';
 
   return (
     <>
       <div
+        ref={wrapperRef}
         className={className}
         style={{
           display: 'flex',
-          height: dims.height,
-          width: '100%',
+          height: base.height,
+          width: base.width,
           border: `1px solid ${borderColor}`,
-          borderRadius: 6,
+          borderRadius: base.borderRadius,
           background: 'var(--color-input-bg)',
           opacity: disabled ? 0.5 : 1,
           transition: 'border-color 120ms',
@@ -100,82 +164,76 @@ export function SelectTextInputView({
           position: 'relative',
         }}
       >
-        {/* Select trigger section */}
+        {/* Select trigger */}
         <div
           ref={triggerRef}
           data-stiv-trigger
-          onClick={openDropdown}
+          onClick={openMethodDropdown}
           className={`dui_select-text__trigger${disabled ? ' dui_select-text__trigger--disabled' : ''}`}
           style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            padding: `0 ${size === 'sm' ? 7 : 10}px`,
+            display: 'flex', alignItems: 'center', gap: base.gap,
+            padding: `0 ${base.paddingX}`,
             width: selWidth,
             flexShrink: 0,
             cursor: disabled ? 'not-allowed' : 'pointer',
             userSelect: 'none',
             color: selectColor,
             fontWeight: 700,
-            fontSize: dims.fontSize,
+            fontSize: base.fontSize,
             letterSpacing: '0.02em',
-            borderRadius: '5px 0 0 5px',
+            borderRadius: `calc(${base.borderRadius} - 1px) 0 0 calc(${base.borderRadius} - 1px)`,
           }}
         >
           <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {selectedOpt?.label ?? selectValue}
           </span>
           <DropdownArrowIcon
-            size={dims.arrowSize}
+            size={base.iconSize - 2}
             style={{
               flexShrink: 0,
               color: 'var(--color-text-muted)',
-              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+              transform: methodOpen ? 'rotate(180deg)' : 'rotate(0deg)',
               transition: 'transform 150ms ease',
             }}
           />
         </div>
 
-        {/* Vertical divider */}
-        <div style={{
-          width: 1,
-          alignSelf: 'stretch',
-          background: 'var(--color-input-border)',
-          flexShrink: 0,
-          margin: '4px 0',
-        }} />
+        {/* Divider */}
+        <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--color-input-border)', flexShrink: 0, margin: '4px 0' }} />
 
-        {/* Text input */}
+        {/* URL text input */}
         <input
+          ref={inputRef}
           value={inputValue}
           onChange={e => onInputChange(e.target.value)}
           placeholder={placeholder}
           disabled={disabled}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => setTimeout(() => setFocused(false), 120)}
+          onKeyDown={handleInputKeyDown}
           style={{
-            flex: 1, height: '100%', padding: `0 ${size === 'sm' ? 8 : 12}px`,
+            flex: 1, height: '100%', padding: `0 ${base.paddingX}`,
             border: 'none', outline: 'none', background: 'transparent',
-            fontSize: dims.inputFont, color: 'var(--color-text-primary)',
+            fontSize: base.fontSize,
+            color: base.color ?? 'var(--color-text-primary)',
             fontFamily: 'inherit',
+            fontStyle: base.fontStyle,
           }}
         />
       </div>
 
-      {/* Dropdown portal */}
-      {open && createPortal(
+      {/* Method dropdown portal */}
+      {methodOpen && createPortal(
         <div
-          data-stiv-dropdown
+          data-stiv-method
           style={{
-            position: 'fixed',
-            top: dropPos.top,
-            left: dropPos.left,
-            minWidth: dropPos.width,
+            position: 'fixed', top: methodDropPos.top, left: methodDropPos.left,
+            minWidth: methodDropPos.width,
             background: 'var(--color-surface)',
             border: '1px solid var(--color-surface-border)',
             borderRadius: 8,
             boxShadow: '0 8px 24px rgba(0,0,0,0.22)',
-            zIndex: 9999,
-            padding: 3,
-            overflow: 'hidden',
+            zIndex: 9999, padding: 3, overflow: 'hidden',
           }}
         >
           {selectOptions.map(opt => {
@@ -183,28 +241,68 @@ export function SelectTextInputView({
             return (
               <div
                 key={opt.value}
-                onMouseDown={e => {
-                  e.preventDefault();
-                  onSelectChange(opt.value);
-                  setOpen(false);
-                }}
+                onMouseDown={e => { e.preventDefault(); onSelectChange(opt.value); setMethodOpen(false); }}
                 className={`dui_select-text__option${isSelected ? ' dui_select-text__option--selected' : ''}`}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
-                  padding: `${size === 'sm' ? '4px 8px' : '6px 10px'}`,
+                  padding: `6px ${base.paddingX}`,
                   borderRadius: 5, cursor: 'pointer',
-                  fontSize: dims.fontSize, fontWeight: isSelected ? 700 : 500,
+                  fontSize: base.fontSize, fontWeight: isSelected ? 700 : 500,
                   color: opt.color ?? 'var(--color-text-primary)',
-                  background: isSelected
-                    ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)'
-                    : 'transparent',
+                  background: isSelected ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
                 }}
               >
                 <span style={{ flex: 1 }}>{opt.label}</span>
-                {isSelected && <CheckIcon size={11} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />}
+                {isSelected && <CheckIcon size={base.iconSize - 2} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />}
               </div>
             );
           })}
+        </div>,
+        document.body
+      )}
+
+      {/* Suggestions autocomplete portal */}
+      {showSuggestions && filteredSuggestions.length > 0 && createPortal(
+        <div
+          data-stiv-suggestions
+          style={{
+            position: 'fixed', top: suggDropPos.top, left: suggDropPos.left, width: suggDropPos.width,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-surface-border)',
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.22)',
+            zIndex: 9998, padding: 3, overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: `4px ${base.paddingX} 6px`, borderBottom: '1px solid var(--color-surface-border)' }}>
+            <p style={{ fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+              Suggestions
+            </p>
+          </div>
+          {filteredSuggestions.map((s, i) => (
+            <div
+              key={s}
+              onMouseDown={e => { e.preventDefault(); handleSuggestionSelect(s); }}
+              onMouseEnter={() => setHighlightedIdx(i)}
+              onMouseLeave={() => setHighlightedIdx(-1)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: `6px ${base.paddingX}`,
+                borderRadius: 5, cursor: 'pointer',
+                fontSize: base.fontSize,
+                color: 'var(--color-text-primary)',
+                background: i === highlightedIdx
+                  ? `color-mix(in srgb, ${accent} 10%, transparent)`
+                  : 'transparent',
+                transition: 'background 80ms',
+              }}
+            >
+              <SearchIcon size={base.iconSize - 2} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
+                {s}
+              </span>
+            </div>
+          ))}
         </div>,
         document.body
       )}
