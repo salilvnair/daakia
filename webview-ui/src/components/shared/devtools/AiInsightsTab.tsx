@@ -237,20 +237,13 @@ Keep the analysis concise and actionable. Use emoji bullets. Format in clear Mar
           <SparkleIcon size={12} style={{ color: ACCENT }} />
           <span className="text-[11px] font-medium" style={{ color: ACCENT }}>AI Analysis</span>
           <div className="flex-1" />
-          <button
-            type="button"
-            onClick={runAnalysis}
+          <AIButtonView
+            label={loading ? 'Analyzing…' : 'Analyze'}
+            size="sm"
+            accentColor={ACCENT}
             disabled={loading}
-            className="flex items-center gap-1 h-[22px] px-2.5 text-[10px] rounded cursor-pointer transition-all disabled:opacity-50 disabled:cursor-default"
-            style={{ background: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, color: ACCENT, border: `1px solid color-mix(in srgb, ${ACCENT} 25%, transparent)` }}
-          >
-            {loading ? (
-              <RefreshIcon size={10} className="animate-spin" />
-            ) : (
-              <ChevronRightIcon size={10} />
-            )}
-            {loading ? 'Analyzing…' : 'Analyze'}
-          </button>
+            onClick={runAnalysis}
+          />
         </div>
         <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-3 py-2">
           {!aiResult && !loading && (
