@@ -84,7 +84,7 @@ export function SelectInputView({
   const radius = rounded ? base.borderRadius : '0px';
   const selected = options.find(o => o.value === value && !o.isHeader);
 
-  // Portal positioning
+  // Portal positioning — re-run on scroll/resize to stay glued to trigger
   useEffect(() => {
     if (!open || !triggerRef.current || !menuRef.current) return;
     const trigger = triggerRef.current;
@@ -103,7 +103,13 @@ export function SelectInputView({
     };
     position();
     const raf = requestAnimationFrame(position);
-    return () => cancelAnimationFrame(raf);
+    window.addEventListener('scroll', position, { passive: true, capture: true });
+    window.addEventListener('resize', position, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', position, { capture: true });
+      window.removeEventListener('resize', position);
+    };
   }, [open]);
 
   useEffect(() => {

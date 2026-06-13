@@ -161,6 +161,7 @@ export function UrlBar() {
           onPrimaryClick={handleSend}
           disabled={!tab.url.trim()}
           items={sendItems}
+          align="right"
         />
       )}
 
@@ -172,6 +173,7 @@ export function UrlBar() {
         size="lg"
         onPrimaryClick={handleSave}
         items={saveItems}
+        align="right"
       />
 
       {/* AI Tools ⋮ */}
@@ -296,7 +298,6 @@ export function UrlBar() {
             method={tab.method || 'GET'}
             url={tab.url}
             onClose={() => setShowPatternStatus(false)}
-            dir={overflowDir}
           />
         )}
       </div>

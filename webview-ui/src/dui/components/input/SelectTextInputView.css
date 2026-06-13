@@ -4,6 +4,9 @@
 }
 
 .dui_select-text__option { transition: background 100ms; }
-.dui_select-text__option:not(.dui_select-text__option--selected):hover {
-  background: var(--color-surface-hover);
+.dui_select-text__option--selected {
+  background: color-mix(in srgb, var(--dui-stiv-accent, var(--color-primary)) 12%, transparent);
+}
+.dui_select-text__option:hover {
+  background: color-mix(in srgb, var(--dui-stiv-accent, var(--color-primary)) 10%, transparent);
 }

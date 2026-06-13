@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { CloseCircleIcon } from '../../../icons';
 import './ModalView.css';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
@@ -145,15 +144,18 @@ export function ModalView({
                     justifyContent: 'center',
                     width: 24,
                     height: 24,
-                    borderRadius: 6,
+                    borderRadius: 5,
                     border: 'none',
                     background: 'transparent',
                     cursor: 'pointer',
-                    color: 'var(--color-text-muted)',
+                    fontSize: 15,
+                    lineHeight: 1,
+                    fontWeight: 400,
+                    padding: 0,
                   }}
                   title="Close"
                 >
-                  <CloseCircleIcon size={16} />
+                  ✕
                 </button>
               )}
             </div>

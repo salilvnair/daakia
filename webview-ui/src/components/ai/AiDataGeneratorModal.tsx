@@ -6,11 +6,11 @@
  * toolbar Dice button.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useTabsStore } from '../../store/tabs-store';
-import { CloseIcon, DiceIcon, CopyIcon, CheckIcon } from '../../icons';
+import { DiceIcon, CopyIcon, CheckIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, ButtonView, EditorView } from '../../dui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,7 +102,6 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
 
     setLoading(true);
     setError('');
-    setResult('');
     setStreaming('');
     setCopied(false);
     accumulatedRef.current = '';
@@ -165,44 +164,75 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
     onClose();
   }, [result, onApply, onClose]);
 
-  const livePreview = result || streaming;
+  const livePreview = streaming || result;
 
-  const modal = (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-    >
-      <div
-        className="w-[580px] max-h-[85vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{
-          backgroundColor: 'var(--color-panel)',
-          borderColor: 'var(--color-surface-border)',
-        }}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0"
-          style={{ borderColor: 'var(--color-surface-border)' }}
-        >
-          <DiceIcon size={16} style={{ color: ACCENT, flexShrink: 0 }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Generate Test Data</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">AI-powered realistic data for testing</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer transition-opacity"
-          >
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Generate Test Data"
+      subtitle="AI-powered realistic data for testing"
+      size="md"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{
+          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: `color-mix(in srgb, ${ACCENT} 18%, transparent)`,
+        }}>
+          <DiceIcon size={13} style={{ color: ACCENT }} />
         </div>
-
-        {/* Config section */}
-        <div className="px-5 py-4 flex-shrink-0 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
-          {/* Data type selector */}
-          <p className="text-[11px] font-medium text-[var(--color-text-muted)] mb-2">Data Type</p>
-          <div className="grid grid-cols-3 gap-1.5 mb-4">
+      }
+      footerLeft={result ? (
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+          {count} records · {format.toUpperCase()}
+        </span>
+      ) : undefined}
+      footerRight={
+        <>
+          {result ? (
+            <>
+              <ButtonView
+                variant="secondary"
+                size="sm"
+                iconLeft={copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+                onClick={handleCopy}
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </ButtonView>
+              {onApply && (
+                <ButtonView variant="primary" size="sm" onClick={handleApply}>
+                  Apply to editor
+                </ButtonView>
+              )}
+              <ButtonView
+                variant="secondary"
+                size="sm"
+                iconLeft={<RefreshIcon size={11} />}
+                disabled={loading}
+                onClick={handleGenerate}
+                style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)` }}
+              >
+                {loading ? 'Generating…' : 'Regenerate'}
+              </ButtonView>
+            </>
+          ) : (
+            <AIButtonView
+              label={loading ? 'Generating…' : 'Generate'}
+              size="sm"
+              accentColor={ACCENT}
+              disabled={loading || (dataType === 'custom' && !customDesc.trim())}
+              onClick={handleGenerate}
+            />
+          )}
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* Data type selector */}
+        <div>
+          <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 8 }}>Data Type</p>
+          <div className="grid grid-cols-3 gap-1.5">
             {DATA_CATEGORIES.map(cat => (
               <button
                 key={cat.id}
@@ -212,176 +242,122 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
                 style={{
                   borderColor: dataType === cat.id ? ACCENT : 'var(--color-surface-border)',
                   backgroundColor: dataType === cat.id
-                    ? `color-mix(in srgb, ${ACCENT} 10%, var(--color-panel))`
-                    : 'var(--color-panel)',
+                    ? `color-mix(in srgb, ${ACCENT} 10%, var(--color-surface))`
+                    : 'var(--color-surface)',
                   color: dataType === cat.id ? ACCENT : 'var(--color-text-secondary)',
                 }}
               >
-                <span className="text-[14px] flex-shrink-0">{cat.emoji}</span>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-medium leading-tight">{cat.label}</p>
-                  <p className="text-[9px] text-[var(--color-text-muted)] leading-tight truncate">{cat.description}</p>
+                <span style={{ fontSize: 14, flexShrink: 0 }}>{cat.emoji}</span>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.2, margin: 0 }}>{cat.label}</p>
+                  <p style={{ fontSize: 9, color: 'var(--color-text-muted)', lineHeight: 1.2, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat.description}</p>
                 </div>
               </button>
             ))}
           </div>
+        </div>
 
-          {/* Custom description */}
-          {dataType === 'custom' && (
-            <textarea
-              value={customDesc}
-              onChange={e => setCustomDesc(e.target.value)}
-              rows={2}
-              placeholder="Describe the data shape… e.g. 'IoT sensor readings with device ID, temperature, humidity, and timestamp'"
-              className="w-full resize-none rounded-md px-2.5 py-2 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none mb-3"
-              style={{ minHeight: 52 }}
-            />
-          )}
+        {/* Custom description */}
+        {dataType === 'custom' && (
+          <textarea
+            value={customDesc}
+            onChange={e => setCustomDesc(e.target.value)}
+            rows={2}
+            placeholder="Describe the data shape… e.g. 'IoT sensor readings with device ID, temperature, humidity, and timestamp'"
+            className="w-full resize-none rounded-md px-2.5 py-2 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+            style={{ minHeight: 52 }}
+          />
+        )}
 
-          {/* Count + format row */}
-          <div className="flex items-center gap-4">
-            {/* Count */}
-            <div>
-              <p className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5">Count</p>
-              <div className="flex gap-1">
-                {COUNTS.map(n => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setCount(n)}
-                    className="w-[34px] h-[28px] rounded-md text-[11px] font-mono cursor-pointer transition-all border"
-                    style={{
-                      borderColor: count === n ? ACCENT : 'var(--color-surface-border)',
-                      backgroundColor: count === n
-                        ? `color-mix(in srgb, ${ACCENT} 15%, transparent)`
-                        : 'transparent',
-                      color: count === n ? ACCENT : 'var(--color-text-muted)',
-                    }}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
+        {/* Count + format row */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
+          {/* Count */}
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 6 }}>Count</p>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {COUNTS.map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setCount(n)}
+                  className="cursor-pointer transition-all border"
+                  style={{
+                    width: 34, height: 28, borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)',
+                    borderColor: count === n ? ACCENT : 'var(--color-surface-border)',
+                    backgroundColor: count === n
+                      ? `color-mix(in srgb, ${ACCENT} 15%, transparent)`
+                      : 'transparent',
+                    color: count === n ? ACCENT : 'var(--color-text-muted)',
+                  }}
+                >
+                  {n}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Format */}
-            <div>
-              <p className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5">Format</p>
-              <div className="flex gap-1">
-                {(['json', 'csv'] as OutputFormat[]).map(f => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setFormat(f)}
-                    className="h-[28px] px-3 rounded-md text-[11px] font-medium cursor-pointer transition-all border"
-                    style={{
-                      borderColor: format === f ? ACCENT : 'var(--color-surface-border)',
-                      backgroundColor: format === f
-                        ? `color-mix(in srgb, ${ACCENT} 15%, transparent)`
-                        : 'transparent',
-                      color: format === f ? ACCENT : 'var(--color-text-muted)',
-                    }}
-                  >
-                    {f.toUpperCase()}
-                  </button>
-                ))}
-              </div>
+          {/* Format */}
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 6 }}>Format</p>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['json', 'csv'] as OutputFormat[]).map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFormat(f)}
+                  className="cursor-pointer transition-all border"
+                  style={{
+                    height: 28, padding: '0 12px', borderRadius: 6, fontSize: 11, fontWeight: 500,
+                    borderColor: format === f ? ACCENT : 'var(--color-surface-border)',
+                    backgroundColor: format === f
+                      ? `color-mix(in srgb, ${ACCENT} 15%, transparent)`
+                      : 'transparent',
+                    color: format === f ? ACCENT : 'var(--color-text-muted)',
+                  }}
+                >
+                  {f.toUpperCase()}
+                </button>
+              ))}
             </div>
-
-            {/* Generate button */}
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={loading || (dataType === 'custom' && !customDesc.trim())}
-              className="ml-auto h-[30px] px-4 rounded-md text-[12px] font-medium text-white cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-              style={{ backgroundColor: ACCENT }}
-            >
-              <DiceIcon size={12} style={{ color: 'white' }} />
-              {loading ? 'Generating…' : 'Generate'}
-            </button>
           </div>
         </div>
 
-        {/* Preview */}
-        <div className="flex-1 min-h-0 flex flex-col px-5 py-4 overflow-y-auto [scrollbar-gutter:stable]">
-          {loading && !streaming && (
-            <div className="flex items-center gap-2 text-[12px] text-[var(--color-text-muted)]">
-              {[0, 150, 300].map(d => (
-                <span
-                  key={d}
-                  className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }}
-                />
-              ))}
-              <span style={{ color: ACCENT }}>Generating {count} records…</span>
-            </div>
-          )}
+        {/* Loading dots */}
+        {loading && !streaming && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {[0, 150, 300].map(d => (
+              <span
+                key={d}
+                className="w-[5px] h-[5px] rounded-full animate-pulse"
+                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }}
+              />
+            ))}
+            <span style={{ fontSize: 12, color: ACCENT }}>Generating {count} records…</span>
+          </div>
+        )}
 
-          {error && !loading && (
-            <p className="text-[12px] text-[var(--color-error)]">{error}</p>
-          )}
+        {error && !loading && (
+          <p style={{ fontSize: 12, color: 'var(--color-error)', margin: 0 }}>{error}</p>
+        )}
 
-          {livePreview && (
-            <div
-              className="rounded-lg border font-mono text-[11px] text-[var(--color-text-primary)] whitespace-pre-wrap break-all overflow-y-auto flex-1 min-h-0 p-3"
-              style={{
-                borderColor: 'var(--color-surface-border)',
-                backgroundColor: 'var(--color-input-bg)',
-                maxHeight: 280,
-              }}
-            >
-              {livePreview}
-            </div>
-          )}
+        {/* Live preview — always EditorView to avoid mount/unmount flicker */}
+        {livePreview && (
+          <EditorView
+            value={livePreview}
+            language={format === 'json' ? 'json' : 'plaintext'}
+            height="260px"
+            readOnly
+            wordWrap
+            bordered
+          />
+        )}
 
-          {!livePreview && !loading && !error && (
-            <div className="flex-1 flex items-center justify-center text-[12px] text-[var(--color-text-muted)] opacity-50">
-              Configure your data and click Generate
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        {result && (
-          <div
-            className="flex items-center justify-between px-5 py-3 border-t flex-shrink-0"
-            style={{ borderColor: 'var(--color-surface-border)' }}
-          >
-            <div className="text-[11px] text-[var(--color-text-muted)]">
-              {count} records · {format.toUpperCase()}
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="h-[30px] px-3 rounded-md text-[11px] font-medium cursor-pointer transition-colors flex items-center gap-1.5 bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-              >
-                {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
-              {onApply && (
-                <button
-                  type="button"
-                  onClick={handleApply}
-                  className="h-[30px] px-4 rounded-md text-[12px] font-medium text-white cursor-pointer transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: ACCENT }}
-                >
-                  Apply to editor
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="h-[30px] px-3 rounded-md text-[11px] font-medium cursor-pointer transition-colors bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-              >
-                Close
-              </button>
-            </div>
+        {!livePreview && !loading && !error && (
+          <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--color-text-muted)', opacity: 0.5, padding: '16px 0' }}>
+            Configure your data and click Generate
           </div>
         )}
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

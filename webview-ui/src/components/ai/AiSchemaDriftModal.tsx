@@ -6,10 +6,9 @@
  * Gate: schemaDriftMonitor feature flag
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { CloseIcon, SparkleIcon } from '../../icons';
-import { MdViewer } from '../shared/display/MdViewer';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, SplitPanelView, EditorView } from '../../dui';
 
 interface Props {
   onClose: () => void;
@@ -78,49 +77,102 @@ export function AiSchemaDriftModal({ onClose }: Props) {
     }});
   }, [baselineSchema, currentSchema, loading]);
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget) e.preventDefault(); }}>
-      <div className="relative flex flex-col rounded-lg overflow-hidden shadow-2xl"
-        style={{ width: 680, maxHeight: '88vh', background: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>
-        <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          <SparkleIcon size={14} style={{ color: ACCENT }} />
-          <span className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Schema Drift Monitor ✦</span>
-          <button type="button" onClick={onClose} className="ml-auto cursor-pointer" style={{ color: 'var(--color-text-muted)' }}><CloseIcon size={14} /></button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Schema Drift Monitor ✦"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{
+          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'color-mix(in srgb, var(--color-warning) 18%, transparent)',
+        }}>
+          <SparkleIcon size={13} style={{ color: ACCENT }} />
         </div>
-        <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
-          <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-            Compare baseline vs current API response schemas. AI detects field-level drift with severity classification and generates guard tests.
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Detecting Drift…' : 'Detect Schema Drift'}
+          size="sm"
+          accentColor={ACCENT}
+          disabled={loading}
+          onClick={handleDetect}
+        />
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: 0 }}>
+          Compare baseline vs current API response schemas. AI detects field-level drift with severity classification and generates guard tests.
+        </p>
+
+        {/* Side-by-side editors */}
+        <div style={{ height: 240 }}>
+          <SplitPanelView
+            direction="horizontal"
+            defaultSplit={50}
+            minFirst={140}
+            minSecond={140}
+            first={
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingRight: 6 }}>
+                <label style={{ fontSize: 10, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--color-text-secondary)', flexShrink: 0 }}>
+                  Baseline Schema (expected)
+                </label>
+                <div style={{ flex: 1, minHeight: 0 }}>
+                  <EditorView
+                    value={baselineSchema}
+                    onChange={setBaselineSchema}
+                    language="json"
+                    height="100%"
+                    placeholder="Paste JSON response or TypeScript interface..."
+                    bordered
+                  />
+                </div>
+              </div>
+            }
+            second={
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingLeft: 6 }}>
+                <label style={{ fontSize: 10, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--color-text-secondary)', flexShrink: 0 }}>
+                  Current Schema (observed)
+                </label>
+                <div style={{ flex: 1, minHeight: 0 }}>
+                  <EditorView
+                    value={currentSchema}
+                    onChange={setCurrentSchema}
+                    language="json"
+                    height="100%"
+                    placeholder="Paste current JSON response or TypeScript interface..."
+                    bordered
+                  />
+                </div>
+              </div>
+            }
+          />
+        </div>
+
+        {error && (
+          <p style={{
+            fontSize: 11, padding: '6px 10px', borderRadius: 6, margin: 0,
+            background: 'color-mix(in srgb, var(--color-error) 12%, transparent)',
+            color: 'var(--color-error)',
+          }}>
+            {error}
           </p>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-[10px] font-medium mb-1 block" style={{ color: 'var(--color-text-secondary)' }}>Baseline Schema (expected)</label>
-              <textarea value={baselineSchema} onChange={e => setBaselineSchema(e.target.value)}
-                placeholder="Paste JSON response or TypeScript interface..."
-                rows={6} className="w-full rounded text-[11px] px-2.5 py-2 resize-none"
-                style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }} />
-            </div>
-            <div className="flex-1">
-              <label className="text-[10px] font-medium mb-1 block" style={{ color: 'var(--color-text-secondary)' }}>Current Schema (observed)</label>
-              <textarea value={currentSchema} onChange={e => setCurrentSchema(e.target.value)}
-                placeholder="Paste current JSON response or TypeScript interface..."
-                rows={6} className="w-full rounded text-[11px] px-2.5 py-2 resize-none"
-                style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }} />
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <button type="button" onClick={handleDetect} disabled={loading}
-              className="flex items-center gap-1.5 h-[26px] px-3 rounded text-[11px] font-medium cursor-pointer disabled:opacity-40"
-              style={{ background: ACCENT, color: '#fff' }}>
-              {loading ? <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" /> : <SparkleIcon size={11} />}
-              {loading ? 'Detecting Drift…' : 'Detect Schema Drift'}
-            </button>
-          </div>
-          {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
-          {result && <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 380, borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}><MdViewer content={result} /></div>}
-        </div>
+        )}
+
+        {result && (
+          <EditorView
+            value={result}
+            language="markdown"
+            height="300px"
+            readOnly
+            wordWrap
+            bordered
+          />
+        )}
       </div>
-    </div>,
-    document.body,
+    </ModalView>
   );
 }

@@ -19,6 +19,8 @@ export interface DropDownButtonViewProps {
   disabled?: boolean;
   onPrimaryClick?: () => void;
   className?: string;
+  /** Dropdown alignment. 'right' keeps menu right-edge aligned with button (opens leftward). */
+  align?: 'auto' | 'left' | 'right';
 }
 
 export function DropDownButtonView({
@@ -32,6 +34,7 @@ export function DropDownButtonView({
   disabled = false,
   onPrimaryClick,
   className = '',
+  align = 'auto',
 }: DropDownButtonViewProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -126,6 +129,7 @@ export function DropDownButtonView({
         rounded={rounded}
         matchAnchorWidth={false}
         width="md"
+        align={align}
       />
     </>
   );

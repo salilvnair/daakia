@@ -175,7 +175,7 @@ export function ContextMenuView({
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
-  // Position the menu
+  // Position the menu — recalculated on open, scroll, and resize
   useEffect(() => {
     if (!open || !menuRef.current) return;
     const menu = menuRef.current;
@@ -219,7 +219,14 @@ export function ContextMenuView({
     };
     place();
     const raf = requestAnimationFrame(place);
-    return () => cancelAnimationFrame(raf);
+    // Reposition when ANY container scrolls (captures scroll in nested divs too)
+    window.addEventListener('scroll', place, { passive: true, capture: true });
+    window.addEventListener('resize', place, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', place, { capture: true });
+      window.removeEventListener('resize', place);
+    };
   }, [open, anchorEl, position, matchAnchorWidth, align]);
 
   if (!open) return null;

@@ -1,4 +1,5 @@
 .dui_modal__close-btn {
+  color: var(--color-text-muted);
   transition: background 120ms, transform 80ms, color 120ms;
 }
 .dui_modal__close-btn:hover {

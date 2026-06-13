@@ -13,6 +13,8 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { CloseIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { EditorView } from '../../dui';
+import type { EditorLanguage } from '../../dui';
 
 // ─── Public handle ────────────────────────────────────────────────────────────
 
@@ -32,6 +34,15 @@ interface Props {
 }
 
 const ACCENT = 'var(--color-protocol-ai)';
+
+// ─── Language detection ───────────────────────────────────────────────────────
+
+function detectLanguage(contentType: string): EditorLanguage {
+  if (contentType.includes('json')) return 'json';
+  if (contentType.includes('xml') || contentType.includes('soap')) return 'xml';
+  if (contentType.includes('html')) return 'html';
+  return 'plaintext';
+}
 
 // ─── Markdown fence stripper ──────────────────────────────────────────────────
 
@@ -237,10 +248,10 @@ export const AiBodyGenerate = forwardRef<AiBodyGenerateHandle, Props>(
               type="button"
               onClick={handleGenerate}
               disabled={loading || !description.trim()}
-              className="h-[26px] px-3 rounded-md text-[11px] font-medium text-white cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ backgroundColor: ACCENT }}
+              className="h-[26px] px-3 rounded-md text-[11px] font-medium cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ backgroundColor: ACCENT, color: 'var(--color-btn-primary-text, #fff)' }}
             >
-              {loading ? 'Generating…' : 'Generate'}
+              {loading ? 'Generating…' : (generated ? 'Regenerate' : 'Generate')}
             </button>
           </div>
         </div>
@@ -261,26 +272,25 @@ export const AiBodyGenerate = forwardRef<AiBodyGenerateHandle, Props>(
           </div>
         )}
 
-        {/* Live streaming preview or final result */}
+        {/* Live preview — always EditorView to avoid mount/unmount flicker */}
         {liveBody && (
           <div className="px-3 pb-2.5">
-            <div
-              className="rounded-md border p-2.5 text-[11px] font-mono whitespace-pre-wrap break-all overflow-y-auto max-h-[180px] text-[var(--color-text-primary)]"
-              style={{
-                borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
-                backgroundColor: 'var(--color-input-bg)',
-              }}
-            >
-              {liveBody}
-            </div>
+            <EditorView
+              value={liveBody}
+              language={detectLanguage(contentType)}
+              height="180px"
+              readOnly
+              wordWrap
+              bordered
+            />
             {/* Apply button — only when generation is complete */}
             {generated && !loading && (
               <div className="flex justify-end mt-2">
                 <button
                   type="button"
                   onClick={handleApply}
-                  className="h-[26px] px-3 rounded-md text-[11px] font-medium text-white cursor-pointer transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: ACCENT }}
+                  className="h-[26px] px-3 rounded-md text-[11px] font-medium cursor-pointer transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: ACCENT, color: 'var(--color-btn-primary-text, #fff)' }}
                 >
                   Apply to editor
                 </button>

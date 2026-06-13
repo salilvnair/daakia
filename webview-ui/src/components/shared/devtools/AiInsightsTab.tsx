@@ -4,12 +4,13 @@
  * highest error rates, usage patterns, and runs an AI analysis on demand.
  * Gate: intelligenceDashboard feature flag.
  */
-import { useState, useMemo, useCallback } from 'react';
-import { SparkleIcon, GaugeIcon, ChevronRightIcon, RefreshIcon } from '../../../icons';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { SparkleIcon, GaugeIcon } from '../../../icons';
 import { MdViewer } from '../display/MdViewer';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { postMsg } from '../../../vscode';
+import { AIButtonView } from '../../../dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
 const PROTOCOLS = ['rest', 'graphql', 'grpc', 'soap', 'websocket', 'sse', 'mqtt', 'socketio'];
@@ -100,9 +101,13 @@ export function AiInsightsTab() {
     ].join('\n');
 
     postMsg({
-      type: 'aiStreamRequest',
-      requestId: analysisId,
-      systemPrompt: `You are an API intelligence analyst. Analyze the request history data and provide:
+      type: 'ai:send',
+      tabId: analysisId,
+      provider: '',
+      model: '',
+      baseUrl: '',
+      stage: 'ai.insights',
+      systemPrompts: [`You are an API intelligence analyst. Analyze the request history data and provide:
 
 ## AI API Intelligence Report
 
@@ -121,27 +126,42 @@ export function AiInsightsTab() {
 ### 📊 Weekly Trend Estimate
 - Based on the patterns, briefly estimate what the trend looks like
 
-Keep the analysis concise and actionable. Use emoji bullets. Format in clear Markdown.`,
+Keep the analysis concise and actionable. Use emoji bullets. Format in clear Markdown.`],
       userPrompt: summary,
+      conversation: [],
+      tools: [],
+      settings: {
+        temperature: 0.3,
+        maxTokens: 2048,
+        stream: true,
+        topP: 1,
+        stopSequences: [],
+        responseFormat: 'text',
+        frequencyPenalty: 0,
+        presencePenalty: 0,
+        seed: null,
+      },
+      mcpServerConfigs: [],
     });
   }, [analysisId, totalRequests, totalErrors, slowest, mostErrors, mostUsed, isEnabled]);
 
   // Listen for AI stream events
-  useState(() => {
+  useEffect(() => {
     const handler = (e: MessageEvent) => {
-      const msg = e.data;
-      if (msg?.type === 'aiStreamChunk' && msg.requestId === analysisId) {
-        setAiResult(prev => prev + (msg.chunk ?? ''));
-      } else if (msg?.type === 'aiStreamDone' && msg.requestId === analysisId) {
+      const msg = e.data as Record<string, unknown>;
+      if (!msg || msg.tabId !== analysisId) return;
+      if (msg.type === 'ai:chunk') {
+        setAiResult(prev => prev + ((msg.delta as string) ?? ''));
+      } else if (msg.type === 'ai:complete') {
         setLoading(false);
-      } else if (msg?.type === 'aiStreamError' && msg.requestId === analysisId) {
+      } else if (msg.type === 'ai:error') {
         setLoading(false);
         setAiResult('> Error running AI analysis. Check your AI provider settings.');
       }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  });
+  }, [analysisId]);
 
   if (stats.length === 0) {
     return (

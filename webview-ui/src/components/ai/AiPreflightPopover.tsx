@@ -1,12 +1,13 @@
 /**
  * AiPreflightPopover — 4.6.5 AI Pre-flight Check
  *
- * Appears as an inline popover anchored to the UrlBar.
+ * DUI ModalView wrapper — centered modal with backdrop.
  * Runs deterministic checks immediately and offers AI deep analysis.
  */
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { postMsg } from '../../vscode';
 import { SparkleIcon } from '../../icons';
+import { ModalView, AIButtonView } from '../../dui';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -140,7 +141,7 @@ function runDeterministicChecks(tab: TabSnapshot): Issue[] {
   return issues;
 }
 
-function buildAiSystemPrompt(tab: TabSnapshot): string {
+function buildAiSystemPrompt(_tab: TabSnapshot): string {
   return `You are a senior API testing expert. Review the following HTTP request and identify any issues, anti-patterns, security concerns, or best-practice violations.
 
 Be concise. Format your response as a bulleted list. Each bullet should start with an emoji (⚠️ warning, ❌ error, ℹ️ tip) followed by the issue and a brief fix suggestion.
@@ -163,15 +164,20 @@ Review this request for issues.`;
 // ── Severity pill ────────────────────────────────────────────────────────────
 
 const SEVERITY_STYLE: Record<Severity, { bg: string; text: string; label: string }> = {
-  error:   { bg: '#ef444420', text: '#ef4444', label: 'Error' },
-  warning: { bg: '#f59e0b20', text: '#f59e0b', label: 'Warn' },
-  info:    { bg: '#3b82f620', text: '#3b82f6', label: 'Info' },
+  error:   { bg: 'color-mix(in srgb, var(--color-error) 15%, transparent)',   text: 'var(--color-error)',   label: 'Error' },
+  warning: { bg: 'color-mix(in srgb, var(--color-warning) 15%, transparent)', text: 'var(--color-warning)', label: 'Warn' },
+  info:    { bg: 'color-mix(in srgb, var(--color-info) 15%, transparent)',    text: 'var(--color-info)',    label: 'Info' },
 };
 
 function SeverityPill({ severity }: { severity: Severity }) {
   const s = SEVERITY_STYLE[severity];
   return (
-    <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: s.bg, color: s.text }}>
+    <span
+      style={{
+        fontSize: 9.5, fontWeight: 700, padding: '2px 6px', borderRadius: 4, flexShrink: 0,
+        backgroundColor: s.bg, color: s.text,
+      }}
+    >
       {s.label}
     </span>
   );
@@ -184,20 +190,7 @@ export function AiPreflightPopover({ tab, onClose }: Props) {
   const [aiText, setAiText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDone, setAiDone] = useState(false);
-  const overlayRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (overlayRef.current && !overlayRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  // Listen for AI streaming events
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data;
@@ -232,107 +225,110 @@ export function AiPreflightPopover({ tab, onClose }: Props) {
   const errorCount = issues.filter(i => i.severity === 'error').length;
   const warnCount  = issues.filter(i => i.severity === 'warning').length;
 
-  return (
-    <div
-      className="absolute right-0 z-50"
-      style={{ top: '100%', marginTop: '4px' }}
-    >
-      <div
-        ref={overlayRef}
-        className="rounded-xl border shadow-2xl overflow-hidden"
-        style={{
-          backgroundColor: 'var(--color-panel)',
-          borderColor: 'var(--color-surface-border)',
-          minWidth: '340px',
-          maxWidth: '600px',
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={13} style={{ color: 'var(--color-protocol-ai)' }} />
-          <span className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Pre-flight Check</span>
-          {errorCount > 0 && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1" style={{ backgroundColor: '#ef444425', color: '#ef4444' }}>
-              {errorCount} error{errorCount > 1 ? 's' : ''}
-            </span>
-          )}
-          {warnCount > 0 && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#f59e0b25', color: '#f59e0b' }}>
-              {warnCount} warning{warnCount > 1 ? 's' : ''}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="ml-auto cursor-pointer hover:opacity-70 transition-opacity text-[14px] leading-none"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Issues list */}
-        <div className="px-4 py-3 flex flex-col gap-2" style={{ maxHeight: '240px', overflowY: 'auto' }}>
-          {issues.length === 0 ? (
-            <div className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
-              <span style={{ color: '#22c55e' }}>✓</span>
-              No issues detected — request looks good
-            </div>
-          ) : (
-            issues.map((issue, i) => (
-              <div key={i} className="flex flex-col gap-1">
-                <div className="flex items-start gap-2">
-                  <SeverityPill severity={issue.severity} />
-                  <span className="text-[11.5px] font-medium flex-1" style={{ color: 'var(--color-text-primary)' }}>
-                    {issue.message}
-                  </span>
-                </div>
-                {issue.hint && (
-                  <p className="text-[10.5px] pl-[44px]" style={{ color: 'var(--color-text-muted)' }}>
-                    {issue.hint}
-                  </p>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* AI analysis section */}
-        <div className="border-t px-4 pb-4 pt-3 flex flex-col gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-          {!aiLoading && !aiDone && (
-            <button
-              type="button"
-              onClick={handleAskAi}
-              className="flex items-center gap-1.5 self-start text-[11px] font-medium px-3 py-1.5 rounded-md cursor-pointer hover:opacity-90 transition-opacity"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 15%, transparent)',
-                color: 'var(--color-protocol-ai)',
-                border: '1px solid color-mix(in srgb, var(--color-protocol-ai) 35%, transparent)',
-              }}
-            >
-              <SparkleIcon size={10} />
-              Ask AI for deeper analysis
-            </button>
-          )}
-          {(aiLoading || aiText) && (
-            <div
-              className="rounded-md px-3 py-2.5 text-[11px] leading-relaxed whitespace-pre-wrap"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 6%, var(--color-surface))',
-                color: 'var(--color-text-primary)',
-                border: '1px solid color-mix(in srgb, var(--color-protocol-ai) 20%, transparent)',
-              }}
-            >
-              {aiLoading && !aiText && (
-                <span style={{ color: 'var(--color-text-muted)' }}>Analyzing request…</span>
-              )}
-              {aiText}
-              {aiLoading && <span className="animate-pulse">▋</span>}
-            </div>
-          )}
-        </div>
-      </div>
+  const headerBadges = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      {errorCount > 0 && (
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20,
+          background: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
+          color: 'var(--color-error)',
+        }}>
+          {errorCount} error{errorCount > 1 ? 's' : ''}
+        </span>
+      )}
+      {warnCount > 0 && (
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20,
+          background: 'color-mix(in srgb, var(--color-warning) 18%, transparent)',
+          color: 'var(--color-warning)',
+        }}>
+          {warnCount} warning{warnCount > 1 ? 's' : ''}
+        </span>
+      )}
+      {errorCount === 0 && warnCount === 0 && (
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20,
+          background: 'color-mix(in srgb, var(--color-success) 18%, transparent)',
+          color: 'var(--color-success)',
+        }}>
+          All clear
+        </span>
+      )}
     </div>
+  );
+
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Pre-flight Check"
+      size="sm"
+      headerColor="var(--color-protocol-ai)"
+      headerIcon={
+        <div style={{
+          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'color-mix(in srgb, var(--color-protocol-ai) 18%, transparent)',
+        }}>
+          <SparkleIcon size={13} style={{ color: 'var(--color-protocol-ai)' }} />
+        </div>
+      }
+      headerRight={headerBadges}
+      footerRight={
+        !aiLoading && !aiDone
+          ? <AIButtonView label="Ask AI for deeper analysis" size="sm" onClick={handleAskAi} />
+          : undefined
+      }
+    >
+      {/* Issues list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {issues.length === 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--color-text-secondary)' }}>
+            <span style={{ color: 'var(--color-success)' }}>✓</span>
+            No issues detected — request looks good
+          </div>
+        ) : (
+          issues.map((issue, i) => (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <SeverityPill severity={issue.severity} />
+                <span style={{ fontSize: 11.5, fontWeight: 500, flex: 1, color: 'var(--color-text-primary)' }}>
+                  {issue.message}
+                </span>
+              </div>
+              {issue.hint && (
+                <p style={{ fontSize: 10.5, paddingLeft: 44, margin: 0, color: 'var(--color-text-muted)' }}>
+                  {issue.hint}
+                </p>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* AI streaming response */}
+      {(aiLoading || aiText) && (
+        <div
+          style={{
+            marginTop: 14,
+            borderRadius: 8,
+            padding: '10px 12px',
+            fontSize: 11,
+            lineHeight: 1.7,
+            whiteSpace: 'pre-wrap',
+            background: 'color-mix(in srgb, var(--color-protocol-ai) 6%, var(--color-surface))',
+            color: 'var(--color-text-primary)',
+            border: '1px solid color-mix(in srgb, var(--color-protocol-ai) 20%, transparent)',
+          }}
+        >
+          {aiLoading && !aiText && (
+            <span style={{ color: 'var(--color-text-muted)' }}>Analyzing request…</span>
+          )}
+          {aiText}
+          {aiLoading && <span className="animate-pulse">▋</span>}
+        </div>
+      )}
+    </ModalView>
   );
 }
 

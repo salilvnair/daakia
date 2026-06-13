@@ -128,6 +128,23 @@ export function SelectTextInputView({
     return () => document.removeEventListener('mousedown', handler);
   }, [methodOpen]);
 
+  // Keep method dropdown glued to trigger on scroll/resize
+  useEffect(() => {
+    if (!methodOpen) return;
+    const track = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setMethodDropPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 120) });
+    };
+    window.addEventListener('scroll', track, { passive: true, capture: true });
+    window.addEventListener('resize', track, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', track, { capture: true });
+      window.removeEventListener('resize', track);
+    };
+  }, [methodOpen]);
+
   // ── Suggestions dropdown ────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -145,6 +162,23 @@ export function SelectTextInputView({
       setShowSuggestions(false);
     }
   }, [filteredSuggestions, filteredMockServers, focused]);
+
+  // Keep suggestions dropdown glued to input on scroll/resize
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const track = () => {
+      const el = inputRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setSuggDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    };
+    window.addEventListener('scroll', track, { passive: true, capture: true });
+    window.addEventListener('resize', track, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', track, { capture: true });
+      window.removeEventListener('resize', track);
+    };
+  }, [showSuggestions]);
 
   const handleSuggestionSelect = (val: string) => {
     suppressRef.current = true;
@@ -261,7 +295,8 @@ export function SelectTextInputView({
             borderRadius: 8,
             boxShadow: '0 8px 24px rgba(0,0,0,0.22)',
             zIndex: 9999, padding: 3, overflow: 'hidden',
-          }}
+            '--dui-stiv-accent': accent,
+          } as React.CSSProperties}
         >
           {selectOptions.map(opt => {
             const isSelected = opt.value === selectValue;
@@ -276,10 +311,9 @@ export function SelectTextInputView({
                   borderRadius: 5, cursor: 'pointer',
                   fontSize: base.fontSize, fontWeight: isSelected ? 700 : 500,
                   color: opt.color ?? 'var(--color-text-primary)',
-                  background: isSelected ? 'color-mix(in srgb, var(--color-primary) 10%, transparent)' : 'transparent',
                 }}
               >
-                <span style={{ flex: 1 }}>{opt.label}</span>
+                <span style={{ flex: 1 }}>{opt.label ?? opt.value}</span>
                 {isSelected && <CheckIcon size={base.iconSize - 2} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />}
               </div>
             );
