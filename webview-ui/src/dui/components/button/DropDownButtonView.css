@@ -1,5 +1,5 @@
-.dui_dropdown-button__label  { background: transparent; transition: background 120ms, filter 80ms; }
-.dui_dropdown-button__chevron { background: transparent; transition: background 120ms, filter 80ms; }
+.dui_dropdown-button__label  { background: transparent; transition: background 120ms, filter 80ms, transform 120ms; }
+.dui_dropdown-button__chevron { background: transparent; transition: background 120ms, filter 80ms, transform 120ms; }
 
 .dui_dropdown-button__label:not(:disabled):hover {
   background: var(--dui-hover-btn-bg, var(--color-surface-active));
@@ -10,6 +10,8 @@
 
 .dui_dropdown-button__label:not(:disabled):active,
 .dui_dropdown-button__chevron:not(:disabled):active {
+  transform: scale(0.92);
   filter: brightness(0.85);
-  transition: filter 60ms;
+  box-shadow: none;
+  transition: transform 60ms, filter 60ms, box-shadow 60ms;
 }

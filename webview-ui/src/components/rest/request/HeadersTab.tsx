@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
-import { KeyValueTableView, type KeyValueTableRow, type PinnedKeyValueRow } from '../../../dui';
+import { KeyValueTableView, IconButtonView, type KeyValueTableRow, type PinnedKeyValueRow } from '../../../dui';
 import { SparkleIcon } from '../../../icons';
 import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../../ai/AiHeaderSuggest';
 import { computeAuthRows } from './requestUtils';
@@ -52,21 +52,18 @@ export function HeadersTab({ tab, cookieJarRows }: HeadersTabProps) {
         }}
         toolbarExtra={
           aiEnabled('headerAutocomplete') ? (
-            <button
-              type="button"
-              title="Suggest headers"
+            <IconButtonView
+              icon={<SparkleIcon size={13} />}
+              size="md"
+              tooltip="Suggest headers"
+              accentColor="var(--color-protocol-ai)"
               disabled={aiHeaderLoading}
               onClick={() => {
                 setAiHeaderLoading(true);
                 aiHeaderSuggestRef.current?.trigger();
                 setTimeout(() => setAiHeaderLoading(false), 300);
               }}
-              className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:bg-[rgba(168,85,247,0.08)]"
-              onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-protocol-ai)')}
-              onMouseLeave={e => (e.currentTarget.style.color = '')}
-            >
-              <SparkleIcon size={13} />
-            </button>
+            />
           ) : undefined
         }
       />

@@ -1,17 +1,12 @@
 /**
  * AiResponseTransformer — transforms response body with AI.
  * Feature 4.6.18 — AI Response Transformer
- *
- * "Convert this XML to flat CSV", "Extract just emails from nested JSON", "Reshape to match this schema"
- *
- * Instruction draft + generated result are persisted per-tab in Zustand.
- * Cache-first: if result exists when opened, shows immediately; refresh to re-run.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CopyIcon, RefreshIcon } from '../../icons';
+import { SparkleIcon, CopyIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
+import { ModalView, AIButtonView } from '../../dui';
 
 interface Props {
   tabId: string;
@@ -45,7 +40,6 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
   const { getTabActions, updateTransform } = useAiResponseActionsStore();
   const cached = getTabActions(tabId);
 
-  // Cache-first: initialize from stored state
   const [instruction, setInstruction] = useState(cached.transform?.instruction ?? '');
   const [result, setResult] = useState(cached.transform?.result ?? '');
   const [loading, setLoading] = useState(false);
@@ -55,14 +49,12 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
   const accRef = useRef('');
   const reqIdRef = useRef('');
 
-  // Persist instruction changes
   const handleInstructionChange = (val: string) => {
     setInstruction(val);
     setError('');
     updateTransform(tabId, { instruction: val });
   };
 
-  // Apply preset — persist to store too
   const applyPreset = (prompt: string) => {
     setInstruction(prompt);
     updateTransform(tabId, { instruction: prompt });
@@ -124,119 +116,102 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
     setTimeout(() => setCopied(false), 1800);
   };
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[680px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Response Transformer</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">Convert, extract, or reshape the response with AI</p>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Response Transformer"
+      subtitle="Convert, extract, or reshape the response with AI"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
+        </div>
+      }
+      headerRight={result && !loading ? (
+        <button type="button" onClick={handleRefresh} title="Clear result and re-transform"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)', opacity: 0.6 }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}
+        >
+          <RefreshIcon size={13} />
+        </button>
+      ) : undefined}
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Transforming…' : (result ? 'Re-transform' : 'Transform')}
+          size="md"
+          accentColor={ACCENT}
+          disabled={loading || !instruction.trim() || !responseBody.trim()}
+          onClick={run}
+        />
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Presets */}
+        <div>
+          <p style={{ fontSize: 11, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>Quick transforms</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {PRESETS.map(p => (
+              <button key={p.label} type="button"
+                onClick={() => applyPreset(p.prompt)}
+                className="cursor-pointer transition-all"
+                style={{
+                  padding: '4px 10px', fontSize: 10.5, borderRadius: 999, border: `1px solid ${instruction === p.prompt ? ACCENT : 'var(--color-surface-border)'}`,
+                  color: instruction === p.prompt ? ACCENT : 'var(--color-text-secondary)',
+                  backgroundColor: instruction === p.prompt ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'transparent',
+                }}>
+                {p.label}
+              </button>
+            ))}
           </div>
-          {/* Refresh — clear result to re-run */}
-          {result && !loading && (
-            <button
-              type="button"
-              onClick={handleRefresh}
-              title="Clear result and re-transform"
-              className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer mr-1"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              <RefreshIcon size={13} />
-            </button>
-          )}
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-          {/* Presets */}
-          <div>
-            <p className="text-[11px] font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Quick transforms</p>
-            <div className="flex flex-wrap gap-1.5">
-              {PRESETS.map(p => (
-                <button key={p.label} type="button"
-                  onClick={() => applyPreset(p.prompt)}
-                  className="px-2.5 py-1 text-[10.5px] rounded-full border cursor-pointer transition-all"
-                  style={{
-                    borderColor: instruction === p.prompt ? ACCENT : 'var(--color-surface-border)',
-                    color: instruction === p.prompt ? ACCENT : 'var(--color-text-secondary)',
-                    backgroundColor: instruction === p.prompt ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'transparent',
-                  }}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Custom instruction */}
-          <div>
-            <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
-              Transformation instruction
-            </label>
-            <textarea
-              value={instruction}
-              onChange={e => handleInstructionChange(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg text-[11.5px] resize-none outline-none"
-              placeholder='e.g. "Convert this JSON to CSV" or "Extract all email addresses" or "Reshape so each user has a roles array"'
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-            />
-          </div>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && !result && (
-            <div className="flex gap-1 items-center">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Transforming…</span>
-            </div>
-          )}
-
-          {result && (
-            <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <div className="flex items-center justify-between px-3 py-1.5 border-b"
-                style={{ backgroundColor: 'var(--color-surface-hover)', borderColor: 'var(--color-surface-border)' }}>
-                <span className="text-[10px] font-medium" style={{ color: 'var(--color-text-muted)' }}>Result</span>
-                <button type="button" onClick={copy}
-                  className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer"
-                  style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                  <CopyIcon size={11} />
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <pre className="p-4 text-[11.5px] font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto"
-                style={{ color: 'var(--color-text-primary)', backgroundColor: 'var(--color-panel)' }}>
-                {result}
-                {loading && <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse" style={{ backgroundColor: ACCENT }} />}
-              </pre>
-            </div>
-          )}
+        {/* Instruction */}
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 6, color: 'var(--color-text-secondary)' }}>
+            Transformation instruction
+          </label>
+          <textarea
+            value={instruction}
+            onChange={e => handleInstructionChange(e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg text-[11.5px] resize-none outline-none"
+            placeholder='"Convert this JSON to CSV" or "Extract all email addresses"'
+            style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
+          />
         </div>
 
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="flex gap-2">
-            <button type="button" onClick={run} disabled={loading || !instruction.trim() || !responseBody.trim()}
-              className="h-[32px] px-4 text-[12px] font-medium rounded-md text-white cursor-pointer hover:opacity-90 disabled:opacity-40"
-              style={{ backgroundColor: ACCENT }}>
-              <SparkleIcon size={11} className="inline mr-1" />
-              {result ? 'Re-transform' : 'Transform'}
-            </button>
-            <button type="button" onClick={onClose}
-              className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-              Close
-            </button>
+        {error && <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>{error}</p>}
+
+        {loading && !result && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {[0, 150, 300].map(d => (
+              <span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse"
+                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
+            ))}
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>Transforming…</span>
           </div>
-        </div>
+        )}
+
+        {result && (
+          <div style={{ borderRadius: 8, border: '1px solid var(--color-surface-border)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', backgroundColor: 'var(--color-surface-hover)', borderBottom: '1px solid var(--color-surface-border)' }}>
+              <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-muted)' }}>Result</span>
+              <button type="button" onClick={copy}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', border: 'none', background: 'transparent', color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                <CopyIcon size={11} />
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            <pre style={{ padding: 16, fontSize: 11.5, fontFamily: 'var(--font-mono)', overflowX: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.6, maxHeight: 300, overflowY: 'auto', color: 'var(--color-text-primary)', backgroundColor: 'var(--color-panel)', margin: 0 }}>
+              {result}
+              {loading && <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse" style={{ backgroundColor: ACCENT }} />}
+            </pre>
+          </div>
+        )}
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

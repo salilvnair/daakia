@@ -52,7 +52,6 @@ export function AiResponseActionsMenu({ tabId, response, requestMethod, requestU
   const { getTabActions } = useAiResponseActionsStore();
 
   const [dropdownCoords, setDropdownCoords] = useState<FloatingCoords | null>(null);
-  const [assertCoords, setAssertCoords] = useState<FloatingCoords | null>(null);
 
   const [showNaturalAssert, setShowNaturalAssert] = useState(false);
   const [showSemanticVal, setShowSemanticVal] = useState(false);
@@ -88,10 +87,9 @@ export function AiResponseActionsMenu({ tabId, response, requestMethod, requestU
   const closeDropdown = useCallback(() => setDropdownCoords(null), []);
 
   const handleAssert = useCallback(() => {
-    setAssertCoords(calcCoords());
     setShowNaturalAssert(p => !p);
     closeDropdown();
-  }, [calcCoords, closeDropdown]);
+  }, [closeDropdown]);
 
   if (!hasBody || !hasAnyAction) return null;
 
@@ -167,24 +165,15 @@ export function AiResponseActionsMenu({ tabId, response, requestMethod, requestU
       )}
 
       {/* Assert popover */}
-      {showNaturalAssert && assertCoords && (
-        <div
-          style={{
-            position: 'fixed',
-            ...(assertCoords.top !== undefined ? { top: assertCoords.top } : { bottom: assertCoords.bottom }),
-            right: assertCoords.right,
-            zIndex: 9999,
-            width: 440,
-          }}
-        >
-          <AiNaturalAssertPopover
-            tabId={tabId}
-            response={{ body: response.body, status: response.status ?? 200, contentType: response.contentType }}
-            requestMethod={requestMethod}
-            requestUrl={requestUrl}
-            onClose={() => { setShowNaturalAssert(false); setAssertCoords(null); }}
-          />
-        </div>
+      {showNaturalAssert && (
+        <AiNaturalAssertPopover
+          tabId={tabId}
+          response={{ body: response.body, status: response.status ?? 200, contentType: response.contentType }}
+          requestMethod={requestMethod}
+          requestUrl={requestUrl}
+          onClose={() => setShowNaturalAssert(false)}
+          anchorEl={btnRef.current}
+        />
       )}
 
       {showSemanticVal && (

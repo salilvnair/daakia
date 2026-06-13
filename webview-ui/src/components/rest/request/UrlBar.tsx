@@ -30,7 +30,8 @@ const METHOD_OPTIONS = [
 export function UrlBar() {
   const { tabs, activeTabId, updateTab, openDaakiaAiTab } = useTabsStore();
   const urlSuggestions = useUrlSuggestionsStore(s => s.byProtocol.rest);
-  const mockSuggestions = useMockSuggestions('rest');
+  const tab = tabs.find(t => t.id === activeTabId);
+  const mockSuggestions = useMockSuggestions('rest', tab?.method);
   const [showImportCurl, setShowImportCurl] = useState(false);
   const [showGenerateCode, setShowGenerateCode] = useState(false);
   const [showPreflight, setShowPreflight] = useState(false);
@@ -42,7 +43,6 @@ export function UrlBar() {
   const [overflowDir, setOverflowDir] = useState<'down' | 'up'>('down');
   const overflowRef = useRef<HTMLDivElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
-  const tab = tabs.find(t => t.id === activeTabId);
 
   const preflightCounts = useMemo(() => tab ? countPreflightIssues(tab) : { errors: 0, warnings: 0 }, [tab]);
 

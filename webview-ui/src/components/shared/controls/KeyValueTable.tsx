@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { HTTP_REQUEST_HEADERS, SENSITIVE_HEADERS, HEADER_VALUE_SUGGESTIONS } from './http-headers';
 import { ConfirmDialog } from '../modals/ConfirmDialog';
 import { TrashIcon, BulkEditIcon, PlusIcon, CheckCircleFilledIcon, EyeIcon, EyeOffIcon } from '../../../icons';
+import { IconButtonView } from '../../../dui';
 
 export interface KeyValueRow {
   id: string;
@@ -129,44 +130,31 @@ export function KeyValueTable({
           <span className="text-[12px] text-[var(--color-text-muted)] font-medium">{label}</span>
         )}
         {!label && <div />}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {toolbarExtra}
-          <button
-            type="button"
+          <IconButtonView
+            icon={<TrashIcon size={14} />}
+            size="md"
+            tooltip="Clear all"
+            disabled={!rows.some(r => r.key || r.value)}
+            style={{ '--dui-hover-color': 'var(--color-error)', '--dui-hover-bg': 'color-mix(in srgb, var(--color-error) 8%, transparent)' } as React.CSSProperties}
             onClick={() => { if (rows.some(r => r.key || r.value)) setShowClearConfirm(true); }}
-            className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
-              rows.some(r => r.key || r.value)
-                ? 'text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)]'
-                : 'text-[var(--color-text-muted)] opacity-30 cursor-default'
-            }`}
-            title="Clear all"
-          >
-            <TrashIcon size={14} />
-          </button>
-          <button
-            type="button"
+          />
+          <IconButtonView
+            icon={<BulkEditIcon size={14} />}
+            size="md"
+            tooltip="Bulk edit"
+            active={bulkEdit}
+            activeColor={accentColor}
             onClick={() => { if (bulkEdit) fromBulkText(bulkTextRef.current); setBulkEdit(!bulkEdit); }}
-            className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
-              bulkEdit
-                ? 'bg-[rgba(99,102,241,0.12)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]'
-            }`}
-            style={bulkEdit && accentColor ? { color: accentColor } : bulkEdit ? { color: 'var(--color-primary)' } : undefined}
-            title="Bulk edit"
-          >
-            <BulkEditIcon size={14} />
-          </button>
-          <button
-            type="button"
+          />
+          <IconButtonView
+            icon={<PlusIcon size={14} />}
+            size="md"
+            tooltip="Add new row"
+            style={{ '--dui-hover-color': accentColor || 'var(--color-primary)', '--dui-hover-bg': `color-mix(in srgb, ${accentColor || 'var(--color-primary)'} 8%, transparent)` } as React.CSSProperties}
             onClick={addRow}
-            className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:bg-[rgba(99,102,241,0.08)] cursor-pointer transition-colors"
-            style={{ '--hover-color': accentColor || 'var(--color-primary)' } as React.CSSProperties}
-            title="Add new row"
-            onMouseEnter={e => (e.currentTarget.style.color = accentColor || 'var(--color-primary)')}
-            onMouseLeave={e => (e.currentTarget.style.color = '')}
-          >
-            <PlusIcon size={14} />
-          </button>
+          />
         </div>
       </div>
       )}

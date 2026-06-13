@@ -8,8 +8,7 @@
  * Tasks: 4.3.12 — AI Data Schema Generator
  */
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { CodeEditor } from '../../shared';
-import { SelectInputView, type SelectOption } from '../../../dui';
+import { SelectInputView, AIButtonView, EditorView, SegmentedControlView, type SelectOption, type EditorLanguage } from '../../../dui';
 import { useAiProvidersStore } from '../../../store/ai-providers-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { generateSchema, downloadBlob, SCHEMA_LANG_META, SCHEMA_LANG_OPTIONS, buildSchemaPrompt, type SchemaLang } from '../../../services/response';
@@ -133,7 +132,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
   // ── Derived display values ─────────────────────────────────────────────────
 
   const displayCode = aiMode ? (aiCode || overrideCode) : staticCode;
-  const editorLang = meta.editorLang;
+  const editorLang = meta.editorLang as EditorLanguage;
   const isGenerating = aiMode && aiStreaming;
 
   const providerLabel = providers.find(p => p.id === providerId)?.name || providerId;
@@ -179,66 +178,36 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
               options={LANG_OPTIONS}
               value={lang}
               onChange={handleLangChange}
-              size="sm"
+              size="md"
               accentColor={AI_ACCENT}
               style={{ width: '100%' }}
             />
           </div>
 
-          {/* AI / Static mode toggle */}
-          <div
-            className="flex items-center rounded-lg overflow-hidden border"
-            style={{ borderColor: 'var(--color-surface-border)' }}
-          >
-            <button
-              type="button"
-              onClick={() => { resetAi(); setAiMode(true); }}
-              className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-all"
-              style={{
-                backgroundColor: aiMode ? `color-mix(in srgb, ${AI_ACCENT} 12%, transparent)` : 'transparent',
-                color: aiMode ? AI_ACCENT : 'var(--color-text-muted)',
-              }}
-            >
-              <SparkleIcon size={10} style={{ color: aiMode ? AI_ACCENT : 'var(--color-text-muted)' }} />
-              AI
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!meta.hasStatic) return; // can't use static for this lang
-                resetAi();
-                setAiMode(false);
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-all"
-              style={{
-                backgroundColor: !aiMode ? 'var(--color-surface-hover)' : 'transparent',
-                color: !aiMode ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                opacity: !meta.hasStatic ? 0.35 : 1,
-                cursor: !meta.hasStatic ? 'not-allowed' : 'pointer',
-              }}
-              title={!meta.hasStatic ? 'Static generation not available for this language' : undefined}
-            >
-              Static
-            </button>
-          </div>
+          {/* AI / Static mode toggle — DUI SegmentedControlView */}
+          <SegmentedControlView
+            size="md"
+            accentColor={AI_ACCENT}
+            value={aiMode ? 'ai' : 'static'}
+            onChange={(v) => {
+              if (v === 'ai') { resetAi(); setAiMode(true); }
+              else if (meta.hasStatic) { resetAi(); setAiMode(false); }
+            }}
+            options={[
+              { value: 'ai', label: 'AI', icon: <SparkleIcon size={10} /> },
+              { value: 'static', label: 'Static', disabled: !meta.hasStatic },
+            ]}
+          />
 
           {/* Regenerate button (AI mode only) */}
           {aiMode && (
-            <button
-              type="button"
-              onClick={handleRegenerate}
+            <AIButtonView
+              label={isGenerating ? 'Generating…' : 'Regenerate'}
+              size="md"
+              accentColor={AI_ACCENT}
               disabled={isGenerating}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition-all border"
-              style={{
-                borderColor: `color-mix(in srgb, ${AI_ACCENT} 30%, transparent)`,
-                color: isGenerating ? 'var(--color-text-muted)' : AI_ACCENT,
-                backgroundColor: isGenerating ? 'transparent' : `color-mix(in srgb, ${AI_ACCENT} 8%, transparent)`,
-                cursor: isGenerating ? 'not-allowed' : 'pointer',
-              }}
-            >
-              <SparkleIcon size={10} />
-              {isGenerating ? 'Generating…' : 'Regenerate'}
-            </button>
+              onClick={handleRegenerate}
+            />
           )}
 
           {/* Spacer */}
@@ -305,10 +274,9 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
             </div>
           </div>
 
-          {/* Editor — explicit 480px height so Monaco resolves height: 100% correctly
-                (flex-1 without a definite ancestor height would give Monaco 0px) */}
+          {/* Editor — explicit 480px height so Monaco resolves height: 100% correctly */}
           <div className="relative" style={{ height: 480 }}>
-            {/* Empty / loading state overlay */}
+            {/* Loading state overlay */}
             {aiMode && !aiCode && isGenerating && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 bg-[var(--color-panel)]">
                 <div className="flex gap-1">
@@ -316,12 +284,8 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
                     <span key={d} className="w-[6px] h-[6px] rounded-full animate-pulse" style={{ backgroundColor: AI_ACCENT, animationDelay: `${d}ms` }} />
                   ))}
                 </div>
-                <p className="text-[12px] text-[var(--color-text-muted)]">
-                  Generating {meta.label} schema…
-                </p>
-                <p className="text-[10px] text-[var(--color-text-muted)] opacity-60">
-                  Using {providerLabel} {model ? `/ ${model}` : ''}
-                </p>
+                <p className="text-[12px] text-[var(--color-text-muted)]">Generating {meta.label} schema…</p>
+                <p className="text-[10px] text-[var(--color-text-muted)] opacity-60">Using {providerLabel} {model ? `/ ${model}` : ''}</p>
               </div>
             )}
             {/* Error state */}
@@ -339,7 +303,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
                 </button>
               </div>
             )}
-            <CodeEditor
+            <EditorView
               value={displayCode}
               language={editorLang}
               readOnly

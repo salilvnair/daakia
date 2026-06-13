@@ -7,6 +7,7 @@
  * Explicit refresh is required to re-generate.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
 import { postMsg } from '../../vscode';
@@ -14,6 +15,7 @@ import { SparkleIcon, RefreshIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 
 const ACCENT = 'var(--color-protocol-ai)';
+const POPOVER_WIDTH = 440;
 
 interface Props {
   tabId: string;
@@ -21,6 +23,7 @@ interface Props {
   requestMethod: string;
   requestUrl: string;
   onClose: () => void;
+  anchorEl?: HTMLElement | null;
 }
 
 /** System prompt telling AI to generate only dk.* assertion code */
@@ -47,7 +50,8 @@ IMPORTANT RULES:
 - Keep it concise and readable
 - Do NOT use console.log or any other APIs not listed above`;
 
-export function AiNaturalAssertPopover({ tabId, response, requestMethod, requestUrl, onClose }: Props) {
+export function AiNaturalAssertPopover({ tabId, response, requestMethod, requestUrl, onClose, anchorEl }: Props) {
+  const menuRef = useRef<HTMLDivElement>(null);
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
 
@@ -157,14 +161,59 @@ Generate the dk.* test script:`;
 
   const hasCachedResult = !!generated;
 
-  return (
+  // Viewport-aware positioning — same approach as AiAssistPopover
+  useEffect(() => {
+    if (!menuRef.current || !anchorEl) return;
+    const menu = menuRef.current;
+    const place = () => {
+      const r = anchorEl.getBoundingClientRect();
+      const menuH = menu.scrollHeight;
+      let left = r.right - POPOVER_WIDTH;
+      let top = r.bottom + 4;
+      if (left < 8) left = Math.min(r.left, window.innerWidth - POPOVER_WIDTH - 8);
+      if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
+      if (left < 8) left = 8;
+      if (top + menuH > window.innerHeight - 8) top = Math.max(8, r.top - menuH - 4);
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+    };
+    place();
+    const raf = requestAnimationFrame(place);
+    window.addEventListener('scroll', place, { passive: true, capture: true });
+    window.addEventListener('resize', place, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', place, { capture: true });
+      window.removeEventListener('resize', place);
+    };
+  }, [anchorEl]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      if (anchorEl?.contains(e.target as Node)) return;
+      onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [anchorEl, onClose]);
+
+  const card = (
     <div
-      className="rounded-lg border overflow-hidden flex flex-col"
+      ref={menuRef}
       style={{
-        width: '100%',
+        position: 'fixed',
+        zIndex: 99998,
+        width: POPOVER_WIDTH,
+        left: -9999,
+        top: -9999,
+        borderRadius: 8,
+        border: '1px solid var(--color-surface-border)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
         backgroundColor: 'var(--color-panel)',
-        borderColor: 'var(--color-surface-border)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px var(--color-panel-border, rgba(255,255,255,.04))',
       }}
     >
       {/* Header */}
@@ -194,10 +243,18 @@ Generate the dk.* test script:`;
         <button
           type="button"
           onClick={onClose}
-          className={`${hasCachedResult && !streaming ? '' : 'ml-auto'} text-[12px] cursor-pointer hover:opacity-70 transition-opacity`}
-          style={{ color: 'var(--color-text-muted)' }}
+          className={hasCachedResult && !streaming ? '' : 'ml-auto'}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 22, height: 22, borderRadius: 5, border: 'none',
+            background: 'transparent', cursor: 'pointer',
+            fontSize: 13, color: 'var(--color-text-muted)', padding: 0, flexShrink: 0,
+            transition: 'color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-error)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 12%, transparent)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent'; }}
         >
-          ×
+          ✕
         </button>
       </div>
 
@@ -253,4 +310,6 @@ Generate the dk.* test script:`;
       )}
     </div>
   );
+
+  return createPortal(card, document.body);
 }

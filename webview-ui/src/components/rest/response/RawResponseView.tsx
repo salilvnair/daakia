@@ -1,9 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
-import { CodeEditor, CopyButton } from '../../shared';
+import { EditorView, IconButtonView, CopyButtonView } from '../../../dui';
 import { downloadBlob } from '../../../services/response';
 import { WrapLinesIcon, DownloadIcon, SearchIcon, MoreVerticalIcon, CloseCircleIcon } from '../../../icons';
-import { ToolbarBtn } from './ToolbarBtn';
 import { useClickOutside } from '../../../hooks/useClickOutside';
 
 interface RawViewProps {
@@ -24,11 +23,9 @@ export function RawResponseView({ response, wrapLines, setWrapLines, tabId }: Ra
     downloadBlob(response.body, 'response.txt');
   }, [response.body]);
 
-  // 5.4.2 — Search button: trigger Monaco's built-in find widget via editor API
   const handleSearch = useCallback(() => {
     const editor = monacoEditorRef.current;
     if (editor) {
-      // Focus then trigger find action — most reliable approach
       editor.focus();
       editor.getAction('actions.find')?.run();
     }
@@ -43,24 +40,37 @@ export function RawResponseView({ response, wrapLines, setWrapLines, tabId }: Ra
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-1.5">
         <span className="text-[12px] text-[var(--color-primary)] font-medium">Raw Response Body</span>
-        <div className="flex items-center gap-1">
-          <ToolbarBtn title="Search in response (Ctrl+F)" onClick={handleSearch}>
-            <SearchIcon size={14} />
-          </ToolbarBtn>
-          <ToolbarBtn title="Wrap lines" active={wrapLines} onClick={() => setWrapLines(!wrapLines)}>
-            <WrapLinesIcon size={14} />
-          </ToolbarBtn>
-          <ToolbarBtn title="Download" onClick={handleDownload}>
-            <DownloadIcon size={14} />
-          </ToolbarBtn>
-          <CopyButton text={response.body} size={14} className="w-7 h-7" />
+        <div className="flex items-center gap-0.5">
+          <IconButtonView
+            icon={<SearchIcon size={14} />}
+            size="md"
+            tooltip="Search in response (Ctrl+F)"
+            onClick={handleSearch}
+          />
+          <IconButtonView
+            icon={<WrapLinesIcon size={14} />}
+            size="md"
+            tooltip="Wrap lines"
+            active={wrapLines}
+            onClick={() => setWrapLines(!wrapLines)}
+          />
+          <IconButtonView
+            icon={<DownloadIcon size={14} />}
+            size="md"
+            tooltip="Download"
+            onClick={handleDownload}
+          />
+          <CopyButtonView text={response.body} size={14} />
 
-          {/* ⋮ More menu — Clear Response only */}
           {tabId && (
             <div className="relative" ref={moreMenuRef}>
-              <ToolbarBtn title="More options" onClick={() => setShowMoreMenu(!showMoreMenu)}>
-                <MoreVerticalIcon size={14} />
-              </ToolbarBtn>
+              <IconButtonView
+                icon={<MoreVerticalIcon size={14} />}
+                size="md"
+                tooltip="More options"
+                active={showMoreMenu}
+                onClick={() => setShowMoreMenu(p => !p)}
+              />
               {showMoreMenu && (
                 <div
                   className="absolute top-full right-0 z-50 mt-1 rounded-xl border shadow-2xl overflow-hidden min-w-[190px]"
@@ -70,7 +80,7 @@ export function RawResponseView({ response, wrapLines, setWrapLines, tabId }: Ra
                     type="button"
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-[11.5px] cursor-pointer transition-colors text-left"
                     style={{ color: 'var(--color-text-primary)' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#ef4444'; }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 8%, transparent)'; e.currentTarget.style.color = 'var(--color-error)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
                     onClick={() => {
                       setShowMoreMenu(false);
@@ -88,11 +98,11 @@ export function RawResponseView({ response, wrapLines, setWrapLines, tabId }: Ra
         </div>
       </div>
 
-      {/* Raw body (unformatted) */}
-      <div className="flex-1 min-h-0 raw-response-editor">
-        <CodeEditor
+      {/* Raw body */}
+      <div className="flex-1 min-h-0">
+        <EditorView
           value={response.body}
-          language="text"
+          language="plaintext"
           readOnly
           height="100%"
           wordWrap={wrapLines}

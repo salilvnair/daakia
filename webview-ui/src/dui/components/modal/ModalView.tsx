@@ -4,6 +4,12 @@ import './ModalView.css';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
 
+/**
+ * 'popout' — centered overlay with backdrop, portalled to document.body (default)
+ * 'inline' — bare card with no backdrop, no portal; parent controls positioning
+ */
+export type ModalMode = 'popout' | 'inline';
+
 export interface ModalViewProps {
   open: boolean;
   onClose: () => void;
@@ -28,6 +34,11 @@ export interface ModalViewProps {
   /** When true, uses var(--color-elevated) for the card background instead of var(--color-surface) */
   elevated?: boolean;
   className?: string;
+  /**
+   * 'popout' (default) — portal + backdrop + centered overlay
+   * 'inline' — bare card, no portal, no backdrop; parent div handles positioning
+   */
+  mode?: ModalMode;
 }
 
 const SIZE_MAP: Record<ModalSize, string> = {
@@ -53,6 +64,7 @@ export function ModalView({
   headerRight,
   noPadding = false,
   elevated = false,
+  mode = 'popout',
 }: ModalViewProps) {
   useEffect(() => {
     if (!open) return;
@@ -63,7 +75,126 @@ export function ModalView({
 
   if (!open) return null;
 
-  const modal = (
+  const surfaceBase = elevated ? 'var(--color-elevated)' : 'var(--color-surface)';
+
+  const card = (
+    <div
+      style={{
+        background: surfaceBase,
+        border: '1px solid var(--color-surface-border)',
+        borderRadius: '10px',
+        width: '100%',
+        ...(mode === 'popout' ? { maxWidth: SIZE_MAP[size], maxHeight: '85vh' } : {}),
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        overflow: 'hidden',
+      }}
+      onClick={e => e.stopPropagation()}
+    >
+      {/* Header */}
+      {(title || showCloseIcon) && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '12px 16px',
+          borderBottom: '1px solid var(--color-surface-border)',
+          flexShrink: 0,
+          ...(headerColor ? {
+            background: headerGradient
+              ? `linear-gradient(to right, color-mix(in srgb, ${headerColor} 15%, ${surfaceBase}), ${surfaceBase})`
+              : `color-mix(in srgb, ${headerColor} 12%, ${surfaceBase})`,
+            borderBottom: `1px solid color-mix(in srgb, ${headerColor} 30%, var(--color-surface-border))`,
+          } : {}),
+        }}>
+          {headerIcon && (
+            <div style={{ flexShrink: 0 }}>{headerIcon}</div>
+          )}
+          {title && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: mode === 'inline' ? '13px' : '14px',
+                fontWeight: 600,
+                color: headerColor
+                  ? `color-mix(in srgb, ${headerColor} 80%, var(--color-text-primary))`
+                  : 'var(--color-text-primary)',
+              }}>
+                {title}
+              </div>
+              {subtitle && (
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: 1 }}>
+                  {subtitle}
+                </div>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
+            {headerRight}
+            {showCloseIcon && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="dui_modal__close-btn"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 22,
+                  height: 22,
+                  borderRadius: 5,
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontSize: mode === 'inline' ? 13 : 15,
+                  lineHeight: 1,
+                  fontWeight: 400,
+                  padding: 0,
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Body */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: noPadding ? 0 : mode === 'inline' ? '14px 16px' : '18px',
+      }}>
+        {children}
+      </div>
+
+      {/* Footer */}
+      {(footerLeft || footerRight) && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: mode === 'inline' ? '10px 16px' : '12px 18px',
+          borderTop: '1px solid var(--color-surface-border)',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {footerLeft}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {footerRight}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Inline: bare card, no portal, no backdrop — parent handles positioning
+  if (mode === 'inline') return card;
+
+  // Modal: portal + backdrop + centering
+  return createPortal(
     <div
       style={{
         position: 'fixed',
@@ -77,117 +208,8 @@ export function ModalView({
       }}
       // backdrop click intentionally does NOT close — per design rules
     >
-      <div
-        style={{
-          background: elevated ? 'var(--color-elevated)' : 'var(--color-surface)',
-          border: '1px solid var(--color-surface-border)',
-          borderRadius: '10px',
-          width: '100%',
-          maxWidth: SIZE_MAP[size],
-          maxHeight: '85vh',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-          overflow: 'hidden',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        {(title || showCloseIcon) && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '14px 18px',
-            borderBottom: '1px solid var(--color-surface-border)',
-            flexShrink: 0,
-            ...(headerColor ? (() => {
-              const surfaceBase = elevated ? 'var(--color-elevated)' : 'var(--color-surface)';
-              return {
-                background: headerGradient
-                  ? `linear-gradient(to right, color-mix(in srgb, ${headerColor} 15%, ${surfaceBase}), ${surfaceBase})`
-                  : `color-mix(in srgb, ${headerColor} 12%, ${surfaceBase})`,
-                borderBottom: `1px solid color-mix(in srgb, ${headerColor} 30%, var(--color-surface-border))`,
-              };
-            })() : {}),
-          }}>
-            {headerIcon && (
-              <div style={{ flexShrink: 0 }}>{headerIcon}</div>
-            )}
-            {title && (
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontSize: '14px', fontWeight: 600,
-                  color: headerColor
-                    ? `color-mix(in srgb, ${headerColor} 80%, var(--color-text-primary))`
-                    : 'var(--color-text-primary)',
-                }}>
-                  {title}
-                </div>
-                {subtitle && (
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: 1 }}>
-                    {subtitle}
-                  </div>
-                )}
-              </div>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
-              {headerRight}
-              {showCloseIcon && (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="dui_modal__close-btn"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 24,
-                    height: 24,
-                    borderRadius: 5,
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    fontSize: 15,
-                    lineHeight: 1,
-                    fontWeight: 400,
-                    padding: 0,
-                  }}
-                  title="Close"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: noPadding ? 0 : '18px' }}>
-          {children}
-        </div>
-
-        {/* Footer */}
-        {(footerLeft || footerRight) && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '12px 18px',
-            borderTop: '1px solid var(--color-surface-border)',
-            flexShrink: 0,
-          }}>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {footerLeft}
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {footerRight}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+      {card}
+    </div>,
+    document.body,
   );
-
-  return createPortal(modal, document.body);
 }

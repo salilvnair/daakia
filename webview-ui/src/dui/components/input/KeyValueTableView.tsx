@@ -3,6 +3,7 @@ import { ConfirmDialog } from '../../../components/shared/modals/ConfirmDialog';
 import { TrashIcon, BulkEditIcon, PlusIcon, EyeIcon, EyeOffIcon } from '../../../icons';
 import type { DuiSize } from '../../core/DuiTypes';
 import { KeyValueTableRowView } from './KeyValueTableRowView';
+import { IconButtonView } from '../button/IconButtonView';
 
 export interface KeyValueTableRow {
   id: string;
@@ -217,43 +218,31 @@ export function KeyValueTableView({
             )}
             {!hasPinned && <div />}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             {toolbarExtra}
-            <button
-              type="button"
+            <IconButtonView
+              icon={<TrashIcon size={14} />}
+              size="md"
+              tooltip="Clear all"
+              disabled={!hasRows}
+              style={{ '--dui-hover-color': 'var(--color-error)', '--dui-hover-bg': 'color-mix(in srgb, var(--color-error) 8%, transparent)' } as React.CSSProperties}
               onClick={() => { if (hasRows) setShowClearConfirm(true); }}
-              className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
-                hasRows
-                  ? 'text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)]'
-                  : 'text-[var(--color-text-muted)] opacity-30 cursor-default'
-              }`}
-              title="Clear all"
-            >
-              <TrashIcon size={14} />
-            </button>
-            <button
-              type="button"
+            />
+            <IconButtonView
+              icon={<BulkEditIcon size={14} />}
+              size="md"
+              tooltip="Bulk edit"
+              active={bulkEdit}
+              activeColor={accent}
               onClick={() => { if (bulkEdit) fromBulkText(bulkTextRef.current); setBulkEdit(!bulkEdit); }}
-              className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
-                bulkEdit
-                  ? 'bg-[rgba(99,102,241,0.12)]'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]'
-              }`}
-              style={bulkEdit ? { color: accent } : undefined}
-              title="Bulk edit"
-            >
-              <BulkEditIcon size={14} />
-            </button>
-            <button
-              type="button"
+            />
+            <IconButtonView
+              icon={<PlusIcon size={14} />}
+              size="md"
+              tooltip="Add new row"
+              style={{ '--dui-hover-color': accent, '--dui-hover-bg': `color-mix(in srgb, ${accent} 8%, transparent)` } as React.CSSProperties}
               onClick={addRow}
-              className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] cursor-pointer transition-colors hover:bg-[rgba(99,102,241,0.08)]"
-              onMouseEnter={e => (e.currentTarget.style.color = accent)}
-              onMouseLeave={e => (e.currentTarget.style.color = '')}
-              title="Add new row"
-            >
-              <PlusIcon size={14} />
-            </button>
+            />
           </div>
         </div>
       )}

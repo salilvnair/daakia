@@ -1,11 +1,9 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
-import { CopyButton } from '../../shared';
-import { EditorView } from '../../../dui';
+import { EditorView, IconButtonView, TextInputView, InfoPopupView, CopyButtonView, type EditorLanguage } from '../../../dui';
 import { useClickOutside } from '../../../hooks/useClickOutside';
 import { applyJqFilter, formatBody, getResponseLanguage, downloadBlob, getExtensionForContentType } from '../../../services/response';
-import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, HelpCircleIcon, CloseCircleIcon } from '../../../icons';
-import { ToolbarBtn } from './ToolbarBtn';
+import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, CloseCircleIcon } from '../../../icons';
 
 interface JsonViewProps {
   response: { body: string; contentType: string; status?: number };
@@ -20,23 +18,31 @@ interface JsonViewProps {
   requestUrl?: string;
 }
 
-export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter, setShowFilter, filterQuery, setFilterQuery, tabId, requestMethod, requestUrl }: JsonViewProps) {
+const JQ_ITEMS = [
+  { code: '.name',          description: 'Access field "name"' },
+  { code: '.data.items',    description: 'Nested access' },
+  { code: '.[0]',           description: 'First array element' },
+  { code: '.[-1]',          description: 'Last array element' },
+  { code: '.[]',            description: 'Iterate all elements' },
+  { code: '.[].name',       description: 'Get "name" from each item' },
+  { code: '.items[].name',  description: 'Map over nested array' },
+  { code: '.[0:3]',         description: 'Slice first 3 items' },
+  { code: '.',              description: 'Identity (full response)' },
+];
+
+export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter, setShowFilter, filterQuery, setFilterQuery, tabId, requestMethod: _requestMethod, requestUrl: _requestUrl }: JsonViewProps) {
   const formattedBody = useMemo(() => formatBody(response.body, response.contentType), [response.body, response.contentType]);
   const [filterError, setFilterError] = useState<string | null>(null);
   const [showJqHelp, setShowJqHelp] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const jqHelpRef = useRef<HTMLDivElement>(null);
+  const jqHelpAnchorRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
-  // Click-outside for jq help popup
-  useClickOutside(jqHelpRef, () => setShowJqHelp(false), showJqHelp);
-  // Click-outside for more menu
   useClickOutside(moreMenuRef as React.RefObject<HTMLElement | null>, () => setShowMoreMenu(false), showMoreMenu);
 
   const isJson = response.contentType.includes('json');
   const hasBody = !!response.body?.trim();
 
-  // Apply jq-like filter
   const filteredBody = useMemo(() => {
     if (!filterQuery.trim()) { setFilterError(null); return formattedBody; }
     try {
@@ -57,35 +63,46 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Toolbar: label + icons */}
+      {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-1.5">
         <span className="text-[12px] text-[var(--color-primary)] font-medium">Response Body</span>
-        <div className="flex items-center gap-1">
-          {/* Wrap lines */}
-          <ToolbarBtn title="Wrap lines" active={wrapLines} onClick={() => setWrapLines(!wrapLines)}>
-            <WrapLinesIcon size={14} />
-          </ToolbarBtn>
+        <div className="flex items-center gap-0.5">
+          <IconButtonView
+            icon={<WrapLinesIcon size={14} />}
+            size="md"
+            tooltip="Wrap lines"
+            active={wrapLines}
+            onClick={() => setWrapLines(!wrapLines)}
+          />
 
-          {/* Filter — only for JSON */}
           {isJson && hasBody && (
-            <ToolbarBtn title="Filter (jq syntax)" active={showFilter} onClick={() => setShowFilter(!showFilter)}>
-              <FilterIcon size={14} />
-            </ToolbarBtn>
+            <IconButtonView
+              icon={<FilterIcon size={14} />}
+              size="md"
+              tooltip="Filter (jq syntax)"
+              active={showFilter}
+              onClick={() => setShowFilter(!showFilter)}
+            />
           )}
 
-          {/* Download */}
-          <ToolbarBtn title="Download file" onClick={handleDownload}>
-            <DownloadIcon size={14} />
-          </ToolbarBtn>
+          <IconButtonView
+            icon={<DownloadIcon size={14} />}
+            size="md"
+            tooltip="Download file"
+            onClick={handleDownload}
+          />
 
-          {/* Copy */}
-          <CopyButton text={formattedBody} size={14} title="Copy response" className="w-7 h-7" />
+          <CopyButtonView text={formattedBody} size={14} title="Copy response" />
 
           {/* ⋮ More menu */}
           <div className="relative" ref={moreMenuRef}>
-            <ToolbarBtn title="More options" onClick={() => setShowMoreMenu(!showMoreMenu)}>
-              <MoreVerticalIcon size={14} />
-            </ToolbarBtn>
+            <IconButtonView
+              icon={<MoreVerticalIcon size={14} />}
+              size="md"
+              tooltip="More options"
+              active={showMoreMenu}
+              onClick={() => setShowMoreMenu(p => !p)}
+            />
             {showMoreMenu && (
               <div
                 className="absolute top-full right-0 z-50 mt-1 rounded-xl border shadow-2xl overflow-hidden min-w-[200px]"
@@ -94,7 +111,7 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
                 <button type="button"
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-[11.5px] cursor-pointer transition-colors text-left"
                   style={{ color: 'var(--color-text-primary)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = 'var(--color-error)'; }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 8%, transparent)'; e.currentTarget.style.color = 'var(--color-error)'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
                   onClick={() => {
                     setShowMoreMenu(false);
@@ -113,61 +130,51 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
 
       {/* Filter bar */}
       {showFilter && (
-        <div className={`flex items-center gap-2 px-4 py-1.5 border-b ${filterError ? 'bg-[rgba(239,68,68,0.08)] border-[rgba(239,68,68,0.3)]' : 'border-[var(--color-surface-border)]'}`}>
-          <SearchIcon size={14} className="text-[var(--color-text-muted)] flex-shrink-0" />
-          <input
-            type="text"
+        <div
+          className="flex items-center gap-1 px-3 py-1 border-b"
+          style={{ borderColor: filterError ? 'color-mix(in srgb, var(--color-error) 35%, var(--color-surface-border))' : 'var(--color-surface-border)', backgroundColor: filterError ? 'color-mix(in srgb, var(--color-error) 5%, transparent)' : undefined }}
+        >
+          <TextInputView
+            naked
+            size="sm"
+            error={!!filterError}
+            iconLeft={<SearchIcon size={13} style={{ color: 'var(--color-text-muted)' }} />}
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             placeholder="Filter JSON response body (uses jq syntax)"
             autoFocus
-            className="flex-1 h-[26px] px-2 py-1 text-[12px] bg-transparent border-none text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+            style={{ flex: 1 }}
           />
+
           {filterError && (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[rgba(239,68,68,0.15)] border border-[rgba(239,68,68,0.3)] text-[10px] text-[#ef4444] max-w-[300px] truncate flex-shrink-0">
-              <InfoCircleIcon size={12} />
-              {filterError}
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded flex-shrink-0 text-[10px]"
+              style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--color-error) 30%, transparent)', color: 'var(--color-error)', maxWidth: 280 }}
+            >
+              <InfoCircleIcon size={11} />
+              <span className="truncate">{filterError}</span>
             </span>
           )}
-          <div className="relative" ref={jqHelpRef}>
-            <button
-              type="button"
-              onClick={() => setShowJqHelp(!showJqHelp)}
-              className="w-5 h-5 flex items-center justify-center rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] cursor-pointer"
-              title="Help"
-            >
-              <HelpCircleIcon size={12} />
-            </button>
-            {showJqHelp && (
-              <div className="absolute top-full right-0 z-50 mt-1 w-[320px] bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-lg shadow-xl p-4">
-                <h4 className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-2">jq Filter Syntax</h4>
-                <p className="text-[11px] text-[var(--color-text-muted)] mb-3">Use dot notation to access nested fields. Supports basic jq-like path expressions.</p>
-                <div className="space-y-2 text-[11px] font-mono">
-                  {[
-                    ['.name', 'Access field "name"'],
-                    ['.data.items', 'Nested access'],
-                    ['.[0]', 'First array element'],
-                    ['.[-1]', 'Last array element'],
-                    ['.[]', 'Iterate all elements'],
-                    ['.[].name', 'Get "name" from each item'],
-                    ['.items[].name', 'Map over nested array'],
-                    ['.[0:3]', 'Slice first 3 items'],
-                    ['.', 'Identity (full response)'],
-                  ].map(([code, desc]) => (
-                    <div key={code} className="flex gap-2">
-                      <code className="px-1.5 py-0.5 rounded bg-[rgba(99,102,241,0.1)] text-[var(--color-primary)]">{code}</code>
-                      <span className="text-[var(--color-text-muted)]">{desc}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2">
-                  <button className="text-[10px] text-[var(--color-primary)] hover:underline cursor-pointer" onClick={() => {}}>
-                    Open Wiki →
-                  </button>
-                </div>
-              </div>
-            )}
+
+          {/* jq help — DUI InfoPopupView anchored to wrapper div */}
+          <div ref={jqHelpAnchorRef} style={{ display: 'inline-flex' }}>
+            <IconButtonView
+              icon={<span style={{ fontSize: 11, fontWeight: 700, lineHeight: 1 }}>?</span>}
+              size="sm"
+              tooltip="jq syntax help"
+              active={showJqHelp}
+              onClick={() => setShowJqHelp(p => !p)}
+            />
           </div>
+
+          <InfoPopupView
+            open={showJqHelp}
+            onClose={() => setShowJqHelp(false)}
+            anchorEl={jqHelpAnchorRef.current}
+            title="jq Filter Syntax"
+            description="Use dot notation to access nested fields. Supports basic jq-like path expressions."
+            items={JQ_ITEMS}
+            width={320}
+          />
         </div>
       )}
 
@@ -175,13 +182,12 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
       <div className="flex-1 min-h-0">
         <EditorView
           value={filteredBody}
-          language={getResponseLanguage(response.contentType)}
+          language={(getResponseLanguage(response.contentType) === 'text' ? 'plaintext' : getResponseLanguage(response.contentType)) as EditorLanguage}
           readOnly
           height="100%"
           wordWrap={wrapLines}
         />
       </div>
-
     </div>
   );
 }

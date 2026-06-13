@@ -26,6 +26,8 @@ export interface TextInputViewProps extends InputHTMLAttributes<HTMLInputElement
   masked?: boolean;
   /** Custom icons for the masked toggle. Defaults to EyeOffIcon (hidden) / EyeIcon (shown). */
   maskIcon?: { hidden?: ReactNode; shown?: ReactNode };
+  /** When true: no border, transparent bg, no focus ring — for embedding inside containers that supply their own chrome */
+  naked?: boolean;
   // ─── DUI container props ────────────────────────────────────────────────────
   width?: DuiWidth;
   borderRadius?: DuiRadius | number;
@@ -39,6 +41,7 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
     { size = 'default', rounded = true, accentColor, error = false,
       iconLeft, iconRight, prefixIcon, suffixIcon,
       masked = false, maskIcon,
+      naked = false,
       style, className = '', onFocus, onBlur, type,
       width, borderRadius, color, fontStyle,
       ...rest },
@@ -59,19 +62,33 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
       ? accent
       : 'var(--color-input-border)';
 
-    const containerStyle: React.CSSProperties = {
-      display: 'inline-flex',
-      alignItems: 'center',
-      height: base.height,
-      width: base.width !== 'auto' ? base.width : undefined,
-      borderRadius: radius,
-      border: `1px solid ${borderColor}`,
-      background: 'var(--color-input-bg)',
-      transition: 'border-color 140ms, box-shadow 140ms',
-      boxShadow: focused ? `0 0 0 2px color-mix(in srgb, ${accent} 20%, transparent)` : 'none',
-      overflow: 'hidden',
-      ...style,
-    };
+    const containerStyle: React.CSSProperties = naked
+      ? {
+          display: 'inline-flex',
+          alignItems: 'center',
+          height: base.height,
+          width: base.width !== 'auto' ? base.width : undefined,
+          border: 'none',
+          // When naked + error: red bottom underline so the error state is visible
+          borderBottom: error ? '1px solid color-mix(in srgb, var(--color-error) 60%, transparent)' : 'none',
+          background: 'transparent',
+          boxShadow: 'none',
+          overflow: 'hidden',
+          ...style,
+        }
+      : {
+          display: 'inline-flex',
+          alignItems: 'center',
+          height: base.height,
+          width: base.width !== 'auto' ? base.width : undefined,
+          borderRadius: radius,
+          border: `1px solid ${borderColor}`,
+          background: 'var(--color-input-bg)',
+          transition: 'border-color 140ms, box-shadow 140ms',
+          boxShadow: focused ? `0 0 0 2px color-mix(in srgb, ${accent} 20%, transparent)` : 'none',
+          overflow: 'hidden',
+          ...style,
+        };
 
     const inputType = masked ? (showMasked ? 'text' : 'password') : (type ?? 'text');
 
@@ -82,7 +99,7 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
     return (
       <div style={containerStyle} className={className}>
         {effectiveLeft && (
-          <span style={{ paddingLeft: base.paddingX, display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)', flexShrink: 0 }}>
+          <span style={{ paddingLeft: base.paddingX, display: 'flex', alignItems: 'center', color: (naked && error) ? 'var(--color-error)' : 'var(--color-text-muted)', flexShrink: 0, transition: 'color 140ms' }}>
             {effectiveLeft}
           </span>
         )}
@@ -98,10 +115,11 @@ export const TextInputView = forwardRef<HTMLInputElement, TextInputViewProps>(
             background: 'transparent',
             border: 'none',
             outline: 'none',
-            color: base.color || 'var(--color-text-primary)',
+            color: (naked && error) ? 'var(--color-error)' : (base.color || 'var(--color-text-primary)'),
             fontStyle: base.fontStyle,
             minWidth: 0,
             fontFamily: 'inherit',
+            caretColor: (naked && error) ? 'var(--color-error)' : undefined,
           }}
           onFocus={e => { setFocused(true); onFocus?.(e); }}
           onBlur={e => { setFocused(false); onBlur?.(e); }}

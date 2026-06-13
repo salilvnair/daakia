@@ -6,11 +6,11 @@
  * negative prices, invalid country codes — things schema allows but are logically wrong.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CheckIcon, RefreshIcon } from '../../icons';
+import { SparkleIcon, CheckIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
+import { ModalView, ButtonView } from '../../dui';
 
 interface Props {
   tabId: string;
@@ -51,7 +51,6 @@ export function AiSemanticValidatorModal({ tabId, responseBody, method, url, sta
   const { getTabActions, updateSemantic } = useAiResponseActionsStore();
   const cached = getTabActions(tabId);
 
-  // Cache-first: initialize from stored result if available
   const [result, setResult] = useState(cached.semantic?.result ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -82,7 +81,6 @@ export function AiSemanticValidatorModal({ tabId, responseBody, method, url, sta
     return () => window.removeEventListener('message', handler);
   }, [tabId, updateSemantic]);
 
-  // Auto-run on first open only — skip if a cached result already exists
   useEffect(() => {
     if (responseBody.trim() && !cached.semantic?.result) run();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,80 +108,64 @@ export function AiSemanticValidatorModal({ tabId, responseBody, method, url, sta
 
   const isAllGood = result && (result.includes('✅') || result.toLowerCase().includes('semantically valid')) && !result.includes('🔴') && !result.includes('🟡');
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[620px] max-h-[88vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Semantic Validator</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">Catches logical errors beyond JSON schema</p>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Semantic Validator"
+      subtitle="Catches logical errors beyond JSON schema"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
+        </div>
+      }
+      headerRight={result && !loading ? (
+        <button type="button" onClick={run} title="Re-run validation"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)', opacity: 0.6 }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}
+        >
+          <RefreshIcon size={13} />
+        </button>
+      ) : undefined}
+      footerRight={<ButtonView variant="secondary" size="sm" onClick={onClose}>Close</ButtonView>}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {loading && !result && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '16px 0' }}>
+            {[0, 150, 300].map(d => (
+              <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
+                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
+            ))}
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>Analyzing semantics…</span>
           </div>
-          {/* Refresh — re-run validation without closing */}
-          {result && !loading && (
-            <button
-              type="button"
-              onClick={run}
-              title="Re-run validation"
-              className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer mr-1"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              <RefreshIcon size={13} />
-            </button>
-          )}
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
-        </div>
+        )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-          {loading && !result && (
-            <div className="flex gap-1 items-center py-4">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Analyzing semantics…</span>
-            </div>
-          )}
+        {error && <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>{error}</p>}
 
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
+        {result && (
+          <div style={{
+            borderRadius: 8, border: `1px solid ${isAllGood ? 'color-mix(in srgb, var(--color-success) 30%, var(--color-surface-border))' : `color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`}`,
+            backgroundColor: `color-mix(in srgb, ${isAllGood ? 'var(--color-success)' : ACCENT} 4%, var(--color-panel))`,
+            padding: 16,
+          }}>
+            {isAllGood && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11, fontWeight: 500, color: 'var(--color-success)' }}>
+                <CheckIcon size={12} />
+                All fields look semantically valid
+              </div>
+            )}
+            <MdViewer content={result} />
+            {loading && <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse align-text-bottom" style={{ backgroundColor: ACCENT }} />}
+          </div>
+        )}
 
-          {result && (
-            <div className="rounded-lg border p-4"
-              style={{
-                borderColor: isAllGood
-                  ? 'color-mix(in srgb, var(--color-success) 30%, var(--color-surface-border))'
-                  : `color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`,
-                backgroundColor: `color-mix(in srgb, ${isAllGood ? 'var(--color-success)' : ACCENT} 4%, var(--color-panel))`,
-              }}>
-              {isAllGood && (
-                <div className="flex items-center gap-1.5 mb-2 text-[11px] font-medium" style={{ color: 'var(--color-success)' }}>
-                  <CheckIcon size={12} />
-                  All fields look semantically valid
-                </div>
-              )}
-              <MdViewer content={result} />
-              {loading && <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse align-text-bottom" style={{ backgroundColor: ACCENT }} />}
-            </div>
-          )}
-
-          {!responseBody.trim() && (
-            <p className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>No response body. Send the request first.</p>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
-        </div>
+        {!responseBody.trim() && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>No response body. Send the request first.</p>
+        )}
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

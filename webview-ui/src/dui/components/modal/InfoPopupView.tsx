@@ -60,7 +60,8 @@ export function InfoPopupView({
     if (!open) setPos(p => ({ ...p, visible: false }));
   }, [open]);
 
-  // Render-then-measure: after popup mounts, compute viewport-safe position
+  // Render-then-measure: after popup mounts, compute viewport-safe position.
+  // Re-runs on scroll/resize so the popup tracks the anchor element.
   useLayoutEffect(() => {
     if (!open || !popRef.current) return;
 
@@ -71,7 +72,6 @@ export function InfoPopupView({
       const vh = window.innerHeight;
 
       if (!anchorEl) {
-        // Centered fallback
         setPos({
           top: Math.max(8, (vh - pop.height) / 2),
           left: Math.max(8, (vw - pop.width) / 2),
@@ -82,19 +82,12 @@ export function InfoPopupView({
 
       const btn = anchorEl.getBoundingClientRect();
 
-      // Default: below-left aligned with anchor
       let left = btn.left;
       let top  = btn.bottom + 6;
 
-      // Flip right → left if overflows right edge
-      if (left + pop.width > vw - 8) {
-        left = btn.right - pop.width;
-      }
-      // Flip down → up if overflows bottom edge
-      if (top + pop.height > vh - 8) {
-        top = btn.top - pop.height - 6;
-      }
-      // Clamp so it never escapes the viewport
+      if (left + pop.width > vw - 8) left = btn.right - pop.width;
+      if (top + pop.height > vh - 8)  top  = btn.top - pop.height - 6;
+
       left = Math.max(8, Math.min(left, vw - pop.width - 8));
       top  = Math.max(8, Math.min(top,  vh - pop.height - 8));
 
@@ -102,7 +95,14 @@ export function InfoPopupView({
     };
 
     const id = requestAnimationFrame(place);
-    return () => cancelAnimationFrame(id);
+    // Reposition when any ancestor scrolls or window resizes
+    window.addEventListener('scroll', place, { passive: true, capture: true });
+    window.addEventListener('resize', place);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('scroll', place, { capture: true });
+      window.removeEventListener('resize', place);
+    };
   }, [open, anchorEl]);
 
   if (!open) return null;

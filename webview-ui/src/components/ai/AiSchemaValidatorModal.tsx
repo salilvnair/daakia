@@ -1,15 +1,12 @@
 /**
  * AiSchemaValidatorModal — validates response against JSON Schema/OpenAPI spec with AI (4.4.8)
- *
- * Auto-loads the current tab's response body. User pastes a schema/spec.
- * AI explains mismatches and compliance issues.
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
-import { CloseIcon, SparkleIcon, CheckIcon } from '../../icons';
+import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
+import { ModalView, AIButtonView, EditorView, ResizablePanelView } from '../../dui';
 
 interface Props {
   responseBody: string;
@@ -38,14 +35,12 @@ export function AiSchemaValidatorModal({ responseBody, method, url, status, onCl
       if (!msg || msg.tabId !== reqIdRef.current) return;
 
       if (msg.type === 'ai:chunk') {
-        const delta = (msg.delta as string) || (msg.text as string) || '';
-        accRef.current += delta;
+        accRef.current += (msg.delta as string) || (msg.text as string) || '';
         setResult(accRef.current);
       }
       if (msg.type === 'ai:complete') {
         const msgPayload = msg.message as Record<string, unknown> | undefined;
-        const content = accRef.current || (msgPayload?.content as string) || '';
-        setResult(content);
+        setResult(accRef.current || (msgPayload?.content as string) || '');
         setLoading(false);
         setIsStreaming(false);
       }
@@ -82,14 +77,11 @@ export function AiSchemaValidatorModal({ responseBody, method, url, status, onCl
     });
 
     postMsg({
-      type: 'ai:send',
-      tabId: pid,
-      provider: '', model: '', baseUrl: '',
+      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.schema.validate',
       systemPrompts: [systemPrompt],
       userPrompt,
-      conversation: [],
-      tools: [],
+      conversation: [], tools: [],
       settings: { temperature: 0.1, maxTokens: 1024, stream: true, topP: 1, stopSequences: [], responseFormat: 'text', frequencyPenalty: 0, presencePenalty: 0, seed: null },
       mcpServerConfigs: [],
     });
@@ -97,112 +89,93 @@ export function AiSchemaValidatorModal({ responseBody, method, url, status, onCl
 
   const allGood = result && !result.toLowerCase().includes('mismatch') && !result.toLowerCase().includes('violation') && !result.toLowerCase().includes('missing') && !result.toLowerCase().includes('invalid');
 
-  const modal = (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-    >
-      <div
-        className="w-[600px] max-h-[88vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Schema Validator</p>
-            {url && <p className="text-[11px] text-[var(--color-text-muted)] truncate">{method} {url} · {status}</p>}
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Schema Validator"
+      subtitle={url ? `${method} ${url} · ${status}` : undefined}
+      size="md"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
         </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-          {/* Schema input */}
-          <div>
-            <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
-              JSON Schema or OpenAPI spec
-            </label>
-            <textarea
-              autoFocus
-              value={schema}
-              onChange={e => { setSchema(e.target.value); setError(''); }}
-              rows={7}
-              className="w-full px-3 py-2 rounded-lg text-[11px] font-mono resize-none outline-none"
-              placeholder={`Paste JSON Schema (draft-07):\n{\n  "type": "object",\n  "required": ["id", "name", "email"],\n  "properties": {\n    "id": { "type": "integer" },\n    "name": { "type": "string", "minLength": 1 },\n    "email": { "type": "string", "format": "email" }\n  }\n}`}
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-            />
-          </div>
-
-          <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-            Response: {responseBody.length > 0 ? `${responseBody.length} chars (loaded)` : 'No response — send the request first'}
-          </p>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {!result && !loading && (
-            <button
-              type="button"
+      }
+      footerRight={
+        <div style={{ display: 'flex', gap: 8 }}>
+          {result && !loading && (
+            <AIButtonView
+              label="Re-validate"
+              size="md"
+              accentColor={ACCENT}
+              disabled={loading}
               onClick={handleValidate}
-              disabled={!schema.trim() || !responseBody.trim()}
-              className="h-[30px] px-4 text-[12px] font-medium rounded-md text-white cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-40 self-start"
-              style={{ backgroundColor: ACCENT }}
-            >
-              ✨ Validate with AI
-            </button>
+            />
           )}
-
-          {loading && !result && (
-            <div className="flex gap-1 items-center py-2">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Validating…</span>
-            </div>
-          )}
-
-          {result && (
-            <div
-              className="rounded-lg border p-3"
-              style={{
-                borderColor: allGood
-                  ? 'color-mix(in srgb, var(--color-success) 30%, var(--color-surface-border))'
-                  : `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
-                backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))`,
-              }}
-            >
-              {allGood && (
-                <div className="flex items-center gap-1.5 mb-2 text-[11px] font-medium" style={{ color: 'var(--color-success)' }}>
-                  <CheckIcon size={12} />
-                  Response appears to comply with the schema
-                </div>
-              )}
-              <MdViewer content={result} />
-              {isStreaming && <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse align-text-bottom" style={{ backgroundColor: ACCENT }} />}
-            </div>
+          {!result && (
+            <AIButtonView
+              label={loading ? 'Validating…' : 'Validate with AI'}
+              size="md"
+              accentColor={ACCENT}
+              disabled={loading || !schema.trim() || !responseBody.trim()}
+              onClick={handleValidate}
+            />
           )}
         </div>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
+            JSON Schema or OpenAPI spec
+          </label>
+          <ResizablePanelView defaultHeight={220} minHeight={100} maxHeight={420}>
+            <EditorView
+              value={schema}
+              onChange={setSchema}
+              language="json"
+              height="100%"
+              placeholder={`{\n  "type": "object",\n  "required": ["id", "name"],\n  "properties": {\n    "id": { "type": "integer" },\n    "name": { "type": "string" }\n  }\n}`}
+              bordered={false}
+            />
+          </ResizablePanelView>
+        </div>
 
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="flex gap-2">
-            {result && !loading && (
-              <button type="button" onClick={handleValidate}
-                className="h-[30px] px-3 text-[11px] rounded-md cursor-pointer border text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                style={{ borderColor: 'var(--color-surface-border)' }}>
-                Re-validate
-              </button>
-            )}
-            <button type="button" onClick={onClose}
-              className="h-[30px] px-4 text-[12px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">
-              Close
-            </button>
+        <p style={{ fontSize: 10, color: 'var(--color-text-muted)', margin: 0 }}>
+          Response: {responseBody.length > 0 ? `${responseBody.length} chars loaded` : 'No response — send the request first'}
+        </p>
+
+        {error && <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>{error}</p>}
+
+        {loading && !result && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '4px 0' }}>
+            {[0, 150, 300].map(d => (
+              <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
+                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
+            ))}
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>Validating…</span>
           </div>
-        </div>
-      </div>
-    </div>
-  );
+        )}
 
-  return createPortal(modal, document.body);
+        {result && (
+          <div style={{
+            borderRadius: 8,
+            border: `1px solid ${allGood ? 'color-mix(in srgb, var(--color-success) 30%, var(--color-surface-border))' : `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`}`,
+            backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))`,
+            padding: 12,
+          }}>
+            {allGood && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11, fontWeight: 500, color: 'var(--color-success)' }}>
+                <CheckIcon size={12} />
+                Response appears to comply with the schema
+              </div>
+            )}
+            <MdViewer content={result} />
+            {isStreaming && <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse align-text-bottom" style={{ backgroundColor: ACCENT }} />}
+          </div>
+        )}
+      </div>
+    </ModalView>
+  );
 }

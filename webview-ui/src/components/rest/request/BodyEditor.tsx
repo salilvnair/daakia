@@ -5,6 +5,7 @@ import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { FormDataTable, ConfirmDialog, KeyValueTable } from '../../shared';
 import { SelectInputView, EditorView, type EditorLanguage } from '../../../dui';
 import { TrashIcon, BulkEditIcon, PlusIcon, SparkleIcon, WandIcon, FileUploadIcon, DiceIcon } from '../../../icons';
+import { IconButtonView } from '../../../dui';
 import { AiBodyGenerate, type AiBodyGenerateHandle } from '../../ai/AiBodyGenerate';
 import { AiDataGeneratorModal } from '../../ai/AiDataGeneratorModal';
 import { AiRequestFuzzerModal } from '../../ai/AiRequestFuzzerModal';
@@ -131,84 +132,67 @@ export function BodyEditor({ tab, showFuzzer, onCloseFuzzer }: BodyEditorProps) 
           <span className="text-[12px] text-[var(--color-primary)] font-medium">
             {isBinaryMode ? 'File Upload' : 'Raw Request Body'}
           </span>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             {hasContent && (
-              <button
-                type="button"
+              <IconButtonView
+                icon={<TrashIcon size={14} />}
+                size="md"
+                tooltip="Clear all"
+                style={{ '--dui-hover-color': 'var(--color-error)', '--dui-hover-bg': 'color-mix(in srgb, var(--color-error) 8%, transparent)' } as React.CSSProperties}
                 onClick={() => setShowClearConfirm(true)}
-                className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors"
-                title="Clear all"
-              >
-                <TrashIcon size={14} />
-              </button>
+              />
             )}
             {isTableMode && (
               <>
-                <button
-                  type="button"
+                <IconButtonView
+                  icon={<BulkEditIcon size={14} />}
+                  size="md"
+                  tooltip="Bulk edit"
+                  active={bulkEdit}
                   onClick={() => { if (bulkEdit) fromBulkText(bulkTextRef.current); setBulkEdit(!bulkEdit); }}
-                  className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
-                    bulkEdit
-                      ? 'text-[var(--color-primary)] bg-[rgba(99,102,241,0.12)]'
-                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]'
-                  }`}
-                  title="Bulk edit"
-                >
-                  <BulkEditIcon size={14} />
-                </button>
-                <button
-                  type="button"
+                />
+                <IconButtonView
+                  icon={<PlusIcon size={14} />}
+                  size="md"
+                  tooltip="Add new row"
                   onClick={addRow}
-                  className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[rgba(99,102,241,0.08)] cursor-pointer transition-colors"
-                  title="Add new row"
-                >
-                  <PlusIcon size={14} />
-                </button>
+                />
               </>
             )}
             {isCodeMode && (
               <>
                 {editorLanguage === 'json' && (
-                  <button
-                    type="button"
+                  <IconButtonView
+                    icon={<WandIcon size={14} />}
+                    size="md"
+                    tooltip="Prettify"
                     onClick={handlePrettify}
-                    className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] cursor-pointer transition-colors"
-                    title="Prettify"
-                  >
-                    <WandIcon size={14} />
-                  </button>
+                  />
                 )}
                 {aiEnabled('bodyGenerator') && (
-                  <button
-                    type="button"
+                  <IconButtonView
+                    icon={<SparkleIcon size={14} />}
+                    size="md"
+                    tooltip="Generate body with AI"
+                    accentColor="var(--color-protocol-ai)"
                     onClick={() => aiBodyGenerateRef.current?.open()}
-                    className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
-                    style={{ color: aiBodyGenerateRef.current?.loading ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-protocol-ai)')}
-                    onMouseLeave={e => { if (!aiBodyGenerateRef.current?.loading) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
-                    title="Generate body with AI"
-                  >
-                    <SparkleIcon size={14} />
-                  </button>
+                  />
                 )}
                 {aiEnabled('dataGenerator') && (
-                  <button
-                    type="button"
+                  <IconButtonView
+                    icon={<DiceIcon size={14} />}
+                    size="md"
+                    tooltip="Generate test data with AI"
+                    style={{ '--dui-hover-color': 'var(--color-info)', '--dui-hover-bg': 'color-mix(in srgb, var(--color-info) 8%, transparent)' } as React.CSSProperties}
                     onClick={() => setShowDataGenerator(true)}
-                    className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-info)] hover:bg-[rgba(14,165,233,0.08)] cursor-pointer transition-colors"
-                    title="Generate test data with AI"
-                  >
-                    <DiceIcon size={14} />
-                  </button>
+                  />
                 )}
-                <button
-                  type="button"
+                <IconButtonView
+                  icon={<FileUploadIcon size={14} />}
+                  size="md"
+                  tooltip="Import from file"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] cursor-pointer transition-colors"
-                  title="Import from file"
-                >
-                  <FileUploadIcon size={14} />
-                </button>
+                />
               </>
             )}
           </div>

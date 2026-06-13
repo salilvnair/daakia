@@ -54,6 +54,9 @@ export type { SelectInputViewProps, SelectOption, SelectInputSize } from './comp
 export { SelectTextInputView } from './components/input/SelectTextInputView';
 export type { SelectTextInputViewProps, SelectTextOption, SelectTextInputSize, MockServerSuggestion } from './components/input/SelectTextInputView';
 
+export { SegmentedControlView } from './components/input/SegmentedControlView';
+export type { SegmentedControlViewProps, SegmentedOption } from './components/input/SegmentedControlView';
+
 export { HiddenKeyValueItemView } from './components/input/HiddenKeyValueItemView';
 export type { HiddenKeyValueItemViewProps } from './components/input/HiddenKeyValueItemView';
 
@@ -78,7 +81,7 @@ export { CheckboxView } from './components/input/CheckboxView';
 export type { CheckboxViewProps, CheckboxSize } from './components/input/CheckboxView';
 
 export { ModalView } from './components/modal/ModalView';
-export type { ModalViewProps } from './components/modal/ModalView';
+export type { ModalViewProps, ModalSize, ModalMode } from './components/modal/ModalView';
 
 export { LoaderView } from './components/display/LoaderView';
 export type { LoaderViewProps, LoaderVariant } from './components/display/LoaderView';

@@ -13,7 +13,7 @@ import { useDebugStore } from '../../../store/debug-store';
 
 export type EditorLanguage =
   | 'javascript' | 'typescript' | 'json' | 'xml' | 'html'
-  | 'css' | 'graphql' | 'python' | 'yaml' | 'plaintext' | 'markdown';
+  | 'css' | 'graphql' | 'python' | 'yaml' | 'plaintext' | 'markdown' | 'java';
 
 let dkLibRegistered = false;
 
