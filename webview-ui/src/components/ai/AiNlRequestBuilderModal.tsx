@@ -8,7 +8,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView } from '../../dui';
 
 interface Props {
   protocol: string;
@@ -161,11 +161,9 @@ export function AiNlRequestBuilderModal({ protocol, currentUrl, onApply, onClose
         </div>
       }
       headerRight={protocolBadge}
-      footerRight={
-        parsed && onApply
-          ? <AIButtonView label="Apply to Request" size="sm" accentColor="var(--color-success)" onClick={() => { onApply(parsed!); onClose(); }} />
-          : undefined
-      }
+      footerRight={parsed && onApply ? (
+        <AIButtonView label="Apply to Request" size="sm" accentColor="var(--color-success)" onClick={() => { onApply(parsed!); onClose(); }} />
+      ) : undefined}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: 0 }}>

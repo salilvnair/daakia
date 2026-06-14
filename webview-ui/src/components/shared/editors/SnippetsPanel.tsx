@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { SearchIcon, ChevronLeftIcon, ChevronRightIcon } from '../../../icons';
+import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from '../../../icons';
+import { TextInputView } from '../../../dui';
 
 // ────────── Types ──────────
 
@@ -338,14 +339,14 @@ export function SnippetsPanel({ onInsert, accentColor }: SnippetsPanelProps) {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Search */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)]">
-        <SearchIcon size={14} className="text-[var(--color-text-muted)] flex-shrink-0" />
-        <input
-          type="text"
+      <div className="px-2 py-2 border-b border-[var(--color-surface-border)]">
+        <TextInputView
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search snippets..."
-          className="flex-1 h-[26px] bg-transparent text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none"
+          size="sm"
+          width="fw"
+          iconLeft={<SearchIcon size={11} />}
         />
       </div>
 

@@ -17,12 +17,9 @@ export type SidebarSection = 'collections' | 'history' | 'environments' | 'debug
 interface AppSidebarProps {
   activeSection: SidebarSection;
   onSectionChange: (section: SidebarSection) => void;
-  sidebarOpen: boolean;
-  sidebarWidth: number;
-  sidebarDragging: boolean;
 }
 
-export function AppSidebar({ activeSection, onSectionChange, sidebarOpen, sidebarWidth, sidebarDragging }: AppSidebarProps) {
+export function AppSidebar({ activeSection, onSectionChange }: AppSidebarProps) {
   const toggle = (section: SidebarSection) => {
     onSectionChange(activeSection === section ? null : section);
   };
@@ -70,14 +67,8 @@ export function AppSidebar({ activeSection, onSectionChange, sidebarOpen, sideba
 
   return (
     <div className="flex h-full">
-      {/* Expandable panel — keep mounted, control visibility via width */}
-      <div
-        className="bg-[var(--color-surface)] flex flex-col overflow-hidden"
-        style={{
-          width: showPanel && sidebarOpen ? sidebarWidth : 0,
-          transition: sidebarDragging ? 'none' : 'width 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-        }}
-      >
+      {/* Expandable panel — fills space given by SplitPanelView */}
+      <div className="flex-1 min-w-0 bg-[var(--color-surface)] flex flex-col overflow-hidden">
         {showPanel && <SidebarPanelContent section={activeSection} />}
       </div>
 

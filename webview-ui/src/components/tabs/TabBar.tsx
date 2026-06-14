@@ -5,6 +5,7 @@ import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, StyledDropdown, ContextMenu, type ContextMenuItem, type ContextMenuSubItem, type DropdownOption } from '../shared';
 import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon } from '../../icons';
+import { IconButtonView } from '../../dui';
 
 interface TabContextMenuState {
   tabId: string;
@@ -561,13 +562,16 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
       {/* Per-tab environment selector — far right */}
       {activeTab && activeTab.type === 'request' && (
         <div className="flex items-center gap-2 h-full px-3 py-1 border-l border-[var(--color-panel-border)] flex-shrink-0 z-10">
-          <button type="button" onClick={() => {
-            const envId = activeTab?.envId || useEnvStore.getState().activeEnvId || GLOBAL_ENV_ID;
-            requestEditEnv(envId);
-            onEnvironmentsClick?.();
-          }} className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity" title="Open Environments">
-            <LayersIcon size={14} style={{ color: 'var(--color-sidebar-environments)' }} />
-          </button>
+          <IconButtonView
+            icon={<LayersIcon size={14} style={{ color: 'var(--color-sidebar-environments)' }} />}
+            size="sm"
+            tooltip="Open Environments"
+            onClick={() => {
+              const envId = activeTab?.envId || useEnvStore.getState().activeEnvId || GLOBAL_ENV_ID;
+              requestEditEnv(envId);
+              onEnvironmentsClick?.();
+            }}
+          />
           {customEnvs.length === 0 ? (
             <span className="text-[12px] text-[var(--color-text-muted)]">No Environment</span>
           ) : (

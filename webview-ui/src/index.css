@@ -841,7 +841,9 @@ input[type="number"] {
   font-size: 12px;
 }
 
-/* Fix tooltip flickering on find widget action buttons */
+/* Fix tooltip flickering on find widget action buttons —
+   The ::after overlay with z-index caused hover-event interference.
+   pointer-events: none keeps the expanded hit area without stealing events. */
 .monaco-editor .find-widget .button {
   position: relative;
 }
@@ -850,10 +852,15 @@ input[type="number"] {
   content: '';
   position: absolute;
   inset: -4px;
-  z-index: 1;
+  pointer-events: none;
 }
 
-/* Prevent tooltip from stealing pointer events */
+/* Prevent Monaco hover tooltip from stealing pointer events and causing flicker.
+   hoverService.setupDelayedHover() renders as .monaco-hover.workbench-hover appended
+   to document.body — outside .monaco-editor scope — so the old scoped rule never fired.
+   Unscoped rules here catch both the body-level workbench hover and editor-level hovers. */
+.monaco-hover.workbench-hover,
+.workbench-hover-container,
 .monaco-editor .monaco-hover,
 .monaco-editor .monaco-editor-hover {
   pointer-events: none !important;
@@ -1042,18 +1049,16 @@ input[type="number"] {
 .wsdl-text { color: var(--color-text-primary); }
 
 /* ─── Monaco Find widget: fix X close button vertical alignment ──────────────
-   The close button renders slightly too high due to Monaco's default line-height.
-   Pull it down to center-align with the input row.
+   Real class: .button.codicon.codicon-widget-close (SimpleButton in findWidget.js)
+   Monaco positions it `position:absolute; top:5px` in a 33px widget.
+   Button total height = 16px + 3px padding × 2 = 22px → perfect center = (33-22)/2 = 5.5px.
+   Use calc(50% - 11px) so it works regardless of our border overrides.
    ─────────────────────────────────────────────────────────────────────────── */
-.monaco-editor .find-widget .button.close-widget,
-.monaco-editor .find-widget .codicon.codicon-close {
-  display: flex !important;
+.monaco-editor .find-widget > .button.codicon-widget-close {
+  top: calc(50% - 11px) !important;
+  display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  margin-top: 0 !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  position: relative !important;
 }
 
 /* Ensure the find widget has a solid non-transparent background */

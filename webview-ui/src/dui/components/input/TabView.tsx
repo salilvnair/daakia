@@ -12,7 +12,7 @@ export interface TabItem {
   badgeColor?: string;
 }
 
-export type TabVariant = 'pill' | 'underline';
+export type TabVariant = 'pill' | 'underline' | 'chip';
 
 export interface TabViewProps {
   tabs: TabItem[];
@@ -109,6 +109,62 @@ export function TabView({
             {TabBadge(tab, accent)}
           </button>
         ))}
+      </div>
+    );
+  }
+
+  if (variant === 'chip') {
+    return (
+      <div
+        role="tablist"
+        className={className}
+        style={{
+          display: base.width !== 'auto' ? 'flex' : 'inline-flex',
+          width: base.width !== 'auto' ? base.width : undefined,
+          alignItems: 'center',
+          gap: 4,
+          flexWrap: 'wrap',
+        }}
+      >
+        {tabs.map(tab => {
+          const isActive = tab.id === activeTab;
+          return (
+            <button
+              key={tab.id}
+              data-tab={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => onChange(tab.id)}
+              className={`dui_tab__btn${isActive ? ' dui_tab__btn--active' : ''}`}
+              style={{
+                padding: `0 ${base.paddingX}`,
+                height: base.height,
+                fontSize: base.fontSize,
+                fontWeight: 500,
+                cursor: 'pointer',
+                border: isActive
+                  ? `1px solid color-mix(in srgb, ${accent} 25%, transparent)`
+                  : '1px solid transparent',
+                borderRadius: 9999,
+                fontFamily: 'inherit',
+                fontStyle: base.fontStyle,
+                background: isActive
+                  ? `color-mix(in srgb, ${accent} 12%, transparent)`
+                  : 'transparent',
+                color: isActive ? accent : inactiveColor,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: base.gap,
+                transition: 'background 150ms, color 150ms, border-color 150ms',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {tab.label}
+              {TabBadge(tab, accent)}
+            </button>
+          );
+        })}
       </div>
     );
   }

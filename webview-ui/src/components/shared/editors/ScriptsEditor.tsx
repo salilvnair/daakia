@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
-import { TabView, EditorView } from '../../../dui';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { TabView, EditorView, ButtonView } from '../../../dui';
 import { SnippetsPanel } from './SnippetsPanel';
 import { useDebugStore } from '../../../store/debug-store';
 import { useTabsStore } from '../../../store/tabs-store';
@@ -46,6 +46,14 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
 
   const { active: debugActive, phase: debugPhase } = useDebugStore();
   const activeTabId = useTabsStore(s => s.activeTabId) || '';
+
+  // When a breakpoint row is clicked, navigate to its phase + line
+  const navigatePhase = useDebugStore(s => s.navigatePhase);
+  useEffect(() => {
+    if (!navigatePhase) return;
+    setActiveScript(navigatePhase);
+    useDebugStore.getState().setNavigatePhase(null);
+  }, [navigatePhase]);
   const currentPhase = activeScript === 'pre-request' ? 'pre-request' : 'post-response';
   const bpKey = `${activeTabId}:${currentPhase}`;
   const breakpointsRaw = useDebugStore(s => s.breakpoints[bpKey]);
@@ -148,64 +156,62 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
         <div className="flex items-center gap-1 mr-2">
           {/* AI Contract Test — post-response only, gated by contractTestGenerator flag */}
           {contractTestAllowed && activeScript === 'post-response' && (
-            <button
-              type="button"
+            <ButtonView
+              size="xs"
+              variant="ghost"
+              iconLeft={<SparkleIcon size={10} />}
               title="Generate contract tests with AI"
               onClick={() => contractTestRef.current?.open()}
-              className="flex items-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
               style={{ color: 'var(--color-success)' }}
             >
-              <SparkleIcon size={10} />
-              <span>Tests</span>
-            </button>
+              Tests
+            </ButtonView>
           )}
           {/* AI Autocomplete toggle — gated by scriptAutocomplete flag */}
           {autocompleteAllowed && (
-          <button
-            type="button"
-            title={aiEnabled ? 'AI autocomplete ON — click to disable' : 'AI autocomplete OFF — click to enable (Ctrl+Alt+Space)'}
-            onClick={() => setAiEnabled(e => !e)}
-            className={`flex items-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded cursor-pointer transition-colors ${
-              aiEnabled
-                ? 'text-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-            }`}
-            style={aiEnabled ? { backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 18%, transparent)', color: 'var(--color-protocol-ai)' } : undefined}
-          >
-            <SparkleIcon size={10} />
-            <span>AI</span>
-          </button>
+            <ButtonView
+              size="xs"
+              variant="ghost"
+              iconLeft={<SparkleIcon size={10} />}
+              title={aiEnabled ? 'AI autocomplete ON — click to disable' : 'AI autocomplete OFF — click to enable (Ctrl+Alt+Space)'}
+              onClick={() => setAiEnabled(e => !e)}
+              style={aiEnabled
+                ? { backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 18%, transparent)', color: 'var(--color-protocol-ai)' }
+                : { color: 'var(--color-text-muted)' }
+              }
+            >
+              AI
+            </ButtonView>
           )}
           {/* Mode toggle — only visible when AI autocomplete is enabled & allowed */}
           {autocompleteAllowed && aiEnabled && (
-            <button
-              type="button"
+            <ButtonView
+              size="xs"
+              variant="ghost"
               title={aiMode === 'on-demand' ? 'On-demand mode (Ctrl+Alt+Space) — click for auto' : 'Auto mode (triggers after idle) — click for on-demand'}
               onClick={() => setAiMode(m => m === 'on-demand' ? 'on-type' : 'on-demand')}
-              className="px-1.5 py-1 text-[9px] font-medium rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)', color: 'var(--color-protocol-ai)' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)', color: 'var(--color-protocol-ai)' }}
             >
               {aiMode === 'on-demand' ? '⌃⌥Space' : 'auto'}
-            </button>
+            </ButtonView>
           )}
           {/* Snippets toggle */}
-          <button
-            type="button"
+          <ButtonView
+            size="xs"
+            variant="ghost"
+            title={showSnippets ? 'Hide snippets' : 'Show snippets'}
             onClick={() => {
               const newVal = !showSnippets;
               setShowSnippets(newVal);
-              if (!newVal) snippetsClosed = true;
-              else snippetsClosed = false;
+              snippetsClosed = !newVal;
             }}
-            className={`px-2 py-1 text-[10px] font-medium rounded cursor-pointer transition-colors ${
-              showSnippets
-                ? 'text-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-            }`}
-            style={showSnippets ? { backgroundColor: accentColor ? `color-mix(in srgb, ${accentColor} 15%, transparent)` : 'rgba(99,102,241,0.15)', color: accentColor || 'var(--color-primary)' } : undefined}
+            style={showSnippets
+              ? { backgroundColor: accentColor ? `color-mix(in srgb, ${accentColor} 15%, transparent)` : 'color-mix(in srgb, var(--color-primary) 15%, transparent)', color: accentColor || 'var(--color-primary)' }
+              : { color: 'var(--color-text-muted)' }
+            }
           >
             Snippets
-          </button>
+          </ButtonView>
         </div>
       </div>
 

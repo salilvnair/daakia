@@ -49,7 +49,7 @@ function AiMenuItem({ label, accentColor, onClick }: { label: string; accentColo
 
 export function AiResponseActionsMenu({ tabId, response, requestMethod, requestUrl }: Props) {
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
-  const { getTabActions } = useAiResponseActionsStore();
+  const { getTabActions, markRead } = useAiResponseActionsStore();
 
   const [dropdownCoords, setDropdownCoords] = useState<FloatingCoords | null>(null);
 
@@ -88,13 +88,15 @@ export function AiResponseActionsMenu({ tabId, response, requestMethod, requestU
 
   const handleAssert = useCallback(() => {
     setShowNaturalAssert(p => !p);
+    markRead(tabId);
     closeDropdown();
-  }, [closeDropdown]);
+  }, [closeDropdown, markRead, tabId]);
 
   if (!hasBody || !hasAnyAction) return null;
 
   const cached = getTabActions(tabId);
   const hasCachedResult = !!(cached.assert?.result || cached.semantic?.result || cached.transform?.result);
+  const showDot = hasCachedResult && !!cached.hasUnread;
 
   return (
     <>
@@ -112,7 +114,7 @@ export function AiResponseActionsMenu({ tabId, response, requestMethod, requestU
           }`}
         >
           <MoreVerticalIcon size={14} />
-          {hasCachedResult && (
+          {showDot && (
             <span
               className="absolute top-[3px] right-[3px] w-[5px] h-[5px] rounded-full pointer-events-none"
               style={{ backgroundColor: 'var(--color-protocol-ai)' }}
@@ -146,19 +148,19 @@ export function AiResponseActionsMenu({ tabId, response, requestMethod, requestU
               <AiMenuItem label="Assert (plain English)" accentColor="var(--color-protocol-ai)" onClick={handleAssert} />
             )}
             {aiEnabled('semanticValidator') && (
-              <AiMenuItem label="Semantic Validate" accentColor="var(--color-success)" onClick={() => { setShowSemanticVal(true); closeDropdown(); }} />
+              <AiMenuItem label="Semantic Validate" accentColor="var(--color-success)" onClick={() => { setShowSemanticVal(true); markRead(tabId); closeDropdown(); }} />
             )}
             {aiEnabled('responseTransformer') && (
-              <AiMenuItem label="Transform Response" accentColor="var(--color-warning)" onClick={() => { setShowTransformer(true); closeDropdown(); }} />
+              <AiMenuItem label="Transform Response" accentColor="var(--color-warning)" onClick={() => { setShowTransformer(true); markRead(tabId); closeDropdown(); }} />
             )}
             {aiEnabled('responseDiff') && (
-              <AiMenuItem label="Compare with AI" accentColor="var(--color-warning)" onClick={() => { setShowDiff(true); closeDropdown(); }} />
+              <AiMenuItem label="Compare with AI" accentColor="var(--color-warning)" onClick={() => { setShowDiff(true); markRead(tabId); closeDropdown(); }} />
             )}
             {aiEnabled('schemaRest') && (
-              <AiMenuItem label="Validate Schema with AI" accentColor="var(--color-info)" onClick={() => { setShowSchemaVal(true); closeDropdown(); }} />
+              <AiMenuItem label="Validate Schema with AI" accentColor="var(--color-info)" onClick={() => { setShowSchemaVal(true); markRead(tabId); closeDropdown(); }} />
             )}
             {isJson && hasBody && (
-              <AiMenuItem label="Generate Data Schema" accentColor="var(--color-primary)" onClick={() => { setShowDataSchema(true); closeDropdown(); }} />
+              <AiMenuItem label="Generate Data Schema" accentColor="var(--color-primary)" onClick={() => { setShowDataSchema(true); markRead(tabId); closeDropdown(); }} />
             )}
           </div>
         </>

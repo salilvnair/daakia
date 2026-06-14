@@ -114,4 +114,6 @@ export const DUI_WIDTH_MAP: Record<DuiWidth, string> = {
   lg:         '200px',
   fullWidth:  '100%',
   maxContent: 'max-content',
+  fw:         '100%',
+  mx:         'max-content',
 };

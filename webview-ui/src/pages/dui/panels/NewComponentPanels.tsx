@@ -1655,11 +1655,21 @@ const PILL_TABS: TabItem[] = [
   { id: 'auth',    label: 'Auth' },
 ];
 
+const SNIPPET_CATS = [
+  { id: 'all',       label: 'All' },
+  { id: 'tests',     label: 'Tests' },
+  { id: 'variables', label: 'Variables' },
+  { id: 'workflows', label: 'Workflows' },
+  { id: 'response',  label: 'Response' },
+  { id: 'request',   label: 'Request' },
+];
+
 export function TabsPanel() {
   const [a1, setA1] = useState('params');
   const [a2, setA2] = useState('params');
   const [a3, setA3] = useState('params');
   const [a4, setA4] = useState('params');
+  const [snippetCat, setSnippetCat] = useState('all');
   return (
     <div>
       <Row label='variant="pill" (default) — sliding background indicator' code={`<TabView\n  tabs={[\n    { id: 'params',  label: 'Params',  badge: 3 },\n    { id: 'headers', label: 'Headers', badge: 5 },\n    { id: 'body',    label: 'Body',    dot: true, dotColor: 'var(--color-warning)' },\n    { id: 'auth',    label: 'Auth' },\n  ]}\n  activeTab={active}\n  onChange={setActive}\n  variant="pill"\n/>`}>
@@ -1667,6 +1677,9 @@ export function TabsPanel() {
       </Row>
       <Row label='variant="underline" — sliding underline indicator' code={`<TabView tabs={tabs} activeTab={active} onChange={setActive} variant="underline" />`}>
         <TabView tabs={PILL_TABS} activeTab={a2} onChange={setA2} variant="underline" />
+      </Row>
+      <Row label='variant="chip" — loose individual pill buttons, no track (Snippets filter style)' code={`<TabView\n  variant="chip"\n  tabs={[\n    { id: 'all', label: 'All' },\n    { id: 'tests', label: 'Tests' },\n    { id: 'variables', label: 'Variables' },\n    { id: 'workflows', label: 'Workflows' },\n    { id: 'response', label: 'Response' },\n    { id: 'request', label: 'Request' },\n  ]}\n  activeTab={active}\n  onChange={setActive}\n  accentColor="var(--color-primary)"\n/>`}>
+        <TabView tabs={SNIPPET_CATS} activeTab={snippetCat} onChange={setSnippetCat} variant="chip" accentColor="var(--color-primary)" />
       </Row>
       <Row label="Protocol accent colors — pill variant" code={`<TabView tabs={restTabs} activeTab={active} onChange={setActive} accentColor="var(--color-protocol-rest)" />\n<TabView tabs={gqlTabs}  activeTab={active} onChange={setActive} accentColor="var(--color-protocol-graphql)" />`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

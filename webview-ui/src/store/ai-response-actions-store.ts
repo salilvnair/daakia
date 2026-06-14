@@ -34,6 +34,8 @@ export interface TabAiResponseActions {
   assert?: AssertActionState;
   semantic?: SemanticActionState;
   transform?: TransformActionState;
+  /** True when a new AI result arrived that the user hasn't opened yet */
+  hasUnread?: boolean;
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -55,6 +57,9 @@ interface AiResponseActionsStore {
 
   /** Clear all AI action state for a tab (e.g. after tab closes) */
   clearTabActions: (tabId: string) => void;
+
+  /** Mark AI results as read (clears the dot indicator) */
+  markRead: (tabId: string) => void;
 }
 
 export const useAiResponseActionsStore = create<AiResponseActionsStore>((set, get) => ({
@@ -74,6 +79,7 @@ export const useAiResponseActionsStore = create<AiResponseActionsStore>((set, ge
             ...s.byTab[tabId]?.assert,
             ...patch,
           },
+          hasUnread: patch.result ? true : s.byTab[tabId]?.hasUnread,
         },
       },
     })),
@@ -89,6 +95,7 @@ export const useAiResponseActionsStore = create<AiResponseActionsStore>((set, ge
             ...s.byTab[tabId]?.semantic,
             ...patch,
           },
+          hasUnread: patch.result ? true : s.byTab[tabId]?.hasUnread,
         },
       },
     })),
@@ -105,6 +112,7 @@ export const useAiResponseActionsStore = create<AiResponseActionsStore>((set, ge
             ...s.byTab[tabId]?.transform,
             ...patch,
           },
+          hasUnread: patch.result ? true : s.byTab[tabId]?.hasUnread,
         },
       },
     })),
@@ -115,4 +123,15 @@ export const useAiResponseActionsStore = create<AiResponseActionsStore>((set, ge
       delete next[tabId];
       return { byTab: next };
     }),
+
+  markRead: (tabId) =>
+    set(s => ({
+      byTab: {
+        ...s.byTab,
+        [tabId]: {
+          ...s.byTab[tabId],
+          hasUnread: false,
+        },
+      },
+    })),
 }));

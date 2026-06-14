@@ -122,6 +122,9 @@ export type { AIButtonViewProps, AIButtonAction } from './components/button/AIBu
 export { SideNavView, filterItems, countLeaves } from './components/layout/SideNavView';
 export type { SideNavViewProps, SideNavItem } from './components/layout/SideNavView';
 
+export { FolderView } from './components/layout/FolderView';
+export type { FolderViewProps, FolderNode, FolderAction, FolderRunnerTab, FolderRunnerConfig } from './components/layout/FolderView';
+
 export { SettingsNavView } from './components/layout/SettingsNavView';
 export type { SettingsNavViewProps, SettingsNavGroup, SettingsNavItem } from './components/layout/SettingsNavView';
 

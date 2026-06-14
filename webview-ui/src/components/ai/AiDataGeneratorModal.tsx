@@ -189,7 +189,7 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
         </span>
       ) : undefined}
       footerRight={
-        <>
+        <div style={{ display: 'flex', gap: 8 }}>
           {result ? (
             <>
               <ButtonView
@@ -225,7 +225,7 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
               onClick={handleGenerate}
             />
           )}
-        </>
+        </div>
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

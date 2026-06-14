@@ -130,7 +130,6 @@ export function AiSemanticValidatorModal({ tabId, responseBody, method, url, sta
           <RefreshIcon size={13} />
         </button>
       ) : undefined}
-      footerRight={<ButtonView variant="secondary" size="sm" onClick={onClose}>Close</ButtonView>}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {loading && !result && (

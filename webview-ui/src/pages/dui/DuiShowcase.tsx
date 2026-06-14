@@ -34,7 +34,9 @@ import {
   SideNavView,
   DuiProvider,
   ToggleSwitchView,
+  FolderView,
 } from '../../dui';
+import type { FolderNode, FolderAction } from '../../dui';
 import type { TabItem, ContextMenuItem, TabBarTab, SelectTextOption, SelectOption, SideNavItem, LiveColorVar } from '../../dui';
 import { applyMonacoTheme } from '../../monaco-setup';
 import { SCHEMA_LANG_OPTIONS } from '../../services/response';
@@ -46,7 +48,7 @@ import {
   CheckIcon, LayersIcon, PanelRightIcon, SidebarLeftIcon, SidebarRightIcon, DotIcon, CheckCircleIcon,
   GaugeIcon, TerminalIcon, DocumentIcon, CodeBracketsIcon,
   ChevronDownIcon, ChevronRightIcon, FolderIcon, SpinnerIcon, SunIcon, KeyIcon,
-  PlusSquareIcon,
+  PlusSquareIcon, FilePlusIcon, FolderPlusIcon,
 } from '../../icons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -63,7 +65,8 @@ type CategoryId =
   | 'searchinput' | 'durationinput' | 'highlightedinput' | 'keyvaluetable'
   | 'mergedinput' | 'duiprovider' | 'hudview'
   | 'collapsiblesection' | 'jsontree' | 'logentry'
-  | 'copybutton' | 'markdownview' | 'formdatatable' | 'yamlkeychip' | 'livecolorpanel' | 'spacerview';
+  | 'copybutton' | 'markdownview' | 'formdatatable' | 'yamlkeychip' | 'livecolorpanel' | 'spacerview'
+  | 'folderview';
 
 interface SidebarItem { id: CategoryId; label: string; icon: React.ReactNode }
 interface SidebarGroup { title: string; items: SidebarItem[] }
@@ -147,6 +150,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'featurecategory',    label: 'FeatureCategoryView',     icon: <FilterIcon size={13} /> },
       { id: 'collapsiblesection', label: 'CollapsibleSectionView',  icon: <ChevronRightIcon size={13} /> },
       { id: 'spacerview',         label: 'SpacerView',              icon: <LayersIcon size={13} /> },
+      { id: 'folderview',         label: 'FolderView',              icon: <FolderIcon size={13} /> },
     ],
   },
   {
@@ -333,8 +337,27 @@ const SAMPLE_JSON = `{
 // ─── Category panels ──────────────────────────────────────────────────────────
 
 function ChipsPanel() {
+  const [aiOn, setAiOn] = useState(false);
+  const [aiMode, setAiMode] = useState<'on-demand' | 'auto'>('on-demand');
+  const [snippetsOn, setSnippetsOn] = useState(false);
   return (
     <div>
+      <Row label="AI autocomplete toggle + mode badge (Scripts editor toolbar)" code={`// AI toggle chip — active state uses protocol-ai color\n<ChipView\n  label="AI"\n  size="xs"\n  color="var(--color-protocol-ai)"\n  active={aiEnabled}\n  onClick={() => setAiEnabled(e => !e)}\n/>\n// Mode badge — switches between shortcut hint and "auto"\n{aiEnabled && (\n  <ChipView\n    label={mode === 'on-demand' ? '⌃⌥Space' : 'auto'}\n    size="xs"\n    color="var(--color-protocol-ai)"\n    onClick={() => setMode(m => m === 'on-demand' ? 'auto' : 'on-demand')}\n  />\n)}`}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <ChipView label="AI" size="xs" color="var(--color-protocol-ai)" active={aiOn} onClick={() => { setAiOn(v => !v); if (!aiOn) setAiMode('on-demand'); }} />
+          {aiOn && (
+            <ChipView
+              label={aiMode === 'on-demand' ? '⌃⌥Space' : 'auto'}
+              size="xs"
+              color="var(--color-protocol-ai)"
+              onClick={() => setAiMode(m => m === 'on-demand' ? 'auto' : 'on-demand')}
+            />
+          )}
+        </div>
+      </Row>
+      <Row label="Snippets toggle chip (Scripts editor toolbar)" code={`<ChipView\n  label="Snippets"\n  size="xs"\n  color="var(--color-primary)"\n  active={snippetsOn}\n  onClick={() => setSnippetsOn(v => !v)}\n/>`}>
+        <ChipView label="Snippets" size="xs" color="var(--color-primary)" active={snippetsOn} onClick={() => setSnippetsOn(v => !v)} />
+      </Row>
       <Row label="Protocol chips" code={`{PROTOCOLS.map(p => (\n  <ChipView key={p.label} label={p.badge} color={p.color} size="sm" />\n))}`}>
         {PROTOCOLS.map(p => <ChipView key={p.label} label={p.badge} color={p.color} size="sm" />)}
       </Row>
@@ -1295,7 +1318,101 @@ const PANELS: Record<CategoryId, { title: string; desc: string; content: React.R
   yamlkeychip:        { title: 'YamlKeyChip', desc: 'Compact type-labeled chip for YAML/JSON keys. Shows the key name with a small colored type badge (string, number, boolean, object, array, null). Used inside JsonTreeView nodes.', vars: VARS_ACCENT, content: <YamlKeyChipPanel />, code: `<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>\n  <YamlKeyChip yamlKey="brand.primary" />\n  <YamlKeyChip yamlKey="component_button.primary_bg" color="var(--color-success)" />\n  <YamlKeyChip yamlKey="surface.border" color="var(--color-warning)" />\n</div>` },
   livecolorpanel:     { title: 'LiveColorCustomizer', desc: 'Interactive color editor that applies CSS custom property changes directly to the document root in real time. Useful for live-theming the webview without a reload. Takes an array of LiveColorVar objects (cssVar, yamlKey, label).', vars: VARS_ACCENT, content: <LiveColorCustomizerPanel />, noExamplesHeader: true, code: `<LiveColorCustomizer vars={[\n  { cssVar: '--color-primary', yamlKey: 'primary', label: 'Primary' },\n  { cssVar: '--color-success', yamlKey: 'success', label: 'Success' },\n  { cssVar: '--color-error',   yamlKey: 'error',   label: 'Error' },\n]} />` },
   spacerview:         { title: 'SpacerView', desc: 'macOS/iOS-style thin divider line for separating groups in icon rails, toolbars, or any flex container. Props: orientation (horizontal | vertical), spacing (sm | md | lg). No interaction — purely visual, pointer-events: none.', vars: VARS_ACCENT, content: <SpacerViewPanel />, code: `function Preview() {\n  const [orientation, setOrientation] = useState('horizontal');\n  const [spacing, setSpacing] = useState('md');\n  return (\n    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>\n      <div style={{ display: 'flex', gap: 6 }}>\n        <SelectInputView\n          value={orientation}\n          onChange={setOrientation}\n          options={[{ value: 'horizontal', label: 'horizontal' }, { value: 'vertical', label: 'vertical' }]}\n          size="sm"\n        />\n        <SelectInputView\n          value={spacing}\n          onChange={setSpacing}\n          options={[{ value: 'sm', label: 'sm' }, { value: 'md', label: 'md' }, { value: 'lg', label: 'lg' }]}\n          size="sm"\n        />\n      </div>\n      <div style={{ display: 'flex', flexDirection: orientation === 'horizontal' ? 'column' : 'row', alignItems: 'center', padding: 8, gap: 4, background: 'var(--color-surface)', borderRadius: 8, border: '1px solid var(--color-surface-border)' }}>\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />\n        <SpacerView orientation={orientation} spacing={spacing} />\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'color-mix(in srgb, var(--color-primary) 20%, transparent)', flexShrink: 0 }} />\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />\n      </div>\n    </div>\n  );\n}` },
+  folderview:         { title: 'FolderView', desc: 'Generic folder tree component with expand/collapse, hover action buttons, DUI ContextMenuView on 3-dot, and DUI ModalView runner popup with chip TabView. Fully controlled or uncontrolled via expandedIds/onToggle.', vars: VARS_ACCENT, content: <FolderViewDemo />, code: `function Preview() {\n  const MC = { GET: 'var(--color-method-get)', POST: 'var(--color-method-post)', PUT: 'var(--color-method-put)', DELETE: 'var(--color-method-delete)' };\n  const nodes = [\n    {\n      id: 'users', label: 'Users API', items: [],\n      children: [\n        { id: 'auth', label: 'Auth', items: [\n          { method: 'POST', name: 'Login' },\n          { method: 'POST', name: 'Logout' },\n        ]},\n        { id: 'crud', label: 'Users CRUD', items: [\n          { method: 'GET',    name: 'Get All Users' },\n          { method: 'POST',   name: 'Create User' },\n          { method: 'PUT',    name: 'Update User' },\n          { method: 'DELETE', name: 'Delete User' },\n        ]},\n      ],\n    },\n    { id: 'payments', label: 'Payments', items: [\n      { method: 'POST', name: 'Create Charge' },\n      { method: 'GET',  name: 'Transaction History' },\n    ]},\n  ];\n  return (\n    <FolderView\n      nodes={nodes}\n      accentColor="var(--color-protocol-rest)"\n      renderItem={(item, _node, depth) => (\n        <div className="flex items-center gap-2 py-1 rounded-md hover:bg-[var(--color-item-hover-bg)] cursor-pointer"\n          style={{ paddingLeft: (depth + 1) * 12 + 8, paddingRight: 8 }}>\n          <span style={{ fontSize: 9, fontWeight: 700, color: MC[item.method] || 'var(--color-text-muted)', width: 36, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>\n            {item.method}\n          </span>\n          <span style={{ fontSize: 11.5, color: 'var(--color-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>\n            {item.name}\n          </span>\n        </div>\n      )}\n      folderActions={[\n        { id: 'file-plus',   icon: <FilePlusIcon size={12} />,   tooltip: 'New Request', onClick: () => {} },\n        { id: 'folder-plus', icon: <FolderPlusIcon size={12} />, tooltip: 'New Folder',  onClick: () => {} },\n        { id: 'run',         icon: <PlayIcon size={12} />,       tooltip: 'Run Collection' },\n        { id: 'more',        icon: <MoreVerticalIcon size={12} />, tooltip: 'More Options' },\n      ]}\n      contextMenuItems={(node) => [\n        { id: 'new-request', label: 'New Request', onClick: () => {} },\n        { id: 'rename',      label: 'Rename',      onClick: () => {} },\n        { id: 'sep', label: '', separator: true },\n        { id: 'delete', label: 'Delete', danger: true, onClick: () => {} },\n      ]}\n    />\n  );\n}` },
 };
+
+const FOLDER_METHOD_COLORS: Record<string, string> = {
+  GET: 'var(--color-method-get)',
+  POST: 'var(--color-method-post)',
+  PUT: 'var(--color-method-put)',
+  PATCH: 'var(--color-method-patch)',
+  DELETE: 'var(--color-method-delete)',
+};
+
+interface DemoRequest { method: string; name: string; }
+
+const FOLDER_DEMO_NODES: FolderNode<DemoRequest>[] = [
+  {
+    id: 'users', label: 'Users API', items: [],
+    children: [
+      { id: 'auth', label: 'Auth', items: [
+        { method: 'POST', name: 'Login' },
+        { method: 'POST', name: 'Logout' },
+        { method: 'POST', name: 'Refresh Token' },
+      ]},
+      { id: 'crud', label: 'Users CRUD', items: [
+        { method: 'GET',    name: 'Get All Users' },
+        { method: 'POST',   name: 'Create User' },
+        { method: 'PUT',    name: 'Update User' },
+        { method: 'DELETE', name: 'Delete User' },
+      ]},
+    ],
+  },
+  {
+    id: 'payments', label: 'Payments', items: [
+      { method: 'POST', name: 'Create Charge' },
+      { method: 'GET',  name: 'Transaction History' },
+      { method: 'POST', name: 'Issue Refund' },
+    ],
+  },
+  {
+    id: 'webhooks', label: 'Webhooks', items: [
+      { method: 'POST',   name: 'Subscribe' },
+      { method: 'DELETE', name: 'Unsubscribe' },
+    ],
+  },
+];
+
+const FOLDER_DEMO_ACTIONS: FolderAction<DemoRequest>[] = [
+  { id: 'file-plus',   icon: <FilePlusIcon size={12} />,     tooltip: 'New Request',   onClick: () => {} },
+  { id: 'folder-plus', icon: <FolderPlusIcon size={12} />,   tooltip: 'New Folder',    onClick: () => {} },
+  { id: 'run',         icon: <PlayIcon size={12} />,          tooltip: 'Run Collection', onClick: () => {} },
+  { id: 'more',        icon: <MoreVerticalIcon size={12} />,  tooltip: 'More Options',   onClick: () => {} },
+];
+
+function FolderViewDemo() {
+  return (
+    <div style={{ border: '1px solid var(--color-surface-border)', borderRadius: 8, overflow: 'hidden', width: '100%', background: 'var(--color-bg)' }}>
+      <FolderView
+        nodes={FOLDER_DEMO_NODES}
+        accentColor="var(--color-protocol-rest)"
+        defaultExpandedIds={new Set(['users', 'auth', 'payments'])}
+        renderItem={(item, _node, depth) => (
+          <div
+            className="flex items-center gap-2 py-1 rounded-md hover:bg-[var(--color-item-hover-bg)] cursor-pointer group/req"
+            style={{ paddingLeft: `${(depth + 1) * 12 + 8}px`, paddingRight: 8 }}
+          >
+            <span style={{
+              fontSize: 9, fontWeight: 700,
+              color: FOLDER_METHOD_COLORS[item.method] || 'var(--color-text-muted)',
+              width: 36, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.05em',
+            }}>
+              {item.method}
+            </span>
+            <span style={{ fontSize: 11.5, color: 'var(--color-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {item.name}
+            </span>
+            <button type="button"
+              className="opacity-0 group-hover/req:opacity-100 flex items-center justify-center w-5 h-5 rounded hover:bg-[var(--color-icon-hover-bg)]"
+              style={{ color: 'var(--color-text-muted)', border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0, padding: 0 }}
+            >
+              <MoreVerticalIcon size={11} />
+            </button>
+          </div>
+        )}
+        folderActions={FOLDER_DEMO_ACTIONS}
+        contextMenuItems={(node) => [
+          { id: 'new-request',  label: 'New Request',  onClick: () => {} },
+          { id: 'new-folder',   label: 'New Folder',   onClick: () => {} },
+          { id: 'rename',       label: 'Rename',       onClick: () => {} },
+          { id: 'duplicate',    label: 'Duplicate',    onClick: () => {} },
+          { id: 'sep', label: '', separator: true },
+          { id: 'delete', label: 'Delete', danger: true, onClick: () => alert(`Delete "${node.label}"`) },
+        ]}
+      />
+    </div>
+  );
+}
 
 // ─── Main showcase ────────────────────────────────────────────────────────────
 

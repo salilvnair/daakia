@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { SparkleIcon, CopyIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
-import { ModalView, AIButtonView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView } from '../../dui';
 
 interface Props {
   tabId: string;

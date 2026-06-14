@@ -3,7 +3,7 @@ import { useTabsStore } from '../../../store/tabs-store';
 import { EditorView, IconButtonView, TextInputView, InfoPopupView, CopyButtonView, type EditorLanguage } from '../../../dui';
 import { useClickOutside } from '../../../hooks/useClickOutside';
 import { applyJqFilter, formatBody, getResponseLanguage, downloadBlob, getExtensionForContentType } from '../../../services/response';
-import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, CloseCircleIcon } from '../../../icons';
+import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, CloseCircleIcon, HelpCircleIcon } from '../../../icons';
 
 interface JsonViewProps {
   response: { body: string; contentType: string; status?: number };
@@ -158,10 +158,11 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
           {/* jq help — DUI InfoPopupView anchored to wrapper div */}
           <div ref={jqHelpAnchorRef} style={{ display: 'inline-flex' }}>
             <IconButtonView
-              icon={<span style={{ fontSize: 11, fontWeight: 700, lineHeight: 1 }}>?</span>}
+              icon={<HelpCircleIcon size={14} />}
               size="sm"
               tooltip="jq syntax help"
               active={showJqHelp}
+              style={{ borderRadius: '50%' }}
               onClick={() => setShowJqHelp(p => !p)}
             />
           </div>

@@ -7,6 +7,7 @@
 import { useState, useCallback } from 'react';
 import { useDebugStore, type DebugVariable } from '../../../store/debug-store';
 import { useTabsStore } from '../../../store/tabs-store';
+import { useUiStateStore } from '../../../store/ui-state-store';
 import {
   ChevronRightIcon,
   DbgContinueIcon,
@@ -608,6 +609,10 @@ function BreakpointRow({ entry }: { entry: { key: string; line: number; disabled
     if (store.activeTabId !== tabId) {
       store.setActiveTab(tabId);
     }
+    // Switch request panel to Scripts subtab
+    useUiStateStore.getState().setPref(`rest.subtab.${tabId}`, 'scripts');
+    // Switch ScriptsEditor to the correct phase tab (pre-request / post-response)
+    useDebugStore.getState().setNavigatePhase(phase as 'pre-request' | 'post-response');
     // Navigate editor to the breakpoint line
     useDebugStore.getState().setNavigateLine(entry.line);
   };

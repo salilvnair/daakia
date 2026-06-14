@@ -7,7 +7,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { postMsg } from '../../vscode';
 import { SparkleIcon } from '../../icons';
-import { ModalView, AIButtonView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView } from '../../dui';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -274,11 +274,9 @@ export function AiPreflightPopover({ tab, onClose }: Props) {
         </div>
       }
       headerRight={headerBadges}
-      footerRight={
-        !aiLoading && !aiDone
-          ? <AIButtonView label="Ask AI for deeper analysis" size="sm" onClick={handleAskAi} />
-          : undefined
-      }
+      footerRight={!aiLoading && !aiDone ? (
+        <AIButtonView label="Ask AI for deeper analysis" size="sm" onClick={handleAskAi} />
+      ) : undefined}
     >
       {/* Issues list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -6,7 +6,7 @@ import { installKeyboardListener } from './services/keyboard';
 // Install bridges before any React render so ConvEngineChat fetch/EventSource is ready
 installDaakiaBridges();
 import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
-import { SplitPanelView } from './dui';
+import { SplitPanelView, ButtonView } from './dui';
 import { TabBar } from './components/tabs/TabBar';
 import { UrlBar } from './components/rest/request/UrlBar';
 import { SaveRequestModal, RightClickMenu } from './components/shared';
@@ -310,9 +310,13 @@ export default function App() {
   // Sidebar resizable
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarDragging, setSidebarDragging] = useState(false);
-  const [showSplitterTip, setShowSplitterTip] = useState(false);
-  const sidebarDragRef = useRef({ startX: 0, startWidth: 0, moved: false });
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const sidebarWidthRef = useRef(260);
+  const [sidebarSplitPct, setSidebarSplitPct] = useState(() => {
+    const total = window.innerWidth - 48;
+    const secondW = 260 + 48;
+    return Math.max(10, Math.min(90, ((total - secondW - 6) / total) * 100));
+  });
 
   // Resizable split: percentage of height for request panel (10-90)
   const storedSplit = useUiStateStore(s => s.panelHeights['split.rest.main']);
@@ -425,30 +429,19 @@ export default function App() {
 
   // Right-click context menu is handled by <RightClickMenu /> component
 
-  // ── Sidebar splitter drag ──
-  const handleSidebarPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    setSidebarDragging(true);
-    sidebarDragRef.current = { startX: e.clientX, startWidth: sidebarWidth, moved: false };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [sidebarWidth]);
+  // ── Sidebar split — keep sidebarWidthRef in sync for collapse effect ──
+  useEffect(() => { sidebarWidthRef.current = sidebarWidth; }, [sidebarWidth]);
 
-  const handleSidebarPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!sidebarDragging) return;
-    sidebarDragRef.current.moved = true;
-    const delta = sidebarDragRef.current.startX - e.clientX; // Reversed: drag left = grow
-    const newWidth = Math.min(480, Math.max(180, sidebarDragRef.current.startWidth + delta));
-    setSidebarWidth(newWidth);
-  }, [sidebarDragging]);
-
-  const handleSidebarPointerUp = useCallback((e: React.PointerEvent) => {
-    setSidebarDragging(false);
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    // Click without drag = toggle
-    if (!sidebarDragRef.current.moved) {
-      setSidebarOpen(prev => !prev);
+  useEffect(() => {
+    const total = splitContainerRef.current?.offsetWidth ?? (window.innerWidth - 48);
+    if (!sidebarOpen) {
+      setSidebarSplitPct(Math.max(10, ((total - 48 - 6) / total) * 100));
+    } else {
+      const secondW = sidebarWidthRef.current + 48;
+      setSidebarSplitPct(Math.max(10, Math.min(90, ((total - secondW - 6) / total) * 100)));
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidebarOpen]);
 
   // ── Req/Resp split callbacks ──
   const handleSplitResize = useCallback((pct: number) => {
@@ -2066,8 +2059,31 @@ export default function App() {
         </ProtocolIcon>
       </div>
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main content + sidebar split */}
+      <div ref={splitContainerRef} className="flex-1 min-w-0 overflow-hidden" style={{ height: '100%', display: 'flex' }}>
+        <SplitPanelView
+          direction="horizontal"
+          split={sidebarSplitPct}
+          onResize={(pct) => setSidebarSplitPct(pct)}
+          onResizeEnd={(pct) => {
+            if (!sidebarOpen) return;
+            const total = splitContainerRef.current?.offsetWidth ?? (window.innerWidth - 48);
+            const secondW = total * (1 - pct / 100) - 6;
+            const newW = Math.max(180, Math.min(480, Math.round(secondW - 48)));
+            setSidebarWidth(newW);
+            sidebarWidthRef.current = newW;
+          }}
+          onHandleClick={() => setSidebarOpen(prev => !prev)}
+          minFirst={300}
+          minSecond={48}
+          accentColor={protocolAccent}
+          pillTooltip={<>
+            <div>Click to {sidebarOpen ? 'collapse' : 'expand'} <kbd style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--color-panel)', fontFamily: 'monospace', border: '1px solid color-mix(in srgb, var(--color-text-primary) 15%, transparent)' }}>Alt+B</kbd></div>
+            <div>Drag to resize</div>
+          </>}
+          style={{ height: '100%' }}
+          first={
+        <div className="flex flex-col h-full min-w-0">
         {/* SQLite status banner */}
         <SqliteBanner sqliteOk={sqliteStatus.ok} error={sqliteStatus.error} />
 
@@ -2163,49 +2179,11 @@ export default function App() {
 
         {/* DevTools bottom panel */}
         <DevToolsPanel />
-      </div>
-
-      {/* Sidebar splitter */}
-      <div
-        className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
-        onPointerDown={handleSidebarPointerDown}
-        onPointerMove={handleSidebarPointerMove}
-        onPointerUp={handleSidebarPointerUp}
-        onMouseEnter={() => setShowSplitterTip(true)}
-        onMouseLeave={() => setShowSplitterTip(false)}
-        aria-label="Resize or collapse sidebar"
-      >
-        {/* Pill grip */}
-        <div
-          className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[3px] rounded-full transition-all duration-150 ${
-            sidebarDragging
-              ? 'h-[80px]'
-              : sidebarOpen
-                ? 'h-[44px] bg-[var(--color-surface-border)] group-hover:h-[80px]'
-                : 'h-[48px] group-hover:h-[80px]'
-          }`}
-          style={{
-            backgroundColor: sidebarDragging
-              ? protocolAccent
-              : sidebarOpen
-                ? undefined
-                : `color-mix(in srgb, ${protocolAccent} 30%, transparent)`,
-            ...((!sidebarDragging) ? { '--hover-accent': protocolAccent } as React.CSSProperties : {}),
-          }}
-          onMouseEnter={(e) => { if (!sidebarDragging) (e.currentTarget as HTMLElement).style.backgroundColor = protocolAccent; }}
-          onMouseLeave={(e) => { if (!sidebarDragging) (e.currentTarget as HTMLElement).style.backgroundColor = sidebarOpen ? '' : `color-mix(in srgb, ${protocolAccent} 30%, transparent)`; }}
+        </div>
+          }
+          second={<AppSidebar activeSection={sidebarSection} onSectionChange={setSidebarSection} />}
         />
-        {/* Tooltip */}
-        {showSplitterTip && !sidebarDragging && (
-          <div className="absolute top-1/2 right-4 -translate-y-1/2 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[11px] px-2.5 py-1.5 rounded-lg border border-[var(--color-surface-border)] shadow-lg whitespace-nowrap pointer-events-none z-50 flex flex-col gap-0.5 leading-tight">
-            <div>Click to {sidebarOpen ? 'collapse' : 'expand'} <kbd className="text-[9px] px-1 py-0.5 rounded bg-[var(--color-panel)] font-mono">Alt+B</kbd></div>
-            <div>Drag to resize</div>
-          </div>
-        )}
       </div>
-
-      {/* Right sidebar: icon rail + expandable panel */}
-      <AppSidebar activeSection={sidebarSection} onSectionChange={setSidebarSection} sidebarOpen={sidebarOpen} sidebarWidth={sidebarWidth} sidebarDragging={sidebarDragging} />
 
       {/* Toast notifications */}
       <ToastContainer />
@@ -2280,14 +2258,9 @@ function EmptyState({ onNewTab, protocol }: { onNewTab: () => void; protocol: 'r
     <div className="flex-1 flex flex-col items-center justify-center gap-3 text-[var(--color-text-muted)]">
       {config.icon}
       <p className="text-[13px]">No open tabs</p>
-      <button
-        type="button"
-        onClick={onNewTab}
-        className="mt-1 h-[30px] px-3 text-[12px] rounded-md text-white hover:opacity-90 cursor-pointer transition-opacity"
-        style={{ backgroundColor: config.color }}
-      >
+      <ButtonView size="md" accentColor={config.color} onClick={onNewTab} style={{ marginTop: 4 }}>
         {config.label}
-      </button>
+      </ButtonView>
     </div>
   );
 }

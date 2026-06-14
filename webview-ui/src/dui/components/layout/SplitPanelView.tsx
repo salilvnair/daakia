@@ -19,6 +19,8 @@ export interface SplitPanelViewProps {
   onResize?: (split: number) => void;
   /** Fired once when drag ends (pointer up) or on double-click reset */
   onResizeEnd?: (split: number) => void;
+  /** Fired when the handle is clicked without dragging (e.g. to collapse/expand) */
+  onHandleClick?: () => void;
   /**
    * Tooltip shown on pill hover. Pass `null` to suppress.
    * Defaults to "Double-click to reset Alt+/ / Drag to resize" with a styled kbd badge.
@@ -57,6 +59,7 @@ export function SplitPanelView({
   accentColor,
   onResize,
   onResizeEnd,
+  onHandleClick,
   pillTooltip = DEFAULT_PILL_TOOLTIP,
   style,
   className = '',
@@ -66,6 +69,7 @@ export function SplitPanelView({
   const [hovered, setHovered] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragActiveRef = useRef(false);
+  const hasMovedRef = useRef(false);
   const isHoriz = direction === 'horizontal';
   const accent = accentColor || 'var(--color-primary)';
   const pillActive = dragging || hovered;
@@ -81,11 +85,13 @@ export function SplitPanelView({
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     dragActiveRef.current = true;
+    hasMovedRef.current = false;
     setDragging(true);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!dragActiveRef.current || !containerRef.current) return;
+    hasMovedRef.current = true;
     const rect = containerRef.current.getBoundingClientRect();
     const total = isHoriz ? rect.width : rect.height;
     const pos = isHoriz ? e.clientX - rect.left : e.clientY - rect.top;
@@ -101,7 +107,11 @@ export function SplitPanelView({
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     dragActiveRef.current = false;
     setDragging(false);
-    onResizeEnd?.(internalSplit);
+    if (!hasMovedRef.current) {
+      onHandleClick?.();
+    } else {
+      onResizeEnd?.(internalSplit);
+    }
   };
 
   const handleDoubleClick = () => {

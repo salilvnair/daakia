@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronRightIcon } from '../../../icons';
 import './ContextMenuView.css';
@@ -24,12 +24,12 @@ export interface ContextMenuViewProps {
   onClose: () => void;
   width?: ContextMenuWidth;
   rounded?: boolean;
-  /** When true, menu matches the anchorEl width (e.g. for Save As use case) */
+  /** When true, menu matches the anchorEl width */
   matchAnchorWidth?: boolean;
   /** Position override for context menus triggered at a specific coordinate */
   position?: { x: number; y: number };
   /**
-   * 'auto' (default) — left-aligns when the popup fits in the viewport, right-aligns when it would overflow.
+   * 'auto' (default) — left-aligns when the popup fits, right-aligns when it would overflow.
    * 'left' — always anchors popup's left edge to anchor's left edge.
    * 'right' — always anchors popup's right edge to anchor's right edge.
    */
@@ -46,44 +46,74 @@ function resolveWidth(w: ContextMenuWidth | undefined): string {
 
 // ─── Recursive submenu item ───────────────────────────────────────────────────
 
-function MenuItemRow({ item, onClose, rounded, accentColor }: { item: ContextMenuItem; onClose: () => void; rounded: boolean; accentColor?: string }) {
+function MenuItemRow({
+  item,
+  onClose,
+  rounded,
+}: {
+  item: ContextMenuItem;
+  onClose: () => void;
+  rounded: boolean;
+}) {
   const [subOpen, setSubOpen] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
   const subRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (item.separator) {
     return <div style={{ height: '1px', background: 'var(--color-surface-border)', margin: '4px 0' }} />;
   }
 
-  const handleClick = () => {
-    if (item.disabled || item.children?.length) return;
+  const hasSubmenu = !!(item.children && item.children.length > 0);
+  const danger = item.danger;
+
+  const openSub = () => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setSubOpen(true);
+  };
+
+  const closeSub = () => {
+    closeTimerRef.current = setTimeout(() => setSubOpen(false), 120);
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (item.disabled) return;
+    if (hasSubmenu) { openSub(); return; }
     item.onClick?.();
     onClose();
   };
 
-  const hasSubmenu = item.children && item.children.length > 0;
-  const danger = item.danger;
-
+  // Position the submenu after it renders — start hidden, reveal after placement
   useEffect(() => {
     if (!subOpen || !rowRef.current || !subRef.current) return;
-    const row = rowRef.current.getBoundingClientRect();
     const sub = subRef.current;
-    sub.style.top = `${row.top - 4}px`;
-    sub.style.left = `${row.right + 4}px`;
-    const subRect = sub.getBoundingClientRect();
-    if (subRect.right > window.innerWidth - 8) {
-      sub.style.left = `${row.left - subRect.width - 4}px`;
-    }
-    if (subRect.bottom > window.innerHeight - 8) {
-      sub.style.top = `${row.bottom - subRect.height + 4}px`;
-    }
+    sub.style.visibility = 'hidden';
+
+    const raf = requestAnimationFrame(() => {
+      if (!rowRef.current || !subRef.current) return;
+      const row = rowRef.current.getBoundingClientRect();
+      sub.style.top = `${row.top - 4}px`;
+      sub.style.left = `${row.right + 4}px`;
+
+      const subRect = sub.getBoundingClientRect();
+      if (subRect.right > window.innerWidth - 8) {
+        sub.style.left = `${row.left - subRect.width - 4}px`;
+      }
+      if (subRect.bottom > window.innerHeight - 8) {
+        sub.style.top = `${window.innerHeight - subRect.height - 8}px`;
+      }
+      sub.style.visibility = 'visible';
+    });
+
+    return () => cancelAnimationFrame(raf);
   }, [subOpen]);
 
   return (
     <div
       ref={rowRef}
-      onMouseEnter={() => hasSubmenu && setSubOpen(true)}
-      onMouseLeave={() => hasSubmenu && setSubOpen(false)}
+      onMouseEnter={() => hasSubmenu && openSub()}
+      onMouseLeave={() => hasSubmenu && closeSub()}
       style={{ position: 'relative' }}
     >
       <div
@@ -93,7 +123,7 @@ function MenuItemRow({ item, onClose, rounded, accentColor }: { item: ContextMen
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          padding: '6px 10px',
+          padding: '8px 10px',
           borderRadius: rounded ? '5px' : '0px',
           fontSize: '12px',
           fontWeight: 500,
@@ -108,25 +138,30 @@ function MenuItemRow({ item, onClose, rounded, accentColor }: { item: ContextMen
             {item.icon}
           </span>
         )}
-        <span style={{ flex: 1 }}>{item.label}</span>
-        {item.shortcut && (
+        <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
+        {item.shortcut && !hasSubmenu && (
           <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginLeft: '12px', flexShrink: 0 }}>{item.shortcut}</span>
         )}
-        {hasSubmenu && <ChevronRightIcon size={10} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />}
+        {hasSubmenu && <ChevronRightIcon size={10} style={{ color: 'var(--color-text-muted)', flexShrink: 0, marginLeft: '8px' }} />}
       </div>
 
-      {/* Recursive submenu */}
+      {/* Recursive submenu — portalled; mouse bridge keeps it open when cursor moves from row to panel */}
       {hasSubmenu && subOpen && createPortal(
         <div
           ref={subRef}
+          data-dui-ctx-menu="true"
+          onMouseEnter={openSub}
+          onMouseLeave={closeSub}
           style={{
             position: 'fixed',
+            visibility: 'hidden',
             zIndex: 99999,
             background: 'var(--color-elevated, var(--color-surface-bg))',
             border: '1px solid var(--color-surface-border)',
             borderRadius: rounded ? '7px' : '0px',
             padding: '4px',
             minWidth: '160px',
+            width: 'max-content',
             boxShadow: '0 12px 40px rgba(0,0,0,.35)',
           }}
         >
@@ -155,25 +190,37 @@ export function ContextMenuView({
 }: ContextMenuViewProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
+  // Close on outside click — but NOT when clicking inside any submenu portal
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (menuRef.current?.contains(e.target as Node)) return;
-      if (anchorEl?.contains(e.target as Node)) return;
+      const target = e.target as HTMLElement;
+      if (menuRef.current?.contains(target)) return;
+      if (anchorEl?.contains(target)) return;
+      // Any element inside a portalled submenu carries the data attribute
+      if (target.closest?.('[data-dui-ctx-menu]')) return;
       onClose();
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open, anchorEl, onClose]);
 
-  // Close on Escape
+  // Close on Escape + fire shortcut actions
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      const key = e.key.toUpperCase();
+      const matched = items.find(item => {
+        if (item.disabled || item.separator || !item.shortcut || !item.onClick) return false;
+        if (item.shortcut === '⌫') return e.key === 'Backspace' || e.key === 'Delete';
+        return item.shortcut.toUpperCase() === key;
+      });
+      if (matched) { e.preventDefault(); matched.onClick!(); onClose(); }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [open, onClose]);
+  }, [open, onClose, items]);
 
   // Position the menu — recalculated on open, scroll, and resize
   useEffect(() => {
@@ -197,7 +244,6 @@ export function ContextMenuView({
         } else if (align === 'left') {
           left = r.left;
         } else {
-          // auto: left-align if it fits, right-align if it would overflow
           left = r.left + menuW <= window.innerWidth - 8 ? r.left : r.right - menuW;
         }
         top = r.bottom + 4;
@@ -207,11 +253,9 @@ export function ContextMenuView({
         return;
       }
 
-      // Final clamp — keep within viewport on both sides
+      // Clamp within viewport
       if (left + menuW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - menuW - 8);
       if (left < 8) left = 8;
-
-      // Flip vertically if not enough space below
       if (top + menuH > window.innerHeight - 8) top = Math.max(8, anchorTop - menuH - 4);
 
       menu.style.left = left + 'px';
@@ -219,7 +263,6 @@ export function ContextMenuView({
     };
     place();
     const raf = requestAnimationFrame(place);
-    // Reposition when ANY container scrolls (captures scroll in nested divs too)
     window.addEventListener('scroll', place, { passive: true, capture: true });
     window.addEventListener('resize', place, { passive: true });
     return () => {
@@ -236,6 +279,7 @@ export function ContextMenuView({
   return createPortal(
     <div
       ref={menuRef}
+      data-dui-ctx-menu="true"
       style={{
         position: 'fixed',
         zIndex: 99998,

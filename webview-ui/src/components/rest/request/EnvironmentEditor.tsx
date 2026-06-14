@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { useEnvStore, type EnvVariable, GLOBAL_ENV_ID } from '../../../store/env-store';
-import { PillTabs, StyledDropdown, ConfirmDialog, InsertRowDivider } from '../../shared';
-import { TrashIcon, RenameIcon, BulkEditIcon, EyeIcon, EyeOffIcon } from '../../../icons';
+import { ConfirmDialog, InsertRowDivider } from '../../shared';
+import { TrashIcon, RenameIcon, BulkEditIcon } from '../../../icons';
+import { TabView, TextInputView, ButtonView, IconButtonView, SelectInputView } from '../../../dui';
 
 interface EnvironmentEditorProps {
   environmentId?: string | null;
@@ -35,7 +36,6 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
   const activeEnv = environments.find(e => e.id === resolvedEnvId);
   const nameReadOnly = !allowRename || activeEnv?.id === GLOBAL_ENV_ID;
 
-  // Filter variables by type
   const variables = activeEnv?.variables.filter(v => !v.isSecret) ?? [];
   const secrets = activeEnv?.variables.filter(v => v.isSecret) ?? [];
   const displayedVars = activeView === 'variables' ? variables : secrets;
@@ -46,34 +46,25 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
     <div className="flex flex-col flex-1 min-h-0 gap-4 py-1">
       {/* Environment selector bar */}
       {showSelector && (
-        <div className="flex items-center gap-3">
-          <StyledDropdown
+        <div className="flex items-center gap-2">
+          <SelectInputView
             options={envOptions.length ? envOptions : [{ value: '', label: 'No environments' }]}
             value={resolvedEnvId || ''}
             onChange={(v) => setActiveEnvironment(v || null)}
             size="sm"
           />
-          <button
-            type="button"
-            onClick={() => addEnvironment()}
-            className="h-[30px] px-3 text-[12px] bg-[var(--color-primary)] text-white rounded-md hover:opacity-90 cursor-pointer font-medium whitespace-nowrap"
-          >
-            + New
-          </button>
+          <ButtonView size="xs" onClick={() => addEnvironment()}>+ New</ButtonView>
           {activeEnv && activeEnv.id !== GLOBAL_ENV_ID && (
-            <button
-              type="button"
+            <IconButtonView
+              icon={<TrashIcon size={14} />}
+              size="sm"
+              tooltip="Delete environment"
               onClick={() => setShowDeleteConfirm(true)}
-              className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer"
-              title="Delete environment"
-            >
-              <TrashIcon size={14} />
-            </button>
+            />
           )}
         </div>
       )}
 
-      {/* Delete confirmation */}
       {showDeleteConfirm && activeEnv && (
         <ConfirmDialog
           title="Delete Environment?"
@@ -93,37 +84,41 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
         </div>
       ) : (
         <>
-          {/* Environment name (editable) with pencil icon */}
+          {/* Environment name (editable) */}
           {showName && (
-          <div className="flex items-center gap-2 px-1">
-            {editingName && !nameReadOnly ? (
-              <input
-                type="text"
-                value={activeEnv.name}
-                onChange={(e) => renameEnvironment(activeEnv.id, e.target.value)}
-                onBlur={() => setEditingName(false)}
-                onKeyDown={(e) => e.key === 'Enter' && setEditingName(false)}
-                autoFocus
-                className="text-[14px] font-semibold bg-transparent border-b-2 border-[var(--color-primary)] text-[var(--color-text-primary)] focus:outline-none px-0 py-0.5"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => { if (!nameReadOnly) setEditingName(true); }}
-                className={`flex items-center gap-2 text-[14px] font-semibold ${nameReadOnly ? 'text-[var(--color-text-primary)] cursor-default' : 'text-[var(--color-primary)] hover:opacity-80 cursor-pointer'}`}
-              >
-                {activeEnv.name}
-                {!nameReadOnly && (
-                  <RenameIcon size={13} />
-                )}
-              </button>
-            )}
-          </div>
+            <div className="flex items-center gap-2 px-1">
+              {editingName && !nameReadOnly ? (
+                <TextInputView
+                  value={activeEnv.name}
+                  onChange={(e) => renameEnvironment(activeEnv.id, e.target.value)}
+                  onBlur={() => setEditingName(false)}
+                  onKeyDown={(e) => e.key === 'Enter' && setEditingName(false)}
+                  autoFocus
+                  size="sm"
+                  style={{ fontWeight: 600 }}
+                />
+              ) : (
+                <span
+                  className={`text-[14px] font-semibold ${nameReadOnly ? 'text-[var(--color-text-primary)] cursor-default' : 'text-[var(--color-primary)] cursor-pointer hover:opacity-80'}`}
+                  onClick={() => { if (!nameReadOnly) setEditingName(true); }}
+                >
+                  {activeEnv.name}
+                </span>
+              )}
+              {!nameReadOnly && !editingName && (
+                <IconButtonView
+                  icon={<RenameIcon size={13} />}
+                  size="sm"
+                  tooltip="Rename"
+                  onClick={() => setEditingName(true)}
+                />
+              )}
+            </div>
           )}
 
-          {/* Variables / Secrets tabs + Add button */}
+          {/* Variables / Secrets tabs + toolbar */}
           <div className="flex items-center justify-between border-b border-[var(--color-surface-border)]">
-            <PillTabs
+            <TabView
               tabs={[
                 { id: 'variables', label: 'Variables', badge: variables.length },
                 { id: 'secrets', label: 'Secrets', badge: secrets.length },
@@ -133,28 +128,21 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
               size="sm"
               variant="underline"
             />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {displayedVars.length > 0 && (
-                <button
-                  type="button"
+                <IconButtonView
+                  icon={<TrashIcon size={13} />}
+                  size="sm"
+                  tooltip="Clear all"
                   onClick={() => setShowClearVarsConfirm(true)}
-                  className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors"
-                  title="Clear all"
-                >
-                  <TrashIcon size={14} />
-                </button>
+                />
               )}
-              <button
-                type="button"
-                onClick={() => addVariable(activeEnv.id, activeView === 'secrets')}
-                className="text-[11px] px-2.5 py-1 rounded-md bg-[var(--color-primary)] text-white hover:opacity-90 cursor-pointer transition-opacity font-medium"
-              >
+              <ButtonView size="xs" onClick={() => addVariable(activeEnv.id, activeView === 'secrets')}>
                 + Add
-              </button>
+              </ButtonView>
             </div>
           </div>
 
-          {/* Clear variables confirm */}
           {showClearVarsConfirm && (
             <ConfirmDialog
               title={`Clear all ${activeView}?`}
@@ -177,16 +165,17 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
               <span className="text-[12px] text-[var(--color-primary)] font-medium">
                 {activeView === 'variables' ? 'Environment Variables' : 'Environment Secrets'}
               </span>
-              <button
-                type="button"
+              <IconButtonView
+                icon={<BulkEditIcon size={14} />}
+                size="sm"
+                tooltip="Bulk edit"
+                active={bulkEdit}
                 onClick={() => {
                   if (!bulkEdit) {
-                    // Entering bulk mode: serialize vars to text
                     bulkTextRef.current = displayedVars
                       .map(v => `${v.key}: ${v.initialValue}${v.currentValue && v.currentValue !== v.initialValue ? ' | ' + v.currentValue : ''}`)
                       .join('\n');
                   } else {
-                    // Leaving bulk mode: parse text back to vars
                     const lines = bulkTextRef.current.split('\n').filter(l => l.trim());
                     const newVars: EnvVariable[] = lines.map(line => {
                       const [keyPart, ...rest] = line.split(':');
@@ -205,22 +194,13 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
                   }
                   setBulkEdit(!bulkEdit);
                 }}
-                className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
-                  bulkEdit
-                    ? 'text-[var(--color-primary)] bg-[rgba(99,102,241,0.12)]'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]'
-                }`}
-                title="Bulk edit"
-              >
-                <BulkEditIcon size={14} />
-              </button>
+              />
             </div>
 
             {bulkEdit ? (
               <EnvBulkEditArea defaultValue={bulkTextRef.current} textRef={bulkTextRef} />
             ) : (
               <>
-                {/* Header */}
                 <div className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2 px-1 mb-1.5">
                   <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide font-medium">Variable</div>
                   <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide font-medium">Initial Value</div>
@@ -246,7 +226,6 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
                         />
                       </div>
                       <InsertRowDivider onInsert={() => {
-                        // Insert a new variable after this position
                         const isSecret = activeView === 'secrets';
                         const newVar: EnvVariable = {
                           id: crypto.randomUUID(),
@@ -255,7 +234,6 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
                           currentValue: '',
                           isSecret,
                         };
-                        // Get all vars of this type, splice in, and update
                         const allOfType = activeEnv.variables.filter(v => v.isSecret === isSecret);
                         const others = activeEnv.variables.filter(v => v.isSecret !== isSecret);
                         const updated = [...allOfType];
@@ -287,64 +265,43 @@ function EnvVariableRow({
   onUpdate: (envId: string, varId: string, patch: Partial<EnvVariable>) => void;
   onRemove: (envId: string, varId: string) => void;
 }) {
-  const [showInitial, setShowInitial] = useState(!variable.isSecret);
-  const [showCurrent, setShowCurrent] = useState(!variable.isSecret);
-
   return (
     <div className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2 px-1 group">
-      <div>
-        <input
-          type="text"
-          value={variable.key}
-          onChange={(e) => onUpdate(envId, variable.id, { key: e.target.value })}
-          placeholder="Variable name"
-          className="w-full px-3 py-1.5 rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] h-[32px]"
-        />
-      </div>
-      <div className="relative">
-        <input
-          type={variable.isSecret && !showInitial ? 'password' : 'text'}
-          value={variable.initialValue}
-          onChange={(e) => onUpdate(envId, variable.id, { initialValue: e.target.value })}
-          placeholder="Initial value"
-          className={`w-full px-3 py-1.5 ${variable.isSecret ? 'pr-7' : ''} rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] h-[32px]`}
-        />
-        {variable.isSecret && (
-          <button type="button" onClick={() => setShowInitial(!showInitial)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer">
-            <LocalEyeIcon open={showInitial} />
-          </button>
-        )}
-      </div>
-      <div className="relative">
-        <input
-          type={variable.isSecret && !showCurrent ? 'password' : 'text'}
-          value={variable.currentValue}
-          onChange={(e) => onUpdate(envId, variable.id, { currentValue: e.target.value })}
-          placeholder="Current value"
-          className={`w-full px-3 py-1.5 ${variable.isSecret ? 'pr-7' : ''} rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] h-[32px]`}
-        />
-        {variable.isSecret && (
-          <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer">
-            <LocalEyeIcon open={showCurrent} />
-          </button>
-        )}
-      </div>
+      <TextInputView
+        size="sm"
+        width="fw"
+        value={variable.key}
+        onChange={(e) => onUpdate(envId, variable.id, { key: e.target.value })}
+        placeholder="Variable name"
+      />
+      <TextInputView
+        size="sm"
+        width="fw"
+        value={variable.initialValue}
+        onChange={(e) => onUpdate(envId, variable.id, { initialValue: e.target.value })}
+        placeholder="Initial value"
+        masked={variable.isSecret}
+      />
+      <TextInputView
+        size="sm"
+        width="fw"
+        value={variable.currentValue}
+        onChange={(e) => onUpdate(envId, variable.id, { currentValue: e.target.value })}
+        placeholder="Current value"
+        masked={variable.isSecret}
+      />
       <div className="flex items-center justify-center">
-        <button
-          type="button"
-          onClick={() => onRemove(envId, variable.id)}
-          className="opacity-0 group-hover:opacity-100 p-1 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-all"
-          title="Remove"
-        >
-          <TrashIcon size={13} />
-        </button>
+        <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <IconButtonView
+            icon={<TrashIcon size={13} />}
+            size="sm"
+            tooltip="Remove"
+            onClick={() => onRemove(envId, variable.id)}
+          />
+        </span>
       </div>
     </div>
   );
-}
-
-function LocalEyeIcon({ open }: { open: boolean }) {
-  return open ? <EyeIcon size={12} /> : <EyeOffIcon size={12} />;
 }
 
 // ─── Bulk Edit Textarea ───
@@ -353,12 +310,12 @@ function EnvBulkEditArea({ defaultValue, textRef }: { defaultValue: string; text
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="text-[11px] text-[var(--color-text-muted)] mb-1.5 px-1">
-        Format: <code className="text-[10px] bg-[rgba(255,255,255,0.06)] px-1 py-0.5 rounded">key: initialValue | currentValue</code>
+        Format: <code className="text-[10px] bg-[var(--color-surface)] px-1 py-0.5 rounded">key: initialValue | currentValue</code>
       </div>
       <textarea
         defaultValue={defaultValue}
         onChange={(e) => { textRef.current = e.target.value; }}
-        className="flex-1 min-h-[120px] w-full px-3 py-2 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] resize-none"
+        className="flex-1 min-h-[120px] w-full px-3 py-2 rounded-md bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] resize-none"
         placeholder={`baseUrl: https://api.example.com\napiKey: secret123 | prod-key-456`}
         spellCheck={false}
       />

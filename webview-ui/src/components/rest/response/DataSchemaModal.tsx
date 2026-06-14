@@ -8,12 +8,11 @@
  * Tasks: 4.3.12 — AI Data Schema Generator
  */
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { SelectInputView, AIButtonView, EditorView, SegmentedControlView, type SelectOption, type EditorLanguage } from '../../../dui';
+import { SelectInputView, AIButtonView, EditorView, SegmentedControlView, IconButtonView, type SelectOption, type EditorLanguage } from '../../../dui';
 import { useAiProvidersStore } from '../../../store/ai-providers-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { generateSchema, downloadBlob, SCHEMA_LANG_META, SCHEMA_LANG_OPTIONS, buildSchemaPrompt, type SchemaLang } from '../../../services/response';
 import { WrapLinesIcon, DownloadIcon, CopyIcon, CloseIcon, SparkleIcon } from '../../../icons';
-import { ToolbarBtn } from './ToolbarBtn';
 import { useAiStream } from '../../../hooks/useAiStream';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -256,21 +255,24 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
               )}
             </span>
             <div className="flex items-center gap-1">
-              <ToolbarBtn title="Wrap lines" onClick={() => setWrapLines(w => !w)}>
-                <WrapLinesIcon size={14} />
-              </ToolbarBtn>
-              <ToolbarBtn
+              <IconButtonView
+                icon={<WrapLinesIcon size={14} />}
+                title="Wrap lines"
+                size="md"
+                onClick={() => setWrapLines(w => !w)}
+              />
+              <IconButtonView
+                icon={<DownloadIcon size={14} />}
                 title="Download"
+                size="md"
                 onClick={handleDownload}
-              >
-                <DownloadIcon size={14} />
-              </ToolbarBtn>
-              <ToolbarBtn
+              />
+              <IconButtonView
+                icon={<CopyIcon size={14} />}
                 title="Copy to clipboard"
+                size="md"
                 onClick={() => navigator.clipboard.writeText(displayCode)}
-              >
-                <CopyIcon size={14} />
-              </ToolbarBtn>
+              />
             </div>
           </div>
 

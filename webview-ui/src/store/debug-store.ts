@@ -70,6 +70,8 @@ interface DebugState {
   breakpointsMuted: boolean;
   /** Line number to scroll to in the active editor (consumed after scrolling) */
   navigateLine: number | null;
+  /** Script phase to switch to in ScriptsEditor (consumed after switching) */
+  navigatePhase: 'pre-request' | 'post-response' | null;
 
   // Actions
   startDebug: (tabId: string, phase: 'pre-request' | 'post-response') => void;
@@ -93,6 +95,7 @@ interface DebugState {
   pruneBreakpoints: (tabId: string, phase: string, maxLine: number) => void;
   toggleMuteBreakpoints: () => void;
   setNavigateLine: (line: number | null) => void;
+  setNavigatePhase: (phase: 'pre-request' | 'post-response' | null) => void;
 }
 
 export const useDebugStore = create<DebugState>((set, get) => ({
@@ -110,6 +113,7 @@ export const useDebugStore = create<DebugState>((set, get) => ({
   conditions: {},
   breakpointsMuted: false,
   navigateLine: null,
+  navigatePhase: null,
 
   startDebug: (tabId, phase) => set({
     active: true,
@@ -286,4 +290,5 @@ export const useDebugStore = create<DebugState>((set, get) => ({
 
   toggleMuteBreakpoints: () => set(state => ({ breakpointsMuted: !state.breakpointsMuted })),
   setNavigateLine: (line) => set({ navigateLine: line }),
+  setNavigatePhase: (phase) => set({ navigatePhase: phase }),
 }));

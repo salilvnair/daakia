@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
+import { useDebugStore } from '../../../store/debug-store';
 import { KeyValueTable, AuthEditor, ScriptsEditor } from '../../shared';
 import { TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '../../../dui';
 import { postMsg } from '../../../vscode';
@@ -39,6 +40,26 @@ export function RequestPanel() {
     setActiveSectionLocal(section);
     useUiStateStore.getState().setPref(`rest.subtab.${activeTabId}`, section);
   };
+
+  // Auto-switch to Scripts tab when debugger activates for this tab, restore when done
+  const debugActive = useDebugStore(s => s.active);
+  const debugTabId = useDebugStore(s => s.tabId);
+  const preDebugSection = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (debugActive && debugTabId === activeTabId) {
+      // Debugger just started for this tab — save current section and jump to scripts
+      if (activeSection !== 'scripts') {
+        preDebugSection.current = activeSection;
+        setActiveSectionLocal('scripts');
+      }
+    } else if (!debugActive && preDebugSection.current !== null) {
+      // Debugger ended — restore the section we were on before
+      const restore = preDebugSection.current;
+      preDebugSection.current = null;
+      setActiveSectionLocal(restore);
+    }
+  }, [debugActive, debugTabId, activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scrollRef = useScrollRestore(`requestConfig.${activeTabId}.${activeSection}`, [activeTabId, activeSection]);
 

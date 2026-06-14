@@ -9,7 +9,7 @@ export type DuiSize = 'xxs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'xxl' | 'xxxl';
 export type DuiRadius = 'none' | 'sm' | 'md' | 'lg' | 'full';
 
 /** Width presets for DUI components. */
-export type DuiWidth = 'sm' | 'md' | 'default' | 'lg' | 'fullWidth' | 'maxContent';
+export type DuiWidth = 'sm' | 'md' | 'default' | 'lg' | 'fullWidth' | 'maxContent' | 'fw' | 'mx';
 
 /** Font style override. */
 export type DuiFontStyle = 'normal' | 'italic';

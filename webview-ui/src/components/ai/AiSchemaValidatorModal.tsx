@@ -6,7 +6,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
-import { ModalView, AIButtonView, EditorView, ResizablePanelView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, EditorView, ResizablePanelView } from '../../dui';
 
 interface Props {
   responseBody: string;

@@ -1389,8 +1389,8 @@ export function MuteBreakpointsIcon(props: IconProps) {
   const { size = 16, ...rest } = props;
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" {...rest}>
-      <circle cx="8" cy="8" r="5.5" stroke="var(--color-error)" strokeWidth="1.4" />
-      <line x1="3.8" y1="12.2" x2="12.2" y2="3.8" stroke="var(--color-error)" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="8" cy="8" r="5.5" fill="var(--color-error)" />
+      <line x1="4.2" y1="11.8" x2="11.8" y2="4.2" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }

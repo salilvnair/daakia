@@ -289,9 +289,9 @@ Generate the fuzz payloads:`;
     return undefined;
   })();
 
-  const footerRight = (phase === 'generated' || phase === 'done')
-    ? <ButtonView variant="secondary" size="sm" onClick={handleReset}>Reset</ButtonView>
-    : undefined;
+  const footerRight = (phase === 'generated' || phase === 'done') ? (
+    <ButtonView variant="secondary" size="sm" onClick={handleReset}>Reset</ButtonView>
+  ) : undefined;
 
   const headerIcon = (
     <div style={{
