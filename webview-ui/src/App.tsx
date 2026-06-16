@@ -310,13 +310,9 @@ export default function App() {
   // Sidebar resizable
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const splitContainerRef = useRef<HTMLDivElement>(null);
-  const sidebarWidthRef = useRef(260);
-  const [sidebarSplitPct, setSidebarSplitPct] = useState(() => {
-    const total = window.innerWidth - 48;
-    const secondW = 260 + 48;
-    return Math.max(10, Math.min(90, ((total - secondW - 6) / total) * 100));
-  });
+  const [sidebarDragging, setSidebarDragging] = useState(false);
+  const [showSplitterTip, setShowSplitterTip] = useState(false);
+  const sidebarDragRef = useRef({ startX: 0, startWidth: 0, moved: false });
 
   // Resizable split: percentage of height for request panel (10-90)
   const storedSplit = useUiStateStore(s => s.panelHeights['split.rest.main']);
@@ -429,19 +425,29 @@ export default function App() {
 
   // Right-click context menu is handled by <RightClickMenu /> component
 
-  // ── Sidebar split — keep sidebarWidthRef in sync for collapse effect ──
-  useEffect(() => { sidebarWidthRef.current = sidebarWidth; }, [sidebarWidth]);
+  // ── Sidebar splitter drag ──
+  const handleSidebarPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    setSidebarDragging(true);
+    sidebarDragRef.current = { startX: e.clientX, startWidth: sidebarWidth, moved: false };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, [sidebarWidth]);
 
-  useEffect(() => {
-    const total = splitContainerRef.current?.offsetWidth ?? (window.innerWidth - 48);
-    if (!sidebarOpen) {
-      setSidebarSplitPct(Math.max(10, ((total - 48 - 6) / total) * 100));
-    } else {
-      const secondW = sidebarWidthRef.current + 48;
-      setSidebarSplitPct(Math.max(10, Math.min(90, ((total - secondW - 6) / total) * 100)));
+  const handleSidebarPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!sidebarDragging) return;
+    sidebarDragRef.current.moved = true;
+    const delta = sidebarDragRef.current.startX - e.clientX;
+    const newWidth = Math.min(480, Math.max(180, sidebarDragRef.current.startWidth + delta));
+    setSidebarWidth(newWidth);
+  }, [sidebarDragging]);
+
+  const handleSidebarPointerUp = useCallback((e: React.PointerEvent) => {
+    setSidebarDragging(false);
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    if (!sidebarDragRef.current.moved) {
+      setSidebarOpen(prev => !prev);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sidebarOpen]);
+  }, []);
 
   // ── Req/Resp split callbacks ──
   const handleSplitResize = useCallback((pct: number) => {
@@ -1904,31 +1910,53 @@ export default function App() {
     return unsub;
   }, []);
 
-  // Save workspace snapshot on state changes (debounced)
+  // Save workspace snapshot — flush function shared by the debounced autosave
+  // and the immediate flush-on-hide/unload listeners below.
+  const flushWorkspaceSnapshot = useCallback(() => {
+    const { tabs: allTabs, activeTabId: atId, activeProtocol: ap } = useTabsStore.getState();
+    // Only save request tabs (strip response data to keep snapshot small)
+    const tabSnapshot = allTabs.map(t => ({ ...t, response: null, loading: false }));
+    // Include breakpoint state for persistence across sessions
+    const { breakpoints: bps, disabledBreakpoints: dBps, conditions: conds } = useDebugStore.getState();
+    getVsCodeApi().postMessage({
+      type: 'saveWorkspaceSnapshot',
+      data: {
+        tabs: tabSnapshot,
+        activeTabId: atId,
+        activeProtocol: ap,
+        sidebarSection,
+        sidebarOpen,
+        sidebarWidth,
+        breakpoints: bps,
+        disabledBreakpoints: dBps,
+        conditions: conds,
+      },
+    });
+  }, [sidebarSection, sidebarOpen, sidebarWidth]);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const { tabs: allTabs, activeTabId: atId, activeProtocol: ap } = useTabsStore.getState();
-      // Only save request tabs (strip response data to keep snapshot small)
-      const tabSnapshot = allTabs.map(t => ({ ...t, response: null, loading: false }));
-      // Include breakpoint state for persistence across sessions
-      const { breakpoints: bps, disabledBreakpoints: dBps, conditions: conds } = useDebugStore.getState();
-      getVsCodeApi().postMessage({
-        type: 'saveWorkspaceSnapshot',
-        data: {
-          tabs: tabSnapshot,
-          activeTabId: atId,
-          activeProtocol: ap,
-          sidebarSection,
-          sidebarOpen,
-          sidebarWidth,
-          breakpoints: bps,
-          disabledBreakpoints: dBps,
-          conditions: conds,
-        },
-      });
-    }, 2000);
+    const timer = setTimeout(flushWorkspaceSnapshot, 2000);
     return () => clearTimeout(timer);
-  }, [tabs, activeTabId, activeProtocol, sidebarSection, sidebarOpen, sidebarWidth, debugBreakpoints, debugDisabledBps, debugConditions]);
+  }, [tabs, activeTabId, activeProtocol, sidebarSection, sidebarOpen, sidebarWidth, debugBreakpoints, debugDisabledBps, debugConditions, flushWorkspaceSnapshot]);
+
+  // The debounced save above can be lost if the webview is disposed (window/panel
+  // closed, VS Code quit) within the 2s window — leaving a stale snapshot (e.g. a
+  // tab the user already closed) as "latest". Flush immediately when the webview
+  // becomes hidden or is about to unload so the snapshot always reflects the real
+  // last state.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushWorkspaceSnapshot();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', flushWorkspaceSnapshot);
+    window.addEventListener('beforeunload', flushWorkspaceSnapshot);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', flushWorkspaceSnapshot);
+      window.removeEventListener('beforeunload', flushWorkspaceSnapshot);
+    };
+  }, [flushWorkspaceSnapshot]);
 
   const tabProtocol = activeTab?.protocol || activeProtocol;
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
@@ -2059,31 +2087,11 @@ export default function App() {
         </ProtocolIcon>
       </div>
 
-      {/* Main content + sidebar split */}
-      <div ref={splitContainerRef} className="flex-1 min-w-0 overflow-hidden" style={{ height: '100%', display: 'flex' }}>
-        <SplitPanelView
-          direction="horizontal"
-          split={sidebarSplitPct}
-          onResize={(pct) => setSidebarSplitPct(pct)}
-          onResizeEnd={(pct) => {
-            if (!sidebarOpen) return;
-            const total = splitContainerRef.current?.offsetWidth ?? (window.innerWidth - 48);
-            const secondW = total * (1 - pct / 100) - 6;
-            const newW = Math.max(180, Math.min(480, Math.round(secondW - 48)));
-            setSidebarWidth(newW);
-            sidebarWidthRef.current = newW;
-          }}
-          onHandleClick={() => setSidebarOpen(prev => !prev)}
-          minFirst={300}
-          minSecond={48}
-          accentColor={protocolAccent}
-          pillTooltip={<>
-            <div>Click to {sidebarOpen ? 'collapse' : 'expand'} <kbd style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--color-panel)', fontFamily: 'monospace', border: '1px solid color-mix(in srgb, var(--color-text-primary) 15%, transparent)' }}>Alt+B</kbd></div>
-            <div>Drag to resize</div>
-          </>}
-          style={{ height: '100%' }}
-          first={
-        <div className="flex flex-col h-full min-w-0">
+      {/* Main content + sidebar (flex row: content | splitter | sidebar) */}
+      <div className="flex-1 min-w-0 overflow-hidden" style={{ height: '100%', display: 'flex' }}>
+
+        {/* Main content */}
+        <div className="flex flex-col h-full flex-1 min-w-0 overflow-hidden">
         {/* SQLite status banner */}
         <SqliteBanner sqliteOk={sqliteStatus.ok} error={sqliteStatus.error} />
 
@@ -2180,9 +2188,38 @@ export default function App() {
         {/* DevTools bottom panel */}
         <DevToolsPanel />
         </div>
-          }
-          second={<AppSidebar activeSection={sidebarSection} onSectionChange={setSidebarSection} />}
-        />
+
+        {/* Sidebar splitter — drag to resize, click to toggle */}
+        <div
+          className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
+          onPointerDown={handleSidebarPointerDown}
+          onPointerMove={handleSidebarPointerMove}
+          onPointerUp={handleSidebarPointerUp}
+          onMouseEnter={() => setShowSplitterTip(true)}
+          onMouseLeave={() => setShowSplitterTip(false)}
+          aria-label="Resize or collapse sidebar"
+        >
+          <div
+            className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[3px] rounded-full transition-all duration-150 ${
+              sidebarDragging ? 'h-[80px]' : sidebarOpen ? 'h-[44px] bg-[var(--color-surface-border)] group-hover:h-[80px]' : 'h-[48px] group-hover:h-[80px]'
+            }`}
+            style={{
+              backgroundColor: sidebarDragging ? protocolAccent : sidebarOpen ? undefined : `color-mix(in srgb, ${protocolAccent} 30%, transparent)`,
+            }}
+            onMouseEnter={(e) => { if (!sidebarDragging) (e.currentTarget as HTMLElement).style.backgroundColor = protocolAccent; }}
+            onMouseLeave={(e) => { if (!sidebarDragging) (e.currentTarget as HTMLElement).style.backgroundColor = sidebarOpen ? '' : `color-mix(in srgb, ${protocolAccent} 30%, transparent)`; }}
+          />
+          {showSplitterTip && !sidebarDragging && (
+            <div className="absolute top-1/2 right-4 -translate-y-1/2 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[11px] px-2.5 py-1.5 rounded-lg border border-[var(--color-surface-border)] shadow-lg whitespace-nowrap pointer-events-none z-50 flex flex-col gap-0.5 leading-tight">
+              <div>Click to {sidebarOpen ? 'collapse' : 'expand'} <kbd style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--color-panel)', fontFamily: 'monospace', border: '1px solid color-mix(in srgb, var(--color-text-primary) 15%, transparent)' }}>Alt+B</kbd></div>
+              <div>Drag to resize</div>
+            </div>
+          )}
+        </div>
+
+        {/* Right sidebar: icon rail + expandable panel */}
+        <AppSidebar activeSection={sidebarSection} onSectionChange={setSidebarSection} sidebarOpen={sidebarOpen} sidebarWidth={sidebarWidth} sidebarDragging={sidebarDragging} />
+
       </div>
 
       {/* Toast notifications */}
@@ -2258,7 +2295,7 @@ function EmptyState({ onNewTab, protocol }: { onNewTab: () => void; protocol: 'r
     <div className="flex-1 flex flex-col items-center justify-center gap-3 text-[var(--color-text-muted)]">
       {config.icon}
       <p className="text-[13px]">No open tabs</p>
-      <ButtonView size="md" accentColor={config.color} onClick={onNewTab} style={{ marginTop: 4 }}>
+      <ButtonView variant="primary" size="md" accentColor={config.color} onClick={onNewTab} style={{ marginTop: 4 }}>
         {config.label}
       </ButtonView>
     </div>

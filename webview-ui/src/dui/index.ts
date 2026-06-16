@@ -48,6 +48,9 @@ export type { DropDownButtonViewProps } from './components/button/DropDownButton
 export { TextInputView } from './components/input/TextInputView';
 export type { TextInputViewProps, TextInputSize } from './components/input/TextInputView';
 
+export { MultilineInputView } from './components/input/MultilineInputView';
+export type { MultilineInputViewProps } from './components/input/MultilineInputView';
+
 export { SelectInputView } from './components/input/SelectInputView';
 export type { SelectInputViewProps, SelectOption, SelectInputSize } from './components/input/SelectInputView';
 

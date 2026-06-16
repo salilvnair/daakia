@@ -74,7 +74,7 @@ function buildFollowUpRequestsPrompt(
 
 export type AssistMode = 'error-diagnosis' | 'explain' | 'follow-up';
 
-const POPOVER_WIDTH = 360;
+const POPOVER_WIDTH = 504;
 
 interface AiAssistPopoverProps {
   mode: AssistMode;
@@ -353,7 +353,7 @@ export function AiAssistPopover({
       {/* Body */}
       <div
         ref={scrollRef}
-        style={{ padding: '10px 12px', maxHeight: 260, overflowY: 'auto', flex: 1 }}
+        style={{ padding: '10px 12px', maxHeight: 312, overflowY: 'auto', flex: 1 }}
       >
         {streaming && !text && !error && (
           <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic', margin: 0 }}>

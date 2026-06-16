@@ -17,9 +17,12 @@ export type SidebarSection = 'collections' | 'history' | 'environments' | 'debug
 interface AppSidebarProps {
   activeSection: SidebarSection;
   onSectionChange: (section: SidebarSection) => void;
+  sidebarOpen?: boolean;
+  sidebarWidth?: number;
+  sidebarDragging?: boolean;
 }
 
-export function AppSidebar({ activeSection, onSectionChange }: AppSidebarProps) {
+export function AppSidebar({ activeSection, onSectionChange, sidebarOpen = true, sidebarWidth = 260, sidebarDragging = false }: AppSidebarProps) {
   const toggle = (section: SidebarSection) => {
     onSectionChange(activeSection === section ? null : section);
   };
@@ -67,13 +70,19 @@ export function AppSidebar({ activeSection, onSectionChange }: AppSidebarProps) 
 
   return (
     <div className="flex h-full">
-      {/* Expandable panel — fills space given by SplitPanelView */}
-      <div className="flex-1 min-w-0 bg-[var(--color-surface)] flex flex-col overflow-hidden">
+      {/* Expandable panel — width animates to 0 when collapsed, CSS-controlled */}
+      <div
+        className="bg-[var(--color-surface)] flex flex-col overflow-hidden"
+        style={{
+          width: showPanel && sidebarOpen ? sidebarWidth : 0,
+          transition: sidebarDragging ? 'none' : 'width 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+        }}
+      >
         {showPanel && <SidebarPanelContent section={activeSection} />}
       </div>
 
-      {/* Icon rail */}
-      <div className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-l border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
+      {/* Icon rail — border-l only when panel is visible */}
+      <div className={`flex flex-col items-center w-12 bg-[var(--color-panel)] ${showPanel && sidebarOpen ? 'border-l border-[var(--color-surface-border)]' : ''} py-2 gap-1 flex-shrink-0`}>
         {/* REST sidebar icons */}
         {showRestSidebar && (
           <>

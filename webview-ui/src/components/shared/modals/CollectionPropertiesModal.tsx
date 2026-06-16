@@ -49,13 +49,13 @@ export function CollectionPropertiesModal({ open, collectionName, properties, on
       size="xl"
       noPadding
       footerRight={
-        <ButtonView variant="primary" size="sm" onClick={handleSave}>
+        <ButtonView variant="primary" size="md" onClick={handleSave}>
           Save
         </ButtonView>
       }
     >
-      {/* Tab bar — flush to modal header */}
-      <div style={{ borderBottom: '1px solid var(--color-surface-border)', padding: '0 18px' }}>
+      {/* Tab bar */}
+      <div style={{ borderBottom: '1px solid var(--color-surface-border)', padding: '8px 18px 0' }}>
         <TabView
           tabs={TABS}
           activeTab={activeTab}

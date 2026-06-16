@@ -6,11 +6,11 @@
  * generates dk.expect() / dk.test() script, then inserts it into the post-response script.
  */
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { createPortal } from 'react-dom';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useTabsStore } from '../../store/tabs-store';
-import { CloseIcon, SparkleIcon, CheckIcon } from '../../icons';
+import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { ModalView, ButtonView, MultilineInputView } from '../../dui';
 
 // ─── Handle ───────────────────────────────────────────────────────────────────
 export interface AiContractTestHandle {
@@ -42,13 +42,11 @@ export const AiContractTestGenerator = forwardRef<AiContractTestHandle, Props>(
 
     const tab = useTabsStore(s => s.tabs.find(t => t.id === tabId));
 
-    // Expose handle
     useImperativeHandle(ref, () => ({
       open: () => { setVisible(true); setGenerated(''); setError(''); accRef.current = ''; },
       loading,
     }), [loading]);
 
-    // Listen for AI stream
     useEffect(() => {
       const handler = (evt: MessageEvent) => {
         const msg = evt.data as Record<string, unknown>;
@@ -135,163 +133,119 @@ export const AiContractTestGenerator = forwardRef<AiContractTestHandle, Props>(
       });
     };
 
-    if (!visible) return null;
-
     const hasResponse = !!(tab?.response as any)?.body;
+    const canInsert = !!(generated && !streaming);
 
-    const modal = (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center"
-        style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-      >
-        <div
-          className="w-[580px] max-h-[85vh] flex flex-col rounded-xl border shadow-2xl"
-          style={{
-            backgroundColor: 'var(--color-panel)',
-            borderColor: 'var(--color-surface-border)',
-          }}
-        >
-          {/* Header */}
-          <div
-            className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0"
-            style={{ borderColor: 'var(--color-surface-border)' }}
-          >
-            <SparkleIcon size={15} style={{ color: ACCENT }} />
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Generate Contract Tests</p>
-              <p className="text-[11px] text-[var(--color-text-muted)]">
-                {tab ? `${tab.method} ${tab.url}` : 'No active tab'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setVisible(false)}
-              className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer"
+    return (
+      <ModalView
+        open={visible}
+        onClose={() => setVisible(false)}
+        title="Generate Contract Tests"
+        subtitle={tab ? `${tab.method} ${tab.url}` : 'No active tab'}
+        headerIcon={<SparkleIcon size={14} style={{ color: ACCENT }} />}
+        headerColor={ACCENT}
+        size="md"
+        footerLeft={
+          !generated && !loading ? (
+            <ButtonView
+              size="md"
+              variant="primary"
+              iconLeft={<SparkleIcon size={11} />}
+              accentColor={ACCENT}
+              onClick={handleGenerate}
+              disabled={!hasResponse}
             >
-              <CloseIcon size={12} />
-            </button>
+              Generate Test Script
+            </ButtonView>
+          ) : canInsert ? (
+            <ButtonView size="md" variant="ghost" onClick={handleGenerate} disabled={!hasResponse}>
+              Regenerate
+            </ButtonView>
+          ) : undefined
+        }
+        footerRight={
+          canInsert ? (
+            <ButtonView
+              size="md"
+              variant="primary"
+              iconLeft={<CheckIcon size={11} />}
+              accentColor={ACCENT}
+              onClick={() => { onApply(generated); setVisible(false); }}
+            >
+              Insert into Script
+            </ButtonView>
+          ) : undefined
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Schema input */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 500, marginBottom: 6, color: 'var(--color-text-secondary)' }}>
+              Schema / OpenAPI spec{' '}
+              <span style={{ fontWeight: 400, fontStyle: 'italic', color: 'var(--color-text-muted)' }}>(optional)</span>
+            </label>
+            <MultilineInputView
+              size="md"
+              value={schema}
+              onChange={e => setSchema(e.target.value)}
+              rows={5}
+              style={{ fontFamily: 'var(--vscode-editor-font-family, monospace)', fontSize: '11.5px', width: '100%' }}
+              placeholder={`Paste JSON Schema or OpenAPI path definition:\n{\n  "type": "object",\n  "required": ["id", "name"],\n  "properties": {...}\n}`}
+            />
           </div>
 
-          {/* Body */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-            {/* Optional schema input */}
-            <div>
-              <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                Schema / OpenAPI spec{' '}
-                <span className="font-normal italic text-[var(--color-text-muted)]">(optional)</span>
-              </label>
-              <textarea
-                value={schema}
-                onChange={e => setSchema(e.target.value)}
-                placeholder={`Paste JSON Schema or OpenAPI path definition:\n{\n  "type": "object",\n  "required": ["id", "name"],\n  "properties": {...}\n}`}
-                rows={4}
-                className="w-full px-3 py-2 rounded-lg text-[11.5px] font-mono resize-none outline-none"
-                style={{
-                  backgroundColor: 'var(--color-input-bg)',
-                  border: '1px solid var(--color-input-border)',
-                  color: 'var(--color-text-primary)',
-                }}
-              />
-            </div>
+          {/* No response warning */}
+          {!hasResponse && (
+            <p style={{ fontSize: '11px', fontStyle: 'italic', color: 'var(--color-text-muted)', margin: 0 }}>
+              ⚠️ No response loaded yet — send the request first to generate tests against real data.
+            </p>
+          )}
 
-            {!hasResponse && (
-              <p className="text-[11px] italic" style={{ color: 'var(--color-text-muted)' }}>
-                ⚠️ No response loaded yet — send the request first to generate tests against real data.
+          {/* Loading dots */}
+          {loading && !generated && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0' }}>
+              {[0, 150, 300].map(d => (
+                <span
+                  key={d}
+                  className="animate-pulse"
+                  style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: ACCENT, display: 'inline-block', animationDelay: `${d}ms` }}
+                />
+              ))}
+              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: 6 }}>Generating tests…</span>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <p style={{ fontSize: '11px', color: 'var(--color-error)', margin: 0 }}>{error}</p>
+          )}
+
+          {/* Generated script preview */}
+          {generated && (
+            <div>
+              <p style={{ fontSize: '11px', fontWeight: 500, marginBottom: 6, color: 'var(--color-text-secondary)' }}>
+                Generated test script:
+                {streaming && <span style={{ marginLeft: 8, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>(streaming…)</span>}
               </p>
-            )}
-
-            {/* Generate button */}
-            {!generated && !loading && (
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={!hasResponse}
-                className="h-[32px] px-4 text-[12px] font-medium rounded-md text-white cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-40 self-start"
-                style={{ backgroundColor: ACCENT }}
-              >
-                ✨ Generate Test Script
-              </button>
-            )}
-
-            {/* Loading */}
-            {loading && !generated && (
-              <div className="flex gap-1 items-center py-2">
-                {[0, 150, 300].map(d => (
-                  <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                    style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-                ))}
-                <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Generating tests…</span>
-              </div>
-            )}
-
-            {/* Error */}
-            {error && (
-              <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>
-            )}
-
-            {/* Generated script preview */}
-            {generated && (
-              <div>
-                <p className="text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
-                  Generated test script:
-                  {streaming && <span className="ml-2 text-[var(--color-text-muted)] italic">(streaming…)</span>}
-                </p>
-                <pre
-                  className="text-[11px] px-3 py-2.5 rounded-lg overflow-auto max-h-[260px] font-mono [scrollbar-gutter:stable]"
-                  style={{
-                    backgroundColor: 'var(--color-input-bg)',
-                    border: '1px solid var(--color-surface-border)',
-                    color: 'var(--color-text-primary)',
-                    whiteSpace: 'pre-wrap',
-                  }}
-                >
-                  {generated}
-                </pre>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div
-            className="flex items-center justify-between px-5 py-3 border-t flex-shrink-0"
-            style={{ borderColor: 'var(--color-surface-border)' }}
-          >
-            <div>
-              {generated && !streaming && (
-                <button
-                  type="button"
-                  onClick={handleGenerate}
-                  className="text-[11px] underline cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-                >
-                  Regenerate
-                </button>
-              )}
+              <pre style={{
+                fontSize: '11px',
+                padding: '8px 12px',
+                borderRadius: 7,
+                overflow: 'auto',
+                maxHeight: 260,
+                fontFamily: 'var(--vscode-editor-font-family, monospace)',
+                backgroundColor: 'var(--color-input-bg)',
+                border: '1px solid var(--color-surface-border)',
+                color: 'var(--color-text-primary)',
+                whiteSpace: 'pre-wrap',
+                margin: 0,
+              }}>
+                {generated}
+              </pre>
             </div>
-            <div className="flex gap-2">
-              {generated && !streaming && (
-                <button
-                  type="button"
-                  onClick={() => { onApply(generated); setVisible(false); }}
-                  className="h-[30px] px-4 rounded-md text-[12px] font-medium text-white cursor-pointer hover:opacity-90 transition-opacity flex items-center gap-1.5"
-                  style={{ backgroundColor: ACCENT }}
-                >
-                  <CheckIcon size={11} />
-                  Insert into Script
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setVisible(false)}
-                className="h-[30px] px-4 rounded-md text-[12px] font-medium cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-      </div>
+      </ModalView>
     );
-
-    return createPortal(modal, document.body);
   }
 );

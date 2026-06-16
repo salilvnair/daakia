@@ -1,6 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './ModalView.css';
+
+// Auto-incrementing layer counter — each ModalView instance gets a unique, ever-growing
+// layer so that modals opened later always stack above earlier ones regardless of DOM order.
+let _mountLayer = 0;
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
 
@@ -66,6 +70,9 @@ export function ModalView({
   elevated = false,
   mode = 'popout',
 }: ModalViewProps) {
+  // Stable layer index per component instance — never decrements so no duplicate z-values
+  const [layer] = useState(() => ++_mountLayer);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -199,7 +206,7 @@ export function ModalView({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1000,
+        zIndex: 1000 + layer * 50,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
