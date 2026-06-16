@@ -6,11 +6,12 @@
  * Gate: deepSecurityAudit feature flag
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { CloseIcon, SparkleIcon, CopyIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
 import type { CollectionTreeNode } from '../../services/collections';
+import { ModalView, AIButtonView, ButtonView, CopyButtonView } from '../../dui';
+import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface Props {
   collectionNode: CollectionTreeNode;
@@ -51,9 +52,21 @@ export function AiDeepSecurityAuditModal({ collectionNode, onClose }: Props) {
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
   const [started, setStarted] = useState(false);
   const streamRef = useRef('');
+  const cacheGet = useAiCollectionCacheStore(s => s.get);
+  const cacheSet = useAiCollectionCacheStore(s => s.set);
+  const cacheKey = `security-audit:${collectionNode.id}`;
+
+  // Cache-first: reopening this action for the same collection shows the last
+  // audit instead of an empty intro screen — Re-run is always explicit.
+  useEffect(() => {
+    const cached = cacheGet(cacheKey);
+    if (!cached) return;
+    setResult(cached.payload as string);
+    setStarted(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -64,6 +77,7 @@ export function AiDeepSecurityAuditModal({ collectionNode, onClose }: Props) {
       } else if (msg?.type === 'aiStream:done') {
         setResult(streamRef.current);
         setLoading(false);
+        cacheSet(cacheKey, streamRef.current);
       } else if (msg?.type === 'aiStream:error') {
         setError(msg.error || 'AI request failed');
         setLoading(false);
@@ -71,7 +85,8 @@ export function AiDeepSecurityAuditModal({ collectionNode, onClose }: Props) {
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
 
   const handleAudit = useCallback(() => {
     if (loading) return;
@@ -90,90 +105,81 @@ export function AiDeepSecurityAuditModal({ collectionNode, onClose }: Props) {
     });
   }, [loading, collectionNode.name]);
 
-  const handleCopy = useCallback(() => {
-    if (!result) return;
-    navigator.clipboard.writeText(result).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }, [result]);
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget) e.preventDefault(); }}
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Deep Security Audit ✦"
+      subtitle={collectionNode.name}
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{
+          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
+        }}>
+          <SparkleIcon size={13} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={result && !loading ? (
+        <CopyButtonView text={result} size={13} title="Copy audit report" accentColor={ACCENT} />
+      ) : undefined}
+      footerRight={
+        started ? (
+          <ButtonView size="md" onClick={handleAudit} disabled={loading}>Re-run Audit</ButtonView>
+        ) : (
+          <AIButtonView
+            label="Run Security Audit"
+            size="md"
+            accentColor={ACCENT}
+            onClick={handleAudit}
+          />
+        )
+      }
     >
-      <div
-        className="relative flex flex-col rounded-lg overflow-hidden shadow-2xl"
-        style={{ width: 640, maxHeight: '88vh', background: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}
-      >
-        <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          <SparkleIcon size={14} style={{ color: ACCENT }} />
-          <span className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Deep Security Audit ✦</span>
-          <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wide"
-            style={{ background: 'color-mix(in srgb, var(--color-error) 15%, transparent)', color: 'var(--color-error)' }}>OWASP Top 10</span>
-          <span className="ml-1 px-2 py-0.5 rounded text-[10px] font-mono truncate max-w-[140px]"
-            style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}>{collectionNode.name}</span>
-          <button type="button" onClick={onClose} className="ml-auto cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
-            <CloseIcon size={14} />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
-          {!started ? (
-            <>
-              <div className="rounded p-3" style={{ background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-error) 25%, transparent)' }}>
-                <p className="text-[11px] font-medium mb-1" style={{ color: 'var(--color-error)' }}>⚠ Security Audit</p>
-                <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                  AI will perform a deep OWASP Top 10 scan of <strong>{collectionNode.name}</strong>: exposed tokens, injection surfaces, missing auth on sensitive endpoints, CORS misconfig, and SSRF vectors. Generates a pentest checklist with PoC payloads.
-                </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {!started ? (
+          <div style={{
+            borderRadius: 6, padding: 12,
+            background: 'color-mix(in srgb, var(--color-error) 8%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--color-error) 25%, transparent)',
+          }}>
+            <p style={{ fontSize: 11, fontWeight: 500, marginBottom: 4, color: 'var(--color-error)' }}>⚠ Security Audit</p>
+            <p style={{ fontSize: 11, margin: 0, color: 'var(--color-text-muted)' }}>
+              AI will perform a deep OWASP Top 10 scan of <strong>{collectionNode.name}</strong>: exposed tokens, injection surfaces, missing auth on sensitive endpoints, CORS misconfig, and SSRF vectors. Generates a pentest checklist with PoC payloads.
+            </p>
+          </div>
+        ) : (
+          <>
+            {error && (
+              <p style={{
+                fontSize: 11, padding: '6px 10px', borderRadius: 6, margin: 0,
+                background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)',
+              }}>
+                {error}
+              </p>
+            )}
+            {loading && !result && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '16px 0' }}>
+                <span className="animate-spin" style={{
+                  display: 'inline-block', width: 16, height: 16, borderRadius: '50%',
+                  border: '2px solid var(--color-error)', borderTopColor: 'transparent',
+                }} />
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Scanning for security vulnerabilities…</span>
               </div>
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleAudit}
-                  className="flex items-center gap-1.5 h-[26px] px-3 rounded text-[11px] font-medium cursor-pointer"
-                  style={{ background: ACCENT, color: '#fff' }}
-                >
-                  <SparkleIcon size={11} />
-                  Run Security Audit
-                </button>
+            )}
+            {result && (
+              <div style={{
+                borderRadius: 8, padding: 12, overflowY: 'auto', maxHeight: 420,
+                border: '1px solid var(--color-surface-border)', background: 'var(--color-surface)',
+              }}>
+                <MdViewer content={result} />
               </div>
-            </>
-          ) : (
-            <>
-              {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
-              {loading && !result && (
-                <div className="flex items-center gap-2 py-4 justify-center">
-                  <span className="inline-block w-4 h-4 border-2 border-[var(--color-error)] border-t-transparent rounded-full animate-spin" />
-                  <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Scanning for security vulnerabilities…</span>
-                </div>
-              )}
-              {result && (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Audit Report</span>
-                    <button
-                      type="button"
-                      onClick={handleCopy}
-                      className="flex items-center gap-1 h-[22px] px-2 rounded text-[10px] cursor-pointer"
-                      style={{ background: copied ? 'var(--color-success)' : 'var(--color-bg-surface)', color: copied ? '#fff' : 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}
-                    >
-                      <CopyIcon size={10} />
-                      {copied ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                  <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 420, borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}>
-                    <MdViewer content={result} />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            )}
+          </>
+        )}
       </div>
-    </div>,
-    document.body,
+    </ModalView>
   );
 }

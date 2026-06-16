@@ -64,11 +64,12 @@ export function EnvironmentModal({ open, envId, title, onSave, onCancel, accentC
       onClose={onCancel}
       title=""
       headerIcon={headerTitle}
-      size="lg"
+      size="xl"
       elevated
       noPadding
       footerRight={
         <ButtonView
+          variant="primary"
           size="md"
           accentColor={accentColor}
           disabled={!hasVariables}
@@ -78,7 +79,7 @@ export function EnvironmentModal({ open, envId, title, onSave, onCancel, accentC
         </ButtonView>
       }
     >
-      <div className="px-6 py-4 flex flex-col" style={{ height: '420px', minHeight: 0 }}>
+      <div className="px-6 py-4 flex flex-col" style={{ height: '65vh', minHeight: 480 }}>
         <EnvironmentEditor environmentId={envId} showSelector={false} allowRename={envId !== GLOBAL_ENV_ID} showName={false} />
       </div>
     </ModalView>

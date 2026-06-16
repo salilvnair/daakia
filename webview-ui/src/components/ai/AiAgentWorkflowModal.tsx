@@ -5,10 +5,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { postMsg } from '../../vscode';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
-import { SparkleIcon } from '../../icons';
+import { SparkleIcon, SpinnerIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { METHOD_COLORS } from '../../colors';
 import { ModalView, ButtonView } from '../../dui';
+import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface RequestResult {
   id: string; name: string; method: string; url: string;
@@ -40,6 +41,30 @@ export function AiAgentWorkflowModal({ collectionId, collectionName, protocol, o
   const tabIdRef = useRef('');
   const accRef = useRef('');
   const resolveTemplate = useAiPromptTemplatesStore(s => s.resolve);
+  const cacheGet = useAiCollectionCacheStore(s => s.get);
+  const cacheSet = useAiCollectionCacheStore(s => s.set);
+  const cacheKey = `agent-workflow:${collectionId}`;
+
+  // Cache-first: if this collection was already run, show the last result instead
+  // of resetting to the empty idle state — Re-run is always available to regenerate.
+  useEffect(() => {
+    const cached = cacheGet(cacheKey);
+    if (!cached) return;
+    const p = cached.payload as { results: RequestResult[]; summary: typeof summary; analysis: string };
+    setResults(p.results);
+    setSummary(p.summary);
+    setAnalysis(p.analysis);
+    setPhase('done');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
+
+  // Persist the completed run so reopening this modal for the same collection is cache-first.
+  useEffect(() => {
+    if (phase === 'done' && !analysisError) {
+      cacheSet(cacheKey, { results, summary, analysis });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // Collection run events + AI streaming — use tabId (not reqId) to match ai:send
   useEffect(() => {
@@ -174,7 +199,8 @@ export function AiAgentWorkflowModal({ collectionId, collectionName, protocol, o
             <div className="overflow-y-auto [scrollbar-gutter:stable]"
               style={{ maxHeight: (phase === 'done' || phase === 'analyzing') ? '220px' : '320px' }}>
               {results.length === 0 && phase === 'running' && (
-                <div className="flex items-center justify-center py-6">
+                <div className="flex items-center justify-center gap-2 py-6">
+                  <SpinnerIcon size={13} style={{ color: ACCENT }} />
                   <span className="text-[12px] text-[var(--color-text-muted)]">Starting...</span>
                 </div>
               )}
@@ -218,6 +244,7 @@ export function AiAgentWorkflowModal({ collectionId, collectionName, protocol, o
                     <MdViewer content={analysis + (phase === 'analyzing' ? ' ▌' : '')} fontSize={12} />
                   ) : (
                     <div className="flex items-center gap-2 py-2">
+                      <SpinnerIcon size={13} style={{ color: ACCENT }} />
                       <span className="text-[11.5px] text-[var(--color-text-muted)]">Preparing analysis...</span>
                     </div>
                   )}

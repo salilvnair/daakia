@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useEnvStore, type EnvVariable, GLOBAL_ENV_ID } from '../../../store/env-store';
 import { ConfirmDialog, InsertRowDivider } from '../../shared';
-import { TrashIcon, RenameIcon, BulkEditIcon } from '../../../icons';
+import { TrashIcon, RenameIcon, BulkEditIcon, PlusIcon } from '../../../icons';
 import { TabView, TextInputView, ButtonView, IconButtonView, SelectInputView } from '../../../dui';
 
 interface EnvironmentEditorProps {
@@ -116,8 +116,8 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
             </div>
           )}
 
-          {/* Variables / Secrets tabs + toolbar */}
-          <div className="flex items-center justify-between border-b border-[var(--color-surface-border)]">
+          {/* Variables / Secrets tabs */}
+          <div className="border-b border-[var(--color-surface-border)]">
             <TabView
               tabs={[
                 { id: 'variables', label: 'Variables', badge: variables.length },
@@ -125,22 +125,9 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
               ]}
               activeTab={activeView}
               onChange={(v) => setActiveView(v as 'variables' | 'secrets')}
-              size="sm"
+              size="md"
               variant="underline"
             />
-            <div className="flex items-center gap-1">
-              {displayedVars.length > 0 && (
-                <IconButtonView
-                  icon={<TrashIcon size={13} />}
-                  size="sm"
-                  tooltip="Clear all"
-                  onClick={() => setShowClearVarsConfirm(true)}
-                />
-              )}
-              <ButtonView size="xs" onClick={() => addVariable(activeEnv.id, activeView === 'secrets')}>
-                + Add
-              </ButtonView>
-            </div>
           </div>
 
           {showClearVarsConfirm && (
@@ -165,36 +152,52 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
               <span className="text-[12px] text-[var(--color-primary)] font-medium">
                 {activeView === 'variables' ? 'Environment Variables' : 'Environment Secrets'}
               </span>
-              <IconButtonView
-                icon={<BulkEditIcon size={14} />}
-                size="sm"
-                tooltip="Bulk edit"
-                active={bulkEdit}
-                onClick={() => {
-                  if (!bulkEdit) {
-                    bulkTextRef.current = displayedVars
-                      .map(v => `${v.key}: ${v.initialValue}${v.currentValue && v.currentValue !== v.initialValue ? ' | ' + v.currentValue : ''}`)
-                      .join('\n');
-                  } else {
-                    const lines = bulkTextRef.current.split('\n').filter(l => l.trim());
-                    const newVars: EnvVariable[] = lines.map(line => {
-                      const [keyPart, ...rest] = line.split(':');
-                      const valuePart = rest.join(':').trim();
-                      const [initialValue, currentValue] = valuePart.split('|').map(s => s.trim());
-                      return {
-                        id: crypto.randomUUID(),
-                        key: (keyPart || '').trim(),
-                        initialValue: initialValue || '',
-                        currentValue: currentValue || initialValue || '',
-                        isSecret: activeView === 'secrets',
-                      };
-                    });
-                    const keep = activeEnv.variables.filter(v => activeView === 'variables' ? v.isSecret : !v.isSecret);
-                    updateVariables(activeEnv.id, [...keep, ...newVars]);
-                  }
-                  setBulkEdit(!bulkEdit);
-                }}
-              />
+              <div className="flex items-center gap-0.5">
+                <IconButtonView
+                  icon={<TrashIcon size={14} />}
+                  size="md"
+                  tooltip="Clear all"
+                  disabled={displayedVars.length === 0}
+                  style={{ '--dui-hover-color': 'var(--color-error)', '--dui-hover-bg': 'color-mix(in srgb, var(--color-error) 8%, transparent)' } as React.CSSProperties}
+                  onClick={() => { if (displayedVars.length > 0) setShowClearVarsConfirm(true); }}
+                />
+                <IconButtonView
+                  icon={<BulkEditIcon size={14} />}
+                  size="md"
+                  tooltip="Bulk edit"
+                  active={bulkEdit}
+                  onClick={() => {
+                    if (!bulkEdit) {
+                      bulkTextRef.current = displayedVars
+                        .map(v => `${v.key}: ${v.initialValue}${v.currentValue && v.currentValue !== v.initialValue ? ' | ' + v.currentValue : ''}`)
+                        .join('\n');
+                    } else {
+                      const lines = bulkTextRef.current.split('\n').filter(l => l.trim());
+                      const newVars: EnvVariable[] = lines.map(line => {
+                        const [keyPart, ...rest] = line.split(':');
+                        const valuePart = rest.join(':').trim();
+                        const [initialValue, currentValue] = valuePart.split('|').map(s => s.trim());
+                        return {
+                          id: crypto.randomUUID(),
+                          key: (keyPart || '').trim(),
+                          initialValue: initialValue || '',
+                          currentValue: currentValue || initialValue || '',
+                          isSecret: activeView === 'secrets',
+                        };
+                      });
+                      const keep = activeEnv.variables.filter(v => activeView === 'variables' ? v.isSecret : !v.isSecret);
+                      updateVariables(activeEnv.id, [...keep, ...newVars]);
+                    }
+                    setBulkEdit(!bulkEdit);
+                  }}
+                />
+                <IconButtonView
+                  icon={<PlusIcon size={14} />}
+                  size="md"
+                  tooltip="Add new row"
+                  onClick={() => addVariable(activeEnv.id, activeView === 'secrets')}
+                />
+              </div>
             </div>
 
             {bulkEdit ? (
@@ -210,7 +213,7 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
 
                 {displayedVars.length === 0 && (
                   <div className="py-6 text-center text-[12px] text-[var(--color-text-muted)]">
-                    No {activeView} yet. Click "+ Add" to create one.
+                    No {activeView} yet. Click the + icon to create one.
                   </div>
                 )}
 
@@ -268,14 +271,14 @@ function EnvVariableRow({
   return (
     <div className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2 px-1 group">
       <TextInputView
-        size="sm"
+        size="md"
         width="fw"
         value={variable.key}
         onChange={(e) => onUpdate(envId, variable.id, { key: e.target.value })}
         placeholder="Variable name"
       />
       <TextInputView
-        size="sm"
+        size="md"
         width="fw"
         value={variable.initialValue}
         onChange={(e) => onUpdate(envId, variable.id, { initialValue: e.target.value })}
@@ -283,7 +286,7 @@ function EnvVariableRow({
         masked={variable.isSecret}
       />
       <TextInputView
-        size="sm"
+        size="md"
         width="fw"
         value={variable.currentValue}
         onChange={(e) => onUpdate(envId, variable.id, { currentValue: e.target.value })}
