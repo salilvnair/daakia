@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
 import { postMsg } from '../../vscode';
-import { SparkleIcon, RefreshIcon } from '../../icons';
+import { SparkleIcon, RefreshIcon, CloseIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 
 const ACCENT = 'var(--color-protocol-ai)';
@@ -243,18 +243,12 @@ Generate the dk.* test script:`;
         <button
           type="button"
           onClick={onClose}
-          className={hasCachedResult && !streaming ? '' : 'ml-auto'}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 22, height: 22, borderRadius: 5, border: 'none',
-            background: 'transparent', cursor: 'pointer',
-            fontSize: 13, color: 'var(--color-text-muted)', padding: 0, flexShrink: 0,
-            transition: 'color 0.15s, background 0.15s',
-          }}
+          className={`${hasCachedResult && !streaming ? '' : 'ml-auto'} flex items-center justify-center w-[22px] h-[22px] rounded cursor-pointer transition-colors`}
+          style={{ color: 'var(--color-text-muted)', background: 'transparent', border: 'none', flexShrink: 0 }}
           onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-error)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 12%, transparent)'; }}
           onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent'; }}
         >
-          ✕
+          <CloseIcon size={11} />
         </button>
       </div>
 

@@ -117,7 +117,7 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
           )}
 
           {/* Variables / Secrets tabs */}
-          <div className="border-b border-[var(--color-surface-border)]">
+          <div className="px-1 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
             <TabView
               tabs={[
                 { id: 'variables', label: 'Variables', badge: variables.length },

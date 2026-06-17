@@ -117,7 +117,7 @@ export function AiAdaptiveLoadTesterModal({ onClose }: Props) {
       footerRight={
         <AIButtonView
           label={loading ? 'Planning…' : 'Generate Load Plan'}
-          size="sm"
+          size="md"
           accentColor={ACCENT}
           disabled={!endpoint.trim() || loading}
           onClick={handlePlan}

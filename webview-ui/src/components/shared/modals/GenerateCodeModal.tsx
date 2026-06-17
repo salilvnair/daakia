@@ -4,7 +4,8 @@ import hljs from 'highlight.js';
 import { generateCode, LANGUAGES, type CodeGenInput } from '../../../utils/code-generator';
 import { StyledDropdown } from '../controls/StyledDropdown';
 import type { RequestTab } from '../../../store/tabs-store';
-import { CloseIcon, WrapLinesIcon, DownloadIcon, CopyIcon } from '../../../icons';
+import { CloseIcon, WrapLinesIcon, DownloadIcon } from '../../../icons';
+import { IconButtonView, CopyButtonView } from '../../../dui';
 
 const HLJS_LANG_MAP: Record<string, string> = {
   'shell-curl': 'bash',
@@ -121,15 +122,21 @@ export function GenerateCodeModal({ open, tab, onClose }: GenerateCodeModalProps
             <div className="flex items-center justify-between">
               <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">Generated code</label>
               <div className="flex items-center gap-1">
-                <MiniBtn title="Toggle wrap" onClick={() => setWrap(v => !v)} active={wrap}>
-                  <WrapLinesIcon size={14} />
-                </MiniBtn>
-                <MiniBtn title="Download" onClick={handleDownload}>
-                  <DownloadIcon size={14} />
-                </MiniBtn>
-                <MiniBtn title="Copy" onClick={handleCopy}>
-                  <CopyIcon size={14} />
-                </MiniBtn>
+                <IconButtonView
+                  icon={<WrapLinesIcon size={14} />}
+                  title="Toggle wrap"
+                  size="md"
+                  active={wrap}
+                  accentColor="var(--color-primary)"
+                  onClick={() => setWrap(v => !v)}
+                />
+                <IconButtonView
+                  icon={<DownloadIcon size={14} />}
+                  title="Download"
+                  size="md"
+                  onClick={handleDownload}
+                />
+                <CopyButtonView text={code} size={14} title="Copy" />
               </div>
             </div>
             <div className="rounded-lg border border-[var(--color-input-border)] bg-[var(--color-input-bg)] overflow-hidden">
@@ -154,13 +161,6 @@ export function GenerateCodeModal({ open, tab, onClose }: GenerateCodeModalProps
           >
             Copy
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-[36px] px-4 text-[12.5px] font-medium rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] text-[#f87171] hover:bg-[rgba(239,68,68,0.15)] cursor-pointer transition-colors"
-          >
-            Dismiss
-          </button>
         </div>
       </div>
     </div>,
@@ -168,15 +168,3 @@ export function GenerateCodeModal({ open, tab, onClose }: GenerateCodeModalProps
   );
 }
 
-function MiniBtn({ title, onClick, active, children }: { title: string; onClick: () => void; active?: boolean; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className={`w-7 h-7 flex items-center justify-center rounded-md cursor-pointer transition-colors ${active ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)]'}`}
-    >
-      {children}
-    </button>
-  );
-}

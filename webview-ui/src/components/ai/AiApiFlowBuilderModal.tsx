@@ -133,7 +133,7 @@ export function AiApiFlowBuilderModal({ protocol = 'rest', onClose }: Props) {
         </ButtonView>
       )}
       {!flow && !loading && (
-        <ButtonView size="sm" variant="primary" accentColor={ACCENT} disabled={!description.trim()}
+        <ButtonView size="md" variant="primary" accentColor={ACCENT} disabled={!description.trim()}
           iconLeft={<SparkleIcon size={11} />} onClick={handleGenerate}>
           Generate Flow
         </ButtonView>
@@ -190,6 +190,7 @@ export function AiApiFlowBuilderModal({ protocol = 'rest', onClose }: Props) {
             onChange={e => setBaseUrl(e.target.value)}
             placeholder="https://api.myapp.com"
             accentColor={ACCENT}
+            size="md"
             style={{ width: '100%' }}
           />
         </div>

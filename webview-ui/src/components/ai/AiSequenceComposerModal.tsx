@@ -85,7 +85,7 @@ export function AiSequenceComposerModal({ protocol, onClose }: Props) {
 
   const footerRight = (
     <ButtonView
-      size="sm"
+      size="md"
       variant="primary"
       accentColor={ACCENT}
       disabled={!description.trim() || loading}

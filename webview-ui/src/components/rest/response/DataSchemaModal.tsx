@@ -8,11 +8,12 @@
  * Tasks: 4.3.12 — AI Data Schema Generator
  */
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { SelectInputView, AIButtonView, EditorView, SegmentedControlView, IconButtonView, type SelectOption, type EditorLanguage } from '../../../dui';
+import { SelectInputView, AIButtonView, EditorView, SegmentedControlView, IconButtonView, CopyButtonView, type SelectOption, type EditorLanguage } from '../../../dui';
+import { ModalView } from '../../../dui';
 import { useAiProvidersStore } from '../../../store/ai-providers-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { generateSchema, downloadBlob, SCHEMA_LANG_META, SCHEMA_LANG_OPTIONS, buildSchemaPrompt, type SchemaLang } from '../../../services/response';
-import { WrapLinesIcon, DownloadIcon, CopyIcon, CloseIcon, SparkleIcon } from '../../../icons';
+import { WrapLinesIcon, DownloadIcon, SparkleIcon } from '../../../icons';
 import { useAiStream } from '../../../hooks/useAiStream';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -115,7 +116,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
     const sl = newLang as SchemaLang;
     setLang(sl);
     if (!SCHEMA_LANG_META[sl].hasStatic && !aiMode) {
-      setAiMode(true); // force AI mode for langs without static generator
+      setAiMode(true);
     }
   };
 
@@ -145,176 +146,166 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    // IMPORTANT: backdrop does NOT close modal — only X button closes it (per project rules)
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div
-        className="bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-xl shadow-2xl w-[980px] max-h-[90vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--color-surface-border)]">
-          <div className="flex items-center gap-2">
-            <SparkleIcon size={15} style={{ color: AI_ACCENT }} />
-            <h3 className="text-[14px] font-semibold text-[var(--color-text-primary)]">Data Schema Generator</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors"
-            style={{ color: 'var(--color-error)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 10%, transparent)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = ''; }}
-          >
-            <CloseIcon size={16} />
-          </button>
+    <ModalView
+      open
+      onClose={onClose}
+      title="Data Schema Generator"
+      size="xl"
+      noPadding
+      headerColor={AI_ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${AI_ACCENT} 20%, transparent)`, flexShrink: 0 }}>
+          <SparkleIcon size={13} style={{ color: AI_ACCENT }} />
         </div>
-
-        {/* ── Controls row ────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-[var(--color-surface-border)]">
-          {/* Language picker */}
-          <div className="flex-1 max-w-[280px]">
-            <SelectInputView
-              options={LANG_OPTIONS}
-              value={lang}
-              onChange={handleLangChange}
-              size="md"
-              accentColor={AI_ACCENT}
-              style={{ width: '100%' }}
-            />
-          </div>
-
-          {/* AI / Static mode toggle — DUI SegmentedControlView */}
-          <SegmentedControlView
+      }
+    >
+      {/* ── Controls row ────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-[var(--color-surface-border)]">
+        {/* Language picker */}
+        <div className="flex-1 max-w-[280px]">
+          <SelectInputView
+            options={LANG_OPTIONS}
+            value={lang}
+            onChange={handleLangChange}
             size="md"
             accentColor={AI_ACCENT}
-            value={aiMode ? 'ai' : 'static'}
-            onChange={(v) => {
-              if (v === 'ai') { resetAi(); setAiMode(true); }
-              else if (meta.hasStatic) { resetAi(); setAiMode(false); }
-            }}
-            options={[
-              { value: 'ai', label: 'AI', icon: <SparkleIcon size={10} /> },
-              { value: 'static', label: 'Static', disabled: !meta.hasStatic },
-            ]}
+            style={{ width: '100%' }}
           />
-
-          {/* Regenerate button (AI mode only) */}
-          {aiMode && (
-            <AIButtonView
-              label={isGenerating ? 'Generating…' : 'Regenerate'}
-              size="md"
-              accentColor={AI_ACCENT}
-              disabled={isGenerating}
-              onClick={handleRegenerate}
-            />
-          )}
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Status indicator */}
-          <div className="flex items-center gap-2">
-            {isGenerating && (
-              <div className="flex items-center gap-1.5">
-                <div className="flex gap-0.5">
-                  {[0, 120, 240].map(d => (
-                    <span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: AI_ACCENT, animationDelay: `${d}ms` }} />
-                  ))}
-                </div>
-                <span className="text-[10px]" style={{ color: AI_ACCENT }}>Generating with {providerLabel}…</span>
-              </div>
-            )}
-            {!isGenerating && !aiError && aiMode && overrideCode && !aiCode && (
-              <span className="text-[10px] text-[var(--color-text-muted)]">Cached · Regenerate to refresh</span>
-            )}
-            {!isGenerating && !aiError && aiMode && aiCode && (
-              <span className="text-[10px] text-[var(--color-text-muted)]">
-                Generated in {(generationMs / 1000).toFixed(1)}s via {providerLabel}
-              </span>
-            )}
-            {aiError && (
-              <span className="text-[10px] text-[var(--color-error)] max-w-[240px] truncate" title={aiError}>
-                ⚠️ {aiError}
-              </span>
-            )}
-          </div>
         </div>
 
-        {/* ── Code area ───────────────────────────────────────────────────────── */}
-        <div className="flex flex-col">
-          {/* Toolbar */}
-          <div className="flex items-center justify-between px-5 py-2">
-            <span className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-1.5">
-              {aiMode ? (
-                <>
-                  <SparkleIcon size={10} style={{ color: AI_ACCENT }} />
-                  AI-generated {meta.label}
-                </>
-              ) : (
-                `Static ${meta.label}`
-              )}
-            </span>
-            <div className="flex items-center gap-1">
-              <IconButtonView
-                icon={<WrapLinesIcon size={14} />}
-                title="Wrap lines"
-                size="md"
-                onClick={() => setWrapLines(w => !w)}
-              />
-              <IconButtonView
-                icon={<DownloadIcon size={14} />}
-                title="Download"
-                size="md"
-                onClick={handleDownload}
-              />
-              <IconButtonView
-                icon={<CopyIcon size={14} />}
-                title="Copy to clipboard"
-                size="md"
-                onClick={() => navigator.clipboard.writeText(displayCode)}
-              />
-            </div>
-          </div>
+        {/* AI / Static mode toggle — DUI SegmentedControlView */}
+        <SegmentedControlView
+          size="md"
+          accentColor={AI_ACCENT}
+          value={aiMode ? 'ai' : 'static'}
+          onChange={(v) => {
+            if (v === 'ai') { resetAi(); setAiMode(true); }
+            else if (meta.hasStatic) { resetAi(); setAiMode(false); }
+          }}
+          options={[
+            { value: 'ai', label: 'AI', icon: <SparkleIcon size={10} /> },
+            { value: 'static', label: 'Static', disabled: !meta.hasStatic },
+          ]}
+        />
 
-          {/* Editor — explicit 480px height so Monaco resolves height: 100% correctly */}
-          <div className="relative" style={{ height: 480 }}>
-            {/* Loading state overlay */}
-            {aiMode && !aiCode && isGenerating && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 bg-[var(--color-panel)]">
-                <div className="flex gap-1">
-                  {[0, 150, 300].map(d => (
-                    <span key={d} className="w-[6px] h-[6px] rounded-full animate-pulse" style={{ backgroundColor: AI_ACCENT, animationDelay: `${d}ms` }} />
-                  ))}
-                </div>
-                <p className="text-[12px] text-[var(--color-text-muted)]">Generating {meta.label} schema…</p>
-                <p className="text-[10px] text-[var(--color-text-muted)] opacity-60">Using {providerLabel} {model ? `/ ${model}` : ''}</p>
+        {/* Regenerate button (AI mode only) */}
+        {aiMode && (
+          <AIButtonView
+            label={isGenerating ? 'Generating…' : 'Regenerate'}
+            size="md"
+            accentColor={AI_ACCENT}
+            disabled={isGenerating}
+            onClick={handleRegenerate}
+          />
+        )}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Status indicator */}
+        <div className="flex items-center gap-2">
+          {isGenerating && (
+            <div className="flex items-center gap-1.5">
+              <div className="flex gap-0.5">
+                {[0, 120, 240].map(d => (
+                  <span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: AI_ACCENT, animationDelay: `${d}ms` }} />
+                ))}
               </div>
-            )}
-            {/* Error state */}
-            {aiMode && aiError && !aiCode && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-[var(--color-panel)]">
-                <p className="text-[13px] text-[var(--color-error)]">⚠️ Generation failed</p>
-                <p className="text-[11px] text-[var(--color-text-muted)] max-w-[400px] text-center">{aiError}</p>
-                <button
-                  type="button"
-                  onClick={triggerAiGeneration}
-                  className="mt-2 px-3 py-1.5 rounded-lg text-[11px] cursor-pointer border"
-                  style={{ color: AI_ACCENT, borderColor: `color-mix(in srgb, ${AI_ACCENT} 30%, transparent)` }}
-                >
-                  Try again
-                </button>
-              </div>
-            )}
-            <EditorView
-              value={displayCode}
-              language={editorLang}
-              readOnly
-              height="480px"
-              wordWrap={wrapLines}
-            />
-          </div>
+              <span className="text-[10px]" style={{ color: AI_ACCENT }}>Generating with {providerLabel}…</span>
+            </div>
+          )}
+          {!isGenerating && !aiError && aiMode && overrideCode && !aiCode && (
+            <span className="text-[10px] text-[var(--color-text-muted)]">Cached · Regenerate to refresh</span>
+          )}
+          {!isGenerating && !aiError && aiMode && aiCode && (
+            <span className="text-[10px] text-[var(--color-text-muted)]">
+              Generated in {(generationMs / 1000).toFixed(1)}s via {providerLabel}
+            </span>
+          )}
+          {aiError && (
+            <span className="text-[10px] text-[var(--color-error)] max-w-[240px] truncate" title={aiError}>
+              ⚠️ {aiError}
+            </span>
+          )}
         </div>
       </div>
-    </div>
+
+      {/* ── Code area ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-col">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-5 py-2">
+          <span className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-1.5">
+            {aiMode ? (
+              <>
+                <SparkleIcon size={10} style={{ color: AI_ACCENT }} />
+                AI-generated {meta.label}
+              </>
+            ) : (
+              `Static ${meta.label}`
+            )}
+          </span>
+          <div className="flex items-center gap-1">
+            <IconButtonView
+              icon={<WrapLinesIcon size={14} />}
+              title="Wrap lines"
+              size="md"
+              active={wrapLines}
+              accentColor="var(--color-primary)"
+              onClick={() => setWrapLines(w => !w)}
+            />
+            <IconButtonView
+              icon={<DownloadIcon size={14} />}
+              title="Download"
+              size="md"
+              onClick={handleDownload}
+            />
+            <CopyButtonView
+              text={displayCode}
+              size={14}
+              title="Copy to clipboard"
+              accentColor="var(--color-success)"
+            />
+          </div>
+        </div>
+
+        {/* Editor — explicit 480px height so Monaco resolves height: 100% correctly */}
+        <div className="relative" style={{ height: 480 }}>
+          {/* Loading state overlay */}
+          {aiMode && !aiCode && isGenerating && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 bg-[var(--color-panel)]">
+              <div className="flex gap-1">
+                {[0, 150, 300].map(d => (
+                  <span key={d} className="w-[6px] h-[6px] rounded-full animate-pulse" style={{ backgroundColor: AI_ACCENT, animationDelay: `${d}ms` }} />
+                ))}
+              </div>
+              <p className="text-[12px] text-[var(--color-text-muted)]">Generating {meta.label} schema…</p>
+              <p className="text-[10px] text-[var(--color-text-muted)] opacity-60">Using {providerLabel} {model ? `/ ${model}` : ''}</p>
+            </div>
+          )}
+          {/* Error state */}
+          {aiMode && aiError && !aiCode && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-[var(--color-panel)]">
+              <p className="text-[13px] text-[var(--color-error)]">⚠️ Generation failed</p>
+              <p className="text-[11px] text-[var(--color-text-muted)] max-w-[400px] text-center">{aiError}</p>
+              <button
+                type="button"
+                onClick={triggerAiGeneration}
+                className="mt-2 px-3 py-1.5 rounded-lg text-[11px] cursor-pointer border"
+                style={{ color: AI_ACCENT, borderColor: `color-mix(in srgb, ${AI_ACCENT} 30%, transparent)` }}
+              >
+                Try again
+              </button>
+            </div>
+          )}
+          <EditorView
+            value={displayCode}
+            language={editorLang}
+            readOnly
+            height="480px"
+            wordWrap={wrapLines}
+          />
+        </div>
+      </div>
+    </ModalView>
   );
 }

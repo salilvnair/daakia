@@ -202,7 +202,7 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
       onClose={onClose}
       title="AI API Discovery"
       subtitle="Probe common paths to discover available endpoints automatically"
-      size="xl"
+      size="lg"
       headerColor="var(--color-protocol-ai)"
       headerGradient
       headerIcon={

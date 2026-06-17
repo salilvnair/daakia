@@ -178,7 +178,7 @@ export function SplitPanelView({
             width: pillW,
             height: pillH,
             borderRadius: 9999,
-            background: pillActive ? accent : 'var(--color-surface-border)',
+            background: pillActive ? accent : `color-mix(in srgb, ${accent} 50%, var(--color-surface-border))`,
             transition: `${isHoriz ? 'height' : 'width'} 150ms ease, background 150ms ease`,
             pointerEvents: 'none',
           }}

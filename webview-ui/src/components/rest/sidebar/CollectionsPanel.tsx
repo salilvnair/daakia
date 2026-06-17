@@ -741,6 +741,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           )}
           <ContextMenuView
             open={headerMenu?.kind === 'importExport'}
+            anchorEl={null}
             position={headerMenu?.kind === 'importExport' ? { x: headerMenu.x, y: headerMenu.y } : undefined}
             onClose={() => setHeaderMenu(null)}
             items={[
@@ -760,6 +761,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           />
           <ContextMenuView
             open={headerMenu?.kind === 'more'}
+            anchorEl={null}
             position={headerMenu?.kind === 'more' ? { x: headerMenu.x, y: headerMenu.y } : undefined}
             onClose={() => setHeaderMenu(null)}
             items={[

@@ -96,7 +96,7 @@ export function AiSchemaDriftModal({ onClose }: Props) {
       footerRight={
         <AIButtonView
           label={loading ? 'Detecting Drift…' : 'Detect Schema Drift'}
-          size="sm"
+          size="md"
           accentColor={ACCENT}
           disabled={loading}
           onClick={handleDetect}

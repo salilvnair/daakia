@@ -9,7 +9,7 @@ import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
 import type { CollectionTreeNode } from '../../services/collections';
-import { ModalView, AIButtonView, ButtonView, EditorView, SplitPanelView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, EditorView, SplitPanelView, ResizablePanelView } from '../../dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface Props {
@@ -137,7 +137,7 @@ export function AiCompatibilityScorerModal({ collectionNode, onClose }: Props) {
         <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: 0 }}>
           Describe two API versions. AI will score breaking changes by severity and generate a migration guide.
         </p>
-        <div style={{ height: 240 }}>
+        <ResizablePanelView defaultHeight={240} minHeight={160} maxHeight={520} borderRadius={8}>
           <SplitPanelView
             direction="horizontal"
             accentColor={ACCENT}
@@ -177,7 +177,7 @@ export function AiCompatibilityScorerModal({ collectionNode, onClose }: Props) {
               </div>
             }
           />
-        </div>
+        </ResizablePanelView>
 
         {error && (
           <p style={{

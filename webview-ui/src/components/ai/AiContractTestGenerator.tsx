@@ -146,18 +146,7 @@ export const AiContractTestGenerator = forwardRef<AiContractTestHandle, Props>(
         headerColor={ACCENT}
         size="md"
         footerLeft={
-          !generated && !loading ? (
-            <ButtonView
-              size="md"
-              variant="primary"
-              iconLeft={<SparkleIcon size={11} />}
-              accentColor={ACCENT}
-              onClick={handleGenerate}
-              disabled={!hasResponse}
-            >
-              Generate Test Script
-            </ButtonView>
-          ) : canInsert ? (
+          canInsert ? (
             <ButtonView size="md" variant="ghost" onClick={handleGenerate} disabled={!hasResponse}>
               Regenerate
             </ButtonView>
@@ -173,6 +162,17 @@ export const AiContractTestGenerator = forwardRef<AiContractTestHandle, Props>(
               onClick={() => { onApply(generated); setVisible(false); }}
             >
               Insert into Script
+            </ButtonView>
+          ) : !generated && !loading ? (
+            <ButtonView
+              size="md"
+              variant="primary"
+              iconLeft={<SparkleIcon size={11} />}
+              accentColor={ACCENT}
+              onClick={handleGenerate}
+              disabled={!hasResponse}
+            >
+              Generate Test Script
             </ButtonView>
           ) : undefined
         }

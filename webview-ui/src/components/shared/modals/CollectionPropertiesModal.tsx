@@ -55,7 +55,7 @@ export function CollectionPropertiesModal({ open, collectionName, properties, on
       }
     >
       {/* Tab bar */}
-      <div style={{ borderBottom: '1px solid var(--color-surface-border)', padding: '8px 18px 0' }}>
+      <div className="px-3 pt-2.5 pb-0" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <TabView
           tabs={TABS}
           activeTab={activeTab}

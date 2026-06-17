@@ -5,7 +5,7 @@ import { getDisplayMethod } from '../../../services/request/request-service';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { SparkleIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, TrashIcon, MoreVerticalIcon, RenameIcon, CopyIcon, ChevronRightIcon, CheckCircleFilledIcon } from '../../../icons';
 import { ConfirmDialog } from '../index';
-import { ModalView, ButtonView, IconButtonView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '../../../dui';
+import { ModalView, ButtonView, IconButtonView, TextInputView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '../../../dui';
 
 const PROTOCOL_ACCENT: Record<string, string> = {
   rest: 'var(--color-primary)',
@@ -342,27 +342,29 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
           <div className="space-y-1.5">
             <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">Request name</label>
             <div className="flex items-center gap-2">
-              <input
+              <TextInputView
                 ref={inputRef}
-                type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-                className="flex-1 h-[32px] px-3 rounded-lg bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[12.5px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--modal-accent)]"
+                size="md"
+                accentColor={accent}
+                style={{ flex: 1 }}
               />
-              <button
-                type="button"
-                title={aiNaming ? 'Generating name…' : 'AI: Suggest a name for this request'}
+              <IconButtonView
+                icon={<SparkleIcon size={15} className={aiNaming ? 'animate-pulse' : ''} />}
+                size="md"
+                tooltip={aiNaming ? 'Generating name…' : 'AI: Suggest a name for this request'}
                 disabled={aiNaming}
+                accentColor={accent}
+                active={aiNaming}
                 onClick={() => {
-                  // Heuristic fallback (immediate while AI loads)
                   const url = tab?.url || '';
                   const parts = url.replace(/https?:\/\//, '').split('/').filter(Boolean);
                   const endpoint = parts.length > 1 ? parts.slice(1).join(' ') : parts[0] || 'request';
                   const heuristic = `${getDisplayMethod(tab!)} ${endpoint}`.slice(0, 60);
                   setName(heuristic);
 
-                  // AI-powered suggestion
                   const pid = `ai-name-${Date.now()}`;
                   aiNameReqIdRef.current = pid;
                   aiNameAccRef.current = '';
@@ -388,16 +390,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
                     mcpServerConfigs: [],
                   });
                 }}
-                className="flex items-center justify-center w-[32px] h-[32px] rounded-lg border border-[var(--color-input-border)] cursor-pointer transition-all disabled:opacity-50"
-                style={{
-                  color: aiNaming ? accent : 'var(--color-text-muted)',
-                  borderColor: aiNaming ? accent : 'var(--color-input-border)',
-                }}
-                onMouseEnter={e => { if (!aiNaming) (e.currentTarget as HTMLElement).style.color = accent; }}
-                onMouseLeave={e => { if (!aiNaming) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'; }}
-              >
-                <SparkleIcon size={16} className={aiNaming ? 'animate-pulse' : ''} />
-              </button>
+              />
             </div>
           </div>
 

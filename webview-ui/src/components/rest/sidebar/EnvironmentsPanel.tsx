@@ -325,6 +325,7 @@ export function EnvironmentsPanel() {
           <div className="flex flex-col items-center justify-center h-full px-4 text-center">
             <p className="text-[12px] text-[var(--color-text-muted)] mb-3">No custom environments yet</p>
             <ButtonView
+              variant="primary"
               size="md"
               accentColor={getProtocolAccent(activeProtocol as any)}
               onClick={openCreateModal}
