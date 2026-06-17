@@ -2,7 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
 import { postMsg } from '../../vscode';
-import { SplitButton, HighlightedInput, type SplitButtonItem } from '../shared';
+import { HighlightedInput } from '../shared';
+import { ButtonView, IconButtonView, DropDownButtonView, type ContextMenuItem } from '../../dui';
 import { saveRequest } from '../../services/request';
 import { ConnectIcon, DisconnectIcon, SaveIcon, MoreVerticalIcon, SparkleIcon } from '../../icons';
 import { useMockSuggestions } from '../../hooks/useMockSuggestions';
@@ -12,9 +13,12 @@ import { AiGqlFederationModal } from '../ai/AiGqlFederationModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { logUiEvent } from '../../store/ui-audit-store';
 
+const ACCENT = 'var(--color-protocol-graphql)';
+
 /**
  * GraphQL URL bar — endpoint input + Connect/Disconnect button + AI Tools ⋮ menu.
  * Connect triggers schema introspection. Run is in the query editor.
+ * All interactive elements use size="lg" matching REST UrlBar.
  */
 export function GraphQLUrlBar() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
@@ -30,7 +34,6 @@ export function GraphQLUrlBar() {
   const [showPatternStatus, setShowPatternStatus] = useState(false);
   const [showFederationModal, setShowFederationModal] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
-  const overflowBtnRef = useRef<HTMLButtonElement>(null);
 
   const isConnected = !!activeTab?.authData?.['gql_connected'];
 
@@ -68,10 +71,27 @@ export function GraphQLUrlBar() {
 
   if (!activeTab) return null;
 
+  const isConnecting = activeTab.authData?.['gql_connected'] === 'connecting';
+
+  const handleSave = () => {
+    const saved = saveRequest(activeTab);
+    if (saved) useTabsStore.getState().updateTab(activeTab.id, { dirty: false });
+  };
+
+  const saveItems: ContextMenuItem[] = [
+    {
+      id: 'save-as',
+      label: 'Save as',
+      icon: <SaveIcon size={13} />,
+      // iconColor: 'var(--color-ctx-close-saved)',
+      onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
+    },
+  ];
+
   return (
     <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
       {/* Protocol badge */}
-      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-graphql)] bg-[rgba(229,53,171,0.1)]">
+      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-graphql)] bg-[color-mix(in_srgb,var(--color-protocol-graphql)_10%,transparent)]">
         GQL
       </span>
 
@@ -85,67 +105,58 @@ export function GraphQLUrlBar() {
         suggestions={urlSuggestions}
         mockServers={mockSuggestions}
         protocolHints={['http://', 'https://']}
-        accentColor="var(--color-protocol-graphql)"
+        accentColor={ACCENT}
       />
 
-      {/* Connect/Disconnect button */}
+      {/* Connect/Disconnect button — size="lg" matching REST UrlBar */}
       {!isConnected ? (
-        <button
-          type="button"
+        <ButtonView
+          label={isConnecting ? 'Connecting...' : 'Connect'}
+          variant="primary"
+          size="lg"
+          iconLeft={<ConnectIcon size={12} />}
+          accentColor={ACCENT}
+          disabled={!activeTab.url.trim() || isConnecting}
           onClick={handleConnect}
-          disabled={!activeTab.url.trim() || activeTab.authData?.['gql_connected'] === 'connecting'}
-          className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[var(--color-protocol-graphql)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity flex items-center gap-1.5 flex-shrink-0"
-        >
-          <ConnectIcon size={12} />
-          {activeTab.authData?.['gql_connected'] === 'connecting' ? 'Connecting...' : 'Connect'}
-        </button>
+        />
       ) : (
-        <button
-          type="button"
+        <ButtonView
+          label="Disconnect"
+          variant="primary"
+          size="lg"
+          iconLeft={<DisconnectIcon size={12} />}
+          accentColor="var(--color-error)"
           onClick={handleDisconnect}
-          className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[rgba(239,68,68,0.12)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.2)] cursor-pointer transition-colors flex items-center gap-1.5 flex-shrink-0"
-        >
-          <DisconnectIcon size={12} />
-          Disconnect
-        </button>
+        />
       )}
 
-      {/* Save SplitButton */}
-      <SplitButton
+      {/* Save DropDownButton — size="lg" matching REST UrlBar */}
+      <DropDownButtonView
         label="Save"
+        icon={<SaveIcon size={13} />}
         variant="secondary"
-        onClick={() => {
-          const saved = saveRequest(activeTab);
-          if (saved) useTabsStore.getState().updateTab(activeTab.id, { dirty: false });
-        }}
-        icon={<SaveIcon />}
+        size="lg"
+        onPrimaryClick={handleSave}
         items={saveItems}
+        align="right"
       />
 
-      {/* AI Tools ⋮ menu */}
+      {/* AI Tools ⋮ menu — size="lg" matching REST UrlBar */}
       <div className="flex-shrink-0 relative" ref={overflowRef}>
-        <button
-          ref={overflowBtnRef}
-          type="button"
+        <IconButtonView
+          icon={<MoreVerticalIcon size={15} />}
+          title="AI tools"
+          size="lg"
+          active={showOverflow}
           onClick={() => {
-            if (!showOverflow && overflowBtnRef.current) {
-              const rect = overflowBtnRef.current.getBoundingClientRect();
+            if (!showOverflow && overflowRef.current) {
+              const rect = overflowRef.current.getBoundingClientRect();
               const spaceBelow = window.innerHeight - rect.bottom;
               setOverflowDir(spaceBelow < 180 ? 'up' : 'down');
             }
             setShowOverflow(p => !p);
           }}
-          title="AI tools"
-          className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
-          style={{
-            color: showOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-            backgroundColor: showOverflow ? 'rgba(255,255,255,0.08)' : 'transparent',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
-          onMouseLeave={e => { e.currentTarget.style.backgroundColor = showOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
-        >
-          <MoreVerticalIcon size={15} />
-        </button>
+        />
 
         {showOverflow && (
           <div
@@ -197,12 +208,12 @@ export function GraphQLUrlBar() {
             {aiEnabled('gqlFederation') && (
               <button type="button"
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
-                style={{ color: 'var(--color-protocol-graphql)' }}
-                onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-graphql) 8%, transparent)`; }}
+                style={{ color: ACCENT }}
+                onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
                 onMouseLeave={e => { e.currentTarget.style.background = ''; }}
                 onClick={() => { setShowFederationModal(true); setShowOverflow(false); }}
               >
-                <SparkleIcon size={12} style={{ color: 'var(--color-protocol-graphql)', flexShrink: 0 }} />
+                <SparkleIcon size={12} style={{ color: ACCENT, flexShrink: 0 }} />
                 Federation Explorer ✦
               </button>
             )}
@@ -227,13 +238,3 @@ export function GraphQLUrlBar() {
     </div>
   );
 }
-
-const saveItems: SplitButtonItem[] = [
-  {
-    id: 'save-as',
-    label: 'Save as',
-    icon: <SaveIcon />,
-    iconColor: 'var(--color-ctx-close-saved)',
-    onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
-  },
-];

@@ -695,8 +695,16 @@ export const useTabsStore = create<TabsState>((set, get) => {
     },
 
     hydrateSnapshot: (tabs, activeTabId, activeProtocol) => {
-      // Restore tabs without response data (response is too large to persist)
-      const restored = tabs.map(t => createDefaultTab({ ...t, response: null, loading: false }));
+      // Restore tabs without response data (response is too large to persist).
+      // Strip GQL connection state — the socket is gone after a reload, so always start fresh.
+      const restored = tabs.map(t => {
+        const base = createDefaultTab({ ...t, response: null, loading: false });
+        if (base.protocol === 'graphql' && base.authData?.gql_connected) {
+          const { gql_connected, gql_schema, gql_schema_sdl, ...restAuth } = base.authData as Record<string, string>;
+          base.authData = restAuth;
+        }
+        return base;
+      });
       set({ tabs: restored, activeTabId, activeProtocol });
     },
   };

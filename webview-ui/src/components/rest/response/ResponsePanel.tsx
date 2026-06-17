@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
-import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { ScriptResultsView, RequestProgressOverlay } from '../../shared';
 import { TabView } from '../../../dui';
 import { cancelRequest } from '../../../services/request';
@@ -11,7 +10,6 @@ import { RawResponseView } from './RawResponseView';
 import { HeadersView } from './HeadersView';
 import { CookiesView } from './CookiesView';
 import { TimelineView } from './TimelineView';
-import { AiSmartRetryAdvisor } from '../../ai/AiSmartRetryAdvisor';
 import { ResponseAiToolbar } from './ResponseAiToolbar';
 import { postMsg } from '../../../vscode';
 import { useDebugStore } from '../../../store/debug-store';
@@ -26,8 +24,6 @@ export function ResponsePanel() {
   const [wrapLines, setWrapLines] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
   const [showFilter, setShowFilter] = useState(false);
-  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
-
   useEffect(() => {
     const pref = useUiStateStore.getState().getPref(`response.subtab.${activeTabId}`, 'json') as ResponseView;
     setActiveViewLocal(pref);
@@ -169,18 +165,6 @@ export function ResponsePanel() {
           <ScriptResultsView response={response} />
         )}
       </div>
-
-      {/* AI Smart Retry Advisor — shown below status bar for error responses */}
-      {response.status >= 400 && aiEnabled('smartRetryAdvisor') && (
-        <div className="px-3 pt-1.5 pb-0.5">
-          <AiSmartRetryAdvisor
-            status={response.status}
-            responseBody={response.body || ''}
-            method={requestMethod}
-            url={requestUrl}
-          />
-        </div>
-      )}
 
     </div>
   );

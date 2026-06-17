@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import type { DuiSize } from '../../core/DuiTypes';
+import { useButtonBase } from '../../core/ButtonBase';
 import { CopyIcon, CheckIcon } from '../../../icons';
 
 export interface CopyButtonViewProps {
   text: string;
-  size?: number;
+  /** DUI size token — controls button dimensions and icon size (default: 'md') */
+  size?: DuiSize;
   title?: string;
   accentColor?: string;
   className?: string;
@@ -12,7 +15,7 @@ export interface CopyButtonViewProps {
 
 export function CopyButtonView({
   text,
-  size = 14,
+  size = 'md',
   title = 'Copy',
   accentColor,
   className = '',
@@ -20,6 +23,7 @@ export function CopyButtonView({
 }: CopyButtonViewProps) {
   const [copied, setCopied] = useState(false);
   const accent = accentColor || 'var(--color-success)';
+  const base = useButtonBase(size);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -35,12 +39,12 @@ export function CopyButtonView({
       title={copied ? 'Copied!' : title}
       className={className}
       style={{
-        width: 28,
-        height: 28,
+        width: base.height,
+        height: base.height,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 5,
+        borderRadius: base.borderRadius,
         border: 'none',
         cursor: 'pointer',
         background: 'transparent',
@@ -58,7 +62,7 @@ export function CopyButtonView({
         e.currentTarget.style.color = copied ? accent : 'var(--color-text-muted)';
       }}
     >
-      {copied ? <CheckIcon size={size} /> : <CopyIcon size={size} />}
+      {copied ? <CheckIcon size={base.iconSize} /> : <CopyIcon size={base.iconSize} />}
     </button>
   );
 }

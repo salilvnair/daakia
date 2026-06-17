@@ -123,7 +123,7 @@ export function AiSmartTestSuiteModal({ collectionNode, onClose }: Props) {
         </div>
       }
       footerLeft={result && !loading ? (
-        <CopyButtonView text={result} size={13} title="Copy test suite" accentColor={ACCENT} />
+        <CopyButtonView text={result} title="Copy test suite" accentColor={ACCENT} />
       ) : undefined}
       footerRight={
         result && !loading ? (

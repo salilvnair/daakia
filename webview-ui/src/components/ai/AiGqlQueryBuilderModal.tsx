@@ -6,12 +6,12 @@
  * Gate: gqlQueryBuilder feature flag
  */
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
+import { ModalView, MultilineInputView, ButtonView, AIButtonView } from '../../dui';
 
 interface Props {
   onClose: () => void;
@@ -44,9 +44,6 @@ export function AiGqlQueryBuilderModal({ onClose, onApply }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const streamRef = useRef('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => { textareaRef.current?.focus(); }, []);
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -94,118 +91,81 @@ export function AiGqlQueryBuilderModal({ onClose, onApply }: Props) {
     onClose();
   };
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={e => e.stopPropagation()}
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Query Builder ✦"
+      size="md"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)`, flexShrink: 0 }}>
+          <SparkleIcon size={13} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={
+        <AIButtonView
+          label={loading ? 'Generating…' : 'Generate'}
+          action="generate"
+          size="md"
+          accentColor={ACCENT}
+          disabled={!description.trim() || loading}
+          onClick={handleGenerate}
+        />
+      }
+      footerRight={
+        generated.trim() ? (
+          <ButtonView
+            label="Apply to editor"
+            variant="secondary"
+            size="md"
+            accentColor={ACCENT}
+            disabled={!generated.trim()}
+            onClick={handleApply}
+          />
+        ) : undefined
+      }
     >
-      <div
-        className="relative flex flex-col rounded-2xl border shadow-2xl overflow-hidden"
-        style={{
-          backgroundColor: 'var(--color-panel)',
-          borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`,
-          width: 560,
-          maxHeight: '80vh',
-        }}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-5 py-3.5 border-b flex-shrink-0"
-          style={{ borderColor: 'var(--color-surface-border)' }}
-        >
-          <div className="flex items-center gap-2">
-            <SparkleIcon size={14} style={{ color: ACCENT }} />
-            <span className="text-[13px] font-semibold" style={{ color: ACCENT }}>Query Builder ✦</span>
-          </div>
-          <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-[var(--color-hover)] cursor-pointer transition-colors" style={{ color: 'var(--color-text-muted)' }}>
-            <CloseIcon size={13} />
-          </button>
+      <div className="flex flex-col gap-4">
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
+            Describe what you want to query or mutate
+          </label>
+          <MultilineInputView
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) handleGenerate(); }}
+            placeholder="e.g. Get all users with their orders and payment status, sorted by creation date"
+            rows={3}
+            size="md"
+            accentColor={ACCENT}
+            autoFocus
+          />
+          <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-muted)' }}>⌘+Enter to generate</p>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-5 flex flex-col gap-4 min-h-0">
+        {error && (
+          <p className="text-[11px] px-3 py-2 rounded-lg" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>
+            {error}
+          </p>
+        )}
+
+        {(generated || loading) && (
           <div>
-            <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
-              Describe what you want to query or mutate
-            </label>
-            <textarea
-              ref={textareaRef}
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) handleGenerate(); }}
-              placeholder="e.g. Get all users with their orders and payment status, sorted by creation date"
-              rows={3}
-              className="w-full resize-none rounded-lg px-3 py-2 text-[12px] border outline-none transition-all"
-              style={{
-                backgroundColor: 'var(--color-surface)',
-                borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
-                color: 'var(--color-text-primary)',
-              }}
-            />
-            <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-muted)' }}>⌘+Enter to generate</p>
-          </div>
-
-          {error && (
-            <p className="text-[11px] px-3 py-2 rounded-lg" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>
-              {error}
-            </p>
-          )}
-
-          {(generated || loading) && (
-            <div>
-              <p className="text-[10.5px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Generated query</p>
-              <div
-                className="rounded-lg border overflow-hidden"
-                style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface)' }}
-              >
-                {loading && !generated ? (
-                  <p className="px-4 py-3 text-[11px] animate-pulse" style={{ color: ACCENT }}>Generating…</p>
-                ) : (
-                  <MdViewer content={'```graphql\n' + generated + '\n```'} />
-                )}
-              </div>
+            <p className="text-[10.5px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Generated query</p>
+            <div
+              className="rounded-lg border overflow-hidden"
+              style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface)' }}
+            >
+              {loading && !generated ? (
+                <p className="px-4 py-3 text-[11px] animate-pulse" style={{ color: ACCENT }}>Generating…</p>
+              ) : (
+                <MdViewer content={'```graphql\n' + generated + '\n```'} />
+              )}
             </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div
-          className="flex items-center justify-between px-5 py-3 border-t flex-shrink-0"
-          style={{ borderColor: 'var(--color-surface-border)' }}
-        >
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={!description.trim() || loading}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: ACCENT, color: '#fff' }}
-          >
-            <SparkleIcon size={12} />
-            {loading ? 'Generating…' : 'Generate'}
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer transition-all hover:bg-[var(--color-hover)]"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleApply}
-              disabled={!generated.trim()}
-              className="px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, color: ACCENT }}
-            >
-              Apply to editor
-            </button>
           </div>
-        </div>
+        )}
       </div>
-    </div>,
-    document.body
+    </ModalView>
   );
 }

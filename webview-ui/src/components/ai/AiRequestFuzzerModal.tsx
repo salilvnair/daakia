@@ -242,10 +242,22 @@ Generate the fuzz payloads:`;
   const handleReset = () => { setPhase('idle'); setPayloads([]); setResults([]); setAnalysis(''); };
 
   const footerLeft = (() => {
+    if (phase === 'generating') return (
+      <span className="animate-pulse" style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+        Generating fuzz payloads…
+      </span>
+    );
+    if (phase === 'generated' || phase === 'done') return (
+      <ButtonView variant="secondary" size="md" onClick={handleReset}>Reset</ButtonView>
+    );
+    return undefined;
+  })();
+
+  const footerRight = (() => {
     if (phase === 'idle') return (
       <ButtonView
         variant="danger"
-        size="sm"
+        size="md"
         iconLeft={<SparkleIcon size={11} />}
         onClick={handleGenerate}
         disabled={!activeTab?.bodyRaw?.trim() || selectedCategories.size === 0}
@@ -253,26 +265,12 @@ Generate the fuzz payloads:`;
         Generate Payloads with AI
       </ButtonView>
     );
-    if (phase === 'generating') return (
-      <span className="animate-pulse" style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-        Generating fuzz payloads…
-      </span>
-    );
     if (phase === 'generated' || phase === 'done') return (
-      <>
-        <ButtonView
-          variant="danger"
-          size="sm"
-          iconLeft={<PlayIcon size={11} />}
-          onClick={handleRunFuzz}
-          disabled={phase === 'running' || payloads.length === 0}
-        >
-          Run Fuzz Tests ({filtered.length})
-        </ButtonView>
+      <div className="flex items-center gap-2">
         {phase === 'done' && (
           <ButtonView
             variant="ghost"
-            size="sm"
+            size="md"
             iconLeft={<SparkleIcon size={11} />}
             onClick={handleAnalyze}
             style={{
@@ -284,14 +282,19 @@ Generate the fuzz payloads:`;
             Analyze Results
           </ButtonView>
         )}
-      </>
+        <ButtonView
+          variant="danger"
+          size="md"
+          iconLeft={<PlayIcon size={11} />}
+          onClick={handleRunFuzz}
+          disabled={phase === 'running' || payloads.length === 0}
+        >
+          Run Fuzz Tests ({filtered.length})
+        </ButtonView>
+      </div>
     );
     return undefined;
   })();
-
-  const footerRight = (phase === 'generated' || phase === 'done') ? (
-    <ButtonView variant="secondary" size="sm" onClick={handleReset}>Reset</ButtonView>
-  ) : undefined;
 
   const headerIcon = (
     <div style={{
@@ -312,7 +315,6 @@ Generate the fuzz payloads:`;
       subtitle={`Generate edge-case payloads to find API bugs • ${activeTab?.method} ${activeTab?.url?.slice(0, 40) || 'No request'}`}
       headerIcon={headerIcon}
       headerColor="var(--color-error)"
-      headerGradient
       size="lg"
       footerLeft={footerLeft}
       footerRight={footerRight}

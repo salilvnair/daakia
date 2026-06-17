@@ -16,7 +16,7 @@ const CONFIG_TABS: TabItem[] = [
   { id: 'params', label: 'Params' },
   { id: 'headers', label: 'Headers' },
   { id: 'body', label: 'Body' },
-  { id: 'auth', label: 'Auth' },
+  { id: 'auth', label: 'Authorization' },
   { id: 'scripts', label: 'Scripts' },
   { id: 'variables', label: 'Variables' },
 ];

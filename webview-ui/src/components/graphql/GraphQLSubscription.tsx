@@ -123,7 +123,7 @@ export function GraphQLSubscription() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
+      <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--color-surface-border)] bg-[var(--color-surface)]">
         <div className="flex items-center gap-2">
           <RadioIcon size={12} className="text-[var(--color-protocol-graphql)]" />
           <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Subscription</span>

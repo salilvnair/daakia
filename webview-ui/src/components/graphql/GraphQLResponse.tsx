@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { CodeEditor, RequestProgressOverlay, CopyButton } from '../shared';
+import { RequestProgressOverlay } from '../shared';
 import { cancelRequest } from '../../services/request';
 import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
-import { DataSchemaModal } from '../rest/response/DataSchemaModal';
 import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
-import { SparkleIcon } from '../../icons';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import { EditorView, CopyButtonView } from '../../dui';
 
 /**
  * GraphQL Response panel — shows JSON response, errors, and metadata.
  */
 export function GraphQLResponse() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
-  const [showPatternLearning, setShowPatternLearning] = useState(false);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   if (!activeTab) return null;
@@ -27,7 +24,7 @@ export function GraphQLResponse() {
   // No response yet
   if (!response && !activeTab.loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-[var(--color-text-muted)] gap-2">
+      <div className="flex-1 flex flex-col items-center justify-center bg-[var(--color-panel)] text-[var(--color-text-muted)] gap-2">
         <span className="text-[28px] opacity-20">⟨/⟩</span>
         <p className="text-[12px]">Execute a query to see the response</p>
         <p className="text-[10px] opacity-60">Ctrl+Enter to run</p>
@@ -88,6 +85,8 @@ export function GraphQLResponse() {
             <AiActionButton
               mode="explain"
               label="Explain"
+              size="xs"
+              accentColor="var(--color-accent)"
               response={response}
               requestMethod="GQL"
               requestUrl={activeTab.url || ''}
@@ -99,6 +98,8 @@ export function GraphQLResponse() {
             <AiActionButton
               mode="follow-up"
               label="Follow-ups"
+              size="xs"
+              accentColor="var(--color-accent)"
               response={response}
               requestMethod="GQL"
               requestUrl={activeTab.url || ''}
@@ -106,89 +107,46 @@ export function GraphQLResponse() {
               onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
             />
           )}
-          {aiEnabled('schemaGraphql') && (
-          <button
-            type="button"
-            onClick={() => setShowSchema(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
-            style={{
-              color: 'var(--color-protocol-ai)',
-              borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-              backgroundColor: 'transparent',
-            }}
-            title="Generate Data Schema"
-          >
-            <SparkleIcon size={10} />
-            Schema
-          </button>
+          {isFailure && aiEnabled('smartRetryAdvisor') && (
+            <AiSmartRetryAdvisor
+              status={response.status}
+              responseBody={response.body}
+              method="GQL"
+              url={activeTab.url || ''}
+            />
           )}
-          {/* 8.2: Record Baseline ✦ */}
           {aiEnabled('patternBaseline') && (
-            <button
-              type="button"
-              onClick={() => setShowPatternLearning(p => !p)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
-              style={{
-                color: showPatternLearning ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)',
-                borderColor: showPatternLearning
-                  ? 'color-mix(in srgb, var(--color-protocol-ai) 35%, transparent)'
-                  : 'color-mix(in srgb, var(--color-text-muted) 25%, transparent)',
-                backgroundColor: 'transparent',
-              }}
-              title="Record / compare response pattern baseline"
-            >
-              <SparkleIcon size={10} />
-              Baseline
-            </button>
+            <AiResponsePatternLearning
+              responseBody={response.body || ''}
+              method="GQL"
+              url={activeTab.url || ''}
+              status={response.status}
+            />
           )}
-          {/* 8.1: ⋮ AI Actions menu */}
-          {aiEnabled('assertGeneration') || aiEnabled('semanticValidator') || aiEnabled('responseTransformer') || aiEnabled('responseDiff') ? (
+          {(aiEnabled('assertGeneration') || aiEnabled('semanticValidator') || aiEnabled('responseTransformer') || aiEnabled('responseDiff')) && (
             <AiResponseActionsMenu
               tabId={activeTab.id}
               response={response}
               requestMethod="GQL"
               requestUrl={activeTab.url || ''}
             />
-          ) : null}
-          <CopyButton text={response.body ? formatJson(response.body) : ''} size={14} />
+          )}
+          <CopyButtonView
+            text={response.body ? formatJson(response.body) : ''}
+            accentColor="var(--color-success)"
+          />
         </div>
       </div>
 
-      {/* 8.2: Pattern Learning panel */}
-      {showPatternLearning && aiEnabled('patternBaseline') && (
-        <div className="border-b border-[var(--color-surface-border)]">
-          <AiResponsePatternLearning
-            responseBody={response.body}
-            method="GQL"
-            url={activeTab.url || ''}
-            status={response.status}
-          />
-        </div>
-      )}
-
       <div className="flex-1 min-h-0 overflow-hidden">
-        <CodeEditor
+        <EditorView
           value={response.body ? formatJson(response.body) : ''}
-          onChange={() => {}}
           language="json"
           height="100%"
           readOnly
         />
       </div>
 
-      {/* 8.3: Smart Retry Advisor — shown on GQL errors or HTTP failure */}
-      {isFailure && aiEnabled('smartRetryAdvisor') && (
-        <div className="border-t border-[var(--color-surface-border)]">
-          <AiSmartRetryAdvisor
-            status={response.status}
-            responseBody={response.body}
-            method="GQL"
-            url={activeTab.url || ''}
-          />
-        </div>
-      )}
-
-      {showSchema && <DataSchemaModal body={response.body} onClose={() => setShowSchema(false)} />}
     </div>
   );
 }

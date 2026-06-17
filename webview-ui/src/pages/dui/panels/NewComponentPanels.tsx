@@ -2382,7 +2382,7 @@ export function CopyButtonPanel() {
       <Row label="Default — copies text on click (check to clipboard)">
         <CopyButtonView text="Hello, world!" />
         <CopyButtonView text="import { CopyButtonView } from 'dui';" />
-        <CopyButtonView text="Bearer eyJhbGci..." title="Copy token" size={15} />
+        <CopyButtonView text="Bearer eyJhbGci..." title="Copy token" />
       </Row>
       <Row label="Accent colors">
         <CopyButtonView text="primary" accentColor="var(--color-primary)" title="Copy (primary)" />
@@ -2390,16 +2390,18 @@ export function CopyButtonPanel() {
         <CopyButtonView text="warning" accentColor="var(--color-warning)" title="Copy (warning)" />
         <CopyButtonView text="success" accentColor="var(--color-success)" title="Copy (success)" />
       </Row>
-      <Row label="Custom size">
-        <CopyButtonView text="small (10)" size={10} />
-        <CopyButtonView text="default (14)" size={14} />
-        <CopyButtonView text="large (18)" size={18} />
-        <CopyButtonView text="xl (22)" size={22} />
+      <Row label="DUI sizes (xxs → xl)">
+        <CopyButtonView text="xxs" size="xxs" title="xxs" />
+        <CopyButtonView text="xs" size="xs" title="xs" />
+        <CopyButtonView text="sm" size="sm" title="sm" />
+        <CopyButtonView text="md (default)" title="md" />
+        <CopyButtonView text="lg" size="lg" title="lg" />
+        <CopyButtonView text="xl" size="xl" title="xl" />
       </Row>
       <Row label="Inline usage — alongside a code snippet">
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)', borderRadius: 6, padding: '4px 8px' }}>
           <code style={{ fontSize: 11, color: 'var(--color-text-primary)', flex: 1 }}>npm install daakia</code>
-          <CopyButtonView text="npm install daakia" size={13} />
+          <CopyButtonView text="npm install daakia" size="sm" />
         </div>
       </Row>
     </div>

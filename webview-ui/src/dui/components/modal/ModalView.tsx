@@ -168,11 +168,14 @@ export function ModalView({
       )}
 
       {/* Body */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: noPadding ? 0 : mode === 'inline' ? '14px 16px' : '18px',
-      }}>
+      <div
+        className="dui_modal__body"
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: noPadding ? 0 : mode === 'inline' ? '14px 12px 14px 16px' : '18px 12px 18px 18px',
+        }}
+      >
         {children}
       </div>
 

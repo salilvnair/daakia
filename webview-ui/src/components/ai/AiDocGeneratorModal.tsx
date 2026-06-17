@@ -127,7 +127,7 @@ export function AiDocGeneratorModal({ collectionNode, onClose }: Props) {
         </div>
       }
       footerLeft={result && !loading ? (
-        <CopyButtonView text={result} size={13} title="Copy documentation" accentColor={ACCENT} />
+        <CopyButtonView text={result} title="Copy documentation" accentColor={ACCENT} />
       ) : undefined}
       footerRight={
         <AIButtonView

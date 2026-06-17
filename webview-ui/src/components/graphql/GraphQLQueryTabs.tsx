@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { PlusIcon, CloseIcon } from '../../icons';
 
@@ -8,6 +8,8 @@ export interface QueryTab {
   query: string;
   variables: string;
 }
+
+const ACCENT = 'var(--color-protocol-graphql)';
 
 /**
  * GraphQL Query Tabs — inner tabs within the Query sub-tab for multiple queries per connection.
@@ -19,6 +21,9 @@ export function GraphQLQueryTabs() {
   // ── All hooks declared unconditionally at the top ──────────────────────────
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const handleSelectQuery = useCallback((queryId: string) => {
     if (!activeTab) return;
@@ -111,6 +116,21 @@ export function GraphQLQueryTabs() {
     });
   }, [activeTab, updateTab]);
 
+  const startEditing = (e: React.MouseEvent, q: QueryTab) => {
+    e.stopPropagation();
+    setEditingId(q.id);
+    setEditingName(q.name);
+    // Focus the input on next frame
+    requestAnimationFrame(() => editInputRef.current?.select());
+  };
+
+  const commitEdit = () => {
+    if (editingId && editingName.trim()) {
+      handleRenameQuery(editingId, editingName.trim());
+    }
+    setEditingId(null);
+  };
+
   // ── Early returns AFTER all hooks ──────────────────────────────────────────
   if (!activeTab) return null;
 
@@ -125,23 +145,39 @@ export function GraphQLQueryTabs() {
       {queries.map(q => (
         <div
           key={q.id}
-          onClick={() => handleSelectQuery(q.id)}
+          onClick={() => { if (editingId !== q.id) handleSelectQuery(q.id); }}
           className={`group flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors border-b-2 max-w-[140px] ${
             q.id === activeQueryId
-              ? 'text-[var(--color-protocol-graphql)] border-[var(--color-protocol-graphql)] bg-[rgba(229,53,171,0.04)]'
+              ? 'border-[var(--color-protocol-graphql)] bg-[color-mix(in_srgb,var(--color-protocol-graphql)_4%,transparent)]'
               : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
           }`}
+          style={{ color: q.id === activeQueryId ? ACCENT : undefined }}
         >
-          <span
-            className="truncate"
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              const newName = prompt('Rename query tab:', q.name);
-              if (newName?.trim()) handleRenameQuery(q.id, newName.trim());
-            }}
-          >
-            {q.name}
-          </span>
+          {editingId === q.id ? (
+            <input
+              ref={editInputRef}
+              value={editingName}
+              onChange={e => setEditingName(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={e => {
+                if (e.key === 'Enter') commitEdit();
+                if (e.key === 'Escape') setEditingId(null);
+                e.stopPropagation();
+              }}
+              onClick={e => e.stopPropagation()}
+              className="truncate bg-transparent outline-none border-b border-[var(--color-protocol-graphql)] min-w-0 w-full text-[11px]"
+              style={{ color: ACCENT }}
+              autoFocus
+            />
+          ) : (
+            <span
+              className="truncate"
+              onDoubleClick={(e) => startEditing(e, q)}
+              title="Double-click to rename"
+            >
+              {q.name}
+            </span>
+          )}
           {queries.length > 1 && (
             <button
               type="button"

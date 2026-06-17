@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { CodeEditor } from '../shared';
-import { WrapLinesIcon, CopyIcon, DownloadIcon } from '../../icons';
+import { EditorView, IconButtonView, CopyButtonView } from '../../dui';
+import { WrapLinesIcon, DownloadIcon } from '../../icons';
 
 /**
  * GraphQL Schema panel — shows the full SDL (Schema Definition Language)
@@ -31,10 +31,6 @@ export function GraphQLSchemaPanel() {
     );
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(sdl);
-  };
-
   const handleDownload = () => {
     const blob = new Blob([sdl], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -51,40 +47,32 @@ export function GraphQLSchemaPanel() {
       <div className="px-3 py-2 border-b border-[var(--color-surface-border)] flex items-center justify-between">
         <h3 className="text-[12px] font-bold text-[var(--color-text-primary)] uppercase tracking-wide">Schema</h3>
         <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            onClick={() => setWordWrap(!wordWrap)}
-            className={`h-[26px] w-[26px] flex items-center justify-center cursor-pointer rounded transition-colors ${
-              wordWrap ? 'text-[var(--color-protocol-graphql)] bg-[rgba(136,71,255,0.08)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
-            }`}
+          <IconButtonView
+            icon={<WrapLinesIcon size={14} />}
             title="Toggle word wrap"
-          >
-            <WrapLinesIcon size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="h-[26px] w-[26px] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] cursor-pointer rounded transition-colors"
+            size="md"
+            active={wordWrap}
+            accentColor="var(--color-protocol-graphql)"
+            onClick={() => setWordWrap(w => !w)}
+          />
+          <IconButtonView
+            icon={<DownloadIcon size={14} />}
             title="Download schema"
-          >
-            <DownloadIcon size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="h-[26px] w-[26px] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] cursor-pointer rounded transition-colors"
+            size="md"
+            onClick={handleDownload}
+          />
+          <CopyButtonView
+            text={sdl}
             title="Copy schema"
-          >
-            <CopyIcon size={14} />
-          </button>
+            accentColor="var(--color-success)"
+          />
         </div>
       </div>
 
       {/* SDL viewer */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <CodeEditor
+        <EditorView
           value={sdl}
-          onChange={() => {}}
           language="graphql"
           height="100%"
           readOnly

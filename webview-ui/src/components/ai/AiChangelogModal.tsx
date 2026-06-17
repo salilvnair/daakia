@@ -157,7 +157,7 @@ export function AiChangelogModal({ collectionNode, onClose }: Props) {
         </div>
       }
       footerLeft={changelog && !loading ? (
-        <CopyButtonView text={changelog} size={13} title="Copy changelog" accentColor={ACCENT} />
+        <CopyButtonView text={changelog} title="Copy changelog" accentColor={ACCENT} />
       ) : undefined}
       footerRight={
         changelog && !loading ? (

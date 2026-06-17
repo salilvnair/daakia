@@ -136,7 +136,7 @@ export function GenerateCodeModal({ open, tab, onClose }: GenerateCodeModalProps
                   size="md"
                   onClick={handleDownload}
                 />
-                <CopyButtonView text={code} size={14} title="Copy" />
+                <CopyButtonView text={code} title="Copy" />
               </div>
             </div>
             <div className="rounded-lg border border-[var(--color-input-border)] bg-[var(--color-input-bg)] overflow-hidden">

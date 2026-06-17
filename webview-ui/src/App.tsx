@@ -940,10 +940,22 @@ export default function App() {
           const { tabId, error: gqlErr } = msg;
           const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
           if (tab) {
-            const { gql_connected, ...restAuth } = tab.authData || {};
-            useTabsStore.getState().updateTab(tabId, { authData: restAuth });
+            const { gql_connected, ...restAuth } = (tab.authData || {}) as Record<string, string>;
+            useTabsStore.getState().updateTab(tabId, {
+              authData: restAuth,
+              loading: false,
+              response: {
+                status: 0,
+                statusText: 'Error',
+                headers: {},
+                body: JSON.stringify({ errors: [{ message: gqlErr }] }),
+                size: 0,
+                time: 0,
+                contentType: 'application/json',
+                cookies: [],
+              },
+            });
           }
-          useToastStore.getState().addToast({ type: 'error', message: `GraphQL: ${gqlErr}` });
           break;
         }
         case 'newRequest': {
@@ -2135,12 +2147,26 @@ export default function App() {
               onResizeEnd={handleSplitResizeEnd}
               style={{ flex: 1, minHeight: 0 }}
               first={
-                <div className="flex flex-col h-full overflow-hidden" onFocus={handleRequestFocus}>
+                <div
+                  className="flex flex-col h-full overflow-hidden"
+                  onFocus={e => {
+                    const el = e.target as HTMLElement;
+                    const tag = el.tagName.toLowerCase();
+                    if (tag === 'input' || tag === 'textarea' || el.isContentEditable) handleRequestFocus();
+                  }}
+                >
                   <RequestPanel />
                 </div>
               }
               second={
-                <div className="flex flex-col h-full overflow-hidden" onFocus={handleResponseFocus}>
+                <div
+                  className="flex flex-col h-full overflow-hidden"
+                  onFocus={e => {
+                    const el = e.target as HTMLElement;
+                    const tag = el.tagName.toLowerCase();
+                    if (tag === 'input' || tag === 'textarea' || el.isContentEditable) handleResponseFocus();
+                  }}
+                >
                   <ResponsePanel />
                 </div>
               }

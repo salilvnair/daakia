@@ -146,9 +146,9 @@ export function InfoPopupView({
                   borderRadius: '4px',
                   fontSize: '10px',
                   fontFamily: 'monospace',
-                  background: 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
-                  color: 'var(--color-primary-light)',
-                  border: '1px solid color-mix(in srgb, var(--color-primary) 22%, transparent)',
+                  background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
+                  color: 'var(--color-accent)',
+                  border: '1px solid color-mix(in srgb, var(--color-accent) 22%, transparent)',
                 }}>
                   {item.code}
                 </span>
@@ -178,7 +178,7 @@ export function InfoPopupView({
               alignItems: 'center',
               gap: '4px',
               fontSize: '11px',
-              color: 'var(--color-primary)',
+              color: 'var(--color-accent)',
               textDecoration: 'none',
               fontWeight: 500,
             }}

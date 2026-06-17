@@ -1,5 +1,5 @@
 /**
- * AiAssistPopover — lightweight inline AI assist panel for response-context actions.
+ * AiAssistPopover — AI assist panel for response-context actions.
  *
  * Tasks: 4.3.1 (Error Diagnosis), 4.3.2 (Response Explainer), 4.3.3 (Request from Response)
  *
@@ -9,7 +9,7 @@
  * - "Open AI Chat" opens a new AI tab with the Q&A pre-loaded as initial conversation
  * - Responses are rendered by MdViewer (marked + highlight.js) instead of raw text
  */
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useTabsStore, type ResponseData } from '../../store/tabs-store';
@@ -17,7 +17,7 @@ import { SparkleIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared';
 import type { DuiSize } from '../../dui';
-import { useButtonBase } from '../../dui';
+import { useButtonBase, ModalView } from '../../dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -74,8 +74,6 @@ function buildFollowUpRequestsPrompt(
 
 export type AssistMode = 'error-diagnosis' | 'explain' | 'follow-up';
 
-const POPOVER_WIDTH = 504;
-
 interface AiAssistPopoverProps {
   mode: AssistMode;
   response: ResponseData;
@@ -83,7 +81,6 @@ interface AiAssistPopoverProps {
   requestUrl: string;
   requestBody?: string;
   onClose: () => void;
-  /** The element to anchor the popover below — right edge aligns with anchor right edge. */
   anchorEl?: HTMLElement | null;
 }
 
@@ -96,10 +93,31 @@ export function AiAssistPopover({
   onClose,
   anchorEl,
 }: AiAssistPopoverProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const popoverId = useRef(`ai-assist-${Date.now()}`).current;
   const accumulatedRef = useRef('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; visible: boolean }>({
+    top: -9999, left: -9999, visible: false,
+  });
+
+  useLayoutEffect(() => {
+    if (!anchorEl || !popRef.current) return;
+    const id = requestAnimationFrame(() => {
+      if (!popRef.current) return;
+      const btn = anchorEl.getBoundingClientRect();
+      const pop = popRef.current.getBoundingClientRect();
+      const W = 380;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let left = btn.right - W;
+      let top = btn.bottom + 6;
+      left = Math.max(8, Math.min(left, vw - W - 8));
+      if (top + pop.height > vh - 8) top = btn.top - pop.height - 6;
+      setPos({ top: Math.max(8, top), left, visible: true });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [anchorEl]);
 
   const providers = useAiProvidersStore(s => s.providers);
   const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
@@ -140,6 +158,9 @@ export function AiAssistPopover({
     : mode === 'explain'
       ? 'Explaining response…'
       : 'Suggesting follow-up requests…';
+
+  const modeIcon = mode === 'error-diagnosis' ? '🚨' : mode === 'explain' ? '🔍' : '🔄';
+  const modeTitle = mode === 'error-diagnosis' ? 'AI Error Diagnosis' : mode === 'explain' ? 'Response Explainer' : 'Follow-up Requests';
 
   // ── AI request effect ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -217,47 +238,6 @@ export function AiAssistPopover({
     }
   }, [text]);
 
-  // Viewport-aware positioning — right-aligned by default (extends leftward from anchor's right edge)
-  useEffect(() => {
-    if (!menuRef.current || !anchorEl) return;
-    const menu = menuRef.current;
-    const place = () => {
-      const r = anchorEl.getBoundingClientRect();
-      const menuH = menu.scrollHeight;
-      // Right-align: popover right edge = anchor right edge → extends leftward
-      let left = r.right - POPOVER_WIDTH;
-      let top = r.bottom + 4;
-      // Clamp horizontally
-      if (left < 8) left = Math.min(r.left, window.innerWidth - POPOVER_WIDTH - 8);
-      if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
-      if (left < 8) left = 8;
-      // Flip above if not enough space below
-      if (top + menuH > window.innerHeight - 8) top = Math.max(8, r.top - menuH - 4);
-      menu.style.left = `${left}px`;
-      menu.style.top = `${top}px`;
-    };
-    place();
-    const raf = requestAnimationFrame(place);
-    window.addEventListener('scroll', place, { passive: true, capture: true });
-    window.addEventListener('resize', place, { passive: true });
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('scroll', place, { capture: true });
-      window.removeEventListener('resize', place);
-    };
-  }, [anchorEl, text]); // re-run when text changes (height grows)
-
-  // Outside-click close
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current?.contains(e.target as Node)) return;
-      if (anchorEl?.contains(e.target as Node)) return;
-      onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [anchorEl, onClose]);
-
   // ── Regenerate ─────────────────────────────────────────────────────────────
   const handleRegenerate = useCallback(() => {
     assistCache.delete(fingerprint);
@@ -274,158 +254,109 @@ export function AiAssistPopover({
     onClose();
   }, [provider, model, onClose]);
 
-  const modeIcon = mode === 'error-diagnosis' ? '🚨' : mode === 'explain' ? '🔍' : '🔄';
-  const modeTitle = mode === 'error-diagnosis' ? 'AI Error Diagnosis' : mode === 'explain' ? 'Response Explainer' : 'Follow-up Requests';
+  const streamingDots = streaming && !error ? (
+    <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+      {[0, 100, 200].map(d => (
+        <span
+          key={d}
+          className="w-[3px] h-[3px] rounded-full animate-pulse"
+          style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }}
+        />
+      ))}
+    </div>
+  ) : undefined;
 
-  const card = (
-    <div
-      ref={menuRef}
-      style={{
-        position: 'fixed',
-        zIndex: 99998,
-        width: POPOVER_WIDTH,
-        left: -9999,
-        top: -9999,
-        background: 'var(--color-elevated, var(--color-surface))',
-        border: '1px solid var(--color-surface-border)',
-        borderRadius: 8,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px var(--color-panel-border, rgba(255,255,255,.04))',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
+  const footerLeft = !streaming && !error && text ? (
+    <button
+      type="button"
+      onClick={handleRegenerate}
+      className="flex items-center gap-1 text-[10px] cursor-pointer transition-opacity opacity-50 hover:opacity-100"
+      style={{ color: 'var(--color-text-muted)' }}
     >
-      {/* Compact header */}
+      <RefreshIcon size={9} />
+      Regenerate
+    </button>
+  ) : undefined;
+
+  const footerRight = error ? (
+    <button
+      type="button"
+      onClick={handleRegenerate}
+      className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer border"
+      style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)` }}
+    >
+      <RefreshIcon size={9} /> Retry
+    </button>
+  ) : (text ? (
+    <button
+      type="button"
+      onClick={handleOpenAiChat}
+      className="text-[10px] font-medium cursor-pointer transition-colors hover:opacity-80"
+      style={{ color: ACCENT }}
+    >
+      Open AI Chat →
+    </button>
+  ) : undefined);
+
+  return createPortal(
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
       <div
+        ref={popRef}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 10px',
-          background: `color-mix(in srgb, ${ACCENT} 10%, var(--color-surface))`,
-          borderBottom: `1px solid color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
-          flexShrink: 0,
+          position: 'fixed',
+          top: pos.top,
+          left: pos.left,
+          width: 380,
+          zIndex: 9999,
+          visibility: pos.visible ? 'visible' : 'hidden',
         }}
       >
-        <div
-          style={{
-            width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: `color-mix(in srgb, ${ACCENT} 22%, transparent)`,
-          }}
+        <ModalView
+          mode="inline"
+          open
+          onClose={onClose}
+          title={`${modeIcon} ${modeTitle}`}
+          headerColor={ACCENT}
+          headerIcon={
+            <div style={{
+              width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: `color-mix(in srgb, ${ACCENT} 22%, transparent)`,
+            }}>
+              <SparkleIcon size={10} style={{ color: ACCENT }} />
+            </div>
+          }
+          headerRight={streamingDots}
+          footerLeft={footerLeft}
+          footerRight={footerRight}
         >
-          <SparkleIcon size={10} style={{ color: ACCENT }} />
-        </div>
-        <span style={{
-          fontSize: 11, fontWeight: 600, flex: 1,
-          color: `color-mix(in srgb, ${ACCENT} 80%, var(--color-text-primary))`,
-        }}>
-          {modeIcon} {modeTitle}
-        </span>
-        {streaming && !error && (
-          <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            {[0, 100, 200].map(d => (
-              <span
-                key={d}
-                className="w-[3px] h-[3px] rounded-full animate-pulse"
-                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }}
-              />
-            ))}
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 22, height: 22, borderRadius: 5, border: 'none',
-            background: 'transparent', cursor: 'pointer',
-            fontSize: 13, color: 'var(--color-text-muted)', padding: 0, flexShrink: 0,
-            transition: 'color 0.15s, background 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-error)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 12%, transparent)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent'; }}
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Body */}
-      <div
-        ref={scrollRef}
-        style={{ padding: '10px 12px', maxHeight: 312, overflowY: 'auto', flex: 1 }}
-      >
-        {streaming && !text && !error && (
-          <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic', margin: 0 }}>
-            {modeLabel}
-          </p>
-        )}
-        {error && (
-          <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>⚠️ {error}</p>
-        )}
-        {text && (
-          <div style={{ fontSize: 11 }}>
-            <MdViewer content={text} />
-            {streaming && (
-              <span
-                className="inline-block w-[2px] h-[13px] ml-0.5 animate-pulse align-text-bottom"
-                style={{ backgroundColor: ACCENT }}
-              />
+          <div ref={scrollRef} style={{ maxHeight: 300, overflowY: 'auto' }}>
+            {streaming && !text && !error && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic', margin: 0 }}>
+                {modeLabel}
+              </p>
+            )}
+            {error && (
+              <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>⚠️ {error}</p>
+            )}
+            {text && (
+              <div style={{ fontSize: 11 }}>
+                <MdViewer content={text} />
+                {streaming && (
+                  <span
+                    className="inline-block w-[2px] h-[13px] ml-0.5 animate-pulse align-text-bottom"
+                    style={{ backgroundColor: ACCENT }}
+                  />
+                )}
+              </div>
             )}
           </div>
-        )}
+        </ModalView>
       </div>
-
-      {/* Compact footer */}
-      {((!streaming && !error && text) || error) && (
-        <div
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '6px 10px',
-            borderTop: '1px solid var(--color-surface-border)',
-            flexShrink: 0,
-          }}
-        >
-          <div>
-            {!streaming && !error && text && (
-              <button
-                type="button"
-                onClick={handleRegenerate}
-                className="flex items-center gap-1 text-[10px] cursor-pointer transition-opacity opacity-50 hover:opacity-100"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                <RefreshIcon size={9} />
-                Regenerate
-              </button>
-            )}
-          </div>
-          <div>
-            {error ? (
-              <button
-                type="button"
-                onClick={handleRegenerate}
-                className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer border"
-                style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)` }}
-              >
-                <RefreshIcon size={9} /> Retry
-              </button>
-            ) : (text ? (
-              <button
-                type="button"
-                onClick={handleOpenAiChat}
-                className="text-[10px] font-medium cursor-pointer transition-colors hover:opacity-80"
-                style={{ color: ACCENT }}
-              >
-                Open AI Chat →
-              </button>
-            ) : null)}
-          </div>
-        </div>
-      )}
-    </div>
+    </>,
+    document.body,
   );
-
-  return createPortal(card, document.body);
 }
 
 // ─── Trigger Button + Modal Shell ─────────────────────────────────────────────

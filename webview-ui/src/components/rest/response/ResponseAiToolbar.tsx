@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { AiAssistPopover, type AssistMode } from '../../ai/AiAssistPopover';
 import { AiResponsePatternLearning } from '../../ai/AiResponsePatternLearning';
+import { AiSmartRetryAdvisor } from '../../ai/AiSmartRetryAdvisor';
 import { AiResponseActionsMenu } from './AiResponseActionsMenu';
 import { AIButtonView } from '../../../dui';
 import type { ResponseData } from '../../../store/tabs-store';
@@ -18,6 +19,7 @@ export function ResponseAiToolbar({ tabId, response, requestMethod, requestUrl }
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
   const explainRef = useRef<HTMLDivElement>(null);
   const followUpRef = useRef<HTMLDivElement>(null);
+  const isError = response.status >= 400;
 
   return (
     <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
@@ -28,6 +30,7 @@ export function ResponseAiToolbar({ tabId, response, requestMethod, requestUrl }
               action="explain"
               label="Explain"
               size="xs"
+              accentColor="var(--color-accent)"
               onClick={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
             />
           </div>
@@ -51,6 +54,7 @@ export function ResponseAiToolbar({ tabId, response, requestMethod, requestUrl }
               action="ask"
               label="Follow-ups"
               size="xs"
+              accentColor="var(--color-accent)"
               onClick={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
             />
           </div>
@@ -65,6 +69,15 @@ export function ResponseAiToolbar({ tabId, response, requestMethod, requestUrl }
             />
           )}
         </>
+      )}
+
+      {isError && aiEnabled('smartRetryAdvisor') && (
+        <AiSmartRetryAdvisor
+          status={response.status}
+          responseBody={response.body || ''}
+          method={requestMethod}
+          url={requestUrl}
+        />
       )}
 
       {aiEnabled('recordBaseline') && (

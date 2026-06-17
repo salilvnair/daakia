@@ -261,7 +261,6 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
             />
             <CopyButtonView
               text={displayCode}
-              size={14}
               title="Copy to clipboard"
               accentColor="var(--color-success)"
             />

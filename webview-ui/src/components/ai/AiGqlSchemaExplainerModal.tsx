@@ -6,12 +6,12 @@
  * Gate: gqlSchemaExplainer feature flag
  */
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
+import { ModalView, ButtonView } from '../../dui';
 
 interface Props {
   onClose: () => void;
@@ -80,92 +80,55 @@ export function AiGqlSchemaExplainerModal({ onClose }: Props) {
     });
   };
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={e => e.stopPropagation()}
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Schema Explainer ✦"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)`, flexShrink: 0 }}>
+          <SparkleIcon size={13} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={
+        !loading && explanation ? (
+          <ButtonView
+            label="Refresh"
+            variant="secondary"
+            size="md"
+            accentColor={ACCENT}
+            onClick={startExplain}
+          />
+        ) : undefined
+      }
     >
-      <div
-        className="relative flex flex-col rounded-2xl border shadow-2xl overflow-hidden"
-        style={{
-          backgroundColor: 'var(--color-panel)',
-          borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`,
-          width: 620,
-          maxHeight: '82vh',
-        }}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-5 py-3.5 border-b flex-shrink-0"
-          style={{ borderColor: 'var(--color-surface-border)' }}
-        >
-          <div className="flex items-center gap-2">
-            <SparkleIcon size={14} style={{ color: ACCENT }} />
-            <span className="text-[13px] font-semibold" style={{ color: ACCENT }}>Schema Explainer ✦</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {!loading && explanation && (
-              <button
-                type="button"
-                onClick={startExplain}
-                className="text-[11px] px-3 py-1 rounded-md cursor-pointer transition-all"
-                style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 10%, transparent)` }}
-              >
-                Refresh
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-[var(--color-hover)] cursor-pointer transition-colors" style={{ color: 'var(--color-text-muted)' }}>
-              <CloseIcon size={13} />
-            </button>
-          </div>
+      {!hasSchema && !loading && !explanation && (
+        <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+          <SparkleIcon size={24} style={{ color: ACCENT, opacity: 0.4 }} />
+          <p className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
+            No schema loaded. Connect to a GraphQL endpoint first to load the schema.
+          </p>
         </div>
+      )}
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-5 min-h-0">
-          {!hasSchema && !loading && !explanation && (
-            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-              <SparkleIcon size={24} style={{ color: ACCENT, opacity: 0.4 }} />
-              <p className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
-                No schema loaded. Connect to a GraphQL endpoint first to load the schema.
-              </p>
-            </div>
-          )}
+      {error && (
+        <p className="text-[11px] px-3 py-2 rounded-lg mb-4" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>
+          {error}
+        </p>
+      )}
 
-          {error && (
-            <p className="text-[11px] px-3 py-2 rounded-lg mb-4" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>
-              {error}
-            </p>
-          )}
-
-          {loading && !explanation && (
-            <div className="flex flex-col items-center justify-center gap-3 py-12">
-              <SparkleIcon size={20} style={{ color: ACCENT }} className="animate-pulse" />
-              <p className="text-[11px] animate-pulse" style={{ color: ACCENT }}>Analyzing schema…</p>
-            </div>
-          )}
-
-          {explanation && (
-            <MdViewer content={explanation} />
-          )}
+      {loading && !explanation && (
+        <div className="flex flex-col items-center justify-center gap-3 py-12">
+          <SparkleIcon size={20} style={{ color: ACCENT }} className="animate-pulse" />
+          <p className="text-[11px] animate-pulse" style={{ color: ACCENT }}>Analyzing schema…</p>
         </div>
+      )}
 
-        {/* Footer */}
-        <div
-          className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0"
-          style={{ borderColor: 'var(--color-surface-border)' }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer transition-all hover:bg-[var(--color-hover)]"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+      {explanation && (
+        <MdViewer content={explanation} />
+      )}
+    </ModalView>
   );
 }

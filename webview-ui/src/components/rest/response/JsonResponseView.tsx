@@ -92,7 +92,7 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
             onClick={handleDownload}
           />
 
-          <CopyButtonView text={formattedBody} size={14} title="Copy response" />
+          <CopyButtonView text={formattedBody} title="Copy response" />
 
           {/* ⋮ More menu */}
           <div className="relative" ref={moreMenuRef}>

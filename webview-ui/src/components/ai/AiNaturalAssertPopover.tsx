@@ -7,15 +7,14 @@
  * Explicit refresh is required to re-generate.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
 import { postMsg } from '../../vscode';
-import { SparkleIcon, RefreshIcon, CloseIcon } from '../../icons';
+import { SparkleIcon, RefreshIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
+import { ModalView, MultilineInputView, ButtonView, IconButtonView } from '../../dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
-const POPOVER_WIDTH = 440;
 
 interface Props {
   tabId: string;
@@ -23,6 +22,7 @@ interface Props {
   requestMethod: string;
   requestUrl: string;
   onClose: () => void;
+  /** Kept for API compat — ModalView is centred, anchorEl is no longer used */
   anchorEl?: HTMLElement | null;
 }
 
@@ -50,15 +50,13 @@ IMPORTANT RULES:
 - Keep it concise and readable
 - Do NOT use console.log or any other APIs not listed above`;
 
-export function AiNaturalAssertPopover({ tabId, response, requestMethod, requestUrl, onClose, anchorEl }: Props) {
-  const menuRef = useRef<HTMLDivElement>(null);
+export function AiNaturalAssertPopover({ tabId, response, requestMethod, requestUrl, onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
 
   const { getTabActions, updateAssert } = useAiResponseActionsStore();
   const cached = getTabActions(tabId);
 
-  // Initialize from cached state
   const [input, setInput] = useState(cached.assert?.input ?? '');
   const [generated, setGenerated] = useState(cached.assert?.result ?? '');
   const [streaming, setStreaming] = useState(false);
@@ -67,13 +65,11 @@ export function AiNaturalAssertPopover({ tabId, response, requestMethod, request
   const reqIdRef = useRef('');
   const accRef = useRef('');
 
-  // Persist input changes to store
   const handleInputChange = (val: string) => {
     setInput(val);
     updateAssert(tabId, { input: val });
   };
 
-  // Listen for AI streaming events (match on tabId)
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data as Record<string, unknown>;
@@ -161,149 +157,75 @@ Generate the dk.* test script:`;
 
   const hasCachedResult = !!generated;
 
-  // Viewport-aware positioning — same approach as AiAssistPopover
-  useEffect(() => {
-    if (!menuRef.current || !anchorEl) return;
-    const menu = menuRef.current;
-    const place = () => {
-      const r = anchorEl.getBoundingClientRect();
-      const menuH = menu.scrollHeight;
-      let left = r.right - POPOVER_WIDTH;
-      let top = r.bottom + 4;
-      if (left < 8) left = Math.min(r.left, window.innerWidth - POPOVER_WIDTH - 8);
-      if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
-      if (left < 8) left = 8;
-      if (top + menuH > window.innerHeight - 8) top = Math.max(8, r.top - menuH - 4);
-      menu.style.left = `${left}px`;
-      menu.style.top = `${top}px`;
-    };
-    place();
-    const raf = requestAnimationFrame(place);
-    window.addEventListener('scroll', place, { passive: true, capture: true });
-    window.addEventListener('resize', place, { passive: true });
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('scroll', place, { capture: true });
-      window.removeEventListener('resize', place);
-    };
-  }, [anchorEl]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current?.contains(e.target as Node)) return;
-      if (anchorEl?.contains(e.target as Node)) return;
-      onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [anchorEl, onClose]);
-
-  const card = (
-    <div
-      ref={menuRef}
-      style={{
-        position: 'fixed',
-        zIndex: 99998,
-        width: POPOVER_WIDTH,
-        left: -9999,
-        top: -9999,
-        borderRadius: 8,
-        border: '1px solid var(--color-surface-border)',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: 'var(--color-panel)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px var(--color-panel-border, rgba(255,255,255,.04))',
-      }}
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="AI Assertions"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{
+          width: 22, height: 22, borderRadius: 5, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: `color-mix(in srgb, ${ACCENT} 22%, transparent)`,
+        }}>
+          <SparkleIcon size={11} style={{ color: ACCENT }} />
+        </div>
+      }
+      headerRight={hasCachedResult && !streaming ? (
+        <IconButtonView
+          icon={<RefreshIcon size={11} />}
+          title="Clear result and re-generate"
+          size="sm"
+          onClick={handleRefresh}
+        />
+      ) : undefined}
+      size="md"
+      footerLeft={hasCachedResult && !streaming ? (
+        <ButtonView
+          label={applied ? '✓ Applied' : 'Apply to Script'}
+          variant="secondary"
+          size="md"
+          accentColor={applied ? 'var(--color-success)' : ACCENT}
+          disabled={applied}
+          onClick={handleApply}
+        />
+      ) : undefined}
+      footerRight={
+        <ButtonView
+          label={streaming ? 'Generating…' : hasCachedResult ? 'Re-generate' : 'Generate'}
+          size="md"
+          accentColor={ACCENT}
+          iconLeft={<SparkleIcon size={12} style={{ color: ACCENT }} />}
+          disabled={!input.trim() || streaming}
+          onClick={handleGenerate}
+        />
+      }
     >
-      {/* Header */}
-      <div
-        className="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
-        style={{
-          borderColor: 'var(--color-surface-border)',
-          backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, var(--color-panel))`,
-        }}
-      >
-        <SparkleIcon size={11} style={{ color: ACCENT }} />
-        <span className="text-[11px] font-semibold" style={{ color: ACCENT }}>AI Assertions</span>
-
-        {/* Refresh — clear cached result to re-generate */}
-        {hasCachedResult && !streaming && (
-          <button
-            type="button"
-            onClick={handleRefresh}
-            className="ml-auto mr-1 w-5 h-5 flex items-center justify-center rounded cursor-pointer hover:opacity-70 transition-opacity"
-            title="Clear result and re-generate"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            <RefreshIcon size={11} />
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={onClose}
-          className={`${hasCachedResult && !streaming ? '' : 'ml-auto'} flex items-center justify-center w-[22px] h-[22px] rounded cursor-pointer transition-colors`}
-          style={{ color: 'var(--color-text-muted)', background: 'transparent', border: 'none', flexShrink: 0 }}
-          onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-error)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 12%, transparent)'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent'; }}
-        >
-          <CloseIcon size={11} />
-        </button>
-      </div>
-
-      {/* Input */}
-      <div className="p-3 flex flex-col gap-2">
-        <textarea
+      <div className="flex flex-col gap-3">
+        <MultilineInputView
           value={input}
           onChange={e => handleInputChange(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleGenerate(); }}
           placeholder="e.g. response should have 10 users each with valid email"
-          rows={2}
+          rows={3}
+          size="md"
+          accentColor={ACCENT}
           autoFocus={!hasCachedResult}
-          className="w-full px-3 py-2 text-[12px] rounded-md border resize-none"
-          style={{
-            backgroundColor: 'var(--color-input-bg)',
-            borderColor: 'var(--color-input-border)',
-            color: 'var(--color-text-primary)',
-          }}
         />
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={!input.trim() || streaming}
-            className="h-[26px] px-3 text-[11px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-            style={{ backgroundColor: ACCENT, color: '#fff' }}
-          >
-            {streaming ? 'Generating…' : hasCachedResult ? 'Re-generate' : 'Generate'}
-          </button>
-          <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>Ctrl+Enter to generate</span>
-        </div>
+        <p style={{ fontSize: 9.5, color: 'var(--color-text-muted)', margin: 0 }}>Ctrl+Enter to generate</p>
+
+        {generated && (
+          <div>
+            <span className="block text-[10.5px] mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
+              Generated script{streaming ? ' ▋' : ''}
+            </span>
+            <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+              <MdViewer content={`\`\`\`javascript\n${generated}${streaming ? ' ▋' : ''}\n\`\`\``} />
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Generated code */}
-      {generated && (
-        <div className="border-t" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="px-3 pt-2 pb-1 flex items-center justify-between">
-            <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>Generated script</span>
-            <button
-              type="button"
-              onClick={handleApply}
-              disabled={applied}
-              className="h-[22px] px-2.5 text-[10px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-60 transition-opacity"
-              style={{ backgroundColor: applied ? 'var(--color-success)' : ACCENT, color: '#fff' }}
-            >
-              {applied ? '✓ Applied' : 'Apply to Script'}
-            </button>
-          </div>
-          <div className="px-3 pb-3 overflow-y-auto" style={{ maxHeight: 240 }}>
-            <MdViewer content={`\`\`\`javascript\n${generated}${streaming ? ' ▋' : ''}\n\`\`\``} />
-          </div>
-        </div>
-      )}
-    </div>
+    </ModalView>
   );
-
-  return createPortal(card, document.body);
 }

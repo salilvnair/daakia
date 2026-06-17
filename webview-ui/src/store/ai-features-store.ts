@@ -244,7 +244,7 @@ export const AI_FEATURE_LABELS: Record<keyof AiFeatureFlags, {
   daakiaAiChat: {
     label: 'Daakia AI Chat Tab',
     description: 'The dedicated full-screen Daakia AI chat panel and "Ask AI" entry points',
-    group: 'Response & Diagnostics',
+    group: 'Chat',
     gates: 'Daakia AI tab (sparkle icon in sidebar) · "Ask AI" in URL bar ⋮ AI Tools menu (all protocols)',
   },
   patternBaseline: {

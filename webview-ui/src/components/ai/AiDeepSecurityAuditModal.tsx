@@ -123,7 +123,7 @@ export function AiDeepSecurityAuditModal({ collectionNode, onClose }: Props) {
         </div>
       }
       footerLeft={result && !loading ? (
-        <CopyButtonView text={result} size={13} title="Copy audit report" accentColor={ACCENT} />
+        <CopyButtonView text={result} title="Copy audit report" accentColor={ACCENT} />
       ) : undefined}
       footerRight={
         started ? (

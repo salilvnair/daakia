@@ -60,7 +60,7 @@ export function RawResponseView({ response, wrapLines, setWrapLines, tabId }: Ra
             tooltip="Download"
             onClick={handleDownload}
           />
-          <CopyButtonView text={response.body} size={14} />
+          <CopyButtonView text={response.body} />
 
           {tabId && (
             <div className="relative" ref={moreMenuRef}>

@@ -5,7 +5,8 @@
  */
 import { useEffect, useState } from 'react';
 import { useAiFeaturesStore, AI_FEATURE_LABELS, FEATURE_TO_TEMPLATE_KEY, type AiFeatureFlags } from '../../store/ai-features-store';
-import { SparkleIcon, ChevronRightIcon, BookOpenIcon } from '../../icons';
+import { SparkleIcon, ChevronRightIcon, BookOpenIcon, SearchIcon } from '../../icons';
+import { TextInputView } from '../../dui';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
 
 
@@ -13,6 +14,7 @@ const ACCENT = 'var(--color-protocol-ai)';
 
 // Group display order (matches AI_FEATURE_LABELS group names in ai-features-store.ts)
 const GROUP_ORDER = [
+  'Chat',
   'Response & Diagnostics',
   'REST Toolkit',
   'Schema & Contracts',
@@ -27,7 +29,8 @@ const GROUP_ORDER = [
 ];
 
 const GROUP_COLORS: Record<string, string> = {
-  'Response & Diagnostics': 'var(--color-protocol-ai)',
+  'Chat':                    'var(--color-protocol-ai)',
+  'Response & Diagnostics':  'var(--color-protocol-ai)',
   'REST Toolkit':            'var(--color-protocol-rest)',
   'Schema & Contracts':      'var(--color-success)',
   'Collections & Workflow':  'var(--color-primary)',
@@ -117,6 +120,7 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
   const { loadFeatures, features, setGroupEnabled, setAllEnabled } = useAiFeaturesStore();
   // Empty set = all groups expanded by default
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => { loadFeatures(); }, [loadFeatures]);
 
@@ -132,10 +136,23 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
   const enabledCount = featureKeys.filter(k => features[k]).length;
   const allEnabled = enabledCount === featureKeys.length;
 
+  const q = searchQuery.trim().toLowerCase();
+
+  const matchesSearch = (key: keyof AiFeatureFlags) => {
+    if (!q) return true;
+    const meta = AI_FEATURE_LABELS[key];
+    return (
+      meta.label.toLowerCase().includes(q) ||
+      meta.group.toLowerCase().includes(q) ||
+      meta.description.toLowerCase().includes(q) ||
+      (meta.gates ?? '').toLowerCase().includes(q)
+    );
+  };
+
   const grouped = GROUP_ORDER.map(g => ({
     group: g,
     color: GROUP_COLORS[g] ?? ACCENT,
-    keys: featureKeys.filter(k => AI_FEATURE_LABELS[k].group === g),
+    keys: featureKeys.filter(k => AI_FEATURE_LABELS[k].group === g && matchesSearch(k)),
   })).filter(g => g.keys.length > 0);
 
   return (
@@ -147,6 +164,18 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
             AI Features
           </span>
         </div>
+      </div>
+
+      {/* Search */}
+      <div className="px-5 py-3 border-b border-[var(--color-surface-border)] shrink-0">
+        <TextInputView
+          size="md"
+          placeholder="Filter by category, name, description…"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          iconLeft={<SearchIcon size={13} style={{ color: 'var(--color-text-muted)' }} />}
+          accentColor={ACCENT}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-5 py-4">
@@ -240,8 +269,8 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                     />
                   </button>
                 </div>
-                {/* Collapsible content */}
-                {!isCollapsed && (
+                {/* Collapsible content — force-expand when search is active */}
+                {(!isCollapsed || !!q) && (
                   <div
                     className="rounded-xl border overflow-hidden px-3 py-1"
                     style={{
