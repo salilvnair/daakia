@@ -3,8 +3,9 @@ import type { ResponseCookie } from '../../../store/tabs-store';
 export function CookiesView({ cookies }: { cookies: ResponseCookie[] }) {
   if (cookies.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-[13px] text-[var(--color-text-muted)]">No cookies in response</p>
+      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-[var(--color-text-muted)]">
+        <span className="text-[28px] opacity-20">⟨/⟩</span>
+        <p className="text-[12px]">No cookies in response</p>
       </div>
     );
   }

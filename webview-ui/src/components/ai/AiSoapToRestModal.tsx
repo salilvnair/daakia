@@ -3,10 +3,10 @@
  * Task 10.14 — AI SOAP to REST Migrator · Gate: soapToRest
  */
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
-import { CloseIcon, SparkleIcon, CopyIcon, CheckIcon, DownloadIcon } from '../../icons';
+import { SparkleIcon, CopyIcon, CheckIcon, DownloadIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, ButtonView, EditorView, SplitPanelView, ResizablePanelView } from '../../dui';
 
 interface Props {
   onClose: () => void;
@@ -14,7 +14,7 @@ interface Props {
 
 const ACCENT = 'var(--color-protocol-soap)';
 
-const PLACEHOLDER = `<definitions name="UserService"
+const PLACEHOLDER_WSDL = `<definitions name="UserService"
   targetNamespace="http://example.com/user"
   xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
   xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
@@ -116,71 +116,116 @@ openapi: "3.1.0"
     URL.revokeObjectURL(url);
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }} onMouseDown={e => e.stopPropagation()}>
-      <div className="relative flex flex-col rounded-2xl border shadow-2xl overflow-hidden" style={{ backgroundColor: 'var(--color-panel)', borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`, width: 820, maxHeight: '87vh' }}>
-        <div className="flex items-center justify-between px-5 py-3.5 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="flex items-center gap-2">
-            <SparkleIcon size={14} style={{ color: ACCENT }} />
-            <span className="text-[13px] font-semibold" style={{ color: ACCENT }}>SOAP → REST Migrator ✦</span>
+  const outputLang = output.trim().includes('openapi:') ? 'yaml' : 'markdown';
+
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="SOAP → REST Migrator ✦"
+      size="xl"
+      headerColor={ACCENT}
+      headerGradient
+      headerIcon={
+        <div style={{
+          width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: `color-mix(in srgb, ${ACCENT} 20%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`,
+        }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={
+        <AIButtonView
+          label={loading ? 'Migrating…' : 'Migrate to REST ✦'}
+          action="generate"
+          size="md"
+          accentColor={ACCENT}
+          disabled={(!wsdl.trim() && !activeTab?.wsdl) || loading}
+          onClick={migrate}
+        />
+      }
+      footerRight={
+        output ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ButtonView
+              variant="secondary"
+              size="md"
+              iconLeft={copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+              style={{ color: copied ? 'var(--color-success)' : ACCENT }}
+              onClick={handleCopy}
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </ButtonView>
+            <ButtonView
+              variant="secondary"
+              size="md"
+              iconLeft={<DownloadIcon size={12} />}
+              style={{ color: ACCENT }}
+              onClick={handleDownload}
+            >
+              Download
+            </ButtonView>
           </div>
-          <div className="flex items-center gap-2">
-            {output && (
-              <>
-                <button type="button" onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer" style={{ color: copied ? 'var(--color-success)' : ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 10%, transparent)` }}>
-                  {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}{copied ? 'Copied!' : 'Copy'}
-                </button>
-                <button type="button" onClick={handleDownload} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer" style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 10%, transparent)` }}>
-                  <DownloadIcon size={11} />Download
-                </button>
-              </>
-            )}
-            <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-[var(--color-hover)] cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
-              <CloseIcon size={13} />
-            </button>
-          </div>
+        ) : undefined
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Column headers */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <span style={{
+            fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: 'var(--color-text-muted)',
+          }}>
+            WSDL / SOAP Source
+          </span>
+          <span style={{
+            fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: ACCENT,
+          }}>
+            REST + OpenAPI 3.1
+          </span>
         </div>
 
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          {/* Left: WSDL input */}
-          <div className="flex flex-col flex-1 border-r min-w-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-            <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>WSDL / SOAP</span>
-            </div>
-            <textarea
-              value={wsdl}
-              onChange={e => setWsdl(e.target.value)}
-              className="flex-1 p-3 text-[11px] font-mono resize-none outline-none bg-transparent"
-              style={{ color: 'var(--color-text-primary)' }}
-              placeholder={PLACEHOLDER}
-            />
-          </div>
-          {/* Right: OpenAPI output */}
-          <div className="flex flex-col flex-1 min-w-0">
-            <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: ACCENT }}>REST + OpenAPI 3.1</span>
-            </div>
-            <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-3">
-              {loading && !output && <p className="text-[11px] animate-pulse" style={{ color: ACCENT }}>Migrating SOAP to REST…</p>}
-              {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-              {output && <pre className="text-[11px] font-mono whitespace-pre-wrap" style={{ color: 'var(--color-text-primary)' }}>{output}</pre>}
-              {!loading && !output && !error && <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Migration result will appear here…</p>}
-            </div>
-          </div>
-        </div>
+        {/* Resizable side-by-side editors */}
+        <ResizablePanelView defaultHeight={380} minHeight={180} maxHeight={560}>
+          <SplitPanelView
+            direction="horizontal"
+            defaultSplit={50}
+            minFirst={200}
+            minSecond={200}
+            first={
+              <EditorView
+                value={wsdl}
+                language="xml"
+                onChange={setWsdl}
+                height="100%"
+                placeholder={PLACEHOLDER_WSDL}
+              />
+            }
+            second={
+              <EditorView
+                value={output || (loading ? '' : '')}
+                language={outputLang}
+                height="100%"
+                readOnly={!loading && !!output}
+                placeholder={
+                  loading
+                    ? 'Migrating SOAP to REST…'
+                    : error
+                    ? `Error: ${error}`
+                    : 'Migration result will appear here…'
+                }
+              />
+            }
+          />
+        </ResizablePanelView>
 
-        <div className="flex items-center gap-3 px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <button type="button" onClick={migrate} disabled={(!wsdl.trim() && !activeTab?.wsdl) || loading}
-            className="flex items-center gap-2 h-[34px] px-5 rounded-xl text-[12px] font-semibold cursor-pointer text-white hover:opacity-90 transition-opacity disabled:opacity-40"
-            style={{ backgroundColor: ACCENT }}
-          >
-            <SparkleIcon size={11} />{loading ? 'Migrating…' : 'Migrate to REST ✦'}
-          </button>
-          <div className="flex-1" />
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer hover:bg-[var(--color-hover)]" style={{ color: 'var(--color-text-muted)' }}>Close</button>
-        </div>
+        {error && (
+          <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>⚠️ {error}</p>
+        )}
       </div>
-    </div>,
-    document.body
+    </ModalView>
   );
 }

@@ -37,6 +37,8 @@ export interface SelectTextInputViewProps {
   suggestions?: string[];
   /** Running mock server URLs — shown at the top with a server icon */
   mockServers?: MockServerSuggestion[];
+  /** Called when user picks a mock server entry (in addition to onInputChange) */
+  onMockServerSelect?: (url: string) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   // ─── DUI container props ──────────────────────────────────────────────────
   width?: DuiWidth;
@@ -64,6 +66,7 @@ export function SelectTextInputView({
   selectWidth,
   suggestions = [],
   mockServers = [],
+  onMockServerSelect,
   onKeyDown,
   width,
   borderRadius,
@@ -179,6 +182,11 @@ export function SelectTextInputView({
       window.removeEventListener('resize', track);
     };
   }, [showSuggestions]);
+
+  const handleMockSelect = (url: string) => {
+    handleSuggestionSelect(url);
+    onMockServerSelect?.(url);
+  };
 
   const handleSuggestionSelect = (val: string) => {
     suppressRef.current = true;
@@ -308,6 +316,7 @@ export function SelectTextInputView({
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: `6px ${base.paddingX}`,
+                  marginBottom: '2px',
                   borderRadius: 5, cursor: 'pointer',
                   fontSize: base.fontSize, fontWeight: isSelected ? 700 : 500,
                   color: opt.color ?? 'var(--color-text-primary)',
@@ -347,12 +356,13 @@ export function SelectTextInputView({
               {filteredMockServers.map((s, i) => (
                 <div
                   key={s.url}
-                  onMouseDown={e => { e.preventDefault(); handleSuggestionSelect(s.url); }}
+                  onMouseDown={e => { e.preventDefault(); handleMockSelect(s.url); }}
                   onMouseEnter={() => setHighlightedIdx(i)}
                   onMouseLeave={() => setHighlightedIdx(-1)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: `6px ${base.paddingX}`,
+                    marginBottom: '2px',
                     borderRadius: 5, cursor: 'pointer',
                     fontSize: base.fontSize,
                     color: 'var(--color-text-primary)',
@@ -395,6 +405,7 @@ export function SelectTextInputView({
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: `6px ${base.paddingX}`,
+                      marginBottom: '2px',
                       borderRadius: 5, cursor: 'pointer',
                       fontSize: base.fontSize,
                       color: 'var(--color-text-primary)',

@@ -69,6 +69,9 @@ export type { TabViewProps, TabItem, TabVariant } from './components/input/TabVi
 export { EditorView } from './components/input/EditorView';
 export type { EditorViewProps, EditorLanguage } from './components/input/EditorView';
 
+export { DebugEditorView } from './components/input/DebugEditorView';
+export type { DebugEditorViewProps, DebugEditorAdapter } from './components/input/DebugEditorView';
+
 export { ContextMenuView } from './components/modal/ContextMenuView';
 export type { ContextMenuViewProps, ContextMenuItem, ContextMenuWidth } from './components/modal/ContextMenuView';
 
@@ -126,7 +129,10 @@ export { SideNavView, filterItems, countLeaves } from './components/layout/SideN
 export type { SideNavViewProps, SideNavItem } from './components/layout/SideNavView';
 
 export { FolderView } from './components/layout/FolderView';
-export type { FolderViewProps, FolderNode, FolderAction, FolderRunnerTab, FolderRunnerConfig } from './components/layout/FolderView';
+export type { FolderViewProps, FolderNode, FolderAction, FolderRunnerTab, FolderRunnerConfig, DropPosition, MoveSummaryEntry } from './components/layout/FolderView';
+
+export { DebugView } from './components/layout/DebugView';
+export type { DebugViewProps, DebugSession, DebugActions, DebugVariable, DebugCallFrame, DebugBreakpoint } from './components/layout/DebugView';
 
 export { SettingsNavView } from './components/layout/SettingsNavView';
 export type { SettingsNavViewProps, SettingsNavGroup, SettingsNavItem } from './components/layout/SettingsNavView';

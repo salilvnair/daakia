@@ -61,8 +61,10 @@ ${bodyXml}
 
   if (!schema || !selectedOp) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[var(--color-text-muted)]">
-        <p className="text-[11px]">Import a WSDL and select an operation to use the form editor</p>
+      <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-6 text-[var(--color-text-muted)]">
+        <span className="text-[28px] opacity-20">⟨/⟩</span>
+        <p className="text-[12px]">Import a WSDL and select an operation to use the form editor</p>
+        <p className="text-[10px] opacity-60">Use the WSDL button to import, then pick an operation above</p>
       </div>
     );
   }

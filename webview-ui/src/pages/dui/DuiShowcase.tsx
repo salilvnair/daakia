@@ -35,8 +35,10 @@ import {
   DuiProvider,
   ToggleSwitchView,
   FolderView,
+  DebugEditorView,
+  DebugView,
 } from '../../dui';
-import type { FolderNode, FolderAction } from '../../dui';
+import type { FolderNode, FolderAction, DebugSession, DebugActions } from '../../dui';
 import type { TabItem, ContextMenuItem, TabBarTab, SelectTextOption, SelectOption, SideNavItem, LiveColorVar } from '../../dui';
 import { applyMonacoTheme } from '../../monaco-setup';
 import { SCHEMA_LANG_OPTIONS } from '../../services/response';
@@ -66,7 +68,7 @@ type CategoryId =
   | 'mergedinput' | 'duiprovider' | 'hudview'
   | 'collapsiblesection' | 'jsontree' | 'logentry'
   | 'copybutton' | 'markdownview' | 'formdatatable' | 'yamlkeychip' | 'livecolorpanel' | 'spacerview'
-  | 'folderview';
+  | 'folderview' | 'debugeditor' | 'debugview';
 
 interface SidebarItem { id: CategoryId; label: string; icon: React.ReactNode }
 interface SidebarGroup { title: string; items: SidebarItem[] }
@@ -83,6 +85,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'toggle',            label: 'ToggleSwitchView',      icon: <RefreshIcon size={13} /> },
       { id: 'themecardselector', label: 'ThemeCardSelectorView', icon: <SunIcon size={13} /> },
       { id: 'editor',            label: 'EditorView',            icon: <CodeIcon size={13} /> },
+      { id: 'debugeditor',      label: 'DebugEditorView',      icon: <TerminalIcon size={13} /> },
       { id: 'searchinput',       label: 'SearchInputView',       icon: <SearchIcon size={13} /> },
       { id: 'durationinput',     label: 'DurationInputView',     icon: <TerminalIcon size={13} /> },
       { id: 'highlightedinput',  label: 'HighlightedInputView',  icon: <GlobeIcon size={13} /> },
@@ -151,6 +154,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'collapsiblesection', label: 'CollapsibleSectionView',  icon: <ChevronRightIcon size={13} /> },
       { id: 'spacerview',         label: 'SpacerView',              icon: <LayersIcon size={13} /> },
       { id: 'folderview',         label: 'FolderView',              icon: <FolderIcon size={13} /> },
+      { id: 'debugview',          label: 'DebugView',               icon: <PlayIcon size={13} /> },
     ],
   },
   {
@@ -942,6 +946,39 @@ function EditorPanel() {
       <Row label="readOnly=true" noPad code={`<EditorView\n  value='{ "status": "read-only" }'\n  language="json"\n  height="80px"\n  readOnly\n/>`}>
         <EditorView value='{ "status": "read-only" }' language="json" height="80px" readOnly />
       </Row>
+      <Row label="Custom right-click context menu (contextMenuItems) — suppresses Monaco's built-in menu" noPad code={`<EditorView\n  value={body}\n  language="json"\n  height="160px"\n  contextMenuItems={[\n    { id: 'format', label: 'Format Document', icon: <CodeIcon size={13} />, onClick: () => {} },\n    { id: 'copy',   label: 'Copy',            icon: <CopyIcon size={13} />, onClick: () => {} },\n    { id: 'sep',    label: '',               separator: true },\n    { id: 'clear',  label: 'Clear',           icon: <TrashIcon size={13} />, danger: true, onClick: () => {} },\n  ]}\n/>`}>
+        <EditorContextMenuDemo />
+      </Row>
+    </div>
+  );
+}
+
+function EditorContextMenuDemo() {
+  const [body, setBody] = useState('{\n  "userId": 42,\n  "name": "Alice",\n  "role": "admin"\n}');
+  const [lastAction, setLastAction] = useState('');
+  return (
+    <div style={{ width: '100%' }}>
+      <EditorView
+        value={body} onChange={setBody} language="json" height="160px"
+        contextMenuItems={[
+          { id: 'format', label: 'Format Document', icon: <CodeIcon size={13} />, onClick: () => setLastAction('Format Document') },
+          { id: 'copy',   label: 'Copy All',        icon: <CopyIcon size={13} />, onClick: () => { navigator.clipboard.writeText(body); setLastAction('Copied'); } },
+          { id: 'sep',    label: '',                separator: true },
+          { id: 'ai',     label: 'AI Assist',       icon: <SparkleIcon size={13} />,
+            children: [
+              { id: 'ai-explain', label: 'Explain',   icon: <InfoCircleIcon size={13} />, onClick: () => setLastAction('AI → Explain') },
+              { id: 'ai-fix',     label: 'Fix issues', icon: <WandIcon size={13} />,       onClick: () => setLastAction('AI → Fix') },
+            ],
+          },
+          { id: 'clear',  label: 'Clear',           icon: <TrashIcon size={13} />, danger: true, onClick: () => { setBody(''); setLastAction('Cleared'); } },
+        ]}
+      />
+      {lastAction && (
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--color-text-muted)' }}>
+          Last action: <strong style={{ color: 'var(--color-text-primary)' }}>{lastAction}</strong>
+        </div>
+      )}
+      <div style={{ marginTop: 4, fontSize: 11, color: 'var(--color-text-muted)' }}>Right-click in the editor to open the custom DUI context menu</div>
     </div>
   );
 }
@@ -1319,6 +1356,8 @@ const PANELS: Record<CategoryId, { title: string; desc: string; content: React.R
   livecolorpanel:     { title: 'LiveColorCustomizer', desc: 'Interactive color editor that applies CSS custom property changes directly to the document root in real time. Useful for live-theming the webview without a reload. Takes an array of LiveColorVar objects (cssVar, yamlKey, label).', vars: VARS_ACCENT, content: <LiveColorCustomizerPanel />, noExamplesHeader: true, code: `<LiveColorCustomizer vars={[\n  { cssVar: '--color-primary', yamlKey: 'primary', label: 'Primary' },\n  { cssVar: '--color-success', yamlKey: 'success', label: 'Success' },\n  { cssVar: '--color-error',   yamlKey: 'error',   label: 'Error' },\n]} />` },
   spacerview:         { title: 'SpacerView', desc: 'macOS/iOS-style thin divider line for separating groups in icon rails, toolbars, or any flex container. Props: orientation (horizontal | vertical), spacing (sm | md | lg). No interaction — purely visual, pointer-events: none.', vars: VARS_ACCENT, content: <SpacerViewPanel />, code: `function Preview() {\n  const [orientation, setOrientation] = useState('horizontal');\n  const [spacing, setSpacing] = useState('md');\n  return (\n    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>\n      <div style={{ display: 'flex', gap: 6 }}>\n        <SelectInputView\n          value={orientation}\n          onChange={setOrientation}\n          options={[{ value: 'horizontal', label: 'horizontal' }, { value: 'vertical', label: 'vertical' }]}\n          size="sm"\n        />\n        <SelectInputView\n          value={spacing}\n          onChange={setSpacing}\n          options={[{ value: 'sm', label: 'sm' }, { value: 'md', label: 'md' }, { value: 'lg', label: 'lg' }]}\n          size="sm"\n        />\n      </div>\n      <div style={{ display: 'flex', flexDirection: orientation === 'horizontal' ? 'column' : 'row', alignItems: 'center', padding: 8, gap: 4, background: 'var(--color-surface)', borderRadius: 8, border: '1px solid var(--color-surface-border)' }}>\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />\n        <SpacerView orientation={orientation} spacing={spacing} />\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'color-mix(in srgb, var(--color-primary) 20%, transparent)', flexShrink: 0 }} />\n        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--color-surface-border)', flexShrink: 0 }} />\n      </div>\n    </div>\n  );\n}` },
   folderview:         { title: 'FolderView', desc: 'Generic folder tree component with expand/collapse, hover action buttons, DUI ContextMenuView on 3-dot, and DUI ModalView runner popup with chip TabView. Fully controlled or uncontrolled via expandedIds/onToggle.', vars: VARS_ACCENT, content: <FolderViewDemo />, code: `function Preview() {\n  const MC = { GET: 'var(--color-method-get)', POST: 'var(--color-method-post)', PUT: 'var(--color-method-put)', DELETE: 'var(--color-method-delete)' };\n  const nodes = [\n    {\n      id: 'users', label: 'Users API', items: [],\n      children: [\n        { id: 'auth', label: 'Auth', items: [\n          { method: 'POST', name: 'Login' },\n          { method: 'POST', name: 'Logout' },\n        ]},\n        { id: 'crud', label: 'Users CRUD', items: [\n          { method: 'GET',    name: 'Get All Users' },\n          { method: 'POST',   name: 'Create User' },\n          { method: 'PUT',    name: 'Update User' },\n          { method: 'DELETE', name: 'Delete User' },\n        ]},\n      ],\n    },\n    { id: 'payments', label: 'Payments', items: [\n      { method: 'POST', name: 'Create Charge' },\n      { method: 'GET',  name: 'Transaction History' },\n    ]},\n  ];\n  return (\n    <FolderView\n      nodes={nodes}\n      accentColor="var(--color-protocol-rest)"\n      renderItem={(item, _node, depth) => (\n        <div className="flex items-center gap-2 py-1 rounded-md hover:bg-[var(--color-item-hover-bg)] cursor-pointer"\n          style={{ paddingLeft: (depth + 1) * 12 + 8, paddingRight: 8 }}>\n          <span style={{ fontSize: 9, fontWeight: 700, color: MC[item.method] || 'var(--color-text-muted)', width: 36, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>\n            {item.method}\n          </span>\n          <span style={{ fontSize: 11.5, color: 'var(--color-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>\n            {item.name}\n          </span>\n        </div>\n      )}\n      folderActions={[\n        { id: 'file-plus',   icon: <FilePlusIcon size={12} />,   tooltip: 'New Request', onClick: () => {} },\n        { id: 'folder-plus', icon: <FolderPlusIcon size={12} />, tooltip: 'New Folder',  onClick: () => {} },\n        { id: 'run',         icon: <PlayIcon size={12} />,       tooltip: 'Run Collection' },\n        { id: 'more',        icon: <MoreVerticalIcon size={12} />, tooltip: 'More Options' },\n      ]}\n      contextMenuItems={(node) => [\n        { id: 'new-request', label: 'New Request', onClick: () => {} },\n        { id: 'rename',      label: 'Rename',      onClick: () => {} },\n        { id: 'sep', label: '', separator: true },\n        { id: 'delete', label: 'Delete', danger: true, onClick: () => {} },\n      ]}\n    />\n  );\n}` },
+  debugeditor:        { title: 'DebugEditorView', desc: 'Monaco editor with breakpoint gutter, paused-line highlight, and variable-hover tooltips. Fully abstract — consumer provides the adapter with toggle/glyph callbacks. No store dependency.', vars: VARS_ACCENT, content: <DebugEditorDemo />, code: `function Preview() {\n  const [code, setCode] = useState(\`// Pre-request script\nconst userId = dk.env.get('userId');\ndk.request.setHeader('X-User-ID', userId);\nconsole.log('userId:', userId);\n\`);\n  const [breakpoints, setBreakpoints] = useState([3]);\n  const [pausedLine, setPausedLine] = useState(3);\n  return (\n    <DebugEditorView\n      value={code}\n      onChange={setCode}\n      language="javascript"\n      height={200}\n      breakpoints={breakpoints}\n      pausedLine={pausedLine}\n      adapter={{\n        onToggleBreakpoint: (line) =>\n          setBreakpoints(prev =>\n            prev.includes(line) ? prev.filter(l => l !== line) : [...prev, line]\n          ),\n      }}\n    />\n  );\n}` },
+  debugview:          { title: 'DebugView', desc: 'VS Code-style Run & Debug sidebar panel — Variables (scoped tree), Watch expressions, Call Stack, Breakpoints. Fully abstract: consumer passes session data + action callbacks. No daakia store dependency.', vars: VARS_ACCENT, content: <DebugViewDemo />, code: `function Preview() {\n  const [session, setSession] = useState({\n    active: true, status: 'paused', pausedLine: 5,\n    variables: [\n      { name: 'userId', value: 42 },\n      { name: 'user',   value: { name: 'Alice', role: 'admin' } },\n    ],\n    callStack: [\n      { fn: 'handleResponse', file: 'post-response.js', line: 5, col: 3, isUser: true },\n    ],\n    breakpoints: [\n      { key: 'tab1:pre', line: 3, label: 'GET /users' },\n    ],\n  });\n  const [watchExprs, setWatchExprs] = useState(['user.name']);\n  return (\n    <div style={{ height: 480, border: '1px solid var(--color-surface-border)', borderRadius: 8, overflow: 'hidden' }}>\n      <DebugView\n        session={session}\n        watchExpressions={watchExprs}\n        actions={{\n          onContinue: () => setSession(s => ({ ...s, status: 'running' })),\n          onStop: () => setSession(s => ({ ...s, active: false, status: 'idle' })),\n          onAddWatchExpression: expr => setWatchExprs(prev => [...prev, expr]),\n          onRemoveWatchExpression: expr => setWatchExprs(prev => prev.filter(e => e !== expr)),\n        }}\n      />\n    </div>\n  );\n}` },
 };
 
 const FOLDER_METHOD_COLORS: Record<string, string> = {
@@ -1371,45 +1410,167 @@ const FOLDER_DEMO_ACTIONS: FolderAction<DemoRequest>[] = [
 ];
 
 function FolderViewDemo() {
+  const [nodes, setNodes] = useState(FOLDER_DEMO_NODES);
+  const [lastMove, setLastMove] = useState<string | null>(null);
+
+  const handleMove = (dragId: string, targetId: string, position: 'before' | 'inside' | 'after') => {
+    setLastMove(`Moved "${dragId}" ${position} "${targetId}"`);
+  };
+
   return (
-    <div style={{ border: '1px solid var(--color-surface-border)', borderRadius: 8, overflow: 'hidden', width: '100%', background: 'var(--color-bg)' }}>
-      <FolderView
-        nodes={FOLDER_DEMO_NODES}
-        accentColor="var(--color-protocol-rest)"
-        defaultExpandedIds={new Set(['users', 'auth', 'payments'])}
-        renderItem={(item, _node, depth) => (
-          <div
-            className="flex items-center gap-2 py-1 rounded-md hover:bg-[var(--color-item-hover-bg)] cursor-pointer group/req"
-            style={{ paddingLeft: `${(depth + 1) * 12 + 8}px`, paddingRight: 8 }}
-          >
-            <span style={{
-              fontSize: 9, fontWeight: 700,
-              color: FOLDER_METHOD_COLORS[item.method] || 'var(--color-text-muted)',
-              width: 36, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.05em',
-            }}>
-              {item.method}
-            </span>
-            <span style={{ fontSize: 11.5, color: 'var(--color-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {item.name}
-            </span>
-            <button type="button"
-              className="opacity-0 group-hover/req:opacity-100 flex items-center justify-center w-5 h-5 rounded hover:bg-[var(--color-icon-hover-bg)]"
-              style={{ color: 'var(--color-text-muted)', border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0, padding: 0 }}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ border: '1px solid var(--color-surface-border)', borderRadius: 8, overflow: 'hidden', width: '100%', background: 'var(--color-bg)' }}>
+        <FolderView
+          nodes={nodes}
+          accentColor="var(--color-protocol-rest)"
+          defaultExpandedIds={new Set(['users', 'auth', 'payments'])}
+          draggable
+          onMove={handleMove}
+          confirmFolderMove
+          renderItem={(item, _node, depth) => (
+            <div
+              className="flex items-center gap-2 py-1 rounded-md hover:bg-[var(--color-item-hover-bg)] cursor-pointer group/req"
+              style={{ paddingLeft: `${(depth + 1) * 12 + 8}px`, paddingRight: 8 }}
             >
-              <MoreVerticalIcon size={11} />
-            </button>
+              <span style={{
+                fontSize: 9, fontWeight: 700,
+                color: FOLDER_METHOD_COLORS[item.method] || 'var(--color-text-muted)',
+                width: 36, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.05em',
+              }}>
+                {item.method}
+              </span>
+              <span style={{ fontSize: 11.5, color: 'var(--color-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {item.name}
+              </span>
+              <button type="button"
+                className="opacity-0 group-hover/req:opacity-100 flex items-center justify-center w-5 h-5 rounded hover:bg-[var(--color-icon-hover-bg)]"
+                style={{ color: 'var(--color-text-muted)', border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0, padding: 0 }}
+              >
+                <MoreVerticalIcon size={11} />
+              </button>
+            </div>
+          )}
+          folderActions={FOLDER_DEMO_ACTIONS}
+          contextMenuItems={(node) => [
+            { id: 'new-request',  label: 'New Request',  onClick: () => {} },
+            { id: 'new-folder',   label: 'New Folder',   onClick: () => {} },
+            { id: 'rename',       label: 'Rename',       onClick: () => {} },
+            { id: 'duplicate',    label: 'Duplicate',    onClick: () => {} },
+            { id: 'sep', label: '', separator: true },
+            { id: 'delete', label: 'Delete', danger: true, onClick: () => alert(`Delete "${node.label}"`) },
+          ]}
+        />
+      </div>
+      {lastMove && (
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', padding: '4px 8px', background: 'var(--color-surface)', borderRadius: 6, border: '1px solid var(--color-surface-border)' }}>
+          ↳ {lastMove}
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+        Drag folders to reorder or nest. Blue line = before/after, ring = drop inside.
+        <code style={{ marginLeft: 6, fontSize: 10, background: 'var(--color-surface)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--color-surface-border)' }}>confirmFolderMove</code> shows a confirm modal before moving.
+      </div>
+    </div>
+  );
+}
+
+// ─── DebugEditorView demo ─────────────────────────────────────────────────────
+
+function DebugEditorDemo() {
+  const [code, setCode] = useState(
+    `// Pre-request script\nconst userId = dk.env.get('userId');\ndk.request.setHeader('X-User-ID', userId);\nconsole.log('userId:', userId);\nconst token = dk.env.get('token');\ndk.request.setHeader('Authorization', 'Bearer ' + token);`,
+  );
+  const [breakpoints, setBreakpoints] = useState<number[]>([3, 5]);
+  const [pausedLine] = useState<number | null>(3);
+
+  return (
+    <div>
+      <Row label="DebugEditorView — breakpoint gutter, paused-line highlight, toggle on click" noPad
+        code={`<DebugEditorView\n  value={code}\n  onChange={setCode}\n  language="javascript"\n  height={200}\n  breakpoints={breakpoints}\n  pausedLine={3}\n  adapter={{ onToggleBreakpoint: (line) => setBreakpoints(prev =>\n    prev.includes(line) ? prev.filter(l => l !== line) : [...prev, line]\n  )}}\n/>`}>
+        <div style={{ width: '100%' }}>
+          <DebugEditorView
+            value={code} onChange={setCode} language="javascript" height="200px"
+            breakpoints={breakpoints} pausedLine={pausedLine}
+            adapter={{
+              onToggleBreakpoint: (line) =>
+                setBreakpoints(prev => prev.includes(line) ? prev.filter(l => l !== line) : [...prev, line]),
+            }}
+          />
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--color-text-muted)' }}>
+            Click gutter to toggle breakpoints · Yellow = paused line · Active: {breakpoints.join(', ') || 'none'}
           </div>
-        )}
-        folderActions={FOLDER_DEMO_ACTIONS}
-        contextMenuItems={(node) => [
-          { id: 'new-request',  label: 'New Request',  onClick: () => {} },
-          { id: 'new-folder',   label: 'New Folder',   onClick: () => {} },
-          { id: 'rename',       label: 'Rename',       onClick: () => {} },
-          { id: 'duplicate',    label: 'Duplicate',    onClick: () => {} },
-          { id: 'sep', label: '', separator: true },
-          { id: 'delete', label: 'Delete', danger: true, onClick: () => alert(`Delete "${node.label}"`) },
-        ]}
-      />
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+// ─── DebugView demo ───────────────────────────────────────────────────────────
+
+const INITIAL_DEBUG_SESSION: DebugSession = {
+  active: true,
+  status: 'paused',
+  pausedLine: 5,
+  variables: [
+    { name: 'userId', value: 42, type: 'number' },
+    { name: 'user', value: { name: 'Alice', role: 'admin', active: true }, type: 'object' },
+    { name: 'token', value: 'eyJhbGci...', type: 'string' },
+    { name: 'dk', value: { env: {}, request: {}, response: {} }, type: 'object' },
+  ],
+  callStack: [
+    { fn: 'handleResponse', file: 'post-response.js', line: 5, col: 3, isUser: true },
+    { fn: 'runScript', file: 'runtime.js', line: 142, col: 8 },
+    { fn: 'executeTab', file: 'executor.js', line: 88, col: 4 },
+  ],
+  breakpoints: [
+    { key: 'tab1:pre',  line: 3, disabled: false, label: 'GET /users' },
+    { key: 'tab1:pre',  line: 7, disabled: true,  label: 'GET /users' },
+    { key: 'tab1:post', line: 5, disabled: false,  label: 'GET /users', condition: 'userId > 10' },
+  ],
+  breakpointsMuted: false,
+};
+
+function DebugViewDemo() {
+  const [session, setSession] = useState<DebugSession>(INITIAL_DEBUG_SESSION);
+  const [watchExprs, setWatchExprs] = useState<string[]>(['user.name', 'token']);
+
+  const actions: DebugActions = {
+    onContinue:   () => setSession(s => ({ ...s, status: 'running' as const })),
+    onStepOver:   () => {},
+    onStepInto:   () => {},
+    onStepOut:    () => {},
+    onRestart:    () => setSession(INITIAL_DEBUG_SESSION),
+    onStop:       () => setSession(s => ({ ...s, active: false, status: 'idle' as const })),
+    onAddWatchExpression:     expr => setWatchExprs(prev => [...prev, expr]),
+    onRemoveWatchExpression:  expr => setWatchExprs(prev => prev.filter(e => e !== expr)),
+    onClearWatchExpressions:  () => setWatchExprs([]),
+    onToggleBreakpoint: (key, line, currently) => setSession(s => ({
+      ...s,
+      breakpoints: s.breakpoints?.map(bp =>
+        bp.key === key && bp.line === line ? { ...bp, disabled: !currently } : bp,
+      ),
+    })),
+    onRemoveBreakpoint: (key, line) => setSession(s => ({
+      ...s,
+      breakpoints: s.breakpoints?.filter(bp => !(bp.key === key && bp.line === line)),
+    })),
+    onToggleMuteBreakpoints: () => setSession(s => ({ ...s, breakpointsMuted: !s.breakpointsMuted })),
+    onClearAllBreakpoints:   () => setSession(s => ({ ...s, breakpoints: [] })),
+  };
+
+  return (
+    <div>
+      <Row label="DebugView — full VS Code-style Run & Debug panel" noPad
+        code={`<DebugView\n  session={session}\n  watchExpressions={watchExprs}\n  actions={{\n    onContinue, onStop, onStepOver, onStepInto,\n    onAddWatchExpression, onRemoveWatchExpression,\n    onToggleBreakpoint, onRemoveBreakpoint,\n    onToggleMuteBreakpoints, onClearAllBreakpoints,\n  }}\n/>`}>
+        <div style={{ height: 500, width: '100%', border: '1px solid var(--color-surface-border)', borderRadius: 8, overflow: 'hidden' }}>
+          <DebugView session={session} watchExpressions={watchExprs} actions={actions} accentColor="var(--color-protocol-rest)" />
+        </div>
+      </Row>
+      <Row label="Inactive session (status=idle)" noPad code={`<DebugView session={{ active: false, status: 'idle' }} />`}>
+        <div style={{ height: 200, width: '100%', border: '1px solid var(--color-surface-border)', borderRadius: 8, overflow: 'hidden' }}>
+          <DebugView session={{ active: false, status: 'idle' }} accentColor="var(--color-protocol-rest)" />
+        </div>
+      </Row>
     </div>
   );
 }

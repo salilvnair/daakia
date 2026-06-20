@@ -35,7 +35,7 @@ Keep explanations concise, practical, and developer-friendly.`;
 
 export function AiSoapWsdlExplainerModal({ onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const getTemplate = useAiPromptTemplatesStore(s => s.getTemplate);
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
   const [explanation, setExplanation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -71,7 +71,7 @@ export function AiSoapWsdlExplainerModal({ onClose }: Props) {
       ? `Service: ${activeTab.soapService || 'unknown'}\nOperations:\n${JSON.stringify(wsdlOperations, null, 2).slice(0, 3500)}`
       : `Service: ${activeTab.soapService || 'unknown'}\nEndpoint: ${activeTab.url || ''}`;
 
-    const template = getTemplate('soap.schema.view');
+    const template = resolve('soap.schema.view');
     streamRef.current = '';
     setExplanation('');
     setError('');

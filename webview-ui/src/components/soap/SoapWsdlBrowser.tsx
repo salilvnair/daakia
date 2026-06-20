@@ -31,10 +31,10 @@ export function SoapWsdlBrowser() {
 
   if (services.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <SchemaIcon size={32} className="text-[var(--color-text-muted)] opacity-40 mb-3" />
-        <p className="text-[12px] text-[var(--color-text-muted)]">No WSDL loaded</p>
-        <p className="text-[10px] text-[var(--color-text-muted)] opacity-60 mt-1">Import a WSDL to browse services, operations, and XSD schemas</p>
+      <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-6 text-[var(--color-text-muted)]">
+        <SchemaIcon size={28} className="opacity-20" />
+        <p className="text-[12px]">No WSDL loaded</p>
+        <p className="text-[10px] opacity-60">Import a WSDL to browse services, operations, and XSD schemas</p>
       </div>
     );
   }

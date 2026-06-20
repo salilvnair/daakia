@@ -19,7 +19,7 @@ import { GraphQLSubscription } from './GraphQLSubscription';
 import { GraphQLQueryTabs, initMultiQuery } from './GraphQLQueryTabs';
 import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../ai/AiHeaderSuggest';
 import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
-import { AiGqlQueryBuilderModal } from '../ai/AiGqlQueryBuilderModal';
+import { AiGqlQueryBuilderDrawer, type AiGqlQueryBuilderDrawerHandle } from '../ai/AiGqlQueryBuilderDrawer';
 import { AiGqlSchemaExplainerModal } from '../ai/AiGqlSchemaExplainerModal';
 import { logUiEvent } from '../../store/ui-audit-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
@@ -39,11 +39,11 @@ export function GraphQLEditor() {
   const [activeSubTab, setActiveSubTabLocal] = useState<EditorTab>((storedSubTab as EditorTab) || 'query');
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const aiHeaderSuggestRef = useRef<AiHeaderSuggestHandle>(null);
+  const qbRef = useRef<AiGqlQueryBuilderDrawerHandle>(null);
   const [aiHeaderLoading, setAiHeaderLoading] = useState(false);
 
   // Modal state
   const [showFuzzer, setShowFuzzer] = useState(false);
-  const [showQueryBuilder, setShowQueryBuilder] = useState(false);
   const [showSchemaExplainer, setShowSchemaExplainer] = useState(false);
 
   useEffect(() => {
@@ -142,14 +142,14 @@ export function GraphQLEditor() {
             {/* Query toolbar — action buttons right only */}
             <div className="flex items-center justify-end px-3 py-1 border-b border-[var(--color-surface-border)] bg-[var(--color-surface)]">
               <div className="flex items-center gap-1">
-                {/* 8.8: Query Builder ✦ — same style as Scripts "Tests" button */}
+                {/* 8.8: Query Builder ✦ — inline drawer above editor */}
                 {aiEnabled('gqlQueryBuilder') && (
                   <ButtonView
                     size="xs"
                     variant="ghost"
                     iconLeft={<SparkleIcon size={10} />}
                     title="AI Query Builder — describe what you want, AI writes the query"
-                    onClick={() => setShowQueryBuilder(true)}
+                    onClick={() => qbRef.current?.open()}
                     style={{ color: ACCENT }}
                   >
                     Query Builder
@@ -209,6 +209,14 @@ export function GraphQLEditor() {
             </div>
             {/* Multi-query tabs (shown when enabled) */}
             <GraphQLQueryTabs />
+            {/* Query Builder inline drawer — shown above editor when active */}
+            {aiEnabled('gqlQueryBuilder') && (
+              <AiGqlQueryBuilderDrawer
+                ref={qbRef}
+                tabId={activeTab.id}
+                onApply={(q) => updateTab(activeTab.id, { bodyRaw: q })}
+              />
+            )}
             {/* Monaco editor */}
             <div className="flex-1 min-h-0">
               <EditorView
@@ -226,7 +234,7 @@ export function GraphQLEditor() {
           <div className="flex-1 flex flex-col min-h-0 bg-[var(--color-surface)]">
             {/* Variables toolbar — Fuzz only */}
             {aiEnabled('requestFuzzer') && (
-              <div className="flex items-center justify-end px-3 py-1 border-b border-[var(--color-surface-border)] bg-[var(--color-surface)]">
+              <div className="flex items-center justify-end px-3 py-[7px] border-b border-[var(--color-surface-border)] bg-[var(--color-surface)]">
                 <ButtonView
                   size="xs"
                   variant="ghost"
@@ -334,12 +342,6 @@ export function GraphQLEditor() {
 
       {/* Modals */}
       {showFuzzer && <AiRequestFuzzerModal onClose={() => setShowFuzzer(false)} />}
-      {showQueryBuilder && (
-        <AiGqlQueryBuilderModal
-          onClose={() => setShowQueryBuilder(false)}
-          onApply={(q) => updateTab(activeTab.id, { bodyRaw: q })}
-        />
-      )}
       {showSchemaExplainer && (
         <AiGqlSchemaExplainerModal onClose={() => setShowSchemaExplainer(false)} />
       )}

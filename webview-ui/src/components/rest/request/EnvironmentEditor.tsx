@@ -77,10 +77,9 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
       )}
 
       {!activeEnv ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-[12px] text-[var(--color-text-muted)]">
-            Create an environment to manage variables and secrets.
-          </p>
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 text-[var(--color-text-muted)]">
+          <span className="text-[28px] opacity-20">⟨/⟩</span>
+          <p className="text-[12px]">Create an environment to manage variables and secrets.</p>
         </div>
       ) : (
         <>

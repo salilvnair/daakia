@@ -59,11 +59,15 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
   // Static generation (memoized)
   const staticCode = useMemo(() => {
     if (aiMode) return '';
+    const trimmed = body.trim();
+    if (trimmed.startsWith('<')) {
+      return '// XML response body — switch to AI mode for schema generation';
+    }
     try {
       const parsed = JSON.parse(body);
       return generateSchema(parsed, lang);
     } catch {
-      return '// Unable to parse JSON response body';
+      return '// Unable to parse response body as JSON';
     }
   }, [body, lang, aiMode]);
 

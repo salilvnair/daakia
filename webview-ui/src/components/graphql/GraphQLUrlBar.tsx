@@ -89,7 +89,7 @@ export function GraphQLUrlBar() {
   ];
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
+    <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 bg-[var(--color-panel)]">
       {/* Protocol badge */}
       <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-graphql)] bg-[color-mix(in_srgb,var(--color-protocol-graphql)_10%,transparent)]">
         GQL

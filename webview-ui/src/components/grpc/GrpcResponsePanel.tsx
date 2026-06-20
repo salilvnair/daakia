@@ -64,8 +64,10 @@ export function GrpcResponsePanel() {
       );
     }
     return (
-      <div className="flex-1 flex items-center justify-center text-[var(--color-text-muted)]">
+      <div className="flex-1 flex flex-col items-center justify-center bg-[var(--color-panel)] text-[var(--color-text-muted)] gap-2">
+        <span className="text-[28px] opacity-20">⟨/⟩</span>
         <p className="text-[12px]">Send a request to see the response</p>
+        <p className="text-[10px] opacity-60">Ctrl+Enter to run</p>
       </div>
     );
   }
@@ -283,10 +285,9 @@ function GrpcTimeline({ messages, status, response }: { messages: GrpcStreamMess
   // For streaming — show stream message timeline
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center p-4">
-        <p className="text-[11px] text-[var(--color-text-muted)]">
-          {status === 'streaming' ? 'Waiting for messages...' : 'No stream messages yet'}
-        </p>
+      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 text-[var(--color-text-muted)]">
+        <span className="text-[24px] opacity-20">〜</span>
+        <p className="text-[12px]">{status === 'streaming' ? 'Waiting for messages...' : 'No stream messages yet'}</p>
       </div>
     );
   }

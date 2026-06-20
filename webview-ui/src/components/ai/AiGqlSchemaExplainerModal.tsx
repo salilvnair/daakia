@@ -32,7 +32,7 @@ Keep explanations concise, practical, and developer-friendly.`;
 
 export function AiGqlSchemaExplainerModal({ onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const getTemplate = useAiPromptTemplatesStore(s => s.getTemplate);
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
   const [explanation, setExplanation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -66,7 +66,7 @@ export function AiGqlSchemaExplainerModal({ onClose }: Props) {
       || JSON.stringify(activeTab.authData?.['gql_schema'] || {}, null, 2).slice(0, 3000);
     if (!sdl) return;
 
-    const template = getTemplate('graphql.schema.view');
+    const template = resolve('graphql.schema.view');
     streamRef.current = '';
     setExplanation('');
     setError('');

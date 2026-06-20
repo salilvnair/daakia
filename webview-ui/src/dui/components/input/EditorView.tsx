@@ -1,10 +1,11 @@
 import Editor, { type OnMount } from '@monaco-editor/react';
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef, useMemo, useEffect, useState } from 'react';
 import { useAppTheme } from '../../../hooks/useAppTheme';
 import { getDkCompletions, DK_TYPE_DEFS } from '../../../services/dk-repl';
 import { initGraphQLCompletionProvider } from '../../../services/graphql-completion';
 import type { DuiSize } from '../../core/DuiTypes';
 import { useEditorBase } from '../../core/EditorBase';
+import { ContextMenuView, type ContextMenuItem } from '../modal/ContextMenuView';
 
 // ─── Debug-only imports — only loaded when debugSupported=true ─────────────────
 import { useBreakpointGutter } from '../../../hooks/useBreakpointGutter';
@@ -74,6 +75,12 @@ export interface EditorViewProps {
   onGlyphContextMenu?: (line: number, pos: { x: number; y: number }) => void;
   /** Receives editor + monaco instances after mount (e.g. for AI autocomplete) */
   onEditorMount?: (editor: any, monaco: any) => void;
+  /**
+   * Custom right-click context menu items (DUI ContextMenuView).
+   * When provided, Monaco's built-in context menu is suppressed and these items render instead.
+   * Supports icons, danger styling, separators, and infinite submenus.
+   */
+  contextMenuItems?: ContextMenuItem[];
 }
 
 // ─── Simple variant — no debug hooks at all ───────────────────────────────────
@@ -81,7 +88,7 @@ export interface EditorViewProps {
 function EditorViewSimple({
   value, onChange, language = 'json', height = '200px', minHeight,
   readOnly = false, placeholder, wordWrap = true, size, fontSize,
-  className = '', bordered = false, onEditorMount,
+  className = '', bordered = false, onEditorMount, contextMenuItems,
 }: EditorViewProps) {
   const base = useEditorBase(size);
   const resolvedFontSize = fontSize ?? base.fontSize;
@@ -120,7 +127,7 @@ function EditorViewSimple({
   };
 
   return (
-    <EditorShell bordered={bordered} containerHeight={containerHeight}>
+    <EditorShell bordered={bordered} containerHeight={containerHeight} contextMenuItems={contextMenuItems}>
       <Editor
         height="100%"
         language={language}
@@ -129,7 +136,7 @@ function EditorViewSimple({
         theme={theme === 'light' ? 'daakia-light' : 'daakia-dark'}
         onChange={v => onChange?.(v ?? '')}
         onMount={handleMount}
-        options={buildOptions({ readOnly, fontSize: resolvedFontSize, wordWrap, glyphMargin: false })}
+        options={buildOptions({ readOnly, fontSize: resolvedFontSize, wordWrap, glyphMargin: false, customContextMenu: !!contextMenuItems?.length })}
       />
     </EditorShell>
   );
@@ -142,7 +149,7 @@ function EditorViewDebug({
   readOnly = false, placeholder, wordWrap = true, size, fontSize,
   className = '', bordered = false,
   breakpoints, disabledBreakpoints, conditionalBreakpointLines, pausedLine,
-  onToggleBreakpoint, onGlyphContextMenu, onEditorMount,
+  onToggleBreakpoint, onGlyphContextMenu, onEditorMount, contextMenuItems,
 }: EditorViewProps) {
   const base = useEditorBase(size);
   const resolvedFontSize = fontSize ?? base.fontSize;
@@ -199,7 +206,7 @@ function EditorViewDebug({
   };
 
   return (
-    <EditorShell bordered={bordered} containerHeight={containerHeight}>
+    <EditorShell bordered={bordered} containerHeight={containerHeight} contextMenuItems={contextMenuItems}>
       <Editor
         height="100%"
         language={language}
@@ -208,7 +215,7 @@ function EditorViewDebug({
         theme={theme === 'light' ? 'daakia-light' : 'daakia-dark'}
         onChange={v => onChange?.(v ?? '')}
         onMount={handleMount}
-        options={buildOptions({ readOnly, fontSize: resolvedFontSize, wordWrap, glyphMargin: !!onToggleBreakpoint })}
+        options={buildOptions({ readOnly, fontSize: resolvedFontSize, wordWrap, glyphMargin: !!onToggleBreakpoint, customContextMenu: !!contextMenuItems?.length })}
       />
     </EditorShell>
   );
@@ -221,29 +228,44 @@ export function EditorView({ debugSupported = false, className = '', ...rest }: 
   return <EditorViewSimple className={className} {...rest} />;
 }
 
+export type { ContextMenuItem as EditorContextMenuItem } from '../modal/ContextMenuView';
+
 // ─── Shared render shell ──────────────────────────────────────────────────────
 
 function EditorShell({
-  bordered, containerHeight, children,
+  bordered, containerHeight, children, contextMenuItems,
 }: {
   bordered: boolean;
   containerHeight: string;
   children: React.ReactNode;
+  contextMenuItems?: ContextMenuItem[];
 }) {
+  const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | null>(null);
+
   return (
     <div
       className={`relative${bordered ? ' rounded border border-[var(--color-surface-border)]' : ''}`}
       style={{ height: containerHeight, width: '100%', position: 'relative' }}
+      onContextMenu={contextMenuItems?.length ? (e) => { e.preventDefault(); setCtxPos({ x: e.clientX, y: e.clientY }); } : undefined}
     >
       {children}
+      {contextMenuItems && (
+        <ContextMenuView
+          open={!!ctxPos}
+          anchorEl={null}
+          position={ctxPos ?? undefined}
+          items={contextMenuItems}
+          onClose={() => setCtxPos(null)}
+        />
+      )}
     </div>
   );
 }
 
 // ─── Shared Monaco options builder ───────────────────────────────────────────
 
-function buildOptions({ readOnly, fontSize, wordWrap, glyphMargin }: {
-  readOnly: boolean; fontSize: number; wordWrap: boolean; glyphMargin: boolean;
+function buildOptions({ readOnly, fontSize, wordWrap, glyphMargin, customContextMenu = false }: {
+  readOnly: boolean; fontSize: number; wordWrap: boolean; glyphMargin: boolean; customContextMenu?: boolean;
 }) {
   return {
     readOnly, fontSize,
@@ -281,7 +303,7 @@ function buildOptions({ readOnly, fontSize, wordWrap, glyphMargin }: {
     colorDecorators: true,
     linkedEditing: true,
     renderWhitespace: 'selection' as const,
-    contextmenu: true,
+    contextmenu: !customContextMenu,
   };
 }
 

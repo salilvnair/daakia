@@ -38,7 +38,7 @@ function stripFences(raw: string): string {
 
 export function AiGqlQueryBuilderModal({ onClose, onApply }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const getTemplate = useAiPromptTemplatesStore(s => s.getTemplate);
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
   const [description, setDescription] = useState('');
   const [generated, setGenerated] = useState('');
   const [loading, setLoading] = useState(false);
@@ -71,7 +71,7 @@ export function AiGqlQueryBuilderModal({ onClose, onApply }: Props) {
       ? `\n\nSchema context (excerpt):\n${(activeTab.authData['gql_schema_sdl'] as string).slice(0, 800)}`
       : '';
     const userPrompt = `${SYSTEM_PROMPT}${schemaHint}\n\nUser request: ${description.trim()}`;
-    const template = getTemplate('graphql.schema.view');
+    const template = resolve('graphql.schema.view');
     streamRef.current = '';
     setGenerated('');
     setError('');

@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
-import { PillTabs, KeyValueTable, CodeEditor, AuthEditor, ScriptsEditor } from '../shared';
-import type { PillTab, KeyValueRow } from '../shared';
+import { AuthEditor, ScriptsEditor } from '../shared';
+import type { KeyValueRow } from '../shared';
 import { SoapFormEditor } from './SoapFormEditor';
 import { SoapHeadersEditor } from './SoapHeadersEditor';
 import { SoapAssertions } from './SoapAssertions';
@@ -10,11 +10,20 @@ import { SoapWsdlBrowser } from './SoapWsdlBrowser';
 import { SoapAttachments } from './SoapAttachments';
 import { SparkleIcon } from '../../icons';
 import { AiHeaderSuggest } from '../ai/AiHeaderSuggest';
+import type { AiHeaderSuggestHandle } from '../ai/AiHeaderSuggest';
 import { AiBodyGenerate } from '../ai/AiBodyGenerate';
 import type { AiBodyGenerateHandle } from '../ai/AiBodyGenerate';
 import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
 import { AiSoapWsdlExplainerModal } from '../ai/AiSoapWsdlExplainerModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import {
+  EditorView,
+  KeyValueTableView,
+  TabView,
+  ButtonView,
+  IconButtonView,
+  type TabItem,
+} from '../../dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
 
@@ -26,22 +35,6 @@ const DEFAULT_ENVELOPE_11 = `<?xml version="1.0" encoding="UTF-8"?>
   </soap:Body>
 </soap:Envelope>`;
 
-const tabs: PillTab[] = [
-  { id: 'envelope', label: 'Envelope' },
-  { id: 'form', label: 'Form' },
-  { id: 'headers', label: 'Headers' },
-  { id: 'wssecurity', label: 'WS-Security' },
-  { id: 'auth', label: 'Auth' },
-  { id: 'assertions', label: 'Assertions' },
-  { id: 'attachments', label: 'Attachments' },
-  { id: 'scripts', label: 'Scripts' },
-  { id: 'wsdl', label: 'WSDL' },
-];
-
-/**
- * SoapRequestConfig — sub-tabs: Envelope (XML editor), Headers (KV table),
- * Auth (shared AuthEditor), Scripts (shared ScriptsEditor).
- */
 export function SoapRequestConfig() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const activeTabId = useTabsStore(s => s.activeTabId);
@@ -51,7 +44,9 @@ export function SoapRequestConfig() {
   const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'envelope');
   const [showFuzzer, setShowFuzzer] = useState(false);
   const [showWsdlExplainer, setShowWsdlExplainer] = useState(false);
+  const [aiHeaderLoading, setAiHeaderLoading] = useState(false);
   const bodyGenRef = useRef<AiBodyGenerateHandle>(null);
+  const aiHeaderSuggestRef = useRef<AiHeaderSuggestHandle>(null);
 
   useEffect(() => {
     const pref = useUiStateStore.getState().getPref(`soap.subtab.${activeTabId}`, 'envelope');
@@ -65,18 +60,37 @@ export function SoapRequestConfig() {
 
   if (!activeTab) return null;
 
-  // Add dot/badge indicators
-  const tabsWithBadges = useMemo(() => tabs.map(t => {
-    switch (t.id) {
-      case 'headers': return { ...t, badge: (activeTab.headers || []).filter(h => h.enabled && h.key).length };
-      case 'wssecurity': return { ...t, dot: !!activeTab.soapWsSecurity };
-      case 'auth': return { ...t, dot: activeTab.authType !== 'none' };
-      case 'assertions': return { ...t, badge: (activeTab.soapAssertions || []).length };
-      case 'attachments': return { ...t, badge: (activeTab.soapAttachments || []).filter(a => a.enabled).length };
-      case 'scripts': return { ...t, dot: !!(activeTab.preRequestScript?.trim()) || !!(activeTab.postResponseScript?.trim()) };
-      default: return t;
-    }
-  }), [activeTab]);
+  const tabItems: TabItem[] = [
+    { id: 'envelope', label: 'Envelope' },
+    { id: 'form', label: 'Form' },
+    {
+      id: 'headers',
+      label: 'Headers',
+      badge: (activeTab.headers || []).filter(h => h.enabled && h.key).length || undefined,
+      badgeColor: ACCENT,
+    },
+    { id: 'wssecurity', label: 'WS-Security', dot: !!activeTab.soapWsSecurity, dotColor: ACCENT },
+    { id: 'auth', label: 'Authorization', dot: activeTab.authType !== 'none', dotColor: ACCENT },
+    {
+      id: 'assertions',
+      label: 'Assertions',
+      badge: (activeTab.soapAssertions || []).length || undefined,
+      badgeColor: ACCENT,
+    },
+    {
+      id: 'attachments',
+      label: 'Attachments',
+      badge: (activeTab.soapAttachments || []).filter(a => a.enabled).length || undefined,
+      badgeColor: ACCENT,
+    },
+    {
+      id: 'scripts',
+      label: 'Scripts',
+      dot: !!(activeTab.preRequestScript?.trim()) || !!(activeTab.postResponseScript?.trim()),
+      dotColor: ACCENT,
+    },
+    { id: 'wsdl', label: 'WSDL' },
+  ];
 
   const handleHeadersChange = (rows: KeyValueRow[]) => {
     updateTab(activeTab.id, { headers: rows, dirty: true });
@@ -84,63 +98,56 @@ export function SoapRequestConfig() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[var(--color-surface)]">
-      {/* Sub-tabs */}
-      <div className="px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
-        <PillTabs
-          tabs={tabsWithBadges}
-          activeTab={activeSubTab}
-          onChange={setActiveSubTab}
-          size="sm"
-          variant="underline"
-          accentColor={ACCENT}
-        />
+      {/* Sub-tabs — same padding/size as REST/GQL request panel tabs */}
+      <div className="flex items-center px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
+        <div className="flex-1">
+          <TabView
+            tabs={tabItems}
+            activeTab={activeSubTab}
+            onChange={setActiveSubTab}
+            variant="underline"
+            accentColor={ACCENT}
+            size="md"
+          />
+        </div>
       </div>
 
       {/* Content */}
       <div className={`flex-1 min-h-0 ${activeSubTab === 'envelope' ? 'flex flex-col' : 'overflow-y-auto [scrollbar-gutter:stable]'}`}>
         {activeSubTab === 'envelope' && (
           <div className="flex-1 flex flex-col min-h-0">
-            {/* 8.23 & 8.24: Envelope toolbar */}
+            {/* Envelope toolbar */}
             {(aiEnabled('bodyGenerator') || aiEnabled('requestFuzzer')) && (
-              <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] flex-shrink-0">
+              <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-surface)]">
                 <span className="text-[11px] font-medium text-[var(--color-text-muted)]">SOAP Envelope (XML)</span>
                 <div className="flex items-center gap-1">
                   {aiEnabled('bodyGenerator') && (
-                    <button
-                      type="button"
-                      onClick={() => bodyGenRef.current?.open()}
-                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                      style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+                    <ButtonView
+                      size="xs"
+                      variant="ghost"
+                      iconLeft={<SparkleIcon size={10} />}
                       title="AI Envelope Generator"
+                      onClick={() => bodyGenRef.current?.open()}
+                      style={{ color: ACCENT }}
                     >
-                      <SparkleIcon size={10} />
                       Generate ✦
-                    </button>
+                    </ButtonView>
                   )}
                   {aiEnabled('requestFuzzer') && (
-                    <button
-                      type="button"
-                      onClick={() => setShowFuzzer(true)}
-                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                      style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+                    <ButtonView
+                      size="xs"
+                      variant="ghost"
+                      iconLeft={<SparkleIcon size={10} />}
                       title="AI XML Fuzzer"
+                      onClick={() => setShowFuzzer(true)}
+                      style={{ color: ACCENT }}
                     >
-                      <SparkleIcon size={10} />
                       Fuzz ✦
-                    </button>
+                    </ButtonView>
                   )}
                 </div>
               </div>
             )}
-            <div className="flex-1 min-h-0">
-              <CodeEditor
-                value={activeTab.soapEnvelope || DEFAULT_ENVELOPE_11}
-                onChange={(val) => updateTab(activeTab.id, { soapEnvelope: val, dirty: true })}
-                language="xml"
-                height="100%"
-              />
-            </div>
-            {/* 8.23: Envelope generator drawer */}
             {aiEnabled('bodyGenerator') && (
               <AiBodyGenerate
                 ref={bodyGenRef}
@@ -151,6 +158,14 @@ export function SoapRequestConfig() {
                 onApply={(body) => updateTab(activeTab.id, { soapEnvelope: body, dirty: true })}
               />
             )}
+            <div className="flex-1 min-h-0">
+              <EditorView
+                value={activeTab.soapEnvelope || DEFAULT_ENVELOPE_11}
+                onChange={(val) => updateTab(activeTab.id, { soapEnvelope: val, dirty: true })}
+                language="xml"
+                height="100%"
+              />
+            </div>
           </div>
         )}
 
@@ -159,10 +174,35 @@ export function SoapRequestConfig() {
         )}
 
         {activeSubTab === 'headers' && (
-          <div className="h-full flex flex-col min-h-0">
-            {/* 8.22: Header Suggest ✦ */}
+          <div className="h-full flex flex-col overflow-hidden">
+            <KeyValueTableView
+              rows={activeTab.headers || []}
+              onChange={handleHeadersChange}
+              placeholder={{ key: 'header-name', value: 'header-value' }}
+              autocompleteKeys
+              maskSensitive
+              label="Headers"
+              accentColor={ACCENT}
+              toolbarExtra={
+                aiEnabled('headerAutocomplete') ? (
+                  <IconButtonView
+                    icon={<SparkleIcon size={13} />}
+                    size="md"
+                    title="Suggest headers"
+                    accentColor="var(--color-protocol-ai)"
+                    disabled={aiHeaderLoading}
+                    onClick={() => {
+                      setAiHeaderLoading(true);
+                      aiHeaderSuggestRef.current?.trigger();
+                      setTimeout(() => setAiHeaderLoading(false), 300);
+                    }}
+                  />
+                ) : undefined
+              }
+            />
             {aiEnabled('headerAutocomplete') && (
               <AiHeaderSuggest
+                ref={aiHeaderSuggestRef}
                 tabId={activeTab.id}
                 method="SOAP"
                 url={activeTab.url || ''}
@@ -181,15 +221,6 @@ export function SoapRequestConfig() {
                 }}
               />
             )}
-            <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-3">
-              <KeyValueTable
-                rows={activeTab.headers || [{ id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true }]}
-                onChange={handleHeadersChange}
-                showDescription={false}
-                placeholder={{ key: 'header-name', value: 'header-value' }}
-                accentColor={ACCENT}
-              />
-            </div>
           </div>
         )}
 
@@ -218,7 +249,7 @@ export function SoapRequestConfig() {
         )}
 
         {activeSubTab === 'scripts' && (
-          <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col px-3 pt-2">
             <ScriptsEditor
               preRequestScript={activeTab.preRequestScript}
               postResponseScript={activeTab.postResponseScript}
@@ -231,19 +262,18 @@ export function SoapRequestConfig() {
 
         {activeSubTab === 'wsdl' && (
           <div className="h-full flex flex-col min-h-0">
-            {/* 8.25: WSDL Explainer button */}
             {aiEnabled('soapWsdlExplainer') && (activeTab.soapOperations?.length || activeTab.soapService) && (
-              <div className="flex items-center justify-end px-3 py-1.5 border-b border-[var(--color-surface-border)] flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowWsdlExplainer(true)}
-                  className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                  style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+              <div className="flex items-center justify-end px-3 py-1 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-surface)]">
+                <ButtonView
+                  size="xs"
+                  variant="ghost"
+                  iconLeft={<SparkleIcon size={10} />}
                   title="AI WSDL Explainer — plain-English explanation of all operations"
+                  onClick={() => setShowWsdlExplainer(true)}
+                  style={{ color: ACCENT }}
                 >
-                  <SparkleIcon size={10} />
                   WSDL Explainer ✦
-                </button>
+                </ButtonView>
               </div>
             )}
             <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
@@ -253,7 +283,6 @@ export function SoapRequestConfig() {
         )}
       </div>
 
-      {/* Modals */}
       {showFuzzer && <AiRequestFuzzerModal onClose={() => setShowFuzzer(false)} />}
       {showWsdlExplainer && <AiSoapWsdlExplainerModal onClose={() => setShowWsdlExplainer(false)} />}
     </div>

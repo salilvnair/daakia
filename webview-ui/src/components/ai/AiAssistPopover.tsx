@@ -307,7 +307,7 @@ export function AiAssistPopover({
           position: 'fixed',
           top: pos.top,
           left: pos.left,
-          width: 380,
+          width: 532,
           zIndex: 9999,
           visibility: pos.visible ? 'visible' : 'hidden',
         }}
@@ -331,7 +331,7 @@ export function AiAssistPopover({
           footerLeft={footerLeft}
           footerRight={footerRight}
         >
-          <div ref={scrollRef} style={{ maxHeight: 300, overflowY: 'auto' }}>
+          <div ref={scrollRef} style={{ maxHeight: 420, overflowY: 'auto' }}>
             {streaming && !text && !error && (
               <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic', margin: 0 }}>
                 {modeLabel}

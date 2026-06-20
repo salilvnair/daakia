@@ -244,6 +244,7 @@ export function SelectInputView({
                   alignItems: 'center',
                   gap: base.gap,
                   padding: `${base.itemPy} ${base.paddingX}`,
+                  marginBottom: '2px',
                   borderRadius: rounded ? '5px' : '0px',
                   fontSize: base.fontSize,
                   fontWeight: 500,

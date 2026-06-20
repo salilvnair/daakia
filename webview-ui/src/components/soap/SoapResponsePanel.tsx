@@ -1,30 +1,25 @@
 import { useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
-import { PillTabs, CodeEditor, RequestProgressOverlay, CopyButton } from '../shared';
+import { RequestProgressOverlay } from '../shared';
 import { ScriptResultsView } from '../shared/display/ScriptResultsView';
 import { cancelRequest } from '../../services/request';
-import type { PillTab } from '../shared';
-import { SparkleIcon } from '../../icons';
 import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
 import { DataSchemaModal } from '../rest/response/DataSchemaModal';
 import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import { EditorView, CopyButtonView, TabView, type TabItem } from '../../dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
 
-const responseTabs: PillTab[] = [
+const responseTabs: TabItem[] = [
   { id: 'body', label: 'Body' },
   { id: 'headers', label: 'Headers' },
   { id: 'tests', label: 'Tests' },
 ];
 
-/**
- * SoapResponsePanel — Shows XML response body, response headers, and test results.
- * Detects SOAP faults and displays them with a fault indicator.
- */
 export function SoapResponsePanel() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const activeTabId = useTabsStore(s => s.activeTabId);
@@ -32,8 +27,8 @@ export function SoapResponsePanel() {
   const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'body');
   const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
-  const [showPatternLearning, setShowPatternLearning] = useState(false);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+
   const setActiveSubTab = (tab: string) => {
     setActiveSubTabLocal(tab);
     if (activeTabId) useUiStateStore.getState().setPref(`soap.response.subtab.${activeTabId}`, tab);
@@ -43,7 +38,6 @@ export function SoapResponsePanel() {
 
   const response = activeTab.response;
 
-  // Show progress overlay while loading (even if previous response exists)
   if (activeTab.loading) {
     const stages = activeTab.requestProgress || [
       { id: 'sending-request', label: 'Sending SOAP request', status: 'running' as const, startTime: Date.now() },
@@ -59,7 +53,6 @@ export function SoapResponsePanel() {
     );
   }
 
-  // If no response yet, show placeholder
   if (!response) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-[var(--color-panel)] text-[var(--color-text-muted)] gap-2">
@@ -70,13 +63,14 @@ export function SoapResponsePanel() {
     );
   }
 
-  // Detect SOAP fault in response body
   const hasFault = response.body
     ? /<(soap:|SOAP-ENV:|)Fault[> ]/i.test(response.body)
     : false;
 
+  const isFailure = response.status >= 400 || hasFault || response.status === 0;
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[var(--color-panel)]">
       {/* Status bar */}
       <div className="flex items-center gap-3 px-3 py-1.5 border-b border-[var(--color-surface-border)] text-[11px]">
         <SoapStatusBadge status={response.status} hasFault={hasFault} />
@@ -95,21 +89,25 @@ export function SoapResponsePanel() {
       </div>
 
       {/* Sub-tabs + AI actions */}
-      <div className="flex items-center justify-between px-3 pt-2 border-b border-[var(--color-surface-border)]">
-        <PillTabs
-          tabs={responseTabs}
-          activeTab={activeSubTab}
-          onChange={setActiveSubTab}
-          size="sm"
-          variant="underline"
-          accentColor={ACCENT}
-        />
+      <div className="flex items-center px-3 border-b border-[var(--color-surface-border)]">
+        <div className="flex-1 pt-2.5 pb-0">
+          <TabView
+            tabs={responseTabs}
+            activeTab={activeSubTab}
+            onChange={setActiveSubTab}
+            variant="underline"
+            accentColor={ACCENT}
+            size="md"
+          />
+        </div>
         {activeSubTab === 'body' && (
-          <div className="flex items-center gap-1.5 pb-1.5">
+          <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
             {aiEnabled('explainSoap') && (
               <AiActionButton
                 mode="explain"
                 label="Explain"
+                size="xs"
+                accentColor="var(--color-accent)"
                 response={response}
                 requestMethod="SOAP"
                 requestUrl={activeTab.url || ''}
@@ -121,6 +119,8 @@ export function SoapResponsePanel() {
               <AiActionButton
                 mode="follow-up"
                 label="Follow-ups"
+                size="xs"
+                accentColor="var(--color-accent)"
                 response={response}
                 requestMethod="SOAP"
                 requestUrl={activeTab.url || ''}
@@ -128,40 +128,22 @@ export function SoapResponsePanel() {
                 onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
               />
             )}
-            {aiEnabled('schemaSoap') && (
-              <button
-                type="button"
-                onClick={() => setShowSchema(true)}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
-                style={{
-                  color: 'var(--color-protocol-ai)',
-                  borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 25%, transparent)',
-                  backgroundColor: 'transparent',
-                }}
-                title="Generate Data Schema"
-              >
-                <SparkleIcon size={10} />
-                Schema
-              </button>
+            {isFailure && aiEnabled('smartRetryAdvisor') && (
+              <AiSmartRetryAdvisor
+                status={hasFault ? 500 : response.status}
+                responseBody={response.body || ''}
+                method="SOAP"
+                url={activeTab.url || ''}
+              />
             )}
-            {/* 8.19: Record Baseline ✦ */}
             {aiEnabled('patternBaseline') && (
-              <button
-                type="button"
-                onClick={() => setShowPatternLearning(p => !p)}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-medium cursor-pointer transition-all border"
-                style={{
-                  color: showPatternLearning ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)',
-                  borderColor: showPatternLearning ? 'color-mix(in srgb, var(--color-protocol-ai) 35%, transparent)' : 'color-mix(in srgb, var(--color-text-muted) 25%, transparent)',
-                  backgroundColor: 'transparent',
-                }}
-                title="Record / compare response pattern baseline"
-              >
-                <SparkleIcon size={10} />
-                Baseline
-              </button>
+              <AiResponsePatternLearning
+                responseBody={response.body || ''}
+                method="SOAP"
+                url={activeTab.url || ''}
+                status={response.status}
+              />
             )}
-            {/* 8.18: ⋮ AI Actions menu */}
             {(aiEnabled('assertGeneration') || aiEnabled('semanticValidator') || aiEnabled('responseTransformer') || aiEnabled('responseDiff')) && (
               <AiResponseActionsMenu
                 tabId={activeTab.id}
@@ -174,18 +156,6 @@ export function SoapResponsePanel() {
         )}
       </div>
 
-      {/* 8.19: Pattern Learning panel */}
-      {showPatternLearning && aiEnabled('patternBaseline') && (
-        <div className="border-b border-[var(--color-surface-border)]">
-          <AiResponsePatternLearning
-            responseBody={response.body || ''}
-            method="SOAP"
-            url={activeTab.url || ''}
-            status={response.status}
-          />
-        </div>
-      )}
-
       {/* Content */}
       <div className={`flex-1 min-h-0 flex flex-col ${activeSubTab === 'body' ? '' : 'overflow-y-auto [scrollbar-gutter:stable]'}`}>
         {activeSubTab === 'body' && (
@@ -197,28 +167,16 @@ export function SoapResponsePanel() {
             )}
             <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--color-surface-border)]">
               <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Response Body</span>
-              <CopyButton text={response.body || ''} size={14} />
+              <CopyButtonView text={response.body || ''} accentColor="var(--color-success)" />
             </div>
             <div className="flex-1 min-h-0">
-              <CodeEditor
+              <EditorView
                 value={response.body || ''}
-                onChange={() => {}}
                 language="xml"
-                readOnly
                 height="100%"
+                readOnly
               />
             </div>
-            {/* 8.20: Smart Retry Advisor — shown on SOAP fault or HTTP error */}
-            {(hasFault || response.status >= 400 || response.status === 0) && aiEnabled('smartRetryAdvisor') && (
-              <div className="border-t border-[var(--color-surface-border)] flex-shrink-0">
-                <AiSmartRetryAdvisor
-                  status={hasFault ? 500 : response.status}
-                  responseBody={response.body || ''}
-                  method="SOAP"
-                  url={activeTab.url || ''}
-                />
-              </div>
-            )}
           </>
         )}
 
@@ -250,14 +208,13 @@ export function SoapResponsePanel() {
           <ScriptResultsView response={response} />
         )}
       </div>
+
       {showSchema && (
         <DataSchemaModal body={response.body || ''} onClose={() => setShowSchema(false)} />
       )}
     </div>
   );
 }
-
-/* --- Helpers --- */
 
 function SoapStatusBadge({ status, hasFault }: { status: number; hasFault: boolean }) {
   const isSuccess = status >= 200 && status < 300 && !hasFault;
