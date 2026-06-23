@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react';
-import { CodeEditor, StyledDropdown, ConfirmDialog, DurationInput } from '../../shared';
-import type { DropdownOption } from '../../shared';
+import {
+  SelectInputView, EditorView, ButtonView, IconButtonView, ToggleSwitchView,
+  TextInputView, DurationInputView, TabView, type SelectOption, type TabItem,
+} from '@salilvnair/dui';
+import { ConfirmDialog } from '../../shared';
 import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from '../../../icons';
 import { SOAP_MOCK_SAMPLES } from '../samples/soap';
 import { useUiStateStore } from '../../../store/ui-state-store';
@@ -12,6 +15,13 @@ import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
 
 type SoapOpTab = 'response' | 'sequence' | 'matching' | 'advanced';
+
+const SOAP_OP_TABS: TabItem[] = [
+  { id: 'response', label: 'Response' },
+  { id: 'sequence', label: 'Sequence' },
+  { id: 'matching', label: 'Matching' },
+  { id: 'advanced', label: 'Advanced' },
+];
 
 function opToRoute(op: OperationRow): MockRoute {
   return {
@@ -31,7 +41,7 @@ function routeToOpPatch(patch: Partial<MockRoute>): Partial<OperationRow> {
 
 const ACCENT = 'var(--color-protocol-soap)';
 
-const RESPONSE_TYPE_OPTIONS: DropdownOption[] = [
+const RESPONSE_TYPE_OPTIONS: SelectOption[] = [
   { value: 'static', label: 'Static XML' },
   { value: 'script', label: 'Script' },
   { value: 'fault', label: 'SOAP Fault' },
@@ -43,7 +53,7 @@ const RESPONSE_TYPE_CONFIG: Record<string, { color: string; label: string }> = {
   fault: { color: '#f87171', label: 'FAULT' },
 };
 
-const SAMPLE_OPTIONS: DropdownOption[] = [
+const SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
   ...SOAP_MOCK_SAMPLES.map(s => ({ value: s.id, label: s.label })),
 ];
@@ -81,12 +91,7 @@ interface SoapConfigProps {
   onUpdate: (patch: Partial<MockServer>) => void;
 }
 
-/**
- * SoapConfig — SOAP mock server configuration panel.
- * Service → Operation hierarchy with response type (static/script/fault).
- */
 export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
-  // Persist expanded state via ui-state-store
   const storedExpanded = useUiStateStore(s => s.getPref(`mock.soap.expanded.${server.id}`));
   const storedOpId = useUiStateStore(s => s.getPref(`mock.soap.expandedOp.${server.id}`));
   const [expandedServices, setExpandedServices] = useState<Set<string>>(() => {
@@ -123,42 +128,23 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
     return Array.from(map.entries()).map(([service, ops]) => ({ service, operations: ops }));
   }, [operations]);
 
-  const update = (newOps: OperationRow[]) => {
-    onUpdate({ soapOperations: newOps as SoapMockOperation[] });
-  };
+  const update = (newOps: OperationRow[]) => { onUpdate({ soapOperations: newOps as SoapMockOperation[] }); };
+
+  const defaultSoapEnvelope = (serviceName: string) =>
+    `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Body>\n    <Response>\n      <message>Hello from SOAP mock</message>\n    </Response>\n  </soap:Body>\n</soap:Envelope>`;
 
   const addService = () => {
     const svcName = `NewService${serviceGroups.length + 1}`;
-    update([...operations, {
-      id: crypto.randomUUID(),
-      service: svcName,
-      operation: 'NewOperation',
-      soapAction: `http://example.com/${svcName}/NewOperation`,
-      responseType: 'static',
-      response: `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Body>\n    <Response>\n      <message>Hello from SOAP mock</message>\n    </Response>\n  </soap:Body>\n</soap:Envelope>`,
-      delay: 0,
-      enabled: true,
-    }]);
+    update([...operations, { id: crypto.randomUUID(), service: svcName, operation: 'NewOperation', soapAction: `http://example.com/${svcName}/NewOperation`, responseType: 'static', response: defaultSoapEnvelope(svcName), delay: 0, enabled: true, serviceEnabled: true }]);
     setExpandedServices(prev => new Set(prev).add(svcName));
   };
 
   const addOperationToService = (serviceName: string) => {
-    update([...operations, {
-      id: crypto.randomUUID(),
-      service: serviceName,
-      operation: 'NewOperation',
-      soapAction: `http://example.com/${serviceName}/NewOperation`,
-      responseType: 'static',
-      response: `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Body>\n    <Response>\n      <message>Hello from SOAP mock</message>\n    </Response>\n  </soap:Body>\n</soap:Envelope>`,
-      delay: 0,
-      enabled: true,
-    }]);
+    update([...operations, { id: crypto.randomUUID(), service: serviceName, operation: 'NewOperation', soapAction: `http://example.com/${serviceName}/NewOperation`, responseType: 'static', response: defaultSoapEnvelope(serviceName), delay: 0, enabled: true, serviceEnabled: true }]);
   };
 
-  const removeOperation = (id: string) => {
-    update(operations.filter(op => op.id !== id));
-    setDeleteConfirm(null);
-  };
+  const removeOperation = (id: string) => { update(operations.filter(op => op.id !== id)); setDeleteConfirm(null); };
+  const removeService = (serviceName: string) => { update(operations.filter(op => op.service !== serviceName)); setDeleteConfirm(null); };
 
   const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
     const newOps: SoapMockOperation[] = [];
@@ -177,30 +163,17 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
     update([...operations, ...newOps]);
   };
 
-  const removeService = (serviceName: string) => {
-    update(operations.filter(op => op.service !== serviceName));
-    setDeleteConfirm(null);
-  };
-
-  const updateOperation = (id: string, patch: Partial<OperationRow>) => {
-    update(operations.map(op => op.id === id ? { ...op, ...patch } : op));
-  };
+  const updateOperation = (id: string, patch: Partial<OperationRow>) => { update(operations.map(op => op.id === id ? { ...op, ...patch } : op)); };
 
   const renameService = (oldName: string, newName: string) => {
     update(operations.map(op => op.service === oldName ? { ...op, service: newName } : op));
-    setExpandedServices(prev => {
-      const next = new Set(prev);
-      next.delete(oldName);
-      next.add(newName);
-      return next;
-    });
+    setExpandedServices(prev => { const next = new Set(prev); next.delete(oldName); next.add(newName); return next; });
   };
 
   const toggleService = (svc: string) => {
     setExpandedServices(prev => {
       const next = new Set(prev);
-      if (next.has(svc)) next.delete(svc);
-      else next.add(svc);
+      if (next.has(svc)) next.delete(svc); else next.add(svc);
       useUiStateStore.getState().setPref(`mock.soap.expanded.${server.id}`, JSON.stringify([...next]));
       return next;
     });
@@ -221,36 +194,21 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
     const sample = SOAP_MOCK_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
     const newOps: OperationRow[] = sample.operations.map(op => ({
-      id: crypto.randomUUID(),
-      service: op.service,
-      operation: op.operation,
-      soapAction: op.soapAction,
-      responseType: op.responseType,
-      response: op.response,
-      faultCode: op.faultCode,
-      faultString: op.faultString,
-      delay: 0,
-      enabled: true,
+      id: crypto.randomUUID(), service: op.service, operation: op.operation, soapAction: op.soapAction,
+      responseType: op.responseType, response: op.response, faultCode: op.faultCode,
+      faultString: op.faultString, delay: 0, enabled: true, serviceEnabled: true,
     }));
-    // REPLACE existing — clear out and set new
     onUpdate({ description: sample.description, soapOperations: newOps as SoapMockOperation[] });
-    const newServices = new Set(newOps.map(op => op.service));
-    setExpandedServices(newServices);
+    setExpandedServices(new Set(newOps.map(op => op.service)));
   };
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Header — matches gRPC layout exactly */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Services ({serviceGroups.length})</span>
         <div className="flex items-center gap-1.5">
-          <StyledDropdown
-            options={SAMPLE_OPTIONS}
-            value=""
-            onChange={(v) => { if (v) loadSample(v); }}
-            size="sm"
-            accentColor={ACCENT}
-          />
+          <SelectInputView size="md" options={SAMPLE_OPTIONS} value="" onChange={(v) => { if (v) loadSample(v); }} accentColor={ACCENT} />
           <MockAiGenerateButton
             templateKey="mock.soap.generate"
             title="SOAP Operations"
@@ -262,25 +220,9 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
             accentVar="var(--color-protocol-soap)"
             onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <button
-            type="button"
-            onClick={addService}
-            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)`, background: 'transparent' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 10%, transparent)`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-          >
-            + Add Service
-          </button>
+          <ButtonView size="md" variant="ghost" accentColor={ACCENT} onClick={addService}>+ Add Service</ButtonView>
           {serviceGroups.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowDeleteAll(true)}
-              title="Delete All Services"
-              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
-              <TrashIcon size={12} />
-            </button>
+            <IconButtonView size="sm" icon={<TrashIcon size={12} />} accentColor="var(--color-error)" onClick={() => setShowDeleteAll(true)} title="Delete All Services" />
           )}
         </div>
       </div>
@@ -305,7 +247,6 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
                     : 'border-[var(--color-surface-border)] bg-[var(--color-panel)]'
                 }`}
               >
-                {/* Disabled overlay */}
                 {!svcEnabled && (
                   <div className="absolute inset-0 rounded-md z-10 pointer-events-none overflow-hidden">
                     <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md bg-[var(--color-muted-fallback)]" />
@@ -318,101 +259,72 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
                   className={`flex items-center gap-1.5 px-2.5 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] relative ${!svcEnabled ? 'opacity-50' : ''}`}
                   onClick={() => { if (svcEnabled) toggleService(group.service); }}
                 >
-                  {/* Toggle */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); toggleServiceEnabled(group.service); }}
-                    className="relative z-20 w-[26px] h-[13px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-                    style={{ backgroundColor: svcEnabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-                    title={svcEnabled ? 'Disable service' : 'Enable service'}
-                  >
-                    <span className="absolute top-[2px] w-[9px] h-[9px] rounded-full bg-white transition-all" style={{ left: svcEnabled ? '15px' : '2px' }} />
-                  </button>
-
+                  <div onClick={e => e.stopPropagation()}>
+                    <ToggleSwitchView checked={svcEnabled} onChange={() => toggleServiceEnabled(group.service)} accentColor="var(--color-success)" size="xs" />
+                  </div>
                   <span
                     className="transition-transform duration-150"
                     style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', color: ACCENT, visibility: svcEnabled ? 'visible' : 'hidden' }}
                   >
                     <ChevronRightIcon size={12} />
                   </span>
-                  <span className="flex-1 text-[12px] font-mono font-medium text-[var(--color-text-primary)] truncate">
-                    {group.service}
-                  </span>
-                  <span className="text-[10px] text-[var(--color-text-muted)]">
-                    {group.operations.length} op{group.operations.length !== 1 ? 's' : ''}
-                  </span>
+                  <span className="flex-1 text-[12px] font-mono font-medium text-[var(--color-text-primary)] truncate">{group.service}</span>
+                  <span className="text-[10px] text-[var(--color-text-muted)]">{group.operations.length} op{group.operations.length !== 1 ? 's' : ''}</span>
                   {svcEnabled && server.running && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const serverUrl = `http://localhost:${server.port || 8000}`;
-                      const svcOps = group.operations.filter(op => op.enabled);
-                      const op = svcOps[0];
-                      const { addTab, switchProtocol } = useTabsStore.getState();
-                      const envelope = `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Header/>\n  <soap:Body>\n    <!-- ${op?.operation || 'Request'} -->\n  </soap:Body>\n</soap:Envelope>`;
-                      switchProtocol('soap');
-                      addTab({
-                        protocol: 'soap',
-                        url: serverUrl,
-                        name: `Try ${group.service}`,
-                        soapVersion: '1.1',
-                        soapAction: op?.soapAction || '',
-                        soapOperation: op?.operation || '',
-                        soapService: group.service,
-                        soapEnvelope: envelope,
-                      });
-                    }}
-                    className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-try-button)] hover:text-[var(--color-try-button)] cursor-pointer transition-colors"
-                    title="Try this service"
-                  >
-                    <ExternalLinkIcon size={12} />
-                  </button>
+                    <div onClick={e => e.stopPropagation()}>
+                      <IconButtonView
+                        size="sm"
+                        icon={<ExternalLinkIcon size={12} />}
+                        accentColor="var(--color-try-button)"
+                        onClick={() => {
+                          const serverUrl = `http://localhost:${server.port || 8000}`;
+                          const svcOps = group.operations.filter(op => op.enabled);
+                          const op = svcOps[0];
+                          const { addTab, switchProtocol } = useTabsStore.getState();
+                          const envelope = `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Header/>\n  <soap:Body>\n    <!-- ${op?.operation || 'Request'} -->\n  </soap:Body>\n</soap:Envelope>`;
+                          switchProtocol('soap');
+                          addTab({ protocol: 'soap', url: serverUrl, name: `Try ${group.service}`, soapVersion: '1.1', soapAction: op?.soapAction || '', soapOperation: op?.operation || '', soapService: group.service, soapEnvelope: envelope });
+                        }}
+                        title="Try this service"
+                      />
+                    </div>
                   )}
                   {svcEnabled && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const svcName = group.service.replace(/[^a-zA-Z0-9]/g, '');
-                      const url = `localhost:${server.port || 8000}/${svcName}?wsdl`;
-                      navigator.clipboard.writeText(url);
-                      setCopiedService(group.service);
-                      setTimeout(() => setCopiedService(null), 1500);
-                    }}
-                    className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-mock-server)] hover:bg-[rgba(249,113,113,0.08)] cursor-pointer transition-colors"
-                    title={`Copy WSDL URL`}
-                  >
-                    {copiedService === group.service ? <CheckIcon size={11} className="text-[var(--color-success)]" /> : <CopyIcon size={11} />}
-                  </button>
+                    <div onClick={e => e.stopPropagation()}>
+                      <IconButtonView
+                        size="sm"
+                        icon={copiedService === group.service ? <CheckIcon size={11} className="text-[var(--color-success)]" /> : <CopyIcon size={11} />}
+                        onClick={() => {
+                          const svcName = group.service.replace(/[^a-zA-Z0-9]/g, '');
+                          navigator.clipboard.writeText(`localhost:${server.port || 8000}/${svcName}?wsdl`);
+                          setCopiedService(group.service);
+                          setTimeout(() => setCopiedService(null), 1500);
+                        }}
+                        title="Copy WSDL URL"
+                      />
+                    </div>
                   )}
                   {svcEnabled && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ type: 'service', id: group.service, label: group.service }); }}
-                    className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors"
-                    title="Remove service"
-                  >
-                    <TrashIcon size={12} />
-                  </button>
+                    <div onClick={e => e.stopPropagation()}>
+                      <IconButtonView
+                        size="sm"
+                        icon={<TrashIcon size={12} />}
+                        accentColor="var(--color-error)"
+                        onClick={() => setDeleteConfirm({ type: 'service', id: group.service, label: group.service })}
+                        title="Remove service"
+                      />
+                    </div>
                   )}
                 </div>
 
                 {/* Expanded service content */}
                 {isExpanded && (
                   <div className="px-3 pb-3 pt-1 border-t border-[rgba(255,255,255,0.06)] flex flex-col gap-2">
-                    {/* Service name edit */}
                     <div className="flex items-center gap-2">
                       <label className="text-[10px] text-[var(--color-text-muted)] whitespace-nowrap">Service Name</label>
-                      <input
-                        type="text"
-                        value={group.service}
-                        onChange={(e) => renameService(group.service, e.target.value)}
-                        className="flex-1 h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
-                      />
+                      <TextInputView value={group.service} onChange={(e) => renameService(group.service, e.target.value)} size="md" style={{ flex: 1, fontFamily: 'monospace' }} />
                     </div>
 
-                    {/* Operation rows */}
                     {group.operations.map((op) => (
                       <OperationItem
                         key={op.id}
@@ -424,17 +336,9 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
                       />
                     ))}
 
-                    {/* Add operation button */}
-                    <button
-                      type="button"
-                      onClick={() => addOperationToService(group.service)}
-                      className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors self-start border border-dashed"
-                      style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: 'transparent' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                    >
+                    <ButtonView size="md" variant="ghost" accentColor={ACCENT} onClick={() => addOperationToService(group.service)}>
                       + Add Operation
-                    </button>
+                    </ButtonView>
                   </div>
                 )}
               </div>
@@ -443,7 +347,6 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
       {deleteConfirm && (
         <ConfirmDialog
           title={deleteConfirm.type === 'service' ? 'Delete Service' : 'Delete Operation'}
@@ -452,10 +355,7 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
             : `Are you sure you want to delete operation "${deleteConfirm.label}"? This cannot be undone.`}
           confirmLabel="Delete"
           danger
-          onConfirm={() => {
-            if (deleteConfirm.type === 'service') removeService(deleteConfirm.id);
-            else removeOperation(deleteConfirm.id);
-          }}
+          onConfirm={() => { if (deleteConfirm.type === 'service') removeService(deleteConfirm.id); else removeOperation(deleteConfirm.id); }}
           onCancel={() => setDeleteConfirm(null)}
         />
       )}
@@ -466,10 +366,7 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
           message={`Are you sure you want to delete all ${serviceGroups.length} service${serviceGroups.length !== 1 ? 's' : ''} and their operations? This cannot be undone.`}
           confirmLabel="Delete All"
           danger
-          onConfirm={() => {
-            update([]);
-            setShowDeleteAll(false);
-          }}
+          onConfirm={() => { update([]); setShowDeleteAll(false); }}
           onCancel={() => setShowDeleteAll(false)}
         />
       )}
@@ -477,7 +374,7 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
   );
 }
 
-// ────────── Operation Item (mirrors GrpcConfig's MethodRow) ──────────
+// ────────── Operation Item ──────────
 
 interface OperationItemProps {
   operation: OperationRow;
@@ -499,7 +396,6 @@ function OperationItem({ operation: op, isExpanded, onToggleExpand, onUpdate, on
           : 'border-[var(--color-surface-border)] bg-[var(--color-panel)]'
       }`}
     >
-      {/* Disabled overlay */}
       {!op.enabled && (
         <div className="absolute inset-0 rounded-md z-10 pointer-events-none overflow-hidden">
           <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md bg-[var(--color-muted-fallback)]" />
@@ -512,135 +408,84 @@ function OperationItem({ operation: op, isExpanded, onToggleExpand, onUpdate, on
         className={`flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] relative ${!op.enabled ? 'opacity-50' : ''}`}
         onClick={() => { if (op.enabled) onToggleExpand(); }}
       >
-        {/* Toggle */}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onUpdate({ enabled: !op.enabled }); }}
-          className="relative z-20 w-[26px] h-[13px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-          style={{ backgroundColor: op.enabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-          title={op.enabled ? 'Disable' : 'Enable'}
-        >
-          <span className="absolute top-[2px] w-[9px] h-[9px] rounded-full bg-white transition-all" style={{ left: op.enabled ? '15px' : '2px' }} />
-        </button>
-
-        {/* Operation name */}
-        <span className="flex-1 text-[11px] font-mono text-[var(--color-text-primary)] truncate">
-          {op.operation}
-        </span>
-
-        {/* Type badge (right side, colored) */}
-        <span
-          className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0"
-          style={{ color: cfg.color, backgroundColor: `${cfg.color}18` }}
-        >
+        <div onClick={e => e.stopPropagation()}>
+          <ToggleSwitchView checked={op.enabled} onChange={(v) => onUpdate({ enabled: v })} accentColor="var(--color-success)" size="xs" />
+        </div>
+        <span className="flex-1 text-[11px] font-mono text-[var(--color-text-primary)] truncate">{op.operation}</span>
+        <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0" style={{ color: cfg.color, backgroundColor: `${cfg.color}18` }}>
           {cfg.label}
         </span>
-
-        {/* Delete */}
         {op.enabled && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors"
-          >
-            <TrashIcon size={11} />
-          </button>
+          <div onClick={e => e.stopPropagation()}>
+            <IconButtonView size="sm" icon={<TrashIcon size={11} />} accentColor="var(--color-error)" onClick={onRemove} />
+          </div>
         )}
       </div>
 
       {/* Expanded detail */}
       {op.enabled && isExpanded && (
         <div className="border-t border-[rgba(255,255,255,0.06)]">
-          {/* Tab bar */}
-          <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.06)] px-2.5">
-            {(['response', 'sequence', 'matching', 'advanced'] as SoapOpTab[]).map(tab => (
-              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-                className="h-[28px] px-2.5 text-[10px] font-medium cursor-pointer transition-colors"
-                style={{
-                  borderBottom: activeTab === tab ? `2px solid ${ACCENT}` : '2px solid transparent',
-                  color: activeTab === tab ? ACCENT : 'var(--color-text-muted)',
-                  marginBottom: '-1px',
-                }}>
-                {tab === 'response' ? 'Response' : tab === 'sequence' ? 'Sequence' : tab === 'matching' ? 'Matching' : 'Advanced'}
-              </button>
-            ))}
+          <div className="px-2.5 pt-1">
+            <TabView tabs={SOAP_OP_TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as SoapOpTab)} variant="underline" size="xs" accentColor={ACCENT} />
           </div>
 
           <div className="px-2.5 pb-2.5 pt-2 flex flex-col gap-2">
-            {/* ── Response tab ── */}
-            {activeTab === 'response' && <>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Operation Name</label>
-                  <input type="text" value={op.operation} onChange={(e) => onUpdate({ operation: e.target.value })}
-                    className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">SOAPAction</label>
-                  <input type="text" value={op.soapAction} onChange={(e) => onUpdate({ soapAction: e.target.value })}
-                    className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response Type</label>
-                  <StyledDropdown options={RESPONSE_TYPE_OPTIONS} value={op.responseType}
-                    onChange={(v) => onUpdate({ responseType: v as OperationRow['responseType'] })} size="sm" accentColor={ACCENT} />
-                </div>
-                <div className="flex items-end">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
-                    <DurationInput value={op.delay} onChange={(ms) => onUpdate({ delay: ms })} />
-                  </div>
-                </div>
-              </div>
-              {op.responseType === 'fault' ? (
+            {activeTab === 'response' && (
+              <>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Fault Code</label>
-                    <input type="text" value={op.faultCode || ''} onChange={(e) => onUpdate({ faultCode: e.target.value })}
-                      placeholder="soap:Server"
-                      className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-mock-server)]" />
+                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Operation Name</label>
+                    <TextInputView value={op.operation} onChange={(e) => onUpdate({ operation: e.target.value })} size="md" style={{ width: '100%', fontFamily: 'monospace' }} />
                   </div>
                   <div>
-                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Fault String</label>
-                    <input type="text" value={op.faultString || ''} onChange={(e) => onUpdate({ faultString: e.target.value })}
-                      placeholder="Error description"
-                      className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-mock-server)]" />
+                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">SOAPAction</label>
+                    <TextInputView value={op.soapAction} onChange={(e) => onUpdate({ soapAction: e.target.value })} size="md" style={{ width: '100%', fontFamily: 'monospace' }} />
                   </div>
                 </div>
-              ) : op.responseType === 'script' ? (
-                <div>
-                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response Script</label>
-                  <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
-                    <CodeEditor value={op.responseScript || '// Return XML string\nreturn `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Body>\n    <Response><result>${Date.now()}</result></Response>\n  </soap:Body>\n</soap:Envelope>`;'}
-                      onChange={(v) => onUpdate({ responseScript: v })} language="javascript" className="h-full" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response Type</label>
+                    <SelectInputView size="md" options={RESPONSE_TYPE_OPTIONS} value={op.responseType} onChange={(v) => onUpdate({ responseType: v as OperationRow['responseType'] })} accentColor={ACCENT} />
+                  </div>
+                  <div className="flex items-end">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
+                      <DurationInputView value={op.delay} onChange={(ms) => onUpdate({ delay: ms })} size="sm" />
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <div>
-                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response XML</label>
-                  <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
-                    <CodeEditor value={op.response} onChange={(v) => onUpdate({ response: v })} language="xml" className="h-full" />
+                {op.responseType === 'fault' ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Fault Code</label>
+                      <TextInputView value={op.faultCode || ''} onChange={(e) => onUpdate({ faultCode: e.target.value })} placeholder="soap:Server" size="md" style={{ width: '100%', fontFamily: 'monospace' }} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Fault String</label>
+                      <TextInputView value={op.faultString || ''} onChange={(e) => onUpdate({ faultString: e.target.value })} placeholder="Error description" size="md" style={{ width: '100%' }} />
+                    </div>
                   </div>
-                </div>
-              )}
-            </>}
-
-            {/* ── Sequence tab ── */}
-            {activeTab === 'sequence' && (
-              <SequencePanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />
+                ) : op.responseType === 'script' ? (
+                  <div>
+                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response Script</label>
+                    <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
+                      <EditorView value={op.responseScript || '// Return XML string\nreturn `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Body>\n    <Response><result>${Date.now()}</result></Response>\n  </soap:Body>\n</soap:Envelope>`;'} onChange={(v) => onUpdate({ responseScript: v })} language="javascript" height="100%" />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response XML</label>
+                    <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
+                      <EditorView value={op.response} onChange={(v) => onUpdate({ response: v })} language="xml" height="100%" />
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            {/* ── Matching tab ── */}
-            {activeTab === 'matching' && (
-              <MatchBuilderPanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />
-            )}
-
-            {/* ── Advanced tab ── */}
-            {activeTab === 'advanced' && (
-              <FaultInjectionPanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />
-            )}
+            {activeTab === 'sequence' && <SequencePanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />}
+            {activeTab === 'matching' && <MatchBuilderPanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />}
+            {activeTab === 'advanced' && <FaultInjectionPanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />}
           </div>
         </div>
       )}

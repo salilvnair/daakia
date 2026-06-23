@@ -3,7 +3,7 @@
  * Toggle template mode on a route, with Monaco editor and live rendered preview.
  */
 import { useState, useCallback } from 'react';
-import { CodeEditor, ResizablePanel } from '../../shared';
+import { EditorView, ResizablePanelView, ToggleSwitchView, ButtonView } from '@salilvnair/dui';
 import { SparkleIcon, ChevronDownIcon } from '../../../icons';
 import type { MockRoute } from '../mock-types';
 
@@ -117,14 +117,12 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
       {/* Template toggle */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onUpdate({ isTemplate: !route.isTemplate })}
-            className="relative w-[32px] h-[16px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-            style={{ backgroundColor: route.isTemplate ? MOCK_ACCENT : 'var(--color-muted-fallback)' }}
-          >
-            <span className="absolute top-[2px] w-[12px] h-[12px] rounded-full bg-white transition-all" style={{ left: route.isTemplate ? '18px' : '2px' }} />
-          </button>
+          <ToggleSwitchView
+            checked={route.isTemplate}
+            onChange={(v) => onUpdate({ isTemplate: v })}
+            accentColor={MOCK_ACCENT}
+            size="xs"
+          />
           <span className="text-[11px] font-medium text-[var(--color-text-muted)]">
             {route.isTemplate ? 'Template mode ON' : 'Template mode OFF'}
           </span>
@@ -132,22 +130,12 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
         </div>
         {route.isTemplate && (
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setShowHelpers(v => !v)}
-              className="h-[22px] px-2 text-[10px] rounded cursor-pointer transition-colors"
-              style={{ color: MOCK_ACCENT, background: showHelpers ? `color-mix(in srgb, ${MOCK_ACCENT} 15%, transparent)` : 'transparent', border: `1px solid color-mix(in srgb, ${MOCK_ACCENT} 25%, transparent)` }}
-            >
+            <ButtonView size="md" variant="ghost" accentColor={MOCK_ACCENT} onClick={() => setShowHelpers(v => !v)}>
               Helpers
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPreview(v => !v)}
-              className="h-[22px] px-2 text-[10px] rounded cursor-pointer transition-colors"
-              style={{ color: 'var(--color-info)', background: showPreview ? 'rgba(14,165,233,0.1)' : 'transparent', border: '1px solid rgba(14,165,233,0.2)' }}
-            >
+            </ButtonView>
+            <ButtonView size="md" variant="ghost" accentColor="var(--color-info)" onClick={() => setShowPreview(v => !v)}>
               {showPreview ? 'Hide Preview' : 'Live Preview'}
-            </button>
+            </ButtonView>
           </div>
         )}
       </div>
@@ -186,9 +174,9 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
             {/* Template side */}
             <div className="flex flex-col gap-1">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Template</span>
-              <ResizablePanel id={`tpl.${route.id}.body`} defaultHeight={140} minHeight={80} maxHeight={400}>
-                <CodeEditor value={route.body} onChange={v => onUpdate({ body: v })} language="json" height="100%" />
-              </ResizablePanel>
+              <ResizablePanelView id={`tpl.${route.id}.body`} defaultHeight={140} minHeight={80} maxHeight={400}>
+                <EditorView value={route.body} onChange={v => onUpdate({ body: v })} language="json" height="100%" />
+              </ResizablePanelView>
             </div>
             {/* Preview side */}
             <div className="flex flex-col gap-1">
@@ -209,13 +197,16 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
             >
               <ChevronDownIcon size={10} /> Sample Request (for preview)
             </button>
-            <textarea
-              value={sampleJson}
-              onChange={e => { setSampleJson(e.target.value); setPreviewError(''); }}
-              rows={4}
-              className="w-full px-2.5 py-2 text-[10px] font-mono rounded-md bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.07)] text-[var(--color-text-muted)] focus:outline-none resize-none"
-              spellCheck={false}
-            />
+            <ResizablePanelView defaultHeight={80} minHeight={60} maxHeight={300}>
+              <EditorView
+                value={sampleJson}
+                onChange={val => { setSampleJson(val); setPreviewError(''); }}
+                language="json"
+                placeholder='{"username": "alice", "orderId": 42}'
+                height="100%"
+                bordered
+              />
+            </ResizablePanelView>
             {previewError && <p className="text-[10px] text-[var(--color-error)]">{previewError}</p>}
           </div>
         </div>

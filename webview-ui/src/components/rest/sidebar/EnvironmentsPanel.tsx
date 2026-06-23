@@ -7,7 +7,7 @@ import { ConfirmDialog, ImportExportIcon } from '../../shared';
 import { EnvironmentModal } from '../../shared';
 import { TrashIcon, RenameIcon, CopyIcon, PlusIcon, MoreVerticalIcon, GlobeIcon, CheckCircleFilledIcon, FolderImportIcon, FolderExportIcon, SearchIcon, HelpCircleIcon } from '../../../icons';
 import { getProtocolAccent } from '../../../colors';
-import { IconButtonView, TextInputView, ContextMenuView, InfoPopupView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '../../../dui';
+import { IconButtonView, TextInputView, ContextMenuView, InfoPopupView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 
 export function EnvironmentsPanel() {
   const activeProtocol = useTabsStore(s => s.activeProtocol);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ModalView, ButtonView, TextInputView } from '../../../dui';
+import { ModalView, ButtonView, TextInputView } from '@salilvnair/dui';
 
 interface NewItemModalProps {
   open: boolean;

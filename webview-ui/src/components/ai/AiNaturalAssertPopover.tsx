@@ -12,7 +12,7 @@ import { useAiResponseActionsStore } from '../../store/ai-response-actions-store
 import { postMsg } from '../../vscode';
 import { SparkleIcon, RefreshIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
-import { ModalView, MultilineInputView, ButtonView, IconButtonView } from '../../dui';
+import { ModalView, MultilineInputView, ButtonView, IconButtonView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
 

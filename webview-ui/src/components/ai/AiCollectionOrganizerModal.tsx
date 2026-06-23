@@ -6,7 +6,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { SparkleIcon, FolderIcon, DocumentIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import type { CollectionTreeNode, CollectionRequest } from '../../services/collections';
-import { ModalView, ButtonView } from '../../dui';
+import { ModalView, ButtonView } from '@salilvnair/dui';
 
 interface OrganizerFolder { name: string; requestIds: string[]; }
 interface OrganizerResult { folders: OrganizerFolder[]; uncategorized: string[]; }

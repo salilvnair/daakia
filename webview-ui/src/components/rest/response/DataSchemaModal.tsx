@@ -8,8 +8,8 @@
  * Tasks: 4.3.12 — AI Data Schema Generator
  */
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { SelectInputView, AIButtonView, EditorView, SegmentedControlView, IconButtonView, CopyButtonView, type SelectOption, type EditorLanguage } from '../../../dui';
-import { ModalView } from '../../../dui';
+import { SelectInputView, AIButtonView, EditorView, SegmentedControlView, IconButtonView, CopyButtonView, type SelectOption, type EditorLanguage } from '@salilvnair/dui';
+import { ModalView } from '@salilvnair/dui';
 import { useAiProvidersStore } from '../../../store/ai-providers-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { generateSchema, downloadBlob, SCHEMA_LANG_META, SCHEMA_LANG_OPTIONS, buildSchemaPrompt, type SchemaLang } from '../../../services/response';

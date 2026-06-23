@@ -7,7 +7,7 @@ import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { EditorView, CopyButtonView } from '../../dui';
+import { EditorView, CopyButtonView } from '@salilvnair/dui';
 
 /**
  * GraphQL Response panel — shows JSON response, errors, and metadata.

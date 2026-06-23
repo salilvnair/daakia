@@ -10,7 +10,7 @@ import { MdViewer } from '../display/MdViewer';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { postMsg } from '../../../vscode';
-import { AIButtonView } from '../../../dui';
+import { AIButtonView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
 const PROTOCOLS = ['rest', 'graphql', 'grpc', 'soap', 'websocket', 'sse', 'mqtt', 'socketio'];

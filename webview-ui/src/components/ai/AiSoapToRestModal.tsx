@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { SparkleIcon, CopyIcon, CheckIcon, DownloadIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView, ButtonView, EditorView, SplitPanelView, ResizablePanelView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, EditorView, SplitPanelView, ResizablePanelView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;

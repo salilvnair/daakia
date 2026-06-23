@@ -19,7 +19,7 @@ import {
   DropDownButtonView,
   IconButtonView,
   type ContextMenuItem,
-} from '../../dui';
+} from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
 

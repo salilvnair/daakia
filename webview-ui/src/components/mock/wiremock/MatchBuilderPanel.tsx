@@ -3,7 +3,10 @@
  * Shows condition chips for URL, header, query, cookie, and body matchers.
  */
 import { useState } from 'react';
-import { StyledDropdown, type DropdownOption } from '../../shared';
+import {
+  SelectInputView, TextInputView, ButtonView, IconButtonView,
+  CheckboxView, EditorView, ResizablePanelView, type SelectOption, type EditorLanguage,
+} from '@salilvnair/dui';
 import { PlusIcon, TrashIcon, ChevronDownIcon } from '../../../icons';
 import type {
   MockRoute, UrlMatchConfig, UrlMatchType, MatchRule, MatchType,
@@ -17,9 +20,7 @@ interface Props {
   onUpdate: (patch: Partial<MockRoute>) => void;
 }
 
-// ─── Dropdown options ──────────────────────────────────────────────────────────
-
-const URL_TYPE_OPTIONS: DropdownOption[] = [
+const URL_TYPE_OPTIONS: SelectOption[] = [
   { value: 'exact',      label: 'Exact' },
   { value: 'pathPrefix', label: 'Prefix' },
   { value: 'regex',      label: 'Regex' },
@@ -27,7 +28,7 @@ const URL_TYPE_OPTIONS: DropdownOption[] = [
   { value: 'template',   label: 'Template' },
 ];
 
-const MATCH_TYPE_OPTIONS: DropdownOption[] = [
+const MATCH_TYPE_OPTIONS: SelectOption[] = [
   { value: 'equalTo',       label: 'equals' },
   { value: 'contains',      label: 'contains' },
   { value: 'startsWith',    label: 'starts with' },
@@ -38,7 +39,7 @@ const MATCH_TYPE_OPTIONS: DropdownOption[] = [
   { value: 'absent',        label: 'is absent' },
 ];
 
-const BODY_MATCH_OPTIONS: DropdownOption[] = [
+const BODY_MATCH_OPTIONS: SelectOption[] = [
   { value: 'equalTo',           label: 'equals (text)' },
   { value: 'contains',          label: 'contains' },
   { value: 'regex',             label: 'matches regex' },
@@ -49,12 +50,10 @@ const BODY_MATCH_OPTIONS: DropdownOption[] = [
   { value: 'matchesXPath',      label: 'XPath' },
 ];
 
-const LOGIC_OPTIONS: DropdownOption[] = [
+const LOGIC_OPTIONS: SelectOption[] = [
   { value: 'AND', label: 'ALL conditions (AND)' },
   { value: 'OR',  label: 'ANY condition (OR)' },
 ];
-
-// ─── Main panel ───────────────────────────────────────────────────────────────
 
 export function MatchBuilderPanel({ route, onUpdate }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -76,10 +75,9 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
   return (
     <div className="border border-dashed border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden">
       {/* Header */}
-      <button
-        type="button"
+      <div
+        className="w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
       >
         <div className="flex items-center gap-2">
           <span
@@ -103,18 +101,18 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
           <span className="text-[10px] text-[var(--color-text-muted)] opacity-50">Priority</span>
-          <input
+          <TextInputView
             type="number"
-            value={route.priority ?? ''}
-            onChange={e => { e.stopPropagation(); onUpdate({ priority: e.target.value ? parseInt(e.target.value) : undefined }); }}
-            onClick={e => e.stopPropagation()}
+            value={String(route.priority ?? '')}
+            onChange={e => onUpdate({ priority: e.target.value ? parseInt(e.target.value) : undefined })}
             placeholder="5"
-            className="w-[40px] h-[22px] px-1.5 text-[10px] text-center rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-muted)] focus:outline-none"
+            size="md"
+            style={{ width: 40, textAlign: 'center' }}
           />
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[rgba(255,255,255,0.07)]">
@@ -122,8 +120,8 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
           {conditionCount > 1 && (
             <div className="flex items-center gap-2 pt-2">
               <span className="text-[10px] text-[var(--color-text-muted)]">Match when</span>
-              <StyledDropdown
-                size="sm"
+              <SelectInputView
+                size="md"
                 options={LOGIC_OPTIONS}
                 value={route.compositeLogic ?? 'AND'}
                 onChange={v => onUpdate({ compositeLogic: v as CompositeLogic })}
@@ -132,10 +130,8 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
             </div>
           )}
 
-          {/* URL Match Type */}
           <UrlMatchSection route={route} onUpdate={onUpdate} />
 
-          {/* Header matchers */}
           <MatchRuleSection
             label="Header Conditions"
             placeholder={{ key: 'Header name', value: 'Value' }}
@@ -143,7 +139,6 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
             onChange={r => onUpdate({ headerMatchers: r })}
           />
 
-          {/* Query param matchers */}
           <MatchRuleSection
             label="Query Param Conditions"
             placeholder={{ key: 'Param name', value: 'Value' }}
@@ -151,7 +146,6 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
             onChange={r => onUpdate({ queryParamMatchers: r })}
           />
 
-          {/* Cookie matchers */}
           <MatchRuleSection
             label="Cookie Conditions"
             placeholder={{ key: 'Cookie name', value: 'Value' }}
@@ -159,7 +153,6 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
             onChange={r => onUpdate({ cookieMatchers: r })}
           />
 
-          {/* Body matcher */}
           <BodyMatchSection route={route} onUpdate={onUpdate} />
         </div>
       )}
@@ -170,21 +163,20 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
 // ─── URL Match Section ────────────────────────────────────────────────────────
 
 function UrlMatchSection({ route, onUpdate }: Props) {
-  const urlMatch = route.urlMatch ?? { type: 'exact', value: route.path };
+  const urlMatch: UrlMatchConfig = route.urlMatch ?? { type: 'exact', value: route.path };
 
   return (
     <div className="flex flex-col gap-1.5 pt-2">
       <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">URL Match Type</span>
       <div className="flex items-center gap-2">
-        <StyledDropdown
-          size="sm"
+        <SelectInputView
+          size="md"
           options={URL_TYPE_OPTIONS}
           value={urlMatch.type}
           onChange={v => onUpdate({ urlMatch: { ...urlMatch, type: v as UrlMatchType } })}
           accentColor={MOCK_ACCENT}
         />
-        <input
-          type="text"
+        <TextInputView
           value={urlMatch.type === 'exact' ? route.path : urlMatch.value}
           onChange={e => {
             if (urlMatch.type === 'exact') {
@@ -193,18 +185,20 @@ function UrlMatchSection({ route, onUpdate }: Props) {
               onUpdate({ urlMatch: { ...urlMatch, value: e.target.value } });
             }
           }}
-          placeholder={urlMatch.type === 'regex' ? '/api/users/[0-9]+' : urlMatch.type === 'glob' ? '/api/*/details' : urlMatch.type === 'template' ? '/api/users/{userId}' : '/api/path'}
-          className="flex-1 h-[28px] px-2.5 text-[12px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+          placeholder={
+            urlMatch.type === 'regex' ? '/api/users/[0-9]+' :
+            urlMatch.type === 'glob' ? '/api/*/details' :
+            urlMatch.type === 'template' ? '/api/users/{userId}' : '/api/path'
+          }
+          size="md"
+          style={{ flex: 1, fontFamily: 'monospace' }}
         />
-        <label className="flex items-center gap-1 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={urlMatch.caseInsensitive ?? false}
-            onChange={e => onUpdate({ urlMatch: { ...urlMatch, caseInsensitive: e.target.checked } })}
-            className="w-3 h-3 rounded cursor-pointer"
-          />
-          <span className="text-[10px] text-[var(--color-text-muted)]">case-insensitive</span>
-        </label>
+        <CheckboxView
+          checked={urlMatch.caseInsensitive ?? false}
+          onChange={v => onUpdate({ urlMatch: { ...urlMatch, caseInsensitive: v } })}
+          label="case-insensitive"
+          size="sm"
+        />
       </div>
       {urlMatch.type === 'regex' && (
         <p className="text-[10px] text-[var(--color-text-muted)] opacity-70">Pattern tested against full request path. Named groups become path params.</p>
@@ -247,14 +241,15 @@ function MatchRuleSection({ label, placeholder, rules, onChange }: MatchRuleSect
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">{label}</span>
-        <button
-          type="button"
+        <ButtonView
+          size="md"
+          variant="ghost"
+          accentColor={MOCK_ACCENT}
+          iconLeft={<PlusIcon size={9} />}
           onClick={addRule}
-          className="flex items-center gap-1 h-[20px] px-2 text-[10px] rounded cursor-pointer transition-colors"
-          style={{ color: MOCK_ACCENT, background: `color-mix(in srgb, ${MOCK_ACCENT} 10%, transparent)` }}
         >
-          <PlusIcon size={9} /> Add
-        </button>
+          Add
+        </ButtonView>
       </div>
 
       {rules.length === 0 && (
@@ -263,45 +258,42 @@ function MatchRuleSection({ label, placeholder, rules, onChange }: MatchRuleSect
 
       {rules.map((rule, idx) => (
         <div key={rule.id} className="flex items-center gap-1.5 group">
-          <input
-            type="text"
+          <TextInputView
             value={rule.key}
             onChange={e => updateRule(idx, { key: e.target.value })}
             placeholder={placeholder.key}
-            className="w-[140px] h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] flex-shrink-0"
+            size="md"
+            style={{ width: 140, fontFamily: 'monospace', flexShrink: 0 }}
           />
-          <StyledDropdown
-            size="sm"
+          <SelectInputView
+            size="md"
             options={MATCH_TYPE_OPTIONS}
             value={rule.matchType}
             onChange={v => updateRule(idx, { matchType: v as MatchType })}
             accentColor={MOCK_ACCENT}
           />
           {rule.matchType !== 'present' && rule.matchType !== 'absent' && (
-            <input
-              type="text"
+            <TextInputView
               value={rule.value}
               onChange={e => updateRule(idx, { value: e.target.value })}
               placeholder={placeholder.value}
-              className="flex-1 h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+              size="md"
+              style={{ flex: 1, fontFamily: 'monospace' }}
             />
           )}
-          <label className="flex items-center cursor-pointer flex-shrink-0" title="Negate (NOT)">
-            <input
-              type="checkbox"
-              checked={rule.negate ?? false}
-              onChange={e => updateRule(idx, { negate: e.target.checked })}
-              className="w-3 h-3 rounded cursor-pointer"
-            />
-            <span className="ml-0.5 text-[9px] text-[var(--color-text-muted)]">NOT</span>
-          </label>
-          <button
-            type="button"
+          <CheckboxView
+            checked={rule.negate ?? false}
+            onChange={v => updateRule(idx, { negate: v })}
+            label="NOT"
+            size="sm"
+          />
+          <IconButtonView
+            size="sm"
+            icon={<TrashIcon size={11} />}
+            accentColor="var(--color-error)"
+            className="opacity-0 group-hover:opacity-100 flex-shrink-0"
             onClick={() => removeRule(idx)}
-            className="p-1 opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-all flex-shrink-0"
-          >
-            <TrashIcon size={11} />
-          </button>
+          />
         </div>
       ))}
     </div>
@@ -323,59 +315,80 @@ function BodyMatchSection({ route, onUpdate }: Props) {
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Body Condition</span>
         {!bm ? (
-          <button
-            type="button"
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor={MOCK_ACCENT}
+            iconLeft={<PlusIcon size={9} />}
             onClick={() => setBm({ matchType: 'equalToJson', value: '' })}
-            className="flex items-center gap-1 h-[20px] px-2 text-[10px] rounded cursor-pointer"
-            style={{ color: MOCK_ACCENT, background: `color-mix(in srgb, ${MOCK_ACCENT} 10%, transparent)` }}
           >
-            <PlusIcon size={9} /> Add
-          </button>
+            Add
+          </ButtonView>
         ) : (
-          <button type="button" onClick={() => setBm(null)} className="text-[10px] text-[var(--color-error)] cursor-pointer hover:opacity-80">Remove</button>
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor="var(--color-error)"
+            onClick={() => setBm(null)}
+          >
+            Remove
+          </ButtonView>
         )}
       </div>
 
       {bm && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
-            <StyledDropdown
-              size="sm"
+            <SelectInputView
+              size="md"
               options={BODY_MATCH_OPTIONS}
               value={bm.matchType}
               onChange={v => setBm({ matchType: v as BodyMatchType })}
               accentColor={MOCK_ACCENT}
             />
-            <label className="flex items-center gap-1 cursor-pointer flex-shrink-0">
-              <input type="checkbox" checked={bm.negate ?? false} onChange={e => setBm({ negate: e.target.checked })} className="w-3 h-3 rounded cursor-pointer" />
-              <span className="text-[9px] text-[var(--color-text-muted)]">NOT</span>
-            </label>
-            {(bm.matchType === 'equalToJson') && (
+            <CheckboxView
+              checked={bm.negate ?? false}
+              onChange={v => setBm({ negate: v })}
+              label="NOT"
+              size="sm"
+            />
+            {bm.matchType === 'equalToJson' && (
               <>
-                <label className="flex items-center gap-1 cursor-pointer flex-shrink-0">
-                  <input type="checkbox" checked={bm.ignoreArrayOrder ?? false} onChange={e => setBm({ ignoreArrayOrder: e.target.checked })} className="w-3 h-3" />
-                  <span className="text-[9px] text-[var(--color-text-muted)]">ignore array order</span>
-                </label>
-                <label className="flex items-center gap-1 cursor-pointer flex-shrink-0">
-                  <input type="checkbox" checked={bm.ignoreExtraElements ?? false} onChange={e => setBm({ ignoreExtraElements: e.target.checked })} className="w-3 h-3" />
-                  <span className="text-[9px] text-[var(--color-text-muted)]">ignore extra fields</span>
-                </label>
+                <CheckboxView
+                  checked={bm.ignoreArrayOrder ?? false}
+                  onChange={v => setBm({ ignoreArrayOrder: v })}
+                  label="ignore array order"
+                  size="sm"
+                />
+                <CheckboxView
+                  checked={bm.ignoreExtraElements ?? false}
+                  onChange={v => setBm({ ignoreExtraElements: v })}
+                  label="ignore extra fields"
+                  size="sm"
+                />
               </>
             )}
           </div>
-          <textarea
-            value={bm.value}
-            onChange={e => setBm({ value: e.target.value })}
-            rows={3}
-            placeholder={
-              bm.matchType === 'matchesJsonPath' ? '$.store.book[?(@.price < 10)]' :
-              bm.matchType === 'matchesJsonSchema' ? '{"type":"object","required":["email"]}' :
-              bm.matchType === 'equalToJson' ? '{"email":"user@example.com"}' :
-              bm.matchType === 'matchesXPath' ? '//users/user[@id]' :
-              'Value to match against request body'
-            }
-            className="w-full px-2.5 py-2 text-[11px] font-mono rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-none"
-          />
+          <ResizablePanelView defaultHeight={80} minHeight={60} maxHeight={300}>
+            <EditorView
+              value={bm.value}
+              onChange={val => setBm({ value: val })}
+              language={(
+                bm.matchType === 'equalToJson' || bm.matchType === 'matchesJsonPath' || bm.matchType === 'matchesJsonSchema' ? 'json' :
+                bm.matchType === 'equalToXml' || bm.matchType === 'matchesXPath' ? 'xml' :
+                'plaintext'
+              ) as EditorLanguage}
+              placeholder={
+                bm.matchType === 'matchesJsonPath' ? '$.store.book[?(@.price < 10)]' :
+                bm.matchType === 'matchesJsonSchema' ? '{"type":"object","required":["email"]}' :
+                bm.matchType === 'equalToJson' ? '{"email":"user@example.com"}' :
+                bm.matchType === 'matchesXPath' ? '//users/user[@id]' :
+                'Value to match against request body'
+              }
+              height="100%"
+              bordered
+            />
+          </ResizablePanelView>
           {bm.matchType === 'matchesJsonPath' && (
             <p className="text-[10px] text-[var(--color-text-muted)] opacity-70">Matches if JSONPath expression returns a non-empty result.</p>
           )}

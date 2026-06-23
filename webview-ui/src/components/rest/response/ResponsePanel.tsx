@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { ScriptResultsView, RequestProgressOverlay } from '../../shared';
-import { TabView } from '../../../dui';
+import { TabView } from '@salilvnair/dui';
 import { cancelRequest } from '../../../services/request';
 import { ResponseStatusBar } from './ResponseStatusBar';
 import { JsonResponseView } from './JsonResponseView';

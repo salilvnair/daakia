@@ -4,7 +4,7 @@ import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { ConfirmDialog } from '../../shared';
-import { SearchInputView, IconButtonView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '../../../dui';
+import { SearchInputView, IconButtonView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 import { buildGroups, formatFullTimestamp, exportHistoryItem, type TopGroup } from '../../../services/history';
 import { replayHistoryItem } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
-import { KeyValueTableView, IconButtonView, type KeyValueTableRow, type PinnedKeyValueRow } from '../../../dui';
+import { KeyValueTableView, IconButtonView, type KeyValueTableRow, type PinnedKeyValueRow } from '@salilvnair/dui';
 import { SparkleIcon } from '../../../icons';
 import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../../ai/AiHeaderSuggest';
 import { computeAuthRows } from './requestUtils';

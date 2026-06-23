@@ -2,14 +2,18 @@
  * SocketIOConfig — Socket.IO event handler config for mock server.
  */
 import { useState } from 'react';
+import {
+  SelectInputView, EditorView, ResizablePanelView, ButtonView, IconButtonView,
+  ToggleSwitchView, TextInputView, CheckboxView, type SelectOption,
+} from '@salilvnair/dui';
 import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
-import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
+import { ConfirmDialog } from '../../shared';
 import { SOCKETIO_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 import type { SocketIOMockHandler } from '../mock-types';
 
-const SOCKETIO_SAMPLE_OPTIONS: DropdownOption[] = [
+const SOCKETIO_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
   ...SOCKETIO_SAMPLES.map(s => ({ value: s.id, label: s.label })),
 ];
@@ -80,14 +84,16 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
 
   const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
     const newHandlers: SocketIOMockHandler[] = items.map(item => {
-      const d = item.data as { listenEvent?: string; emitEvent?: string; response?: string; type?: string };
+      const d = item.data as { listenEvent?: string; emitEvent?: string; response?: unknown; type?: string };
       const eventType = (['connection', 'message', 'disconnect'].includes(d.type || '') ? d.type : 'message') as 'connection' | 'message' | 'disconnect';
+      const responseStr = typeof d.response === 'string' ? d.response
+        : d.response != null ? JSON.stringify(d.response, null, 2) : '{"ack":true}';
       return {
         id: crypto.randomUUID(),
         event: eventType,
         listenEvent: d.listenEvent || item.name || 'message',
         emitEvent: d.emitEvent || '',
-        response: d.response || '{"ack":true}',
+        response: responseStr,
         delay: 0,
         enabled: true,
         broadcast: false,
@@ -101,8 +107,8 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Event Handlers ({handlers.length})</span>
         <div className="flex items-center gap-1.5">
-          <StyledDropdown
-            size="sm"
+          <SelectInputView
+            size="md"
             options={SOCKETIO_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
@@ -119,25 +125,22 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
             accentVar="var(--color-protocol-socketio)"
             onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <button
-            type="button"
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor="var(--color-protocol-socketio)"
             onClick={addHandler}
-            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: 'var(--color-protocol-socketio)', borderColor: 'color-mix(in srgb, var(--color-protocol-socketio) 30%, transparent)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-socketio) 10%, transparent)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             + Add Handler
-          </button>
+          </ButtonView>
           {handlers.length > 0 && (
-            <button
-              type="button"
+            <IconButtonView
+              size="sm"
+              icon={<TrashIcon size={12} />}
+              accentColor="var(--color-error)"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Handlers"
-              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
-              <TrashIcon size={12} />
-            </button>
+            />
           )}
         </div>
       </div>
@@ -161,81 +164,75 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
           )}
 
           <div className={`flex items-center gap-2 ${!handler.enabled ? 'opacity-50' : ''}`}>
-            <button
-              type="button"
-              onClick={() => updateHandler(handler.id, { enabled: !handler.enabled })}
-              className="relative z-20 w-[28px] h-[14px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-              style={{ backgroundColor: handler.enabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-              title={handler.enabled ? 'Disable' : 'Enable'}
-            >
-              <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: handler.enabled ? '16px' : '2px' }} />
-            </button>
+            <ToggleSwitchView
+              checked={handler.enabled}
+              onChange={(v) => updateHandler(handler.id, { enabled: v })}
+              accentColor="var(--color-success)"
+              size="xs"
+            />
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded text-[var(--color-protocol-socketio)] bg-[rgba(156,163,175,0.12)]">
               {handler.eventName || 'event'}
             </span>
             <div className="flex-1" />
             {handler.enabled && (
-              <Checkbox
+              <CheckboxView
                 checked={handler.broadcast}
                 onChange={(v) => updateHandler(handler.id, { broadcast: v })}
                 label="Broadcast"
-                className="text-[10px]"
+                size="sm"
               />
             )}
             {ioUrl && handler.enabled && (
-              <button
-                type="button"
+              <IconButtonView
+                size="sm"
+                icon={copiedId === handler.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
                 onClick={() => copyIoUrl(handler.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
                 title="Copy Socket.IO URL"
-              >
-                {copiedId === handler.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-              </button>
+              />
             )}
             {handler.enabled && (
-              <button
-                type="button"
+              <IconButtonView
+                size="sm"
+                icon={<TrashIcon size={12} />}
+                accentColor="var(--color-error)"
                 onClick={() => setDeleteConfirmId(handler.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer"
-              >
-                <TrashIcon size={12} />
-              </button>
+              />
             )}
           </div>
           {handler.enabled && (
             <>
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
+                <TextInputView
                   value={handler.eventName}
                   onChange={(e) => updateHandler(handler.id, { eventName: e.target.value })}
                   placeholder="Listen event name"
-                  className="flex-1 h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  size="md"
+                  style={{ flex: 1, fontFamily: 'monospace' }}
                 />
                 <span className="text-[10px] text-[var(--color-text-muted)]">→</span>
-                <input
-                  type="text"
+                <TextInputView
                   value={handler.responseEvent}
                   onChange={(e) => updateHandler(handler.id, { responseEvent: e.target.value })}
                   placeholder="Emit event name"
-                  className="flex-1 h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  size="md"
+                  style={{ flex: 1, fontFamily: 'monospace' }}
                 />
-                <input
-                  type="text"
+                <TextInputView
                   value={handler.room || ''}
                   onChange={(e) => updateHandler(handler.id, { room: e.target.value })}
                   placeholder="Room (optional)"
-                  className="w-[100px] h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  size="md"
+                  style={{ width: 100, fontFamily: 'monospace' }}
                 />
               </div>
-              <ResizablePanel id={`mock.io.handler.${handler.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
-                <CodeEditor
+              <ResizablePanelView id={`mock.io.handler.${handler.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
+                <EditorView
                   value={handler.response}
                   onChange={(val) => updateHandler(handler.id, { response: val })}
                   language="json"
                   height="100%"
                 />
-              </ResizablePanel>
+              </ResizablePanelView>
             </>
           )}
         </div>
@@ -253,10 +250,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
           message="Are you sure you want to delete this Socket.IO handler? This cannot be undone."
           confirmLabel="Delete"
           danger
-          onConfirm={() => {
-            removeHandler(deleteConfirmId);
-            setDeleteConfirmId(null);
-          }}
+          onConfirm={() => { removeHandler(deleteConfirmId); setDeleteConfirmId(null); }}
           onCancel={() => setDeleteConfirmId(null)}
         />
       )}
@@ -267,10 +261,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
           message={`Are you sure you want to delete all ${handlers.length} Socket.IO handlers? This cannot be undone.`}
           confirmLabel="Delete All"
           danger
-          onConfirm={() => {
-            onUpdate({ socketioHandlers: [] });
-            setShowDeleteAll(false);
-          }}
+          onConfirm={() => { onUpdate({ socketioHandlers: [] }); setShowDeleteAll(false); }}
           onCancel={() => setShowDeleteAll(false)}
         />
       )}

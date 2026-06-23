@@ -8,7 +8,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { SparkleIcon, SpinnerIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { METHOD_COLORS } from '../../colors';
-import { ModalView, ButtonView } from '../../dui';
+import { ModalView, ButtonView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface RequestResult {

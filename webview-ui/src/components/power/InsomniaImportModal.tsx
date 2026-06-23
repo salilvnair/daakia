@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
-import { ModalView, ButtonView, MultilineInputView } from '../../dui';
+import { ModalView, ButtonView, MultilineInputView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;

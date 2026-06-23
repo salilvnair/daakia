@@ -8,6 +8,7 @@ import type { MockLogEntry } from './mock-types';
 import { METHOD_COLORS } from '../../colors';
 import { JsonTreeViewer, tryParseJson } from '../shared/display/JsonTreeViewer';
 import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
+import { IconButtonView, TabView } from '@salilvnair/dui';
 
 type DetailTab = 'request' | 'response' | 'network-logs';
 
@@ -40,9 +41,13 @@ export function MockLogPanel({ logs, onClear, minimized, onToggleMinimize }: Moc
         <span className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
           Activity Log ({logs.length})
         </span>
-        <button type="button" onClick={onToggleMinimize} className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-mock-server)] hover:bg-[rgba(234,179,8,0.08)] cursor-pointer transition-colors" title="Maximize Activity Log (Alt+/)">
-          <PanelMaximizeIcon size={13} />
-        </button>
+        <IconButtonView
+          icon={<PanelMaximizeIcon size={13} />}
+          size="default"
+          onClick={onToggleMinimize}
+          tooltip="Maximize Activity Log (Alt+/)"
+          accentColor="var(--color-mock-server)"
+        />
       </div>
     );
   }
@@ -55,22 +60,45 @@ export function MockLogPanel({ logs, onClear, minimized, onToggleMinimize }: Moc
           Activity Log ({logs.length})
         </span>
         <div className="flex items-center gap-1">
-          <button type="button" disabled={logs.length === 0} onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)] cursor-pointer transition-colors disabled:opacity-40 disabled:pointer-events-none" title="Scroll to top">
-            <ArrowUpIcon size={12} />
-          </button>
-          <button type="button" disabled={logs.length === 0} onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })} className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)] cursor-pointer transition-colors disabled:opacity-40 disabled:pointer-events-none" title="Scroll to bottom">
-            <ArrowDownIcon size={12} />
-          </button>
-          <button type="button" disabled={logs.length === 0} onClick={() => setAutoScroll(!autoScroll)} className={`w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors disabled:opacity-40 disabled:pointer-events-none ${autoScroll ? 'text-[var(--color-mock-server)] bg-[rgba(234,179,8,0.12)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)]'}`} title="Auto-scroll">
-            <AutoScrollIcon size={12} />
-          </button>
-          <button type="button" disabled={logs.length === 0} onClick={() => setShowClearConfirm(true)} className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors disabled:opacity-40 disabled:pointer-events-none" title="Clear log">
-            <TrashIcon size={12} />
-          </button>
+          <IconButtonView
+            icon={<ArrowUpIcon size={12} />}
+            size="default"
+            disabled={logs.length === 0}
+            onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+            tooltip="Scroll to top"
+          />
+          <IconButtonView
+            icon={<ArrowDownIcon size={12} />}
+            size="default"
+            disabled={logs.length === 0}
+            onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })}
+            tooltip="Scroll to bottom"
+          />
+          <IconButtonView
+            icon={<AutoScrollIcon size={12} />}
+            size="default"
+            disabled={logs.length === 0}
+            onClick={() => setAutoScroll(!autoScroll)}
+            tooltip="Auto-scroll"
+            active={autoScroll}
+            accentColor="var(--color-mock-server)"
+          />
+          <IconButtonView
+            icon={<TrashIcon size={12} />}
+            size="default"
+            disabled={logs.length === 0}
+            onClick={() => setShowClearConfirm(true)}
+            tooltip="Clear log"
+            accentColor="var(--color-error)"
+          />
           {onToggleMinimize && (
-            <button type="button" onClick={onToggleMinimize} className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-mock-server)] hover:bg-[rgba(234,179,8,0.08)] cursor-pointer transition-colors" title="Minimize Activity Log (Alt+/)">
-              <PanelMinimizeIcon size={13} />
-            </button>
+            <IconButtonView
+              icon={<PanelMinimizeIcon size={13} />}
+              size="default"
+              onClick={onToggleMinimize}
+              tooltip="Minimize Activity Log (Alt+/)"
+              accentColor="var(--color-mock-server)"
+            />
           )}
         </div>
       </div>
@@ -226,20 +254,15 @@ function LogDetailPanel({ entry }: { entry: MockLogEntry }) {
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex items-center gap-0 px-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-3 py-[4px] text-[11px] cursor-pointer border-b-2 transition-colors ${
-              tab === t.key
-                ? 'text-[var(--color-text-primary)] border-[var(--color-accent)]'
-                : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="flex items-center px-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
+        <TabView
+          tabs={tabs.map(t => ({ id: t.key, label: t.label }))}
+          activeTab={tab}
+          onChange={(id) => setTab(id as DetailTab)}
+          variant="underline"
+          size="xs"
+          accentColor="var(--color-mock-server)"
+        />
         <div className="ml-auto">
           <CopyAllButton entry={entry} tab={tab} />
         </div>

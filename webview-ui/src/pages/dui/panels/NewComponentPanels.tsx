@@ -19,13 +19,13 @@ import {
   YamlKeyChip,
   LiveColorCustomizer,
   SpacerView,
-} from '../../../dui';
-import type { HudItem, FormDataRow, LiveColorVar } from '../../../dui';
-import type { MergedInputSegment } from '../../../dui';
+} from '@salilvnair/dui';
+import type { HudItem, FormDataRow, LiveColorVar } from '@salilvnair/dui';
+import type { MergedInputSegment } from '@salilvnair/dui';
 import type {
   ContextMenuItem, PromptLibrarySection, PromptLibraryEditorTab,
   KeyValueTableRow, PinnedKeyValueRow, TabItem,
-} from '../../../dui';
+} from '@salilvnair/dui';
 import {
   SearchIcon, SettingsIcon, ServerIcon, LayersIcon, RestApiIcon,
   GraphQLIcon, SparkleIcon, TerminalIcon, OutputIcon, NetworkIcon,

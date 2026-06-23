@@ -3,7 +3,7 @@ import { EnvironmentEditor } from '../../rest/request/EnvironmentEditor';
 import { GLOBAL_ENV_ID } from '../../../store/env-store';
 import { useEnvStore } from '../../../store/env-store';
 import { RenameIcon } from '../../../icons/daakia-icons';
-import { ModalView, ButtonView, IconButtonView } from '../../../dui';
+import { ModalView, ButtonView, IconButtonView } from '@salilvnair/dui';
 
 interface EnvironmentModalProps {
   open: boolean;

@@ -16,8 +16,8 @@ import { useTabsStore, type ResponseData } from '../../store/tabs-store';
 import { SparkleIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared';
-import type { DuiSize } from '../../dui';
-import { useButtonBase, ModalView } from '../../dui';
+import type { DuiSize } from '@salilvnair/dui';
+import { useButtonBase, ModalView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
 

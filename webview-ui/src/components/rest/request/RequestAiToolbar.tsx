@@ -1,5 +1,5 @@
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
-import { AIButtonView } from '../../../dui';
+import { AIButtonView } from '@salilvnair/dui';
 import type { useTabsStore } from '../../../store/tabs-store';
 
 type Tab = ReturnType<typeof useTabsStore.getState>['tabs'][0];

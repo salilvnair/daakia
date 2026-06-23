@@ -8,7 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useSidebarDataStore } from '../../store/sidebar-data-store';
-import { ModalView, AIButtonView, ButtonView, SelectInputView, CodeBlockView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, SelectInputView, CodeBlockView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface Props {

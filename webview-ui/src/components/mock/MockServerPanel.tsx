@@ -44,6 +44,12 @@ export function MockServerPanel() {
   const serversRef = useRef(servers);
   serversRef.current = servers;
 
+  // Sync Zustand store → local state for mutations made outside this component
+  // (e.g. SmStateMachineTabPage calling useMockStore.updateServer directly).
+  useEffect(() => {
+    setServersLocal(cachedServers);
+  }, [cachedServers]);
+
   // Wrapper that updates both local state and Zustand cache
   const setServers: React.Dispatch<React.SetStateAction<MockServer[]>> = useCallback((action) => {
     setServersLocal(prev => {
@@ -94,6 +100,9 @@ export function MockServerPanel() {
             soapOperations: c.soapOperations || [],
             aiScenarios: c.aiScenarios || [],
             mcpTools: c.mcpTools || [],
+            stateMachine: c.stateMachine,
+            connectedWorkflowId: c.connectedWorkflowId,
+            connectedWorkflows: c.connectedWorkflows || [],
             running: false,
             createdAt: c.createdAt || Date.now(),
           }));
@@ -157,6 +166,9 @@ export function MockServerPanel() {
           soapOperations: s.soapOperations,
           aiScenarios: s.aiScenarios,
           mcpTools: s.mcpTools,
+          stateMachine: s.stateMachine,
+          connectedWorkflowId: s.connectedWorkflowId,
+          connectedWorkflows: s.connectedWorkflows,
         })),
       });
     }, 500);

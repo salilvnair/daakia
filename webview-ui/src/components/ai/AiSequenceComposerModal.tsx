@@ -6,7 +6,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
-import { ModalView, ButtonView, MultilineInputView } from '../../dui';
+import { ModalView, ButtonView, MultilineInputView } from '@salilvnair/dui';
 
 interface Props { protocol: string; onClose: () => void; }
 

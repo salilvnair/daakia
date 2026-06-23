@@ -6,7 +6,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
-import { ModalView, AIButtonView, ButtonView, EditorView, SplitPanelView, ResizablePanelView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, EditorView, SplitPanelView, ResizablePanelView } from '@salilvnair/dui';
 
 interface Props {
   currentResponseBody: string;
@@ -124,13 +124,9 @@ export function AiResponseDiffModal({ currentResponseBody, method, url, onClose 
       }
       footerLeft={
         analysis && !loading ? (
-          <button type="button" onClick={() => { setAnalysis(''); accRef.current = ''; }}
-            style={{ fontSize: 11, cursor: 'pointer', color: 'var(--color-text-muted)', background: 'none', border: 'none', opacity: 0.7 }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '0.7')}
-          >
+          <ButtonView variant="ghost" size="md" style={{ color: 'var(--color-text-muted)' }} onClick={() => { setAnalysis(''); accRef.current = ''; }}>
             Clear analysis
-          </button>
+          </ButtonView>
         ) : undefined
       }
       footerRight={

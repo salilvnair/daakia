@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { ChevronRightIcon } from '../../icons';
 import type { SoapOperationDef } from '../../store/tabs-store';
-import { SelectInputView } from '../../dui';
+import { SelectInputView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
 

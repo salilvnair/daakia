@@ -11,7 +11,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
-import { ModalView, MultilineInputView, ButtonView, AIButtonView } from '../../dui';
+import { ModalView, MultilineInputView, ButtonView, AIButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;

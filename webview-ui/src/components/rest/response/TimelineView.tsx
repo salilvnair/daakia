@@ -5,7 +5,7 @@ import { METHOD_COLORS } from '../../../colors';
 import { CopyIcon, CheckIcon, ChevronDownIcon, InfoCircleIcon, ArrowUpRightIcon, ArrowDownLeftIcon } from '../../../icons';
 import { RequestBodyDisplay } from '../../shared/display/RequestBodyDisplay';
 import { SubRequestRow } from './SubRequestRow';
-import { TabView } from '../../../dui';
+import { TabView } from '@salilvnair/dui';
 
 type TimelineSubTab = 'request' | 'response' | 'network-logs';
 

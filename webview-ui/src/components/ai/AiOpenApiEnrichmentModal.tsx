@@ -3,9 +3,9 @@
  * Feature 4.6.23 — AI OpenAPI Spec Enrichment
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CopyIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, MultilineInputView, CopyButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -31,7 +31,6 @@ export function AiOpenApiEnrichmentModal({ onClose }: Props) {
   const [spec, setSpec] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
   const accRef = useRef('');
@@ -78,101 +77,81 @@ export function AiOpenApiEnrichmentModal({ onClose }: Props) {
     });
   };
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(result);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
-
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[760px] max-h-[92vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">OpenAPI Spec Enrichment</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">AI fills in descriptions, examples, errors, and constraints</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="OpenAPI Spec Enrichment"
+      subtitle="AI fills in descriptions, examples, errors, and constraints"
+      size="xl"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={
+        result ? <CopyButtonView text={result} size="md" /> : undefined
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Enriching…' : 'Enrich Spec'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={loading || !spec.trim()}
+          loading={loading}
+          onClick={run}
+        />
+      }
+    >
+      <div className="flex flex-1 min-h-0 gap-3" style={{ minHeight: 400 }}>
+        {/* Input */}
+        <div className="flex flex-col flex-1 min-w-0 gap-2">
+          <p className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Partial/Minimal Spec (YAML or JSON)</p>
+          <MultilineInputView
+            autoFocus
+            value={spec}
+            onChange={e => { setSpec(e.target.value); setError(''); }}
+            rows={16}
+            size="md"
+            width="fw"
+            placeholder={`openapi: "3.0.3"\ninfo:\n  title: My API\n  version: "1.0"\npaths:\n  /users:\n    get:\n      responses:\n        "200":\n          description: OK`}
+          />
         </div>
 
-        <div className="flex flex-1 min-h-0 gap-0">
-          {/* Input */}
-          <div className="flex flex-col flex-1 min-w-0 border-r p-4 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-            <p className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Partial/Minimal Spec (YAML or JSON)</p>
-            <textarea
-              autoFocus
-              value={spec}
-              onChange={e => { setSpec(e.target.value); setError(''); }}
-              className="flex-1 px-3 py-2 rounded-lg text-[11px] font-mono resize-none outline-none"
-              placeholder={`openapi: "3.0.3"\ninfo:\n  title: My API\n  version: "1.0"\npaths:\n  /users:\n    get:\n      responses:\n        "200":\n          description: OK`}
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)', minHeight: '300px' }}
-            />
-          </div>
+        {/* Output */}
+        <div className="flex flex-col flex-1 min-w-0 gap-2">
+          <p className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Enriched Spec</p>
 
-          {/* Output */}
-          <div className="flex flex-col flex-1 min-w-0 p-4 gap-2">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Enriched Spec</p>
-              {result && (
-                <button type="button" onClick={copy}
-                  className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer"
-                  style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                  <CopyIcon size={11} />
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
-              )}
+          {loading && !result && (
+            <div className="flex-1 flex items-center justify-center flex-col gap-2">
+              <div className="flex gap-1">
+                {[0, 150, 300].map(d => (
+                  <span key={d} className="w-[6px] h-[6px] rounded-full animate-pulse"
+                    style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
+                ))}
+              </div>
+              <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Enriching spec…</span>
             </div>
+          )}
 
-            {loading && !result && (
-              <div className="flex-1 flex items-center justify-center flex-col gap-2">
-                <div className="flex gap-1">
-                  {[0, 150, 300].map(d => (
-                    <span key={d} className="w-[6px] h-[6px] rounded-full animate-pulse"
-                      style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-                  ))}
-                </div>
-                <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Enriching spec…</span>
-              </div>
-            )}
+          {!result && !loading && (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Enriched spec will appear here</p>
+            </div>
+          )}
 
-            {!result && !loading && (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Enriched spec will appear here</p>
-              </div>
-            )}
-
-            {result && (
-              <pre className="flex-1 text-[10.5px] font-mono overflow-auto p-2 rounded-lg"
-                style={{ color: 'var(--color-text-primary)', backgroundColor: 'var(--color-panel)', minHeight: '300px' }}>
-                {result}
-                {loading && <span className="inline-block w-[2px] h-[11px] ml-0.5 animate-pulse" style={{ backgroundColor: ACCENT }} />}
-              </pre>
-            )}
-          </div>
-        </div>
-
-        {error && <p className="text-[11px] px-5 py-1" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <button type="button" onClick={run} disabled={loading || !spec.trim()}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-            style={{ backgroundColor: ACCENT }}>
-            <SparkleIcon size={11} className="inline mr-1" />
-            Enrich Spec
-          </button>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
+          {result && (
+            <pre className="flex-1 text-[10.5px] font-mono overflow-auto p-2 rounded-lg"
+              style={{ color: 'var(--color-text-primary)', backgroundColor: 'var(--color-panel)', minHeight: 300 }}>
+              {result}
+              {loading && <span className="inline-block w-[2px] h-[11px] ml-0.5 animate-pulse" style={{ backgroundColor: ACCENT }} />}
+            </pre>
+          )}
         </div>
       </div>
-    </div>
-  );
 
-  return createPortal(modal, document.body);
+      {error && <p className="text-[11px] mt-2" style={{ color: 'var(--color-error)' }}>{error}</p>}
+    </ModalView>
+  );
 }

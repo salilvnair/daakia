@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { EditorView, IconButtonView, CopyButtonView } from '../../dui';
+import { EditorView, IconButtonView, CopyButtonView } from '@salilvnair/dui';
 import { WrapLinesIcon, DownloadIcon } from '../../icons';
 
 /**

@@ -7,7 +7,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { PlusIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import type { CollectionTreeNode, CollectionRequest } from '../../services/collections';
-import { ModalView, ButtonView } from '../../dui';
+import { ModalView, ButtonView } from '@salilvnair/dui';
 
 interface EnvSuggestion {
   name: string;

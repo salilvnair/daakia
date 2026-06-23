@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDownIcon } from '../../../icons';
-import { HiddenKeyValueItemView, IconButtonView } from '../../../dui';
+import { HiddenKeyValueItemView, IconButtonView } from '@salilvnair/dui';
 
 export interface ComputedHeader {
   id: string;

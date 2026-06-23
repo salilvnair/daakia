@@ -18,8 +18,8 @@ import {
   DbgStopIcon,
   MuteBreakpointsIcon,
 } from '../../../icons/daakia-icons';
-import { HudView } from '../../../dui';
-import type { HudItem } from '../../../dui';
+import { HudView } from '@salilvnair/dui';
+import type { HudItem } from '@salilvnair/dui';
 
 export function DebugHud() {
   const { active, status, tabId, phase } = useDebugStore();

@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView, ButtonView, SplitPanelView, EditorView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, SplitPanelView, EditorView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;

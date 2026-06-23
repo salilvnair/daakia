@@ -10,7 +10,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useTabsStore } from '../../store/tabs-store';
 import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { ModalView, ButtonView, MultilineInputView } from '../../dui';
+import { ModalView, ButtonView, MultilineInputView } from '@salilvnair/dui';
 
 // ─── Handle ───────────────────────────────────────────────────────────────────
 export interface AiContractTestHandle {

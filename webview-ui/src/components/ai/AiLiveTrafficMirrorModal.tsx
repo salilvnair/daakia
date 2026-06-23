@@ -5,10 +5,10 @@
  * Gate: liveTrafficMirror feature flag
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, TextInputView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -100,71 +100,90 @@ export function AiLiveTrafficMirrorModal({ onClose }: Props) {
     analyzing: 'Analyzing…',
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget) e.preventDefault(); }}>
-      <div className="relative flex flex-col rounded-lg overflow-hidden shadow-2xl"
-        style={{ width: 640, maxHeight: '88vh', background: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>
-        <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Live Traffic Mirror & AI Analysis ✦"
+      subtitle={
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }} />
+          <span style={{ color: STATUS_COLORS[status] }}>{STATUS_LABELS[status]}</span>
+        </span>
+      }
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
           <SparkleIcon size={14} style={{ color: ACCENT }} />
-          <span className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Live Traffic Mirror & AI Analysis ✦</span>
-          <span className="flex items-center gap-1 ml-1">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: STATUS_COLORS[status] }} />
-            <span className="text-[10px]" style={{ color: STATUS_COLORS[status] }}>{STATUS_LABELS[status]}</span>
-          </span>
-          <button type="button" onClick={onClose} className="ml-auto cursor-pointer" style={{ color: 'var(--color-text-muted)' }}><CloseIcon size={14} /></button>
+        </div>
+      }
+      footerRight={
+        <AIButtonView
+          label={status === 'analyzing' ? 'Analyzing…' : 'Analyze with AI'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={!trafficLog.trim() || status === 'analyzing'}
+          loading={status === 'analyzing'}
+          onClick={handleAnalyzeTraffic}
+        />
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {/* Proxy config */}
+        <div className="rounded p-3 flex flex-col gap-2" style={{ background: 'var(--color-panel)', border: '1px solid var(--color-surface-border)' }}>
+          <p className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Proxy Configuration</p>
+          <div className="flex gap-2 items-end">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Proxy Port</label>
+              <TextInputView
+                value={proxyPort}
+                onChange={e => setProxyPort(e.target.value)}
+                size="md"
+                width="fw"
+                placeholder="8888"
+              />
+            </div>
+            <div className="flex flex-col gap-1 flex-1">
+              <label className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Target URL</label>
+              <TextInputView
+                value={targetUrl}
+                onChange={e => setTargetUrl(e.target.value)}
+                placeholder="https://api.example.com"
+                size="md"
+                width="fw"
+              />
+            </div>
+            <ButtonView
+              size="md"
+              variant="primary"
+              accentColor={status === 'active' ? 'var(--color-success)' : ACCENT}
+              disabled={!targetUrl.trim() || status === 'active'}
+              onClick={handleStartMirror}
+            >
+              {status === 'active' ? 'Mirroring' : 'Start Mirror'}
+            </ButtonView>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
-          {/* Proxy config */}
-          <div className="rounded p-3 flex flex-col gap-2" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}>
-            <p className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Proxy Configuration</p>
-            <div className="flex gap-2 items-center">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Proxy Port</label>
-                <input type="number" value={proxyPort} onChange={e => setProxyPort(e.target.value)}
-                  className="h-[26px] px-2.5 rounded text-[11px] w-[80px]"
-                  style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
-              </div>
-              <div className="flex flex-col gap-1 flex-1">
-                <label className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Target URL</label>
-                <input type="url" value={targetUrl} onChange={e => setTargetUrl(e.target.value)}
-                  placeholder="https://api.example.com"
-                  className="h-[26px] px-2.5 rounded text-[11px] flex-1"
-                  style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
-              </div>
-              <button type="button" onClick={handleStartMirror} disabled={!targetUrl.trim() || status === 'active'}
-                className="flex items-center gap-1.5 h-[26px] px-3 rounded text-[11px] font-medium cursor-pointer disabled:opacity-40 mt-4"
-                style={{ background: status === 'active' ? 'var(--color-success)' : ACCENT, color: '#fff' }}>
-                {status === 'active' ? 'Mirroring' : 'Start Mirror'}
-              </button>
-            </div>
-          </div>
-
-          {/* Traffic log + AI analysis */}
-          <div className="flex flex-col gap-2">
-            <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-              Traffic Log (paste captured traffic or use live feed)
-            </label>
-            <textarea value={trafficLog} onChange={e => setTrafficLog(e.target.value)}
-              placeholder="Paste traffic log entries here... (format: METHOD URL STATUS LATENCY)"
-              rows={4} className="w-full rounded text-[11px] px-2.5 py-2 resize-none"
-              style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono)' }} />
-            <div className="flex justify-end">
-              <button type="button" onClick={handleAnalyzeTraffic} disabled={!trafficLog.trim() || status === 'analyzing'}
-                className="flex items-center gap-1.5 h-[26px] px-3 rounded text-[11px] font-medium cursor-pointer disabled:opacity-40"
-                style={{ background: ACCENT, color: '#fff' }}>
-                {status === 'analyzing' ? <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" /> : <SparkleIcon size={11} />}
-                {status === 'analyzing' ? 'Analyzing…' : 'Analyze with AI'}
-              </button>
-            </div>
-          </div>
-
-          {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
-          {analysis && <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 320, borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}><MdViewer content={analysis} /></div>}
+        {/* Traffic log */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+            Traffic Log (paste captured traffic or use live feed)
+          </label>
+          <MultilineInputView
+            value={trafficLog}
+            onChange={e => setTrafficLog(e.target.value)}
+            placeholder="Paste traffic log entries here... (format: METHOD URL STATUS LATENCY)"
+            rows={4}
+            size="md"
+            width="fw"
+          />
         </div>
+
+        {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
+        {analysis && <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 320, borderColor: 'var(--color-surface-border)', background: 'var(--color-surface)' }}><MdViewer content={analysis} /></div>}
       </div>
-    </div>,
-    document.body,
+    </ModalView>
   );
 }

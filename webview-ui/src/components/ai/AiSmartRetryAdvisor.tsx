@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { postMsg } from '../../vscode';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
-import { ModalView, AIButtonView } from '../../dui';
+import { ModalView, AIButtonView } from '@salilvnair/dui';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 
 interface Props {

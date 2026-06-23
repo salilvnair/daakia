@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { SparkleIcon, PlayIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { ModalView, ButtonView, TextInputView, MultilineInputView } from '../../dui';
+import { ModalView, ButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
 import { METHOD_COLORS } from '../../colors';
 
 interface VariableExtraction { variable: string; path: string; description: string; }

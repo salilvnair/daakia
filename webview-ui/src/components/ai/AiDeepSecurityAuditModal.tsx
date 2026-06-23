@@ -10,7 +10,7 @@ import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
 import type { CollectionTreeNode } from '../../services/collections';
-import { ModalView, AIButtonView, ButtonView, CopyButtonView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, CopyButtonView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface Props {

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useEnvStore, type EnvVariable, GLOBAL_ENV_ID } from '../../../store/env-store';
 import { ConfirmDialog, InsertRowDivider } from '../../shared';
 import { TrashIcon, RenameIcon, BulkEditIcon, PlusIcon } from '../../../icons';
-import { TabView, TextInputView, ButtonView, IconButtonView, SelectInputView } from '../../../dui';
+import { TabView, TextInputView, ButtonView, IconButtonView, SelectInputView } from '@salilvnair/dui';
 
 interface EnvironmentEditorProps {
   environmentId?: string | null;

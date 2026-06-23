@@ -1,4 +1,4 @@
-import { SelectInputView, TextInputView, CheckboxView } from '../../../dui';
+import { SelectInputView, TextInputView, CheckboxView } from '@salilvnair/dui';
 import { RefreshIcon } from '../../../icons';
 
 export interface AuthData {

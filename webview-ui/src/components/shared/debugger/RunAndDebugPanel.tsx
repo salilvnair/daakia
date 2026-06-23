@@ -25,7 +25,7 @@ import { ConfirmDialog } from '../modals/ConfirmDialog';
 import { NetworkSection } from './DebugNetworkSection';
 import { postMsg } from '../../../vscode';
 import { MethodBadge } from '../display/MethodBadge';
-import { CollapsibleSectionView } from '../../../dui';
+import { CollapsibleSectionView } from '@salilvnair/dui';
 
 export function RunAndDebugPanel() {
   const active = useDebugStore(s => s.active);

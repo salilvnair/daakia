@@ -4,7 +4,7 @@ import { AiAssistPopover, type AssistMode } from '../../ai/AiAssistPopover';
 import { AiResponsePatternLearning } from '../../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../../ai/AiSmartRetryAdvisor';
 import { AiResponseActionsMenu } from './AiResponseActionsMenu';
-import { AIButtonView } from '../../../dui';
+import { AIButtonView } from '@salilvnair/dui';
 import type { ResponseData } from '../../../store/tabs-store';
 
 interface ResponseAiToolbarProps {

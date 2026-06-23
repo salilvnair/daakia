@@ -3,11 +3,11 @@
  * Task 10.17 — AI Request Clustering · Gate: requestClustering
  */
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -91,42 +91,28 @@ Repeat for each domain.
     });
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }} onMouseDown={e => e.stopPropagation()}>
-      <div className="relative flex flex-col rounded-2xl border shadow-2xl overflow-hidden" style={{ backgroundColor: 'var(--color-panel)', borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`, width: 700, maxHeight: '85vh' }}>
-        <div className="flex items-center justify-between px-5 py-3.5 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="flex items-center gap-2">
-            <SparkleIcon size={14} style={{ color: ACCENT }} />
-            <span className="text-[13px] font-semibold" style={{ color: ACCENT }}>Request Clustering ✦</span>
-            {tabCount > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)`, color: ACCENT }}>
-                {tabCount} request{tabCount !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {!loading && clusters && (
-              <button type="button" onClick={generateClusters} className="text-[11px] px-3 py-1 rounded-md cursor-pointer" style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 10%, transparent)` }}>
-                Re-cluster
-              </button>
-            )}
-            <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-[var(--color-hover)] cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
-              <CloseIcon size={13} />
-            </button>
-          </div>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Request Clustering ✦"
+      subtitle={tabCount > 0 ? `${tabCount} request${tabCount !== 1 ? 's' : ''}` : undefined}
+      size="xl"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
         </div>
-
-        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-5 min-h-0">
-          {error && <p className="text-[11px] px-3 py-2 rounded-lg mb-3" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>{error}</p>}
-          {loading && !clusters && <p className="text-[11px] animate-pulse text-center py-12" style={{ color: ACCENT }}>Clustering {tabCount} API requests into logical domains…</p>}
-          {clusters && <MdViewer content={clusters} />}
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer hover:bg-[var(--color-hover)]" style={{ color: 'var(--color-text-muted)' }}>Close</button>
-        </div>
-      </div>
-    </div>,
-    document.body
+      }
+      footerRight={
+        !loading && clusters ? (
+          <AIButtonView label="Re-cluster" size="md" accentColor={ACCENT} onClick={generateClusters} />
+        ) : undefined
+      }
+    >
+      {error && <p className="text-[11px] px-3 py-2 rounded-lg mb-3" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>{error}</p>}
+      {loading && !clusters && <p className="text-[11px] animate-pulse text-center py-12" style={{ color: ACCENT }}>Clustering {tabCount} API requests into logical domains…</p>}
+      {clusters && <MdViewer content={clusters} />}
+    </ModalView>
   );
 }

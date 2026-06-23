@@ -6,10 +6,10 @@
  * vs "userName removed and unrelated username added"
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
+import { ModalView, AIButtonView, MultilineInputView } from '@salilvnair/dui';
 
 interface Props {
   responseBodyA?: string;
@@ -86,81 +86,86 @@ export function AiSemanticDiffModal({ responseBodyA = '', responseBodyB = '', on
     });
   };
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[780px] max-h-[92vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Semantic API Diff</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">AI understands intent — renames vs removals, breaking vs non-breaking</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Semantic API Diff"
+      subtitle="AI understands intent — renames vs removals, breaking vs non-breaking"
+      size="xl"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
         </div>
-
-        <div className="flex flex-1 min-h-0 gap-0">
-          {/* Two-pane input */}
-          <div className="flex flex-col w-1/3 border-r" style={{ borderColor: 'var(--color-surface-border)' }}>
-            <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
-              Response A (old)
-            </div>
-            <textarea value={bodyA} onChange={e => { setBodyA(e.target.value); setError(''); }}
-              className="flex-1 p-3 text-[10.5px] font-mono resize-none outline-none"
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Analyzing…' : 'Analyze Diff'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={loading || !bodyA.trim() || !bodyB.trim()}
+          loading={loading}
+          onClick={run}
+        />
+      }
+    >
+      <div className="flex flex-1 min-h-0 gap-0 -mx-4" style={{ minHeight: 360 }}>
+        {/* Response A */}
+        <div className="flex flex-col w-1/3 border-r" style={{ borderColor: 'var(--color-surface-border)' }}>
+          <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
+            Response A (old)
+          </div>
+          <div className="flex-1 p-3">
+            <MultilineInputView
+              value={bodyA}
+              onChange={e => { setBodyA(e.target.value); setError(''); }}
+              rows={12}
+              size="md"
+              width="fw"
               placeholder='{"userName": "John", "userId": 123}'
-              style={{ backgroundColor: 'var(--color-panel)', color: 'var(--color-text-primary)' }} />
-          </div>
-
-          <div className="flex flex-col w-1/3 border-r" style={{ borderColor: 'var(--color-surface-border)' }}>
-            <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
-              Response B (new)
-            </div>
-            <textarea value={bodyB} onChange={e => { setBodyB(e.target.value); setError(''); }}
-              className="flex-1 p-3 text-[10.5px] font-mono resize-none outline-none"
-              placeholder='{"username": "John", "id": 123, "createdAt": "2026-01-01"}'
-              style={{ backgroundColor: 'var(--color-panel)', color: 'var(--color-text-primary)' }} />
-          </div>
-
-          {/* Analysis pane */}
-          <div className="flex flex-col flex-1">
-            <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
-              Semantic Analysis
-            </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              {loading && !result && (
-                <div className="flex gap-1 items-center py-4">
-                  {[0, 150, 300].map(d => (<span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />))}
-                  <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Analyzing…</span>
-                </div>
-              )}
-              {result && <MdViewer content={result} />}
-              {!result && !loading && (
-                <p className="text-[11px] text-center py-8" style={{ color: 'var(--color-text-muted)' }}>Paste both responses and click Analyze</p>
-              )}
-            </div>
+            />
           </div>
         </div>
 
-        {error && <p className="text-[11px] px-5 py-1" style={{ color: 'var(--color-error)' }}>{error}</p>}
+        {/* Response B */}
+        <div className="flex flex-col w-1/3 border-r" style={{ borderColor: 'var(--color-surface-border)' }}>
+          <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
+            Response B (new)
+          </div>
+          <div className="flex-1 p-3">
+            <MultilineInputView
+              value={bodyB}
+              onChange={e => { setBodyB(e.target.value); setError(''); }}
+              rows={12}
+              size="md"
+              width="fw"
+              placeholder='{"username": "John", "id": 123, "createdAt": "2026-01-01"}'
+            />
+          </div>
+        </div>
 
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <button type="button" onClick={run} disabled={loading || !bodyA.trim() || !bodyB.trim()}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-            style={{ backgroundColor: ACCENT }}>
-            <SparkleIcon size={11} className="inline mr-1" />
-            Analyze Diff
-          </button>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
+        {/* Analysis pane */}
+        <div className="flex flex-col flex-1">
+          <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
+            Semantic Analysis
+          </div>
+          <div className="flex-1 overflow-y-auto p-3">
+            {loading && !result && (
+              <div className="flex gap-1 items-center py-4">
+                {[0, 150, 300].map(d => (<span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />))}
+                <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Analyzing…</span>
+              </div>
+            )}
+            {result && <MdViewer content={result} />}
+            {!result && !loading && (
+              <p className="text-[11px] text-center py-8" style={{ color: 'var(--color-text-muted)' }}>Paste both responses and click Analyze</p>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
 
-  return createPortal(modal, document.body);
+      {error && <p className="text-[11px] mt-2" style={{ color: 'var(--color-error)' }}>{error}</p>}
+    </ModalView>
+  );
 }

@@ -5,10 +5,10 @@
  * Gate: crossProtocolOrchestrator feature flag
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, MultilineInputView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -36,10 +36,6 @@ export function AiCrossProtocolOrchestratorModal({ onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const streamRef = useRef('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => { textareaRef.current?.focus(); }, []);
-
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msg = e.data;
@@ -57,41 +53,49 @@ export function AiCrossProtocolOrchestratorModal({ onClose }: Props) {
     postMsg({ type: 'aiStream', payload: { systemPrompt: SYSTEM_PROMPT, userMessage: `Multi-protocol journey:\n${description.trim()}`, templateKey: 'agent.master' } });
   }, [description, loading]);
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget) e.preventDefault(); }}>
-      <div className="relative flex flex-col rounded-lg overflow-hidden shadow-2xl"
-        style={{ width: 600, maxHeight: '84vh', background: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>
-        <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Cross-Protocol Orchestrator ✦"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
           <SparkleIcon size={14} style={{ color: ACCENT }} />
-          <span className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Cross-Protocol Orchestrator ✦</span>
-          <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wide"
-            style={{ background: 'color-mix(in srgb, var(--color-protocol-ai) 15%, transparent)', color: ACCENT }}>Sprint 14</span>
-          <button type="button" onClick={onClose} className="ml-auto cursor-pointer" style={{ color: 'var(--color-text-muted)' }}><CloseIcon size={14} /></button>
         </div>
-        <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
-          <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-            Describe a multi-protocol user journey. AI designs a complete orchestration plan with pass/fail criteria per step across REST, WebSocket, SSE, gRPC, and more.
-          </p>
-          <textarea ref={textareaRef} value={description} onChange={e => setDescription(e.target.value)}
-            onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleCompose(); if (e.key === 'Escape') onClose(); }}
-            placeholder="e.g. REST auth login, subscribe to WebSocket notifications channel, trigger a gRPC order creation, verify SSE event fires within 5s, confirm order via REST GET"
-            rows={4} className="w-full rounded text-[11px] px-2.5 py-2 resize-none"
-            style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
-          <div className="flex justify-between items-center">
-            <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>⌘↵ to compose</span>
-            <button type="button" onClick={handleCompose} disabled={!description.trim() || loading}
-              className="flex items-center gap-1.5 h-[26px] px-3 rounded text-[11px] font-medium cursor-pointer disabled:opacity-40"
-              style={{ background: ACCENT, color: '#fff' }}>
-              {loading ? <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" /> : <SparkleIcon size={11} />}
-              {loading ? 'Orchestrating…' : 'Compose Plan'}
-            </button>
-          </div>
-          {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
-          {result && <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 360, borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}><MdViewer content={result} /></div>}
-        </div>
+      }
+      footerLeft={
+        <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>⌘↵ to compose</span>
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Orchestrating…' : 'Compose Plan'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={!description.trim() || loading}
+          loading={loading}
+          onClick={handleCompose}
+        />
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+          Describe a multi-protocol user journey. AI designs a complete orchestration plan with pass/fail criteria per step across REST, WebSocket, SSE, gRPC, and more.
+        </p>
+        <MultilineInputView
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleCompose(); }}
+          placeholder="e.g. REST auth login, subscribe to WebSocket notifications channel, trigger a gRPC order creation, verify SSE event fires within 5s, confirm order via REST GET"
+          rows={4}
+          size="md"
+          width="fw"
+          autoFocus
+        />
+        {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
+        {result && <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 360, borderColor: 'var(--color-surface-border)', background: 'var(--color-surface)' }}><MdViewer content={result} /></div>}
       </div>
-    </div>,
-    document.body,
+    </ModalView>
   );
 }

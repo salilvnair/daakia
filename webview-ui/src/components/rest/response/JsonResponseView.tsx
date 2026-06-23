@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
-import { EditorView, IconButtonView, TextInputView, InfoPopupView, CopyButtonView, type EditorLanguage } from '../../../dui';
+import { EditorView, IconButtonView, TextInputView, InfoPopupView, CopyButtonView, type EditorLanguage } from '@salilvnair/dui';
 import { useClickOutside } from '../../../hooks/useClickOutside';
 import { applyJqFilter, formatBody, getResponseLanguage, downloadBlob, getExtensionForContentType } from '../../../services/response';
 import { WrapLinesIcon, FilterIcon, DownloadIcon, MoreVerticalIcon, SearchIcon, InfoCircleIcon, CloseCircleIcon, HelpCircleIcon } from '../../../icons';

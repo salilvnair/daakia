@@ -1,6 +1,11 @@
 import { useCallback, useState } from 'react';
 import { useTabsStore, type WsTemplate } from '../../../store/tabs-store';
 import { TrashIcon } from '../../../icons';
+import {
+  ButtonView,
+  IconButtonView,
+  TextInputView,
+} from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-websocket)';
 
@@ -47,24 +52,21 @@ export function WsTemplatesTab({ onLoad, currentMessage }: WsTemplatesTabProps) 
     <div className="flex flex-col h-full overflow-hidden">
       {/* Save current as template */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-        <input
-          type="text"
+        <TextInputView
+          size="md"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
           placeholder="Template name…"
-          className="flex-1 h-[26px] px-2 rounded text-[11.5px] focus:outline-none"
-          style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
+          style={{ flex: 1 }}
         />
-        <button
-          type="button"
+        <ButtonView
+          size="md"
+          label="Save current"
           onClick={handleSave}
           disabled={!currentMessage.trim() || !newName.trim()}
-          className="h-[26px] px-2.5 rounded text-[11px] cursor-pointer disabled:opacity-40 transition-colors"
-          style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, color: ACCENT }}
-        >
-          Save current
-        </button>
+          accentColor={ACCENT}
+        />
       </div>
 
       {/* Template list */}
@@ -87,21 +89,20 @@ export function WsTemplatesTab({ onLoad, currentMessage }: WsTemplatesTabProps) 
               <p className="text-[11px] font-mono text-[var(--color-text-muted)] truncate opacity-70">{tpl.message}</p>
             </div>
             <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
+              <ButtonView
+                size="xs"
+                variant="ghost"
+                label="Load"
                 onClick={() => onLoad(tpl.message)}
-                className="text-[10.5px] px-2 py-0.5 rounded cursor-pointer transition-colors"
-                style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)`, color: ACCENT }}
-              >
-                Load
-              </button>
-              <button
-                type="button"
+                accentColor={ACCENT}
+              />
+              <IconButtonView
+                size="xs"
+                icon={<TrashIcon size={12} />}
+                title="Delete template"
+                accentColor="var(--color-error)"
                 onClick={() => handleDelete(tpl.id)}
-                className="p-0.5 cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
-              >
-                <TrashIcon size={12} />
-              </button>
+              />
             </div>
           </div>
         ))}

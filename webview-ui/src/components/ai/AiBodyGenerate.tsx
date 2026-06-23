@@ -13,8 +13,8 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { CloseIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { EditorView } from '../../dui';
-import type { EditorLanguage } from '../../dui';
+import { EditorView, MultilineInputView, ButtonView, IconButtonView } from '@salilvnair/dui';
+import type { EditorLanguage } from '@salilvnair/dui';
 
 // ─── Public handle ────────────────────────────────────────────────────────────
 
@@ -66,7 +66,6 @@ export const AiBodyGenerate = forwardRef<AiBodyGenerateHandle, Props>(
 
     const accumulatedRef = useRef('');
     const reqIdRef = useRef('');
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const activeTab = useTabsStore(s => s.tabs.find(t => t.id === tabId));
     const resolve = useAiPromptTemplatesStore(s => s.resolve);
@@ -101,13 +100,6 @@ export const AiBodyGenerate = forwardRef<AiBodyGenerateHandle, Props>(
       return () => window.removeEventListener('message', handler);
     }, []);
 
-    // ── Auto-focus textarea when opened ──────────────────────────────────────
-
-    useEffect(() => {
-      if (visible && !loading) {
-        setTimeout(() => textareaRef.current?.focus(), 50);
-      }
-    }, [visible, loading]);
 
     // ── Trigger generation ────────────────────────────────────────────────────
 
@@ -217,42 +209,34 @@ export const AiBodyGenerate = forwardRef<AiBodyGenerateHandle, Props>(
           <span className="text-[11px] font-medium flex-1" style={{ color: ACCENT }}>
             Generate Body with AI
           </span>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-[18px] h-[18px] flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer transition-opacity"
-            title="Close"
-          >
-            <CloseIcon size={10} />
-          </button>
+          <IconButtonView icon={<CloseIcon size={10} />} title="Close" onClick={handleClose} size="sm" variant="ghost" />
         </div>
 
         {/* Description textarea */}
         <div className="px-3 py-2.5">
-          <textarea
-            ref={textareaRef}
+          <MultilineInputView
             value={description}
             onChange={e => setDescription(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={loading}
             rows={2}
+            size="md"
+            width="fw"
             placeholder={`Describe the payload… e.g. "user registration with name, email, password and address"`}
-            className="w-full resize-none rounded-md px-2.5 py-2 text-[12px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-50 transition-colors"
-            style={{ minHeight: 52 }}
           />
           <div className="flex items-center justify-between mt-2">
             <span className="text-[10px] text-[var(--color-text-muted)]">
               ⌘↵ to generate
             </span>
-            <button
-              type="button"
-              onClick={handleGenerate}
+            <ButtonView
+              size="md"
+              variant="primary"
+              accentColor={ACCENT}
               disabled={loading || !description.trim()}
-              className="h-[26px] px-3 rounded-md text-[11px] font-medium cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ backgroundColor: ACCENT, color: 'var(--color-btn-primary-text, #fff)' }}
+              onClick={handleGenerate}
             >
               {loading ? 'Generating…' : (generated ? 'Regenerate' : 'Generate')}
-            </button>
+            </ButtonView>
           </div>
         </div>
 
@@ -286,14 +270,9 @@ export const AiBodyGenerate = forwardRef<AiBodyGenerateHandle, Props>(
             {/* Apply button — only when generation is complete */}
             {generated && !loading && (
               <div className="flex justify-end mt-2">
-                <button
-                  type="button"
-                  onClick={handleApply}
-                  className="h-[26px] px-3 rounded-md text-[11px] font-medium cursor-pointer transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: ACCENT, color: 'var(--color-btn-primary-text, #fff)' }}
-                >
+                <ButtonView size="md" variant="primary" accentColor={ACCENT} onClick={handleApply}>
                   Apply to editor
-                </button>
+                </ButtonView>
               </div>
             )}
           </div>

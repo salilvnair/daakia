@@ -3,7 +3,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
 import { postMsg } from '../../vscode';
 import { HighlightedInput } from '../shared';
-import { ButtonView, IconButtonView, DropDownButtonView, type ContextMenuItem } from '../../dui';
+import { ButtonView, IconButtonView, DropDownButtonView, type ContextMenuItem } from '@salilvnair/dui';
 import { saveRequest } from '../../services/request';
 import { ConnectIcon, DisconnectIcon, SaveIcon, MoreVerticalIcon, SparkleIcon } from '../../icons';
 import { useMockSuggestions } from '../../hooks/useMockSuggestions';

@@ -9,7 +9,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView, ButtonView, SelectTextInputView, TextInputView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, SelectTextInputView, TextInputView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;

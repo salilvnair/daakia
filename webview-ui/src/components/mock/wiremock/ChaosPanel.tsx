@@ -2,29 +2,55 @@
  * ChaosPanel — Global chaos engineering dial for the entire mock server (6A.15).
  * Applies probabilistic fault injection to ALL routes globally.
  */
-import { useState } from 'react';
-import { StyledDropdown, type DropdownOption } from '../../shared';
+import { SelectInputView, ToggleSwitchView, TextInputView, type SelectOption } from '@salilvnair/dui';
 import type { MockServer, FaultType } from '../mock-types';
 
-const MOCK_ACCENT = 'var(--color-mock-server)';
-
-const FAULT_OPTIONS: DropdownOption[] = [
-  { value: 'RANDOM_5XX',      label: 'Random 5xx Error' },
-  { value: 'EMPTY_RESPONSE',  label: 'Empty Response' },
-  { value: 'MALFORMED_JSON',  label: 'Malformed JSON' },
-  { value: 'TIMEOUT',         label: 'Timeout' },
+// HTTP-based protocols (REST, GraphQL, gRPC, SOAP)
+const HTTP_FAULT_OPTIONS: SelectOption[] = [
+  { value: 'RANDOM_5XX',       label: 'Random 5xx Error' },
+  { value: 'EMPTY_RESPONSE',   label: 'Empty Response' },
+  { value: 'MALFORMED_JSON',   label: 'Malformed JSON / Body' },
+  { value: 'TIMEOUT',          label: 'Timeout (slow / no response)' },
   { value: 'CONNECTION_RESET', label: 'Connection Reset' },
-  { value: 'CHUNKED_DRIBBLE', label: 'Chunked Dribble' },
+  { value: 'CHUNKED_DRIBBLE',  label: 'Chunked Dribble (slow stream)' },
 ];
+
+// Event-driven protocols (WebSocket, SSE, Socket.IO, MQTT)
+const REALTIME_FAULT_OPTIONS: SelectOption[] = [
+  { value: 'RANDOM_DISCONNECT', label: 'Random Disconnect' },
+  { value: 'MESSAGE_DELAY',     label: 'Message / Event Delay' },
+  { value: 'CORRUPT_PAYLOAD',   label: 'Corrupt Payload (garbled data)' },
+  { value: 'MISSED_HEARTBEAT',  label: 'Missed Heartbeat / Ping' },
+  { value: 'TIMEOUT',           label: 'Timeout (no response)' },
+  { value: 'CONNECTION_RESET',  label: 'Connection Reset' },
+];
+
+const REALTIME_PROTOCOLS = new Set(['websocket', 'sse', 'socketio', 'mqtt']);
+
+function getFaultOptions(protocol: string): SelectOption[] {
+  return REALTIME_PROTOCOLS.has(protocol) ? REALTIME_FAULT_OPTIONS : HTTP_FAULT_OPTIONS;
+}
+
+function getDefaultFault(protocol: string): string {
+  return REALTIME_PROTOCOLS.has(protocol) ? 'RANDOM_DISCONNECT' : 'RANDOM_5XX';
+}
+
+function getSubtitle(protocol: string): string {
+  return REALTIME_PROTOCOLS.has(protocol)
+    ? 'Applies the selected fault to a percentage of ALL messages / events on this server'
+    : 'Applies the selected fault to a percentage of ALL requests across all routes';
+}
 
 interface Props {
   server: MockServer;
   onUpdate: (patch: Partial<MockServer>) => void;
+  protocol?: string;
 }
 
-export function ChaosPanel({ server, onUpdate }: Props) {
-  const [expanded, setExpanded] = useState(false);
+export function ChaosPanel({ server, onUpdate, protocol = 'rest' }: Props) {
   const chaos = server.globalFault ?? { enabled: false };
+  const faultOptions = getFaultOptions(protocol);
+  const defaultFault = getDefaultFault(protocol);
 
   const update = (patch: Partial<typeof chaos>) => {
     onUpdate({ globalFault: { enabled: false, ...chaos, ...patch } });
@@ -45,17 +71,15 @@ export function ChaosPanel({ server, onUpdate }: Props) {
             </span>
           </div>
           <span className="text-[10px] text-[var(--color-text-muted)] opacity-70">
-            Applies the selected fault to a percentage of ALL requests across all routes
+            {getSubtitle(protocol)}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => update({ enabled: !chaos.enabled })}
-          className="relative w-[36px] h-[18px] rounded-full transition-colors cursor-pointer flex-shrink-0"
-          style={{ backgroundColor: chaos.enabled ? 'var(--color-error)' : 'var(--color-muted-fallback)' }}
-        >
-          <span className="absolute top-[3px] w-[12px] h-[12px] rounded-full bg-white transition-all" style={{ left: chaos.enabled ? '22px' : '3px' }} />
-        </button>
+        <ToggleSwitchView
+          checked={chaos.enabled}
+          onChange={(v) => update({ enabled: v })}
+          accentColor="var(--color-error)"
+          size="xs"
+        />
       </div>
 
       {/* Config */}
@@ -63,10 +87,10 @@ export function ChaosPanel({ server, onUpdate }: Props) {
         {/* Fault type */}
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[var(--color-text-muted)] w-[90px] flex-shrink-0">Fault type</span>
-          <StyledDropdown
-            size="sm"
-            options={FAULT_OPTIONS}
-            value={chaos.type ?? 'RANDOM_5XX'}
+          <SelectInputView
+            size="md"
+            options={faultOptions}
+            value={chaos.type ?? defaultFault}
             onChange={v => update({ type: v as FaultType })}
             accentColor="var(--color-error)"
           />
@@ -80,6 +104,7 @@ export function ChaosPanel({ server, onUpdate }: Props) {
               {probability}%
             </span>
           </div>
+          {/* range input — no DUI slider equivalent yet */}
           <input
             type="range"
             min={0} max={100} step={5}
@@ -95,7 +120,7 @@ export function ChaosPanel({ server, onUpdate }: Props) {
           </div>
         </div>
 
-        {/* Visual risk indicator */}
+        {/* Visual risk presets */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {[
             { label: 'Low (1-10%)', range: [1, 10], desc: 'Occasional hiccups' },
@@ -115,20 +140,18 @@ export function ChaosPanel({ server, onUpdate }: Props) {
           ))}
         </div>
 
-        {/* Warning banner when high */}
         {chaos.enabled && probability >= 50 && (
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
             <span className="text-[12px] flex-shrink-0">⚠️</span>
             <div>
               <p className="text-[10px] font-medium text-[var(--color-error)]">High chaos level active</p>
               <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
-                {probability}% of all requests will receive a {chaos.type?.replace(/_/g, ' ')} fault. Make sure this is intentional for chaos testing.
+                {probability}% of all {REALTIME_PROTOCOLS.has(protocol) ? 'messages/events' : 'requests'} will receive a {chaos.type?.replace(/_/g, ' ')} fault. Make sure this is intentional for chaos testing.
               </p>
             </div>
           </div>
         )}
 
-        {/* Global rate limiting */}
         <GlobalRateLimitSection server={server} onUpdate={onUpdate} />
       </div>
     </div>
@@ -147,27 +170,26 @@ function GlobalRateLimitSection({ server, onUpdate }: Props) {
         <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Global Rate Limit</span>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[var(--color-text-muted)]">Enable</span>
-          <button
-            type="button"
-            onClick={() => update({ enabled: !rl.enabled })}
-            className="relative w-[28px] h-[14px] rounded-full transition-colors cursor-pointer flex-shrink-0"
-            style={{ backgroundColor: rl.enabled ? 'var(--color-warning)' : 'var(--color-muted-fallback)' }}
-          >
-            <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: rl.enabled ? '16px' : '2px' }} />
-          </button>
+          <ToggleSwitchView
+            checked={rl.enabled}
+            onChange={(v) => update({ enabled: v })}
+            accentColor="var(--color-warning)"
+            size="xs"
+          />
         </div>
       </div>
       {rl.enabled && (
         <div className="flex items-center gap-2 flex-wrap">
-          <input
+          <TextInputView
             type="number"
-            value={rl.requestsPerWindow}
+            value={String(rl.requestsPerWindow)}
             onChange={e => update({ requestsPerWindow: parseInt(e.target.value) || 1000 })}
-            className="w-[80px] h-[26px] px-2 text-[11px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none"
+            size="md"
+            style={{ width: 80, fontFamily: 'monospace' }}
           />
           <span className="text-[10px] text-[var(--color-text-muted)]">requests per</span>
-          <StyledDropdown
-            size="sm"
+          <SelectInputView
+            size="md"
             options={[{ value: '1000', label: 'second' }, { value: '60000', label: 'minute' }, { value: '3600000', label: 'hour' }]}
             value={String(rl.windowMs)}
             onChange={v => update({ windowMs: parseInt(v) })}

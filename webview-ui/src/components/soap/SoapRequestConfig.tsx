@@ -23,7 +23,7 @@ import {
   ButtonView,
   IconButtonView,
   type TabItem,
-} from '../../dui';
+} from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AuthEditor, ScriptsEditor } from '..';
 import { InfoCircleIcon } from '../../../icons';
-import { ModalView, ButtonView, TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '../../../dui';
+import { ModalView, ButtonView, TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '@salilvnair/dui';
 
 export interface CollectionProperties {
   headers: KeyValueTableRow[];

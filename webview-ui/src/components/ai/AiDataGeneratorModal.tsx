@@ -10,7 +10,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useTabsStore } from '../../store/tabs-store';
 import { DiceIcon, CopyIcon, CheckIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView, ButtonView, EditorView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, EditorView, MultilineInputView } from '@salilvnair/dui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -259,13 +259,13 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
 
         {/* Custom description */}
         {dataType === 'custom' && (
-          <textarea
+          <MultilineInputView
             value={customDesc}
             onChange={e => setCustomDesc(e.target.value)}
             rows={2}
+            size="md"
+            width="fw"
             placeholder="Describe the data shape… e.g. 'IoT sensor readings with device ID, temperature, humidity, and timestamp'"
-            className="w-full resize-none rounded-md px-2.5 py-2 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
-            style={{ minHeight: 52 }}
           />
         )}
 

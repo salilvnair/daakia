@@ -10,7 +10,7 @@ import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { EditorView, CopyButtonView, TabView, type TabItem } from '../../dui';
+import { EditorView, CopyButtonView, TabView, type TabItem } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
 

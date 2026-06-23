@@ -101,6 +101,13 @@ export interface WebhookConfig {
 
 // ─── State Machine (6A.11-6A.12) ────────────────────────────────────────────
 
+export interface StateMockResponse {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  status: number;
+  body: string;
+}
+
 export interface StateNode {
   id: string;
   name: string;
@@ -108,6 +115,7 @@ export interface StateNode {
   y: number;
   isInitial?: boolean;
   color?: string;
+  mockResponses?: StateMockResponse[];
 }
 
 export interface StateTransition {
@@ -125,6 +133,17 @@ export interface StateMachineConfig {
   sessionMode: 'cookie' | 'header' | 'global';
   sessionKey?: string;
   defaultState: string;
+}
+
+/** One workflow connection on a mock server — supports multiple per server. */
+export interface ConnectedWorkflow {
+  workflowId: string;
+  name: string;
+  /** e.g. "POST /checkout" or "*" for any route */
+  routePattern?: string;
+  /** Trigger event name that starts this workflow */
+  event?: string;
+  stateMachine?: StateMachineConfig;
 }
 
 // ─── Record & Playback (6A.16-6A.18) ────────────────────────────────────────
@@ -145,6 +164,16 @@ export interface RecordedRequest {
   };
   matchedRouteId?: string;
   savedAsStub?: boolean;
+}
+
+// ─── Per-route state transition entry (multi-state support) ─────────────────
+
+export interface StateTransitionEntry {
+  id: string;
+  requiredState: string;       // '' = any / initial (no restriction)
+  newState: string;            // '' = no transition
+  responseBodyOverride?: string;  // if set, overrides the route's main body
+  statusCodeOverride?: number;    // if set, overrides the route's main statusCode
 }
 
 // ─── MockRoute (extended with all 6A features) ───────────────────────────────
@@ -179,10 +208,12 @@ export interface MockRoute {
   bodyFile?: string;
   proxyTarget?: string;
 
-  // State machine (6A.11)
+  // State machine (6A.11) — single-pair legacy fields (still honoured for backward compat)
   requiredState?: string;
   newState?: string;
   stateVariableUpdates?: Record<string, string>;
+  // Multi-entry state transitions table — takes priority over requiredState/newState when present
+  stateTransitions?: StateTransitionEntry[];
 
   // Fault injection (6A.13)
   fault?: FaultConfig;
@@ -234,6 +265,9 @@ export interface MockServer {
 
   // WireMock-grade features (6A)
   stateMachine?: StateMachineConfig;
+  connectedWorkflowId?: string;
+  /** Multiple workflow connections — supersedes single connectedWorkflowId */
+  connectedWorkflows?: ConnectedWorkflow[];
   globalFault?: FaultConfig;
   globalRateLimit?: RateLimitConfig;
   recordingMode?: boolean;

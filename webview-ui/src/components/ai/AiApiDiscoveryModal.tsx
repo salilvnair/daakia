@@ -10,7 +10,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
 import { SparkleIcon, PlusIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
-import { ModalView, ButtonView, AIButtonView, TextInputView } from '../../dui';
+import { ModalView, ButtonView, AIButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -272,17 +272,14 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
               <label className="text-[11px] font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
                 Custom paths (optional, one per line, e.g. /api/v4/users)
               </label>
-              <textarea
+              <MultilineInputView
                 value={customPaths}
                 onChange={e => setCustomPaths(e.target.value)}
                 rows={3}
-                placeholder="/api/v4/users&#10;/internal/metrics&#10;/api/v1/webhooks"
-                className="w-full px-3 py-2 text-[11px] rounded-md border font-mono resize-none"
-                style={{
-                  backgroundColor: 'var(--color-input-bg)',
-                  borderColor: 'var(--color-input-border)',
-                  color: 'var(--color-text-primary)',
-                }}
+                size="md"
+                width="fw"
+                placeholder={`/api/v4/users\n/internal/metrics\n/api/v1/webhooks`}
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}
               />
             </div>
           )}

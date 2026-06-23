@@ -2,8 +2,12 @@
  * GraphQLConfig — GraphQL schema + operations config for mock server.
  */
 import { useState } from 'react';
+import {
+  SelectInputView, EditorView, ResizablePanelView, ButtonView, IconButtonView,
+  ToggleSwitchView, TextInputView, TabView, type SelectOption, type TabItem,
+} from '@salilvnair/dui';
 import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
-import { CodeEditor, StyledDropdown, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
+import { ConfirmDialog } from '../../shared';
 import { GRAPHQL_SAMPLES } from '../samples';
 import type { MockServer, MockRoute } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
@@ -13,6 +17,13 @@ import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
 
 type GQLOpTab = 'response' | 'sequence' | 'matching' | 'advanced';
+
+const GQL_OP_TABS: TabItem[] = [
+  { id: 'response', label: 'Response' },
+  { id: 'sequence', label: 'Sequence' },
+  { id: 'matching', label: 'Matching' },
+  { id: 'advanced', label: 'Advanced' },
+];
 
 function gqlOpToRoute(op: GraphQLMockOperation): MockRoute {
   return {
@@ -33,9 +44,15 @@ function routeToGQLPatch(patch: Partial<MockRoute>): Partial<GraphQLMockOperatio
            cookieMatchers, bodyMatcher, compositeLogic, priority, fault, rateLimit };
 }
 
-const GRAPHQL_SAMPLE_OPTIONS: DropdownOption[] = [
+const GRAPHQL_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
   ...GRAPHQL_SAMPLES.map(s => ({ value: s.id, label: s.label })),
+];
+
+const OP_TYPE_OPTIONS: SelectOption[] = [
+  { value: 'query', label: 'Query' },
+  { value: 'mutation', label: 'Mutation' },
+  { value: 'subscription', label: 'Subscription' },
 ];
 
 const GQL_COLOR = 'var(--color-protocol-graphql)';
@@ -104,20 +121,20 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
       <p className="text-[10px] text-[var(--color-text-muted)]">
         Define a GraphQL schema (SDL) so the GraphQL client can introspect this mock server and show Schema/Documentation panels.
       </p>
-      <ResizablePanel id={`mock.gql.schema.${server.id}`} defaultHeight={200} minHeight={80} maxHeight={500}>
-        <CodeEditor
+      <ResizablePanelView id={`mock.gql.schema.${server.id}`} defaultHeight={200} minHeight={80} maxHeight={500}>
+        <EditorView
           value={server.graphqlSchema || 'type Query {\n  hello: String!\n  users: [User!]!\n}\n\ntype User {\n  id: ID!\n  name: String!\n  email: String\n}'}
           onChange={(val) => onUpdate({ graphqlSchema: val })}
           language="graphql"
           height="100%"
         />
-      </ResizablePanel>
+      </ResizablePanelView>
 
       <div className="flex items-center justify-between mt-2">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Mock Operations ({server.graphqlOperations?.length || 0})</span>
         <div className="flex items-center gap-1.5">
-          <StyledDropdown
-            size="sm"
+          <SelectInputView
+            size="md"
             options={GRAPHQL_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
@@ -134,28 +151,25 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
             accentVar={GQL_COLOR}
             onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <button
-            type="button"
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor={GQL_COLOR}
             onClick={() => {
               const ops = server.graphqlOperations || [];
               onUpdate({ graphqlOperations: [...ops, { id: crypto.randomUUID(), operationType: 'query', operationName: '', response: '{\n  "data": {}\n}', statusCode: 200, delay: 0, enabled: true }] });
             }}
-            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: GQL_COLOR, borderColor: `color-mix(in srgb, ${GQL_COLOR} 30%, transparent)` }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${GQL_COLOR} 10%, transparent)`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             + Add Operation
-          </button>
+          </ButtonView>
           {(server.graphqlOperations || []).length > 0 && (
-            <button
-              type="button"
+            <IconButtonView
+              size="sm"
+              icon={<TrashIcon size={12} />}
+              accentColor="var(--color-error)"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Operations"
-              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
-              <TrashIcon size={12} />
-            </button>
+            />
           )}
         </div>
       </div>
@@ -237,56 +251,63 @@ function GQLOperationCard({ op, gqlUrl, copiedId, onCopyEndpoint, onDelete, onUp
 
       {/* Header row */}
       <div className={`flex items-center gap-2 p-3 ${op.enabled === false ? 'opacity-50' : ''}`}>
-        <button type="button"
-          onClick={() => onUpdate({ enabled: op.enabled === false ? true : false })}
-          className="relative z-20 w-[28px] h-[14px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-          style={{ backgroundColor: op.enabled !== false ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-          title={op.enabled !== false ? 'Disable' : 'Enable'}>
-          <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: op.enabled !== false ? '16px' : '2px' }} />
-        </button>
-        <StyledDropdown size="sm" value={op.operationType}
+        <ToggleSwitchView
+          checked={op.enabled !== false}
+          onChange={(v) => onUpdate({ enabled: v })}
+          accentColor="var(--color-success)"
+          size="xs"
+        />
+        <SelectInputView
+          size="md"
+          options={OP_TYPE_OPTIONS}
+          value={op.operationType}
           onChange={(val) => onUpdate({ operationType: val as GraphQLMockOperation['operationType'] })}
-          options={[{ value: 'query', label: 'Query' }, { value: 'mutation', label: 'Mutation' }, { value: 'subscription', label: 'Subscription' }]}
-          accentColor={GQL_COLOR} />
-        <input type="text" value={op.operationName}
+          accentColor={GQL_COLOR}
+        />
+        <TextInputView
+          value={op.operationName}
           onChange={(e) => onUpdate({ operationName: e.target.value })}
           placeholder="Operation name (optional)"
-          className="flex-1 h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none" />
+          size="md"
+          style={{ flex: 1, fontFamily: 'monospace' }}
+        />
         {gqlUrl && op.enabled !== false && (
-          <button type="button" onClick={() => onCopyEndpoint(op.id)}
-            className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors" title="Copy endpoint URL">
-            {copiedId === op.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-          </button>
+          <IconButtonView
+            size="sm"
+            icon={copiedId === op.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
+            onClick={() => onCopyEndpoint(op.id)}
+            title="Copy endpoint URL"
+          />
         )}
         {op.enabled !== false && (
-          <button type="button" onClick={onDelete} className="text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer">
-            <TrashIcon size={12} />
-          </button>
+          <IconButtonView
+            size="sm"
+            icon={<TrashIcon size={12} />}
+            accentColor="var(--color-error)"
+            onClick={onDelete}
+          />
         )}
       </div>
 
       {/* Tab bar — only when enabled */}
       {op.enabled !== false && (
         <>
-          <div className="flex items-center gap-0 border-t border-b border-[rgba(255,255,255,0.06)] px-3">
-            {(['response', 'sequence', 'matching', 'advanced'] as GQLOpTab[]).map(tab => (
-              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-                className="h-[28px] px-2.5 text-[10px] font-medium cursor-pointer transition-colors"
-                style={{
-                  borderBottom: activeTab === tab ? `2px solid ${GQL_COLOR}` : '2px solid transparent',
-                  color: activeTab === tab ? GQL_COLOR : 'var(--color-text-muted)',
-                  marginBottom: '-1px',
-                }}>
-                {tab === 'response' ? 'Response' : tab === 'sequence' ? 'Sequence' : tab === 'matching' ? 'Matching' : 'Advanced'}
-              </button>
-            ))}
+          <div className="border-t border-[rgba(255,255,255,0.06)] px-3">
+            <TabView
+              tabs={GQL_OP_TABS}
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as GQLOpTab)}
+              variant="underline"
+              size="xs"
+              accentColor={GQL_COLOR}
+            />
           </div>
 
           <div className="p-3 flex flex-col gap-2">
             {activeTab === 'response' && (
-              <ResizablePanel id={`mock.gql.op.${op.id}`} defaultHeight={80} minHeight={50} maxHeight={400}>
-                <CodeEditor value={op.response} onChange={(val) => onUpdate({ response: val })} language="json" height="100%" />
-              </ResizablePanel>
+              <ResizablePanelView id={`mock.gql.op.${op.id}`} defaultHeight={80} minHeight={50} maxHeight={400}>
+                <EditorView value={op.response} onChange={(val) => onUpdate({ response: val })} language="json" height="100%" />
+              </ResizablePanelView>
             )}
             {activeTab === 'sequence' && (
               <SequencePanel route={gqlOpToRoute(op)} onUpdate={(patch) => onUpdate(routeToGQLPatch(patch))} />

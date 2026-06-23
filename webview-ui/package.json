@@ -8,6 +8,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@salilvnair/dui": "file:../../dui",
+    "@salilvnair/state-machine": "file:../../state-machine",
+    "@xyflow/react": "^12.6.4",
     "@monaco-editor/react": "^4.7.0",
     "@salilvnair/convengine-chat": "^1.0.7",
     "highlight.js": "^11.10.0",

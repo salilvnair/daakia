@@ -111,6 +111,22 @@ export class StateMachineRuntime {
   }
 
   /**
+   * Returns the mock response configured on the current state node for the given method + path.
+   * Called on every request — state mock responses take precedence over the route default body
+   * but are overridden by route-level transition entry overrides (more specific).
+   */
+  getStateResponseForRoute(method: string, path: string, sessionKey: string): { status: number; body: string } | null {
+    if (!this.config.enabled) return null;
+    const currentState = this.getCurrentState(sessionKey);
+    const stateNode = this.config.states.find((s) => s.id === currentState);
+    if (!stateNode?.mockResponses?.length) return null;
+    const m = method.toUpperCase();
+    const match = stateNode.mockResponses.find((r) => r.method === m && r.path === path);
+    if (!match) return null;
+    return { status: match.status, body: match.body };
+  }
+
+  /**
    * Check if a route is accessible in the current state.
    * Returns true if route has no requiredState OR currentState matches.
    */

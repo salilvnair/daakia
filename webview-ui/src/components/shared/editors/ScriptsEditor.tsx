@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { TabView, EditorView, ButtonView } from '../../../dui';
+import { TabView, EditorView, ButtonView } from '@salilvnair/dui';
 import { SnippetsPanel } from './SnippetsPanel';
 import { useDebugStore } from '../../../store/debug-store';
 import { useTabsStore } from '../../../store/tabs-store';

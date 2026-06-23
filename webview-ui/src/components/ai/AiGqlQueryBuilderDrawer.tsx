@@ -11,7 +11,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useToastStore } from '../../store/toast-store';
 import { CloseIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { EditorView } from '../../dui';
+import { EditorView } from '@salilvnair/dui';
 
 export interface AiGqlQueryBuilderDrawerHandle {
   open: () => void;

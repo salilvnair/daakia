@@ -1,6 +1,6 @@
 // Shared helpers and demo data for DUI showcase panels
 
-import type { TabItem } from '../../dui';
+import type { TabItem } from '@salilvnair/dui';
 
 // ─── Layout helpers ────────────────────────────────────────────────────────────
 

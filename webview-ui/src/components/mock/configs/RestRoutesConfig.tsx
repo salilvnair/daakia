@@ -2,14 +2,17 @@
  * RestRoutesConfig — REST route management for mock server.
  */
 import { useState } from 'react';
-import { StyledDropdown, ConfirmDialog, type DropdownOption } from '../../shared';
+import { ButtonView, IconButtonView, SelectInputView, type SelectOption } from '@salilvnair/dui';
+import { ConfirmDialog } from '../../shared';
 import { TrashIcon } from '../../../icons';
 import { RouteCard } from '../RouteCard';
 import { REST_SAMPLES } from '../samples';
-import type { MockServer, MockRoute } from '../mock-types';
+import { installSMRestWorkflow } from '../samples/sm-rest-workflows';
+import type { MockServer, MockRoute, ConnectedWorkflow } from '../mock-types';
 import { MockAiGenerateButton } from '../MockAiGeneratePopover';
+import { postMsg } from '../../../vscode';
 
-const REST_SAMPLE_OPTIONS: DropdownOption[] = [
+const REST_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
   ...REST_SAMPLES.map(s => ({ value: s.id, label: s.label })),
 ];
@@ -40,10 +43,34 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
       id: crypto.randomUUID(),
       ...r,
     }));
-    onUpdate({ routes, description: sample.description });
+
+    // Install matching SM workflow (idempotent — safe to call every time)
+    const workflow = installSMRestWorkflow(sampleId);
+
+    if (workflow) {
+      // Use sample's pre-configured stateMachine if provided, else preserve existing
+      const smConfig = sample.stateMachine ?? server.stateMachine ?? undefined;
+      const existing: ConnectedWorkflow[] = server.connectedWorkflows ?? [];
+      const already = existing.find(w => w.workflowId === workflow.id);
+      const connectedWorkflows: ConnectedWorkflow[] = already
+        ? existing
+        : [...existing, { workflowId: workflow.id, name: workflow.name }];
+
+      onUpdate({ routes, description: sample.description, connectedWorkflows, connectedWorkflowId: workflow.id, stateMachine: smConfig });
+
+      // Persist to extension host immediately (MockServerPanel debounced save may lag)
+      postMsg({
+        type: 'mockServer:patchStateMachine',
+        serverId: server.id,
+        connectedWorkflows,
+        connectedWorkflowId: workflow.id,
+        stateMachine: smConfig ?? null,
+      });
+    } else {
+      onUpdate({ routes, description: sample.description });
+    }
   };
 
-  // Build AI context: description (user's full text context) + existing routes
   const buildAiContext = () => {
     const parts: string[] = [];
     if (server.description?.trim()) {
@@ -60,8 +87,8 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Routes ({server.routes.length})</span>
         <div className="flex items-center gap-1.5">
-          <StyledDropdown
-            size="sm"
+          <SelectInputView
+            size="md"
             options={REST_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
@@ -75,25 +102,22 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
             accentVar={REST_COLOR}
             onAddGeneratedRoutes={onAddGeneratedRoutes}
           />
-          <button
-            type="button"
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor={REST_COLOR}
             onClick={onAddRoute}
-            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: REST_COLOR, borderColor: `color-mix(in srgb, ${REST_COLOR} 30%, transparent)` }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${REST_COLOR} 10%, transparent)`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             + Add Route
-          </button>
+          </ButtonView>
           {server.routes.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowDeleteAll(true)}
+            <IconButtonView
+              size="sm"
+              icon={<TrashIcon size={12} />}
               title="Delete All Routes"
-              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
-              <TrashIcon size={12} />
-            </button>
+              accentColor="var(--color-error)"
+              onClick={() => setShowDeleteAll(true)}
+            />
           )}
         </div>
       </div>

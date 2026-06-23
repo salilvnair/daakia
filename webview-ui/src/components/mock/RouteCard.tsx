@@ -2,7 +2,9 @@
  * RouteCard — expandable route editor for REST mock server routes.
  */
 import { useState, useEffect, useRef } from 'react';
-import { CodeEditor, ConfirmDialog, KeyValueTable, StyledDropdown, ResizablePanel, DurationInput, type DropdownOption, type KeyValueRow } from '../shared';
+import { ConfirmDialog } from '../shared';
+import { SelectInputView, EditorView, KeyValueTableView, DurationInputView, ResizablePanelView, TabView, TextInputView, IconButtonView } from '@salilvnair/dui';
+import type { TabItem, KeyValueTableRow, SelectOption } from '@salilvnair/dui';
 import { METHOD_COLORS, methodBg } from '../../colors';
 import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern, ExternalLinkIcon } from '../../icons';
 import type { MockRoute, HttpMethod } from './mock-types';
@@ -22,7 +24,7 @@ function formatDelay(ms: number): string {
   return `${ms}ms`;
 }
 
-const MOCK_METHOD_OPTIONS: DropdownOption[] = [
+const MOCK_METHOD_OPTIONS: SelectOption[] = [
   { value: 'GET', label: 'GET', color: METHOD_COLORS.GET },
   { value: 'POST', label: 'POST', color: METHOD_COLORS.POST },
   { value: 'PUT', label: 'PUT', color: METHOD_COLORS.PUT },
@@ -64,14 +66,14 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
     openRouteTryTab(serverBaseUrl, route);
   };
 
-  const getEditorLang = () => {
+  const getEditorLang = (): 'json' | 'xml' | 'plaintext' => {
     if (contentType === 'application/json') return 'json';
     if (contentType === 'application/xml') return 'xml';
-    return 'text';
+    return 'plaintext';
   };
 
   // Local state for header rows — syncs FROM route.headerRows (or route.headers fallback)
-  const toRows = (route: { headers: Record<string, string>; headerRows?: Array<{ key: string; value: string; enabled: boolean }> }): KeyValueRow[] => {
+  const toRows = (route: { headers: Record<string, string>; headerRows?: Array<{ key: string; value: string; enabled: boolean }> }): KeyValueTableRow[] => {
     if (route.headerRows && route.headerRows.length > 0) {
       const rows = route.headerRows.map(r => ({
         id: `${r.key}-${r.enabled}`,
@@ -92,7 +94,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
     return rows;
   };
 
-  const [headerRows, setHeaderRows] = useState<KeyValueRow[]>(() => toRows(route));
+  const [headerRows, setHeaderRows] = useState<KeyValueTableRow[]>(() => toRows(route));
   const prevHeadersRef = useRef(route.headers);
 
   // Sync from parent if route.headers changed externally
@@ -103,7 +105,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
     }
   }, [route.headers]);
 
-  const handleHeadersChange = (rows: KeyValueRow[]) => {
+  const handleHeadersChange = (rows: KeyValueTableRow[]) => {
     setHeaderRows(rows);
     // Only enabled rows with keys go into headers (for the backend)
     const headers: Record<string, string> = {};
@@ -151,34 +153,37 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
           <span className="text-[10px] text-[var(--color-text-muted)] font-mono bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] rounded px-1.5 py-0.5">{formatDelay(route.delay)}</span>
         )}
         {serverBaseUrl && (
-          <button
-            type="button"
-            onClick={tryRoute}
-            className="relative z-20 p-1 text-[var(--color-try-button)] hover:text-[var(--color-try-button)] cursor-pointer transition-all opacity-0 group-hover:opacity-100"
-            title="Try this route"
-          >
-            <ExternalLinkIcon size={12} />
-          </button>
+          <span className="relative z-20 opacity-0 group-hover:opacity-100 transition-all">
+            <IconButtonView
+              size="default"
+              icon={<ExternalLinkIcon size={12} />}
+              onClick={tryRoute}
+              tooltip="Try this route"
+              color="var(--color-try-button)"
+            />
+          </span>
         )}
         {serverBaseUrl && (
-          <button
-            type="button"
-            onClick={copyFullPath}
-            className="relative z-20 p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-all opacity-0 group-hover:opacity-100"
-            title="Copy full URL"
-          >
-            {copied ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-          </button>
+          <span className="relative z-20 opacity-0 group-hover:opacity-100 transition-all">
+            <IconButtonView
+              size="default"
+              icon={copied ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
+              onClick={copyFullPath}
+              tooltip="Copy full URL"
+            />
+          </span>
         )}
         {route.enabled && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
-            className="relative z-20 p-1 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-all opacity-0 group-hover:opacity-100"
-            title="Delete route"
-          >
-            <TrashIcon size={12} />
-          </button>
+          <span className="relative z-20 opacity-0 group-hover:opacity-100 transition-all">
+            <IconButtonView
+              size="default"
+              icon={<TrashIcon size={12} />}
+              onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+              tooltip="Delete route"
+              color="var(--color-text-muted)"
+              accentColor="var(--color-error)"
+            />
+          </span>
         )}
       </div>
 
@@ -199,44 +204,39 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
         <div className="border-t border-[var(--color-surface-border)] px-3 py-3 flex flex-col gap-2.5">
 
           {/* Route-level tab bar */}
-          <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.07)] -mx-3 px-3">
-            {([
-              { id: 'basic', label: 'Response' },
-              { id: 'matching', label: 'Matching' },
-              { id: 'advanced', label: 'Advanced' },
-            ] as { id: RouteTab; label: string }[]).map(t => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setActiveTab(t.id)}
-                className="h-[28px] px-3 text-[10px] font-medium cursor-pointer transition-colors"
-                style={{
-                  borderBottom: activeTab === t.id ? '2px solid var(--color-mock-server)' : '2px solid transparent',
-                  color: activeTab === t.id ? 'var(--color-mock-server)' : 'var(--color-text-muted)',
-                  marginBottom: '-1px',
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div className="flex items-center -mx-3 px-3 pb-0 pt-0.5 border-b border-[var(--color-surface-border)]">
+            <TabView
+              tabs={([
+                { id: 'basic', label: 'Response' },
+                { id: 'matching', label: 'Matching' },
+                { id: 'advanced', label: 'Advanced' },
+              ] as TabItem[])}
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as RouteTab)}
+              variant="underline"
+              size="xs"
+              accentColor="var(--color-mock-server)"
+            />
           </div>
 
           {/* ═══ BASIC TAB ═══════════════════════════════════════════════════ */}
           {activeTab === 'basic' && <>
             {/* Method + Path */}
             <div className="flex items-center gap-2">
-              <StyledDropdown
+              <SelectInputView
                 options={MOCK_METHOD_OPTIONS}
                 value={route.method}
                 onChange={(v) => onUpdate({ method: v as HttpMethod })}
-                className="mock-method"
+                size="md"
+                accentColor={METHOD_COLORS[route.method] || 'var(--color-primary)'}
               />
-              <input
-                type="text"
+              <TextInputView
                 value={route.path}
                 onChange={(e) => onUpdate({ path: e.target.value })}
                 placeholder="/api/endpoint"
-                className="flex-1 h-[32px] px-3 text-[13px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+                size="md"
+                className="flex-1 font-mono"
+                accentColor="var(--color-mock-server)"
               />
             </div>
 
@@ -244,19 +244,21 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
             <div className="flex items-center gap-4 pt-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] text-[var(--color-text-muted)]">Status</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={route.statusCode}
+                <TextInputView
+                  type="number"
+                  value={String(route.statusCode)}
                   onChange={(e) => onUpdate({ statusCode: parseInt(e.target.value) || 200 })}
-                  className="w-[56px] h-[28px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  size="md"
+                  className="font-mono text-center w-[56px]"
+                  accentColor="var(--color-mock-server)"
                 />
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
-                <DurationInput
+                <DurationInputView
                   value={route.delay}
                   onChange={(ms) => onUpdate({ delay: ms })}
+                  size="md"
                 />
               </div>
             </div>
@@ -273,13 +275,13 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
               </button>
               {headersExpanded && (
                 <div className="mt-1.5">
-                  <KeyValueTable
+                  <KeyValueTableView
                     rows={headerRows}
                     onChange={handleHeadersChange}
                     placeholder={{ key: 'Header name', value: 'Value' }}
-                    autocompleteKeys
                     label="Header List"
                     accentColor="var(--color-mock-server)"
+                    size="md"
                   />
                 </div>
               )}
@@ -309,14 +311,14 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
                   ))}
                 </div>
               </div>
-              <ResizablePanel id={`mock.rest.route.${route.id}.body`} defaultHeight={120} minHeight={60} maxHeight={500}>
-                <CodeEditor
+              <ResizablePanelView defaultHeight={120} minHeight={60} maxHeight={500}>
+                <EditorView
                   value={route.body}
                   onChange={(val) => onUpdate({ body: val })}
-                  language={getEditorLang() as any}
+                  language={getEditorLang()}
                   height="100%"
                 />
-              </ResizablePanel>
+              </ResizablePanelView>
             </div>
 
             {/* Template Editor (6A.7-6A.9) */}
@@ -331,15 +333,15 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
                 </label>
                 <span className="text-[9px] text-[var(--color-text-muted)] opacity-60">JS • access: req.body, req.headers, req.query, jwt.sign()</span>
               </div>
-              <ResizablePanel id={`mock.rest.route.${route.id}.script`} defaultHeight={100} minHeight={50} maxHeight={400}>
-                <CodeEditor
+              <ResizablePanelView defaultHeight={100} minHeight={50} maxHeight={400}>
+                <EditorView
                   value={route.responseScript || ''}
                   onChange={(val) => onUpdate({ responseScript: val })}
                   language="javascript"
                   placeholder="// Return object/string as response. Example:\n// const token = jwt.sign({ sub: req.body.username }, 'secret', { expiresIn: 3600 });\n// return { access_token: token };"
                   height="100%"
                 />
-              </ResizablePanel>
+              </ResizablePanelView>
             </div>
 
             {/* Sequence responses (6A.22) */}

@@ -8,7 +8,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
-import { AIButtonView } from '../../dui';
+import { AIButtonView } from '@salilvnair/dui';
 
 interface PatternRecord {
   url: string;

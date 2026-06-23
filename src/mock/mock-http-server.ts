@@ -130,13 +130,23 @@ export function createHttpServer(
       let matchedRoute: MockRoute | undefined;
       let matchedParams: Record<string, string> = {};
 
+      let matchedTransitionEntry: import('./mock-types').StateTransitionEntry | undefined;
+
       for (const r of sortedRoutes) {
         const result = routeMatchesRequest(r, reqCtx);
         if (result.matched) {
-          // State machine: check if route allowed in current state
-          if (runtime.stateMachine && r.requiredState) {
-            const sessionKey = runtime.stateMachine.resolveSessionKey(req.headers as Record<string, string>, cookies);
-            if (!runtime.stateMachine.routeAllowedInState(r.requiredState, sessionKey)) continue;
+          if (runtime.stateMachine) {
+            const sk = runtime.stateMachine.resolveSessionKey(req.headers as Record<string, string>, cookies);
+            if (r.stateTransitions?.length) {
+              // Multi-entry mode: find first entry whose requiredState matches current state
+              const currentState = runtime.stateMachine.getCurrentState(sk);
+              const entry = r.stateTransitions.find(t => !t.requiredState || t.requiredState === currentState);
+              if (!entry) continue; // none of the entries match — skip route
+              matchedTransitionEntry = entry;
+            } else if (r.requiredState) {
+              // Legacy single-pair mode
+              if (!runtime.stateMachine.routeAllowedInState(r.requiredState, sk)) continue;
+            }
           }
           matchedRoute = r;
           matchedParams = result.params;
@@ -261,6 +271,27 @@ export function createHttpServer(
           responseBody = resolveAll(route.body);
         }
 
+        // State node mock response override — applies when current session state has a
+        // matching method+path response defined on the canvas (screenshot 5 panel).
+        // Takes precedence over the route default body but is overridden by transition entry.
+        if (runtime.stateMachine) {
+          const stateMockResp = runtime.stateMachine.getStateResponseForRoute(method, pathname, sessionKey);
+          if (stateMockResp) {
+            responseBody = stateMockResp.body;
+            statusCode = stateMockResp.status;
+          }
+        }
+
+        // State transition entry overrides (multi-entry mode) — most specific, wins last
+        if (matchedTransitionEntry) {
+          if (matchedTransitionEntry.responseBodyOverride != null && matchedTransitionEntry.responseBodyOverride !== '') {
+            responseBody = resolveAll(matchedTransitionEntry.responseBodyOverride);
+          }
+          if (matchedTransitionEntry.statusCodeOverride) {
+            statusCode = matchedTransitionEntry.statusCodeOverride;
+          }
+        }
+
         // Set response headers
         for (const [k, v] of Object.entries(responseHeaders)) {
           res.setHeader(k, resolveAll(v));
@@ -270,7 +301,13 @@ export function createHttpServer(
 
         // ─── State machine transition (6A.11) ──────────────────────────────
         if (runtime.stateMachine) {
-          runtime.stateMachine.applyTransition(route.id, sessionKey, route.stateVariableUpdates);
+          if (matchedTransitionEntry?.newState) {
+            // Multi-entry mode: apply direct state override
+            runtime.stateMachine.getSession(sessionKey).currentState = matchedTransitionEntry.newState;
+          } else {
+            // Legacy single-pair mode
+            runtime.stateMachine.applyTransition(route.id, sessionKey, route.stateVariableUpdates);
+          }
         }
 
         // ─── Webhooks (6A.23) ──────────────────────────────────────────────

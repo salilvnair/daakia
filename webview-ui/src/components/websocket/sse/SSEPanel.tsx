@@ -6,12 +6,20 @@ import { postMsg } from '../../../vscode';
 import { saveRequest } from '../../../services/request';
 import {
   ConnectIcon, DisconnectIcon, SaveIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon,
-  ArrowDownLeftIcon, AutoScrollIcon, ChevronDownIcon, CopyIcon,
-  CheckIcon, InfoCircleIcon, WarningTriangleIcon, CheckCircleFilledIcon, DownloadIcon, WrapLinesIcon, RadioIcon,
+  ArrowDownLeftIcon, AutoScrollIcon, ChevronDownIcon,
+  InfoCircleIcon, WarningTriangleIcon, CheckCircleFilledIcon, DownloadIcon, WrapLinesIcon, RadioIcon,
   MoreVerticalIcon, SparkleIcon,
 } from '../../../icons';
-import { HighlightedInput, SplitButton } from '../../shared';
-import type { SplitButtonItem } from '../../shared';
+import {
+  HighlightedInputView,
+  ButtonView,
+  DropDownButtonView,
+  IconButtonView,
+  TextInputView,
+  TabView,
+  CopyButtonView,
+  type ContextMenuItem,
+} from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
@@ -96,7 +104,6 @@ export function SSEPanel() {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const aiOverflowRef = useRef<HTMLDivElement>(null);
-  const aiOverflowBtnRef = useRef<HTMLButtonElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const openDaakiaAiTab = useTabsStore(s => s.openDaakiaAiTab);
 
@@ -236,6 +243,15 @@ export function SSEPanel() {
     : connState === 'connecting' ? 'var(--color-warning)'
     : 'var(--color-text-muted)';
 
+  const sseSaveItems: ContextMenuItem[] = [
+    {
+      id: 'save-as',
+      label: 'Save as',
+      icon: <SaveIcon size={13} />,
+      onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
+    },
+  ];
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* URL bar */}
@@ -253,85 +269,84 @@ export function SSEPanel() {
         />
 
         {/* URL input */}
-        <div className="flex-[2] min-w-0">
-          <HighlightedInput
-            value={activeTab.url}
-            onChange={(v) => updateTab(activeTab.id, { url: v })}
-            onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
-            placeholder="https://api.example.com/events"
-            disabled={connState === 'connected'}
-            suggestions={urlSuggestions}
-            mockServers={mockSuggestions}
-            protocolHints={['http://', 'https://']}
-            accentColor="var(--color-protocol-websocket)"
-          />
-        </div>
+        <HighlightedInputView
+          value={activeTab.url}
+          onChange={(v) => updateTab(activeTab.id, { url: v })}
+          onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
+          placeholder="https://api.example.com/events"
+          disabled={connState === 'connected'}
+          suggestions={urlSuggestions}
+          mockServers={mockSuggestions}
+          protocolHints={['http://', 'https://']}
+          accentColor="var(--color-protocol-websocket)"
+          size="lg"
+          borderRadius={6}
+        />
 
         {/* Event type input */}
-        <div className="flex items-center gap-1.5 flex-[1] min-w-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap" style={{ color: 'var(--color-protocol-sse)', backgroundColor: 'rgba(245,158,11,0.12)' }}>Event Type</span>
-          <input
-            type="text"
+          <TextInputView
             value={eventType}
             onChange={(e) => setEventType(e.target.value)}
             disabled={connState === 'connected'}
-            className="h-[36px] flex-1 min-w-[80px] px-2.5 text-[12px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
             placeholder="data"
+            size="lg"
+            style={{ width: 160 }}
           />
         </div>
 
         {/* Start/Stop button */}
         {connState === 'disconnected' ? (
-          <button
-            type="button"
-            onClick={handleConnect}
+          <ButtonView
+            label="Start"
+            iconLeft={<ConnectIcon size={12} />}
+            size="lg"
+            variant="primary"
+            accentColor="var(--color-protocol-sse)"
             disabled={!activeTab.url.trim()}
-            className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[var(--color-protocol-sse)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity flex items-center gap-1.5 flex-shrink-0"
-          >
-            <ConnectIcon size={12} />
-            Start
-          </button>
+            onClick={handleConnect}
+          />
         ) : (
-          <button
-            type="button"
+          <ButtonView
+            label="Stop"
+            iconLeft={<DisconnectIcon size={12} />}
+            size="lg"
+            variant="danger"
             onClick={handleDisconnect}
-            className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[rgba(239,68,68,0.12)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.2)] cursor-pointer transition-colors flex items-center gap-1.5 flex-shrink-0"
-          >
-            <DisconnectIcon size={12} />
-            Stop
-          </button>
+          />
         )}
 
-        {/* Save SplitButton */}
-        <SplitButton
+        {/* Save DropDownButton */}
+        <DropDownButtonView
           label="Save"
+          icon={<SaveIcon size={12} />}
+          items={sseSaveItems}
+          size="lg"
           variant="secondary"
-          onClick={() => {
+          accentColor="var(--color-surface-border)"
+          onPrimaryClick={() => {
             const saved = saveRequest(activeTab);
             if (saved) updateTab(activeTab.id, { dirty: false });
           }}
-          icon={<SaveIcon />}
-          items={sseSaveItems}
+          align="right"
         />
 
-        {/* 9.12: AI Tools ⋮ menu */}
+        {/* AI Tools ⋮ menu */}
         <div className="flex-shrink-0 relative" ref={aiOverflowRef}>
-          <button ref={aiOverflowBtnRef} type="button"
-            onClick={() => {
-              if (!showAiOverflow && aiOverflowBtnRef.current) {
-                const rect = aiOverflowBtnRef.current.getBoundingClientRect();
+          <IconButtonView
+            icon={<MoreVerticalIcon size={15} />}
+            title="AI tools"
+            size="lg"
+            active={showAiOverflow}
+            onClick={(e) => {
+              if (!showAiOverflow) {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 setAiOverflowDir((window.innerHeight - rect.bottom) < 160 ? 'up' : 'down');
               }
               setShowAiOverflow(p => !p);
             }}
-            title="AI tools"
-            className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
-            style={{ color: showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)', backgroundColor: showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent' }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
-          >
-            <MoreVerticalIcon size={15} />
-          </button>
+          />
           {showAiOverflow && (
             <div className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${aiOverflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
               style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
@@ -451,45 +466,36 @@ export function SSEPanel() {
               )}
             </div>
             <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={handleClear}
-                disabled={events.length === 0}
-                className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md"
+              <IconButtonView
+                icon={<TrashIcon size={12} />}
+                size="xs"
                 title="Clear log"
-              >
-                <TrashIcon size={12} />
-              </button>
-              <button
-                type="button"
-                onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
                 disabled={events.length === 0}
-                className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md"
+                onClick={handleClear}
+                hoverColor="var(--color-error)"
+              />
+              <IconButtonView
+                icon={<ArrowUpIcon size={13} />}
+                size="xs"
                 title="Scroll to top"
-              >
-                <ArrowUpIcon size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }}
                 disabled={events.length === 0}
-                className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md"
+                onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              />
+              <IconButtonView
+                icon={<ArrowDownIcon size={13} />}
+                size="xs"
                 title="Scroll to bottom"
-              >
-                <ArrowDownIcon size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setAutoScroll(!autoScroll)}
-                className={`h-[26px] w-[26px] flex items-center justify-center cursor-pointer transition-colors rounded-md ${
-                  autoScroll
-                    ? 'text-[var(--color-protocol-sse)] hover:bg-[rgba(245,158,11,0.08)]'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
-                }`}
+                disabled={events.length === 0}
+                onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }}
+              />
+              <IconButtonView
+                icon={<AutoScrollIcon size={14} />}
+                size="xs"
                 title={autoScroll ? 'Autoscroll: Turn off' : 'Autoscroll: Turn on'}
-              >
-                <AutoScrollIcon size={14} />
-              </button>
+                active={autoScroll}
+                accentColor="var(--color-protocol-sse)"
+                onClick={() => setAutoScroll(!autoScroll)}
+              />
               {/* 9.10-9.16: AI log actions */}
               <AiRealtimeLogActions
                 tabId={activeTab.id}
@@ -525,46 +531,6 @@ export function SSEPanel() {
     </div>
   );
 }
-
-// ────────── Copy Button ──────────
-
-function CopyButton({ text, size = 13 }: { text: string; size?: number }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className={`h-[24px] w-[24px] flex items-center justify-center cursor-pointer rounded transition-colors ${
-        copied
-          ? 'text-[var(--color-success)]'
-          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
-      }`}
-      title={copied ? 'Copied!' : 'Copy'}
-    >
-      {copied ? <CheckIcon size={size} /> : <CopyIcon size={size} />}
-    </button>
-  );
-}
-
-// ────────── Save Items ──────────
-
-const sseSaveItems: SplitButtonItem[] = [
-  {
-    id: 'save-as',
-    label: 'Save as',
-    icon: <SaveIcon />,
-    iconColor: 'var(--color-ctx-close-saved)',
-    onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
-  },
-];
 
 // ────────── SSE Log Entry (collapsible, like WS) ──────────
 
@@ -605,6 +571,11 @@ function SseLogEntry({ event }: { event: SseEvent }) {
   const isDisconnect = event.eventType === '__disconnect__';
   const isStatusMsg = isSystem || isError || isDisconnect;
 
+  const logTabItems = [
+    ...(isJson ? [{ id: 'json', label: 'JSON' }] : []),
+    { id: 'raw', label: 'Raw' },
+  ];
+
   return (
     <div className="border-b border-[var(--color-surface-border)] last:border-b-0 group/row">
       {/* Collapsed row */}
@@ -642,7 +613,7 @@ function SseLogEntry({ event }: { event: SseEvent }) {
         <div className="flex items-center gap-0.5 flex-shrink-0">
           {!isStatusMsg && (
             <div className="opacity-0 group-hover/row:opacity-100 transition-opacity">
-              <CopyButton text={event.data} size={12} />
+              <CopyButtonView text={event.data} size="xs" />
             </div>
           )}
           {!isStatusMsg && (
@@ -659,53 +630,31 @@ function SseLogEntry({ event }: { event: SseEvent }) {
         <div className="border-t border-[var(--color-surface-border)] bg-[var(--color-panel)]">
           {/* Tabs + actions */}
           <div className="flex items-center justify-between px-3 py-1">
-            <div className="flex items-center gap-0">
-              {isJson && (
-                <button
-                  type="button"
-                  onClick={() => setViewMode('json')}
-                  className={`px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors border-b-2 ${
-                    viewMode === 'json'
-                      ? 'text-[var(--color-text-primary)] border-[var(--color-protocol-sse)]'
-                      : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
-                  }`}
-                >
-                  JSON
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setViewMode('raw')}
-                className={`px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors border-b-2 ${
-                  viewMode === 'raw' || !isJson
-                    ? 'text-[var(--color-text-primary)] border-[var(--color-protocol-sse)]'
-                    : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
-                }`}
-              >
-                Raw
-              </button>
-            </div>
+            <TabView
+              tabs={logTabItems}
+              activeTab={viewMode}
+              onChange={(id) => setViewMode(id as 'json' | 'raw')}
+              variant="underline"
+              size="xs"
+              accentColor="var(--color-protocol-sse)"
+            />
             <div className="flex items-center">
               <span className="text-[10px] text-[var(--color-text-muted)] mr-2">Event Data</span>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setWordWrap(!wordWrap); }}
-                className={`h-[24px] w-[24px] flex items-center justify-center cursor-pointer rounded transition-colors ${
-                  wordWrap ? 'text-[var(--color-protocol-sse)] bg-[rgba(245,158,11,0.08)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
-                }`}
+              <IconButtonView
+                icon={<WrapLinesIcon size={13} />}
+                size="xs"
                 title="Toggle word wrap"
-              >
-                <WrapLinesIcon size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="h-[24px] w-[24px] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] cursor-pointer rounded transition-colors"
+                active={wordWrap}
+                accentColor="var(--color-protocol-sse)"
+                onClick={(e) => { e.stopPropagation(); setWordWrap(!wordWrap); }}
+              />
+              <IconButtonView
+                icon={<DownloadIcon size={13} />}
+                size="xs"
                 title="Download"
-              >
-                <DownloadIcon size={13} />
-              </button>
-              <CopyButton text={viewMode === 'json' && isJson ? formattedData : event.data} />
+                onClick={handleDownload}
+              />
+              <CopyButtonView text={viewMode === 'json' && isJson ? formattedData : event.data} size="xs" />
             </div>
           </div>
 

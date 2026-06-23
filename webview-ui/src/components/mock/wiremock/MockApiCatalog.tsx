@@ -2,6 +2,7 @@
  * MockApiCatalog — protocol-aware pre-built template library (6A.26 + extensions).
  */
 import { useState } from 'react';
+import { TextInputView } from '@salilvnair/dui';
 import { PlusIcon } from '../../../icons';
 import type { MockRoute } from '../mock-types';
 
@@ -583,8 +584,7 @@ export function MockApiCatalog({ protocol = 'rest', onAddRoutes }: Props) {
     <div className="flex flex-col gap-3">
       {/* Search + filter */}
       <div className="flex items-center gap-2">
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates…"
-          className="flex-1 h-[30px] px-3 text-[11px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none" />
+        <TextInputView value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates…" size="md" style={{ flex: 1 }} />
       </div>
       <div className="flex items-center gap-1 flex-wrap">
         {categories.map(cat => (

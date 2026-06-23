@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useAiFeaturesStore, AI_FEATURE_LABELS, FEATURE_TO_TEMPLATE_KEY, type AiFeatureFlags } from '../../store/ai-features-store';
 import { SparkleIcon, ChevronRightIcon, BookOpenIcon, SearchIcon } from '../../icons';
-import { TextInputView } from '../../dui';
+import { TextInputView } from '@salilvnair/dui';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
 
 
@@ -167,7 +167,7 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
       </div>
 
       {/* Search */}
-      <div className="px-5 py-3 border-b border-[var(--color-surface-border)] shrink-0">
+      <div className="px-2 py-3 border-b border-[var(--color-surface-border)] shrink-0">
         <TextInputView
           size="md"
           placeholder="Filter by category, name, description…"
@@ -175,10 +175,11 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
           onChange={e => setSearchQuery(e.target.value)}
           iconLeft={<SearchIcon size={13} style={{ color: 'var(--color-text-muted)' }} />}
           accentColor={ACCENT}
+          style={{ width: '100%' }}
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-5 py-4">
+      <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-2 py-4">
         <div className="flex flex-col gap-5">
 
           {/* Summary */}

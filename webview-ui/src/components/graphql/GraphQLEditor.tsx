@@ -12,7 +12,7 @@ import {
   IconButtonView,
   CopyButtonView,
   type TabItem,
-} from '../../dui';
+} from '@salilvnair/dui';
 import { setGraphQLSchema, setActiveGraphQLTab } from '../../services/graphql-completion';
 import { formatGraphQLQuery } from '../../services/graphql-formatter';
 import { GraphQLSubscription } from './GraphQLSubscription';

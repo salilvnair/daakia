@@ -3,10 +3,10 @@
  * Feature 4.6.18 — AI Response Transformer
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { SparkleIcon, CopyIcon, RefreshIcon } from '../../icons';
+import { SparkleIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
-import { ModalView, AIButtonView, ButtonView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, IconButtonView, MultilineInputView, CopyButtonView } from '@salilvnair/dui';
 
 interface Props {
   tabId: string;
@@ -43,7 +43,6 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
   const [instruction, setInstruction] = useState(cached.transform?.instruction ?? '');
   const [result, setResult] = useState(cached.transform?.result ?? '');
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
   const accRef = useRef('');
@@ -109,13 +108,6 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
     updateTransform(tabId, { result: '' });
   }, [tabId, updateTransform]);
 
-  const copy = async () => {
-    if (!result) return;
-    await navigator.clipboard.writeText(result);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
-
   return (
     <ModalView
       open
@@ -130,13 +122,7 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
         </div>
       }
       headerRight={result && !loading ? (
-        <button type="button" onClick={handleRefresh} title="Clear result and re-transform"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)', opacity: 0.6 }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}
-        >
-          <RefreshIcon size={13} />
-        </button>
+        <IconButtonView icon={<RefreshIcon size={13} />} title="Clear result and re-transform" onClick={handleRefresh} size="sm" variant="ghost" />
       ) : undefined}
       footerRight={
         <AIButtonView
@@ -173,13 +159,13 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
           <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 6, color: 'var(--color-text-secondary)' }}>
             Transformation instruction
           </label>
-          <textarea
+          <MultilineInputView
             value={instruction}
             onChange={e => handleInstructionChange(e.target.value)}
             rows={3}
-            className="w-full px-3 py-2 rounded-lg text-[11.5px] resize-none outline-none"
+            size="md"
+            width="fw"
             placeholder='"Convert this JSON to CSV" or "Extract all email addresses"'
-            style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
           />
         </div>
 
@@ -199,11 +185,7 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
           <div style={{ borderRadius: 8, border: '1px solid var(--color-surface-border)', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', backgroundColor: 'var(--color-surface-hover)', borderBottom: '1px solid var(--color-surface-border)' }}>
               <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-muted)' }}>Result</span>
-              <button type="button" onClick={copy}
-                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '2px 8px', borderRadius: 4, cursor: 'pointer', border: 'none', background: 'transparent', color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                <CopyIcon size={11} />
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
+              <CopyButtonView text={result} title="Copy result" size="sm" accentColor={ACCENT} />
             </div>
             <pre style={{ padding: 16, fontSize: 11.5, fontFamily: 'var(--font-mono)', overflowX: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.6, maxHeight: 300, overflowY: 'auto', color: 'var(--color-text-primary)', backgroundColor: 'var(--color-panel)', margin: 0 }}>
               {result}

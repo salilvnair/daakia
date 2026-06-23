@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
-import { EditorView, IconButtonView, CopyButtonView } from '../../../dui';
+import { EditorView, IconButtonView, CopyButtonView } from '@salilvnair/dui';
 import { downloadBlob } from '../../../services/response';
 import { WrapLinesIcon, DownloadIcon, SearchIcon, MoreVerticalIcon, CloseCircleIcon } from '../../../icons';
 import { useClickOutside } from '../../../hooks/useClickOutside';

@@ -2,17 +2,60 @@
  * REST mock server sample routes.
  * Each sample provides 3 routes with method, path, status, headers, and body.
  */
-import type { MockRoute } from '../mock-types';
+import type { MockRoute, StateTransitionEntry, StateMachineConfig } from '../mock-types';
 
 export interface RestSample {
   id: string;
   label: string;
   description: string;
   routes: Array<Omit<MockRoute, 'id'>>;
+  /** Auto-enabled server-level state machine config — applied when loading this sample */
+  stateMachine?: StateMachineConfig;
 }
 
-function route(method: MockRoute['method'], path: string, statusCode: number, body: string, headers: Record<string, string> = {}): Omit<MockRoute, 'id'> {
-  return { method, path, statusCode, body, headers: { 'Content-Type': 'application/json', ...headers }, delay: 0, enabled: true };
+function route(
+  method: MockRoute['method'],
+  path: string,
+  statusCode: number,
+  body: string,
+  headers: Record<string, string> = {},
+  stateTransitions?: StateTransitionEntry[],
+): Omit<MockRoute, 'id'> {
+  return {
+    method, path, statusCode, body,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    delay: 0, enabled: true,
+    ...(stateTransitions?.length ? { stateTransitions } : {}),
+  };
+}
+
+/** Build a StateTransitionEntry (ids are stable per sample so reloads stay idempotent) */
+function tr(
+  id: string, requiredState: string, newState: string,
+  bodyOverride?: string, statusOverride?: number,
+): StateTransitionEntry {
+  return {
+    id, requiredState, newState,
+    ...(bodyOverride != null ? { responseBodyOverride: bodyOverride } : {}),
+    ...(statusOverride != null ? { statusCodeOverride: statusOverride } : {}),
+  };
+}
+
+/** Minimal server-level StateMachineConfig for header-based session tracking */
+function smCfg(stateNames: string[]): StateMachineConfig {
+  return {
+    enabled: true,
+    sessionMode: 'header',
+    sessionKey: 'X-Session-ID',
+    defaultState: '',
+    states: stateNames.map((name, i) => ({
+      id: name.toLowerCase().replace(/\s+/g, '-'),
+      name,
+      x: 250,
+      y: 20 + i * 120,
+    })),
+    transitions: [],
+  };
 }
 
 export const REST_SAMPLES: RestSample[] = [
@@ -40,10 +83,26 @@ export const REST_SAMPLES: RestSample[] = [
     id: 'auth-api',
     label: 'Authentication',
     description: 'JWT-based auth flow with login, token refresh, and logout',
+    stateMachine: smCfg(['Authenticated', 'LoggedOut']),
     routes: [
-      route('POST', '/api/auth/login', 200, '{\n  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ",\n  "refreshToken": "rt_abc123def456",\n  "expiresIn": 3600,\n  "user": { "id": "u1", "email": "user@example.com", "name": "John Doe" }\n}', { 'X-Auth-Provider': 'local' }),
-      route('POST', '/api/auth/refresh', 200, '{\n  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.newtoken",\n  "expiresIn": 3600\n}'),
-      route('POST', '/api/auth/logout', 200, '{\n  "message": "Successfully logged out"\n}'),
+      // login: any state → Authenticated
+      route('POST', '/api/auth/login', 200,
+        '{\n  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ",\n  "refreshToken": "rt_abc123def456",\n  "expiresIn": 3600,\n  "user": { "id": "u1", "email": "user@example.com", "name": "John Doe" }\n}',
+        { 'X-Auth-Provider': 'local' },
+        [tr('auth-login-1', '', 'Authenticated')],
+      ),
+      // refresh: only works when Authenticated, issues new token, stays Authenticated
+      route('POST', '/api/auth/refresh', 200,
+        '{\n  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refreshed",\n  "expiresIn": 3600\n}',
+        {},
+        [tr('auth-refresh-1', 'Authenticated', 'Authenticated')],
+      ),
+      // logout: Authenticated → LoggedOut
+      route('POST', '/api/auth/logout', 200,
+        '{\n  "message": "Successfully logged out"\n}',
+        {},
+        [tr('auth-logout-1', 'Authenticated', 'LoggedOut')],
+      ),
     ],
   },
   {
@@ -59,11 +118,36 @@ export const REST_SAMPLES: RestSample[] = [
   {
     id: 'orders-api',
     label: 'Orders / E-Commerce',
-    description: 'Order management with listing, creation, and status updates',
+    description: 'Order lifecycle — state transitions drive status: pending → processing → shipped → delivered',
+    stateMachine: smCfg(['Processing', 'Shipped', 'Delivered']),
     routes: [
-      route('GET', '/api/orders', 200, '{\n  "orders": [\n    { "id": "ord-001", "status": "delivered", "total": 89.99, "items": 3, "createdAt": "2026-05-18" },\n    { "id": "ord-002", "status": "shipped", "total": 249.50, "items": 1, "createdAt": "2026-05-20" },\n    { "id": "ord-003", "status": "processing", "total": 34.99, "items": 2, "createdAt": "2026-05-21" }\n  ]\n}'),
-      route('POST', '/api/orders', 201, '{\n  "id": "ord-004",\n  "status": "pending",\n  "total": 159.98,\n  "items": [\n    { "productId": "p1", "name": "Widget", "quantity": 2, "price": 79.99 }\n  ],\n  "estimatedDelivery": "2026-05-28"\n}', { 'X-Order-Id': 'ord-004' }),
-      route('PATCH', '/api/orders/:id/status', 200, '{\n  "id": "ord-003",\n  "status": "shipped",\n  "trackingNumber": "1Z999AA10123456784",\n  "updatedAt": "2026-05-21T18:00:00Z"\n}'),
+      route('GET', '/api/orders', 200,
+        '{\n  "orders": [\n    { "id": "ord-001", "status": "delivered", "total": 89.99, "items": 3, "createdAt": "2026-05-18" },\n    { "id": "ord-002", "status": "shipped", "total": 249.50, "items": 1, "createdAt": "2026-05-20" },\n    { "id": "ord-003", "status": "processing", "total": 34.99, "items": 2, "createdAt": "2026-05-21" }\n  ]\n}',
+      ),
+      // POST /api/orders: same URL, 3 different responses as order progresses
+      route('POST', '/api/orders', 201,
+        '{\n  "id": "ord-004",\n  "status": "pending",\n  "total": 159.98,\n  "items": [{ "productId": "p1", "name": "Widget", "quantity": 2, "price": 79.99 }],\n  "estimatedDelivery": "2026-05-28"\n}',
+        { 'X-Order-Id': 'ord-004' },
+        [
+          tr('ord-create-1', '',           'Processing',
+            '{\n  "id": "ord-004",\n  "status": "pending",\n  "total": 159.98,\n  "estimatedDelivery": "2026-05-28"\n}', 201),
+          tr('ord-create-2', 'Processing', 'Shipped',
+            '{\n  "id": "ord-004",\n  "status": "processing",\n  "trackingNumber": null,\n  "updatedAt": "2026-05-22T08:00:00Z"\n}', 200),
+          tr('ord-create-3', 'Shipped',    'Delivered',
+            '{\n  "id": "ord-004",\n  "status": "shipped",\n  "trackingNumber": "1Z999AA10123456784",\n  "updatedAt": "2026-05-22T12:00:00Z"\n}', 200),
+        ],
+      ),
+      // PATCH: advance status — returns state-appropriate confirmation
+      route('PATCH', '/api/orders/:id/status', 200,
+        '{\n  "id": "ord-003",\n  "status": "shipped",\n  "trackingNumber": "1Z999AA10123456784",\n  "updatedAt": "2026-05-21T18:00:00Z"\n}',
+        {},
+        [
+          tr('ord-patch-1', 'Processing', 'Shipped',
+            '{\n  "id": "ord-003",\n  "status": "shipped",\n  "trackingNumber": "1Z999AA10123456784",\n  "updatedAt": "2026-05-22T12:00:00Z"\n}'),
+          tr('ord-patch-2', 'Shipped',    'Delivered',
+            '{\n  "id": "ord-003",\n  "status": "delivered",\n  "deliveredAt": "2026-05-25T09:00:00Z"\n}'),
+        ],
+      ),
     ],
   },
   {
@@ -99,21 +183,61 @@ export const REST_SAMPLES: RestSample[] = [
   {
     id: 'payments',
     label: 'Payments / Stripe-like',
-    description: 'Payment processing API with charges, balance, and refunds',
+    description: 'Payment lifecycle — initiated → pending → processing → succeeded → refunded',
+    stateMachine: smCfg(['Pending', 'Processing', 'Succeeded', 'Refunded']),
     routes: [
-      route('POST', '/api/payments/charge', 200, '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "succeeded",\n  "description": "Pro Plan Subscription",\n  "receipt_url": "https://pay.example.com/receipts/ch_abc123",\n  "created": 1716321600\n}', { 'Idempotency-Key': 'idk_unique123' }),
-      route('GET', '/api/payments/balance', 200, '{\n  "available": [\n    { "amount": 125000, "currency": "usd" }\n  ],\n  "pending": [\n    { "amount": 4500, "currency": "usd" }\n  ]\n}'),
-      route('POST', '/api/payments/refund', 200, '{\n  "id": "re_xyz789",\n  "charge": "ch_abc123",\n  "amount": 2999,\n  "status": "succeeded",\n  "reason": "requested_by_customer"\n}'),
+      // POST /api/payments/charge: cycles through payment states on repeat calls
+      route('POST', '/api/payments/charge', 200,
+        '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "succeeded"\n}',
+        { 'Idempotency-Key': 'idk_unique123' },
+        [
+          tr('pay-charge-1', '',          'Pending',
+            '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "pending",\n  "description": "Pro Plan Subscription"\n}', 202),
+          tr('pay-charge-2', 'Pending',   'Processing',
+            '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "processing"\n}', 200),
+          tr('pay-charge-3', 'Processing','Succeeded',
+            '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "succeeded",\n  "receipt_url": "https://pay.example.com/receipts/ch_abc123"\n}', 200),
+        ],
+      ),
+      route('GET', '/api/payments/balance', 200,
+        '{\n  "available": [{ "amount": 125000, "currency": "usd" }],\n  "pending": [{ "amount": 4500, "currency": "usd" }]\n}',
+      ),
+      // POST /api/payments/refund: only works after Succeeded
+      route('POST', '/api/payments/refund', 200,
+        '{\n  "id": "re_xyz789",\n  "charge": "ch_abc123",\n  "amount": 2999,\n  "status": "succeeded",\n  "reason": "requested_by_customer"\n}',
+        {},
+        [tr('pay-refund-1', 'Succeeded', 'Refunded',
+          '{\n  "id": "re_xyz789",\n  "charge": "ch_abc123",\n  "amount": 2999,\n  "status": "succeeded",\n  "reason": "requested_by_customer"\n}')],
+      ),
     ],
   },
   {
     id: 'health-check',
     label: 'Health / Status',
-    description: 'Service health monitoring with status checks and configuration',
+    description: 'Health probe simulation — GET /health cycles through healthy → degraded → down → recovery',
+    stateMachine: smCfg(['Healthy', 'Degraded', 'Down']),
     routes: [
-      route('GET', '/health', 200, '{\n  "status": "healthy",\n  "version": "2.1.0",\n  "uptime": 864000,\n  "services": {\n    "database": "connected",\n    "cache": "connected",\n    "queue": "connected"\n  }\n}', { 'X-Version': '2.1.0' }),
-      route('GET', '/api/status', 200, '{\n  "api": "operational",\n  "latency": { "p50": 12, "p95": 45, "p99": 120 },\n  "requestsPerMinute": 2500,\n  "errorRate": 0.02\n}'),
-      route('GET', '/api/config', 200, '{\n  "environment": "production",\n  "region": "us-east-1",\n  "features": {\n    "darkMode": true,\n    "betaFeatures": false,\n    "maxUploadSize": 10485760\n  },\n  "maintenance": false\n}'),
+      // GET /health: each call advances degradation — great for chaos testing
+      route('GET', '/health', 200,
+        '{\n  "status": "healthy",\n  "version": "2.1.0",\n  "uptime": 864000\n}',
+        { 'X-Version': '2.1.0' },
+        [
+          tr('health-1', '',         'Healthy',
+            '{\n  "status": "healthy",\n  "version": "2.1.0",\n  "uptime": 864000,\n  "services": { "database": "connected", "cache": "connected", "queue": "connected" }\n}', 200),
+          tr('health-2', 'Healthy',  'Degraded',
+            '{\n  "status": "degraded",\n  "version": "2.1.0",\n  "uptime": 864000,\n  "services": { "database": "connected", "cache": "slow", "queue": "connected" },\n  "warnings": ["Cache latency elevated"]\n}', 200),
+          tr('health-3', 'Degraded', 'Down',
+            '{\n  "status": "down",\n  "version": "2.1.0",\n  "uptime": 864000,\n  "services": { "database": "disconnected", "cache": "disconnected", "queue": "disconnected" },\n  "error": "Database connection pool exhausted"\n}', 503),
+          tr('health-4', 'Down',     'Healthy',
+            '{\n  "status": "healthy",\n  "version": "2.1.0",\n  "uptime": 864060,\n  "services": { "database": "connected", "cache": "connected", "queue": "connected" },\n  "recovered": true\n}', 200),
+        ],
+      ),
+      route('GET', '/api/status', 200,
+        '{\n  "api": "operational",\n  "latency": { "p50": 12, "p95": 45, "p99": 120 },\n  "requestsPerMinute": 2500,\n  "errorRate": 0.02\n}',
+      ),
+      route('GET', '/api/config', 200,
+        '{\n  "environment": "production",\n  "region": "us-east-1",\n  "features": { "darkMode": true, "betaFeatures": false, "maxUploadSize": 10485760 },\n  "maintenance": false\n}',
+      ),
     ],
   },
   {

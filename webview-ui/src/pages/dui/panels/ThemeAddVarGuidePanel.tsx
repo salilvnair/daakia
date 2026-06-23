@@ -1,4 +1,4 @@
-import { ChipView, CodeBlockView } from '../../../dui';
+import { ChipView, CodeBlockView } from '@salilvnair/dui';
 
 // ─── Guide step component ─────────────────────────────────────────────────────
 

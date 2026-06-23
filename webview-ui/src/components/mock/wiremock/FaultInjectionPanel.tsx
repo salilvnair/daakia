@@ -1,14 +1,12 @@
 /**
  * FaultInjectionPanel — Per-route fault injection controls (6A.13-6A.14).
  */
-import { StyledDropdown, DurationInput, type DropdownOption } from '../../shared';
+import { SelectInputView, DurationInputView, TextInputView, ToggleSwitchView, type SelectOption } from '@salilvnair/dui';
 import { ChevronDownIcon } from '../../../icons';
 import { useState } from 'react';
 import type { MockRoute, FaultConfig, FaultType, RateLimitConfig } from '../mock-types';
 
-const MOCK_ACCENT = 'var(--color-mock-server)';
-
-const FAULT_TYPE_OPTIONS: DropdownOption[] = [
+const FAULT_TYPE_OPTIONS: SelectOption[] = [
   { value: '',               label: 'None (no fault)' },
   { value: 'RANDOM_5XX',    label: 'Random 5xx error' },
   { value: 'EMPTY_RESPONSE', label: 'Empty response' },
@@ -16,6 +14,12 @@ const FAULT_TYPE_OPTIONS: DropdownOption[] = [
   { value: 'TIMEOUT',        label: 'Timeout (never respond)' },
   { value: 'CONNECTION_RESET', label: 'Connection reset (TCP RST)' },
   { value: 'CHUNKED_DRIBBLE', label: 'Chunked dribble (partial body)' },
+];
+
+const WINDOW_OPTIONS: SelectOption[] = [
+  { value: '1000', label: 'second' },
+  { value: '60000', label: 'minute' },
+  { value: '3600000', label: 'hour' },
 ];
 
 interface Props {
@@ -66,20 +70,18 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Fault Type</span>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-[var(--color-text-muted)]">Enable</span>
-                <button
-                  type="button"
-                  onClick={() => setFault({ enabled: !fault.enabled })}
-                  className="relative w-[28px] h-[14px] rounded-full transition-colors cursor-pointer flex-shrink-0"
-                  style={{ backgroundColor: fault.enabled ? 'var(--color-error)' : 'var(--color-muted-fallback)' }}
-                >
-                  <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: fault.enabled ? '16px' : '2px' }} />
-                </button>
+                <ToggleSwitchView
+                  checked={fault.enabled}
+                  onChange={(v) => setFault({ enabled: v })}
+                  accentColor="var(--color-error)"
+                  size="xs"
+                />
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <StyledDropdown
-                size="sm"
+              <SelectInputView
+                size="md"
                 options={FAULT_TYPE_OPTIONS}
                 value={fault.type ?? ''}
                 onChange={v => setFault({ type: (v || undefined) as FaultType | undefined, enabled: !!v || fault.enabled })}
@@ -87,7 +89,7 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
               />
             </div>
 
-            {/* Probability slider */}
+            {/* Probability slider — kept as native range (no DUI slider component) */}
             {fault.type && (
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-[var(--color-text-muted)] w-[80px] flex-shrink-0">Probability</span>
@@ -108,7 +110,7 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
             {fault.type && fault.type !== 'TIMEOUT' && (
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-[var(--color-text-muted)] w-[80px] flex-shrink-0">Extra delay</span>
-                <DurationInput value={fault.delayMs ?? 0} onChange={ms => setFault({ delayMs: ms })} />
+                <DurationInputView value={fault.delayMs ?? 0} onChange={ms => setFault({ delayMs: ms })} size="sm" />
               </div>
             )}
 
@@ -116,20 +118,22 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
             {fault.type && fault.type !== 'TIMEOUT' && (
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-[var(--color-text-muted)] w-[80px] flex-shrink-0">Random delay</span>
-                <input
+                <TextInputView
                   type="number"
-                  value={fault.randomDelayRange?.min ?? ''}
+                  value={String(fault.randomDelayRange?.min ?? '')}
                   onChange={e => setFault({ randomDelayRange: { min: parseInt(e.target.value) || 0, max: fault.randomDelayRange?.max ?? 1000 } })}
                   placeholder="min ms"
-                  className="w-[70px] h-[26px] px-2 text-[11px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none"
+                  size="md"
+                  style={{ width: 70, fontFamily: 'monospace' }}
                 />
                 <span className="text-[10px] text-[var(--color-text-muted)]">–</span>
-                <input
+                <TextInputView
                   type="number"
-                  value={fault.randomDelayRange?.max ?? ''}
+                  value={String(fault.randomDelayRange?.max ?? '')}
                   onChange={e => setFault({ randomDelayRange: { min: fault.randomDelayRange?.min ?? 0, max: parseInt(e.target.value) || 1000 } })}
                   placeholder="max ms"
-                  className="w-[70px] h-[26px] px-2 text-[11px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none"
+                  size="md"
+                  style={{ width: 70, fontFamily: 'monospace' }}
                 />
               </div>
             )}
@@ -141,43 +145,39 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Rate Limiting</span>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-[var(--color-text-muted)]">Enable</span>
-                <button
-                  type="button"
-                  onClick={() => setRateLimit({ enabled: !rateLimit.enabled })}
-                  className="relative w-[28px] h-[14px] rounded-full transition-colors cursor-pointer flex-shrink-0"
-                  style={{ backgroundColor: rateLimit.enabled ? 'var(--color-warning)' : 'var(--color-muted-fallback)' }}
-                >
-                  <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: rateLimit.enabled ? '16px' : '2px' }} />
-                </button>
+                <ToggleSwitchView
+                  checked={rateLimit.enabled}
+                  onChange={(v) => setRateLimit({ enabled: v })}
+                  accentColor="var(--color-warning)"
+                  size="xs"
+                />
               </div>
             </div>
 
             {rateLimit.enabled && (
               <div className="flex items-center gap-2 flex-wrap">
-                <input
+                <TextInputView
                   type="number"
-                  value={rateLimit.requestsPerWindow}
+                  value={String(rateLimit.requestsPerWindow)}
                   onChange={e => setRateLimit({ requestsPerWindow: parseInt(e.target.value) || 100 })}
-                  className="w-[70px] h-[26px] px-2 text-[11px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none"
+                  size="md"
+                  style={{ width: 70, fontFamily: 'monospace' }}
                 />
                 <span className="text-[10px] text-[var(--color-text-muted)]">requests per</span>
-                <StyledDropdown
-                  size="sm"
-                  options={[
-                    { value: '1000', label: 'second' },
-                    { value: '60000', label: 'minute' },
-                    { value: '3600000', label: 'hour' },
-                  ]}
+                <SelectInputView
+                  size="md"
+                  options={WINDOW_OPTIONS}
                   value={String(rateLimit.windowMs)}
                   onChange={v => setRateLimit({ windowMs: parseInt(v) })}
                   accentColor="var(--color-warning)"
                 />
-                <input
+                <TextInputView
                   type="number"
-                  value={rateLimit.burstAllowance ?? ''}
+                  value={rateLimit.burstAllowance != null ? String(rateLimit.burstAllowance) : ''}
                   onChange={e => setRateLimit({ burstAllowance: e.target.value ? parseInt(e.target.value) : undefined })}
                   placeholder="burst"
-                  className="w-[60px] h-[26px] px-2 text-[11px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-muted)] focus:outline-none"
+                  size="md"
+                  style={{ width: 60, fontFamily: 'monospace' }}
                   title="Burst allowance (extra requests above limit)"
                 />
               </div>

@@ -7,7 +7,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { postMsg } from '../../vscode';
 import { SparkleIcon } from '../../icons';
-import { ModalView, AIButtonView, ButtonView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView } from '@salilvnair/dui';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

@@ -6,11 +6,11 @@
  * → method: POST, url: /users, body: { name: "John", email: "..." }
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CheckIcon } from '../../icons';
+import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useTabsStore } from '../../store/tabs-store';
 import { useToastStore } from '../../store/toast-store';
+import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -157,120 +157,116 @@ export function VoiceToRequestModal({ onClose }: Props) {
     'Send a GET request to the health endpoint',
   ];
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[600px] max-h-[88vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Voice-to-Request</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">Speak or type your request in plain English</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Voice-to-Request"
+      subtitle="Speak or type your request in plain English"
+      size="md"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
         </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-          {/* Microphone button */}
-          {supported && (
-            <div className="flex flex-col items-center py-4 gap-3">
-              <button type="button" onClick={toggleListening}
-                className="w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all"
-                style={{
-                  backgroundColor: listening ? 'var(--color-error)' : `color-mix(in srgb, ${ACCENT} 15%, transparent)`,
-                  border: `2px solid ${listening ? 'var(--color-error)' : ACCENT}`,
-                  boxShadow: listening ? '0 0 0 8px color-mix(in srgb, var(--color-error) 15%, transparent)' : 'none',
-                }}>
-                <span style={{ fontSize: '24px' }}>{listening ? '■' : '🎤'}</span>
-              </button>
-              <p className="text-[11px]" style={{ color: listening ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
-                {listening ? 'Listening… speak now' : 'Click to speak'}
-              </p>
-            </div>
-          )}
-
-          {!supported && (
-            <div className="rounded-lg border p-3 text-center" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                Speech recognition not supported in this environment. Type your request below.
-              </p>
-            </div>
-          )}
-
-          {/* Text input */}
-          <div>
-            <textarea
-              value={transcript}
-              onChange={e => { setTranscript(e.target.value); setError(''); setResult(null); }}
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg text-[12px] resize-none outline-none"
-              placeholder="Or type: 'Send a POST to /api/users with name John and email john@example.com'"
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-            />
-          </div>
-
-          {/* Example phrases */}
-          <div>
-            <p className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Examples</p>
-            <div className="flex flex-col gap-1">
-              {EXAMPLES.map(ex => (
-                <button key={ex} type="button" onClick={() => setTranscript(ex)}
-                  className="text-left text-[10.5px] px-2.5 py-1.5 rounded-md cursor-pointer border transition-all"
-                  style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-                  &quot;{ex}&quot;
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && (
-            <div className="flex gap-1 items-center">
-              {[0, 150, 300].map(d => (<span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Converting to request…</span>
-            </div>
-          )}
-
-          {result && (
-            <div className="rounded-lg border p-4"
-              style={{ borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 4%, var(--color-panel))` }}>
-              <p className="text-[11px] font-semibold mb-2" style={{ color: ACCENT }}>✦ Request ready</p>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: 'var(--color-info)' }}>{result.method as string}</span>
-                <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-primary)' }}>{result.url as string}</span>
-              </div>
-              {result.body && <p className="text-[10px] font-mono truncate mt-1" style={{ color: 'var(--color-text-muted)' }}>{result.body as string}</p>}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-          {result && (
-            <button type="button" onClick={applyToTab} disabled={applied}
-              className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-60 flex items-center gap-1.5 text-white"
-              style={{ backgroundColor: applied ? 'var(--color-success)' : ACCENT }}>
-              {applied ? <><CheckIcon size={12} /> Applied!</> : 'Open in New Tab'}
+      }
+      footerLeft={
+        result ? (
+          <ButtonView
+            size="md"
+            variant="primary"
+            accentColor={applied ? 'var(--color-success)' : ACCENT}
+            disabled={applied}
+            onClick={applyToTab}
+          >
+            {applied ? <><CheckIcon size={12} style={{ marginRight: 4 }} />Applied!</> : 'Open in New Tab'}
+          </ButtonView>
+        ) : undefined
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Converting…' : 'Convert'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={loading || !transcript.trim()}
+          loading={loading}
+          onClick={convert}
+        />
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {/* Microphone button */}
+        {supported && (
+          <div className="flex flex-col items-center py-4 gap-3">
+            <button type="button" onClick={toggleListening}
+              className="w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all"
+              style={{
+                backgroundColor: listening ? 'var(--color-error)' : `color-mix(in srgb, ${ACCENT} 15%, transparent)`,
+                border: `2px solid ${listening ? 'var(--color-error)' : ACCENT}`,
+                boxShadow: listening ? '0 0 0 8px color-mix(in srgb, var(--color-error) 15%, transparent)' : 'none',
+              }}>
+              <span style={{ fontSize: '24px' }}>{listening ? '■' : '🎤'}</span>
             </button>
-          )}
-          <button type="button" onClick={convert} disabled={loading || !transcript.trim()}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-            style={{ backgroundColor: ACCENT }}>
-            <SparkleIcon size={11} className="inline mr-1" />
-            Convert
-          </button>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+            <p className="text-[11px]" style={{ color: listening ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
+              {listening ? 'Listening… speak now' : 'Click to speak'}
+            </p>
+          </div>
+        )}
 
-  return createPortal(modal, document.body);
+        {!supported && (
+          <div className="rounded-lg border p-3 text-center" style={{ borderColor: 'var(--color-surface-border)' }}>
+            <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+              Speech recognition not supported in this environment. Type your request below.
+            </p>
+          </div>
+        )}
+
+        {/* Text input */}
+        <MultilineInputView
+          value={transcript}
+          onChange={e => { setTranscript(e.target.value); setError(''); setResult(null); }}
+          rows={3}
+          size="md"
+          width="fw"
+          placeholder="Or type: 'Send a POST to /api/users with name John and email john@example.com'"
+        />
+
+        {/* Example phrases */}
+        <div>
+          <p className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Examples</p>
+          <div className="flex flex-col gap-1">
+            {EXAMPLES.map(ex => (
+              <button key={ex} type="button" onClick={() => setTranscript(ex)}
+                className="text-left text-[10.5px] px-2.5 py-1.5 rounded-md cursor-pointer border transition-all"
+                style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
+                &quot;{ex}&quot;
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
+
+        {loading && (
+          <div className="flex gap-1 items-center">
+            {[0, 150, 300].map(d => (<span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />))}
+            <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Converting to request…</span>
+          </div>
+        )}
+
+        {result && (
+          <div className="rounded-lg border p-4"
+            style={{ borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 4%, var(--color-panel))` }}>
+            <p className="text-[11px] font-semibold mb-2" style={{ color: ACCENT }}>✦ Request ready</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: 'var(--color-info)' }}>{result.method as string}</span>
+              <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-primary)' }}>{result.url as string}</span>
+            </div>
+            {result.body && <p className="text-[10px] font-mono truncate mt-1" style={{ color: 'var(--color-text-muted)' }}>{result.body as string}</p>}
+          </div>
+        )}
+      </div>
+    </ModalView>
+  );
 }

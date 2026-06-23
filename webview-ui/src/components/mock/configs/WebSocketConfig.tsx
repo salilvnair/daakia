@@ -2,13 +2,17 @@
  * WebSocketConfig — WebSocket handler config for mock server.
  */
 import { useState, useCallback } from 'react';
+import {
+  SelectInputView, EditorView, ResizablePanelView, ButtonView, IconButtonView,
+  ToggleSwitchView, TextInputView, CheckboxView, type SelectOption,
+} from '@salilvnair/dui';
 import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
-import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, type DropdownOption } from '../../shared';
+import { ConfirmDialog } from '../../shared';
 import { WEBSOCKET_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 
-const WS_SAMPLE_OPTIONS: DropdownOption[] = [
+const WS_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
   ...WEBSOCKET_SAMPLES.map(s => ({ value: s.id, label: s.label })),
 ];
@@ -75,12 +79,8 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
     onUpdate({ wsHandlers: handlers.filter(h => h.id !== id) });
   };
 
-  // ── AI-generated handler items → WebSocketMockHandler ─────────────────────
   const TYPE_MAP: Record<string, 'connection' | 'message' | 'disconnect'> = {
-    connect: 'connection',
-    connection: 'connection',
-    message: 'message',
-    disconnect: 'disconnect',
+    connect: 'connection', connection: 'connection', message: 'message', disconnect: 'disconnect',
   };
 
   const handleAddGeneratedItems = useCallback((items: ParsedGenericItem[]) => {
@@ -92,7 +92,8 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
         id: crypto.randomUUID(),
         event,
         matchPattern: (raw.matchPattern as string) || (event === 'message' ? '*' : ''),
-        response: (raw.response as string) || '{}',
+        response: typeof raw.response === 'string' ? raw.response
+          : raw.response != null ? JSON.stringify(raw.response, null, 2) : '{}',
         delay: 0,
         enabled: true,
         broadcast: false,
@@ -104,11 +105,11 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Single toolbar row: title | Load Sample | Generate with AI | + On Connect | + On Message | + On Disconnect | 🗑️ */}
+      {/* Toolbar row */}
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)] mr-auto">Message Handlers ({handlers.length})</span>
-        <StyledDropdown
-          size="sm"
+        <SelectInputView
+          size="md"
           options={WS_SAMPLE_OPTIONS}
           value={selectedSample}
           onChange={applySample}
@@ -125,39 +126,23 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
           accentVar="var(--color-protocol-websocket)"
           onAddGeneratedItems={handleAddGeneratedItems}
         />
-        <button
-          type="button"
-          onClick={() => addHandler('connection')}
-          className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-          style={{ color: 'var(--color-success)', borderColor: 'color-mix(in srgb, var(--color-success) 30%, transparent)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-success) 10%, transparent)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-        >+ On Connect</button>
-        <button
-          type="button"
-          onClick={() => addHandler('message')}
-          className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-          style={{ color: 'var(--color-mock-server)', borderColor: 'color-mix(in srgb, var(--color-mock-server) 30%, transparent)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-mock-server) 10%, transparent)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-        >+ On Message</button>
-        <button
-          type="button"
-          onClick={() => addHandler('disconnect')}
-          className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-          style={{ color: 'var(--color-error)', borderColor: 'color-mix(in srgb, var(--color-error) 30%, transparent)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-error) 10%, transparent)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-        >+ On Disconnect</button>
+        <ButtonView size="md" variant="ghost" accentColor="var(--color-success)" onClick={() => addHandler('connection')}>
+          + On Connect
+        </ButtonView>
+        <ButtonView size="md" variant="ghost" accentColor="var(--color-mock-server)" onClick={() => addHandler('message')}>
+          + On Message
+        </ButtonView>
+        <ButtonView size="md" variant="ghost" accentColor="var(--color-error)" onClick={() => addHandler('disconnect')}>
+          + On Disconnect
+        </ButtonView>
         {handlers.length > 0 && (
-          <button
-            type="button"
+          <IconButtonView
+            size="sm"
+            icon={<TrashIcon size={12} />}
+            accentColor="var(--color-error)"
             onClick={() => setShowDeleteAll(true)}
             title="Delete All Handlers"
-            className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-          >
-            <TrashIcon size={12} />
-          </button>
+          />
         )}
       </div>
 
@@ -180,15 +165,12 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
           )}
 
           <div className={`flex items-center gap-2 ${!handler.enabled ? 'opacity-50' : ''}`}>
-            <button
-              type="button"
-              onClick={() => updateHandler(handler.id, { enabled: !handler.enabled })}
-              className="relative z-20 w-[28px] h-[14px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-              style={{ backgroundColor: handler.enabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-              title={handler.enabled ? 'Disable' : 'Enable'}
-            >
-              <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: handler.enabled ? '16px' : '2px' }} />
-            </button>
+            <ToggleSwitchView
+              checked={handler.enabled}
+              onChange={(v) => updateHandler(handler.id, { enabled: v })}
+              accentColor="var(--color-success)"
+              size="xs"
+            />
             <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
               handler.event === 'connection' ? 'text-[var(--color-success)] bg-[rgba(34,197,94,0.12)]' :
               handler.event === 'disconnect' ? 'text-[var(--color-error)] bg-[rgba(239,68,68,0.12)]' :
@@ -198,51 +180,48 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
             </span>
             <div className="flex-1" />
             {handler.enabled && (
-              <Checkbox
+              <CheckboxView
                 checked={handler.broadcast}
                 onChange={(v) => updateHandler(handler.id, { broadcast: v })}
                 label="Broadcast"
-                className="text-[10px]"
+                size="sm"
               />
             )}
             {wsUrl && handler.enabled && (
-              <button
-                type="button"
+              <IconButtonView
+                size="sm"
+                icon={copiedId === handler.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
                 onClick={() => copyWsUrl(handler.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
                 title="Copy WebSocket URL"
-              >
-                {copiedId === handler.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-              </button>
+              />
             )}
             {handler.enabled && (
-              <button
-                type="button"
+              <IconButtonView
+                size="sm"
+                icon={<TrashIcon size={12} />}
+                accentColor="var(--color-error)"
                 onClick={() => setDeleteConfirmId(handler.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer"
-              >
-                <TrashIcon size={12} />
-              </button>
+              />
             )}
           </div>
           {handler.enabled && handler.event === 'message' && (
-            <input
-              type="text"
+            <TextInputView
               value={handler.matchPattern}
               onChange={(e) => updateHandler(handler.id, { matchPattern: e.target.value })}
               placeholder="Pattern (regex or * for all)"
-              className="w-full h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+              size="md"
+              style={{ width: '100%', fontFamily: 'monospace' }}
             />
           )}
           {handler.enabled && (
-            <ResizablePanel id={`mock.ws.handler.${handler.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
-              <CodeEditor
+            <ResizablePanelView id={`mock.ws.handler.${handler.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
+              <EditorView
                 value={handler.response}
                 onChange={(val) => updateHandler(handler.id, { response: val })}
                 language="json"
                 height="100%"
               />
-            </ResizablePanel>
+            </ResizablePanelView>
           )}
         </div>
       ))}
@@ -259,10 +238,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
           message="Are you sure you want to delete this WebSocket handler? This cannot be undone."
           confirmLabel="Delete"
           danger
-          onConfirm={() => {
-            removeHandler(deleteConfirmId);
-            setDeleteConfirmId(null);
-          }}
+          onConfirm={() => { removeHandler(deleteConfirmId); setDeleteConfirmId(null); }}
           onCancel={() => setDeleteConfirmId(null)}
         />
       )}
@@ -273,10 +249,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
           message={`Are you sure you want to delete all ${handlers.length} WebSocket handlers? This cannot be undone.`}
           confirmLabel="Delete All"
           danger
-          onConfirm={() => {
-            onUpdate({ wsHandlers: [] });
-            setShowDeleteAll(false);
-          }}
+          onConfirm={() => { onUpdate({ wsHandlers: [] }); setShowDeleteAll(false); }}
           onCancel={() => setShowDeleteAll(false)}
         />
       )}

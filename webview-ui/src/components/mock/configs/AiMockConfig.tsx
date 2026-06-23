@@ -7,6 +7,7 @@
  *   • "Add Custom Scenario" — opens a new draft card; Save/Cancel to commit.
  */
 import { useState, useCallback } from 'react';
+import { ButtonView, IconButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
 import type { MockServer, AiMockScenario } from '../mock-types';
 import { createDefaultAiScenario } from '../mock-types';
 import { PlusIcon, TrashIcon, SparkleIcon, CloseIcon } from '../../../icons';
@@ -26,7 +27,6 @@ const CHIP_STYLE = { backgroundColor: 'rgba(168,85,247,0.25)', color: '#d8b4fe',
 
 // ─── Compact built-in scenario metadata (display only) ───────────────────────
 // Full responses are served by the extension host's mock-ai-server.ts.
-// We show name + keywords + delay + a short preview of the response format.
 
 interface BuiltInMeta {
   name: string;
@@ -69,13 +69,12 @@ function KeywordChips({ keywords, onRemove }: { keywords: string[]; onRemove?: (
         >
           {kw}
           {onRemove && (
-            <button
-              type="button"
+            <IconButtonView
+              size="sm"
+              icon={<CloseIcon size={8} />}
               onClick={() => onRemove(kw)}
-              className="ml-0.5 opacity-60 hover:opacity-100 cursor-pointer leading-none"
-            >
-              ×
-            </button>
+              className="ml-0.5 opacity-60 hover:opacity-100"
+            />
           )}
         </span>
       ))}
@@ -95,9 +94,7 @@ function BuiltInCard({ meta, onClose }: { meta: BuiltInMeta; onClose: () => void
         <SparkleIcon size={11} style={{ color: AI_COLOR }} />
         <span className="text-[11px] font-semibold flex-1" style={{ color: AI_COLOR }}>{meta.name}</span>
         <span className="text-[9px] text-[var(--color-text-muted)] mr-2">Built-in · read-only</span>
-        <button type="button" onClick={onClose} className="opacity-50 hover:opacity-100 cursor-pointer transition-opacity">
-          <CloseIcon size={11} />
-        </button>
+        <IconButtonView size="sm" icon={<CloseIcon size={11} />} onClick={onClose} />
       </div>
       {/* Fields */}
       <div className="px-3 py-2.5 flex flex-col gap-2.5">
@@ -153,21 +150,20 @@ function CustomScenarioCard({
     >
       {/* Card header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-[rgba(168,85,247,0.15)]">
-        <input
-          type="text"
+        <TextInputView
           value={draft.name}
           onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
           placeholder="Scenario name"
-          className="flex-1 bg-transparent text-[12px] h-[26px] font-semibold focus:outline-none text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
+          size="md"
+          style={{ flex: 1, fontWeight: 600 }}
         />
-        <button
-          type="button"
+        <IconButtonView
+          size="sm"
+          icon={<TrashIcon size={12} />}
+          accentColor="var(--color-error)"
           onClick={onDelete}
           title="Delete scenario"
-          className="p-1 rounded cursor-pointer hover:bg-[rgba(239,68,68,0.12)] transition-colors"
-        >
-          <TrashIcon size={12} className="text-[var(--color-error)]" />
-        </button>
+        />
       </div>
 
       {/* Fields */}
@@ -178,25 +174,27 @@ function CustomScenarioCard({
             Match keywords <span className="normal-case">(user message must contain one · leave empty = fallback)</span>
           </div>
           <KeywordChips keywords={draft.keywords} onRemove={removeKeyword} />
-          {/* Keyword input — full width, below chips */}
-          <input
-            type="text"
-            value={kwInput}
-            onChange={e => setKwInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword(); } }}
-            placeholder="Type keyword and press Enter to add..."
-            className="mt-1.5 w-full h-[26px] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded px-2 text-[10px] focus:outline-none focus:border-[var(--color-protocol-ai)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
-          />
+          <div className="mt-1.5">
+            <TextInputView
+              value={kwInput}
+              onChange={e => setKwInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKeyword(); } }}
+              placeholder="Type keyword and press Enter to add..."
+              size="md"
+              style={{ width: '100%' }}
+            />
+          </div>
         </div>
 
         {/* Delay */}
         <div className="flex items-center gap-2">
           <span className="text-[9px] uppercase tracking-wide text-[var(--color-text-muted)] flex-shrink-0">Delay</span>
-          <input
+          <TextInputView
             type="number"
-            value={draft.delay}
+            value={String(draft.delay)}
             onChange={e => setDraft(d => ({ ...d, delay: Math.max(0, parseInt(e.target.value) || 0) }))}
-            className="w-20 h-[26px] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded px-2 text-[11px] focus:outline-none text-[var(--color-text-primary)]"
+            size="md"
+            style={{ width: 80 }}
           />
           <span className="text-[9px] text-[var(--color-text-muted)]">ms · simulates AI thinking time</span>
         </div>
@@ -204,34 +202,33 @@ function CustomScenarioCard({
         {/* Response */}
         <div>
           <div className="text-[9px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1">Assistant response (Markdown supported)</div>
-          <textarea
+          <MultilineInputView
             value={draft.response}
             onChange={e => setDraft(d => ({ ...d, response: e.target.value }))}
             rows={5}
-            className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] rounded px-2 py-1.5 text-[11px] font-mono focus:outline-none focus:border-[var(--color-protocol-ai)] text-[var(--color-text-primary)] resize-y"
+            size="md"
             placeholder="Enter the assistant's canned response..."
+            style={{ fontFamily: 'monospace' }}
           />
         </div>
 
         {/* Save / Cancel */}
         <div className="flex items-center gap-2 pt-0.5">
-          <button
-            type="button"
+          <ButtonView
+            size="md"
             onClick={() => onSave(draft)}
             disabled={!draft.name.trim()}
-            className="h-[26px] px-3 text-[11px] rounded font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: 'rgba(168,85,247,0.18)', color: AI_COLOR, border: '1px solid rgba(168,85,247,0.3)' }}
+            accentColor={AI_COLOR}
           >
             Save
-          </button>
-          <button
-            type="button"
+          </ButtonView>
+          <ButtonView
+            size="md"
+            variant="ghost"
             onClick={onCancel}
-            className="h-[26px] px-3 text-[11px] rounded cursor-pointer transition-colors opacity-60 hover:opacity-100"
-            style={{ color: 'var(--color-text-muted)', border: '1px solid rgba(255,255,255,0.08)' }}
           >
             Cancel
-          </button>
+          </ButtonView>
         </div>
       </div>
     </div>
@@ -243,15 +240,10 @@ function CustomScenarioCard({
 export function AiMockConfig({ server, onUpdate }: Props) {
   const scenarios = server.aiScenarios || [];
 
-  /** Which built-in scenario name is expanded (or null) */
   const [expandedBuiltIn, setExpandedBuiltIn] = useState<string | null>(null);
-  /** Which custom scenario id is being edited (or null) */
   const [editingId, setEditingId] = useState<string | null>(null);
-  /** Whether we're composing a brand-new custom scenario */
   const [addingNew, setAddingNew] = useState(false);
-  /** Confirm delete-all custom scenarios */
   const [showDeleteAll, setShowDeleteAll] = useState(false);
-  /** The blank template for a new scenario */
   const [newDraft] = useState<AiMockScenario>(() => createDefaultAiScenario());
   const [showMockIntelligence, setShowMockIntelligence] = useState(false);
   const [showAdaptiveLearning, setShowAdaptiveLearning] = useState(false);
@@ -294,31 +286,40 @@ export function AiMockConfig({ server, onUpdate }: Props) {
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {aiEnabled('mockIntelligence') && (
-            <button type="button" onClick={() => setShowMockIntelligence(true)}
-              className="flex items-center gap-1 h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer"
-              style={{ color: AI_COLOR, backgroundColor: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}
+            <ButtonView
+              size="md"
+              variant="ghost"
+              accentColor={AI_COLOR}
+              iconLeft={<SparkleIcon size={9} />}
+              onClick={() => setShowMockIntelligence(true)}
               title="AI Mock Intelligence — learn from real API responses"
             >
-              <SparkleIcon size={9} />Intelligence ✦
-            </button>
+              Intelligence ✦
+            </ButtonView>
           )}
           {aiEnabled('adaptiveMockLearning') && (
-            <button type="button" onClick={() => setShowAdaptiveLearning(true)}
-              className="flex items-center gap-1 h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer"
-              style={{ color: AI_COLOR, backgroundColor: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}
+            <ButtonView
+              size="md"
+              variant="ghost"
+              accentColor={AI_COLOR}
+              iconLeft={<SparkleIcon size={9} />}
+              onClick={() => setShowAdaptiveLearning(true)}
               title="Adaptive Mock Learning — record real traffic, AI builds smart mock rules"
             >
-              <SparkleIcon size={9} />AI Learn ✦
-            </button>
+              AI Learn ✦
+            </ButtonView>
           )}
           {aiEnabled('aiScenarioComposer') && (
-            <button type="button" onClick={() => setShowScenarioComposer(true)}
-              className="flex items-center gap-1 h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer"
-              style={{ color: AI_COLOR, backgroundColor: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}
+            <ButtonView
+              size="md"
+              variant="ghost"
+              accentColor={AI_COLOR}
+              iconLeft={<SparkleIcon size={9} />}
+              onClick={() => setShowScenarioComposer(true)}
               title="AI Scenario Composer — describe complex scenarios in plain English"
             >
-              <SparkleIcon size={9} />Compose ✦
-            </button>
+              Compose ✦
+            </ButtonView>
           )}
         </div>
       </div>
@@ -417,27 +418,25 @@ export function AiMockConfig({ server, onUpdate }: Props) {
       {/* ── Add custom scenario + Delete All row ── */}
       {!addingNew && (
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor={AI_COLOR}
+            iconLeft={<PlusIcon size={12} />}
             onClick={() => { setAddingNew(true); setEditingId(null); }}
-            className="flex items-center gap-1.5 h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: AI_COLOR, borderColor: `color-mix(in srgb, ${AI_COLOR} 30%, transparent)`, background: 'transparent' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${AI_COLOR} 10%, transparent)`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
-            <PlusIcon size={12} />
             Add Custom Scenario
-          </button>
+          </ButtonView>
           {scenarios.length > 0 && (
-            <button
-              type="button"
+            <ButtonView
+              size="md"
+              variant="ghost"
+              accentColor="var(--color-error)"
+              iconLeft={<TrashIcon size={11} />}
               onClick={() => setShowDeleteAll(true)}
-              title="Delete All Custom Scenarios"
-              className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
             >
-              <TrashIcon size={11} />
               Delete All
-            </button>
+            </ButtonView>
           )}
         </div>
       )}

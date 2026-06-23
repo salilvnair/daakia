@@ -5,7 +5,7 @@ import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { useDebugStore } from '../../../store/debug-store';
 import { KeyValueTable, AuthEditor, ScriptsEditor } from '../../shared';
-import { TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '../../../dui';
+import { TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '@salilvnair/dui';
 import { postMsg } from '../../../vscode';
 import { computeAuthRows } from './requestUtils';
 import { HeadersTab } from './HeadersTab';

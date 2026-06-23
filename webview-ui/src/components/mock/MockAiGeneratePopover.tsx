@@ -13,15 +13,15 @@
  * Shared by all mock protocols (REST, GraphQL, gRPC, SOAP, SSE, WebSocket, Socket.IO, MQTT).
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore, type AiPromptTemplateKey } from '../../store/prompt-template';
-import { SparkleIcon, CloseIcon, RefreshIcon, PlusIcon, CopyIcon, CheckIcon } from '../../icons';
+import { SparkleIcon, RefreshIcon, PlusIcon, CopyIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import type { MockRoute, HttpMethod } from './mock-types';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import { AIButtonView, EditorView, MultilineInputView, TextInputView, ButtonView, IconButtonView, ModalView, TabView, type EditorLanguage } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-mock-server)';
 
@@ -261,6 +261,106 @@ const PROTOCOL_FLAVORS: Record<string, ProtocolFlavor> = {
   },
 };
 
+// ─── Per-protocol idle-form config ───────────────────────────────────────────
+
+interface IdleFormConfig {
+  describePlaceholder: string;
+  chips: string[];
+  spec?: {
+    tabLabel: string;
+    hasUrl: boolean;
+    urlPlaceholder?: string;
+    urlError?: string;
+    contextPrefixUrl?: string;
+    pasteLabel: string;
+    pastePlaceholder: string;
+    contextPrefixPaste: string;
+    pasteLanguage?: EditorLanguage;
+  };
+}
+
+const PROTOCOL_IDLE: Record<string, IdleFormConfig> = {
+  rest: {
+    describePlaceholder: `Examples:\n• "Todo API with CRUD: create, read, update, delete, mark complete"\n• "User auth with JWT login, refresh token, logout, profile"\n• "E-commerce with products, orders, cart, checkout"`,
+    chips: ['Todo / Task API', 'User Auth + JWT', 'E-commerce Catalog', 'Blog + Comments', 'Inventory CRUD'],
+    spec: {
+      tabLabel: 'URL / Spec', hasUrl: true,
+      urlPlaceholder: 'https://petstore.swagger.io/v2/swagger.json',
+      urlError: 'Enter an OpenAPI spec URL.',
+      contextPrefixUrl: 'OpenAPI/Swagger spec fetched from',
+      pasteLabel: '📋 Paste Spec',
+      pastePlaceholder: `Paste OpenAPI JSON/YAML or a sample JSON response:\n{\n  "openapi": "3.0.0",\n  "info": {...},\n  "paths": {...}\n}`,
+      contextPrefixPaste: 'User-pasted spec / JSON sample',
+      pasteLanguage: 'yaml',
+    },
+  },
+  graphql: {
+    describePlaceholder: `Examples:\n• "Social platform: users, posts, comments, likes — queries & mutations"\n• "E-commerce: products, cart, orders, reviews with subscriptions"\n• "Blog CMS: articles, authors, tags, categories"`,
+    chips: ['Social Platform', 'E-commerce Schema', 'Blog CMS', 'Auth + Roles', 'Real-time Subscriptions'],
+    spec: {
+      tabLabel: 'SDL', hasUrl: false,
+      pasteLabel: '📋 Paste SDL',
+      pastePlaceholder: `type Query {\n  user(id: ID!): User\n  users: [User!]!\n}\ntype Mutation {\n  createUser(name: String!, email: String!): User!\n}\ntype User { id: ID!, name: String!, email: String! }`,
+      contextPrefixPaste: 'GraphQL SDL definition',
+      pasteLanguage: 'graphql',
+    },
+  },
+  grpc: {
+    describePlaceholder: `Examples:\n• "UserService: GetUser, ListUsers, CreateUser, UpdateUser, DeleteUser"\n• "PaymentService: Charge, Refund, GetTransaction (unary + server-streaming)"\n• "NotificationService: Subscribe — bidirectional stream"`,
+    chips: ['User Service', 'Payment Service', 'Notification Service', 'Auth Service', 'File Transfer'],
+    spec: {
+      tabLabel: 'Proto File', hasUrl: false,
+      pasteLabel: '📋 Paste .proto',
+      pastePlaceholder: `syntax = "proto3";\n\npackage users;\n\nservice UserService {\n  rpc GetUser (GetUserRequest) returns (User);\n  rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);\n}\n\nmessage User { string id = 1; string name = 2; string email = 3; }`,
+      contextPrefixPaste: 'Protocol Buffer definition',
+      pasteLanguage: 'plaintext',
+    },
+  },
+  soap: {
+    describePlaceholder: `Examples:\n• "BankingService: GetBalance, Transfer, GetStatement operations with SOAP faults"\n• "WeatherService: GetForecast, GetCurrentConditions, GetAlerts"\n• "AuthService: Login, Logout, ValidateToken, RefreshToken"`,
+    chips: ['Banking Service', 'Weather Service', 'Auth Service', 'Shipping Service', 'Payment Gateway'],
+    spec: {
+      tabLabel: 'WSDL', hasUrl: true,
+      urlPlaceholder: 'http://www.dneonline.com/calculator.asmx?WSDL',
+      urlError: 'Enter a WSDL URL.',
+      contextPrefixUrl: 'WSDL fetched from',
+      pasteLabel: '📋 Paste WSDL',
+      pastePlaceholder: `<?xml version="1.0" encoding="UTF-8"?>\n<definitions name="MyService"\n  xmlns="http://schemas.xmlsoap.org/wsdl/"\n  xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/">\n  <!-- paste your WSDL here -->\n</definitions>`,
+      contextPrefixPaste: 'WSDL definition',
+      pasteLanguage: 'xml',
+    },
+  },
+  websocket: {
+    describePlaceholder: `Examples:\n• "Chat app: connection welcome, send/broadcast message, typing indicator, user join/leave, disconnect"\n• "Live dashboard: subscribe to metrics channel, push data every second, unsubscribe"\n• "Multiplayer game: join room, player-move, shoot, game-state update, player-disconnect"`,
+    chips: ['Chat App', 'Live Dashboard', 'Multiplayer Game', 'Push Notifications', 'Collaborative Editor'],
+  },
+  sse: {
+    describePlaceholder: `Examples:\n• "Stock prices: push symbol, price, change% every 2 seconds for a watchlist"\n• "Order lifecycle: pending → processing → shipped → delivered with timestamps"\n• "System metrics: CPU, memory, disk, network every 5 seconds"`,
+    chips: ['Stock Prices', 'Order Status', 'System Metrics', 'News Feed', 'Sports Live Scores'],
+  },
+  socketio: {
+    describePlaceholder: `Examples:\n• "Chat rooms: join/leave room, send message, typing indicator, read receipts"\n• "Collaborative whiteboard: draw stroke, erase, cursor-move, clear-canvas"\n• "Game lobby: create-game, join, player-ready, start, game-over, leaderboard"`,
+    chips: ['Chat Rooms', 'Live Collaboration', 'Game Lobby', 'Real-time Voting', 'Notification System'],
+  },
+  mqtt: {
+    describePlaceholder: `Examples:\n• "IoT sensor suite: temperature, humidity, motion, door sensors on home/sensor/+ topics every 30s"\n• "Home automation: lights/thermostat/locks on command and status topics with retain"\n• "Fleet tracking: GPS position, fuel level, speed on vehicles/{id}/telemetry"`,
+    chips: ['IoT Sensors', 'Home Automation', 'Fleet Tracking', 'Industrial Monitor', 'Smart Energy'],
+  },
+  mcp: {
+    describePlaceholder: `Examples:\n• "File system tools: read_file, write_file, list_directory, delete_file, move_file"\n• "Database tools: sql_query, insert_row, update_row, delete_row, describe_schema"\n• "Web tools: fetch_url, search_web, take_screenshot, parse_html, extract_links"`,
+    chips: ['File System Tools', 'Database Tools', 'Web Scraping Tools', 'Code Execution', 'API Integration'],
+  },
+  ai: {
+    describePlaceholder: `Examples:\n• "Chat completion endpoint with streaming, system prompt, conversation history, token usage"\n• "Embeddings API returning float arrays for text inputs"\n• "Function calling with tool definitions, tool-call responses, and tool results"`,
+    chips: ['Chat Completion', 'Streaming Responses', 'Embeddings', 'Function Calling', 'Vision API'],
+  },
+};
+
+function getProtocolFromKey(templateKey: string): string {
+  const m = templateKey.match(/^mock\.(\w+)\.generate$/);
+  return m?.[1] ?? 'rest';
+}
+
 function parseGenericItemsFromText(text: string, flavor: ProtocolFlavor): ParsedGenericItem[] {
   const re = new RegExp('```' + flavor.codeBlockName + '\\n?([\\s\\S]*?)\\n?```', 'i');
   const m = text.match(re);
@@ -334,6 +434,10 @@ export function MockAiGeneratePopover({
 
   // Detect protocol flavor (for non-REST protocols)
   const flavor = PROTOCOL_FLAVORS[templateKey];
+
+  // Per-protocol idle form config
+  const protocol = getProtocolFromKey(templateKey);
+  const idleCfg: IdleFormConfig = PROTOCOL_IDLE[protocol] ?? PROTOCOL_IDLE.rest!;
 
   // Check cache on mount — if hit, skip AI call entirely
   const cached = generateCache.get(cacheKey);
@@ -508,7 +612,7 @@ export function MockAiGeneratePopover({
       const content = (msg.content as string) || '';
       // Use fetched spec as the generation context
       triggerGenerateWithContext(
-        `OpenAPI/Swagger spec fetched from ${specUrl}:\n\n${content.slice(0, 8000)}`
+        `${idleCfg.spec?.contextPrefixUrl ?? 'Spec fetched from'} ${specUrl}:\n\n${content.slice(0, 8000)}`
       );
     };
     window.addEventListener('message', handler);
@@ -538,17 +642,19 @@ export function MockAiGeneratePopover({
 
   const handleFetchAndGenerate = useCallback(() => {
     setSpecError('');
-    if (urlInputMode === 'url') {
-      if (!specUrl.trim()) { setSpecError('Enter an OpenAPI spec URL.'); return; }
+    const isUrlMode = (idleCfg.spec?.hasUrl ?? false) && urlInputMode === 'url';
+    if (isUrlMode) {
+      if (!specUrl.trim()) { setSpecError(idleCfg.spec?.urlError ?? 'Enter a spec URL.'); return; }
       setSpecFetching(true);
       const reqId = `spec-fetch-${Date.now()}`;
       fetchReqIdRef.current = reqId;
       postMsg({ type: 'fetchUrl', reqId, url: specUrl.trim() });
     } else {
       // Paste mode
-      if (!specPaste.trim()) { setSpecError('Paste your OpenAPI spec or JSON sample.'); return; }
-      triggerGenerateWithContext(`User-pasted spec / JSON sample:\n\n${specPaste.slice(0, 8000)}`);
+      if (!specPaste.trim()) { setSpecError(`Paste your ${idleCfg.spec?.tabLabel ?? 'spec'} content.`); return; }
+      triggerGenerateWithContext(`${idleCfg.spec?.contextPrefixPaste ?? 'Spec'}:\n\n${specPaste.slice(0, 8000)}`);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlInputMode, specUrl, specPaste, triggerGenerateWithContext]);
 
   /** Triggered by the "Generate" button in idle state — starts AI generation */
@@ -641,261 +747,243 @@ export function MockAiGeneratePopover({
     });
   }, [detectedSdl]);
 
-  const modal = (
-    <div
-      className="fixed inset-0 z-[9000] flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={(e) => {
-        // Backdrop click does NOT close — only X button closes (per modal rules)
-        e.stopPropagation();
-      }}
-    >
-      {/* Snake glow wrapper — rotating conic-gradient border while streaming */}
-      <div
-        style={{
-          position: 'relative',
-          borderRadius: '13px',
-          padding: streaming ? '1.5px' : '0',
-          overflow: 'hidden',
-          flexShrink: 0,
-          maxWidth: '94vw',
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {streaming && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: '-50%',
-              background: `conic-gradient(${ACCENT} 0deg, color-mix(in srgb, ${ACCENT} 15%, transparent) 40deg, color-mix(in srgb, ${ACCENT} 15%, transparent) 320deg, ${ACCENT} 360deg)`,
-              animation: 'ai-snake-spin 2s linear infinite',
-            }}
-          />
-        )}
-      <div
-        className="flex flex-col rounded-xl border shadow-2xl overflow-hidden"
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          width: 850,
-          maxWidth: '94vw',
-          maxHeight: '90vh',
-          minHeight: 200,
-          backgroundColor: 'var(--color-surface)',
-          borderColor: streaming ? 'transparent' : `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
-          boxShadow: `0 24px 60px rgba(0,0,0,0.55), 0 0 0 1px color-mix(in srgb, ${ACCENT} 15%, transparent)`,
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center gap-2 px-4 py-2.5 border-b flex-shrink-0"
-          style={{
-            borderColor: `color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))`,
-            backgroundColor: `color-mix(in srgb, ${ACCENT} 6%, var(--color-surface))`,
-          }}
-        >
-          <SparkleIcon size={13} style={{ color: ACCENT }} />
-          <span className="text-[12px] font-semibold flex-1" style={{ color: ACCENT }}>
-            ✨ Generate {title}
-          </span>
-
-          {/* Streaming dots */}
-          {streaming && !error && (
-            <div className="flex gap-0.5 mr-1">
-              {[0, 100, 200].map(d => (
-                <span
-                  key={d}
-                  className="w-[4px] h-[4px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Regenerate (header shortcut) — only when done */}
-          {!streaming && !error && text && (
-            <>
-              <button
-                type="button"
-                onClick={() => setIsIdle(true)}
-                title="Refine description & regenerate"
-                className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors opacity-50 hover:opacity-100"
-                style={{ color: ACCENT }}
-              >
-                Refine
-              </button>
-              <button
-                type="button"
-                onClick={handleRegenerate}
-                title="Regenerate"
-                className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors opacity-50 hover:opacity-100"
-                style={{ color: ACCENT }}
-              >
-                <RefreshIcon size={10} />
-              </button>
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-[22px] h-[22px] flex items-center justify-center rounded cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
-          >
-            <CloseIcon size={12} />
-          </button>
+  // ── Header right: streaming dots OR refine+regenerate ──────────────────────
+  const headerRight = (
+    <>
+      {streaming && !error && (
+        <div className="flex gap-[3px] items-center mr-1">
+          {[0, 120, 240].map(d => (
+            <span
+              key={d}
+              className="w-[5px] h-[5px] rounded-full animate-pulse"
+              style={{ backgroundColor: ACCENT, animationDelay: `${d}ms`, opacity: 0.85 }}
+            />
+          ))}
         </div>
+      )}
+      {!streaming && !error && text && (
+        <div className="flex items-center gap-1">
+          <ButtonView size="xs" variant="ghost" accentColor={ACCENT} onClick={() => setIsIdle(true)} title="Edit description and regenerate">
+            Refine
+          </ButtonView>
+          <IconButtonView size="xs" icon={<RefreshIcon size={10} />} accentColor={ACCENT} onClick={handleRegenerate} title="Regenerate" />
+        </div>
+      )}
+    </>
+  );
 
-        {/* ── Idle state: natural language OR URL/Spec (4.4.1 + 4.4.2) ─── */}
+  // ── Footer left: regenerate / retry ─────────────────────────────────────────
+  const footerLeft = error ? (
+    <ButtonView size="md" variant="ghost" accentColor="var(--color-error)" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}>
+      Retry
+    </ButtonView>
+  ) : (!streaming && !error && text) ? (
+    <ButtonView size="md" variant="ghost" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}
+      style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}
+    >
+      Regenerate
+    </ButtonView>
+  ) : undefined;
+
+  // ── Footer right: generate (idle) | add-all + copy-sdl (done) ───────────────
+  const footerRight = isIdle ? (
+    <ButtonView size="md" accentColor={ACCENT} disabled={specFetching} onClick={idleMode === 'describe' ? handleGenerate : handleFetchAndGenerate}>
+      {specFetching ? 'Fetching…' : '✨ Generate'}
+    </ButtonView>
+  ) : (!streaming && !error && text) ? (
+    <div className="flex items-center gap-2">
+      {detectedSdl && (
+        <ButtonView
+          size="md"
+          variant="ghost"
+          accentColor={sdlCopied ? 'var(--color-success)' : 'var(--color-protocol-graphql, #ec4899)'}
+          iconLeft={sdlCopied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
+          onClick={handleCopySdl}
+        >
+          {sdlCopied ? 'SDL Copied!' : 'Copy SDL'}
+        </ButtonView>
+      )}
+      {onAddGeneratedRoutes && parsedRoutes.length > 0 && (
+        <ButtonView
+          size="md"
+          variant="ghost"
+          accentColor={addedAll ? 'var(--color-success)' : ACCENT}
+          disabled={addedAll}
+          iconLeft={<PlusIcon size={11} />}
+          onClick={handleAddAll}
+        >
+          {addedAll ? `✓ All ${parsedRoutes.length} Routes Added` : `Add All Routes (${parsedRoutes.length})`}
+        </ButtonView>
+      )}
+      {onAddGeneratedItems && parsedItems.length > 0 && flavor && (
+        <ButtonView
+          size="md"
+          variant="ghost"
+          accentColor={addedAllItems ? 'var(--color-success)' : ACCENT}
+          disabled={addedAllItems}
+          iconLeft={<PlusIcon size={11} />}
+          onClick={handleAddAllItems}
+        >
+          {addedAllItems
+            ? `✓ All ${parsedItems.length} ${flavor.itemLabelPlural} Added`
+            : `Add All ${flavor.itemLabelPlural} (${parsedItems.length})`}
+        </ButtonView>
+      )}
+    </div>
+  ) : undefined;
+
+  return (
+    <ModalView
+      open={true}
+      onClose={onClose}
+      size="xl"
+      maxHeight="60vh"
+      bodyStyle={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      headerColor={ACCENT}
+      headerGradient
+      headerIcon={<SparkleIcon size={14} style={{ color: ACCENT }} />}
+      title={`✨ Generate ${title}`}
+      headerRight={headerRight}
+      footerLeft={footerLeft}
+      footerRight={footerRight}
+      noPadding
+    >
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* ── Idle: describe mode or spec input ─────────────────────────── */}
         {isIdle && (
-          <div className="px-4 py-4 flex flex-col gap-3 flex-shrink-0">
-            {/* Mode tabs */}
-            <div className="flex gap-1 border-b" style={{ borderColor: `color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))` }}>
-              {(['describe', 'url-spec'] as const).map(m => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setIdleMode(m)}
-                  className="px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-colors rounded-t"
-                  style={idleMode === m
-                    ? { color: ACCENT, borderBottom: `2px solid ${ACCENT}`, marginBottom: '-1px' }
-                    : { color: 'var(--color-text-muted)' }}
-                >
-                  {m === 'describe' ? '✏️ Describe' : '📄 URL / Spec'}
-                </button>
-              ))}
-            </div>
+          <div className="px-5 py-4 flex flex-col gap-3 flex-shrink-0">
 
+            {/* Mode tabs — only for protocols that have a spec format */}
+            {idleCfg.spec && (
+              <TabView
+                tabs={[
+                  { id: 'describe', label: '✏️ Describe' },
+                  { id: 'url-spec', label: `📄 ${idleCfg.spec.tabLabel}` },
+                ]}
+                activeTab={idleMode}
+                onChange={(id) => setIdleMode(id as 'describe' | 'url-spec')}
+                variant="underline"
+                size="sm"
+                accentColor={ACCENT}
+              />
+            )}
+
+            {/* Describe mode */}
             {idleMode === 'describe' && (
-              <div>
-                <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
+              <div className="flex flex-col gap-2.5">
+                <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
                   Describe what you want to generate{' '}
-                  <span className="text-[10px] font-normal italic" style={{ color: 'var(--color-text-muted)' }}>(optional — uses server name "{serverName}" if empty)</span>
+                  <span className="text-[10px] font-normal italic" style={{ color: 'var(--color-text-muted)' }}>
+                    (uses server name "{serverName}" if empty)
+                  </span>
                 </label>
-                <textarea
+
+                {/* Quick chips */}
+                <div className="flex flex-wrap gap-1.5">
+                  {idleCfg.chips.map(chip => (
+                    <ButtonView
+                      key={chip}
+                      size="xs"
+                      variant="ghost"
+                      borderRadius={9999}
+                      accentColor={description === chip ? ACCENT : undefined}
+                      onClick={() => setDescription(d => d === chip ? '' : chip)}
+                      style={{
+                        border: `1px solid ${description === chip ? `color-mix(in srgb, ${ACCENT} 40%, transparent)` : 'var(--color-surface-border)'}`,
+                        background: description === chip ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'transparent',
+                      }}
+                    >
+                      {chip}
+                    </ButtonView>
+                  ))}
+                </div>
+
+                <MultilineInputView
                   autoFocus
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGenerate(); }}
-                  placeholder={`Examples:\n• "Todo API with CRUD: create, read, update, delete, mark complete"\n• "User auth with JWT login, refresh token, logout, profile"\n• "E-commerce with products, orders, cart, checkout"`}
-                  rows={5}
-                  className="w-full px-3 py-2 rounded-lg text-[12px] font-mono resize-none outline-none"
-                  style={{
-                    backgroundColor: 'var(--color-input-bg)',
-                    borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-input-border))`,
-                    border: '1px solid',
-                    color: 'var(--color-text-primary)',
-                  }}
+                  placeholder={idleCfg.describePlaceholder}
+                  rows={4}
+                  size="md"
+                  style={{ fontFamily: 'monospace' }}
                 />
-                <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-muted)' }}>⌘↵ to generate</p>
+                <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>⌘↵ to generate</p>
               </div>
             )}
 
-            {idleMode === 'url-spec' && (
-              <div className="flex flex-col gap-2">
-                {/* URL vs Paste sub-toggle */}
-                <div className="flex gap-2">
-                  {(['url', 'paste'] as const).map(m => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => { setUrlInputMode(m); setSpecError(''); }}
-                      className="px-2.5 py-1 text-[10px] rounded cursor-pointer transition-colors border"
-                      style={urlInputMode === m
-                        ? { backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)`, color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)` }
-                        : { color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)' }}
-                    >
-                      {m === 'url' ? '🔗 URL' : '📋 Paste Spec'}
-                    </button>
-                  ))}
-                </div>
-                {urlInputMode === 'url' && (
-                  <input
+            {/* Spec mode */}
+            {idleMode === 'url-spec' && idleCfg.spec && (
+              <div className="flex flex-col gap-2.5">
+                {idleCfg.spec.hasUrl && (
+                  <TabView
+                    tabs={[
+                      { id: 'url', label: '🔗 URL' },
+                      { id: 'paste', label: idleCfg.spec.pasteLabel },
+                    ]}
+                    activeTab={urlInputMode}
+                    onChange={(id) => { setUrlInputMode(id as 'url' | 'paste'); setSpecError(''); }}
+                    variant="chip"
+                    size="xs"
+                    accentColor={ACCENT}
+                  />
+                )}
+
+                {idleCfg.spec.hasUrl && urlInputMode === 'url' && (
+                  <TextInputView
                     autoFocus
                     type="url"
                     value={specUrl}
                     onChange={e => { setSpecUrl(e.target.value); setSpecError(''); }}
                     onKeyDown={e => { if (e.key === 'Enter') handleFetchAndGenerate(); }}
-                    placeholder="https://petstore.swagger.io/v2/swagger.json"
-                    className="w-full px-3 py-2 rounded-lg text-[12px] font-mono outline-none"
-                    style={{
-                      backgroundColor: 'var(--color-input-bg)',
-                      border: '1px solid',
-                      borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-input-border))`,
-                      color: 'var(--color-text-primary)',
-                    }}
+                    placeholder={idleCfg.spec.urlPlaceholder}
+                    size="md"
+                    style={{ fontFamily: 'monospace' }}
                   />
                 )}
-                {urlInputMode === 'paste' && (
-                  <textarea
-                    autoFocus
+
+                {(!idleCfg.spec.hasUrl || urlInputMode === 'paste') && (
+                  <EditorView
                     value={specPaste}
-                    onChange={e => { setSpecPaste(e.target.value); setSpecError(''); }}
-                    placeholder={`Paste OpenAPI JSON/YAML or a sample JSON response:\n{\n  "openapi": "3.0.0",\n  "info": {...},\n  "paths": {...}\n}`}
-                    rows={6}
-                    className="w-full px-3 py-2 rounded-lg text-[12px] font-mono resize-none outline-none"
-                    style={{
-                      backgroundColor: 'var(--color-input-bg)',
-                      border: '1px solid',
-                      borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-input-border))`,
-                      color: 'var(--color-text-primary)',
-                    }}
+                    onChange={(val) => { setSpecPaste(val); setSpecError(''); }}
+                    language={idleCfg.spec.pasteLanguage ?? 'plaintext'}
+                    placeholder={idleCfg.spec.pastePlaceholder}
+                    height={160}
                   />
                 )}
+
                 {specError && (
                   <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{specError}</p>
                 )}
               </div>
             )}
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={idleMode === 'describe' ? handleGenerate : handleFetchAndGenerate}
-                disabled={specFetching}
-                className="h-[30px] px-4 text-[12px] font-medium rounded-lg text-white cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50"
-                style={{ backgroundColor: ACCENT }}
-              >
-                {specFetching ? 'Fetching spec…' : '✨ Generate'}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="h-[30px] px-3 text-[12px] rounded-lg cursor-pointer transition-colors"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Cancel
-              </button>
-            </div>
           </div>
         )}
 
         {/* Thinking placeholder */}
         {streaming && !text && !error && (
-          <div className="px-4 py-3 text-[11px] italic flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
-            Generating {title.toLowerCase()} for <span className="font-medium" style={{ color: ACCENT }}>{serverName}</span>…
+          <div className="px-5 py-4 flex-shrink-0 text-[11px] italic" style={{ color: 'var(--color-text-muted)' }}>
+            Generating {title.toLowerCase()} for{' '}
+            <span className="font-medium not-italic" style={{ color: ACCENT }}>{serverName}</span>…
           </div>
         )}
 
-        {/* Error state */}
+        {/* Error */}
         {error && (
-          <div className="px-4 py-3 flex items-start gap-2 flex-shrink-0">
-            <span className="text-[11px] flex-1" style={{ color: 'var(--color-error)' }}>⚠️ {error}</span>
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer border flex-shrink-0"
-              style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)` }}
-            >
-              <RefreshIcon size={9} /> Retry
-            </button>
+          <div className="px-5 py-4 flex-shrink-0">
+            <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>⚠️ {error}</p>
           </div>
         )}
 
-        {/* Scrollable content area — markdown only, items are fixed below */}
+        {/* Scrollable markdown */}
         {text && (
-          <div ref={scrollRef} className="flex-1 overflow-auto" style={{ minHeight: 0 }}>
-            <div className="px-4 py-3">
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto [scrollbar-gutter:stable]"
+            style={{ minHeight: 0 }}
+          >
+            <div className="px-5 py-4">
               <MdViewer content={text} />
               {streaming && (
                 <span
@@ -907,75 +995,54 @@ export function MockAiGeneratePopover({
           </div>
         )}
 
-        {/* ── Detected REST Routes — fixed bottom section ─────────────────────── */}
+        {/* Detected REST routes — pinned bottom panel with own scroll */}
         {!streaming && parsedRoutes.length > 0 && onAddGeneratedRoutes && text && (
           <div
             className="flex-shrink-0 border-t flex flex-col"
             style={{
-              maxHeight: 224,
+              maxHeight: 210,
               borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
-              backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface))`,
+              background: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface))`,
             }}
           >
-            {/* Header */}
             <div
-              className="flex items-center gap-2 px-3 py-2 border-b text-[10.5px] font-semibold flex-shrink-0"
+              className="flex items-center gap-2 px-4 py-2 border-b text-[10.5px] font-semibold flex-shrink-0"
               style={{
-                backgroundColor: `color-mix(in srgb, ${ACCENT} 7%, var(--color-surface))`,
+                background: `color-mix(in srgb, ${ACCENT} 7%, var(--color-surface))`,
                 borderColor: `color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))`,
                 color: ACCENT,
               }}
             >
               <SparkleIcon size={10} style={{ color: ACCENT }} />
-              Detected Routes ({parsedRoutes.length}) — click to add individually or use "Add All" below
+              Detected Routes ({parsedRoutes.length}) — click row to add
             </div>
-
-            {/* Route cards */}
             <div className="overflow-y-auto divide-y [scrollbar-gutter:stable]" style={{ borderColor: 'var(--color-surface-border)' }}>
               {parsedRoutes.map((route, idx) => {
                 const isAdded = addedIds.has(idx);
                 return (
                   <div
                     key={idx}
-                    className="flex items-center gap-3 px-3 py-2"
-                    style={{ backgroundColor: isAdded ? 'color-mix(in srgb, var(--color-success) 5%, transparent)' : 'transparent' }}
+                    className="flex items-center gap-3 px-4 py-2"
+                    style={{ background: isAdded ? 'color-mix(in srgb, var(--color-success) 5%, transparent)' : 'transparent' }}
                   >
                     <span
                       className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded flex-shrink-0"
                       style={{
                         color: METHOD_COLORS[route.method],
-                        backgroundColor: `color-mix(in srgb, ${METHOD_COLORS[route.method]} 12%, transparent)`,
+                        background: `color-mix(in srgb, ${METHOD_COLORS[route.method]} 12%, transparent)`,
                       }}
                     >
                       {route.method}
                     </span>
-                    <span className="font-mono text-[11px] text-[var(--color-text-primary)] flex-shrink-0">
-                      {route.path}
-                    </span>
-                    <span className="text-[10px] text-[var(--color-text-muted)] flex-shrink-0">
-                      {route.statusCode}
-                    </span>
-                    <span className="text-[11px] text-[var(--color-text-muted)] flex-1 truncate">
-                      {route.name}
-                    </span>
+                    <span className="font-mono text-[11px] text-[var(--color-text-primary)] flex-shrink-0">{route.path}</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] flex-shrink-0">{route.statusCode}</span>
+                    <span className="text-[11px] text-[var(--color-text-muted)] flex-1 truncate">{route.name}</span>
                     {isAdded ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded flex-shrink-0" style={{ color: 'var(--color-success)' }}>
-                        ✓ Added
-                      </span>
+                      <span className="text-[10px] flex-shrink-0 font-medium" style={{ color: 'var(--color-success)' }}>✓ Added</span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleAddOne(route, idx)}
-                        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors flex-shrink-0 border"
-                        style={{
-                          color: ACCENT,
-                          borderColor: `color-mix(in srgb, ${ACCENT} 25%, transparent)`,
-                          backgroundColor: `color-mix(in srgb, ${ACCENT} 5%, transparent)`,
-                        }}
-                      >
-                        <PlusIcon size={9} />
+                      <ButtonView size="xs" variant="ghost" accentColor={ACCENT} iconLeft={<PlusIcon size={9} />} onClick={() => handleAddOne(route, idx)}>
                         Add Route
-                      </button>
+                      </ButtonView>
                     )}
                   </div>
                 );
@@ -984,71 +1051,57 @@ export function MockAiGeneratePopover({
           </div>
         )}
 
-        {/* ── Detected Generic Items (non-REST protocols) — fixed bottom section ─ */}
+        {/* Detected generic items (non-REST) — pinned bottom panel */}
         {!streaming && parsedItems.length > 0 && onAddGeneratedItems && text && flavor && (
           <div
             className="flex-shrink-0 border-t flex flex-col"
             style={{
-              maxHeight: 224,
+              maxHeight: 210,
               borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
-              backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface))`,
+              background: `color-mix(in srgb, ${ACCENT} 3%, var(--color-surface))`,
             }}
           >
-            {/* Header */}
             <div
-              className="flex items-center gap-2 px-3 py-2 border-b text-[10.5px] font-semibold flex-shrink-0"
+              className="flex items-center gap-2 px-4 py-2 border-b text-[10.5px] font-semibold flex-shrink-0"
               style={{
-                backgroundColor: `color-mix(in srgb, ${ACCENT} 7%, var(--color-surface))`,
+                background: `color-mix(in srgb, ${ACCENT} 7%, var(--color-surface))`,
                 borderColor: `color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))`,
                 color: ACCENT,
               }}
             >
               <SparkleIcon size={10} style={{ color: ACCENT }} />
-              Detected {flavor.itemLabelPlural} ({parsedItems.length}) — click to add individually or use "Add All" below
+              Detected {flavor.itemLabelPlural} ({parsedItems.length}) — click row to add
             </div>
-
-            {/* Item rows */}
             <div className="overflow-y-auto divide-y [scrollbar-gutter:stable]" style={{ borderColor: 'var(--color-surface-border)' }}>
               {parsedItems.map((item, idx) => {
                 const isAdded = addedItemIds.has(idx);
                 return (
                   <div
                     key={idx}
-                    className="flex items-center gap-3 px-3 py-2"
-                    style={{ backgroundColor: isAdded ? 'color-mix(in srgb, var(--color-success) 5%, transparent)' : 'transparent' }}
+                    className="flex items-center gap-3 px-4 py-2"
+                    style={{ background: isAdded ? 'color-mix(in srgb, var(--color-success) 5%, transparent)' : 'transparent' }}
                   >
                     {item.detail && (
                       <span
                         className="text-[9px] font-mono px-1.5 py-0.5 rounded flex-shrink-0"
-                        style={{
-                          color: ACCENT,
-                          backgroundColor: `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
-                        }}
+                        style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 12%, transparent)` }}
                       >
                         {item.detail}
                       </span>
                     )}
-                    <span className="font-mono text-[11px] text-[var(--color-text-primary)] flex-1 truncate">
-                      {item.name}
-                    </span>
+                    <span className="font-mono text-[11px] text-[var(--color-text-primary)] flex-1 truncate">{item.name}</span>
                     {isAdded ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded flex-shrink-0" style={{ color: 'var(--color-success)' }}>
-                        ✓ Added
-                      </span>
+                      <span className="text-[10px] flex-shrink-0 font-medium" style={{ color: 'var(--color-success)' }}>✓ Added</span>
                     ) : (
-                      <button
-                        type="button"
+                      <ButtonView
+                        size="xs"
+                        variant="ghost"
+                        accentColor={ACCENT}
+                        iconLeft={flavor.addButtonLabel ? undefined : <PlusIcon size={9} />}
                         onClick={() => handleAddOneItem(item, idx)}
-                        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors flex-shrink-0 border"
-                        style={{
-                          color: ACCENT,
-                          borderColor: `color-mix(in srgb, ${ACCENT} 25%, transparent)`,
-                          backgroundColor: `color-mix(in srgb, ${ACCENT} 5%, transparent)`,
-                        }}
                       >
-                        {!flavor.addButtonLabel && <PlusIcon size={9} />}
                         {flavor.addButtonLabel ? flavor.addButtonLabel(item) : `Add ${flavor.itemLabel}`}
-                      </button>
+                      </ButtonView>
                     )}
                   </div>
                 );
@@ -1057,92 +1110,9 @@ export function MockAiGeneratePopover({
           </div>
         )}
 
-        {/* Footer — after streaming completes */}
-        {!streaming && !error && text && (
-          <div
-            className="flex items-center gap-2 px-4 py-2.5 border-t flex-shrink-0"
-            style={{ borderColor: 'var(--color-surface-border)' }}
-          >
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              className="flex items-center gap-1.5 text-[10.5px] cursor-pointer transition-opacity opacity-50 hover:opacity-100"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              <RefreshIcon size={10} />
-              Regenerate
-            </button>
-
-            <div className="flex-1" />
-
-            {/* Copy SDL — GraphQL only */}
-            {detectedSdl && (
-              <button
-                type="button"
-                onClick={handleCopySdl}
-                className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors font-medium"
-                style={{
-                  backgroundColor: sdlCopied
-                    ? 'color-mix(in srgb, var(--color-success) 12%, transparent)'
-                    : 'color-mix(in srgb, var(--color-protocol-graphql, #ec4899) 10%, transparent)',
-                  color: sdlCopied ? 'var(--color-success)' : 'var(--color-protocol-graphql, #ec4899)',
-                  border: `1px solid ${sdlCopied ? 'color-mix(in srgb, var(--color-success) 30%, transparent)' : 'color-mix(in srgb, var(--color-protocol-graphql, #ec4899) 30%, transparent)'}`,
-                }}
-              >
-                {sdlCopied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
-                {sdlCopied ? 'SDL Copied!' : 'Copy SDL'}
-              </button>
-            )}
-
-            {/* Add all generated REST routes */}
-            {onAddGeneratedRoutes && parsedRoutes.length > 0 && (
-              <button
-                type="button"
-                onClick={handleAddAll}
-                disabled={addedAll}
-                className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{
-                  backgroundColor: addedAll
-                    ? 'color-mix(in srgb, var(--color-success) 12%, transparent)'
-                    : `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-                  color: addedAll ? 'var(--color-success)' : ACCENT,
-                  border: `1px solid ${addedAll ? 'color-mix(in srgb, var(--color-success) 30%, transparent)' : `color-mix(in srgb, ${ACCENT} 30%, transparent)`}`,
-                }}
-              >
-                <PlusIcon size={11} />
-                {addedAll ? `✓ All ${parsedRoutes.length} Routes Added` : `Add All Generated Routes (${parsedRoutes.length})`}
-              </button>
-            )}
-
-            {/* Add all generated items (non-REST protocols) */}
-            {onAddGeneratedItems && parsedItems.length > 0 && flavor && (
-              <button
-                type="button"
-                onClick={handleAddAllItems}
-                disabled={addedAllItems}
-                className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{
-                  backgroundColor: addedAllItems
-                    ? 'color-mix(in srgb, var(--color-success) 12%, transparent)'
-                    : `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-                  color: addedAllItems ? 'var(--color-success)' : ACCENT,
-                  border: `1px solid ${addedAllItems ? 'color-mix(in srgb, var(--color-success) 30%, transparent)' : `color-mix(in srgb, ${ACCENT} 30%, transparent)`}`,
-                }}
-              >
-                <PlusIcon size={11} />
-                {addedAllItems
-                  ? `✓ All ${parsedItems.length} ${flavor.itemLabelPlural} Added`
-                  : `Add All ${flavor.itemLabelPlural} (${parsedItems.length})`}
-              </button>
-            )}
-          </div>
-        )}
       </div>
-      </div> {/* ── end snake glow wrapper ── */}
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }
 
 // ─── Trigger Button + Popover Shell ──────────────────────────────────────────
@@ -1177,19 +1147,13 @@ export function MockAiGenerateButton({
 
   return (
     <>
-      <button
-        type="button"
+      <AIButtonView
+        action="generate"
+        size="md"
+        accentColor={accentVar}
+        label="Generate with AI"
         onClick={() => setOpen(p => !p)}
-        className="h-[28px] px-2.5 text-[10px] rounded-md border cursor-pointer transition-colors"
-        style={{
-          color: accentVar,
-          borderColor: `color-mix(in srgb, ${accentVar} 25%, transparent)`,
-          backgroundColor: open ? `color-mix(in srgb, ${accentVar} 10%, transparent)` : 'transparent',
-        }}
-        title="Generate with AI"
-      >
-        ✨ Generate with AI
-      </button>
+      />
 
       {open && (
         <MockAiGeneratePopover

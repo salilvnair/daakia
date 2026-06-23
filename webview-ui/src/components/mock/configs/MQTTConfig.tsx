@@ -2,16 +2,26 @@
  * MQTTConfig — MQTT topic/subscription config for mock server.
  */
 import { useState } from 'react';
+import {
+  SelectInputView, EditorView, ResizablePanelView, ButtonView, IconButtonView,
+  ToggleSwitchView, TextInputView, CheckboxView, DurationInputView, type SelectOption,
+} from '@salilvnair/dui';
 import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
-import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, DurationInput, type DropdownOption } from '../../shared';
+import { ConfirmDialog } from '../../shared';
 import { MQTT_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 import type { MQTTMockTopic } from '../mock-types';
 
-const MQTT_SAMPLE_OPTIONS: DropdownOption[] = [
+const MQTT_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
   ...MQTT_SAMPLES.map(s => ({ value: s.id, label: s.label })),
+];
+
+const QOS_OPTIONS: SelectOption[] = [
+  { value: '0', label: 'QoS 0' },
+  { value: '1', label: 'QoS 1' },
+  { value: '2', label: 'QoS 2' },
 ];
 
 interface MQTTConfigProps {
@@ -78,14 +88,16 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
 
   const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
     const newTopics: MQTTMockTopic[] = items.map(item => {
-      const d = item.data as { topic?: string; payload?: string; qos?: number; intervalMs?: number };
+      const d = item.data as { topic?: string; payload?: unknown; qos?: number; intervalMs?: number };
       const qos = ([0, 1, 2].includes(d.qos ?? 0) ? d.qos : 0) as 0 | 1 | 2;
+      const payloadStr = typeof d.payload === 'string' ? d.payload
+        : d.payload != null ? JSON.stringify(d.payload, null, 2) : '{"hello":"world"}';
       return {
         id: crypto.randomUUID(),
         topic: d.topic || item.name || 'topic/default',
         qos,
         retain: false,
-        payload: d.payload || '{"hello":"world"}',
+        payload: payloadStr,
         intervalMs: d.intervalMs ?? 5000,
         enabled: true,
       };
@@ -98,8 +110,8 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Topics ({topics.length})</span>
         <div className="flex items-center gap-1.5">
-          <StyledDropdown
-            size="sm"
+          <SelectInputView
+            size="md"
             options={MQTT_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
@@ -116,25 +128,22 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
             accentVar="var(--color-protocol-mqtt)"
             onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <button
-            type="button"
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor="var(--color-protocol-mqtt)"
             onClick={addTopic}
-            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: 'var(--color-protocol-mqtt)', borderColor: 'color-mix(in srgb, var(--color-protocol-mqtt) 30%, transparent)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-mqtt) 10%, transparent)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             + Add Topic
-          </button>
+          </ButtonView>
           {topics.length > 0 && (
-            <button
-              type="button"
+            <IconButtonView
+              size="sm"
+              icon={<TrashIcon size={12} />}
+              accentColor="var(--color-error)"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Topics"
-              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
-              <TrashIcon size={12} />
-            </button>
+            />
           )}
         </div>
       </div>
@@ -158,81 +167,73 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
           )}
 
           <div className={`flex items-center gap-2 ${!topic.enabled ? 'opacity-50' : ''}`}>
-            <button
-              type="button"
-              onClick={() => updateTopic(topic.id, { enabled: !topic.enabled })}
-              className="relative z-20 w-[28px] h-[14px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-              style={{ backgroundColor: topic.enabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-              title={topic.enabled ? 'Disable' : 'Enable'}
-            >
-              <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: topic.enabled ? '16px' : '2px' }} />
-            </button>
+            <ToggleSwitchView
+              checked={topic.enabled}
+              onChange={(v) => updateTopic(topic.id, { enabled: v })}
+              accentColor="var(--color-success)"
+              size="xs"
+            />
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded text-[var(--color-protocol-mqtt)] bg-[rgba(139,92,246,0.12)]">
               QoS {topic.qos}
             </span>
             <div className="flex-1" />
             {topic.enabled && (
-              <Checkbox
+              <CheckboxView
                 checked={topic.retain}
                 onChange={(v) => updateTopic(topic.id, { retain: v })}
                 label="Retain"
-                className="text-[10px]"
+                size="sm"
               />
             )}
             {mqttUrl && topic.enabled && (
-              <button
-                type="button"
+              <IconButtonView
+                size="sm"
+                icon={copiedId === topic.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
                 onClick={() => copyMqttUrl(topic.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
                 title="Copy MQTT URL"
-              >
-                {copiedId === topic.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-              </button>
+              />
             )}
             {topic.enabled && (
-              <button
-                type="button"
+              <IconButtonView
+                size="sm"
+                icon={<TrashIcon size={12} />}
+                accentColor="var(--color-error)"
                 onClick={() => setDeleteConfirmId(topic.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer"
-              >
-                <TrashIcon size={12} />
-              </button>
+              />
             )}
           </div>
           {topic.enabled && (
             <>
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
+                <TextInputView
                   value={topic.topic}
                   onChange={(e) => updateTopic(topic.id, { topic: e.target.value })}
                   placeholder="Topic (e.g., sensors/temperature)"
-                  className="flex-1 h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  size="md"
+                  style={{ flex: 1, fontFamily: 'monospace' }}
                 />
-                <StyledDropdown
-                  size="sm"
+                <SelectInputView
+                  size="md"
                   value={String(topic.qos)}
                   onChange={(val) => updateTopic(topic.id, { qos: parseInt(val) as 0 | 1 | 2 })}
-                  options={[
-                    { value: '0', label: 'QoS 0' },
-                    { value: '1', label: 'QoS 1' },
-                    { value: '2', label: 'QoS 2' },
-                  ]}
+                  options={QOS_OPTIONS}
+                  accentColor="var(--color-protocol-mqtt)"
                 />
-                <DurationInput
+                <DurationInputView
                   value={topic.intervalMs}
                   onChange={(ms) => updateTopic(topic.id, { intervalMs: ms })}
                   placeholder="Interval"
+                  size="sm"
                 />
               </div>
-              <ResizablePanel id={`mock.mqtt.topic.${topic.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
-                <CodeEditor
+              <ResizablePanelView id={`mock.mqtt.topic.${topic.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
+                <EditorView
                   value={topic.payload}
                   onChange={(val) => updateTopic(topic.id, { payload: val })}
                   language="json"
                   height="100%"
                 />
-              </ResizablePanel>
+              </ResizablePanelView>
             </>
           )}
         </div>
@@ -250,10 +251,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
           message="Are you sure you want to delete this MQTT topic? This cannot be undone."
           confirmLabel="Delete"
           danger
-          onConfirm={() => {
-            removeTopic(deleteConfirmId);
-            setDeleteConfirmId(null);
-          }}
+          onConfirm={() => { removeTopic(deleteConfirmId); setDeleteConfirmId(null); }}
           onCancel={() => setDeleteConfirmId(null)}
         />
       )}
@@ -264,10 +262,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
           message={`Are you sure you want to delete all ${topics.length} MQTT topics? This cannot be undone.`}
           confirmLabel="Delete All"
           danger
-          onConfirm={() => {
-            onUpdate({ mqttTopics: [] });
-            setShowDeleteAll(false);
-          }}
+          onConfirm={() => { onUpdate({ mqttTopics: [] }); setShowDeleteAll(false); }}
           onCancel={() => setShowDeleteAll(false)}
         />
       )}

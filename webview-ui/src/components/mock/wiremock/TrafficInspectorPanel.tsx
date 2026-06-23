@@ -2,7 +2,8 @@
  * TrafficInspectorPanel — Record/playback + live traffic inspector (6A.16-6A.18 + Sprint 13.33).
  */
 import { useState } from 'react';
-import { TrashIcon, ChevronDownIcon } from '../../../icons';
+import { TabView, ButtonView, IconButtonView, CheckboxView, TextInputView, type TabItem } from '@salilvnair/dui';
+import { TrashIcon } from '../../../icons';
 import type { MockServer, RecordedRequest, MockLogEntry } from '../mock-types';
 import { ProtocolTrafficInspector } from '../ProtocolTrafficInspector';
 
@@ -29,30 +30,24 @@ export function TrafficInspectorPanel({ server, onUpdate, onClearTraffic, onImpo
     onUpdate({ recordingMode: !server.recordingMode });
   };
 
-  const tabs: { key: TrafficTab; label: string }[] = [
-    { key: 'recording', label: 'Record & Proxy' },
-    { key: 'traffic', label: `Recorded (${recorded.length})` },
-    ...(isNonRest ? [{ key: 'protocol' as TrafficTab, label: `Protocol Traffic (${protocolLogs.length})` }] : []),
+  const tabItems: TabItem[] = [
+    { id: 'recording', label: 'Record & Proxy' },
+    { id: 'traffic', label: `Recorded (${recorded.length})` },
+    ...(isNonRest ? [{ id: 'protocol', label: `Protocol Traffic (${protocolLogs.length})` }] : []),
   ];
 
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Tab bar */}
-      <div className="flex items-center gap-0 border-b border-[var(--color-surface-border)] flex-shrink-0">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className="h-[28px] px-3 text-[11px] font-medium cursor-pointer transition-colors"
-            style={{
-              borderBottom: tab === t.key ? `2px solid ${MOCK_ACCENT}` : '2px solid transparent',
-              color: tab === t.key ? MOCK_ACCENT : 'var(--color-text-muted)',
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="flex-shrink-0 px-2 pt-1 border-b border-[var(--color-surface-border)]">
+        <TabView
+          tabs={tabItems}
+          activeTab={tab}
+          onChange={(id) => setTab(id as TrafficTab)}
+          variant="underline"
+          size="xs"
+          accentColor={MOCK_ACCENT}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] min-h-0 p-3">
@@ -69,7 +64,6 @@ export function TrafficInspectorPanel({ server, onUpdate, onClearTraffic, onImpo
           <ProtocolTrafficInspector
             logs={logs}
             onClear={() => {
-              // Clear is handled by the parent MockLogPanel's clear
               if (onClearTraffic) onClearTraffic();
             }}
           />
@@ -101,29 +95,26 @@ function RecordingConfig({ server, onUpdate, onToggle }: {
             Proxies requests to the real API and captures interactions as mock routes
           </span>
         </div>
-        <button
-          type="button"
+        <ButtonView
+          size="md"
+          variant="ghost"
+          accentColor={server.recordingMode ? 'var(--color-error)' : MOCK_ACCENT}
           onClick={onToggle}
-          className="h-[28px] px-3 text-[11px] rounded cursor-pointer font-medium"
-          style={{
-            background: server.recordingMode ? 'rgba(239,68,68,0.15)' : `color-mix(in srgb, ${MOCK_ACCENT} 12%, transparent)`,
-            border: `1px solid ${server.recordingMode ? 'rgba(239,68,68,0.3)' : `color-mix(in srgb, ${MOCK_ACCENT} 25%, transparent)`}`,
-            color: server.recordingMode ? 'var(--color-error)' : MOCK_ACCENT,
-          }}
         >
           {server.recordingMode ? 'Stop Recording' : 'Start Recording'}
-        </button>
+        </ButtonView>
       </div>
 
       {/* Proxy target */}
       <div className="flex flex-col gap-1">
         <label className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Proxy Target URL</label>
-        <input
+        <TextInputView
           type="url"
           value={server.proxyTarget ?? ''}
           onChange={e => onUpdate({ proxyTarget: e.target.value || undefined })}
           placeholder="https://api.yourservice.com"
-          className="h-[32px] px-3 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+          size="md"
+          style={{ width: '100%', fontFamily: 'monospace' }}
         />
         <p className="text-[10px] text-[var(--color-text-muted)] opacity-60">
           Incoming requests are forwarded here. Responses are captured and saved as mock routes.
@@ -190,24 +181,32 @@ function TrafficLog({ recorded, onClear, onImport }: {
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <input type="checkbox" checked={checked.size === recorded.length} onChange={toggleAll} className="cursor-pointer" />
+          <CheckboxView
+            checked={checked.size === recorded.length}
+            onChange={toggleAll}
+            size="sm"
+          />
           <span className="text-[11px] text-[var(--color-text-muted)]">{checked.size} selected</span>
         </div>
         <div className="flex items-center gap-1.5">
           {checked.size > 0 && onImport && (
-            <button
-              type="button"
+            <ButtonView
+              size="md"
+              variant="ghost"
+              accentColor={MOCK_ACCENT}
               onClick={() => onImport(recorded.filter(r => checked.has(r.id)))}
-              className="h-[24px] px-2.5 text-[10px] rounded cursor-pointer"
-              style={{ color: MOCK_ACCENT, background: `color-mix(in srgb, ${MOCK_ACCENT} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${MOCK_ACCENT} 25%, transparent)` }}
             >
               Convert to Routes
-            </button>
+            </ButtonView>
           )}
           {onClear && (
-            <button type="button" onClick={onClear} className="h-[24px] px-2 text-[10px] rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-error)] flex items-center gap-1">
-              <TrashIcon size={11} /> Clear
-            </button>
+            <IconButtonView
+              size="sm"
+              icon={<TrashIcon size={11} />}
+              accentColor="var(--color-error)"
+              onClick={onClear}
+              title="Clear traffic"
+            />
           )}
         </div>
       </div>
@@ -223,7 +222,9 @@ function TrafficLog({ recorded, onClear, onImport }: {
               className="flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors"
               style={{ background: selected === r.id ? `color-mix(in srgb, ${MOCK_ACCENT} 10%, transparent)` : 'transparent' }}
             >
-              <input type="checkbox" checked={checked.has(r.id)} onChange={() => toggle(r.id)} onClick={e => e.stopPropagation()} className="cursor-pointer flex-shrink-0" />
+              <div onClick={e => e.stopPropagation()}>
+                <CheckboxView checked={checked.has(r.id)} onChange={() => toggle(r.id)} size="sm" />
+              </div>
               <span className="text-[9px] font-medium font-mono px-1 py-0.5 rounded flex-shrink-0" style={{ background: methodColor(r.method).bg, color: methodColor(r.method).text }}>{r.method}</span>
               <span className="text-[10px] text-[var(--color-text-muted)] truncate">{r.path}</span>
             </div>
@@ -244,7 +245,14 @@ function TrafficLog({ recorded, onClear, onImport }: {
 }
 
 function RequestDetail({ record }: { record: RecordedRequest }) {
-  const [section, setSection] = useState<'request' | 'response'>('request');
+  type Section = 'request' | 'response';
+  const [section, setSection] = useState<Section>('request');
+
+  const sectionTabs: TabItem[] = [
+    { id: 'request', label: 'Request' },
+    { id: 'response', label: 'Response' },
+  ];
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -252,15 +260,14 @@ function RequestDetail({ record }: { record: RecordedRequest }) {
         <span className="text-[11px] font-mono text-[var(--color-text-primary)]">{record.path}</span>
         <span className="ml-auto text-[10px] font-mono" style={{ color: statusColor(record.responseStatus) }}>{record.responseStatus}</span>
       </div>
-      <div className="flex gap-2">
-        {(['request', 'response'] as const).map(s => (
-          <button key={s} type="button" onClick={() => setSection(s)}
-            className="text-[10px] cursor-pointer capitalize pb-0.5"
-            style={{ borderBottom: section === s ? `1px solid ${MOCK_ACCENT}` : '1px solid transparent', color: section === s ? MOCK_ACCENT : 'var(--color-text-muted)' }}>
-            {s}
-          </button>
-        ))}
-      </div>
+      <TabView
+        tabs={sectionTabs}
+        activeTab={section}
+        onChange={(id) => setSection(id as Section)}
+        variant="underline"
+        size="xs"
+        accentColor={MOCK_ACCENT}
+      />
       {section === 'request' && (
         <pre className="text-[10px] font-mono text-[var(--color-text-muted)] whitespace-pre-wrap break-all">
           {`Headers:\n${JSON.stringify(record.requestHeaders, null, 2)}\n\nBody:\n${record.requestBody || '(empty)'}`}

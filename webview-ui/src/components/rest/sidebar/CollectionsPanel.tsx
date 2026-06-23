@@ -33,7 +33,7 @@ import { AiCompatibilityScorerModal } from '../../ai/AiCompatibilityScorerModal'
 import { AiDocGeneratorModal } from '../../ai/AiDocGeneratorModal';
 import { AiSmartTestSuiteModal } from '../../ai/AiSmartTestSuiteModal';
 import { InsomniaImportModal } from '../../power/InsomniaImportModal';
-import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '../../../dui';
+import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 
 // ────────────── Main Component ──────────────
 

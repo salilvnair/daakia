@@ -17,14 +17,21 @@ export type SidebarSection = 'collections' | 'history' | 'environments' | 'debug
 interface AppSidebarProps {
   activeSection: SidebarSection;
   onSectionChange: (section: SidebarSection) => void;
+  onOpenChange?: (open: boolean) => void;
   sidebarOpen?: boolean;
   sidebarWidth?: number;
   sidebarDragging?: boolean;
 }
 
-export function AppSidebar({ activeSection, onSectionChange, sidebarOpen = true, sidebarWidth = 260, sidebarDragging = false }: AppSidebarProps) {
+export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sidebarOpen = true, sidebarWidth = 260, sidebarDragging = false }: AppSidebarProps) {
   const toggle = (section: SidebarSection) => {
-    onSectionChange(activeSection === section ? null : section);
+    if (activeSection === section) {
+      onSectionChange(null);
+    } else {
+      onSectionChange(section);
+      // Ensure panel opens when selecting a section
+      if (!sidebarOpen) onOpenChange?.(true);
+    }
   };
 
   const { tabs, activeTabId, activeProtocol } = useTabsStore();
@@ -46,9 +53,10 @@ export function AppSidebar({ activeSection, onSectionChange, sidebarOpen = true,
 
   // Protocol-aware sidebar — use store protocol (follows left rail switch)
   const isMockServer = activeTab?.type === 'mock-server';
+  const isStateMachine = activeTab?.type === 'state-machine';
   const isDaakiaAi = activeTab?.type === 'daakia-ai';
-  // Never show protocol icons when settings, mock-server, or daakia-ai tab is active — they have their own full-panel UI
-  const showProtocolIcons = !settingsActive && !isMockServer && !isDaakiaAi;
+  // Never show protocol icons when settings, mock-server, state-machine, or daakia-ai tab is active
+  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi;
   const showRestSidebar = showProtocolIcons && activeProtocol === 'rest';
   const showGraphqlSidebar = showProtocolIcons && activeProtocol === 'graphql';
   const showWebsocketSidebar = showProtocolIcons && activeProtocol === 'websocket';
@@ -81,8 +89,8 @@ export function AppSidebar({ activeSection, onSectionChange, sidebarOpen = true,
         {showPanel && <SidebarPanelContent section={activeSection} />}
       </div>
 
-      {/* Icon rail — border-l only when panel is visible */}
-      <div className={`flex flex-col items-center w-12 bg-[var(--color-panel)] ${showPanel && sidebarOpen ? 'border-l border-[var(--color-surface-border)]' : ''} py-2 gap-1 flex-shrink-0`}>
+      {/* Icon rail — always has left border for clean separation */}
+      <div className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-l border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
         {/* REST sidebar icons */}
         {showRestSidebar && (
           <>

@@ -9,7 +9,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
 import { SparkleIcon, PlayIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
-import { ModalView, ButtonView } from '../../dui';
+import { ModalView, ButtonView } from '@salilvnair/dui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

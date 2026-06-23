@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { HTTP_REQUEST_HEADERS, SENSITIVE_HEADERS, HEADER_VALUE_SUGGESTIONS } from './http-headers';
 import { ConfirmDialog } from '../modals/ConfirmDialog';
 import { TrashIcon, BulkEditIcon, PlusIcon, CheckCircleFilledIcon, EyeIcon, EyeOffIcon } from '../../../icons';
-import { IconButtonView } from '../../../dui';
+import { IconButtonView } from '@salilvnair/dui';
 
 export interface KeyValueRow {
   id: string;

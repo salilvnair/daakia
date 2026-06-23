@@ -16,44 +16,64 @@ let _markedConfigured = false;
 
 // ─── Marked custom renderer ──────────────────────────────────────────────────
 
+// Daakia custom code-fence names → hljs highlight language
+// These are AI-generated structured blocks that contain JSON (or GraphQL) data.
+const DAAKIA_LANG_MAP: Record<string, string> = {
+  sse_events: 'json',
+  routes: 'json',
+  graphql_operations: 'json',
+  graphql_sdl: 'graphql',
+  grpc_services: 'json',
+  soap_services: 'json',
+  mqtt_topics: 'json',
+  sio_handlers: 'json',
+  websocket_handlers: 'json',
+};
+
 function buildMarkedRenderer(): Renderer {
   const r = new Renderer();
 
   // Fenced code blocks with header + copy button
   r.code = ({ text, lang }: { text: string; lang?: string }) => {
     const safeLang = (lang || '').replace(/[<>"'&]/g, '');
-    let highlighted = text;
+    // Map daakia custom block names to an hljs-known language
+    const hljsLang = DAAKIA_LANG_MAP[safeLang] || safeLang;
+    // Pretty-print JSON blocks so minified AI output is readable
+    let displayText = text;
+    if (hljsLang === 'json') {
+      try { displayText = JSON.stringify(JSON.parse(text), null, 2); } catch { /* keep raw */ }
+    }
+    let highlighted = displayText;
     let resolvedLang = safeLang || 'plaintext';
     try {
-      if (safeLang && hljs.getLanguage(safeLang)) {
-        // Known language — highlight explicitly for best accuracy
-        highlighted = hljs.highlight(text, { language: safeLang }).value;
-        resolvedLang = safeLang;
-      } else if (safeLang) {
+      if (hljsLang && hljs.getLanguage(hljsLang)) {
+        highlighted = hljs.highlight(displayText, { language: hljsLang }).value;
+        resolvedLang = safeLang || hljsLang; // show original label (e.g. sse_events), not json
+      } else if (hljsLang) {
         // Try common aliases: js→javascript, ts→typescript, sh→bash, py→python
         const ALIASES: Record<string, string> = {
           js: 'javascript', ts: 'typescript', sh: 'bash', py: 'python',
           yml: 'yaml', rb: 'ruby', rs: 'rust', cs: 'csharp', kt: 'kotlin',
           md: 'markdown', tf: 'hcl', proto: 'protobuf',
         };
-        const alias = ALIASES[safeLang.toLowerCase()];
+        const alias = ALIASES[hljsLang.toLowerCase()];
         if (alias && hljs.getLanguage(alias)) {
-          highlighted = hljs.highlight(text, { language: alias }).value;
-          resolvedLang = safeLang; // keep display label as user typed
+          highlighted = hljs.highlight(displayText, { language: alias }).value;
+          resolvedLang = safeLang;
         } else {
           // Auto-detect — best effort for unrecognised lang tags
-          const auto = hljs.highlightAuto(text);
+          const auto = hljs.highlightAuto(displayText);
           highlighted = auto.value;
-          resolvedLang = safeLang; // keep user-visible label unchanged
+          resolvedLang = safeLang;
         }
       } else {
         // No lang specified — auto-detect
-        const auto = hljs.highlightAuto(text);
+        const auto = hljs.highlightAuto(displayText);
         highlighted = auto.value;
         resolvedLang = auto.language || 'plaintext';
       }
     } catch { /* noop — keep raw text */ }
-    const encoded = encodeURIComponent(text);
+    const encoded = encodeURIComponent(displayText);
     // Copy icon SVG (two overlapping rectangles)
     const copyIcon = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mdv-copy-icon"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
     // Check icon SVG (checkmark tick)

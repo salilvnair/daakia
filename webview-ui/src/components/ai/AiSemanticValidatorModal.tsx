@@ -10,7 +10,7 @@ import { SparkleIcon, CheckIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
-import { ModalView, ButtonView } from '../../dui';
+import { ModalView, ButtonView } from '@salilvnair/dui';
 
 interface Props {
   tabId: string;

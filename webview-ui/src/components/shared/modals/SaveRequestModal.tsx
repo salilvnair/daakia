@@ -5,7 +5,7 @@ import { getDisplayMethod } from '../../../services/request/request-service';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { SparkleIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, TrashIcon, MoreVerticalIcon, RenameIcon, CopyIcon, ChevronRightIcon, CheckCircleFilledIcon } from '../../../icons';
 import { ConfirmDialog } from '../index';
-import { ModalView, ButtonView, IconButtonView, TextInputView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '../../../dui';
+import { ModalView, ButtonView, IconButtonView, TextInputView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 
 const PROTOCOL_ACCENT: Record<string, string> = {
   rest: 'var(--color-primary)',

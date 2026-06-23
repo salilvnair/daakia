@@ -2,10 +2,10 @@
  * StateMachinePanel — Visual state machine editor for scenario-based mock flows (6A.11-6A.12).
  * Per-route state requirements + transitions, plus server-level state machine config.
  */
-import { useState } from 'react';
+import { SelectInputView, TextInputView, ButtonView, IconButtonView, EditorView, ResizablePanelView, type SelectOption } from '@salilvnair/dui';
 import { PlusIcon, TrashIcon, ChevronDownIcon } from '../../../icons';
-import type { MockRoute, StateMachineConfig, StateNode, StateTransition } from '../mock-types';
-import { StyledDropdown } from '../../shared/controls/StyledDropdown';
+import { useState } from 'react';
+import type { MockRoute, StateMachineConfig, StateNode, StateTransition, StateTransitionEntry } from '../mock-types';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
 
@@ -64,10 +64,9 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
 
   return (
     <div className="border border-dashed border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden">
-      <button
-        type="button"
+      <div
+        className="w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
       >
         <div className="flex items-center gap-2">
           <span className="transition-transform duration-150 text-[var(--color-text-muted)]" style={{ display: 'inline-flex', transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
@@ -80,23 +79,27 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
             </span>
           )}
         </div>
-        <button type="button" onClick={e => { e.stopPropagation(); addState(); setExpanded(true); }}
-          className="flex items-center gap-1 h-[20px] px-2 text-[10px] rounded cursor-pointer"
-          style={{ color: MOCK_ACCENT, background: `color-mix(in srgb, ${MOCK_ACCENT} 10%, transparent)` }}>
-          <PlusIcon size={9} /> Add State
-        </button>
-      </button>
+        <ButtonView
+          size="md"
+          variant="ghost"
+          accentColor={MOCK_ACCENT}
+          iconLeft={<PlusIcon size={12} />}
+          onClick={e => { e.stopPropagation(); addState(); setExpanded(true); }}
+        >
+          Add State
+        </ButtonView>
+      </div>
 
       {expanded && (
         <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[rgba(255,255,255,0.07)]">
           {/* Initial state */}
           <div className="flex items-center gap-2 pt-2">
             <span className="text-[10px] text-[var(--color-text-muted)]">Initial state</span>
-            <input
-              type="text"
+            <TextInputView
               value={cfg.initialState}
               onChange={e => onUpdate({ ...cfg, initialState: e.target.value })}
-              className="h-[24px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none w-[140px]"
+              size="md"
+              style={{ width: 140, fontFamily: 'monospace' }}
             />
           </div>
 
@@ -112,11 +115,9 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">States</span>
-              <button type="button" onClick={addState}
-                className="flex items-center gap-1 h-[20px] px-2 text-[10px] rounded cursor-pointer"
-                style={{ color: MOCK_ACCENT, background: `color-mix(in srgb, ${MOCK_ACCENT} 10%, transparent)` }}>
-                <PlusIcon size={9} /> Add
-              </button>
+              <ButtonView size="md" variant="ghost" accentColor={MOCK_ACCENT} iconLeft={<PlusIcon size={9} />} onClick={addState}>
+                Add
+              </ButtonView>
             </div>
             {cfg.states.length === 0 ? (
               <p className="text-[10px] text-[var(--color-text-muted)] opacity-50 py-1">No states defined yet.</p>
@@ -125,26 +126,30 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
                 {cfg.states.map((s, idx) => (
                   <div key={s.id} className="flex items-center gap-2 group">
                     <div className="w-[10px] h-[10px] rounded-full flex-shrink-0" style={{ background: s.color ?? MOCK_ACCENT }} />
-                    <input
-                      type="text"
+                    <TextInputView
                       value={s.id}
                       onChange={e => updateState(idx, { id: e.target.value })}
                       placeholder="state_id"
-                      className="w-[120px] h-[24px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none"
+                      size="md"
+                      style={{ width: 120, fontFamily: 'monospace' }}
                     />
-                    <input
-                      type="text"
+                    <TextInputView
                       value={s.label ?? s.id}
                       onChange={e => updateState(idx, { label: e.target.value })}
                       placeholder="Display label"
-                      className="flex-1 h-[24px] px-2 text-[11px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none"
+                      size="md"
+                      style={{ flex: 1 }}
                     />
                     {cfg.initialState === s.id && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-[rgba(34,197,94,0.12)] text-[var(--color-success)]">initial</span>
                     )}
-                    <button type="button" onClick={() => removeState(s.id)} className="opacity-0 group-hover:opacity-100 p-1 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer">
-                      <TrashIcon size={11} />
-                    </button>
+                    <IconButtonView
+                      size="sm"
+                      icon={<TrashIcon size={11} />}
+                      accentColor="var(--color-error)"
+                      className="opacity-0 group-hover:opacity-100"
+                      onClick={() => removeState(s.id)}
+                    />
                   </div>
                 ))}
               </div>
@@ -155,11 +160,16 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Transitions</span>
-              <button type="button" onClick={addTransition} disabled={!hasMultipleStates}
-                className="flex items-center gap-1 h-[20px] px-2 text-[10px] rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{ color: MOCK_ACCENT, background: `color-mix(in srgb, ${MOCK_ACCENT} 10%, transparent)` }}>
-                <PlusIcon size={9} /> Add
-              </button>
+              <ButtonView
+                size="md"
+                variant="ghost"
+                accentColor={MOCK_ACCENT}
+                iconLeft={<PlusIcon size={9} />}
+                disabled={!hasMultipleStates}
+                onClick={addTransition}
+              >
+                Add
+              </ButtonView>
             </div>
             {!hasMultipleStates && <p className="text-[10px] text-[var(--color-text-muted)] opacity-40">Need at least 2 states to add transitions.</p>}
             {cfg.transitions.map((t, idx) => (
@@ -167,16 +177,20 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
                 <StateSelect value={t.from} states={stateIds} onChange={v => updateTransition(idx, { from: v })} />
                 <span className="text-[10px] text-[var(--color-text-muted)]">→</span>
                 <StateSelect value={t.to} states={stateIds} onChange={v => updateTransition(idx, { to: v })} />
-                <input
-                  type="text"
+                <TextInputView
                   value={t.triggeredByRouteId}
                   onChange={e => updateTransition(idx, { triggeredByRouteId: e.target.value })}
                   placeholder="route id (trigger)"
-                  className="flex-1 h-[24px] px-2 text-[10px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-muted)] focus:outline-none"
+                  size="md"
+                  style={{ flex: 1, fontFamily: 'monospace' }}
                 />
-                <button type="button" onClick={() => removeTransition(idx)} className="opacity-0 group-hover:opacity-100 p-1 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer">
-                  <TrashIcon size={11} />
-                </button>
+                <IconButtonView
+                  size="sm"
+                  icon={<TrashIcon size={11} />}
+                  accentColor="var(--color-error)"
+                  className="opacity-0 group-hover:opacity-100"
+                  onClick={() => removeTransition(idx)}
+                />
               </div>
             ))}
           </div>
@@ -186,46 +200,289 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
   );
 }
 
-// ─── Per-route state gate controls (within RouteCard) ────────────────────────
+// ─── Per-route state transitions table (multi-entry) ─────────────────────────
+
+const ACCENT = 'var(--color-mock-server)';
 
 interface RouteStatePanelProps {
   route: MockRoute;
   onUpdate: (patch: Partial<MockRoute>) => void;
-  availableStates?: string[];
 }
 
-export function RouteStatePanel({ route, onUpdate, availableStates = [] }: RouteStatePanelProps) {
+function initEntries(route: MockRoute): StateTransitionEntry[] {
+  if (route.stateTransitions?.length) return route.stateTransitions;
+  // Migrate legacy single-pair on first open
+  if (route.requiredState || route.newState) {
+    return [{
+      id: `tr_${route.id}_0`,
+      requiredState: route.requiredState ?? '',
+      newState: route.newState ?? '',
+    }];
+  }
+  return [];
+}
+
+export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
+  const entries = route.stateTransitions ?? initEntries(route);
+  const [expandedBody, setExpandedBody] = useState<Set<string>>(new Set());
+
+  const save = (next: StateTransitionEntry[]) => {
+    onUpdate({
+      stateTransitions: next,
+      // Keep legacy fields in sync for backward-compat with engine
+      requiredState: next[0]?.requiredState || undefined,
+      newState: next[0]?.newState || undefined,
+    });
+  };
+
+  const addEntry = () => {
+    save([...entries, { id: `tr_${Date.now()}`, requiredState: '', newState: '' }]);
+  };
+
+  const updateEntry = (id: string, patch: Partial<StateTransitionEntry>) => {
+    save(entries.map(e => e.id === id ? { ...e, ...patch } : e));
+  };
+
+  const removeEntry = (id: string) => {
+    save(entries.filter(e => e.id !== id));
+    setExpandedBody(prev => { const s = new Set(prev); s.delete(id); return s; });
+  };
+
+  const toggleBody = (id: string) => {
+    setExpandedBody(prev => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  };
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-[var(--color-text-muted)] w-[100px] flex-shrink-0">Required state</span>
-        <input
-          type="text"
-          value={route.requiredState ?? ''}
-          onChange={e => onUpdate({ requiredState: e.target.value || undefined })}
-          list="available-states"
-          placeholder="any state (no restriction)"
-          className="flex-1 h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
-        />
-        <datalist id="available-states">
-          {availableStates.map(s => <option key={s} value={s} />)}
-        </datalist>
+
+      {/* ── header ──────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
+            State Transitions
+          </span>
+          {entries.length > 0 && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+              background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+              color: ACCENT,
+            }}>
+              {entries.length}
+            </span>
+          )}
+        </div>
+        <ButtonView
+          size="xs"
+          variant="ghost"
+          accentColor={ACCENT}
+          iconLeft={<PlusIcon size={10} />}
+          onClick={addEntry}
+        >
+          Add Transition
+        </ButtonView>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-[var(--color-text-muted)] w-[100px] flex-shrink-0">Transition to state</span>
-        <input
-          type="text"
-          value={route.newState ?? ''}
-          onChange={e => onUpdate({ newState: e.target.value || undefined })}
-          list="available-states"
-          placeholder="no transition"
-          className="flex-1 h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
-        />
+
+      {/* ── empty hint ──────────────────────────────────────────────── */}
+      {entries.length === 0 && (
+        <div style={{
+          borderRadius: 7, border: '1px dashed rgba(255,255,255,0.09)',
+          padding: '10px 12px', textAlign: 'center',
+        }}>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>
+            No state transitions yet
+          </p>
+          <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', lineHeight: 1.5 }}>
+            Add entries to serve different responses based on session state.
+            <br />
+            Same URL — multiple behaviors.
+          </p>
+        </div>
+      )}
+
+      {/* ── column header (only when entries exist) ─────────────────── */}
+      {entries.length > 0 && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: '14px 1fr 20px 1fr 54px',
+          gap: 6, alignItems: 'center',
+          padding: '0 4px',
+        }}>
+          <span />
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Required State
+          </span>
+          <span />
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Transition To
+          </span>
+          <span />
+        </div>
+      )}
+
+      {/* ── entries ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1.5">
+        {entries.map((entry, i) => {
+          const bodyOpen = expandedBody.has(entry.id);
+          const hasOverride = !!(entry.responseBodyOverride || entry.statusCodeOverride);
+          return (
+            <div key={entry.id} style={{
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.07)',
+              background: 'rgba(255,255,255,0.02)',
+              overflow: 'hidden',
+            }}>
+              {/* main row */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '14px 1fr 20px 1fr 54px',
+                gap: 6, alignItems: 'center', padding: '7px 8px',
+              }}>
+                {/* index */}
+                <span style={{
+                  fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.2)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+
+                {/* required state */}
+                <TextInputView
+                  value={entry.requiredState}
+                  onChange={e => updateEntry(entry.id, { requiredState: e.target.value })}
+                  placeholder="any state (initial)"
+                  size="sm"
+                  style={{ fontFamily: 'monospace', fontSize: 11 }}
+                />
+
+                {/* arrow */}
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>→</span>
+
+                {/* new state */}
+                <TextInputView
+                  value={entry.newState}
+                  onChange={e => updateEntry(entry.id, { newState: e.target.value })}
+                  placeholder="no transition"
+                  size="sm"
+                  style={{ fontFamily: 'monospace', fontSize: 11 }}
+                />
+
+                {/* actions: body toggle + delete */}
+                <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                  <IconButtonView
+                    size="xs"
+                    icon={<ChevronDownIcon size={10} />}
+                    title="Response override"
+                    accentColor={hasOverride ? ACCENT : 'rgba(255,255,255,0.3)'}
+                    style={{
+                      transform: bodyOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                      transition: 'transform 150ms',
+                      opacity: bodyOpen || hasOverride ? 1 : 0.5,
+                    }}
+                    onClick={() => toggleBody(entry.id)}
+                  />
+                  <IconButtonView
+                    size="xs"
+                    icon={<TrashIcon size={10} />}
+                    accentColor="var(--color-error)"
+                    title="Remove"
+                    onClick={() => removeEntry(entry.id)}
+                  />
+                </div>
+              </div>
+
+              {/* optional response override panel */}
+              {bodyOpen && (
+                <div style={{
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                  padding: '8px 10px',
+                  display: 'flex', flexDirection: 'column', gap: 7,
+                  background: 'rgba(0,0,0,0.15)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.05em', width: 72, flexShrink: 0 }}>
+                      Status
+                    </span>
+                    <TextInputView
+                      value={entry.statusCodeOverride ? String(entry.statusCodeOverride) : ''}
+                      onChange={e => updateEntry(entry.id, { statusCodeOverride: e.target.value ? Number(e.target.value) : undefined })}
+                      placeholder="inherit"
+                      size="sm"
+                      style={{ width: 80, fontFamily: 'monospace' }}
+                    />
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginLeft: 2 }}>
+                      leave blank to use route's status code
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Response Body Override
+                    </span>
+                    <ResizablePanelView defaultHeight={80} minHeight={60} maxHeight={300}>
+                      <EditorView
+                        value={entry.responseBodyOverride ?? ''}
+                        onChange={val => updateEntry(entry.id, { responseBodyOverride: val || undefined })}
+                        language="json"
+                        placeholder={'// leave blank to use route\'s main body\n{\n  "status": "shipped"\n}'}
+                        height="100%"
+                        bordered
+                      />
+                    </ResizablePanelView>
+                  </div>
+                </div>
+              )}
+
+              {/* state label chips row */}
+              {(entry.requiredState || entry.newState) && (
+                <div style={{
+                  padding: '4px 10px 6px',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  borderTop: bodyOpen ? undefined : '1px solid rgba(255,255,255,0.04)',
+                }}>
+                  {entry.requiredState ? (
+                    <span style={{
+                      fontSize: 9, padding: '2px 7px', borderRadius: 4, fontFamily: 'monospace',
+                      background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
+                      color: 'var(--color-warning)',
+                    }}>
+                      {entry.requiredState}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>any state</span>
+                  )}
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>→</span>
+                  {entry.newState ? (
+                    <span style={{
+                      fontSize: 9, padding: '2px 7px', borderRadius: 4, fontFamily: 'monospace',
+                      background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)',
+                      color: 'var(--color-success)',
+                    }}>
+                      {entry.newState}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>no transition</span>
+                  )}
+                  {hasOverride && (
+                    <span style={{
+                      marginLeft: 4, fontSize: 9, padding: '2px 6px', borderRadius: 4,
+                      background: `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
+                      color: ACCENT,
+                    }}>
+                      override
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-      {(route.requiredState || route.newState) && (
-        <p className="text-[10px] text-[var(--color-text-muted)] opacity-60">
-          {route.requiredState ? `Only matches when session is in state "${route.requiredState}". ` : ''}
-          {route.newState ? `After matching, transitions session to "${route.newState}".` : ''}
+
+      {/* hint when entries exist */}
+      {entries.length > 0 && (
+        <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', lineHeight: 1.5, marginTop: 2 }}>
+          Entries match top-to-bottom. First match wins. Empty "Required State" matches any session state.
         </p>
       )}
     </div>
@@ -235,12 +492,13 @@ export function RouteStatePanel({ route, onUpdate, availableStates = [] }: Route
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function StateSelect({ value, states, onChange }: { value: string; states: string[]; onChange: (v: string) => void }) {
+  const options: SelectOption[] = states.map(s => ({ value: s, label: s }));
   return (
-    <StyledDropdown
+    <SelectInputView
       value={value}
-      options={states.map(s => ({ value: s, label: s }))}
+      options={options}
       onChange={onChange}
-      size="xs"
+      size="md"
     />
   );
 }
@@ -250,11 +508,10 @@ function StateDiagram({ states, transitions, initialState }: {
   transitions: StateTransition[];
   initialState: string;
 }) {
-  // Simple linear/circular text diagram — no canvas needed
   const stateMap = new Map(states.map(s => [s.id, s]));
   return (
     <div className="flex flex-wrap gap-1.5 items-center">
-      {states.map((s, i) => {
+      {states.map((s) => {
         const outgoing = transitions.filter(t => t.from === s.id);
         return (
           <div key={s.id} className="flex items-center gap-1.5">

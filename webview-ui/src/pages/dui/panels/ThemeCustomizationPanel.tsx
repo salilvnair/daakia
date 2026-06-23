@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { DownloadIcon, UploadIcon, RefreshIcon } from '../../../icons';
-import { ButtonView } from '../../../dui';
-import { SCHEMA, GROUPS } from '../../../dui/theme/core';
-import { generateYaml, parseThemeYaml, applyThemeVars, resetThemeVars, readCurrentColors } from '../../../dui/theme/utils';
-import { ColorEditor } from '../../../dui/theme/editor';
+import { ButtonView } from '@salilvnair/dui';
+import { SCHEMA, GROUPS } from '@salilvnair/dui/theme/core';
+import { generateYaml, parseThemeYaml, applyThemeVars, resetThemeVars, readCurrentColors } from '@salilvnair/dui/theme/utils';
+import { ColorEditor } from '@salilvnair/dui/theme/editor';
 
 type StatusMsg = { type: 'success' | 'error'; text: string } | null;
 

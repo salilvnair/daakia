@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from '../../../icons';
-import { TextInputView } from '../../../dui';
+import { TextInputView } from '@salilvnair/dui';
 
 // ────────── Types ──────────
 

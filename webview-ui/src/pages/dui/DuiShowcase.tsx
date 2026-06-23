@@ -37,9 +37,9 @@ import {
   FolderView,
   DebugEditorView,
   DebugView,
-} from '../../dui';
-import type { FolderNode, FolderAction, DebugSession, DebugActions } from '../../dui';
-import type { TabItem, ContextMenuItem, TabBarTab, SelectTextOption, SelectOption, SideNavItem, LiveColorVar } from '../../dui';
+} from '@salilvnair/dui';
+import type { FolderNode, FolderAction, DebugSession, DebugActions } from '@salilvnair/dui';
+import type { TabItem, ContextMenuItem, TabBarTab, SelectTextOption, SelectOption, SideNavItem, LiveColorVar } from '@salilvnair/dui';
 import { applyMonacoTheme } from '../../monaco-setup';
 import { SCHEMA_LANG_OPTIONS } from '../../services/response';
 import {

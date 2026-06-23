@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import MonacoEditor, { type OnMount } from '@monaco-editor/react';
 import { CodeIcon, RefreshIcon, PaletteIcon } from '../../../../icons';
-import { LiveColorCustomizer, ResizablePanelView } from '../../../../dui';
-import type { LiveColorVar } from '../../../../dui';
+import { LiveColorCustomizer, ResizablePanelView } from '@salilvnair/dui';
+import type { LiveColorVar } from '@salilvnair/dui';
 import { ErrorBoundary } from './ErrorBoundary';
 import { buildAndEval } from './buildAndEval';
 import * as ReactNS from 'react';

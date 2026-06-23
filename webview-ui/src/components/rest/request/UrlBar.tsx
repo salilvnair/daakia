@@ -3,7 +3,7 @@ import { useTabsStore, type HttpMethod } from '../../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { useDebugStore } from '../../../store/debug-store';
 import { GenerateCodeModal, ImportCurlModal } from '../../shared';
-import { SelectTextInputView, DropDownButtonView, ButtonView, IconButtonView, type ContextMenuItem } from '../../../dui';
+import { SelectTextInputView, DropDownButtonView, ButtonView, IconButtonView, type ContextMenuItem } from '@salilvnair/dui';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 import { postMsg } from '../../../vscode';
 import { sendRequest, sendAndDownloadRequest, cancelRequest, saveRequest } from '../../../services/request';

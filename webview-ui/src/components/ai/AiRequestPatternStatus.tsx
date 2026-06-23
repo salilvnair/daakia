@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { SparkleIcon } from '../../icons';
-import { ModalView, ButtonView } from '../../dui';
+import { ModalView, ButtonView } from '@salilvnair/dui';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

@@ -8,7 +8,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView, ButtonView } from '../../dui';
+import { ModalView, AIButtonView, ButtonView, TextInputView } from '@salilvnair/dui';
 
 interface Props {
   protocol: string;
@@ -90,11 +90,8 @@ export function AiNlRequestBuilderModal({ protocol, currentUrl, onApply, onClose
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const streamRef = useRef('');
-  const inputRef = useRef<HTMLInputElement>(null);
   const proto = (protocol || 'rest').toLowerCase();
   const systemPrompt = SYSTEM_PROMPTS[proto] || SYSTEM_PROMPTS.rest;
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -161,8 +158,20 @@ export function AiNlRequestBuilderModal({ protocol, currentUrl, onApply, onClose
         </div>
       }
       headerRight={protocolBadge}
+      footerLeft={
+        <AIButtonView
+          label={loading ? 'Building…' : 'Build ✦'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={!description.trim() || loading}
+          loading={loading}
+          onClick={handleBuild}
+        />
+      }
       footerRight={parsed && onApply ? (
-        <AIButtonView label="Apply to Request" size="sm" accentColor="var(--color-success)" onClick={() => { onApply(parsed!); onClose(); }} />
+        <ButtonView size="md" variant="primary" accentColor="var(--color-success)" onClick={() => { onApply(parsed!); onClose(); }}>
+          Apply to Request
+        </ButtonView>
       ) : undefined}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -170,40 +179,15 @@ export function AiNlRequestBuilderModal({ protocol, currentUrl, onApply, onClose
           Describe your API request in plain English. AI builds the exact request: method, URL, params, headers, and body.
         </p>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleBuild(); if (e.key === 'Escape') onClose(); }}
-            placeholder='e.g. "Get all admin users created after Jan 1st, paginated by 20"'
-            style={{
-              flex: 1, height: 32, padding: '0 10px', borderRadius: 6, fontSize: 11,
-              background: 'var(--color-input-bg)',
-              border: '1px solid var(--color-input-border)',
-              color: 'var(--color-text-primary)',
-              outline: 'none',
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleBuild}
-            disabled={!description.trim() || loading}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              height: 32, padding: '0 12px', borderRadius: 6, fontSize: 11,
-              fontWeight: 500, cursor: 'pointer', flexShrink: 0, border: 'none',
-              background: ACCENT, color: 'var(--color-btn-primary-text, #fff)',
-              opacity: (!description.trim() || loading) ? 0.4 : 1,
-            }}
-          >
-            {loading
-              ? <span style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
-              : <SparkleIcon size={11} />}
-            {loading ? 'Building…' : 'Build'}
-          </button>
-        </div>
+        <TextInputView
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleBuild(); if (e.key === 'Escape') onClose(); }}
+          placeholder='e.g. "Get all admin users created after Jan 1st, paginated by 20"'
+          size="md"
+          width="fw"
+          autoFocus
+        />
 
         {error && (
           <p style={{

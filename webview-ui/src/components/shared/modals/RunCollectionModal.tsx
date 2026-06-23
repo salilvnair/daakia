@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { postMsg } from '../../../vscode';
 import { METHOD_COLORS } from '../../../colors';
 import { PlayIcon, StopSquareIcon } from '../../../icons';
-import { ModalView, ButtonView, CodeBlockView, AIButtonView, TextInputView, CheckboxView } from '../../../dui';
+import { ModalView, ButtonView, CodeBlockView, AIButtonView, TextInputView, CheckboxView } from '@salilvnair/dui';
 import { AiPerformanceInsightsModal } from '../../ai/AiPerformanceInsightsModal';
 
 interface RunCollectionModalProps {

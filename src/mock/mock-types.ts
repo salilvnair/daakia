@@ -100,7 +100,24 @@ export interface WebhookConfig {
   enabled: boolean;
 }
 
+// ─── Per-route state transition entry (multi-state support) ─────────────────
+
+export interface StateTransitionEntry {
+  id: string;
+  requiredState: string;
+  newState: string;
+  responseBodyOverride?: string;
+  statusCodeOverride?: number;
+}
+
 // ─── State Machine (6A.11-6A.12) ────────────────────────────────────────────
+
+export interface StateMockResponse {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  status: number;
+  body: string;
+}
 
 export interface StateNode {
   id: string;
@@ -109,6 +126,7 @@ export interface StateNode {
   y: number;
   isInitial?: boolean;
   color?: string;
+  mockResponses?: StateMockResponse[];
 }
 
 export interface StateTransition {
@@ -126,6 +144,14 @@ export interface StateMachineConfig {
   sessionMode: 'cookie' | 'header' | 'global';
   sessionKey?: string;
   defaultState: string;
+}
+
+export interface ConnectedWorkflow {
+  workflowId: string;
+  name: string;
+  routePattern?: string;
+  event?: string;
+  stateMachine?: StateMachineConfig;
 }
 
 // ─── Record & Playback (6A.16-6A.18) ────────────────────────────────────────
@@ -187,6 +213,7 @@ export interface MockRoute {
   requiredState?: string;
   newState?: string;
   stateVariableUpdates?: Record<string, string>;
+  stateTransitions?: StateTransitionEntry[];
 
   // Fault injection (6A.13)
   fault?: FaultConfig;
@@ -399,6 +426,8 @@ export interface MockServerConfig {
 
   // State machine (6A.11-6A.12)
   stateMachine?: StateMachineConfig;
+  connectedWorkflowId?: string; // UUID of the @salilvnair/state-machine workflow linked to this server
+  connectedWorkflows?: ConnectedWorkflow[];
 
   // Global fault injection / chaos (6A.15)
   globalFault?: FaultConfig;

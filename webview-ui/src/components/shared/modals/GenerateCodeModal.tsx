@@ -5,7 +5,7 @@ import { generateCode, LANGUAGES, type CodeGenInput } from '../../../utils/code-
 import { StyledDropdown } from '../controls/StyledDropdown';
 import type { RequestTab } from '../../../store/tabs-store';
 import { CloseIcon, WrapLinesIcon, DownloadIcon } from '../../../icons';
-import { IconButtonView, CopyButtonView } from '../../../dui';
+import { IconButtonView, CopyButtonView } from '@salilvnair/dui';
 
 const HLJS_LANG_MAP: Record<string, string> = {
   'shell-curl': 'bash',

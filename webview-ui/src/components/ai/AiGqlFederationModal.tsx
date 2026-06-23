@@ -7,7 +7,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
-import { ModalView, TabView, type TabItem } from '../../dui';
+import { ModalView, TabView, type TabItem } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;

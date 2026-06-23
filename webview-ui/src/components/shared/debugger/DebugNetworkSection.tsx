@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { useDebugStore, type DebugSubRequest } from '../../../store/debug-store';
 import { CopyIcon, CheckIcon, ChevronDownIcon, ArrowUpRightIcon, ArrowDownLeftIcon, InfoCircleIcon } from '../../../icons/daakia-icons';
-import { CollapsibleSectionView } from '../../../dui';
+import { CollapsibleSectionView } from '@salilvnair/dui';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 

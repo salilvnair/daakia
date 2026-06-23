@@ -41,7 +41,8 @@ import {
   handleStartMockServer, handleStopMockServer, handleUpdateMockRoutes,
   handleSaveMockConfigs, handleGetMockServerState, handleSetMockPortRange,
   handleUpdateMockGraphQLSchema, handleUpdateMockGraphQLOps, handleUpdateMockWsHandlers,
-  handleUpdateMockSoapOps, handleUpdateMockGrpcMethods,
+  handleUpdateMockSoapOps, handleUpdateMockGrpcMethods, handlePatchStateMachine,
+  handleImportMockSpec,
   initMockLogForwarding,
 } from './handlers/mock-handler';
 import { handleExecuteGraphQL, handleGraphQLConnect, handleGraphQLSubscribe, handleGraphQLUnsubscribe, cleanupAllSubscriptions } from './handlers/graphql-handler';
@@ -62,6 +63,15 @@ import { handleMcpConnect, handleMcpDisconnect, handleMcpCallTool, handleMcpGetP
 import { handleAiMcpConnect, handleAiMcpDisconnect, cleanupAiMcpClients } from './handlers/ai-mcp-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from './handlers/ui-state-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
+import {
+  initSmWorkflowStorage,
+  handleSmWorkflowGetAll,
+  handleSmWorkflowSave,
+  handleSmWorkflowDelete,
+  handleSmWorkflowSaveFolder,
+  handleSmWorkflowDeleteFolder,
+  handleSmWorkflowSaveTodos,
+} from './handlers/sm-workflow-handler';
 
 export class MainPanel {
   public static currentPanel: MainPanel | undefined;
@@ -123,6 +133,7 @@ export class MainPanel {
     this.postMessage({ type: 'init', sqliteOk: status.ok, sqliteError: status.error });
 
     initMockLogForwarding(this._post);
+    initSmWorkflowStorage();
     handleGetMockServerState(this._post);
 
     handleGetEnvironments(this._post);
@@ -396,6 +407,32 @@ export class MainPanel {
         break;
       case 'mockServer:getAll':
         handleGetMockServerState(this._post);
+        break;
+      case 'mockServer:patchStateMachine':
+        handlePatchStateMachine(msg);
+        break;
+      case 'mockServer:importSpec':
+        handleImportMockSpec(msg, this._post);
+        break;
+
+      // ── State Machine Workflows ──
+      case 'smWorkflow:getAll':
+        handleSmWorkflowGetAll(this._post);
+        break;
+      case 'smWorkflow:save':
+        handleSmWorkflowSave(msg);
+        break;
+      case 'smWorkflow:delete':
+        handleSmWorkflowDelete(msg);
+        break;
+      case 'smWorkflow:saveFolder':
+        handleSmWorkflowSaveFolder(msg);
+        break;
+      case 'smWorkflow:deleteFolder':
+        handleSmWorkflowDeleteFolder(msg);
+        break;
+      case 'smWorkflow:saveTodos':
+        handleSmWorkflowSaveTodos(msg);
         break;
       case 'mockServer:setPortRange':
         handleSetMockPortRange(msg, this._post);

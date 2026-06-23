@@ -1,18 +1,19 @@
 import { useCallback, useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { StyledDropdown, SplitButton, type DropdownOption, type SplitButtonItem } from '../shared';
+import { SelectInputView, SplitButtonView, ButtonView, TextInputView } from '@salilvnair/dui';
+import type { SelectOption, SplitButtonViewItem } from '@salilvnair/dui';
 import { ProtocolMcpBadge, ConnectIcon, DisconnectIcon, SaveIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { saveRequest } from '../../services/request';
 import { AiMcpPromptBuilderModal } from '../ai/AiMcpPromptBuilderModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 
-const TRANSPORT_OPTIONS: DropdownOption[] = [
+const TRANSPORT_OPTIONS: SelectOption[] = [
   { value: 'stdio', label: 'STDIO' },
   { value: 'http', label: 'HTTP/SSE' },
 ];
 
-const saveItems: SplitButtonItem[] = [
+const saveItems: SplitButtonViewItem[] = [
   { id: 'save-as', label: 'Save as', icon: <SaveIcon size={12} />, iconColor: 'var(--color-ctx-close-saved)', onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }) },
 ];
 
@@ -83,21 +84,23 @@ export function McpUrlBar() {
     {connectionError && (
       <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] shrink-0" style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)', borderBottom: '1px solid color-mix(in srgb, var(--color-error) 30%, transparent)', color: 'var(--color-error)' }}>
         <span className="flex-1 truncate">⚠ {connectionError}</span>
-        <button
-          type="button"
+        <ButtonView
+          variant="secondary"
+          size="xs"
           onClick={handleRetry}
-          className="shrink-0 text-[10.5px] px-2 py-0.5 rounded cursor-pointer border transition-colors"
-          style={{ borderColor: 'var(--color-error)', color: 'var(--color-error)' }}
+          accentColor="var(--color-error)"
+          color="var(--color-error)"
         >
           Retry
-        </button>
-        <button
-          type="button"
+        </ButtonView>
+        <ButtonView
+          variant="ghost"
+          size="xs"
           onClick={() => updateTab(activeTab.id, { mcpConnectionError: undefined })}
-          className="shrink-0 cursor-pointer text-[var(--color-error)] opacity-70 hover:opacity-100"
+          color="var(--color-error)"
         >
           ×
-        </button>
+        </ButtonView>
       </div>
     )}
     <div className="url-bar">
@@ -106,51 +109,55 @@ export function McpUrlBar() {
 
       {/* Transport selector — auto width based on content */}
       <div className="shrink-0">
-        <StyledDropdown
+        <SelectInputView
           options={TRANSPORT_OPTIONS}
           value={transport}
           onChange={handleTransportChange}
+          size="sm"
           accentColor="var(--color-protocol-mcp)"
         />
       </div>
 
       {/* STDIO: command input */}
       {transport === 'stdio' && (
-        <input
-          type="text"
+        <TextInputView
           value={command}
           onChange={handleCommandChange}
           placeholder="npx @modelcontextprotocol/server-name"
-          className="url-bar-input ml-1"
+          size="sm"
+          className="url-bar-input ml-1 flex-1"
+          accentColor="var(--color-protocol-mcp)"
         />
       )}
 
       {/* HTTP/SSE: URL input */}
       {transport === 'http' && (
-        <input
-          type="text"
+        <TextInputView
           value={url}
           onChange={handleUrlChange}
           placeholder="http://localhost:3000/mcp/sse"
-          className="url-bar-input ml-1"
+          size="sm"
+          className="url-bar-input ml-1 flex-1"
+          accentColor="var(--color-protocol-mcp)"
         />
       )}
 
       {/* Connect/Disconnect button */}
-      <button
-        type="button"
+      <ButtonView
+        variant="primary"
+        size="sm"
         onClick={handleConnect}
-        className="url-bar-send cursor-pointer"
-        style={{ backgroundColor: connected || loading ? 'var(--color-error)' : 'var(--color-protocol-mcp)' }}
+        iconLeft={connected ? <DisconnectIcon size={13} /> : <ConnectIcon size={13} />}
+        accentColor={connected || loading ? 'var(--color-error)' : 'var(--color-protocol-mcp)'}
       >
-        {connected ? <DisconnectIcon size={13} /> : <ConnectIcon size={13} />}
-        <span>{loading ? 'Cancel' : connected ? 'Disconnect' : 'Connect'}</span>
-      </button>
+        {loading ? 'Cancel' : connected ? 'Disconnect' : 'Connect'}
+      </ButtonView>
 
       {/* Save SplitButton */}
-      <SplitButton
+      <SplitButtonView
         label="Save"
         variant="secondary"
+        size="sm"
         onClick={() => {
           if (!activeTab) return;
           const saved = saveRequest(activeTab);
@@ -162,15 +169,16 @@ export function McpUrlBar() {
 
       {/* 10.4: Prompt Builder ✦ */}
       {aiEnabled('mcpPromptBuilder') && (
-        <button
-          type="button"
+        <ButtonView
+          variant="secondary"
+          size="sm"
           onClick={() => setShowPromptBuilder(true)}
-          className="flex items-center gap-1.5 h-[36px] px-3 rounded-md text-[11.5px] font-medium cursor-pointer transition-all flex-shrink-0"
-          style={{ color: 'var(--color-protocol-mcp)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-mcp) 10%, transparent)' }}
-          title="AI Prompt Builder"
+          iconLeft={<SparkleIcon size={11} />}
+          accentColor="var(--color-protocol-mcp)"
+          color="var(--color-protocol-mcp)"
         >
-          <SparkleIcon size={11} />Prompt Builder ✦
-        </button>
+          Prompt Builder ✦
+        </ButtonView>
       )}
     </div>
     {showPromptBuilder && <AiMcpPromptBuilderModal onClose={() => setShowPromptBuilder(false)} />}

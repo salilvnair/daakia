@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useSidebarDataStore } from '../../store/sidebar-data-store';
-import { ModalView, ButtonView, AIButtonView, SelectInputView } from '../../dui';
+import { ModalView, ButtonView, AIButtonView, SelectInputView } from '@salilvnair/dui';
 
 interface BaselineEntry {
   name: string;

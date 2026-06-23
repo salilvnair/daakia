@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { PillTabs, type PillTab } from '../shared';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
+import { TabView } from '@salilvnair/dui';
+import type { TabItem } from '@salilvnair/dui';
 import { McpToolsTab } from './tabs/McpToolsTab';
 import { McpResourcesTab } from './tabs/McpResourcesTab';
 import { McpPromptsTab } from './tabs/McpPromptsTab';
@@ -15,7 +16,7 @@ import { McpServersTab } from './tabs/McpServersTab';
 
 const ACCENT = 'var(--color-protocol-mcp)';
 
-const TABS: PillTab[] = [
+const TABS: TabItem[] = [
   { id: 'servers', label: 'Servers' },
   { id: 'tools', label: 'Tools' },
   { id: 'resources', label: 'Resources' },
@@ -49,13 +50,13 @@ export function McpRequestTabs() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Tab header */}
-      <div className="px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
-        <PillTabs
+      <div className="flex items-center px-3 pt-1.5 pb-0 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
+        <TabView
           tabs={TABS}
           activeTab={activeTab}
           onChange={setActiveTab}
-          size="sm"
           variant="underline"
+          size="sm"
           accentColor={ACCENT}
         />
       </div>

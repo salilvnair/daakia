@@ -6,7 +6,7 @@ import { installKeyboardListener } from './services/keyboard';
 // Install bridges before any React render so ConvEngineChat fetch/EventSource is ready
 installDaakiaBridges();
 import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
-import { SplitPanelView, ButtonView } from './dui';
+import { SplitPanelView, ButtonView } from '@salilvnair/dui';
 import { TabBar } from './components/tabs/TabBar';
 import { UrlBar } from './components/rest/request/UrlBar';
 import { SaveRequestModal, RightClickMenu } from './components/shared';
@@ -17,6 +17,7 @@ import { sendRequest, saveRequest } from './services/request';
 import { AppSidebar, SidebarSection } from './components/sidebar';
 import { SettingsPanel } from './components/sidebar/SettingsPanel';
 import { MockServerPanel } from './components/mock/MockServerPanel';
+import { SmStateMachineTabPage } from './components/mock/SmStateMachineTabPage';
 import { GraphQLPanel } from './components/graphql';
 import { WebSocketPanel } from './components/websocket';
 import { GrpcPanel } from './components/grpc';
@@ -41,6 +42,8 @@ import { useAiHistoryStore } from './store/ai-history-store';
 import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_DEFAULTS } from './store/prompt-template';
 import { useAiConversationStore } from './store/ai-conversation-store';
 import { getVsCodeApi, postMsg } from './vscode';
+import { useSMWorkspaceStore } from '@salilvnair/state-machine';
+import { DaakiaSMConsumer } from './consumer/DaakiaSMConsumer';
 import { getProtocolAccent } from './colors';
 import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, DevToolsIcon } from './icons';
 import { DevToolsPanel } from './components/shared/devtools';
@@ -345,6 +348,11 @@ export default function App() {
   // Install centralized keyboard listener
   useEffect(() => installKeyboardListener(), []);
 
+  // Register SM workflow consumer once — loads persisted workflows from extension host DB
+  useEffect(() => {
+    useSMWorkspaceStore.getState().registerConsumer(new DaakiaSMConsumer());
+  }, []);
+
   // Dynamically set --color-accent based on active protocol/tab so all inputs + scrollbars inherit protocol color
   useEffect(() => {
     const map: Record<string, string> = {
@@ -358,6 +366,7 @@ export default function App() {
     };
     const tabProtocol = activeTab?.protocol || activeProtocol;
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+      : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
       : activeTab?.type === 'daakia-ai' ? 'var(--color-protocol-ai)'
       : map[tabProtocol] || map.rest;
@@ -367,7 +376,21 @@ export default function App() {
   // Keyboard shortcuts
   useKeyboardShortcut('app.toggle-sidebar', { key: 'b', altKey: true }, (e) => {
     e.preventDefault();
-    setSidebarOpen(prev => !prev);
+    setSidebarOpen(prev => {
+      const next = !prev;
+      // When opening, ensure a section is active so the panel actually appears
+      if (next && !sidebarSection) {
+        const proto = activeProtocol;
+        if (proto === 'graphql') setSidebarSection('gql-collections');
+        else if (proto === 'websocket') setSidebarSection('ws-collections');
+        else if (proto === 'grpc') setSidebarSection('grpc-collections');
+        else if (proto === 'soap') setSidebarSection('soap-collections');
+        else if (proto === 'ai') setSidebarSection('ai-collections');
+        else if (proto === 'mcp') setSidebarSection('mcp-collections');
+        else setSidebarSection('collections');
+      }
+      return next;
+    });
   }, 'Toggle sidebar');
 
   useKeyboardShortcut('app.toggle-split', { key: '/', altKey: true }, (e) => {
@@ -445,9 +468,22 @@ export default function App() {
     setSidebarDragging(false);
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     if (!sidebarDragRef.current.moved) {
-      setSidebarOpen(prev => !prev);
+      setSidebarOpen(prev => {
+        const next = !prev;
+        if (next && !sidebarSection) {
+          const proto = activeProtocol;
+          if (proto === 'graphql') setSidebarSection('gql-collections');
+          else if (proto === 'websocket') setSidebarSection('ws-collections');
+          else if (proto === 'grpc') setSidebarSection('grpc-collections');
+          else if (proto === 'soap') setSidebarSection('soap-collections');
+          else if (proto === 'ai') setSidebarSection('ai-collections');
+          else if (proto === 'mcp') setSidebarSection('mcp-collections');
+          else setSidebarSection('collections');
+        }
+        return next;
+      });
     }
-  }, []);
+  }, [sidebarSection, activeProtocol]);
 
   // ── Req/Resp split callbacks ──
   const handleSplitResize = useCallback((pct: number) => {
@@ -1972,6 +2008,7 @@ export default function App() {
 
   const tabProtocol = activeTab?.protocol || activeProtocol;
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+    : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
     : activeTab?.type === 'daakia-ai' ? 'var(--color-protocol-ai)'
     : tabProtocol === 'graphql' ? 'var(--color-protocol-graphql)'
@@ -2122,11 +2159,36 @@ export default function App() {
           </div>
         )}
 
+        {/* MockServerPanel — always mounted when any mock-server tab exists.
+            Keeps ServerDetail sub-tab selection (State Machine, Traffic, etc.)
+            alive across Daakia tab switches. */}
+        {tabs.some(t => t.type === 'mock-server') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'mock-server' ? 'flex' : 'none' }}
+          >
+            <MockServerPanel />
+          </div>
+        )}
+
+        {/* SmStateMachineTabPage — one keep-alive instance per SM tab so the
+            canvas, workflow tabs, and registered DaakiaSMConsumer survive
+            Daakia tab switches without remounting from scratch. */}
+        {tabs.filter(t => t.type === 'state-machine').map(smTab => (
+          <div
+            key={smTab.id}
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.id === smTab.id ? 'flex' : 'none' }}
+          >
+            <SmStateMachineTabPage tabId={smTab.id} />
+          </div>
+        ))}
+
         {activeTab?.type === 'settings' ? (
           <SettingsPanel />
-        ) : activeTab?.type === 'mock-server' ? (
-          <MockServerPanel />
-        ) : activeTab?.type === 'daakia-ai' ? null
+        ) : activeTab?.type === 'mock-server' ? null
+        : activeTab?.type === 'state-machine' ? null
+        : activeTab?.type === 'daakia-ai' ? null
         : (activeTab?.protocol || activeProtocol) === 'rest' ? (
           !activeTab ? (
             <EmptyState protocol="rest" onNewTab={() => useTabsStore.getState().addTab()} />
@@ -2215,36 +2277,38 @@ export default function App() {
         <DevToolsPanel />
         </div>
 
-        {/* Sidebar splitter — drag to resize, click to toggle */}
-        <div
-          className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
-          onPointerDown={handleSidebarPointerDown}
-          onPointerMove={handleSidebarPointerMove}
-          onPointerUp={handleSidebarPointerUp}
-          onMouseEnter={() => setShowSplitterTip(true)}
-          onMouseLeave={() => setShowSplitterTip(false)}
-          aria-label="Resize or collapse sidebar"
-        >
+        {/* Sidebar splitter — only for protocol tabs that have an expandable panel */}
+        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
           <div
-            className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[3px] rounded-full transition-all duration-150 ${
-              sidebarDragging ? 'h-[80px]' : sidebarOpen ? 'h-[44px] bg-[var(--color-surface-border)] group-hover:h-[80px]' : 'h-[48px] group-hover:h-[80px]'
-            }`}
-            style={{
-              backgroundColor: sidebarDragging ? protocolAccent : sidebarOpen ? undefined : `color-mix(in srgb, ${protocolAccent} 30%, transparent)`,
-            }}
-            onMouseEnter={(e) => { if (!sidebarDragging) (e.currentTarget as HTMLElement).style.backgroundColor = protocolAccent; }}
-            onMouseLeave={(e) => { if (!sidebarDragging) (e.currentTarget as HTMLElement).style.backgroundColor = sidebarOpen ? '' : `color-mix(in srgb, ${protocolAccent} 30%, transparent)`; }}
-          />
-          {showSplitterTip && !sidebarDragging && (
-            <div className="absolute top-1/2 right-4 -translate-y-1/2 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[11px] px-2.5 py-1.5 rounded-lg border border-[var(--color-surface-border)] shadow-lg whitespace-nowrap pointer-events-none z-50 flex flex-col gap-0.5 leading-tight">
-              <div>Click to {sidebarOpen ? 'collapse' : 'expand'} <kbd style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--color-panel)', fontFamily: 'monospace', border: '1px solid color-mix(in srgb, var(--color-text-primary) 15%, transparent)' }}>Alt+B</kbd></div>
-              <div>Drag to resize</div>
-            </div>
-          )}
-        </div>
+            className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
+            onPointerDown={handleSidebarPointerDown}
+            onPointerMove={handleSidebarPointerMove}
+            onPointerUp={handleSidebarPointerUp}
+            onMouseEnter={() => setShowSplitterTip(true)}
+            onMouseLeave={() => setShowSplitterTip(false)}
+            aria-label="Resize or collapse sidebar"
+          >
+            <div
+              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[3px] rounded-full transition-all duration-150 ${
+                sidebarDragging ? 'h-[80px]' : sidebarOpen ? 'h-[44px] bg-[var(--color-surface-border)] group-hover:h-[80px]' : 'h-[48px] group-hover:h-[80px]'
+              }`}
+              style={{
+                backgroundColor: sidebarDragging ? protocolAccent : sidebarOpen ? undefined : `color-mix(in srgb, ${protocolAccent} 30%, transparent)`,
+              }}
+              onMouseEnter={(e) => { if (!sidebarDragging) (e.currentTarget as HTMLElement).style.backgroundColor = protocolAccent; }}
+              onMouseLeave={(e) => { if (!sidebarDragging) (e.currentTarget as HTMLElement).style.backgroundColor = sidebarOpen ? '' : `color-mix(in srgb, ${protocolAccent} 30%, transparent)`; }}
+            />
+            {showSplitterTip && !sidebarDragging && (
+              <div className="absolute top-1/2 right-4 -translate-y-1/2 bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[11px] px-2.5 py-1.5 rounded-lg border border-[var(--color-surface-border)] shadow-lg whitespace-nowrap pointer-events-none z-50 flex flex-col gap-0.5 leading-tight">
+                <div>Click to {sidebarOpen ? 'collapse' : 'expand'} <kbd style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--color-panel)', fontFamily: 'monospace', border: '1px solid color-mix(in srgb, var(--color-text-primary) 15%, transparent)' }}>Alt+B</kbd></div>
+                <div>Drag to resize</div>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Right sidebar: icon rail + expandable panel */}
-        <AppSidebar activeSection={sidebarSection} onSectionChange={setSidebarSection} sidebarOpen={sidebarOpen} sidebarWidth={sidebarWidth} sidebarDragging={sidebarDragging} />
+        {/* Right sidebar — always visible; icon rail only for mock-server/SM/settings */}
+        <AppSidebar activeSection={sidebarSection} onSectionChange={setSidebarSection} onOpenChange={setSidebarOpen} sidebarOpen={sidebarOpen} sidebarWidth={sidebarWidth} sidebarDragging={sidebarDragging} />
 
       </div>
 
