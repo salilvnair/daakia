@@ -22,6 +22,7 @@ import { MdViewer } from '../shared/display/MdViewer';
 import type { MockRoute, HttpMethod } from './mock-types';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { AIButtonView, EditorView, MultilineInputView, TextInputView, ButtonView, IconButtonView, ModalView, TabView, type EditorLanguage } from '@salilvnair/dui';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 const ACCENT = 'var(--color-mock-server)';
 
@@ -659,6 +660,7 @@ export function MockAiGeneratePopover({
 
   /** Triggered by the "Generate" button in idle state — starts AI generation */
   const handleGenerate = useCallback(() => {
+    logUiEvent('mock.ai_generate', { cacheKey });
     generateCache.delete(cacheKey);
     accumulatedRef.current = '';
     setText('');
@@ -677,6 +679,7 @@ export function MockAiGeneratePopover({
   }, [cacheKey]);
 
   const handleRegenerate = useCallback(() => {
+    logUiEvent('mock.ai_regen', { cacheKey });
     generateCache.delete(cacheKey);
     accumulatedRef.current = '';
     setText('');
@@ -697,6 +700,7 @@ export function MockAiGeneratePopover({
 
   const handleAddOne = useCallback((route: ParsedRoute, idx: number) => {
     if (!onAddGeneratedRoutes) return;
+    logUiEvent('mock.ai_add_one', { method: route.method, path: route.path, idx });
     onAddGeneratedRoutes([{
       method: route.method,
       path: route.path,
@@ -711,6 +715,7 @@ export function MockAiGeneratePopover({
 
   const handleAddAll = useCallback(() => {
     if (!onAddGeneratedRoutes || parsedRoutes.length === 0) return;
+    logUiEvent('mock.ai_add_all', { count: parsedRoutes.length });
     onAddGeneratedRoutes(parsedRoutes.map(r => ({
       method: r.method,
       path: r.path,
@@ -728,12 +733,14 @@ export function MockAiGeneratePopover({
 
   const handleAddOneItem = useCallback((item: ParsedGenericItem, idx: number) => {
     if (!onAddGeneratedItems) return;
+    logUiEvent('mock.ai_add_one', { name: item.name, idx });
     onAddGeneratedItems([item]);
     setAddedItemIds(prev => new Set(prev).add(idx));
   }, [onAddGeneratedItems]);
 
   const handleAddAllItems = useCallback(() => {
     if (!onAddGeneratedItems || parsedItems.length === 0) return;
+    logUiEvent('mock.ai_add_all', { count: parsedItems.length });
     onAddGeneratedItems(parsedItems);
     setAddedAllItems(true);
     setAddedItemIds(new Set(parsedItems.map((_, i) => i)));
@@ -763,7 +770,7 @@ export function MockAiGeneratePopover({
       )}
       {!streaming && !error && text && (
         <div className="flex items-center gap-1">
-          <ButtonView size="xs" variant="ghost" accentColor={ACCENT} onClick={() => setIsIdle(true)} title="Edit description and regenerate">
+          <ButtonView size="sm" accentColor={ACCENT} onClick={() => setIsIdle(true)} title="Edit description and regenerate">
             Refine
           </ButtonView>
           <IconButtonView size="xs" icon={<RefreshIcon size={10} />} accentColor={ACCENT} onClick={handleRegenerate} title="Regenerate" />
@@ -774,11 +781,11 @@ export function MockAiGeneratePopover({
 
   // ── Footer left: regenerate / retry ─────────────────────────────────────────
   const footerLeft = error ? (
-    <ButtonView size="md" variant="ghost" accentColor="var(--color-error)" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}>
+    <ButtonView size="md" accentColor="var(--color-error)" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}>
       Retry
     </ButtonView>
   ) : (!streaming && !error && text) ? (
-    <ButtonView size="md" variant="ghost" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}
+    <ButtonView size="md" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}
       style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}
     >
       Regenerate
@@ -795,7 +802,6 @@ export function MockAiGeneratePopover({
       {detectedSdl && (
         <ButtonView
           size="md"
-          variant="ghost"
           accentColor={sdlCopied ? 'var(--color-success)' : 'var(--color-protocol-graphql, #ec4899)'}
           iconLeft={sdlCopied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
           onClick={handleCopySdl}
@@ -806,7 +812,6 @@ export function MockAiGeneratePopover({
       {onAddGeneratedRoutes && parsedRoutes.length > 0 && (
         <ButtonView
           size="md"
-          variant="ghost"
           accentColor={addedAll ? 'var(--color-success)' : ACCENT}
           disabled={addedAll}
           iconLeft={<PlusIcon size={11} />}
@@ -818,7 +823,6 @@ export function MockAiGeneratePopover({
       {onAddGeneratedItems && parsedItems.length > 0 && flavor && (
         <ButtonView
           size="md"
-          variant="ghost"
           accentColor={addedAllItems ? 'var(--color-success)' : ACCENT}
           disabled={addedAllItems}
           iconLeft={<PlusIcon size={11} />}
@@ -885,7 +889,6 @@ export function MockAiGeneratePopover({
                     <ButtonView
                       key={chip}
                       size="xs"
-                      variant="ghost"
                       borderRadius={9999}
                       accentColor={description === chip ? ACCENT : undefined}
                       onClick={() => setDescription(d => d === chip ? '' : chip)}
@@ -1040,7 +1043,7 @@ export function MockAiGeneratePopover({
                     {isAdded ? (
                       <span className="text-[10px] flex-shrink-0 font-medium" style={{ color: 'var(--color-success)' }}>✓ Added</span>
                     ) : (
-                      <ButtonView size="xs" variant="ghost" accentColor={ACCENT} iconLeft={<PlusIcon size={9} />} onClick={() => handleAddOne(route, idx)}>
+                      <ButtonView size="sm" accentColor={ACCENT} iconLeft={<PlusIcon size={9} />} onClick={() => handleAddOne(route, idx)}>
                         Add Route
                       </ButtonView>
                     )}
@@ -1095,7 +1098,6 @@ export function MockAiGeneratePopover({
                     ) : (
                       <ButtonView
                         size="xs"
-                        variant="ghost"
                         accentColor={ACCENT}
                         iconLeft={flavor.addButtonLabel ? undefined : <PlusIcon size={9} />}
                         onClick={() => handleAddOneItem(item, idx)}

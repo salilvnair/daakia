@@ -8,6 +8,7 @@ import { useAiFeaturesStore, AI_FEATURE_LABELS, FEATURE_TO_TEMPLATE_KEY, type Ai
 import { SparkleIcon, ChevronRightIcon, BookOpenIcon, SearchIcon } from '../../icons';
 import { TextInputView } from '@salilvnair/dui';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 
 const ACCENT = 'var(--color-protocol-ai)';
@@ -100,7 +101,7 @@ function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: keyo
       {/* Toggle */}
       <button
         type="button"
-        onClick={() => toggleFeature(featureKey)}
+        onClick={() => { logUiEvent('ai.toggle_feature', { feature: featureKey, enabled: !enabled }); toggleFeature(featureKey); }}
         className="w-[38px] h-[21px] rounded-full cursor-pointer transition-all flex-shrink-0 relative mt-1"
         style={{ backgroundColor: enabled ? color : 'rgba(255,255,255,0.12)' }}
         title={enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
@@ -199,7 +200,7 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                   </span>
                   <button
                     type="button"
-                    onClick={() => setAllEnabled(!allEnabled)}
+                    onClick={() => { logUiEvent('ai.toggle_all', { enabled: !allEnabled }); setAllEnabled(!allEnabled); }}
                     className="w-[38px] h-[21px] rounded-full cursor-pointer transition-all flex-shrink-0 relative"
                     style={{ backgroundColor: allEnabled ? ACCENT : 'rgba(255,255,255,0.12)' }}
                     title={allEnabled ? 'Disable all AI features' : 'Enable all AI features'}

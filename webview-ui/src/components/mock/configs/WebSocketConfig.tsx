@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../../shared';
 import { WEBSOCKET_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 const WS_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -42,6 +43,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
     if (!sampleId) return;
     const sample = WEBSOCKET_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'websocket' });
     setSelectedSample(sampleId);
     onUpdate({
       description: sample.description,
@@ -58,6 +60,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
   };
 
   const addHandler = (event: 'connection' | 'message' | 'disconnect') => {
+    logUiEvent('mock.cfg_add', { event, protocol: 'websocket' });
     onUpdate({
       wsHandlers: [...handlers, {
         id: crypto.randomUUID(),
@@ -126,18 +129,18 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
           accentVar="var(--color-protocol-websocket)"
           onAddGeneratedItems={handleAddGeneratedItems}
         />
-        <ButtonView size="md" variant="ghost" accentColor="var(--color-success)" onClick={() => addHandler('connection')}>
+        <ButtonView size="md" variant="accent" accentColor="var(--color-success)" onClick={() => addHandler('connection')}>
           + On Connect
         </ButtonView>
-        <ButtonView size="md" variant="ghost" accentColor="var(--color-mock-server)" onClick={() => addHandler('message')}>
+        <ButtonView size="md" variant="accent" accentColor="var(--color-mock-server)" onClick={() => addHandler('message')}>
           + On Message
         </ButtonView>
-        <ButtonView size="md" variant="ghost" accentColor="var(--color-error)" onClick={() => addHandler('disconnect')}>
+        <ButtonView size="md" variant="accent" accentColor="var(--color-error)" onClick={() => addHandler('disconnect')}>
           + On Disconnect
         </ButtonView>
         {handlers.length > 0 && (
           <IconButtonView
-            size="sm"
+            size="md"
             icon={<TrashIcon size={12} />}
             accentColor="var(--color-error)"
             onClick={() => setShowDeleteAll(true)}
@@ -249,7 +252,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
           message={`Are you sure you want to delete all ${handlers.length} WebSocket handlers? This cannot be undone.`}
           confirmLabel="Delete All"
           danger
-          onConfirm={() => { onUpdate({ wsHandlers: [] }); setShowDeleteAll(false); }}
+          onConfirm={() => { logUiEvent('mock.cfg_clear', { count: handlers.length, protocol: 'websocket' }); onUpdate({ wsHandlers: [] }); setShowDeleteAll(false); }}
           onCancel={() => setShowDeleteAll(false)}
         />
       )}

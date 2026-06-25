@@ -331,6 +331,7 @@ export function MQTTPanel() {
 
   const handleSubscribe = useCallback(() => {
     if (!activeTab || !newSubTopic.trim()) return;
+    logUiEvent('mqtt.subscribe', { topic: newSubTopic });
     postMsg({ type: 'mqtt:subscribe', tabId: activeTab.id, topic: newSubTopic, qos: newSubQos });
     setSubscriptions(prev => [...prev, {
       id: crypto.randomUUID(),
@@ -355,6 +356,7 @@ export function MQTTPanel() {
 
   const handlePublish = useCallback(() => {
     if (!activeTab || !pubTopic.trim()) return;
+    logUiEvent('mqtt.publish', { topic: pubTopic });
     postMsg({
       type: 'mqtt:publish',
       tabId: activeTab.id,
@@ -365,7 +367,7 @@ export function MQTTPanel() {
     });
   }, [activeTab, pubTopic, pubPayload, pubQos, pubRetain]);
 
-  const handleClear = useCallback(() => setMessages([]), [setMessages]);
+  const handleClear = useCallback(() => { logUiEvent('mqtt.clear'); setMessages([]); }, [setMessages]);
 
   // Save handlers
   const handleSave = useCallback(() => {

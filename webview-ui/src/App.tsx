@@ -261,18 +261,9 @@ export default function App() {
 
   // Remap sidebar section when protocol changes so icons match active protocol
   const prevProtocolRef = useRef(activeProtocol);
-  // Tracks protocols we've already auto-opened the sidebar for (first-visit only).
-  // Initialized with the current protocol so the initial render never auto-opens.
-  const autoOpenedProtocols = useRef<Set<string>>(new Set([activeProtocol]));
   useEffect(() => {
     if (prevProtocolRef.current === activeProtocol) return;
     prevProtocolRef.current = activeProtocol;
-    // Auto-open sidebar on the FIRST visit to each protocol.
-    // If user manually closes it afterwards, we won't re-open (protocol stays in set).
-    if (!autoOpenedProtocols.current.has(activeProtocol)) {
-      autoOpenedProtocols.current.add(activeProtocol);
-      setSidebarOpen(true);
-    }
     // Map current section to equivalent in new protocol
     if (activeProtocol === 'rest') {
       if (sidebarSection?.startsWith('gql-') || sidebarSection?.startsWith('ws-')) {
@@ -1218,9 +1209,6 @@ export default function App() {
             const tabsStore = useTabsStore.getState();
             // Only restore if app started with no tabs (fresh load)
             if (tabsStore.tabs.length === 0) {
-              // Mark the restored protocol as already auto-opened so the protocol-change
-              // effect doesn't override the saved sidebarOpen state from the snapshot.
-              if (snapshot.activeProtocol) autoOpenedProtocols.current.add(snapshot.activeProtocol);
               tabsStore.hydrateSnapshot(snapshot.tabs as any[], snapshot.activeTabId || '', snapshot.activeProtocol as any || 'rest');
               if (snapshot.sidebarSection) setSidebarSection(snapshot.sidebarSection as SidebarSection);
               if (snapshot.sidebarOpen !== undefined) setSidebarOpen(snapshot.sidebarOpen);

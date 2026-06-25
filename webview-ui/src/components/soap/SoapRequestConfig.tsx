@@ -8,7 +8,7 @@ import { SoapHeadersEditor } from './SoapHeadersEditor';
 import { SoapAssertions } from './SoapAssertions';
 import { SoapWsdlBrowser } from './SoapWsdlBrowser';
 import { SoapAttachments } from './SoapAttachments';
-import { SparkleIcon } from '../../icons';
+import { SparkleIcon, WandIcon } from '../../icons';
 import { AiHeaderSuggest } from '../ai/AiHeaderSuggest';
 import type { AiHeaderSuggestHandle } from '../ai/AiHeaderSuggest';
 import { AiBodyGenerate } from '../ai/AiBodyGenerate';
@@ -26,6 +26,21 @@ import {
 } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
+
+function prettifyXml(xml: string): string {
+  const INDENT = '  ';
+  let depth = 0;
+  let result = '';
+  const tokens = xml.replace(/>\s*</g, '><').split(/(?<=>)(?=<)/);
+  for (const token of tokens) {
+    const isClosing = /^<\//.test(token);
+    const isSelfClosing = /\/>$/.test(token) || /^<!/.test(token) || /^<\?/.test(token);
+    if (isClosing) depth = Math.max(0, depth - 1);
+    result += INDENT.repeat(depth) + token.trim() + '\n';
+    if (!isClosing && !isSelfClosing && /^<[^/!?]/.test(token)) depth++;
+  }
+  return result.trimEnd();
+}
 
 const DEFAULT_ENVELOPE_11 = `<?xml version="1.0" encoding="UTF-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -116,38 +131,48 @@ export function SoapRequestConfig() {
       <div className={`flex-1 min-h-0 ${activeSubTab === 'envelope' ? 'flex flex-col' : 'overflow-y-auto [scrollbar-gutter:stable]'}`}>
         {activeSubTab === 'envelope' && (
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Envelope toolbar */}
-            {(aiEnabled('bodyGenerator') || aiEnabled('requestFuzzer')) && (
-              <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-surface)]">
-                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">SOAP Envelope (XML)</span>
-                <div className="flex items-center gap-1">
-                  {aiEnabled('bodyGenerator') && (
-                    <ButtonView
-                      size="xs"
-                      variant="ghost"
-                      iconLeft={<SparkleIcon size={10} />}
-                      title="AI Envelope Generator"
-                      onClick={() => bodyGenRef.current?.open()}
-                      style={{ color: ACCENT }}
-                    >
-                      Generate ✦
-                    </ButtonView>
-                  )}
-                  {aiEnabled('requestFuzzer') && (
-                    <ButtonView
-                      size="xs"
-                      variant="ghost"
-                      iconLeft={<SparkleIcon size={10} />}
-                      title="AI XML Fuzzer"
-                      onClick={() => setShowFuzzer(true)}
-                      style={{ color: ACCENT }}
-                    >
-                      Fuzz ✦
-                    </ButtonView>
-                  )}
-                </div>
+            {/* Envelope toolbar — always visible */}
+            <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-surface)]">
+              <span className="text-[11px] font-medium text-[var(--color-text-muted)]">SOAP Envelope (XML)</span>
+              <div className="flex items-center gap-1">
+                <IconButtonView
+                  icon={<WandIcon size={12} />}
+                  size="sm"
+                  title="Prettify XML"
+                  onClick={() => {
+                    const raw = activeTab.soapEnvelope || DEFAULT_ENVELOPE_11;
+                    try {
+                      const formatted = prettifyXml(raw);
+                      updateTab(activeTab.id, { soapEnvelope: formatted, dirty: true });
+                    } catch { /* malformed XML */ }
+                  }}
+                />
+                {aiEnabled('bodyGenerator') && (
+                  <ButtonView
+                    size="xs"
+                    variant="ghost"
+                    iconLeft={<SparkleIcon size={10} />}
+                    title="AI Envelope Generator"
+                    onClick={() => bodyGenRef.current?.open()}
+                    style={{ color: ACCENT }}
+                  >
+                    Generate ✦
+                  </ButtonView>
+                )}
+                {aiEnabled('requestFuzzer') && (
+                  <ButtonView
+                    size="xs"
+                    variant="ghost"
+                    iconLeft={<SparkleIcon size={10} />}
+                    title="AI XML Fuzzer"
+                    onClick={() => setShowFuzzer(true)}
+                    style={{ color: ACCENT }}
+                  >
+                    Fuzz ✦
+                  </ButtonView>
+                )}
               </div>
-            )}
+            </div>
             {aiEnabled('bodyGenerator') && (
               <AiBodyGenerate
                 ref={bodyGenRef}

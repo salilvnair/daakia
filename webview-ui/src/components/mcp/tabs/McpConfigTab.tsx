@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useTabsStore, type McpServerConfig } from '../../../store/tabs-store';
-import { CodeEditor } from '../../shared';
+import { ButtonView, EditorView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-mcp)';
 
@@ -110,31 +110,15 @@ export function McpConfigTab() {
         <span className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wide flex-1">
           MCP Server Config (Claude Desktop format)
         </span>
-        <button
-          type="button"
-          onClick={handleLoadExample}
-          className="text-[11px] px-2 py-0.5 rounded cursor-pointer transition-colors"
-          style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}
-        >
+        <ButtonView size="md" variant="accent" accentColor={ACCENT} onClick={handleLoadExample}>
           Load Example
-        </button>
-        <button
-          type="button"
-          onClick={handleCopy}
-          disabled={!jsonText}
-          className="text-[11px] px-2 py-0.5 rounded cursor-pointer transition-colors disabled:opacity-40"
-          style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}
-        >
+        </ButtonView>
+        <ButtonView size="md" variant="accent" accentColor={ACCENT} onClick={handleCopy} disabled={!jsonText}>
           Copy
-        </button>
-        <button
-          type="button"
-          onClick={handleApply}
-          className="text-[11px] px-3 py-0.5 rounded cursor-pointer transition-colors text-white"
-          style={{ backgroundColor: applied ? 'var(--color-success)' : ACCENT }}
-        >
+        </ButtonView>
+        <ButtonView size="md" variant="accent" accentColor={applied ? 'var(--color-success)' : ACCENT} onClick={handleApply}>
           {applied ? '✓ Applied' : 'Apply Config'}
-        </button>
+        </ButtonView>
       </div>
 
       {/* Error banner */}
@@ -146,12 +130,11 @@ export function McpConfigTab() {
 
       {/* Monaco editor */}
       <div className="flex-1 overflow-hidden">
-        <CodeEditor
+        <EditorView
           value={jsonText}
           onChange={(val) => { setJsonText(val || ''); setError(null); }}
           language="json"
           height="100%"
-          placeholder='Paste your Claude Desktop / Cursor mcpServers config JSON here...'
         />
       </div>
 

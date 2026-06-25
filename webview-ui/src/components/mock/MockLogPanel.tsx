@@ -8,7 +8,8 @@ import type { MockLogEntry } from './mock-types';
 import { METHOD_COLORS } from '../../colors';
 import { JsonTreeViewer, tryParseJson } from '../shared/display/JsonTreeViewer';
 import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
-import { IconButtonView, TabView } from '@salilvnair/dui';
+import { IconButtonView, TabView, PilledTabView, type PilledTab } from '@salilvnair/dui';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 type DetailTab = 'request' | 'response' | 'network-logs';
 
@@ -137,7 +138,7 @@ export function MockLogPanel({ logs, onClear, minimized, onToggleMinimize }: Moc
           title="Clear Activity Log?"
           message={`This will permanently remove ${logs.length} log ${logs.length === 1 ? 'entry' : 'entries'}. This action cannot be undone.`}
           confirmLabel="Clear All"
-          onConfirm={() => { onClear(); setShowClearConfirm(false); }}
+          onConfirm={() => { logUiEvent('mock.log_clear'); onClear(); setShowClearConfirm(false); }}
           onCancel={() => setShowClearConfirm(false)}
         />
       )}
@@ -525,18 +526,18 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
+    logUiEvent('mock.log_copy');
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <button
-      type="button"
+    <IconButtonView
+      size="default"
+      icon={copied ? <CheckIcon size={10} className="text-[var(--color-success)]" /> : <CopyIcon size={10} />}
       onClick={handleCopy}
-      className="opacity-0 group-hover/hdr:opacity-100 w-4 h-4 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-all flex-shrink-0"
-    >
-      {copied ? <CheckIcon size={10} className="text-[var(--color-success)]" /> : <CopyIcon size={10} />}
-    </button>
+      className="opacity-0 group-hover/hdr:opacity-100 flex-shrink-0"
+    />
   );
 }
 
@@ -566,16 +567,12 @@ function CopyAllButton({ entry, tab }: { entry: MockLogEntry; tab: DetailTab }) 
     setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <button
-      type="button"
+    <IconButtonView
+      size="default"
+      icon={copied ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
       onClick={handleCopy}
-      className={`h-[22px] w-[22px] flex items-center justify-center cursor-pointer rounded transition-colors ${
-        copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
-      }`}
-      title={copied ? 'Copied!' : 'Copy'}
-    >
-      {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
-    </button>
+      tooltip={copied ? 'Copied!' : 'Copy'}
+    />
   );
 }
 
@@ -594,23 +591,14 @@ function BodyViewer({ label, text, compact }: { label: string; text: string; com
           {formatBytes(text.length)}
         </span>
         {isJson && (
-          <div className="ml-auto flex items-center gap-0.5 rounded-md border border-[var(--color-surface-border)] overflow-hidden">
-            <button
-              onClick={() => setActiveTab('json')}
-              className={`px-2 py-[2px] text-[9px] cursor-pointer transition-colors ${
-                activeTab === 'json'
-                  ? 'bg-[rgba(234,179,8,0.15)] text-[var(--color-mock-server)] font-medium'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]'
-              }`}
-            >json</button>
-            <button
-              onClick={() => setActiveTab('raw')}
-              className={`px-2 py-[2px] text-[9px] cursor-pointer transition-colors ${
-                activeTab === 'raw'
-                  ? 'bg-[rgba(234,179,8,0.15)] text-[var(--color-mock-server)] font-medium'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]'
-              }`}
-            >raw</button>
+          <div className="ml-auto">
+            <PilledTabView
+              mode="pill"
+              tabs={[{ id: 'json', label: 'json' }, { id: 'raw', label: 'raw' }] as PilledTab[]}
+              activeId={activeTab}
+              onChange={(id) => setActiveTab(id as 'json' | 'raw')}
+              accentColor="var(--color-mock-server)"
+            />
           </div>
         )}
       </div>

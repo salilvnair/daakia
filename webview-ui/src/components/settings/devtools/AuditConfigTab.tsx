@@ -6,7 +6,7 @@
  */
 import { useState, useCallback } from 'react';
 import { ChevronRightIcon } from '../../../icons';
-import { AUDIT_EVENT_DEFS, getAuditConfig, setAuditEventEnabled, isAuditEventEnabled, resetAuditConfig } from '../../../store/ui-audit-store';
+import { AUDIT_EVENT_DEFS, getAuditConfig, setAuditEventEnabled, isAuditEventEnabled, resetAuditConfig, logUiEvent } from '../../../store/ui-audit-store';
 
 const MODULE_ORDER = ['REST', 'GraphQL', 'gRPC', 'SOAP', 'WebSocket', 'SSE', 'MQTT', 'Socket.IO', 'Mock Server', 'Collections', 'History', 'Settings'];
 
@@ -26,16 +26,19 @@ export function AuditConfigTab() {
     setCollapsed(prev => { const n = new Set(prev); n.has(module) ? n.delete(module) : n.add(module); return n; });
 
   const toggle = (id: string, enabled: boolean) => {
+    logUiEvent('devtools.audit_config', { eventId: id, enabled, scope: 'single' });
     setAuditEventEnabled(id, enabled);
     refresh();
   };
 
   const toggleModule = (module: string, enable: boolean) => {
+    logUiEvent('devtools.audit_config', { module, enabled: enable, scope: 'group' });
     AUDIT_EVENT_DEFS.filter(d => d.module === module).forEach(d => setAuditEventEnabled(d.id, enable));
     refresh();
   };
 
   const toggleAll = (enable: boolean) => {
+    logUiEvent('devtools.audit_config', { enabled: enable, scope: 'all' });
     AUDIT_EVENT_DEFS.forEach(d => setAuditEventEnabled(d.id, enable));
     refresh();
   };

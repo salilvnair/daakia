@@ -4,15 +4,16 @@
  * Shows: matched handler, extracted variables, response payload, and protocol badges.
  */
 import { useState, useRef, useEffect } from 'react';
-import { TabView, TextInputView, IconButtonView, type TabItem } from '@salilvnair/dui';
+import { PilledTabView, TextInputView, IconButtonView, ChipView, CopyButtonView, type PilledTab } from '@salilvnair/dui';
+import { logUiEvent } from '../../store/ui-audit-store';
 import {
   ArrowDownLeftIcon, ArrowUpRightIcon, InfoCircleIcon, TrashIcon,
-  AutoScrollIcon, CopyIcon, CheckIcon,
+  AutoScrollIcon,
 } from '../../icons';
 import type { MockLogEntry } from './mock-types';
 import { JsonTreeViewer, tryParseJson } from '../shared/display/JsonTreeViewer';
 
-const DIR_TABS: TabItem[] = [
+const DIR_TABS: PilledTab[] = [
   { id: 'all', label: 'All' },
   { id: 'incoming', label: 'Incoming' },
   { id: 'outgoing', label: 'Outgoing' },
@@ -86,26 +87,26 @@ export function ProtocolTrafficInspector({ logs, onClear }: Props) {
 
         {/* Protocol filter chips */}
         <div className="flex items-center gap-1 flex-wrap">
-          <FilterChip label="All" active={filterProto === 'all'} onClick={() => setFilterProto('all')} />
+          <ChipView label="All" active={filterProto === 'all'} color="var(--color-mock-server)" size="xs" onClick={() => { logUiEvent('mock.traffic_filter', { proto: 'all' }); setFilterProto('all'); }} />
           {presentProtocols.map(p => (
-            <FilterChip
+            <ChipView
               key={p}
               label={PROTOCOL_BADGE[p]?.label ?? p.toUpperCase()}
               active={filterProto === p}
-              onClick={() => setFilterProto(filterProto === p ? 'all' : p)}
-              color={PROTOCOL_BADGE[p]?.color}
+              color={PROTOCOL_BADGE[p]?.color ?? 'var(--color-mock-server)'}
+              size="xs"
+              onClick={() => { const next = filterProto === p ? 'all' : p; logUiEvent('mock.traffic_filter', { proto: next }); setFilterProto(next); }}
             />
           ))}
         </div>
 
-        {/* Direction filter — picker (iOS segmented control) */}
-        <TabView
+        {/* Direction filter */}
+        <PilledTabView
           tabs={DIR_TABS}
-          activeTab={filterDir}
-          onChange={(id) => setFilterDir(id as FilterDir)}
-          variant="picker"
-          size="xs"
+          activeId={filterDir}
+          onChange={(id) => { logUiEvent('mock.traffic_filter', { dir: id }); setFilterDir(id as FilterDir); }}
           accentColor="var(--color-mock-server)"
+          mode="rounded"
         />
 
         {/* Search */}
@@ -118,17 +119,17 @@ export function ProtocolTrafficInspector({ logs, onClear }: Props) {
         />
 
         <IconButtonView
-          size="xs"
+          size="default"
           icon={<AutoScrollIcon size={12} />}
           accentColor={autoScroll ? 'var(--color-mock-server)' : undefined}
           onClick={() => setAutoScroll(!autoScroll)}
           title="Auto-scroll"
         />
         <IconButtonView
-          size="xs"
+          size="default"
           icon={<TrashIcon size={12} />}
           accentColor="var(--color-error)"
-          onClick={onClear}
+          onClick={() => { logUiEvent('mock.traffic_clear'); onClear(); }}
           title="Clear traffic"
           disabled={protocolLogs.length === 0}
         />
@@ -303,22 +304,6 @@ function TrafficDetail({ entry }: { entry: MockLogEntry }) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function FilterChip({ label, active, onClick, color }: { label: string; active: boolean; onClick: () => void; color?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="h-[20px] px-2 rounded-full text-[10px] font-medium cursor-pointer transition-colors border"
-      style={{
-        borderColor: active ? (color ?? 'var(--color-mock-server)') : 'var(--color-surface-border)',
-        color: active ? (color ?? 'var(--color-mock-server)') : 'var(--color-text-muted)',
-        backgroundColor: active ? `color-mix(in srgb, ${color ?? 'var(--color-mock-server)'} 12%, transparent)` : 'transparent',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
 
 function InfoSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -335,36 +320,22 @@ function InfoSection({ label, children }: { label: string; children: React.React
 
 function PayloadViewer({ text }: { text: string }) {
   const [mode, setMode] = useState<'json' | 'raw'>('json');
-  const [copied, setCopied] = useState(false);
   const parsed = tryParseJson(text);
   const isJson = parsed !== null;
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
 
   return (
     <div>
       <div className="flex items-center gap-1 mb-1.5">
         {isJson && (
-          <TabView
-            tabs={[{ id: 'json', label: 'json' }, { id: 'raw', label: 'raw' }]}
-            activeTab={mode}
+          <PilledTabView
+            mode="rounded"
+            tabs={[{ id: 'json', label: 'json' }, { id: 'raw', label: 'raw' }] as PilledTab[]}
+            activeId={mode}
             onChange={(id) => setMode(id as 'json' | 'raw')}
-            variant="picker"
-            size="xs"
             accentColor="var(--color-mock-server)"
           />
         )}
-        <button
-          type="button"
-          onClick={handleCopy}
-          className={`ml-auto w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors ${copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
-        >
-          {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
-        </button>
+        <CopyButtonView text={text} size="sm" accentColor="var(--color-mock-server)" className="ml-auto" />
       </div>
       <div className="rounded bg-[var(--color-input-bg)] p-2 max-h-[200px] overflow-y-auto">
         {isJson && mode === 'json'

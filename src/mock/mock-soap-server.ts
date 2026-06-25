@@ -3,6 +3,8 @@
  * Supports SOAP 1.1 and 1.2, serves WSDL at ?wsdl endpoint.
  */
 import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as crypto from 'crypto';
 import type { MockServerConfig, MockLogEntry, SoapMockOperation } from './mock-types';
 
@@ -198,7 +200,31 @@ export function createSoapServer(
         let responseBody: string;
         let statusCode: number;
 
-        if (matched.responseType === 'fault') {
+        if (matched.responseType === 'file' && matched.bodyFile) {
+          // Serve a file as response (binary-safe)
+          const filePath = path.isAbsolute(matched.bodyFile) ? matched.bodyFile : path.join(process.cwd(), matched.bodyFile);
+          if (!fs.existsSync(filePath)) {
+            responseBody = soapFault('Server', `bodyFile not found: ${matched.bodyFile}`);
+            res.writeHead(500, { 'Content-Type': 'text/xml;charset=UTF-8' });
+            res.end(responseBody);
+          } else {
+            const fileBuffer = fs.readFileSync(filePath);
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeType = ext === '.xml' || ext === '.wsdl' ? 'text/xml;charset=UTF-8' : 'application/octet-stream';
+            const filename = path.basename(filePath);
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            res.writeHead(200, { 'Content-Type': mimeType });
+            res.end(fileBuffer);
+          }
+          onLog?.({
+            id: crypto.randomUUID(), timestamp: Date.now(), serverId: config.id,
+            direction: 'incoming', protocol: 'soap', method: 'POST',
+            path: url.pathname, statusCode: 200,
+            body: reqBody.slice(0, 500), responseBody: `[file: ${matched.bodyFile}]`,
+            duration: Date.now() - startTime, event: soapAction,
+          });
+          return;
+        } else if (matched.responseType === 'fault') {
           // Return a SOAP fault
           responseBody = soapFault(
             matched.faultCode || 'Server',

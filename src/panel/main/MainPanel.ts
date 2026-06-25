@@ -414,6 +414,20 @@ export class MainPanel {
       case 'mockServer:importSpec':
         handleImportMockSpec(msg, this._post);
         break;
+      case 'mockServer:pickBodyFile': {
+        const callbackId = msg.callbackId as string;
+        vscode.window.showOpenDialog({
+          canSelectMany: false,
+          canSelectFolders: false,
+          openLabel: 'Select file',
+          title: 'Select response body file',
+        }).then(uris => {
+          if (uris && uris.length > 0) {
+            this._post({ type: 'mockServer:bodyFilePicked', callbackId, filePath: uris[0].fsPath });
+          }
+        });
+        break;
+      }
 
       // ── State Machine Workflows ──
       case 'smWorkflow:getAll':

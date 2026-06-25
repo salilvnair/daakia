@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ContextMenu } from '../shared';
 import { MOCK_PROTOCOL_COLORS, getMockProtocolBg } from '../../colors';
 import { RenameIcon, PlayIcon, PauseIcon, TrashIcon, ServerIcon, MoreVerticalIcon, PlusIcon } from '../../icons';
+import { IconButtonView, TextInputView } from '@salilvnair/dui';
 import type { MockServer, MockServerProtocol } from './mock-types';
 
 interface ServerListProps {
@@ -33,23 +34,20 @@ export function ServerList({ servers, activeServerId, onSelect, onNew, onRename,
         </span>
         <div className="flex items-center gap-1">
           {servers.length > 0 && (
-            <button
-              type="button"
+            <IconButtonView
+              size="sm"
+              icon={<MoreVerticalIcon size={13} />}
               onClick={(e) => setHeaderMenu({ x: e.clientX, y: e.clientY })}
-              className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)] cursor-pointer transition-colors"
-              title="More options"
-            >
-              <MoreVerticalIcon size={14} />
-            </button>
+              tooltip="More options"
+            />
           )}
-          <button
-            type="button"
+          <IconButtonView
+            size="sm"
+            icon={<PlusIcon size={13} />}
             onClick={onNew}
-            className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-mock-server)] hover:bg-[rgba(234,179,8,0.08)] cursor-pointer transition-colors"
-            title="New mock server"
-          >
-            <PlusIcon size={14} />
-          </button>
+            accentColor="var(--color-mock-server)"
+            tooltip="New mock server"
+          />
         </div>
       </div>
 
@@ -70,8 +68,7 @@ export function ServerList({ servers, activeServerId, onSelect, onNew, onRename,
           >
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${server.running ? 'bg-[var(--color-success)] animate-pulse' : 'bg-[var(--color-muted-fallback)]'}`} />
             {renamingId === server.id ? (
-              <input
-                type="text"
+              <TextInputView
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onBlur={() => { onRename(server.id, renameValue.trim() || server.name); setRenamingId(null); }}
@@ -80,30 +77,31 @@ export function ServerList({ servers, activeServerId, onSelect, onNew, onRename,
                   if (e.key === 'Escape') setRenamingId(null);
                 }}
                 autoFocus
-                className="flex-1 min-w-0 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-primary)] rounded px-1 py-0 text-[var(--color-text-primary)] focus:outline-none"
-                style={{ padding: '1px 4px', height: 'auto', minHeight: 'unset' }}
-                onClick={(e) => e.stopPropagation()}
+                size="sm"
+                accentColor="var(--color-primary)"
+                className="flex-1 min-w-0"
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
               />
             ) : (
               <span className="truncate flex-1">{server.name}</span>
             )}
             <span
-              className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0"
+              className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md tracking-wider shrink-0"
               style={{ color: MOCK_PROTOCOL_COLORS[server.protocol || 'rest'], backgroundColor: getMockProtocolBg(server.protocol || 'rest') }}
             >
               {getProtocolBadge(server.protocol || 'rest')}
             </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEntryMenu({ x: e.clientX, y: e.clientY, server });
-              }}
-              className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)] cursor-pointer transition-all shrink-0"
-              title="More options"
-            >
-              <MoreVerticalIcon size={12} />
-            </button>
+            <span className="opacity-0 group-hover:opacity-100 transition-all shrink-0">
+              <IconButtonView
+                size="sm"
+                icon={<MoreVerticalIcon size={12} />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEntryMenu({ x: e.clientX, y: e.clientY, server });
+                }}
+                tooltip="More options"
+              />
+            </span>
           </div>
         ))}
       </div>

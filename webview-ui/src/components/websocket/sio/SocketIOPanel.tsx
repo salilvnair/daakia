@@ -28,6 +28,7 @@ import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
 import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 // ────────── Types ──────────
 
@@ -217,6 +218,7 @@ export function SocketIOPanel() {
     if (!activeTab) return;
     const url = activeTab.url.trim();
     if (!url) return;
+    logUiEvent('sio.connect', { url });
     setConnState('connecting');
     setError(null);
     postMsg({ type: 'socketio:connect', tabId: activeTab.id, url, namespace, headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [], authType: activeTab.authType, authData: activeTab.authData, envId: activeTab.envId });
@@ -224,16 +226,18 @@ export function SocketIOPanel() {
 
   const handleDisconnect = useCallback(() => {
     if (!activeTab) return;
+    logUiEvent('sio.disconnect');
     postMsg({ type: 'socketio:disconnect', tabId: activeTab.id });
   }, [activeTab]);
 
   const handleSend = useCallback(() => {
     if (!activeTab || connState !== 'connected' || !eventName.trim()) return;
+    logUiEvent('sio.emit', { event: eventName.trim() });
     postMsg({ type: 'socketio:emit', tabId: activeTab.id, event: eventName.trim(), data: eventData.trim() || undefined, envId: activeTab.envId });
     if (clearOnSend) { setEventName(''); setEventData(''); }
   }, [activeTab, connState, eventName, eventData, clearOnSend]);
 
-  const handleClearMessages = useCallback(() => setEvents([]), [setEvents]);
+  const handleClearMessages = useCallback(() => { logUiEvent('sio.clear'); setEvents([]); }, [setEvents]);
 
   // Splitter handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => { e.preventDefault(); (e.target as HTMLElement).setPointerCapture(e.pointerId); setIsDragging(true); }, []);

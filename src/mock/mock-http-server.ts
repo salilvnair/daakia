@@ -11,6 +11,8 @@
  * - Record & playback (6A.16)
  */
 import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vm from 'vm';
 import * as crypto from 'crypto';
 import type {
@@ -244,6 +246,36 @@ export function createHttpServer(
         let responseBody: string;
         let statusCode = route.statusCode;
         let responseHeaders = { ...route.headers };
+
+        // ── File response (bodySource === 'file') ────────────────────────────
+        if (route.bodySource === 'file' && route.bodyFile) {
+          const filePath = path.isAbsolute(route.bodyFile) ? route.bodyFile : path.join(process.cwd(), route.bodyFile);
+          if (!fs.existsSync(filePath)) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'File Not Found', message: `bodyFile not found: ${route.bodyFile}` }));
+            logRequest(onLog, config, method, pathname, 500, req.headers as Record<string, string>, queryParams, reqBody, 'bodyFile not found', Date.now() - startTime);
+            return;
+          }
+          const fileBuffer = fs.readFileSync(filePath);
+          // Always derive MIME from the actual file extension — never let a leftover inline
+          // Content-Type header (e.g. application/json) override a binary file type.
+          const mimeType = guessMimeFromExt(filePath);
+          const filename = path.basename(filePath);
+          res.setHeader('Content-Type', mimeType);
+          if (!responseHeaders['Content-Disposition'] && !responseHeaders['content-disposition']) {
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          }
+          // Apply remaining custom headers, skipping Content-Type (already set from file)
+          for (const [k, v] of Object.entries(responseHeaders)) {
+            if (k.toLowerCase() !== 'content-type') {
+              res.setHeader(k, resolveAll(v));
+            }
+          }
+          res.writeHead(statusCode);
+          res.end(fileBuffer);
+          logRequest(onLog, config, method, pathname, statusCode, req.headers as Record<string, string>, queryParams, reqBody, `[binary file: ${filename}]`, Date.now() - startTime, responseHeaders);
+          return;
+        }
 
         // Response sequences (6A.22)
         if (route.responses && route.responses.length > 0) {
@@ -524,6 +556,46 @@ function executeRouteScript(script: string, reqContext: {
   if (typeof result === 'string') return result;
   if (result === undefined || result === null) return '';
   return JSON.stringify(result);
+}
+
+// ─── MIME type helper ─────────────────────────────────────────────────────────
+
+function guessMimeFromExt(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const MIME_MAP: Record<string, string> = {
+    '.json': 'application/json',
+    '.xml': 'application/xml',
+    '.html': 'text/html',
+    '.htm': 'text/html',
+    '.txt': 'text/plain',
+    '.csv': 'text/csv',
+    '.js': 'application/javascript',
+    '.pdf': 'application/pdf',
+    '.zip': 'application/zip',
+    '.gz': 'application/gzip',
+    '.tar': 'application/x-tar',
+    '.7z': 'application/x-7z-compressed',
+    '.rar': 'application/x-rar-compressed',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.mp4': 'video/mp4',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.proto': 'text/plain',
+    '.wasm': 'application/wasm',
+  };
+  return MIME_MAP[ext] || 'application/octet-stream';
 }
 
 // ─── Logging helper ───────────────────────────────────────────────────────────

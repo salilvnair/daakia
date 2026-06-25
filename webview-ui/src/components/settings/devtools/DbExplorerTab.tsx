@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { postMsg } from '../../../vscode';
 import { CodeEditor } from '../../shared';
 import { RefreshIcon, TrashIcon, ChevronRightIcon, ServerIcon, CloseIcon } from '../../../icons';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 interface TableInfo { name: string; rowCount: number; columns: string[]; }
 
@@ -155,6 +156,7 @@ export function DbExplorerTab() {
   }, [rows, columns]);
 
   const selectTable = (name: string) => {
+    logUiEvent('devtools.db_query', { table: name });
     const tbl = tables.find(t => t.name === name);
     if (tbl) setColumns(tbl.columns);
     setActiveTable(name);

@@ -830,6 +830,20 @@ input[type="number"] {
   white-space: nowrap;
 }
 
+/* ─── Monaco editor — themed scrollbar matching Daakia's global style ─── */
+
+.dui-editor-shell .monaco-scrollable-element > .scrollbar > .slider {
+  background: color-mix(in srgb, var(--editor-accent, var(--color-accent)) 50%, transparent) !important;
+  border-radius: 99px !important;
+  transition: background 120ms !important;
+}
+.dui-editor-shell .monaco-scrollable-element > .scrollbar > .slider:hover {
+  background: color-mix(in srgb, var(--editor-accent, var(--color-accent)) 75%, transparent) !important;
+}
+.dui-editor-shell .monaco-scrollable-element > .scrollbar > .slider.active {
+  background: color-mix(in srgb, var(--editor-accent, var(--color-accent)) 90%, transparent) !important;
+}
+
 /* ─── Monaco Find/Replace Widget ─── */
 
 .monaco-editor .find-widget {

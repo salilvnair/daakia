@@ -22,6 +22,10 @@ export default defineConfig({
     assetsInlineLimit: 8192,
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
+      input: {
+        main:    resolve(__dirname, 'index.html'),
+        sidebar: resolve(__dirname, 'sidebar.html'),
+      },
       output: {
         manualChunks: {
           'monaco-editor': ['monaco-editor'],

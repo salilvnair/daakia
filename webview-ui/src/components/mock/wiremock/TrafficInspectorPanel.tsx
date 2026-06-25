@@ -97,7 +97,6 @@ function RecordingConfig({ server, onUpdate, onToggle }: {
         </div>
         <ButtonView
           size="md"
-          variant="ghost"
           accentColor={server.recordingMode ? 'var(--color-error)' : MOCK_ACCENT}
           onClick={onToggle}
         >
@@ -192,7 +191,6 @@ function TrafficLog({ recorded, onClear, onImport }: {
           {checked.size > 0 && onImport && (
             <ButtonView
               size="md"
-              variant="ghost"
               accentColor={MOCK_ACCENT}
               onClick={() => onImport(recorded.filter(r => checked.has(r.id)))}
             >

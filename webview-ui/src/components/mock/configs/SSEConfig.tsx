@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../../shared';
 import { SSE_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import type { SSEMockEvent } from '../mock-types';
 
 const SSE_SAMPLE_OPTIONS: SelectOption[] = [
@@ -44,6 +45,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
     if (!sampleId) return;
     const sample = SSE_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'sse' });
     setSelectedSample(sampleId);
     onUpdate({
       description: sample.description,
@@ -60,6 +62,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
   };
 
   const addEvent = () => {
+    logUiEvent('mock.cfg_add', { protocol: 'sse' });
     onUpdate({
       sseEvents: [...events, {
         id: crypto.randomUUID(),
@@ -124,7 +127,6 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
           />
           <ButtonView
             size="md"
-            variant="ghost"
             accentColor="var(--color-protocol-sse)"
             onClick={addEvent}
           >
@@ -132,7 +134,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
           </ButtonView>
           {events.length > 0 && (
             <IconButtonView
-              size="sm"
+              size="md"
               icon={<TrashIcon size={12} />}
               title="Delete All Events"
               accentColor="var(--color-error)"
@@ -258,6 +260,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
           confirmLabel="Delete All"
           danger
           onConfirm={() => {
+            logUiEvent('mock.cfg_clear', { count: events.length, protocol: 'sse' });
             onUpdate({ sseEvents: [] });
             setShowDeleteAll(false);
           }}

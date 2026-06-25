@@ -1,4 +1,6 @@
 import { useState, useEffect, type JSX } from 'react';
+import { ButtonView, TextInputView, ToggleSwitchView, TabView } from '@salilvnair/dui';
+import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, DocumentIcon, ChevronLeftIcon, ChevronRightIcon } from '../../icons';
 import { LlmProviderSettings } from './LlmProviderSettings';
@@ -156,23 +158,19 @@ function GeneralSettings() {
   return (
     <div className="flex flex-col h-full">
       {/* Subtab bar */}
-      <div className="border-b border-[var(--color-surface-border)] pt-3">
-        <div className="flex items-center gap-0 px-5">
-          {(['general', 'encoding', 'proxy'] as const).map(tab => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setSubtab(tab)}
-              className={`px-3 py-2 text-[12px] border-b-2 cursor-pointer transition-colors capitalize ${
-                subtab === tab
-                  ? 'border-[var(--color-settings)] text-[var(--color-settings)] font-medium'
-                  : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+      <div className="px-3 pt-2 pb-0 border-b border-[var(--color-surface-border)]">
+        <TabView
+          tabs={[
+            { id: 'general', label: 'General' },
+            { id: 'encoding', label: 'Encoding' },
+            { id: 'proxy', label: 'Proxy' },
+          ] as TabItem[]}
+          activeTab={subtab}
+          onChange={(t) => setSubtab(t as GeneralSubtab)}
+          variant="underline"
+          size="sm"
+          accentColor="var(--color-settings)"
+        />
       </div>
 
       {/* Content */}
@@ -245,11 +243,13 @@ function GeneralGeneralContent() {
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Request Timeout</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">Maximum time to wait for a response (ms)</p>
-        <input
+        <TextInputView
           type="number"
-          value={timeout}
+          value={String(timeout)}
           onChange={(e) => { const v = parseInt(e.target.value) || 0; setTimeout_(v); save({ timeout: v }); }}
-          className="w-[120px] h-[28px] px-2.5 py-1 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+          size="md"
+          accentColor="var(--color-settings)"
+          style={{ width: 120 }}
         />
       </div>
 
@@ -257,13 +257,13 @@ function GeneralGeneralContent() {
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Maximum History Entries</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">Older entries are automatically deleted when this limit is exceeded</p>
-        <input
+        <TextInputView
           type="number"
-          min={10}
-          max={10000}
-          value={maxHistoryEntries}
+          value={String(maxHistoryEntries)}
           onChange={(e) => { const v = Math.max(10, parseInt(e.target.value) || 500); setMaxHistoryEntries(v); save({ maxHistoryEntries: v }); }}
-          className="w-[120px] h-[28px] px-2.5 py-1 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+          size="md"
+          accentColor="var(--color-settings)"
+          style={{ width: 120 }}
         />
       </div>
 
@@ -271,13 +271,13 @@ function GeneralGeneralContent() {
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Maximum AI Chat Messages</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">Max messages retained in the Daakia AI conversation (oldest trimmed automatically)</p>
-        <input
+        <TextInputView
           type="number"
-          min={10}
-          max={2000}
-          value={maxAiChatMessages}
+          value={String(maxAiChatMessages)}
           onChange={(e) => { const v = Math.max(10, parseInt(e.target.value) || 200); setMaxAiChatMessages(v); save({ maxAiChatMessages: v }); }}
-          className="w-[120px] h-[28px] px-2.5 py-1 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+          size="md"
+          accentColor="var(--color-settings)"
+          style={{ width: 120 }}
         />
       </div>
     </div>
@@ -393,8 +393,6 @@ function ProxyContent() {
     postMsg({ type: 'saveSettings', settings: { proxy: proxySettings } });
   };
 
-  const inputCls = "w-full h-[28px] px-2.5 py-1 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]";
-
   return (
     <div className="flex flex-col gap-6">
       {/* Proxy Mode */}
@@ -441,24 +439,27 @@ function ProxyContent() {
             <div className="flex gap-2">
               <div className="flex-1">
                 <p className="text-[11px] text-[var(--color-text-muted)] mb-1">Proxy Host</p>
-                <input
-                  type="text"
+                <TextInputView
                   placeholder="proxy.company.com"
                   value={host}
-                  onChange={(e) => { setHost(e.target.value); }}
+                  onChange={(e) => setHost(e.target.value)}
                   onBlur={() => save()}
-                  className={inputCls}
+                  size="md"
+                  accentColor="var(--color-settings)"
+                  style={{ width: '100%' }}
                 />
               </div>
-              <div className="w-[80px]">
+              <div style={{ width: 80 }}>
                 <p className="text-[11px] text-[var(--color-text-muted)] mb-1">Port</p>
-                <input
+                <TextInputView
                   type="number"
                   placeholder="8080"
                   value={port}
-                  onChange={(e) => { setPort(e.target.value); }}
+                  onChange={(e) => setPort(e.target.value)}
                   onBlur={() => save()}
-                  className={inputCls}
+                  size="md"
+                  accentColor="var(--color-settings)"
+                  style={{ width: '100%' }}
                 />
               </div>
             </div>
@@ -467,34 +468,38 @@ function ProxyContent() {
           <div className="pl-3">
             <p className="text-[11px] text-[var(--color-text-muted)] mb-1">Authentication (optional)</p>
             <div className="flex gap-2">
-              <input
-                type="text"
+              <TextInputView
                 placeholder="Username"
                 value={username}
-                onChange={(e) => { setUsername(e.target.value); }}
+                onChange={(e) => setUsername(e.target.value)}
                 onBlur={() => save()}
-                className={inputCls + ' flex-1'}
+                size="md"
+                accentColor="var(--color-settings)"
+                style={{ flex: 1 }}
               />
-              <input
+              <TextInputView
                 type="password"
                 placeholder="Password"
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); }}
+                onChange={(e) => setPassword(e.target.value)}
                 onBlur={() => save()}
-                className={inputCls + ' flex-1'}
+                size="md"
+                accentColor="var(--color-settings)"
+                style={{ flex: 1 }}
               />
             </div>
           </div>
 
           <div className="pl-3">
             <p className="text-[11px] text-[var(--color-text-muted)] mb-1">Bypass List</p>
-            <input
-              type="text"
+            <TextInputView
               placeholder="localhost, 127.0.0.1, *.internal.com"
               value={bypass}
-              onChange={(e) => { setBypass(e.target.value); }}
+              onChange={(e) => setBypass(e.target.value)}
               onBlur={() => save()}
-              className={inputCls}
+              size="md"
+              accentColor="var(--color-settings)"
+              style={{ width: '100%' }}
             />
             <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Comma-separated hosts/patterns that bypass the proxy. Use * for wildcard.</p>
           </div>
@@ -513,17 +518,12 @@ function SettingToggle({ title, description, value, onChange }: { title: string;
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">{title}</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{description}</p>
       </div>
-      <button
-        type="button"
-        onClick={() => onChange(!value)}
-        className={`w-[36px] h-[20px] rounded-full cursor-pointer transition-colors flex-shrink-0 relative ${
-          value ? 'bg-[var(--color-settings)]' : 'bg-[rgba(255,255,255,0.15)]'
-        }`}
-      >
-        <span className={`absolute top-[2px] w-[16px] h-[16px] rounded-full bg-white transition-transform ${
-          value ? 'left-[18px]' : 'left-[2px]'
-        }`} />
-      </button>
+      <ToggleSwitchView
+        checked={value}
+        onChange={onChange}
+        accentColor="var(--color-settings)"
+        size="sm"
+      />
     </div>
   );
 }
@@ -566,7 +566,7 @@ function MockServerSettings() {
     <div className="flex flex-col h-full">
       <div className="border-b border-[var(--color-surface-border)] pt-3">
         <div className="flex items-center gap-0 px-5">
-          <span className="px-3 py-2 text-[12px] border-b-2 border-[var(--color-primary)] text-[var(--color-primary)] font-medium">
+          <span className="px-3 py-2 text-[12px] border-b-2 border-[var(--color-settings)] text-[var(--color-settings)] font-medium">
             Configuration
           </span>
         </div>
@@ -580,26 +580,31 @@ function MockServerSettings() {
               Mock servers will be assigned ports within this range. The extension auto-finds a free port.
             </p>
             <div className="flex items-center gap-2">
-              <input
+              <TextInputView
                 type="number"
-                value={portMin}
+                value={String(portMin)}
                 onChange={(e) => setPortMin(parseInt(e.target.value) || 8000)}
-                className="w-[100px] h-[28px] px-2.5 py-1 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+                size="md"
+                accentColor="var(--color-settings)"
+                style={{ width: 100 }}
               />
               <span className="text-[12px] text-[var(--color-text-muted)]">to</span>
-              <input
+              <TextInputView
                 type="number"
-                value={portMax}
+                value={String(portMax)}
                 onChange={(e) => setPortMax(parseInt(e.target.value) || 9000)}
-                className="w-[100px] h-[28px] px-2.5 py-1 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+                size="md"
+                accentColor="var(--color-settings)"
+                style={{ width: 100 }}
               />
-              <button
-                type="button"
+              <ButtonView
+                size="md"
+                variant="primary"
+                accentColor="var(--color-settings)"
                 onClick={handleSave}
-                className="ml-2 px-3 py-1 text-[11px] rounded-md bg-[var(--color-settings)] text-white hover:opacity-90 cursor-pointer transition-opacity"
               >
                 Save
-              </button>
+              </ButtonView>
               {saved && <span className="text-[11px] text-[var(--color-success)]">Saved!</span>}
             </div>
           </div>
@@ -727,21 +732,15 @@ function DevToolsSettingsPage() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Sub-tab bar */}
-      <div className="flex items-center gap-0.5 px-4 pt-3 pb-0 border-b border-[var(--color-surface-border)] shrink-0">
-        {DEVTOOLS_TABS.map(tab => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActive(tab.id)}
-            className={`h-[30px] px-3 text-[11px] font-medium rounded-t-md cursor-pointer transition-colors border-b-2 ${
-              active === tab.id
-                ? 'text-[var(--color-primary)] border-[var(--color-primary)] bg-[rgba(99,102,241,0.06)]'
-                : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="px-3 pt-2 pb-0 border-b border-[var(--color-surface-border)] shrink-0">
+        <TabView
+          tabs={DEVTOOLS_TABS as TabItem[]}
+          activeTab={active}
+          onChange={(t) => setActive(t as DevToolsSubtab)}
+          variant="underline"
+          size="sm"
+          accentColor="var(--color-settings)"
+        />
       </div>
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-hidden">

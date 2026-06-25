@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { RequestProgressOverlay } from '../shared';
@@ -10,9 +10,25 @@ import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { EditorView, CopyButtonView, TabView, type TabItem } from '@salilvnair/dui';
+import { WandIcon } from '../../icons';
+import { EditorView, CopyButtonView, TabView, IconButtonView, type TabItem } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
+
+function prettifyXml(xml: string): string {
+  const INDENT = '  ';
+  let depth = 0;
+  let result = '';
+  const tokens = xml.replace(/>\s*</g, '><').split(/(?<=>)(?=<)/);
+  for (const token of tokens) {
+    const isClosing = /^<\//.test(token);
+    const isSelfClosing = /\/>$/.test(token) || /^<!/.test(token) || /^<\?/.test(token);
+    if (isClosing) depth = Math.max(0, depth - 1);
+    result += INDENT.repeat(depth) + token.trim() + '\n';
+    if (!isClosing && !isSelfClosing && /^<[^/!?]/.test(token)) depth++;
+  }
+  return result.trimEnd();
+}
 
 const responseTabs: TabItem[] = [
   { id: 'body', label: 'Body' },
@@ -28,6 +44,9 @@ export function SoapResponsePanel() {
   const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const responseBody = activeTab?.response?.body ?? '';
+  const [displayBody, setDisplayBody] = useState(responseBody);
+  useEffect(() => { setDisplayBody(responseBody); }, [responseBody]);
 
   const setActiveSubTab = (tab: string) => {
     setActiveSubTabLocal(tab);
@@ -167,14 +186,24 @@ export function SoapResponsePanel() {
             )}
             <div className="flex items-center justify-between px-3 py-1 border-b border-[var(--color-surface-border)]">
               <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Response Body</span>
-              <CopyButtonView text={response.body || ''} accentColor="var(--color-success)" />
+              <div className="flex items-center gap-1">
+                <IconButtonView
+                  icon={<WandIcon size={12} />}
+                  size="sm"
+                  title="Prettify XML"
+                  onClick={() => {
+                    try { setDisplayBody(prettifyXml(displayBody)); } catch { /* malformed XML */ }
+                  }}
+                />
+                <CopyButtonView text={response.body || ''} accentColor="var(--color-success)" />
+              </div>
             </div>
             <div className="flex-1 min-h-0">
               <EditorView
-                value={response.body || ''}
+                value={displayBody}
+                onChange={setDisplayBody}
                 language="xml"
                 height="100%"
-                readOnly
               />
             </div>
           </>

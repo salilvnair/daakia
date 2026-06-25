@@ -338,6 +338,8 @@ export interface McpServerConfig {
   url?: string;            // HTTP: server URL
   envVars?: Record<string, string>; // Environment variables
   workingDir?: string;     // STDIO: working directory for spawned process
+  category?: string;       // 'database' | 'general' | 'docs' | 'code'
+  headers?: Record<string, string>; // HTTP: request headers
   enabled: boolean;
 }
 

@@ -366,7 +366,7 @@ export interface SoapMockOperation {
   service: string;
   operation: string;
   soapAction: string;
-  responseType: 'static' | 'script' | 'fault';
+  responseType: 'static' | 'script' | 'fault' | 'file';
   response: string;
   responseScript?: string;
   faultCode?: string;
@@ -374,6 +374,8 @@ export interface SoapMockOperation {
   delay: number;
   enabled: boolean;
   serviceEnabled?: boolean;
+  /** Absolute or relative path to a file to serve as response body */
+  bodyFile?: string;
   // Advanced matching + sequencing (shared with REST RouteCard)
   responses?: ResponseSequenceItem[];
   sequenceMode?: SequenceMode;

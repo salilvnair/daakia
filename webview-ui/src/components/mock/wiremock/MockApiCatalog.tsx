@@ -2,8 +2,7 @@
  * MockApiCatalog — protocol-aware pre-built template library (6A.26 + extensions).
  */
 import { useState } from 'react';
-import { TextInputView } from '@salilvnair/dui';
-import { PlusIcon } from '../../../icons';
+import { TextInputView, ChipView, ButtonView } from '@salilvnair/dui';
 import type { MockRoute } from '../mock-types';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
@@ -588,15 +587,15 @@ export function MockApiCatalog({ protocol = 'rest', onAddRoutes }: Props) {
       </div>
       <div className="flex items-center gap-1 flex-wrap">
         {categories.map(cat => (
-          <button key={cat} type="button" onClick={() => setCategory(cat)}
-            className="h-[22px] px-2.5 text-[10px] rounded-full cursor-pointer capitalize transition-colors"
-            style={{
-              background: category === cat ? `color-mix(in srgb, ${MOCK_ACCENT} 15%, transparent)` : 'rgba(255,255,255,0.04)',
-              border: `1px solid ${category === cat ? `color-mix(in srgb, ${MOCK_ACCENT} 30%, transparent)` : 'rgba(255,255,255,0.08)'}`,
-              color: category === cat ? MOCK_ACCENT : 'var(--color-text-muted)',
-            }}>
-            {cat}
-          </button>
+          <ChipView
+            key={cat}
+            label={cat}
+            color="var(--color-primary)"
+            size="xs"
+            active={category === cat}
+            onClick={() => setCategory(cat)}
+            className="capitalize cursor-pointer"
+          />
         ))}
       </div>
 
@@ -625,15 +624,16 @@ function CatalogCard({ entry, added, onAdd }: { entry: CatalogEntry; added: bool
           <p className="text-[12px] font-medium text-[var(--color-text-primary)]">{entry.name}</p>
           <p className="text-[9px] text-[var(--color-text-muted)] mt-0.5">{itemLabel} · {entry.category}</p>
         </div>
-        <button type="button" onClick={onAdd} disabled={added}
-          className="flex items-center gap-1 h-[22px] px-2 text-[10px] rounded cursor-pointer disabled:opacity-50 flex-shrink-0"
-          style={{
-            background: added ? 'rgba(34,197,94,0.12)' : `color-mix(in srgb, ${MOCK_ACCENT} 12%, transparent)`,
-            border: `1px solid ${added ? 'rgba(34,197,94,0.25)' : `color-mix(in srgb, ${MOCK_ACCENT} 25%, transparent)`}`,
-            color: added ? 'var(--color-success)' : MOCK_ACCENT,
-          }}>
-          {added ? '✓ Added' : <><PlusIcon size={9} /> Add</>}
-        </button>
+        <ButtonView
+          size="xs"
+          variant="accent"
+          accentColor={added ? 'var(--color-success)' : MOCK_ACCENT}
+          disabled={added}
+          onClick={onAdd}
+          className="flex-shrink-0"
+        >
+          {added ? '✓ Added' : '+ Add'}
+        </ButtonView>
       </div>
       <p className="text-[10px] text-[var(--color-text-muted)] opacity-70 leading-relaxed">{entry.description}</p>
       <div className="flex flex-wrap gap-1">

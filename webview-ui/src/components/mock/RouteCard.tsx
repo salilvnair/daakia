@@ -1,13 +1,15 @@
 /**
  * RouteCard — expandable route editor for REST mock server routes.
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ConfirmDialog } from '../shared';
-import { SelectInputView, EditorView, KeyValueTableView, DurationInputView, ResizablePanelView, TabView, TextInputView, IconButtonView } from '@salilvnair/dui';
-import type { TabItem, KeyValueTableRow, SelectOption } from '@salilvnair/dui';
+import { SelectInputView, EditorView, KeyValueTableView, DurationInputView, ResizablePanelView, TabView, TextInputView, IconButtonView, PilledTabView, ToggleSwitchView } from '@salilvnair/dui';
+import type { TabItem, KeyValueTableRow, SelectOption, PilledTab } from '@salilvnair/dui';
 import { METHOD_COLORS, methodBg } from '../../colors';
-import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern, ExternalLinkIcon } from '../../icons';
+import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern, ExternalLinkIcon, FolderOpenIcon } from '../../icons';
 import type { MockRoute, HttpMethod } from './mock-types';
+import { postMsg } from '../../vscode';
+import { logUiEvent } from '../../store/ui-audit-store';
 import { openRouteTryTab } from './mock-try-handler';
 import { MatchBuilderPanel } from './wiremock/MatchBuilderPanel';
 import { TemplateEditorPanel } from './wiremock/TemplateEditorPanel';
@@ -50,6 +52,19 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
   const [headersExpanded, setHeadersExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<RouteTab>('basic');
+
+  const pickBodyFile = useCallback(() => {
+    const callbackId = `route-${route.id}-${Date.now()}`;
+    const handler = (event: MessageEvent) => {
+      const d = event.data;
+      if (d?.type === 'mockServer:bodyFilePicked' && d.callbackId === callbackId) {
+        window.removeEventListener('message', handler);
+        if (d.filePath) onUpdate({ bodyFile: d.filePath });
+      }
+    };
+    window.addEventListener('message', handler);
+    postMsg({ type: 'mockServer:pickBodyFile', callbackId });
+  }, [route.id, onUpdate]);
 
   const copyFullPath = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -135,15 +150,14 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
 
       {/* Route summary row */}
       <div className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer group relative ${!route.enabled ? 'opacity-50' : ''}`} onClick={() => { if (route.enabled) onEdit(); }}>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onUpdate({ enabled: !route.enabled }); }}
-          className="relative z-20 w-[28px] h-[14px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-          style={{ backgroundColor: route.enabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-          title={route.enabled ? 'Disable' : 'Enable'}
-        >
-          <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: route.enabled ? '16px' : '2px' }} />
-        </button>
+        <div onClick={(e) => e.stopPropagation()} className="relative z-20 flex-shrink-0">
+          <ToggleSwitchView
+            checked={route.enabled}
+            onChange={(v) => { logUiEvent('mock.route_toggle', { enabled: v, routeId: route.id, method: route.method, path: route.path }); onUpdate({ enabled: v }); }}
+            accentColor="var(--color-success)"
+            size="xs"
+          />
+        </div>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md tracking-wider" style={{ color: METHOD_COLORS[route.method] || 'var(--color-muted-fallback)', backgroundColor: methodBg(route.method) }}>
           {route.method}
         </span>
@@ -226,7 +240,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
               <SelectInputView
                 options={MOCK_METHOD_OPTIONS}
                 value={route.method}
-                onChange={(v) => onUpdate({ method: v as HttpMethod })}
+                onChange={(v) => { logUiEvent('mock.route_method', { method: v, routeId: route.id }); onUpdate({ method: v as HttpMethod }); }}
                 size="md"
                 accentColor={METHOD_COLORS[route.method] || 'var(--color-primary)'}
               />
@@ -265,14 +279,15 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
 
             {/* Response Headers — collapsed by default, tight spacing */}
             <div className="pt-0.5">
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => setHeadersExpanded(!headersExpanded)}
                 className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
               >
                 <span className={`transition-transform text-[8px] ${headersExpanded ? 'rotate-90' : ''}`}>▶</span>
                 Response Headers ({Object.keys(route.headers).length})
-              </button>
+              </div>
               {headersExpanded && (
                 <div className="mt-1.5">
                   <KeyValueTableView
@@ -287,29 +302,62 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
               )}
             </div>
 
-            {/* Response Body */}
-            <div>
+            {/* Response Body Source toggle */}
+            <div className="flex items-center gap-3">
+              <label className="text-[11px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Body Source</label>
+              <PilledTabView
+                mode="pill"
+                tabs={[{ id: 'inline', label: 'inline' }, { id: 'file', label: 'file' }] as PilledTab[]}
+                activeId={route.bodySource ?? 'inline'}
+                onChange={(id) => onUpdate({ bodySource: id as 'inline' | 'file' })}
+                accentColor="var(--color-mock-server)"
+              />
+            </div>
+
+            {/* File path input when bodySource === 'file' */}
+            {route.bodySource === 'file' && (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5">
+                  <TextInputView
+                    value={route.bodyFile || ''}
+                    onChange={(e) => onUpdate({ bodyFile: e.target.value })}
+                    placeholder="Select a file or type its path…"
+                    size="md"
+                    className="font-mono flex-1"
+                    accentColor="var(--color-mock-server)"
+                  />
+                  <IconButtonView
+                    size="md"
+                    icon={<FolderOpenIcon size={14} />}
+                    onClick={pickBodyFile}
+                    tooltip="Browse file…"
+                    color="var(--color-mock-server)"
+                  />
+                </div>
+                <span className="text-[10px] text-[var(--color-text-muted)]">
+                  Supports any file type (ZIP, PDF, PNG, XML, …). Content-Type and Content-Disposition are auto-set from the file extension unless overridden in Response Headers above.
+                </span>
+              </div>
+            )}
+
+            {/* Response Body editor (only when inline) */}
+            {(route.bodySource ?? 'inline') === 'inline' && <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[11px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Response Body</label>
-                <div className="flex items-center gap-0.5 rounded-md border border-[var(--color-surface-border)] overflow-hidden">
-                  {(['application/json', 'application/xml', 'text/plain'] as const).map(ct => (
-                    <button
-                      key={ct}
-                      type="button"
-                      onClick={() => {
-                        setContentType(ct);
-                        onUpdate({ headers: { ...route.headers, 'Content-Type': ct } });
-                      }}
-                      className={`px-2.5 py-1 text-[10px] cursor-pointer transition-colors ${
-                        contentType === ct
-                          ? 'bg-[rgba(234,179,8,0.15)] text-[var(--color-mock-server)] font-medium'
-                          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]'
-                      }`}
-                    >
-                      {ct.split('/')[1]}
-                    </button>
-                  ))}
-                </div>
+                <PilledTabView
+                  mode="pill"
+                  tabs={[
+                    { id: 'application/json', label: 'json' },
+                    { id: 'application/xml', label: 'xml' },
+                    { id: 'text/plain', label: 'plain' },
+                  ] as PilledTab[]}
+                  activeId={contentType}
+                  onChange={(id) => {
+                    setContentType(id as 'application/json' | 'application/xml' | 'text/plain');
+                    onUpdate({ headers: { ...route.headers, 'Content-Type': id } });
+                  }}
+                  accentColor="var(--color-mock-server)"
+                />
               </div>
               <ResizablePanelView defaultHeight={120} minHeight={60} maxHeight={500}>
                 <EditorView
@@ -319,7 +367,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
                   height="100%"
                 />
               </ResizablePanelView>
-            </div>
+            </div>}
 
             {/* Template Editor (6A.7-6A.9) */}
             <TemplateEditorPanel route={route} onUpdate={onUpdate} />

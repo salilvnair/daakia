@@ -67,7 +67,6 @@ export function SequencePanel({ route, onUpdate }: Props) {
         </div>
         <ButtonView
           size="md"
-          variant="ghost"
           accentColor={MOCK_ACCENT}
           iconLeft={<PlusIcon size={12} />}
           onClick={e => { e.stopPropagation(); addResponse(); setExpanded(true); }}
@@ -122,7 +121,6 @@ export function SequencePanel({ route, onUpdate }: Props) {
               <div>
                 <ButtonView
                   size="md"
-                  variant="ghost"
                   accentColor={MOCK_ACCENT}
                   iconLeft={<PlusIcon size={9} />}
                   onClick={addResponse}

@@ -244,6 +244,7 @@ export function WebSocketPanel() {
 
   const handleSend = useCallback(() => {
     if (!activeTab || connState !== 'connected' || !inputMsg.trim()) return;
+    logUiEvent('ws.send', { url: activeTab.url });
     postMsg({
       type: 'ws:send',
       tabId: activeTab.id,
@@ -260,6 +261,7 @@ export function WebSocketPanel() {
   }, [activeTab, connState, inputMsg, clearOnSend]);
 
   const handleClearMessages = useCallback(() => {
+    logUiEvent('ws.clear');
     setMessages([]);
   }, [setMessages]);
 
@@ -503,7 +505,7 @@ export function WebSocketPanel() {
               activeTab={activeSubTab}
               onChange={(id) => setActiveSubTab(id as SubTab)}
               variant="underline"
-              size="sm"
+              size="md"
               accentColor={ACCENT}
             />
           </div>

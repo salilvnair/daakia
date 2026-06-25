@@ -8,6 +8,7 @@ import {
 } from '@salilvnair/dui';
 import { ChevronDownIcon, PlusIcon, TrashIcon } from '../../../icons';
 import type { MockRoute, WebhookConfig, HttpMethod } from '../mock-types';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
 
@@ -28,6 +29,7 @@ export function WebhookPanel({ route, onUpdate }: Props) {
   const webhooks = route.webhooks ?? [];
 
   const addWebhook = () => {
+    logUiEvent('mock.webhook_add');
     const w: WebhookConfig = {
       id: crypto.randomUUID(),
       url: 'https://example.com/callback',
@@ -47,6 +49,7 @@ export function WebhookPanel({ route, onUpdate }: Props) {
   };
 
   const remove = (idx: number) => {
+    logUiEvent('mock.webhook_del');
     onUpdate({ webhooks: webhooks.filter((_, i) => i !== idx) });
   };
 
@@ -69,7 +72,6 @@ export function WebhookPanel({ route, onUpdate }: Props) {
         </div>
         <ButtonView
           size="md"
-          variant="ghost"
           accentColor={MOCK_ACCENT}
           iconLeft={<PlusIcon size={12} />}
           onClick={e => { e.stopPropagation(); addWebhook(); setExpanded(true); }}
@@ -89,7 +91,6 @@ export function WebhookPanel({ route, onUpdate }: Props) {
               <div className="mt-2 flex justify-center">
                 <ButtonView
                   size="md"
-                  variant="secondary"
                   accentColor={MOCK_ACCENT}
                   iconLeft={<PlusIcon size={10} />}
                   onClick={addWebhook}

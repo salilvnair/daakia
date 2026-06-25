@@ -74,6 +74,7 @@ export function GraphQLUrlBar() {
   const isConnecting = activeTab.authData?.['gql_connected'] === 'connecting';
 
   const handleSave = () => {
+    logUiEvent('graphql.save', { url: activeTab.url });
     const saved = saveRequest(activeTab);
     if (saved) useTabsStore.getState().updateTab(activeTab.id, { dirty: false });
   };

@@ -4,10 +4,9 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import {
-  EditorView, ButtonView, IconButtonView, ToggleSwitchView, TabView,
-  type EditorLanguage, type TabItem,
+  EditorView, ButtonView, IconButtonView, ToggleSwitchView, PilledTabView,
+  type EditorLanguage, type PilledTab,
 } from '@salilvnair/dui';
-import { ChevronDownIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
 import type { MockRoute } from '../mock-types';
 
@@ -153,7 +152,7 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
   const pendingRequestId = useRef<string | null>(null);
   const editorLanguage: EditorLanguage = (FORMAT_LANGUAGE[format] as EditorLanguage) ?? 'plaintext';
 
-  const formatTabs: TabItem[] = cfg.formats.map(f => ({ id: f.id, label: f.label }));
+  const formatTabs: PilledTab[] = cfg.formats.map(f => ({ id: f.id, label: f.label }));
 
   // Listen for extension-host import results
   useEffect(() => {
@@ -216,12 +215,11 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
       {cfg.formats.length > 1 && (
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[var(--color-text-muted)]">Format</span>
-          <TabView
+          <PilledTabView
             tabs={formatTabs}
-            activeTab={format}
+            activeId={format}
             onChange={id => { setFormat(id as ImportFormat); setResult(null); setContractResult(null); }}
-            variant="picker"
-            size="xs"
+            mode="pill"
             accentColor={ACCENT}
           />
           {cfg.hasContractValidation && (
@@ -244,7 +242,6 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
           </label>
           <ButtonView
             size="sm"
-            variant="ghost"
             accentColor={ACCENT}
             onClick={() => fileRef.current?.click()}
           >
@@ -279,7 +276,6 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
         {contractMode && cfg.hasContractValidation && (
           <ButtonView
             size="md"
-            variant="ghost"
             accentColor="var(--color-warning)"
             disabled={!content.trim()}
             onClick={handleValidate}

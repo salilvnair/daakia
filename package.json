@@ -16,24 +16,10 @@
   },
   "changelog": "CHANGELOG.md",
   "categories": ["Testing", "Other", "Debuggers"],
-  "keywords": ["api", "rest", "http", "postman", "graphql", "soap", "grpc", "websocket", "mqtt", "mock", "collections", "openapi", "swagger", "ai", "mcp"],
+  "keywords": ["api", "rest", "http", "postman", "graphql", "soap", "grpc", "websocket", "mqtt", "mock", "collections", "openapi", "swagger", "ai", "mcp", "copilot"],
   "engines": {
     "vscode": "^1.99.0"
   },
-  "categories": [
-    "Testing",
-    "Other"
-  ],
-  "keywords": [
-    "api",
-    "rest",
-    "http",
-    "postman",
-    "soap",
-    "graphql",
-    "mock",
-    "copilot"
-  ],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {

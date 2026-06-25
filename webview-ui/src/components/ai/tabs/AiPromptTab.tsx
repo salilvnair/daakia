@@ -2,10 +2,13 @@ import { useCallback, useRef, useState } from 'react';
 import { useTabsStore, type AiImageAttachment } from '../../../store/tabs-store';
 import { TrashIcon } from '../../../icons';
 import { ConfirmDialog } from '../../shared';
+import { ButtonView, IconButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
+
+const ACCENT = 'var(--color-protocol-ai)';
 
 /**
- * AiPromptTab — System prompts + user prompt + image attachments (6D.22).
- * Supports image upload (file picker → base64) and image URL for multimodal prompts.
+ * AiPromptTab — System prompts + user prompt + image attachments.
+ * All inputs use DUI components for uniform styling.
  */
 export function AiPromptTab() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
@@ -42,7 +45,6 @@ export function AiPromptTab() {
     updateTab(activeTab.id, { aiUserPrompt: e.target.value, dirty: true });
   }, [activeTab, updateTab]);
 
-  // 6D.22 — Image upload: file → base64
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (!activeTab) return;
     const files = Array.from(e.target.files || []);
@@ -64,18 +66,16 @@ export function AiPromptTab() {
       };
       reader.readAsDataURL(file);
     });
-    // Reset file input so same file can be re-added
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [activeTab, updateTab]);
 
-  // 6D.22 — Add image by URL
   const handleAddImageUrl = useCallback(() => {
     if (!activeTab || !imageUrl.trim()) return;
     const attachment: AiImageAttachment = {
       id: crypto.randomUUID(),
       type: 'url',
       url: imageUrl.trim(),
-      mimeType: 'image/jpeg', // default; server will detect
+      mimeType: 'image/jpeg',
     };
     updateTab(activeTab.id, {
       aiImages: [...images, attachment],
@@ -100,13 +100,14 @@ export function AiPromptTab() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-[var(--color-text-muted)]">System Prompts</span>
-          <button
-            type="button"
+          <ButtonView
+            label="+ Add"
+            variant="ghost"
+            size="sm"
+            accentColor={ACCENT}
             onClick={handleAddSystem}
-            className="text-[11px] px-2 py-0.5 rounded bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-          >
-            + Add
-          </button>
+          />
+
         </div>
 
         {systemPrompts.map((prompt, idx) => (
@@ -117,22 +118,23 @@ export function AiPromptTab() {
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-[var(--color-text-muted)]">Prompt {idx + 1}</span>
               {systemPrompts.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setDeleteIdx(idx)}
-                  className="text-[var(--color-text-muted)] hover:text-[var(--color-error)] p-0.5 cursor-pointer transition-colors"
+                <IconButtonView
+                  icon={<TrashIcon size={12} />}
+                  size="sm"
+                  variant="ghost"
+                  accentColor="var(--color-error)"
                   title="Remove system prompt"
-                >
-                  <TrashIcon size={13} />
-                </button>
+                  onClick={() => setDeleteIdx(idx)}
+                />
               )}
             </div>
-            <textarea
+            <MultilineInputView
               value={prompt}
               onChange={(e) => handleSystemChange(idx, e.target.value)}
               placeholder="You are a helpful assistant..."
               rows={3}
-              className="w-full px-2.5 py-2 rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] resize-y font-mono"
+              size="md"
+              accentColor={ACCENT}
             />
           </div>
         ))}
@@ -142,26 +144,30 @@ export function AiPromptTab() {
       <div className="flex flex-col gap-2 flex-1 min-h-0">
         <span className="text-[11px] text-[var(--color-text-muted)]">User Prompt</span>
         <div className="flex flex-col flex-1 p-2.5 rounded-md border border-[var(--color-surface-border)] bg-[var(--color-surface-raised)]">
-          <textarea
+          <MultilineInputView
             value={userPrompt}
             onChange={handleUserPromptChange}
             placeholder="Enter user prompt here..."
-            className="flex-1 min-h-[60px] w-full px-2.5 py-2 rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] resize-y font-mono"
+            rows={5}
+            resize="vertical"
+            size="md"
+            accentColor={ACCENT}
+            className="flex-1"
           />
         </div>
       </div>
 
-      {/* 6D.22 — Image Attachments Section */}
+      {/* Image Attachments Section */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-[var(--color-text-muted)]">Images (multimodal)</span>
-          <button
-            type="button"
+          <ButtonView
+            label="+ Upload"
+            variant="ghost"
+            size="sm"
+            accentColor={ACCENT}
             onClick={() => fileInputRef.current?.click()}
-            className="text-[11px] px-2 py-0.5 rounded bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-          >
-            + Upload
-          </button>
+          />
         </div>
         <input
           ref={fileInputRef}
@@ -174,23 +180,23 @@ export function AiPromptTab() {
 
         {/* URL input row */}
         <div className="flex gap-1.5">
-          <input
-            type="text"
+          <TextInputView
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleAddImageUrl(); }}
             placeholder="Or paste an image URL..."
-            className="flex-1 px-2 py-1.5 rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+            size="sm"
+            className="flex-1"
+            accentColor={ACCENT}
           />
-          <button
-            type="button"
-            onClick={handleAddImageUrl}
+          <ButtonView
+            label="Add"
+            variant="secondary"
+            size="sm"
+            accentColor={ACCENT}
             disabled={!imageUrl.trim()}
-            className="px-2 py-1.5 rounded text-[11px] cursor-pointer disabled:opacity-40 transition-colors"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 15%, transparent)', color: 'var(--color-protocol-ai)' }}
-          >
-            Add
-          </button>
+            onClick={handleAddImageUrl}
+          />
         </div>
 
         {/* Image previews */}
@@ -202,7 +208,6 @@ export function AiPromptTab() {
                 className="flex items-center gap-2 p-2 rounded-md border"
                 style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-raised)' }}
               >
-                {/* Thumbnail */}
                 <div className="w-[40px] h-[40px] rounded overflow-hidden flex-shrink-0" style={{ backgroundColor: 'var(--color-panel)' }}>
                   {img.type === 'base64' && img.base64 ? (
                     <img src={img.base64} alt={img.filename || 'image'} className="w-full h-full object-cover" />
@@ -212,7 +217,6 @@ export function AiPromptTab() {
                     <div className="w-full h-full flex items-center justify-center text-[16px]">🖼️</div>
                   )}
                 </div>
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] truncate" style={{ color: 'var(--color-text-primary)' }}>
                     {img.filename || img.url || 'Image'}
@@ -221,15 +225,14 @@ export function AiPromptTab() {
                     {img.type === 'base64' ? `${img.mimeType || 'image'} · uploaded` : 'URL'}
                   </p>
                 </div>
-                {/* Remove */}
-                <button
-                  type="button"
-                  onClick={() => handleRemoveImage(img.id)}
-                  className="flex-shrink-0 p-0.5 cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
+                <IconButtonView
+                  icon={<TrashIcon size={12} />}
+                  size="sm"
+                  variant="ghost"
+                  accentColor="var(--color-error)"
                   title="Remove image"
-                >
-                  <TrashIcon size={12} />
-                </button>
+                  onClick={() => handleRemoveImage(img.id)}
+                />
               </div>
             ))}
           </div>

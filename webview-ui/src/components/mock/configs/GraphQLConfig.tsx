@@ -12,6 +12,7 @@ import { GRAPHQL_SAMPLES } from '../samples';
 import type { MockServer, MockRoute } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
 import type { GraphQLMockOperation } from '../mock-types';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import { SequencePanel } from '../wiremock/SequencePanel';
 import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
@@ -81,6 +82,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
     if (!sampleId) return;
     const sample = GRAPHQL_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'graphql' });
     setSelectedSample(sampleId);
     onUpdate({
       description: sample.description,
@@ -153,9 +155,10 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
           />
           <ButtonView
             size="md"
-            variant="ghost"
+            variant="accent"
             accentColor={GQL_COLOR}
             onClick={() => {
+              logUiEvent('mock.cfg_add', { protocol: 'graphql' });
               const ops = server.graphqlOperations || [];
               onUpdate({ graphqlOperations: [...ops, { id: crypto.randomUUID(), operationType: 'query', operationName: '', response: '{\n  "data": {}\n}', statusCode: 200, delay: 0, enabled: true }] });
             }}
@@ -164,7 +167,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
           </ButtonView>
           {(server.graphqlOperations || []).length > 0 && (
             <IconButtonView
-              size="sm"
+              size="md"
               icon={<TrashIcon size={12} />}
               accentColor="var(--color-error)"
               onClick={() => setShowDeleteAll(true)}
@@ -211,6 +214,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
           confirmLabel="Delete All"
           danger
           onConfirm={() => {
+            logUiEvent('mock.cfg_clear', { count: (server.graphqlOperations || []).length, protocol: 'graphql' });
             onUpdate({ graphqlOperations: [] });
             setShowDeleteAll(false);
           }}

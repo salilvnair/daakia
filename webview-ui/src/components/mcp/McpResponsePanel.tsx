@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { useTabsStore, type McpConversationEntry, type ResponseData } from '../../store/tabs-store';
 import { TrashIcon } from '../../icons';
 import { JsonTreeViewer } from '../shared/display/JsonTreeViewer';
+import { IconButtonView } from '@salilvnair/dui';
 import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
 import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
@@ -60,14 +61,13 @@ export function McpResponsePanel() {
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-panel)]">
         <span className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Activity Log</span>
         {conversation.length > 0 && (
-          <button
-            type="button"
-            onClick={handleClear}
-            className="h-[22px] w-[22px] flex items-center justify-center rounded hover:bg-[rgba(239,68,68,0.08)] text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-colors"
+          <IconButtonView
+            icon={<TrashIcon size={12} />}
+            size="sm"
             title="Clear log"
-          >
-            <TrashIcon size={12} />
-          </button>
+            accentColor="var(--color-error)"
+            onClick={handleClear}
+          />
         )}
       </div>
 
@@ -160,26 +160,20 @@ function McpLogEntry({ entry, typeColors, typeLabels }: { entry: McpConversation
           {/* Toggle buttons */}
           {hasJson && (
             <div className="flex items-center gap-0.5">
-              <button
-                onClick={() => setViewMode('raw')}
-                className={`px-2 py-0.5 text-[9px] font-medium rounded cursor-pointer transition-colors ${
-                  viewMode === 'raw'
-                    ? 'bg-[var(--color-input-bg)] text-[var(--color-text-primary)] border border-[var(--color-surface-border)]'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-                }`}
-              >
-                Raw
-              </button>
-              <button
-                onClick={() => setViewMode('json')}
-                className={`px-2 py-0.5 text-[9px] font-medium rounded cursor-pointer transition-colors ${
-                  viewMode === 'json'
-                    ? 'bg-[var(--color-input-bg)] text-[var(--color-text-primary)] border border-[var(--color-surface-border)]'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-                }`}
-              >
-                JSON
-              </button>
+              {(['raw', 'json'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  className="px-2 py-0.5 text-[9px] font-medium rounded cursor-pointer transition-colors"
+                  style={viewMode === mode
+                    ? { backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text-primary)', border: '1px solid var(--color-surface-border)' }
+                    : { color: 'var(--color-text-muted)' }
+                  }
+                >
+                  {mode.toUpperCase()}
+                </button>
+              ))}
             </div>
           )}
 

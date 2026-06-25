@@ -80,8 +80,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
           )}
         </div>
         <ButtonView
-          size="md"
-          variant="ghost"
+          size="sm"
           accentColor={MOCK_ACCENT}
           iconLeft={<PlusIcon size={12} />}
           onClick={e => { e.stopPropagation(); addState(); setExpanded(true); }}
@@ -115,7 +114,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">States</span>
-              <ButtonView size="md" variant="ghost" accentColor={MOCK_ACCENT} iconLeft={<PlusIcon size={9} />} onClick={addState}>
+              <ButtonView size="sm" accentColor={MOCK_ACCENT} iconLeft={<PlusIcon size={9} />} onClick={addState}>
                 Add
               </ButtonView>
             </div>
@@ -161,8 +160,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Transitions</span>
               <ButtonView
-                size="md"
-                variant="ghost"
+                size="sm"
                 accentColor={MOCK_ACCENT}
                 iconLeft={<PlusIcon size={9} />}
                 disabled={!hasMultipleStates}
@@ -276,8 +274,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
           )}
         </div>
         <ButtonView
-          size="xs"
-          variant="ghost"
+          size="sm"
           accentColor={ACCENT}
           iconLeft={<PlusIcon size={10} />}
           onClick={addEntry}
@@ -371,7 +368,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
                 {/* actions: body toggle + delete */}
                 <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
                   <IconButtonView
-                    size="xs"
+                    size="sm"
                     icon={<ChevronDownIcon size={10} />}
                     title="Response override"
                     accentColor={hasOverride ? ACCENT : 'rgba(255,255,255,0.3)'}
@@ -383,7 +380,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
                     onClick={() => toggleBody(entry.id)}
                   />
                   <IconButtonView
-                    size="xs"
+                    size="sm"
                     icon={<TrashIcon size={10} />}
                     accentColor="var(--color-error)"
                     title="Remove"

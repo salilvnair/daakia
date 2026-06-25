@@ -6,6 +6,7 @@ import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, StyledDropdown, ContextMenu, type ContextMenuItem, type ContextMenuSubItem, type DropdownOption } from '../shared';
 import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon } from '../../icons';
 import { IconButtonView, StateMachineIcon } from '@salilvnair/dui';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 interface TabContextMenuState {
   tabId: string;
@@ -152,6 +153,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
   const envOptions: DropdownOption[] = customEnvs.map(e => ({ value: e.id, label: e.name }));
 
   const handleClose = (tabId: string) => {
+    logUiEvent('tab.close', { tabId });
     const tab = tabs.find(t => t.id === tabId);
     // daakia-ai tabs have no save flow — never prompt for unsaved changes
     if (tab?.dirty && tab.type !== 'daakia-ai') {
@@ -264,7 +266,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
 
     switch (actionId) {
       case 'rename': startRename(tabId); setContextMenu(null); break;
-      case 'duplicate': duplicateTab(tabId); setContextMenu(null); break;
+      case 'duplicate': logUiEvent('tab.duplicate', { tabId }); duplicateTab(tabId); setContextMenu(null); break;
       case 'pin': pinTab(tabId); setContextMenu(null); break;
       case 'unpin': unpinTab(tabId); setContextMenu(null); break;
       case 'close': handleClose(tabId); setContextMenu(null); break;
@@ -544,7 +546,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           type="button"
           className="flex items-center justify-center w-9 h-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] cursor-pointer flex-shrink-0 transition-colors"
           style={{ color: requestAccentColor }}
-          onClick={() => addTab()}
+          onClick={() => { logUiEvent('tab.new'); addTab(); }}
           title="New Tab"
         >
           <PlusIcon size={16} />

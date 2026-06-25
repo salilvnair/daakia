@@ -2,12 +2,13 @@
  * MockServerPanel — orchestrator that composes ServerList + ServerDetail + MockLogPanel.
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ConfirmDialog, StyledDropdown } from '../shared';
+import { ConfirmDialog } from '../shared';
+import { ModalView, ButtonView, TextInputView, SelectInputView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { useMockStore } from '../../store/mock-store';
 import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
-import { MOCK_PROTOCOL_COLORS, getMockProtocolBg, getMockProtocolLabel } from '../../colors';
+import { MOCK_PROTOCOL_COLORS } from '../../colors';
 import { ServerIcon, WebSocketIcon, SSEIcon, SocketIOIcon, MQTTIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../icons';
 import { logUiEvent } from '../../store/ui-audit-store';
 import { ServerList } from './ServerList';
@@ -177,6 +178,7 @@ export function MockServerPanel() {
   const addServer = useCallback(() => {
     const name = newServerName.trim() || 'Untitled Mock Server';
     const server = createDefaultServer(name, newServerProtocol);
+    logUiEvent('mock.create', { name, protocol: newServerProtocol });
     setServers(prev => [...prev, server]);
     setActiveServerId(server.id);
     setShowNewDialog(false);
@@ -207,6 +209,7 @@ export function MockServerPanel() {
 
   const deleteServer = useCallback((id: string) => {
     const s = serversRef.current.find(x => x.id === id);
+    logUiEvent('mock.delete', { serverId: id, serverName: s?.name });
     if (s?.running) postMsg({ type: 'mockServer:stop', id });
     setServers(prev => prev.filter(x => x.id !== id));
     if (activeServerId === id) setActiveServerId(null);
@@ -214,6 +217,7 @@ export function MockServerPanel() {
   }, [activeServerId, persistConfigs]);
 
   const deleteAllServers = useCallback(() => {
+    logUiEvent('mock.delete_all', { count: serversRef.current.length });
     serversRef.current.forEach(s => { if (s.running) postMsg({ type: 'mockServer:stop', id: s.id }); });
     setServers([]);
     setActiveServerId(null);
@@ -266,6 +270,7 @@ export function MockServerPanel() {
   }, []);
 
   const addRoute = useCallback((serverId: string) => {
+    logUiEvent('mock.add_stub', { serverId });
     setServers(prev => prev.map(s => s.id === serverId ? { ...s, routes: [...s.routes, createDefaultRoute()] } : s));
     persistConfigs();
     const server = serversRef.current.find(s => s.id === serverId);
@@ -293,6 +298,7 @@ export function MockServerPanel() {
   }, [persistConfigs]);
 
   const deleteRoute = useCallback((serverId: string, routeId: string) => {
+    logUiEvent('mock.delete_stub', { serverId, routeId });
     setServers(prev => prev.map(s => s.id === serverId ? { ...s, routes: s.routes.filter(r => r.id !== routeId) } : s));
     persistConfigs();
     const server = serversRef.current.find(s => s.id === serverId);
@@ -363,13 +369,13 @@ export function MockServerPanel() {
       <div className="flex-1 flex flex-col items-center justify-center gap-4 text-[var(--color-text-muted)]">
         <ServerIcon size={56} className="opacity-20" strokeWidth={1.2} />
         <p className="text-[14px] text-[var(--color-text-muted)]">No mock servers found</p>
-        <button
-          type="button"
+        <ButtonView
+          size="md"
+          accentColor="var(--color-mock-server)"
           onClick={() => setShowNewDialog(true)}
-          className="mt-1 h-[30px] px-3 text-[12px] rounded-md bg-[var(--color-mock-server)] text-[#1a1a1a] font-medium hover:opacity-90 cursor-pointer transition-opacity"
         >
           + Create Mock Server
-        </button>
+        </ButtonView>
       </div>
     );
   }
@@ -385,7 +391,7 @@ export function MockServerPanel() {
         activeServerId={activeServerId}
         onSelect={setActiveServerId}
         onNew={() => setShowNewDialog(true)}
-        onRename={(id, name) => { updateServer(id, { name }); }}
+        onRename={(id, name) => { logUiEvent('mock.rename', { serverId: id, name }); updateServer(id, { name }); }}
         onToggleRunning={toggleRunning}
         onDelete={(server) => setDeleteConfirm({ id: server.id, name: server.name, running: server.running, port: server.port })}
         onDeleteAll={() => setDeleteAllConfirm(true)}
@@ -444,59 +450,52 @@ export function MockServerPanel() {
 
       {/* New Server Dialog */}
       {showNewDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-[var(--color-surface)] border border-[var(--color-surface-border)] rounded-lg shadow-xl p-5 w-[360px]">
-            <h3 className="text-[14px] font-semibold text-[var(--color-text-primary)] mb-3">Create Mock Server</h3>
-            <input
-              type="text"
+        <ModalView
+          open={showNewDialog}
+          onClose={() => { setShowNewDialog(false); setNewServerName(''); setNewServerProtocol('rest'); }}
+          title="Create Mock Server"
+          headerIcon={<ServerIcon size={14} style={{ color: 'var(--color-mock-server)' }} />}
+          size="sm"
+          footerLeft={
+            <SelectInputView
+              options={[
+                { value: 'rest',      label: 'REST',      icon: <ProtocolRestBadge size={14} />,                                              color: MOCK_PROTOCOL_COLORS.rest },
+                { value: 'graphql',   label: 'GraphQL',   icon: <ProtocolGraphQLBadge size={14} />,                                           color: MOCK_PROTOCOL_COLORS.graphql },
+                { value: 'websocket', label: 'WebSocket', icon: <WebSocketIcon size={12} style={{ color: MOCK_PROTOCOL_COLORS.websocket }} />, color: MOCK_PROTOCOL_COLORS.websocket },
+                { value: 'sse',       label: 'SSE',       icon: <SSEIcon size={12} style={{ color: MOCK_PROTOCOL_COLORS.sse }} />,             color: MOCK_PROTOCOL_COLORS.sse },
+                { value: 'socketio',  label: 'Socket.IO', icon: <SocketIOIcon size={12} style={{ color: MOCK_PROTOCOL_COLORS.socketio }} />,   color: MOCK_PROTOCOL_COLORS.socketio },
+                { value: 'mqtt',      label: 'MQTT',      icon: <MQTTIcon size={12} style={{ color: MOCK_PROTOCOL_COLORS.mqtt }} />,           color: MOCK_PROTOCOL_COLORS.mqtt },
+                { value: 'grpc',      label: 'gRPC',      icon: <ProtocolGrpcBadge size={14} />,                                              color: MOCK_PROTOCOL_COLORS.grpc },
+                { value: 'soap',      label: 'SOAP',      icon: <ProtocolSoapBadge size={14} />,                                              color: MOCK_PROTOCOL_COLORS.soap },
+                { value: 'ai',        label: 'AI',        icon: <ProtocolAiBadge size={14} />,                                                color: MOCK_PROTOCOL_COLORS.ai },
+                { value: 'mcp',       label: 'MCP',       icon: <ProtocolMcpBadge size={14} />,                                               color: MOCK_PROTOCOL_COLORS.mcp },
+              ]}
+              value={newServerProtocol}
+              onChange={(v) => setNewServerProtocol(v as MockServerProtocol)}
+              accentColor="var(--color-mock-server)"
+              size="md"
+              style={{ minWidth: 'max-content' }}
+            />
+          }
+          footerRight={
+            <ButtonView size="md" variant="primary" accentColor="var(--color-mock-server)" color="#1a1a1a" onClick={addServer}>
+              Create
+            </ButtonView>
+          }
+        >
+          <div className="px-4 py-0">
+            <TextInputView
               value={newServerName}
               onChange={(e) => setNewServerName(e.target.value)}
               placeholder="Mock server name"
+              size="lg"
               autoFocus
-              onKeyDown={(e) => { if (e.key === 'Enter') addServer(); if (e.key === 'Escape') { setShowNewDialog(false); setNewServerProtocol('rest'); } }}
-              className="w-full h-[32px] px-3 py-1 text-[13px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+              onKeyDown={(e) => { if (e.key === 'Enter') addServer(); }}
+              accentColor="var(--color-mock-server)"
+              style={{ width: '100%' }}
             />
-            <div className="flex items-end justify-between mt-3">
-              <div>
-                <label className="text-[11px] text-[var(--color-text-muted)] mb-1 block">Protocol</label>
-                <StyledDropdown
-                  options={[
-                    { value: 'rest', label: 'REST', icon: <ProtocolRestBadge size={14} />, color: MOCK_PROTOCOL_COLORS.rest },
-                    { value: 'graphql', label: 'GraphQL', icon: <ProtocolGraphQLBadge size={14} />, color: MOCK_PROTOCOL_COLORS.graphql },
-                    { value: 'websocket', label: 'WebSocket', icon: <WebSocketIcon size={12} style={{ color: MOCK_PROTOCOL_COLORS.websocket }} />, color: MOCK_PROTOCOL_COLORS.websocket },
-                    { value: 'sse', label: 'SSE', icon: <SSEIcon size={12} style={{ color: MOCK_PROTOCOL_COLORS.sse }} />, color: MOCK_PROTOCOL_COLORS.sse },
-                    { value: 'socketio', label: 'Socket.IO', icon: <SocketIOIcon size={12} style={{ color: MOCK_PROTOCOL_COLORS.socketio }} />, color: MOCK_PROTOCOL_COLORS.socketio },
-                    { value: 'mqtt', label: 'MQTT', icon: <MQTTIcon size={12} style={{ color: MOCK_PROTOCOL_COLORS.mqtt }} />, color: MOCK_PROTOCOL_COLORS.mqtt },
-                    { value: 'grpc', label: 'gRPC', icon: <ProtocolGrpcBadge size={14} />, color: MOCK_PROTOCOL_COLORS.grpc },
-                    { value: 'soap', label: 'SOAP', icon: <ProtocolSoapBadge size={14} />, color: MOCK_PROTOCOL_COLORS.soap },
-                    { value: 'ai', label: 'AI', icon: <ProtocolAiBadge size={14} />, color: MOCK_PROTOCOL_COLORS.ai },
-                    { value: 'mcp', label: 'MCP', icon: <ProtocolMcpBadge size={14} />, color: MOCK_PROTOCOL_COLORS.mcp },
-                  ]}
-                  value={newServerProtocol}
-                  onChange={(v) => setNewServerProtocol(v as MockServerProtocol)}
-                  size="sm"
-                  accentColor="var(--color-mock-server)"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowNewDialog(false); setNewServerName(''); setNewServerProtocol('rest'); }}
-                  className="px-3 py-1.5 text-[12px] rounded-md bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] text-[#f87171] hover:bg-[rgba(239,68,68,0.15)] cursor-pointer transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={addServer}
-                  className="h-[30px] px-3 text-[12px] rounded-md bg-[var(--color-mock-server)] text-[#1a1a1a] font-medium hover:opacity-90 cursor-pointer transition-opacity"
-                >
-                  Create
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
+        </ModalView>
       )}
 
       {/* Delete single server confirm */}

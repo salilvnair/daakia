@@ -243,7 +243,6 @@ function MatchRuleSection({ label, placeholder, rules, onChange }: MatchRuleSect
         <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">{label}</span>
         <ButtonView
           size="md"
-          variant="ghost"
           accentColor={MOCK_ACCENT}
           iconLeft={<PlusIcon size={9} />}
           onClick={addRule}
@@ -317,7 +316,6 @@ function BodyMatchSection({ route, onUpdate }: Props) {
         {!bm ? (
           <ButtonView
             size="md"
-            variant="ghost"
             accentColor={MOCK_ACCENT}
             iconLeft={<PlusIcon size={9} />}
             onClick={() => setBm({ matchType: 'equalToJson', value: '' })}
@@ -327,7 +325,6 @@ function BodyMatchSection({ route, onUpdate }: Props) {
         ) : (
           <ButtonView
             size="md"
-            variant="ghost"
             accentColor="var(--color-error)"
             onClick={() => setBm(null)}
           >

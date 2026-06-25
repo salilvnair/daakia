@@ -7,7 +7,7 @@
  *   • "Add Custom Scenario" — opens a new draft card; Save/Cancel to commit.
  */
 import { useState, useCallback } from 'react';
-import { ButtonView, IconButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
+import { ButtonView, IconButtonView, TextInputView, MultilineInputView, ChipView } from '@salilvnair/dui';
 import type { MockServer, AiMockScenario } from '../mock-types';
 import { createDefaultAiScenario } from '../mock-types';
 import { PlusIcon, TrashIcon, SparkleIcon, CloseIcon } from '../../../icons';
@@ -23,7 +23,11 @@ interface Props {
 }
 
 const AI_COLOR = 'var(--color-protocol-ai)';
-const CHIP_STYLE = { backgroundColor: 'rgba(168,85,247,0.25)', color: '#d8b4fe', border: '1px solid rgba(168,85,247,0.55)' };
+const CHIP_STYLE: React.CSSProperties = {
+  background: 'color-mix(in srgb, var(--color-protocol-ai) 15%, transparent)',
+  color: 'var(--color-protocol-ai)',
+  border: '1px solid color-mix(in srgb, var(--color-protocol-ai) 30%, transparent)',
+};
 
 // ─── Compact built-in scenario metadata (display only) ───────────────────────
 // Full responses are served by the extension host's mock-ai-server.ts.
@@ -224,7 +228,6 @@ function CustomScenarioCard({
           </ButtonView>
           <ButtonView
             size="md"
-            variant="ghost"
             onClick={onCancel}
           >
             Cancel
@@ -288,7 +291,6 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           {aiEnabled('mockIntelligence') && (
             <ButtonView
               size="md"
-              variant="ghost"
               accentColor={AI_COLOR}
               iconLeft={<SparkleIcon size={9} />}
               onClick={() => setShowMockIntelligence(true)}
@@ -300,7 +302,6 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           {aiEnabled('adaptiveMockLearning') && (
             <ButtonView
               size="md"
-              variant="ghost"
               accentColor={AI_COLOR}
               iconLeft={<SparkleIcon size={9} />}
               onClick={() => setShowAdaptiveLearning(true)}
@@ -312,7 +313,6 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           {aiEnabled('aiScenarioComposer') && (
             <ButtonView
               size="md"
-              variant="ghost"
               accentColor={AI_COLOR}
               iconLeft={<SparkleIcon size={9} />}
               onClick={() => setShowScenarioComposer(true)}
@@ -334,20 +334,15 @@ export function AiMockConfig({ server, onUpdate }: Props) {
         </div>
         <div className="flex flex-wrap gap-1.5">
           {BUILT_IN_META.map(meta => (
-            <button
+            <ChipView
               key={meta.name}
-              type="button"
+              label={meta.name}
+              color={AI_COLOR}
+              size="xs"
+              active={expandedBuiltIn === meta.name}
               onClick={() => toggleBuiltIn(meta.name)}
-              className="text-[9px] px-2 py-0.5 rounded font-mono cursor-pointer transition-all"
-              style={{
-                ...CHIP_STYLE,
-                opacity: expandedBuiltIn === meta.name ? 1 : 0.75,
-                fontWeight: expandedBuiltIn === meta.name ? 600 : 400,
-                boxShadow: expandedBuiltIn === meta.name ? '0 0 0 1px rgba(168,85,247,0.5)' : 'none',
-              }}
-            >
-              {meta.name}
-            </button>
+              className="font-mono"
+            />
           ))}
         </div>
 
@@ -369,23 +364,18 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           {scenarios.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {scenarios.map(s => (
-                <button
+                <ChipView
                   key={s.id}
-                  type="button"
+                  label={s.name || 'Untitled'}
+                  color={AI_COLOR}
+                  size="xs"
+                  active={editingId === s.id}
                   onClick={() => {
                     setEditingId(prev => (prev === s.id ? null : s.id));
                     setAddingNew(false);
                   }}
-                  className="text-[9px] px-2 py-0.5 rounded font-mono cursor-pointer transition-all"
-                  style={{
-                    ...CHIP_STYLE,
-                    opacity: editingId === s.id ? 1 : 0.75,
-                    fontWeight: editingId === s.id ? 600 : 400,
-                    boxShadow: editingId === s.id ? '0 0 0 1px rgba(168,85,247,0.5)' : 'none',
-                  }}
-                >
-                  {s.name || 'Untitled'}
-                </button>
+                  className="font-mono"
+                />
               ))}
             </div>
           )}
@@ -420,7 +410,6 @@ export function AiMockConfig({ server, onUpdate }: Props) {
         <div className="flex items-center gap-2">
           <ButtonView
             size="md"
-            variant="ghost"
             accentColor={AI_COLOR}
             iconLeft={<PlusIcon size={12} />}
             onClick={() => { setAddingNew(true); setEditingId(null); }}
@@ -430,7 +419,6 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           {scenarios.length > 0 && (
             <ButtonView
               size="md"
-              variant="ghost"
               accentColor="var(--color-error)"
               iconLeft={<TrashIcon size={11} />}
               onClick={() => setShowDeleteAll(true)}

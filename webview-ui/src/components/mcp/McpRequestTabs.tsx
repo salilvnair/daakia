@@ -7,33 +7,36 @@ import { McpToolsTab } from './tabs/McpToolsTab';
 import { McpResourcesTab } from './tabs/McpResourcesTab';
 import { McpPromptsTab } from './tabs/McpPromptsTab';
 import { McpArgsTab } from './tabs/McpArgsTab';
-import { McpEnvTab } from './tabs/McpEnvTab';
 import { McpSettingsTab } from './tabs/McpSettingsTab';
-import { McpAuthTab } from './tabs/McpAuthTab';
-import { McpConfigTab } from './tabs/McpConfigTab';
+import { McpEnvTab } from './tabs/McpEnvTab';
 import { McpCatalogTab } from './tabs/McpCatalogTab';
 import { McpServersTab } from './tabs/McpServersTab';
+import { McpConfigTab } from './tabs/McpConfigTab';
 
 const ACCENT = 'var(--color-protocol-mcp)';
 
-const TABS: TabItem[] = [
+const BASE_TABS: TabItem[] = [
   { id: 'servers', label: 'Servers' },
   { id: 'tools', label: 'Tools' },
   { id: 'resources', label: 'Resources' },
   { id: 'prompts', label: 'Prompts' },
   { id: 'args', label: 'Args' },
-  { id: 'env', label: 'Environment' },
-  { id: 'auth', label: 'Auth' },
-  { id: 'config', label: 'Config' },
+  { id: 'env', label: 'Env' },
   { id: 'catalog', label: 'Catalog' },
+  { id: 'config', label: 'Config' },
   { id: 'settings', label: 'Settings' },
 ];
 
 /**
- * McpRequestTabs — PillTabs switching between Tools, Resources, Prompts, Env, Settings.
+ * McpRequestTabs — sub-tab navigation for MCP protocol.
  */
 export function McpRequestTabs() {
   const activeTabId = useTabsStore(s => s.activeTabId);
+  const mcpEnvVars = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId)?.mcpEnvVars);
+  const envBadge = Object.keys(mcpEnvVars ?? {}).filter(k => k.trim()).length;
+  const tabs: TabItem[] = BASE_TABS.map(t =>
+    t.id === 'env' && envBadge > 0 ? { ...t, badge: envBadge } : t
+  );
   const storedSubTab = useUiStateStore(s => s.prefs[`mcp.subtab.${activeTabId}`]);
   const [activeTab, setActiveTabLocal] = useState(storedSubTab || 'tools');
 
@@ -52,11 +55,11 @@ export function McpRequestTabs() {
       {/* Tab header */}
       <div className="flex items-center px-3 pt-1.5 pb-0 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
         <TabView
-          tabs={TABS}
+          tabs={tabs}
           activeTab={activeTab}
           onChange={setActiveTab}
           variant="underline"
-          size="sm"
+          size="md"
           accentColor={ACCENT}
         />
       </div>
@@ -69,9 +72,8 @@ export function McpRequestTabs() {
         {activeTab === 'prompts' && <McpPromptsTab />}
         {activeTab === 'args' && <McpArgsTab />}
         {activeTab === 'env' && <McpEnvTab />}
-        {activeTab === 'auth' && <McpAuthTab />}
-        {activeTab === 'config' && <McpConfigTab />}
         {activeTab === 'catalog' && <McpCatalogTab />}
+        {activeTab === 'config' && <McpConfigTab />}
         {activeTab === 'settings' && <McpSettingsTab />}
       </div>
     </div>

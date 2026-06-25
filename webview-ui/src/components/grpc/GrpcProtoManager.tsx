@@ -77,7 +77,7 @@ export function GrpcProtoManager() {
   if (!activeTab) return null;
 
   return (
-    <div className="flex flex-col gap-3 p-3">
+    <div className="flex flex-col gap-3 px-4 py-3">
       <div className="flex items-center justify-between">
         <h4 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
           Proto Source

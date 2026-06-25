@@ -106,14 +106,14 @@ export function UrlBar() {
   const sendItems: ContextMenuItem[] = [
     { id: 'send-download', label: 'Send and Download', icon: <DownloadIcon size={13} />, onClick: handleSendAndDownload },
     { id: 'sep-1', label: '', separator: true },
-    { id: 'import-curl', label: 'Import cURL', icon: <CopyIcon size={13} />, onClick: () => setShowImportCurl(true) },
-    { id: 'show-code', label: 'Show code', icon: <CodeIcon size={13} />, onClick: () => setShowGenerateCode(true) },
+    { id: 'import-curl', label: 'Import cURL', icon: <CopyIcon size={13} />, onClick: () => { logUiEvent('rest.import_curl'); setShowImportCurl(true); } },
+    { id: 'show-code', label: 'Show code', icon: <CodeIcon size={13} />, onClick: () => { logUiEvent('rest.show_code'); setShowGenerateCode(true); } },
     { id: 'sep-2', label: '', separator: true },
     { id: 'clear-all', label: 'Clear all', icon: <RefreshIcon size={13} />, onClick: handleClearAll },
   ];
 
   const saveItems: ContextMenuItem[] = [
-    { id: 'save-as', label: 'Save as', icon: <SaveIcon size={13} />, onClick: () => postMsg({ type: 'openSaveAs', tabId: tab.id }) },
+    { id: 'save-as', label: 'Save as', icon: <SaveIcon size={13} />, onClick: () => { logUiEvent('rest.save_as'); postMsg({ type: 'openSaveAs', tabId: tab.id }); } },
   ];
 
   // Pre-flight internals for dropdown item color

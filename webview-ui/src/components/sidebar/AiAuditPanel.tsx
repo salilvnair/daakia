@@ -106,6 +106,21 @@ function prettifyStage(stage: string): string {
   return STAGE_LABEL_MAP[stage] ?? stage;
 }
 
+function stageColor(stage: string): string {
+  if (stage === 'DAAKIA_AI') return 'var(--color-protocol-ai)';
+  const prefix = stage.split('.')[0];
+  switch (prefix) {
+    case 'rest':       return 'var(--color-protocol-rest)';
+    case 'mock':       return 'var(--color-mock-server)';
+    case 'collection': return 'var(--color-info)';
+    case 'test':       return 'var(--color-success)';
+    case 'import':     return 'var(--color-warning)';
+    case 'agent':      return 'var(--color-protocol-ai)';
+    case 'data':       return 'var(--color-info)';
+    default:           return 'var(--color-protocol-ai)';
+  }
+}
+
 // ─── Copy button (labeled — used in detail view) ─────────────────────────────
 
 function CopyBtn({ text, label = 'Copy' }: { text: string; label?: string }) {
@@ -250,10 +265,10 @@ function EntryDetail({ entry, onBack }: { entry: CeAuditEntry; onBack: () => voi
           <span
             className="text-[10.5px] font-mono font-semibold px-1.5 py-0.5 rounded"
             style={{
-              color: hasError ? 'var(--color-error)' : 'var(--color-primary)',
+              color: hasError ? 'var(--color-error)' : stageColor(entry.stage),
               background: hasError
                 ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
-                : 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
+                : `color-mix(in srgb, ${stageColor(entry.stage)} 12%, transparent)`,
             }}
           >
             {prettifyStage(entry.stage)}
@@ -296,12 +311,12 @@ function EntryDetail({ entry, onBack }: { entry: CeAuditEntry; onBack: () => voi
             onClick={() => setActiveTab(t.id)}
             className="px-3 py-[7px] text-[11px] whitespace-nowrap cursor-pointer transition-colors border-b-[2px]"
             style={{
-              color: activeTab === t.id ? 'var(--color-primary)' : 'var(--color-text-muted)',
-              borderColor: activeTab === t.id ? 'var(--color-primary)' : 'transparent',
+              color: activeTab === t.id ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)',
+              borderColor: activeTab === t.id ? 'var(--color-protocol-ai)' : 'transparent',
               fontWeight: activeTab === t.id ? 600 : 400,
               background: 'none',
               border: 'none',
-              borderBottom: `2px solid ${activeTab === t.id ? 'var(--color-primary)' : 'transparent'}`,
+              borderBottom: `2px solid ${activeTab === t.id ? 'var(--color-protocol-ai)' : 'transparent'}`,
             }}
           >
             {t.label}
@@ -317,7 +332,7 @@ function EntryDetail({ entry, onBack }: { entry: CeAuditEntry; onBack: () => voi
               <div key={t.id}>
                 <div
                   className="text-[10px] font-semibold uppercase tracking-wider mb-2"
-                  style={{ color: 'var(--color-primary)' }}
+                  style={{ color: 'var(--color-protocol-ai)' }}
                 >
                   {t.label}
                 </div>
@@ -406,7 +421,7 @@ export function AiAuditPanel() {
         className="flex items-center gap-2 px-3 py-2.5 border-b flex-shrink-0"
         style={{ borderColor: 'var(--color-surface-border)', background: 'var(--color-panel)' }}
       >
-        <SparkleIcon size={14} style={{ color: 'var(--color-primary)' }} />
+        <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />
         <span className="text-[13px] font-medium text-[var(--color-text-primary)] flex-1">AI Audit</span>
         <span className="text-[11px] text-[var(--color-text-muted)]">{entries.length} records</span>
         <button
@@ -463,7 +478,7 @@ export function AiAuditPanel() {
                     checked={selected.size === entries.length && entries.length > 0}
                     ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < entries.length; }}
                     onChange={e => setSelected(e.target.checked ? new Set(entries.map(r => r.audit_id!)) : new Set())}
-                    style={{ cursor: 'pointer', accentColor: 'var(--color-primary)' }}
+                    style={{ cursor: 'pointer', accentColor: 'var(--color-protocol-ai)' }}
                   />
                 </th>
                 {['#', 'Stage', 'Model', 'Duration', 'Created At', ''].map(h => (
@@ -488,12 +503,12 @@ export function AiAuditPanel() {
                     style={{
                       borderBottom: '1px solid color-mix(in srgb, var(--color-surface-border) 50%, transparent)',
                       background: isChecked
-                        ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)'
+                        ? 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)'
                         : undefined,
                     }}
                     onClick={() => { setViewEntry(e); }}
                     onMouseEnter={ev => { if (!isChecked) (ev.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.025)'; }}
-                    onMouseLeave={ev => { (ev.currentTarget as HTMLElement).style.background = isChecked ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : ''; }}
+                    onMouseLeave={ev => { (ev.currentTarget as HTMLElement).style.background = isChecked ? 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' : ''; }}
                   >
                     <td className="px-2 py-1.5 w-8" onClick={ev => ev.stopPropagation()}>
                       <input
@@ -507,7 +522,7 @@ export function AiAuditPanel() {
                             return s;
                           });
                         }}
-                        style={{ cursor: 'pointer', accentColor: 'var(--color-primary)' }}
+                        style={{ cursor: 'pointer', accentColor: 'var(--color-protocol-ai)' }}
                       />
                     </td>
                     <td className="px-2 py-1.5" style={{ color: 'var(--color-text-muted)' }}>
@@ -517,10 +532,10 @@ export function AiAuditPanel() {
                       <span
                         className="font-mono font-semibold text-[10.5px] px-1.5 py-0.5 rounded"
                         style={{
-                          color: hasError ? 'var(--color-error)' : 'var(--color-primary)',
+                          color: hasError ? 'var(--color-error)' : stageColor(e.stage),
                           background: hasError
                             ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
-                            : 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
+                            : `color-mix(in srgb, ${stageColor(e.stage)} 12%, transparent)`,
                         }}
                       >
                         {prettifyStage(e.stage)}

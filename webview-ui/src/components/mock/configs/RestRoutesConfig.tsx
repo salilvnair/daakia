@@ -11,6 +11,7 @@ import { installSMRestWorkflow } from '../samples/sm-rest-workflows';
 import type { MockServer, MockRoute, ConnectedWorkflow } from '../mock-types';
 import { MockAiGenerateButton } from '../MockAiGeneratePopover';
 import { postMsg } from '../../../vscode';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 const REST_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
@@ -38,6 +39,7 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
     if (!sampleId) return;
     const sample = REST_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'rest' });
     setSelectedSample(sampleId);
     const routes: MockRoute[] = sample.routes.map(r => ({
       id: crypto.randomUUID(),
@@ -104,15 +106,15 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
           />
           <ButtonView
             size="md"
-            variant="ghost"
+            variant="accent"
             accentColor={REST_COLOR}
-            onClick={onAddRoute}
+            onClick={() => { logUiEvent('mock.cfg_add', { protocol: 'rest' }); onAddRoute(); }}
           >
             + Add Route
           </ButtonView>
           {server.routes.length > 0 && (
             <IconButtonView
-              size="sm"
+              size="md"
               icon={<TrashIcon size={12} />}
               title="Delete All Routes"
               accentColor="var(--color-error)"
@@ -142,6 +144,7 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
           confirmLabel="Delete All"
           danger
           onConfirm={() => {
+            logUiEvent('mock.cfg_clear', { count: server.routes.length, protocol: 'rest' });
             onUpdate({ routes: [] });
             setShowDeleteAll(false);
           }}

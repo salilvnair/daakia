@@ -8,6 +8,7 @@ import { EnvironmentModal } from '../../shared';
 import { TrashIcon, RenameIcon, CopyIcon, PlusIcon, MoreVerticalIcon, GlobeIcon, CheckCircleFilledIcon, FolderImportIcon, FolderExportIcon, SearchIcon, HelpCircleIcon } from '../../../icons';
 import { getProtocolAccent } from '../../../colors';
 import { IconButtonView, TextInputView, ContextMenuView, InfoPopupView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 export function EnvironmentsPanel() {
   const activeProtocol = useTabsStore(s => s.activeProtocol);
@@ -26,6 +27,7 @@ export function EnvironmentsPanel() {
   const addToast = useToastStore(s => s.addToast);
 
   const activateEnv = (envId: string | null) => {
+    logUiEvent('env.activate', { envId });
     setActiveEnvironment(envId);
     // Sync to the active tab's envId (Global is always merged, so tab gets null or a custom env)
     if (activeTabId) {
@@ -99,6 +101,7 @@ export function EnvironmentsPanel() {
   const customEnvs = filteredEnvironments.filter(env => env.id !== GLOBAL_ENV_ID && env.id !== createdEnvId);
 
   const openCreateModal = () => {
+    logUiEvent('env.create');
     setPrevActiveEnvId(activeEnvId);
     const newId = addEnvironment('New Environment');
     // Restore active env so the list doesn't deselect during editing
@@ -156,6 +159,7 @@ export function EnvironmentsPanel() {
 
   const confirmDeleteEnv = () => {
     if (showDeleteEnvConfirm) {
+      logUiEvent('env.delete', { envId: showDeleteEnvConfirm });
       removeEnvironment(showDeleteEnvConfirm);
       setShowDeleteEnvConfirm(null);
     }

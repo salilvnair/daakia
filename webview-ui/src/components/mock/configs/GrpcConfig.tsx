@@ -9,6 +9,7 @@ import { GRPC_SAMPLES } from '../samples/grpc';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import type { MockServer, GrpcMockMethod, MockRoute } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import { SequencePanel } from '../wiremock/SequencePanel';
 import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
@@ -128,12 +129,14 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
   };
 
   const addService = () => {
+    logUiEvent('mock.cfg_add', { type: 'service' });
     const svcName = `mypackage.NewService${serviceGroups.length + 1}`;
     update([...methods, { id: crypto.randomUUID(), service: svcName, method: 'MyMethod', type: 'unary', response: '{\n  "message": "Hello from gRPC mock"\n}', enabled: true, delay: 0, statusCode: 0, serviceEnabled: true }]);
     setExpandedServices(prev => new Set(prev).add(svcName));
   };
 
   const addMethodToService = (serviceName: string) => {
+    logUiEvent('mock.cfg_add', { type: 'method', service: serviceName });
     update([...methods, { id: crypto.randomUUID(), service: serviceName, method: 'NewMethod', type: 'unary', response: '{\n  "message": "Hello from gRPC mock"\n}', enabled: true, delay: 0, statusCode: 0, serviceEnabled: true }]);
   };
 
@@ -196,6 +199,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
   const loadSample = (sampleId: string) => {
     const sample = GRPC_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'grpc' });
     const newMethods: GrpcMethodRow[] = sample.methods.map(m => ({
       id: crypto.randomUUID(), service: m.service, method: m.method, type: m.type,
       response: m.response, enabled: true, delay: 0, statusCode: 0, serviceEnabled: true,
@@ -228,11 +232,11 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
             accentVar={ACCENT}
             onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <ButtonView size="md" variant="ghost" accentColor={ACCENT} onClick={addService}>
+          <ButtonView size="md" variant="accent" accentColor={ACCENT} onClick={addService}>
             + Add Service
           </ButtonView>
           {serviceGroups.length > 0 && (
-            <IconButtonView size="sm" icon={<TrashIcon size={12} />} accentColor="var(--color-error)" onClick={() => setShowDeleteAll(true)} title="Delete All Services" />
+            <IconButtonView size="md" icon={<TrashIcon size={12} />} accentColor="var(--color-error)" onClick={() => setShowDeleteAll(true)} title="Delete All Services" />
           )}
         </div>
       </div>
@@ -327,8 +331,8 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                     ))}
 
                     <ButtonView
-                      size="md"
-                      variant="ghost"
+                      size="sm"
+                      variant="accent"
                       accentColor={ACCENT}
                       onClick={() => addMethodToService(group.service)}
                     >
@@ -364,7 +368,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
           message={`Are you sure you want to delete all ${serviceGroups.length} service${serviceGroups.length !== 1 ? 's' : ''} and their methods? This cannot be undone.`}
           confirmLabel="Delete All"
           danger
-          onConfirm={() => { update([]); setShowDeleteAll(false); }}
+          onConfirm={() => { logUiEvent('mock.cfg_clear', { count: methods.length, protocol: 'grpc' }); update([]); setShowDeleteAll(false); }}
           onCancel={() => setShowDeleteAll(false)}
         />
       )}

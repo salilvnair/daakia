@@ -406,13 +406,19 @@ export async function handleExecuteRequest(
     }
 
     if (msg.downloadResponse) {
+      const dispositionFilename = parseContentDispositionFilename(result.response.headers['content-disposition'] || result.response.headers['Content-Disposition'] || '');
+      const ext = guessResponseExtension(result.response.contentType, dispositionFilename);
+      const defaultName = dispositionFilename || `response.${ext}`;
       const saveUri = await vscode.window.showSaveDialog({
         saveLabel: 'Save response',
-        defaultUri: vscode.Uri.file(`response.${guessResponseExtension(result.response.contentType)}`),
-        filters: buildResponseFilters(result.response.contentType),
+        defaultUri: vscode.Uri.file(defaultName),
+        filters: buildResponseFilters(result.response.contentType, ext),
       });
       if (saveUri) {
-        fs.writeFileSync(saveUri.fsPath, result.response.body, 'utf8');
+        const fileBuffer = result.response.bodyEncoding === 'base64'
+          ? Buffer.from(result.response.body, 'base64')
+          : Buffer.from(result.response.body, 'utf8');
+        fs.writeFileSync(saveUri.fsPath, fileBuffer);
         postMessage({ type: 'toast', toastType: 'success', message: `Response saved to ${path.basename(saveUri.fsPath)}` });
       }
     }
@@ -659,18 +665,56 @@ function persistScriptVarUpdates(
 
 // ────────────────── Response Helpers ──────────────────
 
-export function guessResponseExtension(contentType: string): string {
-  if (contentType.includes('json')) { return 'json'; }
-  if (contentType.includes('html')) { return 'html'; }
-  if (contentType.includes('xml')) { return 'xml'; }
-  if (contentType.includes('javascript')) { return 'js'; }
-  if (contentType.includes('csv')) { return 'csv'; }
-  if (contentType.includes('plain')) { return 'txt'; }
-  return 'txt';
+export function parseContentDispositionFilename(header: string): string {
+  if (!header) return '';
+  // filename*=UTF-8''encoded%20name.ext  (RFC 5987 extended notation)
+  const extMatch = header.match(/filename\*\s*=\s*(?:[^']*'')?([^;\s]+)/i);
+  if (extMatch) {
+    try { return decodeURIComponent(extMatch[1]); } catch { /* fall through */ }
+  }
+  // filename="name.ext" or filename=name.ext
+  const simpleMatch = header.match(/filename\s*=\s*"?([^";\r\n]+)"?/i);
+  if (simpleMatch) return simpleMatch[1].trim();
+  return '';
 }
 
-export function buildResponseFilters(contentType: string): Record<string, string[]> {
-  const ext = guessResponseExtension(contentType);
-  return { 'Response Files': [ext], 'All Files': ['*'] };
+export function guessResponseExtension(contentType: string, dispositionFilename?: string): string {
+  // If server gave us a filename, trust its extension
+  if (dispositionFilename) {
+    const dotIdx = dispositionFilename.lastIndexOf('.');
+    if (dotIdx >= 0) return dispositionFilename.slice(dotIdx + 1).toLowerCase();
+  }
+  const ct = contentType.toLowerCase().split(';')[0].trim();
+  if (ct.includes('json')) return 'json';
+  if (ct.includes('html')) return 'html';
+  if (ct === 'application/xml' || ct === 'text/xml' || ct.includes('soap+xml')) return 'xml';
+  if (ct.includes('javascript')) return 'js';
+  if (ct.includes('csv')) return 'csv';
+  if (ct === 'application/pdf') return 'pdf';
+  if (ct === 'application/zip' || ct === 'application/x-zip-compressed') return 'zip';
+  if (ct === 'application/gzip') return 'gz';
+  if (ct === 'application/x-tar') return 'tar';
+  if (ct === 'application/x-7z-compressed') return '7z';
+  if (ct === 'application/x-rar-compressed') return 'rar';
+  if (ct === 'application/msword') return 'doc';
+  if (ct === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
+  if (ct === 'application/vnd.ms-excel') return 'xls';
+  if (ct === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return 'xlsx';
+  if (ct === 'application/vnd.ms-powerpoint') return 'ppt';
+  if (ct === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') return 'pptx';
+  if (ct === 'image/png') return 'png';
+  if (ct === 'image/jpeg' || ct === 'image/jpg') return 'jpg';
+  if (ct === 'image/gif') return 'gif';
+  if (ct === 'image/webp') return 'webp';
+  if (ct === 'image/svg+xml') return 'svg';
+  if (ct.startsWith('image/')) return 'bin';
+  if (ct === 'application/octet-stream') return 'bin';
+  if (ct === 'text/plain') return 'txt';
+  return 'bin';
+}
+
+export function buildResponseFilters(contentType: string, ext?: string): Record<string, string[]> {
+  const resolvedExt = ext ?? guessResponseExtension(contentType);
+  return { 'Response Files': [resolvedExt], 'All Files': ['*'] };
 }
 

@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../../shared';
 import { MQTT_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import type { MQTTMockTopic } from '../mock-types';
 
 const MQTT_SAMPLE_OPTIONS: SelectOption[] = [
@@ -49,6 +50,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
     if (!sampleId) return;
     const sample = MQTT_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'mqtt' });
     setSelectedSample(sampleId);
     onUpdate({
       description: sample.description,
@@ -65,6 +67,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
   };
 
   const addTopic = () => {
+    logUiEvent('mock.cfg_add', { protocol: 'mqtt' });
     onUpdate({
       mqttTopics: [...topics, {
         id: crypto.randomUUID(),
@@ -130,7 +133,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
           />
           <ButtonView
             size="md"
-            variant="ghost"
+            variant="accent"
             accentColor="var(--color-protocol-mqtt)"
             onClick={addTopic}
           >
@@ -138,7 +141,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
           </ButtonView>
           {topics.length > 0 && (
             <IconButtonView
-              size="sm"
+              size="md"
               icon={<TrashIcon size={12} />}
               accentColor="var(--color-error)"
               onClick={() => setShowDeleteAll(true)}
@@ -262,7 +265,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
           message={`Are you sure you want to delete all ${topics.length} MQTT topics? This cannot be undone.`}
           confirmLabel="Delete All"
           danger
-          onConfirm={() => { onUpdate({ mqttTopics: [] }); setShowDeleteAll(false); }}
+          onConfirm={() => { logUiEvent('mock.cfg_clear', { count: topics.length, protocol: 'mqtt' }); onUpdate({ mqttTopics: [] }); setShowDeleteAll(false); }}
           onCancel={() => setShowDeleteAll(false)}
         />
       )}

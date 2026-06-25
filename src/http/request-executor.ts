@@ -60,6 +60,8 @@ export interface ExecuteResult {
     statusText: string;
     headers: Record<string, string>;
     body: string;
+    /** 'base64' when body is a binary response encoded as base64; 'utf8' for text responses */
+    bodyEncoding?: 'utf8' | 'base64';
     size: number;
     time: number;
     contentType: string;
@@ -227,8 +229,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     validateStatus: () => true, // Don't throw on non-2xx
     timeout: params.timeout || 0,
     maxRedirects: params.followRedirects === false ? 0 : 10,
-    responseType: 'text',
-    transformResponse: [(data) => data], // Keep raw
+    responseType: 'arraybuffer',
     proxy: proxyConfig as any,
     signal: controller.signal,
     ...(isHttps
@@ -241,7 +242,8 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     markTtfb(timedAgent);
     markDownloadEnd(timedAgent);
     const elapsed = Date.now() - startTime;
-    const body = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    // res.data is always a Buffer (arraybuffer responseType)
+    const rawBuffer: Buffer = Buffer.isBuffer(res.data) ? res.data : Buffer.from(res.data as ArrayBuffer);
     const responseHeaders: Record<string, string> = {};
     const rawSetCookies: string[] = [];
     for (const [k, v] of Object.entries(res.headers)) {
@@ -253,6 +255,12 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
       else if (Array.isArray(v)) responseHeaders[k] = v.join(', ');
     }
     const contentType = responseHeaders['content-type'] || 'text/plain';
+
+    // Determine if response is binary — base64 encode to preserve bytes; text stays UTF-8
+    const bodyEncoding = isBinaryContentType(contentType) ? 'base64' : 'utf8';
+    const body = bodyEncoding === 'base64'
+      ? rawBuffer.toString('base64')
+      : rawBuffer.toString('utf8');
 
     // Parse cookies from Set-Cookie headers
     const cookies: ResponseCookie[] = rawSetCookies.map(raw => {
@@ -288,7 +296,8 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
         statusText: res.statusText,
         headers: responseHeaders,
         body,
-        size: Buffer.byteLength(body, 'utf-8'),
+        bodyEncoding,
+        size: rawBuffer.length,
         time: elapsed,
         contentType,
         cookies,
@@ -430,3 +439,54 @@ function classifyNetworkError(err: AxiosError, url: string): { errorCode: string
     }
   }
 }
+
+/** Returns true for content types whose body should be base64-encoded (not decoded to UTF-8 string) */
+export function isBinaryContentType(contentType: string): boolean {
+  const ct = contentType.toLowerCase().split(';')[0].trim();
+  // Explicit text types — always UTF-8 string
+  if (
+    ct.startsWith('text/') ||
+    ct === 'application/json' ||
+    ct === 'application/xml' ||
+    ct === 'application/xhtml+xml' ||
+    ct === 'application/javascript' ||
+    ct === 'application/x-javascript' ||
+    ct === 'application/ld+json' ||
+    ct === 'application/atom+xml' ||
+    ct === 'application/rss+xml' ||
+    ct === 'application/soap+xml' ||
+    ct === 'application/x-www-form-urlencoded'
+  ) {
+    return false;
+  }
+  // Binary types
+  if (
+    ct.startsWith('image/') ||
+    ct.startsWith('audio/') ||
+    ct.startsWith('video/') ||
+    ct === 'application/octet-stream' ||
+    ct === 'application/pdf' ||
+    ct === 'application/zip' ||
+    ct === 'application/x-zip-compressed' ||
+    ct === 'application/gzip' ||
+    ct === 'application/x-tar' ||
+    ct === 'application/x-rar-compressed' ||
+    ct === 'application/x-7z-compressed' ||
+    ct === 'application/vnd.ms-excel' ||
+    ct === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    ct === 'application/vnd.ms-powerpoint' ||
+    ct === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    ct === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    ct === 'application/msword' ||
+    ct === 'application/x-protobuf' ||
+    ct === 'application/protobuf' ||
+    ct === 'font/woff' ||
+    ct === 'font/woff2' ||
+    ct === 'application/x-font-woff'
+  ) {
+    return true;
+  }
+  // Unknown types with no text subtype — treat as binary to be safe
+  return ct.startsWith('application/') && !ct.includes('json') && !ct.includes('xml') && !ct.includes('text');
+}
+

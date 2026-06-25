@@ -124,6 +124,7 @@ export function SoapUrlBar() {
 
   const handleSave = useCallback(() => {
     if (!activeTab) return;
+    logUiEvent('soap.save', { url: activeTab.url });
     const saved = saveRequest(activeTab);
     if (saved) updateTab(activeTab.id, { dirty: false });
   }, [activeTab, updateTab]);
@@ -160,7 +161,7 @@ export function SoapUrlBar() {
           iconLeft={<UploadIcon size={11} />}
           variant="secondary"
           size="lg"
-          onClick={() => setWsdlImportOpen(true)}
+          onClick={() => { logUiEvent('soap.import_wsdl'); setWsdlImportOpen(true); }}
           title="Import WSDL"
         />
 

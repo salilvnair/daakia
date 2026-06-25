@@ -13,6 +13,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ButtonView, IconButtonView, TextInputView, SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { PlusIcon, TrashIcon, CopyIcon, CheckIcon } from '../../icons';
 import type { StateMachineConfig, StateNode, StateTransition } from './mock-types';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 const ACCENT = 'var(--color-mock-server)';
 const SUCCESS = 'var(--color-success)';
@@ -153,6 +154,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
   };
 
   const doRemoveState = (id: string) => {
+    logUiEvent('mock.sm_del_state', { stateId: id });
     const remaining = cfg.states.filter(s => s.id !== id);
     setPositions(p => { const n = { ...p }; delete n[id]; return n; });
     onUpdate({
@@ -165,11 +167,13 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
   };
 
   const doRemoveTransition = (tid: string) => {
+    logUiEvent('mock.sm_del_trans', { transitionId: tid });
     onUpdate({ ...cfg, transitions: cfg.transitions.filter(t => t.id !== tid) });
     if (selectedEdge === tid) setSelectedEdge(null);
   };
 
   const addState = () => {
+    logUiEvent('mock.sm_add_state');
     const n = cfg.states.length + 1;
     const id = `state_${n}`;
     const pos = { x: 60 + ((n - 1) % 4) * 176, y: 80 + Math.floor((n - 1) / 4) * 130 };
@@ -214,6 +218,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
       if (connecting.fromId !== id) {
         const exists = cfg.transitions.some(t => t.from === connecting.fromId && t.to === id);
         if (!exists) {
+          logUiEvent('mock.sm_add_trans', { from: connecting.fromId, to: id });
           onUpdate({ ...cfg, transitions: [...cfg.transitions, { id: `tr_${Date.now()}`, from: connecting.fromId, to: id, triggeredByRouteId: '' }] });
         }
       }
@@ -261,6 +266,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
   };
 
   const exportJson = () => {
+    logUiEvent('mock.sm_export', { stateCount: cfg.states.length, transitionCount: cfg.transitions.length });
     navigator.clipboard.writeText(JSON.stringify(cfg, null, 2));
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
@@ -277,13 +283,12 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
         <span className="text-[10.5px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
           {cfg.states.length} states · {cfg.transitions.length} transitions
         </span>
-        <ButtonView size="md" variant="ghost" accentColor={ACCENT} iconLeft={<PlusIcon size={11} />} onClick={addState}>
+        <ButtonView size="md" accentColor={ACCENT} iconLeft={<PlusIcon size={11} />} onClick={addState}>
           Add State
         </ButtonView>
         <div className="ml-auto">
           <ButtonView
             size="md"
-            variant="ghost"
             iconLeft={copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
             onClick={exportJson}
             style={{ color: 'var(--color-text-muted)' }}
@@ -647,9 +652,8 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
               ) : (
                 <ButtonView
                   size="md"
-                  variant="ghost"
                   accentColor={SUCCESS}
-                  onClick={() => onUpdate({ ...cfg, initialState: selectedStateData.id })}
+                  onClick={() => { logUiEvent('mock.sm_initial', { stateId: selectedStateData.id }); onUpdate({ ...cfg, initialState: selectedStateData.id }); }}
                   style={{ width: '100%' }}
                 >
                   Set as Initial

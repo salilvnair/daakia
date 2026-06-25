@@ -2,8 +2,9 @@
  * ChaosPanel — Global chaos engineering dial for the entire mock server (6A.15).
  * Applies probabilistic fault injection to ALL routes globally.
  */
-import { SelectInputView, ToggleSwitchView, TextInputView, type SelectOption } from '@salilvnair/dui';
+import { SelectInputView, ToggleSwitchView, TextInputView, SliderView, ChipView, type SelectOption } from '@salilvnair/dui';
 import type { MockServer, FaultType } from '../mock-types';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 // HTTP-based protocols (REST, GraphQL, gRPC, SOAP)
 const HTTP_FAULT_OPTIONS: SelectOption[] = [
@@ -53,7 +54,7 @@ export function ChaosPanel({ server, onUpdate, protocol = 'rest' }: Props) {
   const defaultFault = getDefaultFault(protocol);
 
   const update = (patch: Partial<typeof chaos>) => {
-    onUpdate({ globalFault: { enabled: false, ...chaos, ...patch } });
+    onUpdate({ globalFault: { ...chaos, ...patch } });
   };
 
   const probability = Math.round((chaos.probability ?? 0.1) * 100);
@@ -76,7 +77,7 @@ export function ChaosPanel({ server, onUpdate, protocol = 'rest' }: Props) {
         </div>
         <ToggleSwitchView
           checked={chaos.enabled}
-          onChange={(v) => update({ enabled: v })}
+          onChange={(v) => { logUiEvent('mock.chaos_toggle', { enabled: v, protocol: server.protocol }); update({ enabled: v }); }}
           accentColor="var(--color-error)"
           size="xs"
         />
@@ -104,14 +105,12 @@ export function ChaosPanel({ server, onUpdate, protocol = 'rest' }: Props) {
               {probability}%
             </span>
           </div>
-          {/* range input — no DUI slider equivalent yet */}
-          <input
-            type="range"
+          <SliderView
             min={0} max={100} step={5}
             value={probability}
-            onChange={e => update({ probability: parseInt(e.target.value) / 100 })}
-            className="w-full cursor-pointer"
-            style={{ accentColor: probabilityColor(probability) }}
+            onChange={(v) => update({ probability: v / 100 })}
+            accentColor={probabilityColor(probability)}
+            width="100%"
           />
           <div className="flex justify-between text-[9px] text-[var(--color-text-muted)] opacity-50">
             <span>0% (safe)</span>
@@ -127,16 +126,14 @@ export function ChaosPanel({ server, onUpdate, protocol = 'rest' }: Props) {
             { label: 'Medium (25-50%)', range: [25, 50], desc: 'Noticeable failures' },
             { label: 'High (75-100%)', range: [75, 100], desc: 'Most requests fail' },
           ].map(preset => (
-            <button
+            <ChipView
               key={preset.label}
-              type="button"
+              label={preset.label}
+              color="var(--color-text-muted)"
+              size="xs"
+              active={false}
               onClick={() => update({ probability: preset.range[0] / 100 })}
-              title={preset.desc}
-              className="h-[22px] px-2 text-[9px] rounded-full cursor-pointer transition-colors"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--color-text-muted)' }}
-            >
-              {preset.label}
-            </button>
+            />
           ))}
         </div>
 
@@ -161,7 +158,7 @@ export function ChaosPanel({ server, onUpdate, protocol = 'rest' }: Props) {
 function GlobalRateLimitSection({ server, onUpdate }: Props) {
   const rl = server.globalRateLimit ?? { enabled: false, requestsPerWindow: 1000, windowMs: 60000 };
   const update = (patch: Partial<typeof rl>) => {
-    onUpdate({ globalRateLimit: { enabled: false, requestsPerWindow: 1000, windowMs: 60000, ...rl, ...patch } });
+    onUpdate({ globalRateLimit: { ...rl, ...patch } });
   };
 
   return (

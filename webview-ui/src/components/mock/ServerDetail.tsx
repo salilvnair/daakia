@@ -11,6 +11,7 @@ import type { MockServer, MockRoute } from './mock-types';
 import { openTryTab } from './mock-try-handler';
 import { RestRoutesConfig, GraphQLConfig, WebSocketConfig, SSEConfig, SocketIOConfig, MQTTConfig, GrpcConfig, SoapConfig, AiMockConfig, McpMockConfig } from './configs';
 import { postMsg } from '../../vscode';
+import { logUiEvent } from '../../store/ui-audit-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { TrafficInspectorPanel } from './wiremock/TrafficInspectorPanel';
@@ -104,12 +105,13 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
 
   const copyUrl = () => {
     if (!serverUrl) return;
+    logUiEvent('mock.url_copy', { serverId: server.id, protocol: server.protocol });
     navigator.clipboard.writeText(serverUrl);
     setUrlCopied(true);
     setTimeout(() => setUrlCopied(false), 1500);
   };
 
-  const handleTry = () => openTryTab(server, serverUrl);
+  const handleTry = () => { logUiEvent('mock.try', { serverId: server.id, protocol: server.protocol }); openTryTab(server, serverUrl); };
 
   const handleOpenSSO = () => {
     if (!server.running || !server.port) return;
@@ -224,6 +226,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
             tabs={serverTabs(server.protocol ?? 'rest') as TabItem[]}
             activeTab={serverTab}
             onChange={(id) => {
+              logUiEvent('mock.tab_switch', { tab: id, serverId: server.id });
               setServerTab(id as ServerTab);
             }}
             variant="underline"

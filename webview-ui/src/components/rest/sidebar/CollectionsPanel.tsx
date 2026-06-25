@@ -34,6 +34,7 @@ import { AiDocGeneratorModal } from '../../ai/AiDocGeneratorModal';
 import { AiSmartTestSuiteModal } from '../../ai/AiSmartTestSuiteModal';
 import { InsomniaImportModal } from '../../power/InsomniaImportModal';
 import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 // ────────────── Main Component ──────────────
 
@@ -325,6 +326,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const handleModalSave = (name: string) => {
     const id = crypto.randomUUID();
     if (modalMode === 'request') {
+      logUiEvent('collection.open', { name, collectionId: modalParentId });
       postCollMsg({
         type: 'saveRequestToCollection',
         collectionId: modalParentId,
@@ -349,6 +351,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       const { addTab } = useTabsStore.getState();
       addTab({ name, method: 'GET', url: '', collectionId: modalParentId ?? undefined, requestId: id });
     } else {
+      logUiEvent('collection.create', { name, parentId: modalParentId });
       postCollMsg({ type: 'createCollection', id, name, parentId: modalParentId });
       setExpandedIds(prev => new Set([...prev, id]));
     }
@@ -369,8 +372,10 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const confirmDelete = () => {
     if (!deleteTarget) return;
     if (deleteTarget.type === 'collection') {
+      logUiEvent('collection.delete', { id: deleteTarget.id });
       postCollMsg({ type: 'deleteCollection', id: deleteTarget.id });
     } else {
+      logUiEvent('collection.delete', { id: deleteTarget.id, type: 'request' });
       postCollMsg({ type: 'deleteRequestFromCollection', requestId: deleteTarget.id });
     }
     setDeleteTarget(null);

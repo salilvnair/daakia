@@ -40,7 +40,7 @@ export function AiMcpPromptBuilderModal({ onClose }: Props) {
     if (!activeTab || !description.trim() || loading) return;
     streamRef.current = ''; setResult(''); setError(''); setLoading(true);
     postMsg({
-      type: 'aiChat',
+      type: 'ai:send',
       tabId: activeTab.id,
       messages: [{
         role: 'user',

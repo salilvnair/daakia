@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PillTabs, type PillTab } from '../shared';
+import { TabView, type TabItem } from '@salilvnair/dui';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { AiPromptTab } from './tabs/AiPromptTab';
@@ -10,7 +10,7 @@ import { AiMcpTab } from './tabs/AiMcpTab';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
-const TABS: PillTab[] = [
+const TABS: TabItem[] = [
   { id: 'prompt', label: 'Prompt' },
   { id: 'auth', label: 'Authorization' },
   { id: 'tools', label: 'Tools' },
@@ -19,7 +19,7 @@ const TABS: PillTab[] = [
 ];
 
 /**
- * AiRequestTabs — PillTabs switching between Prompt, Authorization, Tools, MCP, Settings.
+ * AiRequestTabs — TabView switching between Prompt, Authorization, Tools, MCP, Settings.
  */
 export function AiRequestTabs() {
   const activeTabId = useTabsStore(s => s.activeTabId);
@@ -40,11 +40,11 @@ export function AiRequestTabs() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Tab header */}
       <div className="px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
-        <PillTabs
+        <TabView
           tabs={TABS}
           activeTab={activeTab}
           onChange={setActiveTab}
-          size="sm"
+          size="md"
           variant="underline"
           accentColor={ACCENT}
         />

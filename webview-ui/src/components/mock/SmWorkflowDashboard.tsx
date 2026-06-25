@@ -156,7 +156,7 @@ function WorkflowCard({ index, workflow, protocolColor, protocolLabel, onUnlink,
             </span>
             {onUnlink && (
               <IconButtonView
-                size="xs"
+                size="default"
                 icon={<DisconnectIcon size={10} />}
                 title="Unlink this workflow"
                 accentColor="var(--color-error)"
@@ -188,12 +188,13 @@ function WorkflowCard({ index, workflow, protocolColor, protocolLabel, onUnlink,
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)' }}>
               {stateCount}s · {totalNodes}n · {transitionCount}t
             </span>
-            <button
+            <ButtonView
+              size="md"
+              accentColor={protocolColor}
               onClick={() => onOpenEditor(workflow.workflowId)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 700, color: protocolColor, padding: 0, opacity: 0.8 }}
             >
               Open Editor →
-            </button>
+            </ButtonView>
           </div>
 
         </div>
@@ -229,7 +230,7 @@ function LegacySingleCard({ server, onOpenEditor, onUnlink }: Props) {
         onOpenEditor={onOpenEditor}
       />
       <div style={{ display: 'flex', gap: 6, paddingTop: 2 }}>
-        <ButtonView size="sm" variant="ghost" accentColor={protocolColor} onClick={() => (onConnectNew ?? onOpenEditor)()} style={{ flex: 1 }}>
+        <ButtonView size="md" accentColor={protocolColor} onClick={() => (onConnectNew ?? onOpenEditor)()} style={{ flex: 1 }}>
           + Connect Another Workflow
         </ButtonView>
       </div>
@@ -247,7 +248,7 @@ function EmptyState({ onOpenEditor }: { onOpenEditor: () => void }) {
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', maxWidth: 220 }}>
         Open the State Machine editor, design a flow, then right-click a workflow to connect it here.
       </div>
-      <ButtonView size="md" variant="ghost" accentColor={SM_AMBER} onClick={onOpenEditor}>
+      <ButtonView size="md" accentColor={SM_AMBER} onClick={onOpenEditor}>
         Open State Machine Editor
       </ButtonView>
     </div>
@@ -281,7 +282,7 @@ export function SmWorkflowDashboard({ server, onOpenEditor, onConnectNew, onUnli
 
         {/* action row */}
         <div style={{ display: 'flex', gap: 6, paddingTop: 2 }}>
-          <ButtonView size="sm" variant="ghost" accentColor={protocolColor} onClick={() => (onConnectNew ?? onOpenEditor)()} style={{ flex: 1 }}>
+          <ButtonView size="md" accentColor={protocolColor} onClick={() => (onConnectNew ?? onOpenEditor)()} style={{ flex: 1 }}>
             + Connect Another Workflow
           </ButtonView>
           <IconButtonView

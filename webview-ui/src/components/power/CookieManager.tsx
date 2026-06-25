@@ -3,10 +3,11 @@
  * Feature 6B.13 — Cookie manager
  */
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { CloseIcon, TrashIcon, PlusIcon, CopyIcon } from '../../icons';
+import { TrashIcon, PlusIcon, CopyIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
+import { ModalView, ButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 interface CookieEntry {
   id: string;
@@ -54,6 +55,8 @@ function toNetscapeCookies(cookies: CookieEntry[]): string {
   return lines.join('\n');
 }
 
+const ACCENT = 'var(--color-settings)';
+
 export function CookieManager({ onClose }: Props) {
   const [cookies, setCookies] = useState<CookieEntry[]>([]);
   const [filter, setFilter] = useState('');
@@ -63,7 +66,6 @@ export function CookieManager({ onClose }: Props) {
   const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
-    // Load cookies from extension host
     postMsg({ type: 'cookies:getAll' });
     const handler = (evt: MessageEvent) => {
       const msg = evt.data as Record<string, unknown>;
@@ -80,6 +82,7 @@ export function CookieManager({ onClose }: Props) {
   );
 
   const addCookie = () => {
+    logUiEvent('settings.cookie_add');
     const newCookie: CookieEntry = {
       id: `cookie-new-${Date.now()}`,
       domain: '', name: '', value: '', path: '/',
@@ -91,6 +94,7 @@ export function CookieManager({ onClose }: Props) {
 
   const deleteCookie = (id: string) => {
     const c = cookies.find(x => x.id === id);
+    logUiEvent('settings.cookie_del', { domain: c?.domain, name: c?.name });
     if (c) postMsg({ type: 'cookies:delete', domain: c.domain, name: c.name });
     setCookies(prev => prev.filter(x => x.id !== id));
     if (selected === id) setSelected(null);
@@ -125,43 +129,40 @@ export function CookieManager({ onClose }: Props) {
 
   const selectedCookie = cookies.find(c => c.id === selected);
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[780px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: '#1a1a1f', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Cookie Manager</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">{cookies.length} cookies across all domains</p>
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={exportCookies}
-              className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded border cursor-pointer"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-              <CopyIcon size={10} />Export
-            </button>
-            <button type="button" onClick={() => setShowImport(true)}
-              className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded border cursor-pointer"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-              Import
-            </button>
-            <button type="button" onClick={addCookie}
-              className="flex items-center gap-1 h-[26px] px-2.5 text-[11px] rounded cursor-pointer text-white"
-              style={{ backgroundColor: 'var(--color-success)' }}>
-              <PlusIcon size={10} />Add
-            </button>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      title="Cookie Manager"
+      subtitle={`${cookies.length} cookies across all domains`}
+      headerColor={ACCENT}
+      size="lg"
+      onClose={onClose}
+      footerLeft={
+        <div className="flex items-center gap-2">
+          <ButtonView size="sm" accentColor="var(--color-text-muted)" iconLeft={<CopyIcon size={10} />} onClick={exportCookies}>
+            Export
+          </ButtonView>
+          <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={() => setShowImport(true)}>
+            Import
+          </ButtonView>
         </div>
-
+      }
+      footerRight={
+        <ButtonView size="sm" variant="primary" accentColor={ACCENT} iconLeft={<PlusIcon size={10} />} onClick={addCookie}>
+          Add Cookie
+        </ButtonView>
+      }
+    >
+      <div className="flex flex-col" style={{ height: 480 }}>
+        {/* Filter bar */}
         <div className="px-4 py-2 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <input value={filter} onChange={e => setFilter(e.target.value)}
-            className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
+          <TextInputView
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
             placeholder="Filter by domain or name…"
-            style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
+            size="md"
+            accentColor={ACCENT}
+            style={{ width: '100%' }}
           />
         </div>
 
@@ -211,13 +212,14 @@ export function CookieManager({ onClose }: Props) {
                 ].map(({ label, field, type, placeholder }) => (
                   <div key={field}>
                     <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>{label}</label>
-                    <input
+                    <TextInputView
                       type={type}
                       value={(selectedCookie as unknown as Record<string, unknown>)[field] as string || ''}
                       onChange={e => updateCookie(selectedCookie.id, { [field]: e.target.value } as Partial<CookieEntry>)}
                       placeholder={placeholder}
-                      className="w-full h-[26px] px-2.5 rounded text-[11px] outline-none"
-                      style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
+                      size="md"
+                      accentColor={ACCENT}
+                      style={{ width: '100%' }}
                     />
                   </div>
                 ))}
@@ -234,52 +236,47 @@ export function CookieManager({ onClose }: Props) {
                   ))}
                 </div>
 
-                <button type="button" onClick={() => saveCookie(selectedCookie.id)}
-                  className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer text-white self-start"
-                  style={{ backgroundColor: 'var(--color-success)' }}>
+                <ButtonView
+                  size="md"
+                  variant="primary"
+                  accentColor={ACCENT}
+                  onClick={() => saveCookie(selectedCookie.id)}
+                >
                   Save Cookie
-                </button>
+                </ButtonView>
               </div>
             )}
           </div>
         </div>
 
-        {/* Import modal */}
+        {/* Import overlay */}
         {showImport && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10 rounded-xl">
             <div className="w-[480px] rounded-xl border p-5 flex flex-col gap-3"
-              style={{ backgroundColor: '#1a1a1f', borderColor: 'var(--color-surface-border)' }}>
+              style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
               <p className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Import Cookies</p>
               <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Paste Netscape format cookies (from browser devtools or curl --cookie-jar)</p>
-              <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={8}
-                className="w-full px-3 py-2 rounded text-[11px] font-mono resize-none outline-none"
+              <MultilineInputView
+                value={importText}
+                onChange={e => setImportText(e.target.value)}
+                rows={8}
+                size="md"
+                accentColor={ACCENT}
                 placeholder="# Netscape HTTP Cookie File&#10;.example.com TRUE / FALSE 0 session_id abc123"
-                style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
+                style={{ fontFamily: 'monospace', fontSize: 11, width: '100%' }}
+              />
               <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => { setShowImport(false); setImportText(''); }}
-                  className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer"
-                  style={{ color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
+                <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={() => { setShowImport(false); setImportText(''); }}>
                   Cancel
-                </button>
-                <button type="button" onClick={importCookies} disabled={!importText.trim()}
-                  className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer text-white disabled:opacity-40"
-                  style={{ backgroundColor: 'var(--color-info)' }}>
+                </ButtonView>
+                <ButtonView size="md" variant="primary" accentColor={ACCENT} disabled={!importText.trim()} onClick={importCookies}>
                   Import
-                </button>
+                </ButtonView>
               </div>
             </div>
           </div>
         )}
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <button type="button" onClick={onClose}
-            className="h-[26px] px-2.5 text-[11px] font-medium rounded cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
-        </div>
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

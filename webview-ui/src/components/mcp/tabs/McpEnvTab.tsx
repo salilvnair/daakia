@@ -1,53 +1,65 @@
-import { useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
-import { KeyValueTable, type KeyValueRow } from '../../shared';
+import { KeyValueTableView, type KeyValueTableRow } from '@salilvnair/dui';
+
+const ACCENT = 'var(--color-protocol-mcp)';
+
+function makeRow(): KeyValueTableRow {
+  return { id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true };
+}
+
+function envVarsToRows(env: Record<string, string>): KeyValueTableRow[] {
+  const entries = Object.entries(env);
+  if (entries.length === 0) return [makeRow()];
+  return entries.map(([key, value]) => ({
+    id: crypto.randomUUID(),
+    key,
+    value,
+    description: '',
+    enabled: true,
+  }));
+}
+
+function rowsToEnvVars(rows: KeyValueTableRow[]): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const r of rows) {
+    if (r.key.trim()) env[r.key.trim()] = r.value;
+  }
+  return env;
+}
 
 /**
- * McpEnvTab — Environment variables for the MCP STDIO process using KeyValueTable.
+ * McpEnvTab — STDIO process environment variables.
+ * Injected into the MCP server process at startup. Use for API keys, tokens, and secrets.
  */
 export function McpEnvTab() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
-  const envVars = activeTab?.mcpEnvVars || {};
 
-  // Convert Record<string,string> → KeyValueRow[]
-  const rows: KeyValueRow[] = useMemo(() => {
-    const entries = Object.entries(envVars);
-    const mapped: KeyValueRow[] = entries.map(([key, value]) => ({
-      id: key, // use key as ID since keys are unique
-      key,
-      value,
-      enabled: true,
-    }));
-    // Always have an empty row at the end for adding
-    if (mapped.length === 0 || mapped[mapped.length - 1].key !== '') {
-      mapped.push({ id: crypto.randomUUID(), key: '', value: '', enabled: true });
-    }
-    return mapped;
-  }, [envVars]);
+  const [rows, setRows] = useState<KeyValueTableRow[]>(() =>
+    envVarsToRows(activeTab?.mcpEnvVars || {})
+  );
 
-  // Convert KeyValueRow[] → Record<string,string>
-  const handleChange = useCallback((newRows: KeyValueRow[]) => {
+  const handleChange = useCallback((newRows: KeyValueTableRow[]) => {
     if (!activeTab) return;
-    const updated: Record<string, string> = {};
-    for (const row of newRows) {
-      if (row.key.trim()) {
-        updated[row.key.trim()] = row.value;
-      }
-    }
-    updateTab(activeTab.id, { mcpEnvVars: updated, dirty: true });
+    setRows(newRows);
+    updateTab(activeTab.id, { mcpEnvVars: rowsToEnvVars(newRows), dirty: true });
   }, [activeTab, updateTab]);
 
   if (!activeTab) return null;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] px-3 py-2">
-      <KeyValueTable
+    <div className="flex flex-col gap-1.5 px-4 py-3 overflow-auto">
+      <p className="text-[11px] text-[var(--color-text-muted)] opacity-70">
+        These env vars are injected into the STDIO process environment. Use them for API keys, tokens, and secrets.
+      </p>
+      <KeyValueTableView
         rows={rows}
         onChange={handleChange}
-        placeholder={{ key: 'VARIABLE_NAME', value: 'value' }}
-        label="Environment Variables"
-        accentColor="var(--color-protocol-mcp)"
+        label="Variable"
+        placeholder={{ key: 'VARIABLE_NAME', value: 'value (secret)' }}
+        maskSensitive
+        accentColor={ACCENT}
       />
     </div>
   );

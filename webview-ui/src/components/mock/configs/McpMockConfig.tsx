@@ -7,7 +7,7 @@
  *   • "Add Custom Tool" — opens a new draft card; Save/Cancel to commit.
  */
 import { useState, useCallback } from 'react';
-import { ButtonView, IconButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
+import { ButtonView, IconButtonView, TextInputView, MultilineInputView, ChipView } from '@salilvnair/dui';
 import type { MockServer, McpMockTool } from '../mock-types';
 import { createDefaultMcpTool } from '../mock-types';
 import { PlusIcon, TrashIcon, CloseIcon } from '../../../icons';
@@ -19,7 +19,11 @@ interface Props {
 }
 
 const MCP_COLOR = 'var(--color-protocol-mcp)';
-const CHIP_STYLE = { backgroundColor: 'rgba(99,102,241,0.12)', color: 'var(--color-protocol-mcp)', border: '1px solid rgba(99,102,241,0.22)' };
+const CHIP_STYLE: React.CSSProperties = {
+  background: 'color-mix(in srgb, var(--color-protocol-mcp) 15%, transparent)',
+  color: 'var(--color-protocol-mcp)',
+  border: '1px solid color-mix(in srgb, var(--color-protocol-mcp) 30%, transparent)',
+};
 
 // ─── Compact built-in tool metadata (display only) ────────────────────────────
 // Full responses are served by the extension host's mock-mcp-server.ts.
@@ -197,7 +201,6 @@ function CustomToolCard({
           </ButtonView>
           <ButtonView
             size="md"
-            variant="ghost"
             onClick={onCancel}
           >
             Cancel
@@ -277,20 +280,15 @@ export function McpMockConfig({ server, onUpdate }: Props) {
         </div>
         <div className="flex flex-wrap gap-1.5">
           {BUILT_IN_TOOL_META.map(meta => (
-            <button
+            <ChipView
               key={meta.name}
-              type="button"
+              label={meta.name}
+              color={MCP_COLOR}
+              size="xs"
+              active={expandedBuiltIn === meta.name}
               onClick={() => toggleBuiltIn(meta.name)}
-              className="text-[9px] px-2 py-0.5 rounded font-mono cursor-pointer transition-all"
-              style={{
-                ...CHIP_STYLE,
-                opacity: expandedBuiltIn === meta.name ? 1 : 0.75,
-                fontWeight: expandedBuiltIn === meta.name ? 600 : 400,
-                boxShadow: expandedBuiltIn === meta.name ? '0 0 0 1px rgba(99,102,241,0.5)' : 'none',
-              }}
-            >
-              {meta.name}
-            </button>
+              className="font-mono"
+            />
           ))}
         </div>
 
@@ -312,23 +310,18 @@ export function McpMockConfig({ server, onUpdate }: Props) {
           {tools.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {tools.map(t => (
-                <button
+                <ChipView
                   key={t.id}
-                  type="button"
+                  label={t.name || 'untitled_tool'}
+                  color={MCP_COLOR}
+                  size="xs"
+                  active={editingId === t.id}
                   onClick={() => {
                     setEditingId(prev => (prev === t.id ? null : t.id));
                     setAddingNew(false);
                   }}
-                  className="text-[9px] px-2 py-0.5 rounded font-mono cursor-pointer transition-all"
-                  style={{
-                    ...CHIP_STYLE,
-                    opacity: editingId === t.id ? 1 : 0.75,
-                    fontWeight: editingId === t.id ? 600 : 400,
-                    boxShadow: editingId === t.id ? '0 0 0 1px rgba(99,102,241,0.5)' : 'none',
-                  }}
-                >
-                  {t.name || 'untitled_tool'}
-                </button>
+                  className="font-mono"
+                />
               ))}
             </div>
           )}
@@ -363,7 +356,6 @@ export function McpMockConfig({ server, onUpdate }: Props) {
         <div className="flex items-center gap-1.5">
           <ButtonView
             size="md"
-            variant="ghost"
             accentColor={MCP_COLOR}
             iconLeft={<PlusIcon size={12} />}
             onClick={() => { setAddingNew(true); setEditingId(null); }}

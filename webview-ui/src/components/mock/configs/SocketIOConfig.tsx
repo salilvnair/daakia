@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../../shared';
 import { SOCKETIO_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import type { SocketIOMockHandler } from '../mock-types';
 
 const SOCKETIO_SAMPLE_OPTIONS: SelectOption[] = [
@@ -43,6 +44,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
     if (!sampleId) return;
     const sample = SOCKETIO_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'socketio' });
     setSelectedSample(sampleId);
     onUpdate({
       description: sample.description,
@@ -60,6 +62,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
   };
 
   const addHandler = () => {
+    logUiEvent('mock.cfg_add', { protocol: 'socketio' });
     onUpdate({
       socketioHandlers: [...handlers, {
         id: crypto.randomUUID(),
@@ -127,7 +130,6 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
           />
           <ButtonView
             size="md"
-            variant="ghost"
             accentColor="var(--color-protocol-socketio)"
             onClick={addHandler}
           >
@@ -135,7 +137,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
           </ButtonView>
           {handlers.length > 0 && (
             <IconButtonView
-              size="sm"
+              size="md"
               icon={<TrashIcon size={12} />}
               accentColor="var(--color-error)"
               onClick={() => setShowDeleteAll(true)}
@@ -261,7 +263,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
           message={`Are you sure you want to delete all ${handlers.length} Socket.IO handlers? This cannot be undone.`}
           confirmLabel="Delete All"
           danger
-          onConfirm={() => { onUpdate({ socketioHandlers: [] }); setShowDeleteAll(false); }}
+          onConfirm={() => { logUiEvent('mock.cfg_clear', { count: handlers.length, protocol: 'socketio' }); onUpdate({ socketioHandlers: [] }); setShowDeleteAll(false); }}
           onCancel={() => setShowDeleteAll(false)}
         />
       )}

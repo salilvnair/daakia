@@ -9,6 +9,7 @@ import { buildGroups, formatFullTimestamp, exportHistoryItem, type TopGroup } fr
 import { replayHistoryItem } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
 import { MoreVerticalIcon, ClockIcon, ChevronRightIcon, ExternalLinkIcon, PlusSquareIcon, DownloadIcon, TrashIcon, SaveIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../../icons';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
   const size = 20;
@@ -91,6 +92,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
   }, [cachedHistory]);
 
   const handleClearAll = () => {
+    logUiEvent('history.clear', { protocol });
     postMsg({ type: 'clearHistory', protocol });
     setShowClearConfirm(false);
   };
@@ -101,11 +103,13 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
   };
 
   const confirmDelete = (id: number) => {
+    logUiEvent('history.delete', { id, protocol });
     postMsg({ type: 'deleteHistoryEntry', id, protocol });
     setDeleteConfirmId(null);
   };
 
   const handleReplay = (item: HistoryItem, forceNewTab = false) => {
+    logUiEvent('history.open', { method: item.method, url: item.url, protocol });
     replayHistoryItem(item, forceNewTab, protocol);
   };
 

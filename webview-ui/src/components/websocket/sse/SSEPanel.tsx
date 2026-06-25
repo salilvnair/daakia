@@ -200,7 +200,7 @@ export function SSEPanel() {
     setConnState('disconnected');
   }, [activeTab]);
 
-  const handleClear = useCallback(() => setEvents([]), [setEvents]);
+  const handleClear = useCallback(() => { logUiEvent('sse.clear'); setEvents([]); }, [setEvents]);
 
   // Splitter handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => {

@@ -1,10 +1,11 @@
 /**
  * FaultInjectionPanel — Per-route fault injection controls (6A.13-6A.14).
  */
-import { SelectInputView, DurationInputView, TextInputView, ToggleSwitchView, type SelectOption } from '@salilvnair/dui';
+import { SelectInputView, DurationInputView, TextInputView, ToggleSwitchView, SliderView, type SelectOption } from '@salilvnair/dui';
 import { ChevronDownIcon } from '../../../icons';
 import { useState } from 'react';
 import type { MockRoute, FaultConfig, FaultType, RateLimitConfig } from '../mock-types';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 const FAULT_TYPE_OPTIONS: SelectOption[] = [
   { value: '',               label: 'None (no fault)' },
@@ -33,19 +34,20 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
   const rateLimit = route.rateLimit ?? { enabled: false, requestsPerWindow: 100, windowMs: 60000 };
 
   const setFault = (patch: Partial<FaultConfig>) => {
-    onUpdate({ fault: { enabled: false, ...fault, ...patch } });
+    onUpdate({ fault: { ...fault, ...patch } });
   };
 
   const setRateLimit = (patch: Partial<RateLimitConfig>) => {
-    onUpdate({ rateLimit: { enabled: false, requestsPerWindow: 100, windowMs: 60000, ...rateLimit, ...patch } });
+    onUpdate({ rateLimit: { ...rateLimit, ...patch } });
   };
 
   const hasFaultOrLimit = fault.enabled || rateLimit.enabled;
 
   return (
     <div className="border border-dashed border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center justify-between px-3 py-2 text-left cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
       >
@@ -60,7 +62,7 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
             </span>
           )}
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[rgba(255,255,255,0.07)]">
@@ -72,7 +74,7 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
                 <span className="text-[10px] text-[var(--color-text-muted)]">Enable</span>
                 <ToggleSwitchView
                   checked={fault.enabled}
-                  onChange={(v) => setFault({ enabled: v })}
+                  onChange={(v) => { logUiEvent('mock.fault_toggle', { enabled: v }); setFault({ enabled: v }); }}
                   accentColor="var(--color-error)"
                   size="xs"
                 />
@@ -89,16 +91,15 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
               />
             </div>
 
-            {/* Probability slider — kept as native range (no DUI slider component) */}
             {fault.type && (
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-[var(--color-text-muted)] w-[80px] flex-shrink-0">Probability</span>
-                <input
-                  type="range"
+                <SliderView
                   min={0} max={100} step={5}
                   value={Math.round((fault.probability ?? 1.0) * 100)}
-                  onChange={e => setFault({ probability: parseInt(e.target.value) / 100 })}
-                  className="flex-1 cursor-pointer"
+                  onChange={(v) => setFault({ probability: v / 100 })}
+                  accentColor="var(--color-error)"
+                  className="flex-1"
                 />
                 <span className="text-[11px] font-mono text-[var(--color-error)] w-[36px] text-right">
                   {Math.round((fault.probability ?? 1.0) * 100)}%
@@ -147,7 +148,7 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
                 <span className="text-[10px] text-[var(--color-text-muted)]">Enable</span>
                 <ToggleSwitchView
                   checked={rateLimit.enabled}
-                  onChange={(v) => setRateLimit({ enabled: v })}
+                  onChange={(v) => { logUiEvent('mock.ratelimit_toggle', { enabled: v }); setRateLimit({ enabled: v }); }}
                   accentColor="var(--color-warning)"
                   size="xs"
                 />

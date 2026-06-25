@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   SelectInputView, EditorView, ButtonView, IconButtonView, ToggleSwitchView,
   TextInputView, DurationInputView, TabView, type SelectOption, type TabItem,
 } from '@salilvnair/dui';
 import { ConfirmDialog } from '../../shared';
-import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from '../../../icons';
+import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon, FolderOpenIcon } from '../../../icons';
+import { postMsg } from '../../../vscode';
 import { SOAP_MOCK_SAMPLES } from '../samples/soap';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useTabsStore } from '../../../store/tabs-store';
@@ -45,12 +46,14 @@ const RESPONSE_TYPE_OPTIONS: SelectOption[] = [
   { value: 'static', label: 'Static XML' },
   { value: 'script', label: 'Script' },
   { value: 'fault', label: 'SOAP Fault' },
+  { value: 'file', label: 'File' },
 ];
 
 const RESPONSE_TYPE_CONFIG: Record<string, { color: string; label: string }> = {
-  static: { color: '#4ade80', label: 'STATIC' },
-  script: { color: '#fbbf24', label: 'SCRIPT' },
-  fault: { color: '#f87171', label: 'FAULT' },
+  static: { color: 'var(--color-success)', label: 'STATIC' },
+  script: { color: 'var(--color-warning)', label: 'SCRIPT' },
+  fault: { color: 'var(--color-error)', label: 'FAULT' },
+  file: { color: 'var(--color-primary)', label: 'FILE' },
 };
 
 const SAMPLE_OPTIONS: SelectOption[] = [
@@ -63,11 +66,12 @@ interface OperationRow {
   service: string;
   operation: string;
   soapAction: string;
-  responseType: 'static' | 'script' | 'fault';
+  responseType: 'static' | 'script' | 'fault' | 'file';
   response: string;
   responseScript?: string;
   faultCode?: string;
   faultString?: string;
+  bodyFile?: string;
   delay: number;
   enabled: boolean;
   serviceEnabled: boolean;
@@ -113,6 +117,7 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
     responseScript: op.responseScript,
     faultCode: op.faultCode,
     faultString: op.faultString,
+    bodyFile: op.bodyFile,
     delay: op.delay || 0,
     enabled: op.enabled !== false,
     serviceEnabled: op.serviceEnabled !== false,
@@ -220,9 +225,9 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
             accentVar="var(--color-protocol-soap)"
             onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <ButtonView size="md" variant="ghost" accentColor={ACCENT} onClick={addService}>+ Add Service</ButtonView>
+          <ButtonView size="md" accentColor={ACCENT} onClick={addService}>+ Add Service</ButtonView>
           {serviceGroups.length > 0 && (
-            <IconButtonView size="sm" icon={<TrashIcon size={12} />} accentColor="var(--color-error)" onClick={() => setShowDeleteAll(true)} title="Delete All Services" />
+            <IconButtonView size="md" icon={<TrashIcon size={12} />} accentColor="var(--color-error)" onClick={() => setShowDeleteAll(true)} title="Delete All Services" />
           )}
         </div>
       </div>
@@ -336,7 +341,7 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
                       />
                     ))}
 
-                    <ButtonView size="md" variant="ghost" accentColor={ACCENT} onClick={() => addOperationToService(group.service)}>
+                    <ButtonView size="sm" accentColor={ACCENT} onClick={() => addOperationToService(group.service)}>
                       + Add Operation
                     </ButtonView>
                   </div>
@@ -387,6 +392,19 @@ interface OperationItemProps {
 function OperationItem({ operation: op, isExpanded, onToggleExpand, onUpdate, onRemove }: OperationItemProps) {
   const cfg = RESPONSE_TYPE_CONFIG[op.responseType] || RESPONSE_TYPE_CONFIG.static;
   const [activeTab, setActiveTab] = useState<SoapOpTab>('response');
+
+  const pickBodyFile = useCallback(() => {
+    const callbackId = `soap-op-${op.id}-${Date.now()}`;
+    const handler = (event: MessageEvent) => {
+      const d = event.data;
+      if (d?.type === 'mockServer:bodyFilePicked' && d.callbackId === callbackId) {
+        window.removeEventListener('message', handler);
+        if (d.filePath) onUpdate({ bodyFile: d.filePath });
+      }
+    };
+    window.addEventListener('message', handler);
+    postMsg({ type: 'mockServer:pickBodyFile', callbackId });
+  }, [op.id, onUpdate]);
 
   return (
     <div
@@ -471,6 +489,29 @@ function OperationItem({ operation: op, isExpanded, onToggleExpand, onUpdate, on
                     <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
                       <EditorView value={op.responseScript || '// Return XML string\nreturn `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Body>\n    <Response><result>${Date.now()}</result></Response>\n  </soap:Body>\n</soap:Envelope>`;'} onChange={(v) => onUpdate({ responseScript: v })} language="javascript" height="100%" />
                     </div>
+                  </div>
+                ) : op.responseType === 'file' ? (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-[var(--color-text-muted)] block">File Path</label>
+                    <div className="flex items-center gap-1.5">
+                      <TextInputView
+                        value={op.bodyFile || ''}
+                        onChange={(e) => onUpdate({ bodyFile: e.target.value })}
+                        placeholder="Select a file or type its path…"
+                        size="md"
+                        style={{ flex: 1, fontFamily: 'monospace' }}
+                      />
+                      <IconButtonView
+                        size="md"
+                        icon={<FolderOpenIcon size={14} />}
+                        onClick={pickBodyFile}
+                        tooltip="Browse file…"
+                        color={ACCENT}
+                      />
+                    </div>
+                    <span className="text-[10px] text-[var(--color-text-muted)]">
+                      Supports any file type (XML, ZIP, PDF, …). Content-Type is auto-detected from the file extension. Content-Disposition is set automatically.
+                    </span>
                   </div>
                 ) : (
                   <div>

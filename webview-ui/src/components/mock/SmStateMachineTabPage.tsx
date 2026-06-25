@@ -18,6 +18,7 @@ import { useMockStore } from '../../store/mock-store'
 import type { MockServer, StateMachineConfig, StateNode, StateTransition, ConnectedWorkflow, StateMockResponse } from './mock-types'
 import { postMsg } from '../../vscode'
 import { DisconnectIcon } from '../../icons'
+import { logUiEvent } from '../../store/ui-audit-store'
 
 // Canvas CSS (not re-exported by the library — import from source directly)
 import '@salilvnair/state-machine/src/style/tokens.css'
@@ -130,6 +131,7 @@ export function SmStateMachineTabPage({ tabId }: Props) {
 
   const handleConnect = useCallback((machine: SMachine) => {
     if (!smLinkedServerId) return
+    logUiEvent('mock.sm_link', { workflowId: machine.id, serverId: smLinkedServerId })
 
     const ws = useSMWorkspaceStore.getState()
     const canvasMachine = ws.machines.find((m) => m.id === machine.id) ?? machine
@@ -156,6 +158,7 @@ export function SmStateMachineTabPage({ tabId }: Props) {
   // Unlink ALL workflows (clears the server completely)
   const handleUnlink = useCallback(() => {
     if (!smLinkedServerId) return
+    logUiEvent('mock.sm_unlink', { serverId: smLinkedServerId })
     const patch: Partial<MockServer> = { stateMachine: undefined, connectedWorkflowId: undefined, connectedWorkflows: [] }
     useMockStore.getState().updateServer(smLinkedServerId, patch)
     postMsg({ type: 'mockServer:patchStateMachine', serverId: smLinkedServerId, stateMachine: null, connectedWorkflowId: null, connectedWorkflows: [] })

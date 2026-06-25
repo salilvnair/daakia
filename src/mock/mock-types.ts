@@ -367,7 +367,7 @@ export interface SoapMockOperation {
   service: string;
   operation: string;
   soapAction: string;
-  responseType: 'static' | 'script' | 'fault';
+  responseType: 'static' | 'script' | 'fault' | 'file';
   response: string; // XML response body
   responseScript?: string; // dynamic response
   faultCode?: string;
@@ -375,6 +375,8 @@ export interface SoapMockOperation {
   delay: number;
   enabled: boolean;
   serviceEnabled?: boolean;
+  /** Absolute or relative path to a file to serve as response body */
+  bodyFile?: string;
   // Sprint 13 (SOAP parity): sequences + matching + fault
   responses?: ResponseSequenceItem[];
   sequenceMode?: SequenceMode;

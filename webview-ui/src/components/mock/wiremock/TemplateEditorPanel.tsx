@@ -130,10 +130,10 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
         </div>
         {route.isTemplate && (
           <div className="flex items-center gap-1.5">
-            <ButtonView size="md" variant="ghost" accentColor={MOCK_ACCENT} onClick={() => setShowHelpers(v => !v)}>
+            <ButtonView size="md" accentColor={MOCK_ACCENT} onClick={() => setShowHelpers(v => !v)}>
               Helpers
             </ButtonView>
-            <ButtonView size="md" variant="ghost" accentColor="var(--color-info)" onClick={() => setShowPreview(v => !v)}>
+            <ButtonView size="md" accentColor="var(--color-info)" onClick={() => setShowPreview(v => !v)}>
               {showPreview ? 'Hide Preview' : 'Live Preview'}
             </ButtonView>
           </div>
@@ -151,15 +151,15 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
               <div key={cat.category}>
                 <p className="text-[9px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-1 px-1">{cat.category}</p>
                 {cat.items.map(item => (
-                  <button
+                  <ButtonView
                     key={item}
-                    type="button"
+                    size="xs"
+                    accentColor={MOCK_ACCENT}
                     onClick={() => insertHelper(item)}
-                    title={`Insert ${item}`}
-                    className="w-full text-left px-1.5 py-0.5 text-[10px] font-mono rounded hover:bg-[rgba(255,255,255,0.06)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors truncate"
+                    className="w-full !justify-start font-mono text-[10px] truncate"
                   >
                     {item}
-                  </button>
+                  </ButtonView>
                 ))}
               </div>
             ))}
@@ -190,13 +190,14 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
           </div>
           {/* Sample request input */}
           <div>
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => setShowHelpers(v => !v)}
               className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer mb-1"
             >
               <ChevronDownIcon size={10} /> Sample Request (for preview)
-            </button>
+            </div>
             <ResizablePanelView defaultHeight={80} minHeight={60} maxHeight={300}>
               <EditorView
                 value={sampleJson}
