@@ -283,15 +283,16 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
         <span className="text-[10.5px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
           {cfg.states.length} states · {cfg.transitions.length} transitions
         </span>
-        <ButtonView size="md" accentColor={ACCENT} iconLeft={<PlusIcon size={11} />} onClick={addState}>
+        <ButtonView size="md" variant="ghost" accentColor={ACCENT} iconLeft={<PlusIcon size={11} />} onClick={addState}>
           Add State
         </ButtonView>
         <div className="ml-auto">
           <ButtonView
             size="md"
+            variant="ghost"
+            accentColor="var(--color-text-muted)"
             iconLeft={copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
             onClick={exportJson}
-            style={{ color: 'var(--color-text-muted)' }}
           >
             {copied ? 'Copied!' : 'Export JSON'}
           </ButtonView>
@@ -652,6 +653,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
               ) : (
                 <ButtonView
                   size="md"
+                  variant="ghost"
                   accentColor={SUCCESS}
                   onClick={() => { logUiEvent('mock.sm_initial', { stateId: selectedStateData.id }); onUpdate({ ...cfg, initialState: selectedStateData.id }); }}
                   style={{ width: '100%' }}

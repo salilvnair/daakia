@@ -220,6 +220,7 @@ function CustomScenarioCard({
         <div className="flex items-center gap-2 pt-0.5">
           <ButtonView
             size="md"
+            variant="ghost"
             onClick={() => onSave(draft)}
             disabled={!draft.name.trim()}
             accentColor={AI_COLOR}
@@ -228,6 +229,8 @@ function CustomScenarioCard({
           </ButtonView>
           <ButtonView
             size="md"
+            variant="ghost"
+            accentColor="var(--color-text-muted)"
             onClick={onCancel}
           >
             Cancel
@@ -291,6 +294,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           {aiEnabled('mockIntelligence') && (
             <ButtonView
               size="md"
+              variant="ghost"
               accentColor={AI_COLOR}
               iconLeft={<SparkleIcon size={9} />}
               onClick={() => setShowMockIntelligence(true)}
@@ -302,6 +306,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           {aiEnabled('adaptiveMockLearning') && (
             <ButtonView
               size="md"
+              variant="ghost"
               accentColor={AI_COLOR}
               iconLeft={<SparkleIcon size={9} />}
               onClick={() => setShowAdaptiveLearning(true)}
@@ -313,6 +318,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           {aiEnabled('aiScenarioComposer') && (
             <ButtonView
               size="md"
+              variant="ghost"
               accentColor={AI_COLOR}
               iconLeft={<SparkleIcon size={9} />}
               onClick={() => setShowScenarioComposer(true)}
@@ -410,6 +416,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
         <div className="flex items-center gap-2">
           <ButtonView
             size="md"
+            variant="ghost"
             accentColor={AI_COLOR}
             iconLeft={<PlusIcon size={12} />}
             onClick={() => { setAddingNew(true); setEditingId(null); }}
@@ -419,6 +426,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
           {scenarios.length > 0 && (
             <ButtonView
               size="md"
+              variant="ghost"
               accentColor="var(--color-error)"
               iconLeft={<TrashIcon size={11} />}
               onClick={() => setShowDeleteAll(true)}

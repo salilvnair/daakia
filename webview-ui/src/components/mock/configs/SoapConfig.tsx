@@ -121,6 +121,14 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
     delay: op.delay || 0,
     enabled: op.enabled !== false,
     serviceEnabled: op.serviceEnabled !== false,
+    responses: op.responses,
+    sequenceMode: op.sequenceMode,
+    headerMatchers: op.headerMatchers,
+    bodyMatcher: op.bodyMatcher,
+    compositeLogic: op.compositeLogic,
+    priority: op.priority,
+    fault: op.fault,
+    rateLimit: op.rateLimit,
   }));
 
   const serviceGroups: ServiceGroup[] = useMemo(() => {

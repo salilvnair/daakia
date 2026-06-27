@@ -770,7 +770,7 @@ export function MockAiGeneratePopover({
       )}
       {!streaming && !error && text && (
         <div className="flex items-center gap-1">
-          <ButtonView size="sm" accentColor={ACCENT} onClick={() => setIsIdle(true)} title="Edit description and regenerate">
+          <ButtonView size="sm" variant="ghost" accentColor={ACCENT} onClick={() => setIsIdle(true)} title="Edit description and regenerate">
             Refine
           </ButtonView>
           <IconButtonView size="xs" icon={<RefreshIcon size={10} />} accentColor={ACCENT} onClick={handleRegenerate} title="Regenerate" />
@@ -781,13 +781,11 @@ export function MockAiGeneratePopover({
 
   // ── Footer left: regenerate / retry ─────────────────────────────────────────
   const footerLeft = error ? (
-    <ButtonView size="md" accentColor="var(--color-error)" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}>
+    <ButtonView size="md" variant="ghost" accentColor="var(--color-error)" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}>
       Retry
     </ButtonView>
   ) : (!streaming && !error && text) ? (
-    <ButtonView size="md" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}
-      style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}
-    >
+    <ButtonView size="md" variant="ghost" accentColor="var(--color-text-muted)" iconLeft={<RefreshIcon size={11} />} onClick={handleRegenerate}>
       Regenerate
     </ButtonView>
   ) : undefined;
@@ -802,6 +800,7 @@ export function MockAiGeneratePopover({
       {detectedSdl && (
         <ButtonView
           size="md"
+          variant="ghost"
           accentColor={sdlCopied ? 'var(--color-success)' : 'var(--color-protocol-graphql, #ec4899)'}
           iconLeft={sdlCopied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}
           onClick={handleCopySdl}
@@ -812,6 +811,7 @@ export function MockAiGeneratePopover({
       {onAddGeneratedRoutes && parsedRoutes.length > 0 && (
         <ButtonView
           size="md"
+          variant="ghost"
           accentColor={addedAll ? 'var(--color-success)' : ACCENT}
           disabled={addedAll}
           iconLeft={<PlusIcon size={11} />}
@@ -823,6 +823,7 @@ export function MockAiGeneratePopover({
       {onAddGeneratedItems && parsedItems.length > 0 && flavor && (
         <ButtonView
           size="md"
+          variant="ghost"
           accentColor={addedAllItems ? 'var(--color-success)' : ACCENT}
           disabled={addedAllItems}
           iconLeft={<PlusIcon size={11} />}
@@ -1043,7 +1044,7 @@ export function MockAiGeneratePopover({
                     {isAdded ? (
                       <span className="text-[10px] flex-shrink-0 font-medium" style={{ color: 'var(--color-success)' }}>✓ Added</span>
                     ) : (
-                      <ButtonView size="sm" accentColor={ACCENT} iconLeft={<PlusIcon size={9} />} onClick={() => handleAddOne(route, idx)}>
+                      <ButtonView size="sm" variant="ghost" accentColor={ACCENT} iconLeft={<PlusIcon size={9} />} onClick={() => handleAddOne(route, idx)}>
                         Add Route
                       </ButtonView>
                     )}
@@ -1098,6 +1099,7 @@ export function MockAiGeneratePopover({
                     ) : (
                       <ButtonView
                         size="xs"
+                        variant="ghost"
                         accentColor={ACCENT}
                         iconLeft={flavor.addButtonLabel ? undefined : <PlusIcon size={9} />}
                         onClick={() => handleAddOneItem(item, idx)}

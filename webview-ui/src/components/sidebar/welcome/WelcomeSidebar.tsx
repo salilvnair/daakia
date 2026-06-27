@@ -8,6 +8,7 @@ import {
 declare function acquireVsCodeApi(): { postMessage: (msg: unknown) => void };
 const vscode = typeof acquireVsCodeApi !== 'undefined' ? acquireVsCodeApi() : null;
 function openPanel() { vscode?.postMessage({ command: 'openPanel' }); }
+function openWiki() { vscode?.postMessage({ command: 'openWiki' }); }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
@@ -356,7 +357,7 @@ function EnvironmentsSection() {
 function WikiFooter() {
   return (
     <div
-      onClick={openPanel}
+      onClick={openWiki}
       style={{
         fontSize: 10,
         color: 'var(--vscode-descriptionForeground)',

@@ -223,7 +223,7 @@ export function AiUrlBar() {
         size="lg"
         accentColor={ACCENT}
         iconLeft={<SendIcon size={13} />}
-        disabled={loading}
+        disabled={loading || (provider !== 'copilot' && !url.trim())}
         onClick={handleSend}
       />
 

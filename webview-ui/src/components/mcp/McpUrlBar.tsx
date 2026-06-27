@@ -150,6 +150,7 @@ export function McpUrlBar() {
           onClick={handleConnect}
           iconLeft={connected ? <DisconnectIcon size={13} /> : <ConnectIcon size={13} />}
           accentColor={connected || loading ? 'var(--color-error)' : ACCENT}
+          disabled={!connected && !loading && (transport === 'stdio' ? !command.trim() : !url.trim())}
         >
           {loading ? 'Cancel' : connected ? 'Disconnect' : 'Connect'}
         </ButtonView>

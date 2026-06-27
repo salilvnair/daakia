@@ -7,6 +7,7 @@ import {
   EditorView, ButtonView, IconButtonView, ToggleSwitchView, PilledTabView,
   type EditorLanguage, type PilledTab,
 } from '@salilvnair/dui';
+import { ChevronDownIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
 import type { MockRoute } from '../mock-types';
 
@@ -242,6 +243,7 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
           </label>
           <ButtonView
             size="sm"
+            variant="ghost"
             accentColor={ACCENT}
             onClick={() => fileRef.current?.click()}
           >
@@ -267,6 +269,7 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
       <div className="flex items-center gap-2">
         <ButtonView
           size="md"
+          variant="ghost"
           accentColor={ACCENT}
           disabled={!content.trim() || loading}
           onClick={handleParse}
@@ -276,6 +279,7 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
         {contractMode && cfg.hasContractValidation && (
           <ButtonView
             size="md"
+            variant="ghost"
             accentColor="var(--color-warning)"
             disabled={!content.trim()}
             onClick={handleValidate}
@@ -337,7 +341,7 @@ function ParseResultView({ result, protocol, accent, onImport }: { result: Impor
           {result.errors.length > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[rgba(239,68,68,0.12)] text-[var(--color-error)]">{result.errors.length} errors</span>}
         </div>
         {(result.routes.length > 0 || result.raw) && (
-          <ButtonView size="sm" accentColor={ACCENT} onClick={onImport}>
+          <ButtonView size="sm" variant="ghost" accentColor={ACCENT} onClick={onImport}>
             {isNonRest ? 'Apply to Server' : 'Import All Routes'}
           </ButtonView>
         )}

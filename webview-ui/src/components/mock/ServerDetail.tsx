@@ -309,6 +309,8 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
             }));
             onUpdate({ routes: [...(server.routes ?? []), ...newRoutes] });
           }}
+          onAddRoutes={routes => onUpdate({ routes: [...(server.routes ?? []), ...routes] })}
+          onApplyStateMachine={sm => onUpdate({ stateMachine: sm })}
         />
       )}
 
@@ -329,7 +331,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         <ExportPanel
           protocol={server.protocol}
           server={server}
-          onExport={format => postMsg({ type: 'exportMockServer', serverId: server.id, format })}
+          onExport={(format, content, filename) => postMsg({ type: 'exportMockServer', serverId: server.id, format, content, filename })}
         />
       )}
 
@@ -343,9 +345,48 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         <MockApiCatalog
           protocol={server.protocol}
           onAddRoutes={(routes, raw) => {
-            if (routes.length > 0) onUpdate({ routes: [...(server.routes ?? []), ...routes] });
-            if (raw) onUpdate({ description: (server.description ? server.description + '\n\n' : '') + raw });
+            const proto = server.protocol ?? 'rest';
+            if (proto === 'graphql' && raw) {
+              onUpdate({ graphqlSchema: raw });
+            } else if (proto === 'grpc' && raw) {
+              onUpdate({ grpcProtoFile: raw });
+            } else if (proto === 'websocket' && raw) {
+              try {
+                const events: Array<{ event: string; direction: string; payload: Record<string, unknown> }> = JSON.parse(raw);
+                const handlers = events
+                  .filter(e => e.direction === 'server→client')
+                  .map(e => ({ id: crypto.randomUUID(), event: 'message' as const, matchPattern: e.event, response: JSON.stringify(e.payload, null, 2), delay: 0, enabled: true, broadcast: false }));
+                if (handlers.length > 0) onUpdate({ wsHandlers: [...(server.wsHandlers ?? []), ...handlers] });
+              } catch { /* ignore malformed JSON */ }
+            } else if (proto === 'sse' && raw) {
+              try {
+                const events: Array<{ event: string; direction: string; payload: Record<string, unknown> }> = JSON.parse(raw);
+                const sseEvents = events
+                  .filter(e => e.direction === 'server→client')
+                  .map(e => ({ id: crypto.randomUUID(), eventName: e.event, data: JSON.stringify(e.payload, null, 2), intervalMs: 5000, delay: 0, enabled: true, repeat: true }));
+                if (sseEvents.length > 0) onUpdate({ sseEvents: [...(server.sseEvents ?? []), ...sseEvents] });
+              } catch { /* ignore malformed JSON */ }
+            } else if (proto === 'socketio' && raw) {
+              try {
+                const events: Array<{ event: string; direction: string; payload: Record<string, unknown> }> = JSON.parse(raw);
+                const handlers = events
+                  .filter(e => e.direction === 'server→client')
+                  .map(e => ({ id: crypto.randomUUID(), event: 'message' as const, listenEvent: e.event, emitEvent: e.event, response: JSON.stringify(e.payload, null, 2), delay: 0, enabled: true, broadcast: false }));
+                if (handlers.length > 0) onUpdate({ socketioHandlers: [...(server.socketioHandlers ?? []), ...handlers] });
+              } catch { /* ignore malformed JSON */ }
+            } else if (proto === 'mqtt' && raw) {
+              try {
+                const events: Array<{ event: string; direction: string; payload: Record<string, unknown> }> = JSON.parse(raw);
+                const topics = events
+                  .filter(e => e.direction === 'server→client')
+                  .map(e => ({ id: crypto.randomUUID(), topic: e.event, qos: 0 as const, retain: false, payload: JSON.stringify(e.payload, null, 2), intervalMs: 5000, enabled: true }));
+                if (topics.length > 0) onUpdate({ mqttTopics: [...(server.mqttTopics ?? []), ...topics] });
+              } catch { /* ignore malformed JSON */ }
+            } else if (routes.length > 0) {
+              onUpdate({ routes: [...(server.routes ?? []), ...routes] });
+            }
           }}
+          onAddSoapOps={ops => onUpdate({ soapOperations: [...(server.soapOperations ?? []), ...ops] })}
         />
       )}
 

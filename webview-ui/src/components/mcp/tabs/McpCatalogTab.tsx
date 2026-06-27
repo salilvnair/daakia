@@ -137,7 +137,7 @@ export function McpCatalogTab() {
               </div>
               <ButtonView
                 size="sm"
-                variant="primary"
+                variant="ghost"
                 accentColor={isAdded ? 'var(--color-success)' : isExisting ? 'var(--color-text-muted)' : ACCENT}
                 onClick={() => handleAdd(entry)}
                 disabled={isExisting}

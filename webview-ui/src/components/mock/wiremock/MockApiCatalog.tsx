@@ -3,7 +3,7 @@
  */
 import { useState } from 'react';
 import { TextInputView, ChipView, ButtonView } from '@salilvnair/dui';
-import type { MockRoute } from '../mock-types';
+import type { MockRoute, SoapMockOperation } from '../mock-types';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
 
@@ -18,11 +18,15 @@ export interface CatalogEntry {
   /** For non-REST protocols, raw config (SDL / .proto / WSDL / event JSON) instead of routes */
   raw?: string;
   rawLabel?: string; // e.g. "SDL", ".proto", "WSDL", "Events"
+  /** SOAP-specific: pre-built mock operations to add directly to soapOperations */
+  soapOperations?: SoapMockOperation[];
 }
 
 export interface Props {
   protocol?: string;
   onAddRoutes: (routes: MockRoute[], raw?: string) => void;
+  /** Called with SOAP operations when a SOAP catalog entry is added */
+  onAddSoapOps?: (ops: SoapMockOperation[]) => void;
 }
 
 // ─── Template helpers ─────────────────────────────────────────────────────────
@@ -351,10 +355,14 @@ message GetPermissionsResponse { repeated string permissions = 1; string role = 
 
 const SOAP_CATALOG: CatalogEntry[] = [
   {
-    id: 'wsdl-weather', name: 'Weather Service', category: 'Services', tags: ['weather', 'forecast', 'xml'], routeCount: 0,
+    id: 'wsdl-weather', name: 'Weather Service', category: 'Services', tags: ['weather', 'forecast', 'xml'], routeCount: 2,
     description: 'Classic weather WSDL — GetWeather and GetForecast operations.',
     routes: [],
     rawLabel: 'WSDL',
+    soapOperations: [
+      { id: crypto.randomUUID(), service: 'WeatherService', operation: 'GetWeather', soapAction: 'http://mock.daakia.io/weather/GetWeather', responseType: 'static', response: `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://mock.daakia.io/weather">\n  <soap:Body>\n    <tns:GetWeatherResponse>\n      <tns:city>New York</tns:city>\n      <tns:temperature>22.5</tns:temperature>\n      <tns:unit>Celsius</tns:unit>\n      <tns:description>Partly cloudy</tns:description>\n      <tns:humidity>65</tns:humidity>\n    </tns:GetWeatherResponse>\n  </soap:Body>\n</soap:Envelope>`, delay: 0, enabled: true },
+      { id: crypto.randomUUID(), service: 'WeatherService', operation: 'GetForecast', soapAction: 'http://mock.daakia.io/weather/GetForecast', responseType: 'static', response: `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://mock.daakia.io/weather">\n  <soap:Body>\n    <tns:GetForecastResponse>\n      <tns:city>New York</tns:city>\n      <tns:days>7</tns:days>\n      <tns:forecast>Sunny with occasional clouds</tns:forecast>\n    </tns:GetForecastResponse>\n  </soap:Body>\n</soap:Envelope>`, delay: 0, enabled: true },
+    ],
     raw: `<?xml version="1.0" encoding="UTF-8"?>
 <definitions name="WeatherService"
   targetNamespace="http://mock.daakia.io/weather"
@@ -410,10 +418,13 @@ const SOAP_CATALOG: CatalogEntry[] = [
 </definitions>`,
   },
   {
-    id: 'wsdl-currency', name: 'Currency Converter', category: 'Finance', tags: ['currency', 'forex', 'finance'], routeCount: 0,
+    id: 'wsdl-currency', name: 'Currency Converter', category: 'Finance', tags: ['currency', 'forex', 'finance'], routeCount: 1,
     description: 'Currency conversion WSDL — ConvertCurrency and GetRates operations.',
     routes: [],
     rawLabel: 'WSDL',
+    soapOperations: [
+      { id: crypto.randomUUID(), service: 'CurrencyService', operation: 'ConvertCurrency', soapAction: 'ConvertCurrency', responseType: 'static', response: `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://mock.daakia.io/currency">\n  <soap:Body>\n    <tns:ConvertResponse>\n      <tns:convertedAmount>85.42</tns:convertedAmount>\n      <tns:rate>0.854200</tns:rate>\n      <tns:timestamp>2024-01-15T12:00:00Z</tns:timestamp>\n    </tns:ConvertResponse>\n  </soap:Body>\n</soap:Envelope>`, delay: 0, enabled: true },
+    ],
     raw: `<?xml version="1.0" encoding="UTF-8"?>
 <definitions name="CurrencyService"
   targetNamespace="http://mock.daakia.io/currency"
@@ -560,7 +571,7 @@ function getCatalog(protocol: string): CatalogEntry[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MockApiCatalog({ protocol = 'rest', onAddRoutes }: Props) {
+export function MockApiCatalog({ protocol = 'rest', onAddRoutes, onAddSoapOps }: Props) {
   const catalog = getCatalog(protocol);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -574,8 +585,12 @@ export function MockApiCatalog({ protocol = 'rest', onAddRoutes }: Props) {
   });
 
   const add = (entry: CatalogEntry) => {
-    const routes = entry.routes.map(r => ({ ...r, id: crypto.randomUUID() }));
-    onAddRoutes(routes, entry.raw);
+    if (entry.soapOperations && entry.soapOperations.length > 0 && onAddSoapOps) {
+      onAddSoapOps(entry.soapOperations.map(op => ({ ...op, id: crypto.randomUUID() })));
+    } else {
+      const routes = entry.routes.map(r => ({ ...r, id: crypto.randomUUID() }));
+      onAddRoutes(routes, entry.raw);
+    }
     setAdded(prev => new Set([...prev, entry.id]));
   };
 
@@ -626,7 +641,7 @@ function CatalogCard({ entry, added, onAdd }: { entry: CatalogEntry; added: bool
         </div>
         <ButtonView
           size="xs"
-          variant="accent"
+          variant="ghost"
           accentColor={added ? 'var(--color-success)' : MOCK_ACCENT}
           disabled={added}
           onClick={onAdd}

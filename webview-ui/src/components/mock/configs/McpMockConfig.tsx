@@ -193,6 +193,7 @@ function CustomToolCard({
         <div className="flex items-center gap-2 pt-0.5">
           <ButtonView
             size="md"
+            variant="ghost"
             onClick={() => onSave(draft)}
             disabled={!draft.name.trim()}
             accentColor={MCP_COLOR}
@@ -201,6 +202,8 @@ function CustomToolCard({
           </ButtonView>
           <ButtonView
             size="md"
+            variant="ghost"
+            accentColor="var(--color-text-muted)"
             onClick={onCancel}
           >
             Cancel
@@ -356,6 +359,7 @@ export function McpMockConfig({ server, onUpdate }: Props) {
         <div className="flex items-center gap-1.5">
           <ButtonView
             size="md"
+            variant="ghost"
             accentColor={MCP_COLOR}
             iconLeft={<PlusIcon size={12} />}
             onClick={() => { setAddingNew(true); setEditingId(null); }}

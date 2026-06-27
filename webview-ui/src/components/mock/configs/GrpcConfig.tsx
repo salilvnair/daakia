@@ -112,6 +112,14 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
     delay: m.delay || 0,
     statusCode: m.statusCode ?? 0,
     serviceEnabled: m.serviceEnabled !== false,
+    responses: m.responses,
+    sequenceMode: m.sequenceMode,
+    headerMatchers: m.headerMatchers,
+    bodyMatcher: m.bodyMatcher,
+    compositeLogic: m.compositeLogic,
+    priority: m.priority,
+    fault: m.fault,
+    rateLimit: m.rateLimit,
   }));
 
   const serviceGroups: ServiceGroup[] = useMemo(() => {
@@ -317,6 +325,9 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                         size="md"
                         style={{ flex: 1, fontFamily: 'monospace' }}
                       />
+                      <ButtonView size="sm" variant="accent" accentColor={ACCENT} onClick={() => addMethodToService(group.service)}>
+                        + Add Method
+                      </ButtonView>
                     </div>
 
                     {group.methods.map((m) => (
@@ -330,14 +341,6 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                       />
                     ))}
 
-                    <ButtonView
-                      size="sm"
-                      variant="accent"
-                      accentColor={ACCENT}
-                      onClick={() => addMethodToService(group.service)}
-                    >
-                      + Add Method
-                    </ButtonView>
                   </div>
                 )}
               </div>

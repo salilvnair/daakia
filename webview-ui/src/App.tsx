@@ -1882,6 +1882,15 @@ export default function App() {
           });
           break;
         }
+        case 'navigate': {
+          if (msg.panel === 'settings') {
+            useTabsStore.getState().openSettingsTab();
+            if (msg.section) {
+              useUiStateStore.getState().setPref('settings.section', msg.section);
+            }
+          }
+          break;
+        }
       }
     };
 

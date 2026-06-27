@@ -21,7 +21,7 @@ interface ExportOption {
 export interface Props {
   protocol?: string;
   server: MockServer;
-  onExport: (format: ExportFormat) => void;
+  onExport: (format: ExportFormat, content: string, filename: string) => void;
 }
 
 // ─── REST exports ──────────────────────────────────────────────────────────────
@@ -492,6 +492,7 @@ export function ExportPanel({ protocol = 'rest', server, onExport }: Props) {
       <div className="flex items-center gap-2">
         <ButtonView
           size="md"
+          variant="ghost"
           accentColor={MOCK_ACCENT}
           onClick={generate}
         >
@@ -499,8 +500,9 @@ export function ExportPanel({ protocol = 'rest', server, onExport }: Props) {
         </ButtonView>
         <ButtonView
           size="md"
+          variant="ghost"
           accentColor={MOCK_ACCENT}
-          onClick={() => onExport(selected)}
+          onClick={() => onExport(selected, opt.generate(server), opt.filename(server))}
         >
           Download {opt.filename(server)}
         </ButtonView>

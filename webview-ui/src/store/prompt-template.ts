@@ -338,7 +338,10 @@ export type AiPromptTemplateKey =
   | 'platform.webhook.debugger'
   | 'platform.webhook.debugger.system'
   | 'platform.request.clustering'
-  | 'platform.request.clustering.system';
+  | 'platform.request.clustering.system'
+  // ── AI Enrich Captured Traffic ────────────────────────────────────────────
+  | 'mock.traffic.enrich'
+  | 'mock.traffic.enrich.system';
 
 // ─── Default templates ────────────────────────────────────────────────────────
 
@@ -670,6 +673,32 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `Cluster these API requests into logical groups and suggest a collection structure:\n\nRequest history:\n{requests}\n\nGroup by:\n1. Resource domain (users, orders, products, payments, etc.)\n2. Authentication and initialization flows\n3. CRUD patterns (list/get/create/update/delete on the same resource)\n4. Microservice or API boundaries (different base URLs)\n5. Workflow sequences (requests that are always called together)\n\nFor each cluster: suggest a collection name, folder structure, and which requests belong. Output as JSON with collectionName, folders (name + requestIds), and ungrouped remainder.`,
   'platform.request.clustering.system':
     `You are an API request clustering expert. Group API request histories into logical domains and resource families, then suggest collection names and folder structures. Identify patterns: authentication flows, CRUD operations on the same resource, related microservice calls. Return ONLY valid JSON — no explanation, no fences.`,
+  // ── AI Enrich Captured Traffic ────────────────────────────────────────────
+  'mock.traffic.enrich':
+    `You are a mock API data enrichment expert. Given a captured real API interaction, generate {count} realistic route variations by swapping the entity name ({entityName}) with alternatives: {alternatives}.
+
+Captured Request:
+Method: {method}
+Path: {path}
+Headers: {requestHeaders}
+Cookies: {cookies}
+Query Params: {queryParams}
+Body: {requestBody}
+
+Captured Response:
+Status: {responseStatus}
+Headers: {responseHeaders}
+Body: {responseBody}
+
+Generate exactly {count} WireMock-style route stubs as a JSON array. Each stub must:
+1. Include a "request" object with method, urlPattern or urlPathPattern, and bodyPatterns (use contains matcher for the entity name variant)
+2. Include a "response" object with status, headers, and body (swap all occurrences of "{entityName}" with the variant name, and update any IDs, emails, addresses, or entity-specific fields to be realistic for that variant)
+3. Keep the same data structure and fields as the captured response — only change entity-specific values
+4. Use realistic, domain-appropriate data for each variant (not "string1" or "value2")
+
+Return ONLY a JSON array of stub objects — no explanation, no markdown fences.`,
+  'mock.traffic.enrich.system':
+    `You are a WireMock stub generation expert. You analyze captured API traffic and generate realistic route variations by substituting entity names and producing domain-appropriate data for each variant. You understand HTTP request matching patterns and produce valid WireMock stub JSON. Always return ONLY valid JSON arrays — no explanations, no fences, no comments.`,
 };
 
 // ─── Labels for UI ────────────────────────────────────────────────────────────
@@ -821,6 +850,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'platform.webhook.debugger.system': { label: 'Webhook Debugger — System',      description: 'Behavioral rules for the webhook debugger (HMAC validation steps, field explanations)' },
   'platform.request.clustering':        { label: 'Request Clustering',           description: 'Daakia AI tab → platform tools → "Cluster ✦" button: groups request history into logical API domains' },
   'platform.request.clustering.system': { label: 'Request Clustering — System',  description: 'Behavioral rules for the request clustering engine (JSON only, collectionName + folders + requestIds)' },
+  'mock.traffic.enrich':        { label: 'AI Enrich Traffic',        description: 'Traffic Inspector → "AI Enrich ✦" button: generates N route variations from a captured real API interaction by swapping entity names' },
+  'mock.traffic.enrich.system': { label: 'AI Enrich Traffic — System', description: 'Behavioral rules for the AI traffic enrichment engine (WireMock stub JSON only)' },
 };
 
 // ─── Variables available per template ────────────────────────────────────────
@@ -963,6 +994,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'platform.webhook.debugger.system': [],
   'platform.request.clustering':        ['{requests}'],
   'platform.request.clustering.system': [],
+  'mock.traffic.enrich':        ['{count}', '{entityName}', '{alternatives}', '{method}', '{path}', '{requestHeaders}', '{cookies}', '{queryParams}', '{requestBody}', '{responseStatus}', '{responseHeaders}', '{responseBody}'],
+  'mock.traffic.enrich.system': [],
 };
 
 // ─── Prompt Library sidebar categories ───────────────────────────────────────
@@ -1072,6 +1105,7 @@ export const AI_TEMPLATE_CATEGORIES: {
       'platform.openapi.generator', 'platform.security.audit', 'platform.mock.intelligence',
       'platform.postman.translator', 'platform.soap.to.rest', 'platform.gql.federation',
       'platform.webhook.debugger', 'platform.request.clustering',
+      'mock.traffic.enrich',
     ],
   },
 ];
@@ -1215,6 +1249,8 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'platform.webhook.debugger.system': '#10b981',
   'platform.request.clustering':        '#06b6d4',
   'platform.request.clustering.system': '#06b6d4',
+  'mock.traffic.enrich':        '#f59e0b',
+  'mock.traffic.enrich.system': '#f59e0b',
 };
 
 // ─── Interpolation helper ─────────────────────────────────────────────────────

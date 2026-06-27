@@ -72,6 +72,7 @@ export function WebhookPanel({ route, onUpdate }: Props) {
         </div>
         <ButtonView
           size="md"
+          variant="ghost"
           accentColor={MOCK_ACCENT}
           iconLeft={<PlusIcon size={12} />}
           onClick={e => { e.stopPropagation(); addWebhook(); setExpanded(true); }}
@@ -91,6 +92,7 @@ export function WebhookPanel({ route, onUpdate }: Props) {
               <div className="mt-2 flex justify-center">
                 <ButtonView
                   size="md"
+                  variant="ghost"
                   accentColor={MOCK_ACCENT}
                   iconLeft={<PlusIcon size={10} />}
                   onClick={addWebhook}

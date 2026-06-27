@@ -3,9 +3,10 @@
  */
 import { useState } from 'react';
 import { TabView, ButtonView, IconButtonView, CheckboxView, TextInputView, type TabItem } from '@salilvnair/dui';
-import { TrashIcon } from '../../../icons';
-import type { MockServer, RecordedRequest, MockLogEntry } from '../mock-types';
+import { TrashIcon, SparkleIcon } from '../../../icons';
+import type { MockServer, RecordedRequest, MockRoute, StateMachineConfig, MockLogEntry } from '../mock-types';
 import { ProtocolTrafficInspector } from '../ProtocolTrafficInspector';
+import { AiEnrichModal } from './AiEnrichModal';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
 const NON_REST = new Set(['websocket', 'graphql', 'mqtt', 'sse', 'socketio', 'grpc', 'soap']);
@@ -15,11 +16,13 @@ interface Props {
   onUpdate: (patch: Partial<MockServer>) => void;
   onClearTraffic?: () => void;
   onImportRecorded?: (requests: RecordedRequest[]) => void;
+  onAddRoutes?: (routes: MockRoute[]) => void;
+  onApplyStateMachine?: (sm: StateMachineConfig) => void;
   /** Sprint 13.33: live activity logs for Protocol Traffic Inspector */
   logs?: MockLogEntry[];
 }
 
-export function TrafficInspectorPanel({ server, onUpdate, onClearTraffic, onImportRecorded, logs = [] }: Props) {
+export function TrafficInspectorPanel({ server, onUpdate, onClearTraffic, onImportRecorded, onAddRoutes, onApplyStateMachine, logs = [] }: Props) {
   const isNonRest = NON_REST.has(server.protocol ?? '');
   type TrafficTab = 'recording' | 'traffic' | 'protocol';
   const [tab, setTab] = useState<TrafficTab>(isNonRest ? 'protocol' : 'recording');
@@ -55,7 +58,7 @@ export function TrafficInspectorPanel({ server, onUpdate, onClearTraffic, onImpo
           <RecordingConfig server={server} onUpdate={onUpdate} onToggle={toggleRecording} />
         )}
         {tab === 'traffic' && (
-          <TrafficLog recorded={recorded} onClear={onClearTraffic} onImport={onImportRecorded} />
+          <TrafficLog recorded={recorded} onClear={onClearTraffic} onImport={onImportRecorded} onAddRoutes={onAddRoutes} onApplyStateMachine={onApplyStateMachine} />
         )}
       </div>
 
@@ -97,6 +100,7 @@ function RecordingConfig({ server, onUpdate, onToggle }: {
         </div>
         <ButtonView
           size="md"
+          variant="ghost"
           accentColor={server.recordingMode ? 'var(--color-error)' : MOCK_ACCENT}
           onClick={onToggle}
         >
@@ -143,13 +147,16 @@ function RecordingConfig({ server, onUpdate, onToggle }: {
 
 // ─── Traffic log ──────────────────────────────────────────────────────────────
 
-function TrafficLog({ recorded, onClear, onImport }: {
+function TrafficLog({ recorded, onClear, onImport, onAddRoutes, onApplyStateMachine }: {
   recorded: RecordedRequest[];
   onClear?: () => void;
   onImport?: (reqs: RecordedRequest[]) => void;
+  onAddRoutes?: (routes: MockRoute[]) => void;
+  onApplyStateMachine?: (sm: StateMachineConfig) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [enrichTarget, setEnrichTarget] = useState<RecordedRequest | null>(null);
 
   const toggle = (id: string) => {
     setChecked(prev => {
@@ -188,9 +195,21 @@ function TrafficLog({ recorded, onClear, onImport }: {
           <span className="text-[11px] text-[var(--color-text-muted)]">{checked.size} selected</span>
         </div>
         <div className="flex items-center gap-1.5">
+          {selectedRecord && onAddRoutes && (
+            <ButtonView
+              size="md"
+              variant="ghost"
+              accentColor={MOCK_ACCENT}
+              iconLeft={<SparkleIcon size={11} />}
+              onClick={() => setEnrichTarget(selectedRecord)}
+            >
+              AI Enrich ✦
+            </ButtonView>
+          )}
           {checked.size > 0 && onImport && (
             <ButtonView
               size="md"
+              variant="ghost"
               accentColor={MOCK_ACCENT}
               onClick={() => onImport(recorded.filter(r => checked.has(r.id)))}
             >
@@ -238,6 +257,15 @@ function TrafficLog({ recorded, onClear, onImport }: {
           )}
         </div>
       </div>
+
+      {enrichTarget && onAddRoutes && (
+        <AiEnrichModal
+          record={enrichTarget}
+          onClose={() => setEnrichTarget(null)}
+          onAddRoutes={(routes) => { onAddRoutes(routes); }}
+          onApplyStateMachine={onApplyStateMachine}
+        />
+      )}
     </div>
   );
 }
@@ -256,7 +284,7 @@ function RequestDetail({ record }: { record: RecordedRequest }) {
       <div className="flex items-center gap-2">
         <span className="text-[9px] font-medium px-1.5 py-0.5 rounded font-mono" style={{ background: methodColor(record.method).bg, color: methodColor(record.method).text }}>{record.method}</span>
         <span className="text-[11px] font-mono text-[var(--color-text-primary)]">{record.path}</span>
-        <span className="ml-auto text-[10px] font-mono" style={{ color: statusColor(record.responseStatus) }}>{record.responseStatus}</span>
+        <span className="ml-auto text-[10px] font-mono" style={{ color: statusColor(record.response.status) }}>{record.response.status}</span>
       </div>
       <TabView
         tabs={sectionTabs}
@@ -268,12 +296,12 @@ function RequestDetail({ record }: { record: RecordedRequest }) {
       />
       {section === 'request' && (
         <pre className="text-[10px] font-mono text-[var(--color-text-muted)] whitespace-pre-wrap break-all">
-          {`Headers:\n${JSON.stringify(record.requestHeaders, null, 2)}\n\nBody:\n${record.requestBody || '(empty)'}`}
+          {`Headers:\n${JSON.stringify(record.headers, null, 2)}\n\nBody:\n${record.body || '(empty)'}`}
         </pre>
       )}
       {section === 'response' && (
         <pre className="text-[10px] font-mono text-[var(--color-text-muted)] whitespace-pre-wrap break-all">
-          {`Headers:\n${JSON.stringify(record.responseHeaders, null, 2)}\n\nBody:\n${record.responseBody || '(empty)'}`}
+          {`Headers:\n${JSON.stringify(record.response.headers, null, 2)}\n\nBody:\n${record.response.body || '(empty)'}`}
         </pre>
       )}
     </div>

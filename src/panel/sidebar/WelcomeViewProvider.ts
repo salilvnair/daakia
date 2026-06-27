@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { MainPanel } from '../main/MainPanel';
 
 export class WelcomeViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'daakia.welcome';
@@ -32,6 +33,12 @@ export class WelcomeViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage((msg) => {
       if (msg.command === 'openPanel') {
         vscode.commands.executeCommand('daakia.openPanel');
+      } else if (msg.command === 'openWiki') {
+        vscode.commands.executeCommand('daakia.openPanel').then(() => {
+          setTimeout(() => {
+            MainPanel.currentPanel?.postMessage({ type: 'navigate', panel: 'settings', section: 'wiki' });
+          }, 300);
+        });
       }
     });
   }

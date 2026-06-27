@@ -371,6 +371,7 @@ export function MockServerPanel() {
         <p className="text-[14px] text-[var(--color-text-muted)]">No mock servers found</p>
         <ButtonView
           size="md"
+          variant="ghost"
           accentColor="var(--color-mock-server)"
           onClick={() => setShowNewDialog(true)}
         >

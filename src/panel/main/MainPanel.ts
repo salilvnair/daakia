@@ -429,6 +429,22 @@ export class MainPanel {
         break;
       }
 
+      case 'exportMockServer': {
+        const content = msg.content as string ?? '';
+        const filename = msg.filename as string ?? 'mock-server.js';
+        vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(filename),
+          filters: { 'All Files': ['*'] },
+          saveLabel: 'Save',
+          title: 'Save Mock Server File',
+        }).then(uri => {
+          if (uri) {
+            fs.writeFileSync(uri.fsPath, content, 'utf-8');
+          }
+        });
+        break;
+      }
+
       // ── State Machine Workflows ──
       case 'smWorkflow:getAll':
         handleSmWorkflowGetAll(this._post);

@@ -190,6 +190,7 @@ function WorkflowCard({ index, workflow, protocolColor, protocolLabel, onUnlink,
             </span>
             <ButtonView
               size="md"
+              variant="ghost"
               accentColor={protocolColor}
               onClick={() => onOpenEditor(workflow.workflowId)}
             >
@@ -230,7 +231,7 @@ function LegacySingleCard({ server, onOpenEditor, onUnlink }: Props) {
         onOpenEditor={onOpenEditor}
       />
       <div style={{ display: 'flex', gap: 6, paddingTop: 2 }}>
-        <ButtonView size="md" accentColor={protocolColor} onClick={() => (onConnectNew ?? onOpenEditor)()} style={{ flex: 1 }}>
+        <ButtonView size="md" variant="ghost" accentColor={protocolColor} onClick={() => (onConnectNew ?? onOpenEditor)()} style={{ flex: 1 }}>
           + Connect Another Workflow
         </ButtonView>
       </div>
@@ -248,7 +249,7 @@ function EmptyState({ onOpenEditor }: { onOpenEditor: () => void }) {
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', maxWidth: 220 }}>
         Open the State Machine editor, design a flow, then right-click a workflow to connect it here.
       </div>
-      <ButtonView size="md" accentColor={SM_AMBER} onClick={onOpenEditor}>
+      <ButtonView size="md" variant="ghost" accentColor={SM_AMBER} onClick={onOpenEditor}>
         Open State Machine Editor
       </ButtonView>
     </div>
@@ -282,11 +283,11 @@ export function SmWorkflowDashboard({ server, onOpenEditor, onConnectNew, onUnli
 
         {/* action row */}
         <div style={{ display: 'flex', gap: 6, paddingTop: 2 }}>
-          <ButtonView size="md" accentColor={protocolColor} onClick={() => (onConnectNew ?? onOpenEditor)()} style={{ flex: 1 }}>
+          <ButtonView size="md" variant="ghost" accentColor={protocolColor} onClick={() => (onConnectNew ?? onOpenEditor)()} style={{ flex: 1 }}>
             + Connect Another Workflow
           </ButtonView>
           <IconButtonView
-            size="sm"
+            size="md"
             icon={<DisconnectIcon size={11} />}
             title="Unlink all workflows"
             accentColor="var(--color-error)"

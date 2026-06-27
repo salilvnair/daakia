@@ -130,10 +130,10 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
         </div>
         {route.isTemplate && (
           <div className="flex items-center gap-1.5">
-            <ButtonView size="md" accentColor={MOCK_ACCENT} onClick={() => setShowHelpers(v => !v)}>
+            <ButtonView size="md" variant="ghost" accentColor={MOCK_ACCENT} onClick={() => setShowHelpers(v => !v)}>
               Helpers
             </ButtonView>
-            <ButtonView size="md" accentColor="var(--color-info)" onClick={() => setShowPreview(v => !v)}>
+            <ButtonView size="md" variant="ghost" accentColor="var(--color-info)" onClick={() => setShowPreview(v => !v)}>
               {showPreview ? 'Hide Preview' : 'Live Preview'}
             </ButtonView>
           </div>
@@ -154,6 +154,7 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
                   <ButtonView
                     key={item}
                     size="xs"
+                    variant="ghost"
                     accentColor={MOCK_ACCENT}
                     onClick={() => insertHelper(item)}
                     className="w-full !justify-start font-mono text-[10px] truncate"

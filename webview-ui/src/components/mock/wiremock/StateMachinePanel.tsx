@@ -81,6 +81,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
         </div>
         <ButtonView
           size="sm"
+          variant="ghost"
           accentColor={MOCK_ACCENT}
           iconLeft={<PlusIcon size={12} />}
           onClick={e => { e.stopPropagation(); addState(); setExpanded(true); }}
@@ -114,7 +115,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">States</span>
-              <ButtonView size="sm" accentColor={MOCK_ACCENT} iconLeft={<PlusIcon size={9} />} onClick={addState}>
+              <ButtonView size="sm" variant="ghost" accentColor={MOCK_ACCENT} iconLeft={<PlusIcon size={9} />} onClick={addState}>
                 Add
               </ButtonView>
             </div>
@@ -161,6 +162,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Transitions</span>
               <ButtonView
                 size="sm"
+                variant="ghost"
                 accentColor={MOCK_ACCENT}
                 iconLeft={<PlusIcon size={9} />}
                 disabled={!hasMultipleStates}
@@ -275,6 +277,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
         </div>
         <ButtonView
           size="sm"
+          variant="ghost"
           accentColor={ACCENT}
           iconLeft={<PlusIcon size={10} />}
           onClick={addEntry}

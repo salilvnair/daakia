@@ -4,6 +4,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
+import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
@@ -17,6 +18,9 @@ const ACCENT = 'var(--color-protocol-mcp)';
 
 export function AiMcpPromptBuilderModal({ onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
+  const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
+  const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
+  const providers = useAiProvidersStore(s => s.providers);
   const [description, setDescription] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,12 +43,13 @@ export function AiMcpPromptBuilderModal({ onClose }: Props) {
   const handleGenerate = () => {
     if (!activeTab || !description.trim() || loading) return;
     streamRef.current = ''; setResult(''); setError(''); setLoading(true);
-    postMsg({
-      type: 'ai:send',
-      tabId: activeTab.id,
-      messages: [{
-        role: 'user',
-        content: `You are an MCP (Model Context Protocol) expert. The user wants to accomplish the following goal using MCP tools:
+
+    // Resolve active AI provider/model — prefer what's on the tab, fall back to store defaults
+    const provider = activeTab.aiProvider || defaultProviderId;
+    const providerInfo = providers.find(p => p.id === provider);
+    const model = activeTab.aiModel || defaultModelId || providerInfo?.models.find(m => m.enabled)?.id || '';
+
+    const userPrompt = `You are an MCP (Model Context Protocol) expert. The user wants to accomplish the following goal using MCP tools:
 
 "${description}"
 
@@ -61,9 +66,22 @@ Format your response with:
 ## Goal Analysis
 ## Tool Call Sequence
 ## Recommended Prompt
-## Example Usage`,
-      }],
-      stream: true,
+## Example Usage`;
+
+    postMsg({
+      type: 'ai:send',
+      tabId: activeTab.id,
+      provider,
+      model,
+      baseUrl: '',
+      systemPrompts: [],
+      userPrompt,
+      conversation: [],
+      tools: [],
+      settings: {},
+      mcpServerConfigs: [],
+      images: [],
+      envId: activeTab.envId,
     });
   };
 
