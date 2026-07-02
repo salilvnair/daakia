@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@salilvnair/dui": "file:../../dui",
+    "@salilvnair/dui": "file:../../dui2",
     "@salilvnair/state-machine": "file:../../state-machine",
     "@xyflow/react": "^12.6.4",
     "@monaco-editor/react": "^4.7.0",

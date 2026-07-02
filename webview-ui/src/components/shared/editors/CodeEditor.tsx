@@ -1,15 +1,4 @@
-import Editor, { OnMount } from '@monaco-editor/react';
-import { useRef, useMemo, useEffect, useState } from 'react';
-import { getDkCompletions, DK_TYPE_DEFS } from '../../../services/dk-repl';
-import { useAppTheme } from '../../../hooks/useAppTheme';
-
-// Module-level flag — dk type defs are global to the JS language worker, register once only
-let dkLibRegistered = false;
-import { initGraphQLCompletionProvider } from '../../../services/graphql-completion';
-import { useBreakpointGutter } from '../../../hooks/useBreakpointGutter';
-import { useDebugVariableHover } from '../../../hooks/useDebugVariableHover';
-import { useDebugStore } from '../../../store/debug-store';
-
+import { EditorView } from '@salilvnair/dui';
 
 export type CodeLanguage = 'javascript' | 'json' | 'xml' | 'python' | 'text' | 'html' | 'typescript' | 'java' | 'graphql' | 'plaintext';
 
@@ -39,48 +28,20 @@ interface Props {
   onEditorMount?: (editor: any, monaco: any) => void;
 }
 
-const LANG_MAP: Record<CodeLanguage, string> = {
-  javascript: 'javascript',
-  typescript: 'typescript',
-  json: 'json',
-  xml: 'xml',
-  python: 'python',
-  html: 'html',
-  java: 'java',
-  graphql: 'graphql',
-  plaintext: 'plaintext',
-  text: 'plaintext',
+// dui's EditorLanguage doesn't have a 'text' value — it's an alias for 'plaintext' here.
+const LANG_MAP: Record<CodeLanguage, Exclude<CodeLanguage, 'text'>> = {
+  javascript: 'javascript', typescript: 'typescript', json: 'json', xml: 'xml',
+  python: 'python', html: 'html', java: 'java', graphql: 'graphql',
+  plaintext: 'plaintext', text: 'plaintext',
 };
 
-const EXT_MAP: Record<CodeLanguage, string> = {
-  javascript: '.js',
-  typescript: '.ts',
-  json: '.json',
-  xml: '.xml',
-  python: '.py',
-  html: '.html',
-  java: '.java',
-  graphql: '.graphql',
-  plaintext: '.txt',
-  text: '.txt',
-};
-
-/** Simple XML formatter — adds proper indentation */
-function formatXml(xml: string): string {
-  const INDENT = '  ';
-  let depth = 0;
-  let result = '';
-  const tokens = xml.replace(/>\s*</g, '><').split(/(?<=>)(?=<)/);
-  for (const token of tokens) {
-    const isClosing = /^<\//.test(token);
-    const isSelfClosing = /\/>$/.test(token) || /^<!/.test(token) || /^<\?/.test(token);
-    if (isClosing) depth = Math.max(0, depth - 1);
-    result += INDENT.repeat(depth) + token.trim() + '\n';
-    if (!isClosing && !isSelfClosing && /^<[^/!?]/.test(token)) depth++;
-  }
-  return result.trimEnd();
-}
-
+/**
+ * Thin wrapper around dui's EditorView — kept as its own component (rather
+ * than switching every call site to EditorView directly) so this file's
+ * exported CodeLanguage type and always-on debug-hook behavior (breakpoint
+ * gutter, variable hover, navigate-to-line) stay exactly as they were when
+ * this used to own its Monaco setup directly.
+ */
 export function CodeEditor({
   value,
   onChange,
@@ -99,469 +60,33 @@ export function CodeEditor({
   onGlyphContextMenu,
   onEditorMount,
 }: Props) {
-  const editorRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
-  const disposablesRef = useRef<any[]>([]);
-  // Stable unique path with correct extension so the TypeScript worker identifies the script kind
-  const modelPath = useMemo(() => `inmemory://daakia/${crypto.randomUUID()}${EXT_MAP[language] || '.txt'}`, [language]);
-
-  // Breakpoint gutter logic (decorations, hover, click handlers, paused-line highlight) — externalized
-  const { attach: attachBreakpointGutter } = useBreakpointGutter({
-    breakpoints,
-    disabledBreakpoints,
-    conditionalBreakpointLines,
-    pausedLine,
-    onToggleBreakpoint,
-    onGlyphContextMenu,
-  });
-
-  // Variable hover during debug — shows values on hover over identifiers
-  const { attach: attachDebugHover } = useDebugVariableHover();
-
-  // Dynamic Monaco theme — follows the app-wide dark/light setting
-  const appTheme = useAppTheme();
-  const monacoTheme = appTheme === 'light' ? 'daakia-light' : 'daakia-dark';
-
-  // Cleanup on unmount — dispose listeners and model to prevent leaks
-  useEffect(() => {
-    return () => {
-      disposablesRef.current.forEach(d => d?.dispose?.());
-      disposablesRef.current = [];
-      const editor = editorRef.current;
-      if (editor) {
-        const model = editor.getModel();
-        if (model) model.dispose();
-      }
-    };
-  }, []);
-
-  // Explicit value sync for readOnly editors — @monaco-editor/react's internal
-  // value-update effect can silently drop updates when the editor mounts with
-  // value='' and the parent later sets a non-empty value (e.g. AI streaming).
-  // Belt-and-suspenders: directly push the value into the model whenever it changes.
-  useEffect(() => {
-    if (!readOnly) return;
-    const editor = editorRef.current;
-    if (!editor) return;
-    const model = editor.getModel();
-    if (!model || model.getValue() === value) return;
-    model.setValue(value);
-  }, [value, readOnly]);
-
-  // Navigate to line when breakpoint is clicked in RunAndDebugPanel
-  const navigateLine = useDebugStore(s => s.navigateLine);
-  useEffect(() => {
-    if (navigateLine && editorRef.current && breakpoints) {
-      editorRef.current.revealLineInCenter(navigateLine);
-      editorRef.current.setPosition({ lineNumber: navigateLine, column: 1 });
-      useDebugStore.getState().setNavigateLine(null);
-    }
-  }, [navigateLine, breakpoints]);
-
-  const handleMount: OnMount = (editor, monacoInstance) => {
-    editorRef.current = editor;
-    monacoRef.current = monacoInstance;
-    disposablesRef.current = [];
-
-    // Attach breakpoint gutter interactions (click, context menu, hover)
-    attachBreakpointGutter(editor, monacoInstance);
-
-    // Attach debug variable hover (shows variable values on hover during debug)
-    attachDebugHover(editor, monacoInstance);
-
-    // Force auto-closing options after mount to ensure they take effect
-    editor.updateOptions({
-      autoClosingBrackets: 'always',
-      autoClosingQuotes: 'always',
-      autoClosingDelete: 'always',
-      autoSurround: 'languageDefined',
-      autoIndent: 'full',
-    });
-
-    // Override clipboard keybindings to use modern Clipboard API (webview-compatible)
-    const KM = monacoInstance.KeyMod;
-    const KC = monacoInstance.KeyCode;
-
-    editor.addAction({
-      id: 'daakia.clipboard.copy',
-      label: 'Copy',
-      keybindings: [KM.CtrlCmd | KC.KeyC],
-      run: (ed) => {
-        const sel = ed.getSelection();
-        if (sel && !sel.isEmpty()) {
-          const text = ed.getModel()?.getValueInRange(sel) || '';
-          navigator.clipboard.writeText(text);
-        } else {
-          // Copy entire line if no selection (Monaco default behavior)
-          const pos = ed.getPosition();
-          if (pos) {
-            const line = ed.getModel()?.getLineContent(pos.lineNumber) || '';
-            navigator.clipboard.writeText(line + '\n');
-          }
-        }
-      },
-    });
-
-    editor.addAction({
-      id: 'daakia.clipboard.cut',
-      label: 'Cut',
-      keybindings: [KM.CtrlCmd | KC.KeyX],
-      run: (ed) => {
-        const sel = ed.getSelection();
-        if (sel && !sel.isEmpty()) {
-          const text = ed.getModel()?.getValueInRange(sel) || '';
-          navigator.clipboard.writeText(text);
-          ed.executeEdits('cut', [{ range: sel, text: '' }]);
-        } else {
-          // Cut entire line if no selection
-          const pos = ed.getPosition();
-          if (pos) {
-            const model = ed.getModel();
-            if (model) {
-              const line = model.getLineContent(pos.lineNumber) + '\n';
-              navigator.clipboard.writeText(line);
-              const range = new monacoInstance.Range(pos.lineNumber, 1, pos.lineNumber + 1, 1);
-              ed.executeEdits('cut', [{ range, text: '' }]);
-            }
-          }
-        }
-      },
-    });
-
-    editor.addAction({
-      id: 'daakia.clipboard.paste',
-      label: 'Paste',
-      keybindings: [KM.CtrlCmd | KC.KeyV],
-      run: async (ed) => {
-        try {
-          const text = await navigator.clipboard.readText();
-          if (text) {
-            const sel = ed.getSelection();
-            if (sel) {
-              ed.executeEdits('paste', [{ range: sel, text, forceMoveMarkers: true }]);
-            }
-          }
-        } catch { /* clipboard permission denied */ }
-      },
-    });
-
-    editor.addAction({
-      id: 'daakia.clipboard.selectAll',
-      label: 'Select All',
-      keybindings: [KM.CtrlCmd | KC.KeyA],
-      run: (ed) => {
-        const model = ed.getModel();
-        if (model) {
-          ed.setSelection(model.getFullModelRange());
-        }
-      },
-    });
-
-    // Format Document — Shift+Alt+F (works for JSON, JS; custom for XML)
-    editor.addAction({
-      id: 'daakia.format.document',
-      label: 'Format Document',
-      keybindings: [KM.Shift | KM.Alt | KC.KeyF],
-      contextMenuGroupId: 'modification',
-      contextMenuOrder: 1.5,
-      run: async (ed) => {
-        const model = ed.getModel();
-        if (!model) return;
-        const langId = model.getLanguageId();
-        if (langId === 'xml' || langId === 'html') {
-          // Simple XML/HTML indent formatter
-          try {
-            const raw = model.getValue();
-            const formatted = formatXml(raw);
-            if (formatted !== raw) {
-              ed.executeEdits('daakia.format', [{ range: model.getFullModelRange(), text: formatted }]);
-            }
-          } catch { /* malformed XML — leave as is */ }
-        } else {
-          await ed.getAction('editor.action.formatDocument')?.run();
-        }
-      },
-    });
-
-    // Ensure the language model has correct config for bracket pairs
-    const model = editor.getModel();
-    if (model) {
-      const langId = model.getLanguageId();
-
-      if (langId === 'xml' || langId === 'html') {
-        monacoInstance.languages.setLanguageConfiguration(langId, {
-          autoClosingPairs: [
-            { open: '{', close: '}' },
-            { open: '[', close: ']' },
-            { open: '(', close: ')' },
-            { open: '"', close: '"', notIn: ['string'] },
-            { open: "'", close: "'", notIn: ['string', 'comment'] },
-            { open: '<', close: '>', notIn: ['string'] },
-          ],
-          brackets: [
-            ['{', '}'],
-            ['[', ']'],
-            ['(', ')'],
-            ['<', '>'],
-          ],
-          surroundingPairs: [
-            { open: '{', close: '}' },
-            { open: '[', close: ']' },
-            { open: '(', close: ')' },
-            { open: '"', close: '"' },
-            { open: "'", close: "'" },
-            { open: '<', close: '>' },
-          ],
-          onEnterRules: [
-            {
-              beforeText: /<([_:\w][_:\w\-.\d]*)([^/>]*(?!\/)>)\s*$/i,
-              afterText: /^<\/([_:\w][_:\w\-.\d]*)\s*>$/i,
-              action: { indentAction: monacoInstance.languages.IndentAction.IndentOutdent },
-            },
-            {
-              beforeText: /<([_:\w][_:\w\-.\d]*)([^/>]*(?!\/)>)\s*$/i,
-              action: { indentAction: monacoInstance.languages.IndentAction.Indent },
-            },
-          ],
-          wordPattern: /(-?\d*\.\d\w*)|([^\`\~\!\@\#\$\%\^\&\*\(\)\-\=\+\[\{\]\}\\\|\;\:\'\"\,\.\<\>\/\?\s]+)/g,
-        });
-
-        // Register XML auto-closing tag completion provider
-        monacoInstance.languages.registerCompletionItemProvider(langId, {
-          triggerCharacters: ['/'],
-          provideCompletionItems: (mdl: any, position: any) => {
-            const textUntilPosition = mdl.getValueInRange({
-              startLineNumber: 1,
-              startColumn: 1,
-              endLineNumber: position.lineNumber,
-              endColumn: position.column,
-            });
-
-            // Match </ and suggest closing tag
-            const match = textUntilPosition.match(/<\/\s*$/);
-            if (match) {
-              // Find last unclosed tag
-              const openTags: string[] = [];
-              const tagRegex = /<\/?([_:\w][_:\w\-.\d]*)[^>]*\/?>/g;
-              let m;
-              while ((m = tagRegex.exec(textUntilPosition.slice(0, -2))) !== null) {
-                const fullMatch = m[0];
-                const tagName = m[1];
-                if (fullMatch.startsWith('</')) {
-                  openTags.pop();
-                } else if (!fullMatch.endsWith('/>')) {
-                  openTags.push(tagName);
-                }
-              }
-              const lastOpen = openTags[openTags.length - 1];
-              if (lastOpen) {
-                return {
-                  suggestions: [{
-                    label: `/${lastOpen}>`,
-                    kind: monacoInstance.languages.CompletionItemKind.Keyword,
-                    insertText: `${lastOpen}>`,
-                    range: {
-                      startLineNumber: position.lineNumber,
-                      startColumn: position.column,
-                      endLineNumber: position.lineNumber,
-                      endColumn: position.column,
-                    },
-                  }],
-                };
-              }
-            }
-            return { suggestions: [] };
-          },
-        });
-      } else {
-        monacoInstance.languages.setLanguageConfiguration(langId, {
-          autoClosingPairs: [
-            { open: '{', close: '}' },
-            { open: '[', close: ']' },
-            { open: '(', close: ')' },
-            { open: '"', close: '"', notIn: ['string'] },
-            { open: "'", close: "'", notIn: ['string', 'comment'] },
-          ],
-          brackets: [
-            ['{', '}'],
-            ['[', ']'],
-            ['(', ')'],
-          ],
-          surroundingPairs: [
-            { open: '{', close: '}' },
-            { open: '[', close: ']' },
-            { open: '(', close: ')' },
-            { open: '"', close: '"' },
-            { open: "'", close: "'" },
-          ],
-        });
-      }
-    }
-
-    // Register GraphQL language if not already registered
-    const languages = monacoInstance.languages.getLanguages();
-    if (!languages.some((l: any) => l.id === 'graphql')) {
-      monacoInstance.languages.register({ id: 'graphql' });
-      monacoInstance.languages.setMonarchTokensProvider('graphql', {
-        keywords: ['type', 'input', 'enum', 'union', 'interface', 'scalar', 'schema', 'query', 'mutation', 'subscription', 'fragment', 'on', 'extend', 'implements', 'directive', 'repeatable'],
-        typeKeywords: ['String', 'Int', 'Float', 'Boolean', 'ID'],
-        operators: ['!', '=', '|', '&', '...'],
-        symbols: /[=!|&]+/,
-        tokenizer: {
-          root: [
-            [/#.*$/, 'comment'],
-            [/"([^"\\]|\\.)*"/, 'string'],
-            [/"""[\s\S]*?"""/, 'string'],
-            [/\b(type|input|enum|union|interface|scalar|schema|extend|implements|directive|repeatable)\b/, 'keyword'],
-            [/\b(query|mutation|subscription|fragment|on)\b/, 'keyword.control'],
-            [/\b(String|Int|Float|Boolean|ID)\b/, 'type.identifier'],
-            [/\b[A-Z][a-zA-Z0-9_]*\b/, 'type.identifier'],
-            [/\b[a-z_][a-zA-Z0-9_]*(?=\s*[:(])/, 'variable'],
-            [/\b[a-z_][a-zA-Z0-9_]*\b/, 'identifier'],
-            [/[{}()\[\]]/, '@brackets'],
-            [/[!:=|&]/, 'operator'],
-            [/\$[a-zA-Z_]\w*/, 'variable'],
-            [/@[a-zA-Z_]\w*/, 'annotation'],
-          ],
-        },
-      } as any);
-    }
-
-    // Register GraphQL schema-based completion provider (once globally)
-    if (language === 'graphql') {
-      initGraphQLCompletionProvider(monacoInstance);
-    }
-
-    // Register dk/console intellisense for JavaScript editors (script editors)
-    if (language === 'javascript') {
-      // Inject dk global type declarations once — tells Monaco's JavaScript diagnostics
-      // that `dk` is a valid global so it stops showing "Cannot find name 'dk'" errors.
-      if (!dkLibRegistered) {
-        monacoInstance.languages.typescript.javascriptDefaults.addExtraLib(
-          DK_TYPE_DEFS,
-          'dk-globals.d.ts',
-        );
-        dkLibRegistered = true;
-      }
-
-      monacoInstance.languages.registerCompletionItemProvider('javascript', {
-        triggerCharacters: ['.'],
-        provideCompletionItems: (mdl: any, pos: any) => {
-          const textUntilPosition = mdl.getValueInRange({
-            startLineNumber: pos.lineNumber,
-            startColumn: 1,
-            endLineNumber: pos.lineNumber,
-            endColumn: pos.column,
-          });
-          const suggestions = getDkCompletions(textUntilPosition, monacoInstance, pos);
-          if (suggestions.length > 0) return { suggestions };
-
-          // console. completions
-          const range = { startLineNumber: pos.lineNumber, endLineNumber: pos.lineNumber, startColumn: pos.column, endColumn: pos.column };
-          if (/\bconsole\.\s*$/.test(textUntilPosition)) {
-            return {
-              suggestions: [
-                { label: 'log', kind: monacoInstance.languages.CompletionItemKind.Function, insertText: 'log(${1})', insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Log output', range },
-                { label: 'info', kind: monacoInstance.languages.CompletionItemKind.Function, insertText: 'info(${1})', insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Info output', range },
-                { label: 'warn', kind: monacoInstance.languages.CompletionItemKind.Function, insertText: 'warn(${1})', insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Warning output', range },
-                { label: 'error', kind: monacoInstance.languages.CompletionItemKind.Function, insertText: 'error(${1})', insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Error output', range },
-                { label: 'debug', kind: monacoInstance.languages.CompletionItemKind.Function, insertText: 'debug(${1})', insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Debug output', range },
-              ],
-            };
-          }
-
-          return { suggestions: [] };
-        },
-      });
-    }
-
-    // Show placeholder if empty
-    if (!value && placeholder) {
-      editor.updateOptions({ placeholder });
-    }
-
-    // Notify parent with editor + monaco instances (used by AI autocomplete)
-    onEditorMount?.(editor, monacoInstance);
-
-    // Find & Replace shortcut — Ctrl+Shift+H (avoids VS Code's Ctrl+R window reload and Ctrl+H interference)
-    // Also adds "Find and Replace" to the right-click context menu via addAction
-    editor.addAction({
-      id: 'daakia.findAndReplace',
-      label: 'Find and Replace',
-      keybindings: [
-        monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.KeyH,
-      ],
-      contextMenuGroupId: 'navigation',
-      contextMenuOrder: 1.5,
-      run: () => editor.getAction('editor.action.startFindReplaceAction')?.run(),
-    });
-
-    // Enable the standard context menu so "Find and Replace" appears
-    // Note: we re-enable just for the custom action; other VS Code menu items are suppressed by Monaco defaults
-    editor.updateOptions({ contextmenu: true });
-  };
-
   return (
-    <div className={`rounded border border-[var(--color-surface-border)] ${className}`} style={{ height }}>
-      <Editor
-        height="100%"
-        language={LANG_MAP[language] || 'plaintext'}
-        path={modelPath}
-        value={value}
-        onChange={(val) => onChange?.(val ?? '')}
-        onMount={handleMount}
-        theme={monacoTheme}
-        options={{
-          readOnly,
-          minimap: { enabled: false },
-          fontSize,
-          lineNumbers: 'on',
-          glyphMargin: !!onToggleBreakpoint,
-          scrollBeyondLastLine: false,
-          wordWrap: wordWrap ? 'on' : 'off',
-          tabSize: 2,
-          renderLineHighlight: 'line',
-          overviewRulerLanes: 0,
-          hideCursorInOverviewRuler: true,
-          scrollbar: {
-            verticalScrollbarSize: 8,
-            horizontalScrollbarSize: 8,
-          },
-          padding: { top: 8, bottom: 8 },
-          folding: true,
-          bracketPairColorization: { enabled: true },
-          automaticLayout: true,
-          contextmenu: true,
-          fixedOverflowWidgets: true,
-          // Let Monaco handle clipboard internally
-          copyWithSyntaxHighlighting: true,
-          formatOnPaste: true,
-          formatOnType: true,
-          // VS Code-like auto features
-          autoClosingBrackets: 'always',
-          autoClosingQuotes: 'always',
-          autoClosingDelete: 'always',
-          autoIndent: 'full',
-          autoSurround: 'languageDefined',
-          suggest: {
-            showKeywords: true,
-            showSnippets: true,
-            showValues: true,
-            showProperties: true,
-          },
-          quickSuggestions: true,
-          suggestOnTriggerCharacters: true,
-          acceptSuggestionOnEnter: 'on',
-          matchBrackets: 'always',
-          guides: {
-            bracketPairs: true,
-            indentation: true,
-          },
-          colorDecorators: true,
-          linkedEditing: true,
-          renderWhitespace: 'selection',
-        }}
-      />
-    </div>
+    <EditorView
+      debugSupported
+      bordered
+      className={className}
+      value={value}
+      onChange={onChange}
+      language={LANG_MAP[language]}
+      readOnly={readOnly}
+      placeholder={placeholder}
+      height={height}
+      wordWrap={wordWrap}
+      fontSize={fontSize}
+      breakpoints={breakpoints}
+      disabledBreakpoints={disabledBreakpoints}
+      conditionalBreakpointLines={conditionalBreakpointLines}
+      pausedLine={pausedLine}
+      onToggleBreakpoint={onToggleBreakpoint}
+      onGlyphContextMenu={onGlyphContextMenu}
+      onEditorMount={onEditorMount}
+      editorOptions={{
+        // CodeEditor always highlighted the current line and used an 8px
+        // scrollbar regardless of whether breakpoints were wired up —
+        // dui's defaults are conditional on glyphMargin, so pin them explicitly.
+        renderLineHighlight: 'line',
+        scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+      }}
+    />
   );
 }

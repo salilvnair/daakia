@@ -10,8 +10,7 @@
  * - Save + Reset actions
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import Editor from '@monaco-editor/react';
-import type * as MonacoT from 'monaco-editor';
+import { EditorView } from '@salilvnair/dui';
 import { TrashIcon } from '../../icons';
 import type { AgentScenario, ScenarioVarMap } from '../../store/prompt-template';
 import { SCENARIO_COLORS, SCENARIO_LABELS, SCENARIO_DESCRIPTIONS } from '../../store/prompt-template';
@@ -54,11 +53,8 @@ function ensureVarDecorationStyle() {
   document.head.appendChild(style);
 }
 
-function computeVarDecorations(
-  text: string,
-  monaco: typeof MonacoT,
-): MonacoT.editor.IModelDeltaDecoration[] {
-  const decos: MonacoT.editor.IModelDeltaDecoration[] = [];
+function computeVarDecorations(text: string, monaco: any): any[] {
+  const decos: any[] = [];
   text.split('\n').forEach((line, lineIdx) => {
     const regex = /\{\{[^}]+\}\}/g;
     let m;
@@ -110,9 +106,9 @@ export function AgentPromptEditor({ entry, onSave, onResetRequest }: AgentPrompt
   const [editUser, setEditUser] = useState(entry.userPrompt);
   const [dirty, setDirty] = useState(false);
 
-  const editorRef = useRef<MonacoT.editor.IStandaloneCodeEditor | null>(null);
-  const monacoRef = useRef<typeof MonacoT | null>(null);
-  const decoCollRef = useRef<MonacoT.editor.IEditorDecorationsCollection | null>(null);
+  const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
+  const decoCollRef = useRef<any>(null);
 
   useEffect(() => { ensureVarDecorationStyle(); }, []);
 
@@ -264,11 +260,12 @@ export function AgentPromptEditor({ entry, onSave, onResetRequest }: AgentPrompt
             <PromptPreview text={currentEditText} vars={allVars} />
           </div>
         ) : (
-          <Editor
+          <EditorView
             key={`${entry.scenario}-${promptRole}`}
             height="100%"
             language="plaintext"
-            theme="daakia-dark"
+            fontSize={12}
+            wordWrap
             value={currentEditText}
             onChange={val => {
               const v = val ?? '';
@@ -276,17 +273,18 @@ export function AgentPromptEditor({ entry, onSave, onResetRequest }: AgentPrompt
               setDirty(true);
               updateDecorations(v);
             }}
-            onMount={(editor, monaco) => {
-              editorRef.current = editor as unknown as MonacoT.editor.IStandaloneCodeEditor;
-              monacoRef.current = monaco as unknown as typeof MonacoT;
+            onEditorMount={(editor, monaco) => {
+              editorRef.current = editor;
+              monacoRef.current = monaco;
               decoCollRef.current = editor.createDecorationsCollection([]);
-              decoCollRef.current.set(computeVarDecorations(currentEditText, monaco as unknown as typeof MonacoT));
+              decoCollRef.current.set(computeVarDecorations(currentEditText, monaco));
             }}
-            options={{
-              fontSize: 12, wordWrap: 'on', lineNumbers: 'off', minimap: { enabled: false },
-              scrollBeyondLastLine: false, padding: { top: 12, bottom: 12 },
-              renderLineHighlight: 'none', overviewRulerLanes: 0,
-              lineDecorationsWidth: 0, folding: false, glyphMargin: false,
+            editorOptions={{
+              lineNumbers: 'off',
+              padding: { top: 12, bottom: 12 },
+              renderLineHighlight: 'none',
+              lineDecorationsWidth: 0,
+              folding: false,
             }}
           />
         )}

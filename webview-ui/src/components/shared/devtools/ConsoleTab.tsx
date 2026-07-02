@@ -13,7 +13,7 @@ import { getDkCompletions, replEval, type ReplEvalContext } from '../../../servi
 import { useTabsStore } from '../../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../../store/env-store';
 import { getProtocolAccent } from '../../../colors';
-import Editor, { OnMount } from '@monaco-editor/react';
+import { EditorView } from '@salilvnair/dui';
 import { LEVEL_CONFIG, formatTimestamp, LogMessage, LevelIcon } from './log-utils';
 import { InfoPopup } from '../display/InfoPopup';
 
@@ -438,43 +438,34 @@ function ConsoleReplEditor({ value, onChange, onExecute, onMount, showLineNumber
   value: string;
   onChange: (v: string) => void;
   onExecute: () => void;
-  onMount: OnMount;
+  onMount: (editor: any, monaco: any) => void;
   showLineNumbers: boolean;
   height: number;
 }) {
   return (
-    <Editor
+    <EditorView
       value={value}
       onChange={(v) => onChange(v || '')}
       language="javascript"
       height={height}
-      onMount={onMount}
-      options={{
-        minimap: { enabled: false },
-        scrollBeyondLastLine: false,
+      wordWrap
+      fontSize={12}
+      contextMenuMode="none"
+      onEditorMount={onMount}
+      editorOptions={{
         lineNumbers: showLineNumbers ? 'on' : 'off',
-        glyphMargin: false,
         folding: false,
         lineDecorationsWidth: showLineNumbers ? 4 : 0,
         lineNumbersMinChars: showLineNumbers ? 3 : 0,
-        overviewRulerLanes: 0,
-        overviewRulerBorder: false,
-        hideCursorInOverviewRuler: true,
         renderLineHighlight: 'none',
         scrollbar: { vertical: 'hidden', horizontal: 'hidden' },
-        wordWrap: 'on',
-        fontSize: 12,
         fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
         padding: { top: 6, bottom: 6 },
         suggest: { showIcons: true },
         tabSize: 2,
-        automaticLayout: true,
-        contextmenu: false,
-        fixedOverflowWidgets: true,
         quickSuggestions: true,
-        parameterHints: { enabled: true },
+        parameterHints: true,
       }}
-      theme="daakia-dark"
     />
   );
 }

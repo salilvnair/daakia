@@ -40,7 +40,7 @@ import {
 } from '@salilvnair/dui';
 import type { FolderNode, FolderAction, DebugSession, DebugActions } from '@salilvnair/dui';
 import type { TabItem, ContextMenuItem, TabBarTab, SelectTextOption, SelectOption, SideNavItem, LiveColorVar } from '@salilvnair/dui';
-import { applyMonacoTheme } from '../../monaco-setup';
+import { applyMonacoTheme } from '@salilvnair/dui/monaco-setup';
 import { SCHEMA_LANG_OPTIONS } from '../../services/response';
 import {
   TrashIcon, PlusIcon, SearchIcon, SettingsIcon, SparkleIcon,
