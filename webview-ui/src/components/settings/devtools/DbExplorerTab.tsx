@@ -64,7 +64,7 @@ function JsonPopupModal({ value, accentColor, onClose }: { value: string; accent
             <button
               type="button"
               onClick={onClose}
-              className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.08)] transition-colors"
+              className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] transition-colors"
               title="Close"
             >
               <CloseIcon size={13} />
@@ -175,8 +175,8 @@ export function DbExplorerTab() {
   return (
     <div className="flex h-full min-h-0">
       {/* ─── Left: table list ─── */}
-      <div className="w-[190px] shrink-0 border-r border-[rgba(255,255,255,0.07)] flex flex-col bg-[rgba(255,255,255,0.01)]">
-        <div className="flex items-center justify-between px-3 py-2.5 border-b border-[rgba(255,255,255,0.07)]">
+      <div className="w-[190px] shrink-0 border-r border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)] flex flex-col bg-[color-mix(in_srgb,var(--color-text-primary)_1%,transparent)]">
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
           <span className="text-[9.5px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">Tables</span>
           <button type="button" onClick={loadTables}
             className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors">
@@ -262,7 +262,7 @@ export function DbExplorerTab() {
                     <tr
                       key={i}
                       className="border-b transition-colors"
-                      style={{ borderColor: 'rgba(255,255,255,0.03)' }}
+                      style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)' }}
                       onMouseEnter={ev => (ev.currentTarget as HTMLElement).style.background = `color-mix(in srgb, ${activeColor} 3%, transparent)`}
                       onMouseLeave={ev => (ev.currentTarget as HTMLElement).style.background = ''}
                     >

@@ -111,7 +111,7 @@ export function SmMockServerCanvas({ server, onUpdate }: Props) {
       )}
 
       <Suspense fallback={
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'color-mix(in srgb, var(--color-text-primary) 40%, transparent)' }}>
           Loading canvas…
         </div>
       }>

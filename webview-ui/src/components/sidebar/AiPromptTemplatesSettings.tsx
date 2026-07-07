@@ -46,7 +46,7 @@ function TemplateRow({ templateKey }: { templateKey: AiPromptTemplateKey }) {
   };
 
   return (
-    <div className="flex flex-col gap-2 py-3 border-b border-[rgba(255,255,255,0.06)] last:border-b-0">
+    <div className="flex flex-col gap-2 py-3 border-b border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] last:border-b-0">
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -170,7 +170,7 @@ export function AiPromptTemplatesSettings() {
             <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-text-muted)' }}>
               Response Errors
             </p>
-            <div className="rounded-lg border px-3 py-1" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+            <div className="rounded-lg border px-3 py-1" style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)' }}>
               <TemplateRow templateKey={askWhy} />
             </div>
           </div>
@@ -180,7 +180,7 @@ export function AiPromptTemplatesSettings() {
             <p className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-text-muted)' }}>
               Mock Server — Generate With AI
             </p>
-            <div className="rounded-lg border px-3 py-1" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+            <div className="rounded-lg border px-3 py-1" style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)' }}>
               {mockKeys.map(key => <TemplateRow key={key} templateKey={key} />)}
             </div>
           </div>

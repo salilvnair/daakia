@@ -29,11 +29,11 @@ function renderMarkdown(text: string): React.ReactNode[] {
       nodes.push(
         <div key={`cb-${i}`} className="relative group my-2">
           {lang && (
-            <div className="text-[10px] px-2 py-0.5 rounded-t-md font-mono" style={{ backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--color-text-muted)' }}>
+            <div className="text-[10px] px-2 py-0.5 rounded-t-md font-mono" style={{ backgroundColor: 'var(--color-overlay-medium)', color: 'var(--color-text-muted)' }}>
               {lang}
             </div>
           )}
-          <pre className={`text-[12px] font-mono p-3 overflow-x-auto rounded-b-md whitespace-pre ${lang ? '' : 'rounded-t-md'}`} style={{ backgroundColor: 'rgba(0,0,0,0.35)', color: 'var(--color-text-primary)' }}>
+          <pre className={`text-[12px] font-mono p-3 overflow-x-auto rounded-b-md whitespace-pre ${lang ? '' : 'rounded-t-md'}`} style={{ backgroundColor: 'var(--color-code-bg)', color: 'var(--color-text-primary)' }}>
             <code>{codeLines.join('\n')}</code>
           </pre>
           <CopyCodeButton text={codeLines.join('\n')} />
@@ -111,7 +111,7 @@ function inlineMarkdown(text: string): React.ReactNode {
       return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
     }
     if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={i} className="px-1 py-0.5 rounded text-[11px] font-mono" style={{ backgroundColor: 'rgba(0,0,0,0.3)', color: 'var(--color-protocol-ai)' }}>{part.slice(1, -1)}</code>;
+      return <code key={i} className="px-1 py-0.5 rounded text-[11px] font-mono" style={{ backgroundColor: 'var(--color-code-bg)', color: 'var(--color-protocol-ai)' }}>{part.slice(1, -1)}</code>;
     }
     if (part.startsWith('*') && part.endsWith('*')) {
       return <em key={i}>{part.slice(1, -1)}</em>;
@@ -130,7 +130,7 @@ function MarkdownTable({ lines }: { lines: string[] }) {
     <div className="my-2 overflow-x-auto rounded-md border border-[var(--color-surface-border)]">
       <table className="min-w-full text-[12px]">
         <thead>
-          <tr className="border-b border-[var(--color-surface-border)]" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}>
+          <tr className="border-b border-[var(--color-surface-border)]" style={{ backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 4%, transparent)' }}>
             {parseRow(header).map((h, i) => (
               <th key={i} className="px-3 py-1.5 text-left font-semibold text-[var(--color-text-primary)] whitespace-nowrap">{h}</th>
             ))}
@@ -138,7 +138,7 @@ function MarkdownTable({ lines }: { lines: string[] }) {
         </thead>
         <tbody>
           {body.map((row, ri) => (
-            <tr key={ri} className="border-b border-[var(--color-surface-border)] last:border-b-0 hover:bg-[rgba(255,255,255,0.02)] transition-colors">
+            <tr key={ri} className="border-b border-[var(--color-surface-border)] last:border-b-0 hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] transition-colors">
               {parseRow(row).map((cell, ci) => (
                 <td key={ci} className="px-3 py-1.5 text-[var(--color-text-muted)] align-top">{inlineMarkdown(cell)}</td>
               ))}
@@ -162,7 +162,7 @@ function CopyCodeButton({ text }: { text: string }) {
       type="button"
       onClick={handleCopy}
       className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity h-[22px] px-1.5 flex items-center gap-1 rounded text-[10px] cursor-pointer"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)', color: 'var(--color-text-muted)' }}
+      style={{ backgroundColor: 'var(--color-elevated)', color: 'var(--color-text-muted)', border: '1px solid var(--color-surface-border)' }}
       title="Copy code"
     >
       <CopyIcon size={10} />

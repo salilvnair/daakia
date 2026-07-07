@@ -265,7 +265,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                 key={stableKey}
                 className={`relative rounded-md border overflow-hidden transition-all ${
                   svcEnabled
-                    ? 'border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)]'
+                    ? 'border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]'
                     : 'border-[var(--color-surface-border)] bg-[var(--color-panel)]'
                 }`}
               >
@@ -278,7 +278,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
 
                 {/* Service header */}
                 <div
-                  className={`flex items-center gap-1.5 px-2.5 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] relative ${!svcEnabled ? 'opacity-50' : ''}`}
+                  className={`flex items-center gap-1.5 px-2.5 py-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] relative ${!svcEnabled ? 'opacity-50' : ''}`}
                   onClick={() => { if (svcEnabled) toggleService(group.service); }}
                 >
                   <div onClick={e => e.stopPropagation()}>
@@ -316,7 +316,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
 
                 {/* Expanded service content */}
                 {isExpanded && (
-                  <div className="px-3 pb-3 pt-1 border-t border-[rgba(255,255,255,0.06)] flex flex-col gap-2">
+                  <div className="px-3 pb-3 pt-1 border-t border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] flex flex-col gap-2">
                     <div className="flex items-center gap-2">
                       <label className="text-[10px] text-[var(--color-text-muted)] whitespace-nowrap">Service Name</label>
                       <TextInputView
@@ -396,7 +396,7 @@ function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }
     <div
       className={`relative rounded-md border overflow-hidden transition-all ${
         m.enabled
-          ? 'border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.01)]'
+          ? 'border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] bg-[color-mix(in_srgb,var(--color-text-primary)_1%,transparent)]'
           : 'border-[var(--color-surface-border)] bg-[var(--color-panel)]'
       }`}
     >
@@ -409,7 +409,7 @@ function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }
 
       {/* Method header */}
       <div
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] relative ${!m.enabled ? 'opacity-50' : ''}`}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] relative ${!m.enabled ? 'opacity-50' : ''}`}
         onClick={() => { if (m.enabled) onToggleExpand(); }}
       >
         <div onClick={e => e.stopPropagation()}>
@@ -452,7 +452,7 @@ function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }
 
       {/* Expanded detail */}
       {m.enabled && isExpanded && (
-        <div className="border-t border-[rgba(255,255,255,0.06)]">
+        <div className="border-t border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
           <div className="px-2.5 pt-1">
             <TabView
               tabs={GRPC_METHOD_TABS}
@@ -490,7 +490,7 @@ function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }
                 </div>
                 <div>
                   <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response (JSON)</label>
-                  <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
+                  <div className="h-[120px] rounded-md overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)]">
                     <EditorView value={m.response} onChange={(val) => onUpdate({ response: val })} language="json" height="100%" />
                   </div>
                 </div>

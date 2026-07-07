@@ -517,7 +517,7 @@ export function ExportPanel({ protocol = 'rest', server, onExport }: Props) {
             </span>
             <CopyButtonView text={preview} size="sm" accentColor={MOCK_ACCENT} title="Copy code" />
           </div>
-          <div className="rounded-lg overflow-hidden border border-[rgba(255,255,255,0.07)]">
+          <div className="rounded-lg overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
             <EditorView
               value={preview}
               language={opt.language}

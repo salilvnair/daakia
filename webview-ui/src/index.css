@@ -238,6 +238,18 @@
   --color-debug-object:  #9cdcfe;
   --color-debug-fn:      #808080;
   --color-debug-scope:   #c586c0;
+
+  /* Theme-aware overlays — subtle washes that adapt to light/dark */
+  --color-overlay-subtle: rgba(0, 0, 0, 0.15);
+  --color-overlay-medium: rgba(0, 0, 0, 0.3);
+  --color-code-bg: rgba(0, 0, 0, 0.35);
+
+  /* Inverse surface — a "flipped" surface (dark pill in dark theme, dark slate in light) */
+  --color-inverse-surface: #0a0a0a;
+  --color-inverse-text: #ffffff;
+
+  /* Text on accent-colored (primary/method/protocol) backgrounds */
+  --color-btn-primary-text: #ffffff;
 }
 
 /* ─── Light theme — VS Code Light+ / GitHub Light / Atom One Light blend ─── */
@@ -331,6 +343,30 @@
   --color-ctx-close-batch: #ea580c;
   --color-ctx-close-saved: #1a7f37;
   --color-ctx-close-all: #9f1239;
+
+  /* Variable pill — darker purple for light bg readability */
+  --color-var-pill-bg: rgba(124, 58, 237, 0.1);
+  --color-var-pill-text: #6d28d9;
+  --color-var-pill-border: rgba(124, 58, 237, 0.3);
+
+  /* JSON TREE / DEBUGGER TOKEN COLORS — VS Code Light+ palette */
+  --color-debug-key:     #0451a5;
+  --color-debug-string:  #a31515;
+  --color-debug-number:  #098658;
+  --color-debug-boolean: #0000ff;
+  --color-debug-null:    #795e26;
+  --color-debug-object:  #001080;
+  --color-debug-fn:      #795e26;
+  --color-debug-scope:   #af00db;
+
+  /* Theme-aware overlays — much lighter washes on white surfaces */
+  --color-overlay-subtle: rgba(0, 0, 0, 0.05);
+  --color-overlay-medium: rgba(0, 0, 0, 0.08);
+  --color-code-bg: rgba(0, 0, 0, 0.06);
+
+  /* Inverse surface — dark slate pill on light background */
+  --color-inverse-surface: #1f2328;
+  --color-inverse-text: #ffffff;
 }
 
 :root {

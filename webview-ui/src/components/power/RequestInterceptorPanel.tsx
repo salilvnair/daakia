@@ -247,7 +247,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                   Proxy active on :{config.port}
                 </span>
               </div>
-              <div className="rounded-lg p-2.5 text-[9.5px] leading-5 font-mono" style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--color-text-muted)' }}>
+              <div className="rounded-lg p-2.5 text-[9.5px] leading-5 font-mono" style={{ background: 'var(--color-overlay-subtle)', color: 'var(--color-text-muted)' }}>
                 <div>Configure browser proxy to:</div>
                 <div style={{ color: 'var(--color-text-primary)' }}>{config.listenHost}:{config.port}</div>
                 <div className="mt-1 opacity-70">Chrome: Settings → System → Proxy</div>
@@ -365,7 +365,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                     <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: `color-mix(in srgb, ${ACCENT} 70%, var(--color-text-muted))` }}>Body</p>
                     <pre
                       className="p-3 rounded-xl text-[10px] font-mono whitespace-pre-wrap overflow-auto max-h-[200px]"
-                      style={{ backgroundColor: 'rgba(0,0,0,0.15)', color: 'var(--color-text-primary)', border: '1px solid var(--color-surface-border)' }}
+                      style={{ backgroundColor: 'var(--color-overlay-subtle)', color: 'var(--color-text-primary)', border: '1px solid var(--color-surface-border)' }}
                     >
                       {selectedReq.body}
                     </pre>

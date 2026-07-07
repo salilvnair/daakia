@@ -331,10 +331,10 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
           >
             <defs>
               <pattern id="sm-grid" width="36" height="36" patternUnits="userSpaceOnUse">
-                <circle cx="0.5" cy="0.5" r="0.8" fill="rgba(255,255,255,0.04)" />
+                <circle cx="0.5" cy="0.5" r="0.8" fill="color-mix(in srgb, var(--color-text-primary) 4%, transparent)" />
               </pattern>
               <marker id="sm-arr" markerWidth="7" markerHeight="7" refX="6.5" refY="3.5" orient="auto">
-                <path d="M0,0.5 L0,6.5 L6.5,3.5 z" fill="rgba(255,255,255,0.25)" />
+                <path d="M0,0.5 L0,6.5 L6.5,3.5 z" fill="color-mix(in srgb, var(--color-text-primary) 25%, transparent)" />
               </marker>
               <marker id="sm-arr-sel" markerWidth="7" markerHeight="7" refX="6.5" refY="3.5" orient="auto">
                 <path d="M0,0.5 L0,6.5 L6.5,3.5 z" fill="var(--color-mock-server)" />
@@ -348,7 +348,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
               const to = positions[t.to];
               if (!from || !to) return null;
               const isSelected = t.id === selectedEdge;
-              const color = isSelected ? 'var(--color-mock-server)' : 'rgba(255,255,255,0.22)';
+              const color = isSelected ? 'var(--color-mock-server)' : 'color-mix(in srgb, var(--color-text-primary) 22%, transparent)';
 
               if (t.from === t.to) {
                 // Self-loop arc
@@ -512,10 +512,10 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
             {/* Empty canvas hint */}
             {cfg.states.length === 0 && (
               <>
-                <text x={CANVAS_W / 2} y={CANVAS_H / 2 - 14} textAnchor="middle" fontSize={13} fill="rgba(255,255,255,0.12)" className="select-none">
+                <text x={CANVAS_W / 2} y={CANVAS_H / 2 - 14} textAnchor="middle" fontSize={13} fill="color-mix(in srgb, var(--color-text-primary) 12%, transparent)" className="select-none">
                   Click "+ Add State" to create your first state
                 </text>
-                <text x={CANVAS_W / 2} y={CANVAS_H / 2 + 8} textAnchor="middle" fontSize={10} fill="rgba(255,255,255,0.07)" className="select-none">
+                <text x={CANVAS_W / 2} y={CANVAS_H / 2 + 8} textAnchor="middle" fontSize={10} fill="color-mix(in srgb, var(--color-text-primary) 7%, transparent)" className="select-none">
                   Drag nodes to move · click → handle then click another node to connect
                 </text>
               </>
@@ -542,7 +542,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
                 <p className="text-[10px] leading-relaxed mt-1.5" style={{ color: 'var(--color-text-muted)' }}>
                   {smCfg.example}
                 </p>
-                <div className="mt-2.5 pt-2 border-t border-[rgba(255,255,255,0.06)] flex flex-col gap-1">
+                <div className="mt-2.5 pt-2 border-t border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] flex flex-col gap-1">
                   {[
                     ['Drag', 'node body to reposition'],
                     ['Click →', 'handle then click target'],
@@ -571,7 +571,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
                         key={s.id}
                         type="button"
                         onClick={() => { setSelectedNode(s.id); setSelectedEdge(null); }}
-                        className="flex items-center gap-1.5 px-2 py-1.5 rounded text-left w-full transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded text-left w-full transition-colors hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]"
                       >
                         <div className="w-[7px] h-[7px] rounded-full flex-shrink-0"
                           style={{ background: s.id === cfg.initialState ? SUCCESS : ACCENT }} />
@@ -602,7 +602,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
                             key={t.id}
                             type="button"
                             onClick={() => { setSelectedEdge(t.id); setSelectedNode(null); }}
-                            className="flex items-center gap-1.5 px-2 py-1.5 rounded text-left w-full transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+                            className="flex items-center gap-1.5 px-2 py-1.5 rounded text-left w-full transition-colors hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]"
                           >
                             <span className="text-[9.5px] font-mono truncate" style={{ color: 'var(--color-text-muted)' }}>
                               {t.from} <span style={{ color: ACCENT }}>→</span> {t.to}
@@ -661,7 +661,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
                   Set as Initial
                 </ButtonView>
               )}
-              <div className="pt-1.5 border-t border-[rgba(255,255,255,0.06)]">
+              <div className="pt-1.5 border-t border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
                 <p className="text-[8.5px]" style={{ color: 'var(--color-text-muted)', opacity: 0.5 }}>
                   {cfg.transitions.filter(t => t.from === selectedStateData.id).length} outgoing ·{' '}
                   {cfg.transitions.filter(t => t.to === selectedStateData.id).length} incoming

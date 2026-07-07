@@ -78,7 +78,7 @@ export function SettingsPanel() {
             type="button"
             title={navCollapsed ? 'Show navigation' : 'Hide navigation'}
             onClick={() => setNavCollapsed(v => !v)}
-            className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] cursor-pointer transition-colors flex-shrink-0 ml-auto"
+            className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] cursor-pointer transition-colors flex-shrink-0 ml-auto"
           >
             {navCollapsed ? <ChevronRightIcon size={12} /> : <ChevronLeftIcon size={12} />}
           </button>
@@ -95,7 +95,7 @@ export function SettingsPanel() {
               } ${
                 activeSection === sec.id
                   ? 'bg-[rgba(42,157,143,0.12)] text-[var(--color-settings)] font-medium'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.04)]'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]'
               }`}
             >
               {sec.icon}
@@ -322,7 +322,7 @@ function EncodingContent() {
               <span className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center transition-colors ${
                 encoding === opt.value
                   ? 'border-[var(--color-settings)]'
-                  : 'border-[rgba(255,255,255,0.2)] group-hover:border-[rgba(255,255,255,0.4)]'
+                  : 'border-[color-mix(in_srgb,var(--color-text-primary)_20%,transparent)] group-hover:border-[color-mix(in_srgb,var(--color-text-primary)_40%,transparent)]'
               }`}>
                 {encoding === opt.value && (
                   <span className="w-[8px] h-[8px] rounded-full bg-[var(--color-settings)]" />
@@ -409,7 +409,7 @@ function ProxyContent() {
               <span className={`mt-0.5 w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
                 mode === opt.value
                   ? 'border-[var(--color-settings)]'
-                  : 'border-[rgba(255,255,255,0.2)] group-hover:border-[rgba(255,255,255,0.4)]'
+                  : 'border-[color-mix(in_srgb,var(--color-text-primary)_20%,transparent)] group-hover:border-[color-mix(in_srgb,var(--color-text-primary)_40%,transparent)]'
               }`}>
                 {mode === opt.value && (
                   <span className="w-[8px] h-[8px] rounded-full bg-[var(--color-settings)]" />
@@ -621,7 +621,7 @@ function MockServerSettings() {
           <div>
             <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Storage</p>
             <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
-              Mock server configurations are stored in <code className="text-[10px] bg-[rgba(255,255,255,0.06)] px-1 py-0.5 rounded">~/.salilvnair/daakia-vsce/mock-servers.json</code>
+              Mock server configurations are stored in <code className="text-[10px] bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] px-1 py-0.5 rounded">~/.salilvnair/daakia-vsce/mock-servers.json</code>
             </p>
           </div>
 
@@ -632,7 +632,7 @@ function MockServerSettings() {
               <li>• Mock servers run as real HTTP servers in the extension host</li>
               <li>• Routes are hot-reloaded — changes apply instantly to running servers</li>
               <li>• Servers are automatically stopped when the extension deactivates</li>
-              <li>• Path parameters are supported via <code className="text-[10px] bg-[rgba(255,255,255,0.06)] px-1 rounded">:param</code> syntax</li>
+              <li>• Path parameters are supported via <code className="text-[10px] bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] px-1 rounded">:param</code> syntax</li>
             </ul>
           </div>
         </div>

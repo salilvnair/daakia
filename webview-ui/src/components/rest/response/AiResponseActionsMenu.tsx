@@ -110,7 +110,7 @@ export function AiResponseActionsMenu({ tabId, response, requestMethod, requestU
           className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
             isOpen
               ? 'text-[var(--color-primary)] bg-[rgba(99,102,241,0.12)]'
-              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]'
+              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]'
           }`}
         >
           <MoreVerticalIcon size={14} />

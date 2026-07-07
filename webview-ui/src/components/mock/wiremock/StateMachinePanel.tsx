@@ -63,9 +63,9 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
   const hasMultipleStates = cfg.states.length >= 2;
 
   return (
-    <div className="border border-dashed border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden">
+    <div className="border border-dashed border-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] rounded-lg overflow-hidden">
       <div
-        className="w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors"
         onClick={() => setExpanded(v => !v)}
       >
         <div className="flex items-center gap-2">
@@ -91,7 +91,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
       </div>
 
       {expanded && (
-        <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[rgba(255,255,255,0.07)]">
+        <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
           {/* Initial state */}
           <div className="flex items-center gap-2 pt-2">
             <span className="text-[10px] text-[var(--color-text-muted)]">Initial state</span>
@@ -105,7 +105,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
 
           {/* Visual state diagram */}
           {cfg.states.length > 0 && (
-            <div className="rounded-lg border border-[rgba(255,255,255,0.08)] p-3 bg-[rgba(255,255,255,0.02)]">
+            <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] p-3 bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
               <p className="text-[9px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-2">Visual Flow</p>
               <StateDiagram states={cfg.states} transitions={cfg.transitions} initialState={cfg.initialState} />
             </div>
@@ -289,13 +289,13 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
       {/* ── empty hint ──────────────────────────────────────────────── */}
       {entries.length === 0 && (
         <div style={{
-          borderRadius: 7, border: '1px dashed rgba(255,255,255,0.09)',
+          borderRadius: 7, border: '1px dashed color-mix(in srgb, var(--color-text-primary) 9%, transparent)',
           padding: '10px 12px', textAlign: 'center',
         }}>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>
+          <p style={{ fontSize: 11, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', marginBottom: 4 }}>
             No state transitions yet
           </p>
-          <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', lineHeight: 1.5 }}>
+          <p style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', lineHeight: 1.5 }}>
             Add entries to serve different responses based on session state.
             <br />
             Same URL — multiple behaviors.
@@ -311,11 +311,11 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
           padding: '0 4px',
         }}>
           <span />
-          <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Required State
           </span>
           <span />
-          <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Transition To
           </span>
           <span />
@@ -330,8 +330,8 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
           return (
             <div key={entry.id} style={{
               borderRadius: 8,
-              border: '1px solid rgba(255,255,255,0.07)',
-              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid color-mix(in srgb, var(--color-text-primary) 7%, transparent)',
+              background: 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)',
               overflow: 'hidden',
             }}>
               {/* main row */}
@@ -341,7 +341,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
               }}>
                 {/* index */}
                 <span style={{
-                  fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.2)',
+                  fontSize: 9, fontWeight: 700, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)',
                   fontVariantNumeric: 'tabular-nums',
                 }}>
                   {String(i + 1).padStart(2, '0')}
@@ -357,7 +357,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
                 />
 
                 {/* arrow */}
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>→</span>
+                <span style={{ fontSize: 11, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', textAlign: 'center' }}>→</span>
 
                 {/* new state */}
                 <TextInputView
@@ -374,7 +374,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
                     size="sm"
                     icon={<ChevronDownIcon size={10} />}
                     title="Response override"
-                    accentColor={hasOverride ? ACCENT : 'rgba(255,255,255,0.3)'}
+                    accentColor={hasOverride ? ACCENT : 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)'}
                     style={{
                       transform: bodyOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
                       transition: 'transform 150ms',
@@ -395,13 +395,13 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
               {/* optional response override panel */}
               {bodyOpen && (
                 <div style={{
-                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                  borderTop: '1px solid var(--color-surface-border)',
                   padding: '8px 10px',
                   display: 'flex', flexDirection: 'column', gap: 7,
-                  background: 'rgba(0,0,0,0.15)',
+                  background: 'var(--color-overlay-subtle)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.05em', width: 72, flexShrink: 0 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', width: 72, flexShrink: 0 }}>
                       Status
                     </span>
                     <TextInputView
@@ -411,12 +411,12 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
                       size="sm"
                       style={{ width: 80, fontFamily: 'monospace' }}
                     />
-                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginLeft: 2 }}>
+                    <span style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', marginLeft: 2 }}>
                       leave blank to use route's status code
                     </span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       Response Body Override
                     </span>
                     <ResizablePanelView defaultHeight={80} minHeight={60} maxHeight={300}>
@@ -438,7 +438,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
                 <div style={{
                   padding: '4px 10px 6px',
                   display: 'flex', alignItems: 'center', gap: 6,
-                  borderTop: bodyOpen ? undefined : '1px solid rgba(255,255,255,0.04)',
+                  borderTop: bodyOpen ? undefined : '1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent)',
                 }}>
                   {entry.requiredState ? (
                     <span style={{
@@ -449,9 +449,9 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
                       {entry.requiredState}
                     </span>
                   ) : (
-                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>any state</span>
+                    <span style={{ fontSize: 9, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', fontStyle: 'italic' }}>any state</span>
                   )}
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>→</span>
+                  <span style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)' }}>→</span>
                   {entry.newState ? (
                     <span style={{
                       fontSize: 9, padding: '2px 7px', borderRadius: 4, fontFamily: 'monospace',
@@ -461,7 +461,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
                       {entry.newState}
                     </span>
                   ) : (
-                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>no transition</span>
+                    <span style={{ fontSize: 9, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', fontStyle: 'italic' }}>no transition</span>
                   )}
                   {hasOverride && (
                     <span style={{
@@ -481,7 +481,7 @@ export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
 
       {/* hint when entries exist */}
       {entries.length > 0 && (
-        <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', lineHeight: 1.5, marginTop: 2 }}>
+        <p style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', lineHeight: 1.5, marginTop: 2 }}>
           Entries match top-to-bottom. First match wins. Empty "Required State" matches any session state.
         </p>
       )}

@@ -202,7 +202,7 @@ export function SoapOperationSelector() {
               filteredByService.map(svc => (
                 <div key={svc.name}>
                   {/* Service category header */}
-                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] bg-[rgba(255,255,255,0.02)] border-b border-[var(--color-surface-border)]">
+                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] border-b border-[var(--color-surface-border)]">
                     {svc.name.split('.').pop() || svc.name}
                   </div>
                   {/* Operations */}
@@ -240,7 +240,7 @@ export function SoapOperationSelector() {
           </div>
 
           {/* Footer — WSDL source */}
-          <div className="flex items-center justify-between px-3 py-2 border-t border-[var(--color-surface-border)] bg-[rgba(255,255,255,0.02)]">
+          <div className="flex items-center justify-between px-3 py-2 border-t border-[var(--color-surface-border)] bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
             <span className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-muted)]">
               <CheckCircleFilledIcon size={10} style={{ color: '#4ade80' }} />
               Using WSDL definition.

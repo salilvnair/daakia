@@ -142,8 +142,8 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
 
       {/* Helper catalog (6A.8) */}
       {route.isTemplate && showHelpers && (
-        <div className="rounded-lg border border-[rgba(255,255,255,0.08)] overflow-hidden">
-          <div className="px-3 py-2 bg-[rgba(255,255,255,0.03)] border-b border-[rgba(255,255,255,0.07)]">
+        <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] overflow-hidden">
+          <div className="px-3 py-2 bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] border-b border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
             <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Helper Catalog — click to insert</span>
           </div>
           <div className="p-2 grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto">
@@ -184,7 +184,7 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Preview</span>
               <div
                 className="flex-1 min-h-[140px] px-2.5 py-2 rounded-md text-[11px] font-mono overflow-auto"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', color: 'var(--color-text-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                style={{ background: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)', border: '1px solid color-mix(in srgb, var(--color-text-primary) 7%, transparent)', color: 'var(--color-text-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
                 dangerouslySetInnerHTML={{ __html: preview }}
               />
             </div>

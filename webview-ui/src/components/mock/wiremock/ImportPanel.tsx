@@ -326,8 +326,8 @@ function ParseResultView({ result, protocol, accent, onImport }: { result: Impor
   const isNonRest = protocol !== 'rest';
 
   return (
-    <div className="rounded-lg border border-[rgba(255,255,255,0.1)] overflow-hidden">
-      <div className="px-3 py-2 flex items-center justify-between bg-[rgba(255,255,255,0.02)]">
+    <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] overflow-hidden">
+      <div className="px-3 py-2 flex items-center justify-between bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
         <div className="flex items-center gap-2">
           <IconButtonView
             size="xs"
@@ -347,7 +347,7 @@ function ParseResultView({ result, protocol, accent, onImport }: { result: Impor
         )}
       </div>
       {expanded && (
-        <div className="max-h-[200px] overflow-y-auto divide-y divide-[rgba(255,255,255,0.05)]">
+        <div className="max-h-[200px] overflow-y-auto divide-y divide-[color-mix(in_srgb,var(--color-text-primary)_5%,transparent)]">
           {result.routes.map((r, i) => (
             <div key={r.id ?? i} className="flex items-center gap-2 px-3 py-1.5">
               <span className="text-[9px] font-mono px-1 py-0.5 rounded font-medium bg-[rgba(14,165,233,0.12)] text-[var(--color-info)]">{r.method}</span>
@@ -357,7 +357,7 @@ function ParseResultView({ result, protocol, accent, onImport }: { result: Impor
           ))}
           {result.raw && isNonRest && (
             <div className="px-3 py-2">
-              <div className="rounded-lg overflow-hidden border border-[rgba(255,255,255,0.06)]">
+              <div className="rounded-lg overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
                 <EditorView
                   value={result.raw.slice(0, 1000)}
                   language={protocol === 'soap' ? 'xml' : protocol === 'graphql' ? 'graphql' : 'plaintext'}

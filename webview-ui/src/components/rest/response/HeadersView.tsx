@@ -37,7 +37,7 @@ export function HeadersView({ headers }: { headers: [string, string][] }) {
         {headers.map(([key, value], idx) => (
           <div
             key={key}
-            className="flex items-center gap-4 py-2.5 border-b border-[rgba(255,255,255,0.06)] group"
+            className="flex items-center gap-4 py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] group"
             onMouseEnter={() => setHoveredIdx(idx)}
             onMouseLeave={() => setHoveredIdx(null)}
           >

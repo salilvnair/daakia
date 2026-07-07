@@ -335,7 +335,7 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
 
           {/* ── Search box ── */}
           <div className="flex items-center gap-1.5 border-b flex-shrink-0 px-2.5"
-            style={{ height: 28, borderColor: 'var(--color-surface-border)', backgroundColor: 'rgba(255,255,255,0.02)', outline: 'none' }}>
+            style={{ height: 28, borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)', outline: 'none' }}>
             <SearchIcon size={10} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
             <input
               type="text"
@@ -354,7 +354,7 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
               </button>
             ) : (
               <span className="text-[9px] font-mono tabular-nums px-1 rounded shrink-0"
-                style={{ color: 'var(--color-text-muted)', backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                style={{ color: 'var(--color-text-muted)', backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 5%, transparent)' }}>
                 {filteredScenarios.length + filteredCategories.reduce((s, c) => s + c.keys.length, 0)}
               </span>
             )}
@@ -367,7 +367,7 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
           >
             {/* Section header */}
             <button type="button" onClick={() => setAgentCollapsed(c => !c)}
-              className="flex items-center gap-1.5 px-3 h-[30px] w-full text-left flex-shrink-0 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+              className="flex items-center gap-1.5 px-3 h-[30px] w-full text-left flex-shrink-0 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors"
             >
               <span className={`transition-transform duration-150 ${agentCollapsed ? '' : 'rotate-90'}`}><ChevronRightIcon size={9} /></span>
               <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Agent Prompts</span>
@@ -397,7 +397,7 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
                         const color = SCENARIO_COLORS[s];
                         return (
                           <button key={s} type="button" onClick={() => setActive({ kind: 'agent', scenario: s })}
-                            className={`w-full flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors text-left ${isAct ? 'bg-[rgba(139,92,246,0.12)]' : 'hover:bg-[rgba(255,255,255,0.04)]'}`}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors text-left ${isAct ? 'bg-[rgba(139,92,246,0.12)]' : 'hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]'}`}
                           >
                             <div className="w-[22px] h-[22px] rounded-md flex items-center justify-center flex-shrink-0 text-white text-[9px] font-bold" style={{ backgroundColor: color }}>{SCENARIO_LABELS[s].slice(0,2)}</div>
                             <div className="flex-1 min-w-0">
@@ -441,7 +441,7 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
           {/* AI Actions section */}
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <button type="button" onClick={() => setAiCollapsed(c => !c)}
-              className="flex items-center gap-1.5 px-3 h-[30px] w-full text-left flex-shrink-0 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+              className="flex items-center gap-1.5 px-3 h-[30px] w-full text-left flex-shrink-0 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors"
             >
               <span className={`transition-transform duration-150 ${aiCollapsed ? '' : 'rotate-90'}`}><ChevronRightIcon size={9} /></span>
               <span className="text-[9px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">AI Actions</span>
@@ -481,7 +481,7 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
                         return (
                           <button key={key} type="button"
                             onClick={() => setActive(isMockCat ? { kind: 'mock', key } : { kind: 'template', key })}
-                            className={`w-full flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors text-left ${isAct ? 'bg-[rgba(139,92,246,0.12)]' : 'hover:bg-[rgba(255,255,255,0.04)]'}`}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors text-left ${isAct ? 'bg-[rgba(139,92,246,0.12)]' : 'hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]'}`}
                           >
                             <div className="w-[22px] h-[22px] rounded-md flex items-center justify-center flex-shrink-0 text-white text-[11px]" style={{ backgroundColor: color }}>{isMockCat ? label.slice(0, 2) : '✦'}</div>
                             <div className="flex-1 min-w-0">

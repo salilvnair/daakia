@@ -232,7 +232,7 @@ export function SmStateMachineTabPage({ tabId }: Props) {
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <Suspense fallback={
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: 'color-mix(in srgb, var(--color-text-primary) 40%, transparent)' }}>
             Loading canvas…
           </div>
         }>

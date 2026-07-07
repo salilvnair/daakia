@@ -160,15 +160,15 @@ function AssertionRow({ assertion, onToggle, onEdit, onDelete }: {
     ? <CheckCircleIcon size={12} className="text-[var(--color-success)]" />
     : assertion.lastResult === 'fail'
       ? <XCircleIcon size={12} className="text-[var(--color-error)]" />
-      : <span className="w-3 h-3 rounded-full border border-[rgba(255,255,255,0.15)]" />;
+      : <span className="w-3 h-3 rounded-full border border-[color-mix(in_srgb,var(--color-text-primary)_15%,transparent)]" />;
 
   return (
-    <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-colors ${assertion.enabled ? 'bg-[rgba(255,255,255,0.02)]' : 'opacity-50'}`}>
+    <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-colors ${assertion.enabled ? 'bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]' : 'opacity-50'}`}>
       {icon}
       <button
         type="button"
         onClick={onToggle}
-        className={`w-6 h-3.5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${assertion.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[rgba(255,255,255,0.12)]'}`}
+        className={`w-6 h-3.5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${assertion.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[color-mix(in_srgb,var(--color-text-primary)_12%,transparent)]'}`}
       >
         <span className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all ${assertion.enabled ? 'left-3' : 'left-0.5'}`} />
       </button>
@@ -248,7 +248,7 @@ function AssertionEditModal({ assertion, onUpdate, onClose }: {
                 onChange={(e) => onUpdate({ expression: e.target.value })}
                 placeholder={assertion.type.startsWith('xpath') ? '//tns:name' : assertion.type === 'script' ? 'return response.includes("success");' : 'expected substring'}
                 rows={assertion.type === 'script' ? 4 : 2}
-                className="w-full px-2.5 py-1.5 text-[12px] font-mono rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)] resize-none"
+                className="w-full px-2.5 py-1.5 text-[12px] font-mono rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)] resize-none"
               />
             </div>
           )}
@@ -277,7 +277,7 @@ function AssertionEditModal({ assertion, onUpdate, onClose }: {
                   value={assertion.expectedValue || ''}
                   onChange={(e) => onUpdate({ expectedValue: e.target.value })}
                   placeholder={assertion.type === 'response-time' ? '2000' : 'expected value'}
-                  className="w-full h-[28px] px-2 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                  className="w-full h-[28px] px-2 text-[12px] rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
                 />
               </div>
             </div>

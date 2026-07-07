@@ -233,7 +233,7 @@ function BulkEditArea({ defaultValue, onChangeRef, accentColor }: { defaultValue
         onChange={(e) => setText(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full min-h-[160px] px-3 py-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-y"
+        className="w-full min-h-[160px] px-3 py-2.5 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-y"
         style={focused ? { borderColor: highlight } : undefined}
         placeholder={`Content-Type: application/json\nAuthorization: Bearer token123\n# X-Debug: true`}
         spellCheck={false}
@@ -394,7 +394,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
           onBlur={() => setTimeout(() => { setKeyFocused(false); setKeyHighlight(-1); }, 150)}
           onKeyDown={handleKeyInputKeyDown}
           placeholder={placeholder?.key || 'Key'}
-          className="w-full px-2.5 py-1 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
+          className="w-full px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
         />
         {/* Autocomplete dropdown */}
         {showDropdown && (
@@ -428,7 +428,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
           onBlur={() => setTimeout(() => { setValueFocused(false); setValueHighlight(-1); }, 150)}
           onKeyDown={handleValueInputKeyDown}
           placeholder={placeholder?.value || 'Value'}
-          className="w-full px-2.5 py-1 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
+          className="w-full px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
         />
         {/* Value autocomplete dropdown */}
         {showValueDropdown && (
@@ -473,7 +473,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
             value={row.description || ''}
             onChange={(e) => onUpdate(idx, 'description', e.target.value)}
             placeholder="Description"
-            className="w-full px-2.5 py-1 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
+            className="w-full px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
           />
         </div>
       )}

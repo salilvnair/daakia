@@ -181,7 +181,7 @@ export function SoapWsdlImport({ open, onClose }: SoapWsdlImportProps) {
             className={`h-[28px] px-3 text-[11px] font-medium rounded-md cursor-pointer transition-colors flex items-center gap-1.5 ${
               mode === 'url'
                 ? 'bg-[color-mix(in_srgb,var(--color-protocol-soap)_15%,transparent)] text-[var(--color-protocol-soap)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.04)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]'
             }`}
           >
             <LinkIcon size={12} />
@@ -193,7 +193,7 @@ export function SoapWsdlImport({ open, onClose }: SoapWsdlImportProps) {
             className={`h-[28px] px-3 text-[11px] font-medium rounded-md cursor-pointer transition-colors flex items-center gap-1.5 ${
               mode === 'file'
                 ? 'bg-[color-mix(in_srgb,var(--color-protocol-soap)_15%,transparent)] text-[var(--color-protocol-soap)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.04)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]'
             }`}
           >
             <UploadIcon size={12} />
@@ -213,7 +213,7 @@ export function SoapWsdlImport({ open, onClose }: SoapWsdlImportProps) {
                 onKeyDown={(e) => { if (e.key === 'Enter') handleLoadUrl(); }}
                 placeholder="https://example.com/service?wsdl"
                 autoFocus
-                className="w-full h-[36px] px-3 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                className="w-full h-[36px] px-3 text-[12px] rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
               />
             </>
           ) : (
@@ -221,7 +221,7 @@ export function SoapWsdlImport({ open, onClose }: SoapWsdlImportProps) {
               <label className="text-[11px] text-[var(--color-text-muted)]">Upload .wsdl or .xml file</label>
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full h-[80px] rounded-md border-2 border-dashed border-[rgba(255,255,255,0.12)] hover:border-[var(--color-protocol-soap)] flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                className="w-full h-[80px] rounded-md border-2 border-dashed border-[color-mix(in_srgb,var(--color-text-primary)_12%,transparent)] hover:border-[var(--color-protocol-soap)] flex items-center justify-center gap-2 cursor-pointer transition-colors"
               >
                 <UploadIcon size={16} className="text-[var(--color-text-muted)]" />
                 <span className="text-[12px] text-[var(--color-text-muted)]">Click to browse or drag file here</span>
@@ -309,7 +309,7 @@ export function SoapWsdlImport({ open, onClose }: SoapWsdlImportProps) {
             {WSDL_SAMPLES.map(sample => (
               <div
                 key={sample.id}
-                className="flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-[rgba(255,255,255,0.04)] group"
+                className="flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] group"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -348,7 +348,7 @@ export function SoapWsdlImport({ open, onClose }: SoapWsdlImportProps) {
             <button
               type="button"
               onClick={() => setShowSamples(false)}
-              className="h-[28px] px-3 text-[11px] font-medium rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.08)] cursor-pointer transition-colors"
+              className="h-[28px] px-3 text-[11px] font-medium rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] cursor-pointer transition-colors"
             >
               Close
             </button>

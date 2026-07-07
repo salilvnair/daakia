@@ -54,9 +54,9 @@ export function WebhookPanel({ route, onUpdate }: Props) {
   };
 
   return (
-    <div className="border border-dashed border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden">
+    <div className="border border-dashed border-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] rounded-lg overflow-hidden">
       <div
-        className="w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors"
         onClick={() => setExpanded(v => !v)}
       >
         <div className="flex items-center gap-2">
@@ -82,7 +82,7 @@ export function WebhookPanel({ route, onUpdate }: Props) {
       </div>
 
       {expanded && (
-        <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[rgba(255,255,255,0.07)]">
+        <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
           {webhooks.length === 0 ? (
             <div className="pt-3 text-center">
               <p className="text-[11px] text-[var(--color-text-muted)] opacity-60">No webhooks configured.</p>
@@ -121,9 +121,9 @@ function WebhookItem({ webhook, index, onUpdate, onRemove }: {
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-[rgba(255,255,255,0.08)] overflow-hidden">
+    <div className="flex flex-col gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] overflow-hidden">
       {/* Header row */}
-      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-[rgba(255,255,255,0.02)] group">
+      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] group">
         <ToggleSwitchView
           checked={webhook.enabled}
           onChange={(v) => onUpdate({ enabled: v })}

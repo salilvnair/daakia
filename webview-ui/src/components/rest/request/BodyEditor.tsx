@@ -339,7 +339,7 @@ function BodyBulkEditArea({ defaultValue, onChangeRef }: { defaultValue: string;
         onChange={(e) => setText(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full min-h-[160px] px-3 py-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-y"
+        className="w-full min-h-[160px] px-3 py-2.5 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-y"
         style={focused ? { borderColor: 'var(--color-primary)' } : undefined}
         placeholder={`field1: value1\nfield2: value2\n# disabled_field: value3`}
         spellCheck={false}

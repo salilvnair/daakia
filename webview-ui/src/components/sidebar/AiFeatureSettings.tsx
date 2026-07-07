@@ -54,7 +54,7 @@ function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: keyo
   const templateKey = FEATURE_TO_TEMPLATE_KEY[featureKey];
 
   return (
-    <div className="flex items-start gap-4 py-2.5 border-b border-[rgba(255,255,255,0.05)] last:border-b-0">
+    <div className="flex items-start gap-4 py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_5%,transparent)] last:border-b-0">
       <div className="flex-1 min-w-0 pt-0.5">
         {/* Label row */}
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -91,7 +91,7 @@ function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: keyo
         <button
           type="button"
           onClick={() => onNavigateToPrompt(templateKey)}
-          className="w-[26px] h-[26px] flex items-center justify-center rounded cursor-pointer flex-shrink-0 mt-0.5 transition-all hover:bg-[rgba(255,255,255,0.08)]"
+          className="w-[26px] h-[26px] flex items-center justify-center rounded cursor-pointer flex-shrink-0 mt-0.5 transition-all hover:bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)]"
           title="Edit prompt template in Prompt Library"
           style={{ color: `color-mix(in srgb, ${color} 50%, var(--color-text-muted))` }}
         >
@@ -103,7 +103,7 @@ function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: keyo
         type="button"
         onClick={() => { logUiEvent('ai.toggle_feature', { feature: featureKey, enabled: !enabled }); toggleFeature(featureKey); }}
         className="w-[38px] h-[21px] rounded-full cursor-pointer transition-all flex-shrink-0 relative mt-1"
-        style={{ backgroundColor: enabled ? color : 'rgba(255,255,255,0.12)' }}
+        style={{ backgroundColor: enabled ? color : 'color-mix(in srgb, var(--color-text-primary) 12%, transparent)' }}
         title={enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
       >
         <span
@@ -202,7 +202,7 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                     type="button"
                     onClick={() => { logUiEvent('ai.toggle_all', { enabled: !allEnabled }); setAllEnabled(!allEnabled); }}
                     className="w-[38px] h-[21px] rounded-full cursor-pointer transition-all flex-shrink-0 relative"
-                    style={{ backgroundColor: allEnabled ? ACCENT : 'rgba(255,255,255,0.12)' }}
+                    style={{ backgroundColor: allEnabled ? ACCENT : 'color-mix(in srgb, var(--color-text-primary) 12%, transparent)' }}
                     title={allEnabled ? 'Disable all AI features' : 'Enable all AI features'}
                   >
                     <span
@@ -262,7 +262,7 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setGroupEnabled(keys, !allGroupEnabled); }}
                     className="w-[32px] h-[18px] rounded-full cursor-pointer transition-all flex-shrink-0 relative"
-                    style={{ backgroundColor: allGroupEnabled ? color : 'rgba(255,255,255,0.1)' }}
+                    style={{ backgroundColor: allGroupEnabled ? color : 'color-mix(in srgb, var(--color-text-primary) 10%, transparent)' }}
                     title={allGroupEnabled ? `Disable all ${group}` : `Enable all ${group}`}
                   >
                     <span

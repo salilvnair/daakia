@@ -69,7 +69,7 @@ export function DaakiaWikiPanel() {
               color: 'var(--dw-muted)', background: 'transparent', border: 'none',
               flexShrink: 0, marginLeft: 'auto',
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.07)')}
+            onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in srgb, var(--color-text-primary) 7%, transparent)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           >
             {tocCollapsed ? <ChevronRightIcon size={12} /> : <ChevronLeftIcon size={12} />}

@@ -63,7 +63,7 @@ export function ChaosPanel({ server, onUpdate, protocol = 'rest' }: Props) {
     <div className="flex flex-col gap-3">
       {/* Header toggle */}
       <div className="flex items-center justify-between p-3 rounded-lg"
-        style={{ background: chaos.enabled ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.02)', border: `1px solid ${chaos.enabled ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
+        style={{ background: chaos.enabled ? 'rgba(239,68,68,0.06)' : 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)', border: `1px solid ${chaos.enabled ? 'rgba(239,68,68,0.2)' : 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)'}` }}>
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
             {chaos.enabled && <span className="w-[6px] h-[6px] rounded-full bg-[var(--color-error)] animate-pulse" />}
@@ -162,7 +162,7 @@ function GlobalRateLimitSection({ server, onUpdate }: Props) {
   };
 
   return (
-    <div className="flex flex-col gap-2 pt-2 border-t border-[rgba(255,255,255,0.06)]">
+    <div className="flex flex-col gap-2 pt-2 border-t border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Global Rate Limit</span>
         <div className="flex items-center gap-2">

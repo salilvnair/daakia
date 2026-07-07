@@ -59,7 +59,7 @@ export function AuditConfigTab() {
     <div className="flex flex-col h-full min-h-0">
       {/* ─── Toolbar ─── */}
       <div className="flex items-center justify-between px-4 py-2 border-b shrink-0"
-        style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'rgba(255,255,255,0.025)' }}>
+        style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)' }}>
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-medium text-[var(--color-text-primary)]">Audit Config</span>
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full tabular-nums"
@@ -80,7 +80,7 @@ export function AuditConfigTab() {
           </button>
           <button type="button" onClick={handleReset}
             className="px-2 py-0.5 text-[10px] rounded cursor-pointer transition-colors border text-[var(--color-text-muted)]"
-            style={{ borderColor: 'rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)' }}>
+            style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 12%, transparent)', background: 'color-mix(in srgb, var(--color-text-primary) 4%, transparent)' }}>
             Reset Defaults
           </button>
         </div>
@@ -137,7 +137,7 @@ export function AuditConfigTab() {
                   <button type="button"
                     onClick={e => { e.stopPropagation(); toggleModule(module, !allGroupEnabled); refresh(); }}
                     className="w-[28px] h-[15px] rounded-full cursor-pointer transition-all relative flex-shrink-0"
-                    style={{ backgroundColor: allGroupEnabled ? color : 'rgba(255,255,255,0.1)' }}
+                    style={{ backgroundColor: allGroupEnabled ? color : 'color-mix(in srgb, var(--color-text-primary) 10%, transparent)' }}
                     title={allGroupEnabled ? `Disable all ${module}` : `Enable all ${module}`}>
                     <span className="absolute top-[2px] w-[11px] h-[11px] rounded-full bg-white shadow transition-all duration-200"
                       style={{ left: allGroupEnabled ? '14px' : '2px' }} />
@@ -153,7 +153,7 @@ export function AuditConfigTab() {
                       return (
                         <div key={def.id}
                           className={`flex items-center gap-3 px-3 py-2 ${idx < defs.length - 1 ? 'border-b' : ''}`}
-                          style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+                          style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 4%, transparent)' }}>
                           {/* Labels */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -177,7 +177,7 @@ export function AuditConfigTab() {
                           <button type="button"
                             onClick={() => toggle(def.id, !enabled)}
                             className="w-[32px] h-[18px] rounded-full cursor-pointer transition-all flex-shrink-0 relative"
-                            style={{ backgroundColor: enabled ? color : 'rgba(255,255,255,0.1)' }}
+                            style={{ backgroundColor: enabled ? color : 'color-mix(in srgb, var(--color-text-primary) 10%, transparent)' }}
                             title={enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}>
                             <span className="absolute top-[3px] w-[12px] h-[12px] rounded-full bg-white shadow transition-all duration-200"
                               style={{ left: enabled ? '17px' : '3px' }} />

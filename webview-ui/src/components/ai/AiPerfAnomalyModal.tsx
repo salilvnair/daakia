@@ -114,7 +114,7 @@ This exceeds the 2σ anomaly threshold. Please analyze the likely root causes an
           { label: 'Slower by', value: `${pctSlower}%`, color: 'var(--color-error)' },
           { label: 'σ deviation', value: `${sigma.toFixed(1)}σ`, color: sigma >= 3 ? 'var(--color-error)' : ACCENT },
         ].map(({ label, value, color }) => (
-          <div key={label} className="flex flex-col items-center flex-1 gap-0.5 px-2 py-3 border-r border-[rgba(255,255,255,0.07)] last:border-r-0">
+          <div key={label} className="flex flex-col items-center flex-1 gap-0.5 px-2 py-3 border-r border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)] last:border-r-0">
             <span className="text-[15px] font-bold tabular-nums" style={{ color }}>{value}</span>
             <span className="text-[9px] text-[var(--color-text-muted)] uppercase tracking-wide text-center">{label}</span>
           </div>

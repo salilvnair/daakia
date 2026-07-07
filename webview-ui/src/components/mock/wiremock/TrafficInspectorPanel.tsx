@@ -86,7 +86,7 @@ function RecordingConfig({ server, onUpdate, onToggle }: {
   return (
     <div className="flex flex-col gap-3">
       {/* Recording toggle */}
-      <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: server.recordingMode ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)', border: `1px solid ${server.recordingMode ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
+      <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: server.recordingMode ? 'rgba(239,68,68,0.08)' : 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)', border: `1px solid ${server.recordingMode ? 'rgba(239,68,68,0.2)' : 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)'}` }}>
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
             {server.recordingMode && <span className="w-[6px] h-[6px] rounded-full bg-[var(--color-error)] animate-pulse" />}
@@ -125,7 +125,7 @@ function RecordingConfig({ server, onUpdate, onToggle }: {
       </div>
 
       {/* How it works */}
-      <div className="rounded-lg border border-[rgba(255,255,255,0.06)] p-3 flex flex-col gap-1.5">
+      <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] p-3 flex flex-col gap-1.5">
         <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">How recording works</p>
         <div className="flex flex-col gap-1">
           {[
@@ -249,7 +249,7 @@ function TrafficLog({ recorded, onClear, onImport, onAddRoutes, onApplyStateMach
         </div>
 
         {/* Detail */}
-        <div className="flex-1 rounded-lg border border-[rgba(255,255,255,0.07)] p-2.5 overflow-auto min-h-0">
+        <div className="flex-1 rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)] p-2.5 overflow-auto min-h-0">
           {!selectedRecord ? (
             <p className="text-[10px] text-[var(--color-text-muted)] opacity-50">Select a request to inspect</p>
           ) : (
@@ -316,7 +316,7 @@ function methodColor(method: string) {
     PATCH: { bg: 'rgba(168,85,247,0.12)', text: '#a855f7' },
     DELETE: { bg: 'rgba(239,68,68,0.12)', text: 'var(--color-error)' },
   };
-  return map[method] ?? { bg: 'rgba(255,255,255,0.08)', text: 'var(--color-text-muted)' };
+  return map[method] ?? { bg: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)', text: 'var(--color-text-muted)' };
 }
 
 function statusColor(status: number) {

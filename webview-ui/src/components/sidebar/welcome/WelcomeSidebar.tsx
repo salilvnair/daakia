@@ -3,6 +3,7 @@ import {
   SectionCard, SectionHeader, FeatureRow, ProtocolBadge,
   ShortcutRow, TipBox, Chip, SubHeader, InfoRow, PROTOCOL_COLORS,
 } from './WelcomeShared';
+import { DaakiaLogoIcon } from '../../../icons/daakia-icons';
 
 // ─── vscode API bridge (acquired once at module level) ────────────────────────
 declare function acquireVsCodeApi(): { postMessage: (msg: unknown) => void };
@@ -64,26 +65,17 @@ function OpenButton() {
         fontSize: 12,
         fontWeight: 700,
         cursor: 'pointer',
-        background: hovered ? '#4f52d4' : '#6366f1',
-        color: '#fff',
+        background: hovered ? 'var(--color-primary-dark)' : 'var(--color-primary)',
+        color: 'var(--color-btn-primary-text)',
         transition: 'background 0.15s',
         flexShrink: 0,
         letterSpacing: '0.01em',
         fontFamily: 'inherit',
       }}
     >
-      <DaakiaIcon />
+      <DaakiaLogoIcon />
       Open Daakia Panel
     </button>
-  );
-}
-
-function DaakiaIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" opacity="0.6" />
-    </svg>
   );
 }
 

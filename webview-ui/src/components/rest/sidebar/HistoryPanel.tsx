@@ -197,7 +197,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
         onClick={() => handleReplay(item)}
         onContextMenu={(e) => openHistoryContextMenu(e, item)}
         data-context-menu="history"
-        className="px-2.5 py-1.5 mx-0.5 my-0.5 rounded-md hover:bg-[rgba(255,255,255,0.04)] cursor-pointer group relative"
+        className="px-2.5 py-1.5 mx-0.5 my-0.5 rounded-md hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] cursor-pointer group relative"
         title={timestamp}
       >
         {/* Row: Method | URL | Trash */}
@@ -314,7 +314,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.label)}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors"
                 >
                   <ChevronRightIcon size={10} strokeWidth={2.5} className={`text-[var(--color-text-muted)] shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
                   <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">
@@ -350,7 +350,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                               <button
                                 type="button"
                                 onClick={() => toggleSubGroup(subKey)}
-                                className="w-full flex items-center gap-1.5 pl-6 pr-3 py-1 cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                                className="w-full flex items-center gap-1.5 pl-6 pr-3 py-1 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] transition-colors"
                               >
                                 <ChevronRightIcon size={8} strokeWidth={2.5} className={`text-[var(--color-text-muted)] opacity-60 shrink-0 transition-transform ${isSubCollapsed ? '' : 'rotate-90'}`} />
                                 <span className="text-[10px] font-medium text-[var(--color-text-muted)] opacity-80">
@@ -371,7 +371,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                                           <button
                                             type="button"
                                             onClick={() => toggleSubGroup(innerKey)}
-                                            className="w-full flex items-center gap-1.5 pl-10 pr-3 py-0.5 cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                                            className="w-full flex items-center gap-1.5 pl-10 pr-3 py-0.5 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] transition-colors"
                                           >
                                             <ChevronRightIcon size={7} strokeWidth={2} className={`text-[var(--color-text-muted)] opacity-50 shrink-0 transition-transform ${isInnerCollapsed ? '' : 'rotate-90'}`} />
                                             <span className="text-[9px] text-[var(--color-text-muted)] opacity-70">
@@ -404,7 +404,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                             <button
                               type="button"
                               onClick={() => toggleSubGroup(subKey)}
-                              className="w-full flex items-center gap-1.5 pl-6 pr-3 py-1 cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                              className="w-full flex items-center gap-1.5 pl-6 pr-3 py-1 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] transition-colors"
                             >
                               <ChevronRightIcon size={8} strokeWidth={2.5} className={`text-[var(--color-text-muted)] opacity-60 shrink-0 transition-transform ${isSubCollapsed ? '' : 'rotate-90'}`} />
                               <span className="text-[10px] font-medium text-[var(--color-text-muted)] opacity-80">

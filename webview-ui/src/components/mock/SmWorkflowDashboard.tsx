@@ -55,8 +55,8 @@ function BlockChip({ label }: { label: string }) {
     <span style={{
       display: 'inline-block', padding: '1px 6px', borderRadius: 4,
       fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
-      border: '1px solid rgba(255,255,255,0.15)',
-      color: 'rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.03)',
+      border: '1px solid color-mix(in srgb, var(--color-text-primary) 15%, transparent)',
+      color: 'color-mix(in srgb, var(--color-text-primary) 45%, transparent)', background: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)',
     }}>
       {label}
     </span>
@@ -128,8 +128,8 @@ function WorkflowCard({ index, workflow, protocolColor, protocolLabel, onUnlink,
 
   return (
     <div style={{
-      borderRadius: 8, border: '1px solid rgba(255,255,255,0.07)',
-      background: 'rgba(255,255,255,0.025)', overflow: 'hidden',
+      borderRadius: 8, border: '1px solid color-mix(in srgb, var(--color-text-primary) 7%, transparent)',
+      background: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)', overflow: 'hidden',
     }}>
       {/* left accent bar + content row */}
       <div style={{ display: 'flex' }}>
@@ -138,7 +138,7 @@ function WorkflowCard({ index, workflow, protocolColor, protocolLabel, onUnlink,
 
           {/* row 1: index · protocol · name · unlink */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.2)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
               {String(index).padStart(2, '0')}
             </span>
             <span style={{
@@ -167,7 +167,7 @@ function WorkflowCard({ index, workflow, protocolColor, protocolLabel, onUnlink,
 
           {/* row 2: subtitle (state flow) */}
           {subtitle && (
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', lineHeight: 1.3 }}>
+            <div style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 35%, transparent)', fontStyle: 'italic', lineHeight: 1.3 }}>
               {subtitle}
             </div>
           )}
@@ -185,7 +185,7 @@ function WorkflowCard({ index, workflow, protocolColor, protocolLabel, onUnlink,
 
           {/* row 4: counts + open editor */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)' }}>
+            <span style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 28%, transparent)' }}>
               {stateCount}s · {totalNodes}n · {transitionCount}t
             </span>
             <ButtonView
@@ -245,8 +245,8 @@ function EmptyState({ onOpenEditor }: { onOpenEditor: () => void }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
       <StateMachineIcon size={32} style={{ color: SM_AMBER, opacity: 0.5 }} />
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>No workflow connected</div>
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'center', maxWidth: 220 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'color-mix(in srgb, var(--color-text-primary) 50%, transparent)' }}>No workflow connected</div>
+      <div style={{ fontSize: 11, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', textAlign: 'center', maxWidth: 220 }}>
         Open the State Machine editor, design a flow, then right-click a workflow to connect it here.
       </div>
       <ButtonView size="md" variant="ghost" accentColor={SM_AMBER} onClick={onOpenEditor}>

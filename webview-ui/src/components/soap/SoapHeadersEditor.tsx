@@ -84,20 +84,20 @@ export function SoapHeadersEditor() {
   return (
     <div className="flex flex-col gap-4 p-3">
       {/* WS-Security Section */}
-      <div className="rounded-lg border border-[rgba(255,255,255,0.06)] overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 bg-[rgba(255,255,255,0.02)]">
+      <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-2 bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
           <span className="text-[12px] font-medium text-[var(--color-text-primary)]">WS-Security</span>
           <button
             type="button"
             onClick={() => updateSecurity({ enabled: !wsSecurity.enabled })}
-            className={`w-8 h-4 rounded-full relative transition-colors cursor-pointer ${wsSecurity.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[rgba(255,255,255,0.12)]'}`}
+            className={`w-8 h-4 rounded-full relative transition-colors cursor-pointer ${wsSecurity.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[color-mix(in_srgb,var(--color-text-primary)_12%,transparent)]'}`}
           >
             <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${wsSecurity.enabled ? 'left-4' : 'left-0.5'}`} />
           </button>
         </div>
 
         {wsSecurity.enabled && (
-          <div className="px-3 py-3 border-t border-[rgba(255,255,255,0.04)] flex flex-col gap-3">
+          <div className="px-3 py-3 border-t border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] flex flex-col gap-3">
             {/* Username Token */}
             <div className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold tracking-wider">Username Token</div>
             <div className="grid grid-cols-2 gap-2">
@@ -108,7 +108,7 @@ export function SoapHeadersEditor() {
                   value={wsSecurity.username || ''}
                   onChange={(e) => updateSecurity({ username: e.target.value })}
                   placeholder="{{soap_user}}"
-                  className="w-full h-[28px] px-2 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                  className="w-full h-[28px] px-2 text-[12px] rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
                 />
               </div>
               <div>
@@ -118,7 +118,7 @@ export function SoapHeadersEditor() {
                   value={wsSecurity.password || ''}
                   onChange={(e) => updateSecurity({ password: e.target.value })}
                   placeholder="{{soap_pass}}"
-                  className="w-full h-[28px] px-2 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                  className="w-full h-[28px] px-2 text-[12px] rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
                 />
               </div>
             </div>
@@ -158,7 +158,7 @@ export function SoapHeadersEditor() {
                     type="number"
                     value={wsSecurity.timestampTtl}
                     onChange={(e) => updateSecurity({ timestampTtl: parseInt(e.target.value) || 300 })}
-                    className="w-[60px] h-[24px] px-1.5 text-[11px] rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                    className="w-[60px] h-[24px] px-1.5 text-[11px] rounded bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
                   />
                 </div>
               )}
@@ -178,8 +178,8 @@ export function SoapHeadersEditor() {
       </div>
 
       {/* Custom SOAP Header Blocks */}
-      <div className="rounded-lg border border-[rgba(255,255,255,0.06)] overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 bg-[rgba(255,255,255,0.02)]">
+      <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-2 bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
           <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Custom SOAP Headers</span>
           <button
             type="button"
@@ -192,18 +192,18 @@ export function SoapHeadersEditor() {
         </div>
 
         {headerBlocks.length === 0 ? (
-          <div className="px-3 py-3 text-[11px] text-[var(--color-text-muted)] border-t border-[rgba(255,255,255,0.04)]">
+          <div className="px-3 py-3 text-[11px] text-[var(--color-text-muted)] border-t border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]">
             No custom SOAP headers. Click + to add one.
           </div>
         ) : (
-          <div className="border-t border-[rgba(255,255,255,0.04)]">
+          <div className="border-t border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]">
             {headerBlocks.map(block => (
-              <div key={block.id} className="border-b border-[rgba(255,255,255,0.03)] last:border-b-0">
+              <div key={block.id} className="border-b border-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] last:border-b-0">
                 <div className="flex items-center gap-2 px-3 py-1.5">
                   <button
                     type="button"
                     onClick={() => updateHeaderBlock(block.id, { enabled: !block.enabled })}
-                    className={`w-6 h-3.5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${block.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[rgba(255,255,255,0.12)]'}`}
+                    className={`w-6 h-3.5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${block.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[color-mix(in_srgb,var(--color-text-primary)_12%,transparent)]'}`}
                   >
                     <span className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all ${block.enabled ? 'left-3' : 'left-0.5'}`} />
                   </button>
@@ -229,7 +229,7 @@ export function SoapHeadersEditor() {
                     <TrashIcon size={10} />
                   </button>
                 </div>
-                <div className="h-[80px] mx-3 mb-2 rounded overflow-hidden border border-[rgba(255,255,255,0.06)]">
+                <div className="h-[80px] mx-3 mb-2 rounded overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
                   <CodeEditor
                     value={block.content}
                     onChange={(v) => updateHeaderBlock(block.id, { content: v })}

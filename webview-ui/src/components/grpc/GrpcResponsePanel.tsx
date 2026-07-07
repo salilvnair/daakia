@@ -253,14 +253,14 @@ function GrpcTimeline({ messages, status, response }: { messages: GrpcStreamMess
     const isOk = response.status === 0;
     return (
       <div className="flex flex-col">
-        <div className="flex items-start gap-2 px-3 py-2 border-b border-[rgba(255,255,255,0.04)]">
+        <div className="flex items-start gap-2 px-3 py-2 border-b border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]">
           <span className="mt-0.5 shrink-0">
             <ArrowUpIcon size={12} style={{ color: 'var(--color-warning)' }} />
           </span>
           <span className="shrink-0 text-[10px] font-mono mt-0.5 w-[70px]" style={{ color: 'var(--color-text-muted)' }}>0ms</span>
           <span className="text-[11px] font-medium" style={{ color: 'var(--color-text-primary)' }}>Request sent</span>
         </div>
-        <div className="flex items-start gap-2 px-3 py-2 border-b border-[rgba(255,255,255,0.04)]">
+        <div className="flex items-start gap-2 px-3 py-2 border-b border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]">
           <span className="mt-0.5 shrink-0">
             <ArrowDownIcon size={12} style={{ color: isOk ? ACCENT : 'var(--color-error)' }} />
           </span>
@@ -293,7 +293,7 @@ function GrpcTimeline({ messages, status, response }: { messages: GrpcStreamMess
       {messages.map((msg) => (
         <div
           key={msg.id}
-          className="flex items-start gap-2 px-3 py-2 border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)]"
+          className="flex items-start gap-2 px-3 py-2 border-b border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]"
         >
           <span className="mt-0.5 shrink-0">
             {msg.direction === 'sent' ? (

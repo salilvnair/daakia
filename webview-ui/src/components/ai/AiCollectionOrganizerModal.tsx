@@ -169,7 +169,7 @@ export function AiCollectionOrganizerModal({ collectionNode, protocol, onClose, 
             ))}
             {result.uncategorized.length > 0 && (
               <div className="rounded-lg border px-3 py-2.5"
-                style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)' }}>
                 <div className="flex items-center gap-2 mb-1.5">
                   <FolderIcon size={13} style={{ color: 'var(--color-text-muted)' }} />
                   <span className="text-[12px] font-medium text-[var(--color-text-muted)] italic">Uncategorized</span>

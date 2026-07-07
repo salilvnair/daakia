@@ -50,7 +50,7 @@ export function CopyRootHtmlButton() {
         position: 'relative',
       }}
       onMouseEnter={e => {
-        if (!copied) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'rgba(255,255,255,0.07)';
+        if (!copied) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'color-mix(in srgb, var(--color-text-primary) 7%, transparent)';
       }}
       onMouseLeave={e => {
         if (!copied) (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';

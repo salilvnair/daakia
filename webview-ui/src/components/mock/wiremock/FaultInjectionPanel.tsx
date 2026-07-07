@@ -44,12 +44,12 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
   const hasFaultOrLimit = fault.enabled || rateLimit.enabled;
 
   return (
-    <div className="border border-dashed border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden">
+    <div className="border border-dashed border-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] rounded-lg overflow-hidden">
       <div
         role="button"
         tabIndex={0}
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 text-left cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors"
       >
         <div className="flex items-center gap-2">
           <span className="transition-transform duration-150 text-[var(--color-text-muted)]" style={{ display: 'inline-flex', transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
@@ -65,7 +65,7 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
       </div>
 
       {expanded && (
-        <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[rgba(255,255,255,0.07)]">
+        <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
           {/* Fault type */}
           <div className="flex flex-col gap-2 pt-2">
             <div className="flex items-center justify-between">
@@ -141,7 +141,7 @@ export function FaultInjectionPanel({ route, onUpdate }: Props) {
           </div>
 
           {/* Rate limiting (6A.14) */}
-          <div className="flex flex-col gap-2 pt-1 border-t border-[rgba(255,255,255,0.06)]">
+          <div className="flex flex-col gap-2 pt-1 border-t border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Rate Limiting</span>
               <div className="flex items-center gap-2">

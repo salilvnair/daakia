@@ -73,10 +73,10 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
     (route.bodyMatcher ? 1 : 0);
 
   return (
-    <div className="border border-dashed border-[rgba(255,255,255,0.1)] rounded-lg overflow-hidden">
+    <div className="border border-dashed border-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] rounded-lg overflow-hidden">
       {/* Header */}
       <div
-        className="w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+        className="w-full flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors"
         onClick={() => setExpanded(v => !v)}
       >
         <div className="flex items-center gap-2">
@@ -96,7 +96,7 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
             </span>
           )}
           {hasAdvanced && !conditionCount && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--color-text-muted)' }}>
+            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-text-primary) 6%, transparent)', color: 'var(--color-text-muted)' }}>
               custom URL match
             </span>
           )}
@@ -115,7 +115,7 @@ export function MatchBuilderPanel({ route, onUpdate }: Props) {
       </div>
 
       {expanded && (
-        <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[rgba(255,255,255,0.07)]">
+        <div className="px-3 pb-3 flex flex-col gap-3 border-t border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
           {/* Logic combinator */}
           {conditionCount > 1 && (
             <div className="flex items-center gap-2 pt-2">

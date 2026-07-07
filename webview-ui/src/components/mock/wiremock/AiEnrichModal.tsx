@@ -208,7 +208,7 @@ function StubRow({
   const status = stub.response.status ?? 200;
 
   return (
-    <div className="rounded-lg border flex flex-col" style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
+    <div className="rounded-lg border flex flex-col" style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)', background: 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)' }}>
       {/* Header row */}
       <div className="flex items-center gap-1.5 p-2">
         <button
@@ -262,7 +262,7 @@ function StubRow({
 
       {/* Expandable body */}
       {expanded && (
-        <div className="px-2 pb-2 flex flex-col gap-1.5 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        <div className="px-2 pb-2 flex flex-col gap-1.5 border-t" style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 6%, transparent)' }}>
           {editing ? (
             <>
               <MultilineInputView
@@ -581,7 +581,7 @@ export function AiEnrichModal({ record, onClose, onAddRoutes, onApplyStateMachin
                   </div>
                 </div>
                 <pre className="text-[10px] font-mono text-[var(--color-text-muted)] whitespace-pre-wrap break-all overflow-auto max-h-[260px] p-2 rounded-lg"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  style={{ background: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)', border: '1px solid color-mix(in srgb, var(--color-text-primary) 7%, transparent)' }}>
                   {smJson}
                 </pre>
               </div>
@@ -600,7 +600,7 @@ export function AiEnrichModal({ record, onClose, onAddRoutes, onApplyStateMachin
                 </div>
                 {stubs.map((stub, i) => (
                   <div key={i} className="rounded-lg border p-2.5 flex items-center gap-2"
-                    style={{ borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>
+                    style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 7%, transparent)', background: 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)' }}>
                     <span className="text-[10px] font-bold tabular-nums w-5 flex-shrink-0 text-[var(--color-text-muted)]">#{i + 1}</span>
                     {stub.variant && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded flex-shrink-0"

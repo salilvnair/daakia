@@ -296,7 +296,7 @@ function GQLOperationCard({ op, gqlUrl, copiedId, onCopyEndpoint, onDelete, onUp
       {/* Tab bar — only when enabled */}
       {op.enabled !== false && (
         <>
-          <div className="border-t border-[rgba(255,255,255,0.06)] px-3">
+          <div className="border-t border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] px-3">
             <TabView
               tabs={GQL_OP_TABS}
               activeTab={activeTab}

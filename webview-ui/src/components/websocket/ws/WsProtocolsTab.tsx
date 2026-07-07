@@ -20,9 +20,12 @@ export function WsProtocolsTab() {
 
   // Protocols stored as JSON array in authData['ws_protocol_entries']
   const rawEntries = activeTab.authData?.['ws_protocol_entries'];
-  const entries: { id: string; value: string; enabled: boolean }[] = rawEntries
-    ? JSON.parse(rawEntries)
-    : [{ id: crypto.randomUUID(), value: '', enabled: true }];
+  let entries: { id: string; value: string; enabled: boolean }[];
+  try {
+    entries = rawEntries ? JSON.parse(rawEntries) : [{ id: crypto.randomUUID(), value: '', enabled: true }];
+  } catch {
+    entries = [{ id: crypto.randomUUID(), value: '', enabled: true }];
+  }
 
   const saveEntries = (updated: typeof entries) => {
     updateTab(activeTab.id, {

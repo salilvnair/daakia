@@ -63,7 +63,7 @@ export function ServerList({ servers, activeServerId, onSelect, onNew, onRename,
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-left transition-colors text-[12px] group ${
               activeServerId === server.id
                 ? 'bg-[rgba(234,179,8,0.12)] text-[var(--color-mock-server)] font-medium'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.04)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]'
             }`}
           >
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${server.running ? 'bg-[var(--color-success)] animate-pulse' : 'bg-[var(--color-muted-fallback)]'}`} />

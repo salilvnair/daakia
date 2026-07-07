@@ -396,7 +396,7 @@ function DaakiaAiButton() {
             : undefined,
       }}
       onMouseEnter={e => {
-        if (!isDaakiaAiActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.07)';
+        if (!isDaakiaAiActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--color-text-primary) 7%, transparent)';
       }}
       onMouseLeave={e => {
         if (!isDaakiaAiActive) (e.currentTarget as HTMLElement).style.backgroundColor =
@@ -479,9 +479,9 @@ function AiProviderStatusIcon() {
           onClick={e => e.stopPropagation()}
         >
           {/* Dark card background */}
-          <div style={{ backgroundColor: 'var(--vscode-editor-background, #1e1e1e)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12 }}>
+          <div style={{ backgroundColor: 'var(--vscode-editor-background, #1e1e1e)', border: '1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent)', borderRadius: 12 }}>
             {/* Header */}
-            <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[rgba(255,255,255,0.07)]">
+            <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
               <SparkleIcon size={13} style={{ color: 'var(--color-protocol-ai)' }} />
               <span className="text-[12px] font-semibold text-[var(--color-text-primary)]">Active AI Provider</span>
             </div>
@@ -505,7 +505,7 @@ function AiProviderStatusIcon() {
             </div>
 
             {/* Footer */}
-            <div className="px-3.5 py-2.5 border-t border-[rgba(255,255,255,0.07)]">
+            <div className="px-3.5 py-2.5 border-t border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
               <button
                 type="button"
                 onClick={() => {

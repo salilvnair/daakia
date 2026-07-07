@@ -143,10 +143,10 @@ function ModelPills({ models, accent = ACCENT, selectedModelId, onPillClick }: {
             className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-all font-mono"
             style={
               isSelected
-                ? { backgroundColor: '#0a0a0a', color: '#ffffff', border: `1.5px solid ${accent}`, fontWeight: 600 }
+                ? { backgroundColor: 'var(--color-inverse-surface)', color: 'var(--color-inverse-text)', border: `1.5px solid ${accent}`, fontWeight: 600 }
                 : m.enabled
                   ? { backgroundColor: `color-mix(in srgb, ${accent} 12%, transparent)`, color: accent, border: `1px solid color-mix(in srgb, ${accent} 28%, transparent)` }
-                  : { backgroundColor: 'transparent', color: 'var(--color-text-muted)', border: '1px solid rgba(255,255,255,0.12)', opacity: 0.5 }
+                  : { backgroundColor: 'transparent', color: 'var(--color-text-muted)', border: '1px solid var(--color-surface-border)', opacity: 0.5 }
             }
           >
             {isSelected && <CheckIcon size={9} strokeWidth={3} className="flex-shrink-0" style={{ color: accent }} />}
@@ -245,7 +245,7 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
   return (
     <div className="rounded-lg overflow-hidden group/card" style={{ border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, backgroundColor: 'transparent' }}>
       {/* Provider header row */}
-      <div className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors" onClick={() => setExpanded(!expanded)}>
+      <div className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors" onClick={() => setExpanded(!expanded)}>
         {expanded
           ? <ChevronDownIcon size={12} style={{ color: accent }} className="flex-shrink-0" />
           : <ChevronRightIcon size={12} style={{ color: accent }} className="flex-shrink-0" />
@@ -295,7 +295,7 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
 
       {/* Expanded model list */}
       {expanded && (
-        <div className="border-t bg-[rgba(0,0,0,0.15)] px-3 py-1.5" style={{ borderColor: `color-mix(in srgb, ${accent} 15%, transparent)` }}>
+        <div className="border-t bg-[var(--color-overlay-subtle)] px-3 py-1.5" style={{ borderColor: `color-mix(in srgb, ${accent} 15%, transparent)` }}>
           {/* View mode toggle + Add model */}
           <div className="flex items-center gap-2 mb-1">
             <div className="w-[14px]" />
@@ -523,7 +523,7 @@ function DaakiaMockProviderCard({ provider }: { provider: AiProviderConfig }) {
             className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-mono cursor-pointer transition-all"
             style={
               isDefault && defaultModelId === 'mock1-model'
-                ? { backgroundColor: '#0a0a0a', color: '#ffffff', border: `1.5px solid ${DAAKIA_MOCK_ACCENT}`, fontWeight: 600 }
+                ? { backgroundColor: 'var(--color-inverse-surface)', color: 'var(--color-inverse-text)', border: `1.5px solid ${DAAKIA_MOCK_ACCENT}`, fontWeight: 600 }
                 : { backgroundColor: `color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 12%, transparent)`, color: DAAKIA_MOCK_ACCENT, border: `1px solid color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 28%, transparent)` }
             }
           >

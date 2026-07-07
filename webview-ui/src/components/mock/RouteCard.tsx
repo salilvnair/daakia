@@ -143,7 +143,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
       {!route.enabled && (
         <div className="absolute inset-0 rounded-lg z-10 pointer-events-none overflow-hidden">
           <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg bg-[var(--color-muted-fallback)]" />
-          <div className="absolute inset-0 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(234,179,8,0.03) 0%, rgba(255,255,255,0.04) 100%)' }} />
+          <div className="absolute inset-0 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(234,179,8,0.03) 0%, color-mix(in srgb, var(--color-text-primary) 4%, transparent) 100%)' }} />
           <DiagonalLinesPattern patternId={`disabled-lines-${route.id}`} />
         </div>
       )}

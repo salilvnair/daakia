@@ -633,7 +633,7 @@ function CatalogCard({ entry, added, onAdd }: { entry: CatalogEntry; added: bool
     : `${entry.routeCount} route${entry.routeCount !== 1 ? 's' : ''}`;
 
   return (
-    <div className="flex flex-col gap-2 p-3 rounded-lg border border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)] transition-colors bg-[rgba(255,255,255,0.02)]">
+    <div className="flex flex-col gap-2 p-3 rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] hover:border-[color-mix(in_srgb,var(--color-text-primary)_15%,transparent)] transition-colors bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-[12px] font-medium text-[var(--color-text-primary)]">{entry.name}</p>
@@ -653,7 +653,7 @@ function CatalogCard({ entry, added, onAdd }: { entry: CatalogEntry; added: bool
       <p className="text-[10px] text-[var(--color-text-muted)] opacity-70 leading-relaxed">{entry.description}</p>
       <div className="flex flex-wrap gap-1">
         {entry.tags.map(t => (
-          <span key={t} className="text-[8px] px-1.5 py-0.5 rounded-full bg-[rgba(255,255,255,0.05)] text-[var(--color-text-muted)]">{t}</span>
+          <span key={t} className="text-[8px] px-1.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--color-text-primary)_5%,transparent)] text-[var(--color-text-muted)]">{t}</span>
         ))}
       </div>
     </div>

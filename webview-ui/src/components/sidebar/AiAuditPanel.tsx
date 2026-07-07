@@ -254,7 +254,7 @@ function EntryDetail({ entry, onBack }: { entry: CeAuditEntry; onBack: () => voi
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.06)]"
+          className="flex items-center gap-1 px-2 py-1 rounded text-[11px] cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]"
           style={{ color: 'var(--color-text-muted)' }}
         >
           <ChevronLeftIcon size={12} />
@@ -507,7 +507,7 @@ export function AiAuditPanel() {
                         : undefined,
                     }}
                     onClick={() => { setViewEntry(e); }}
-                    onMouseEnter={ev => { if (!isChecked) (ev.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.025)'; }}
+                    onMouseEnter={ev => { if (!isChecked) (ev.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)'; }}
                     onMouseLeave={ev => { (ev.currentTarget as HTMLElement).style.background = isChecked ? 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' : ''; }}
                   >
                     <td className="px-2 py-1.5 w-8" onClick={ev => ev.stopPropagation()}>

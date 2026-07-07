@@ -214,8 +214,8 @@ Keep the analysis concise and actionable. Use emoji bullets. Format in clear Mar
           {displayList.length === 0 ? (
             <div className="flex items-center justify-center h-full text-[11px] text-[var(--color-text-muted)]">No data for this view</div>
           ) : displayList.map((stat, i) => (
-            <div key={i} className="flex items-center gap-2 px-3 py-1.5 border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.03)]">
-              <span className="text-[9px] font-bold px-1 rounded bg-[rgba(255,255,255,0.08)] text-[var(--color-text-muted)] flex-shrink-0 uppercase">{stat.method}</span>
+            <div key={i} className="flex items-center gap-2 px-3 py-1.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)]">
+              <span className="text-[9px] font-bold px-1 rounded bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-muted)] flex-shrink-0 uppercase">{stat.method}</span>
               <span className="flex-1 min-w-0 text-[10px] text-[var(--color-text-primary)] truncate font-mono">{stat.url}</span>
               {view === 'slow' && (
                 <span className="text-[10px] font-mono tabular-nums flex-shrink-0" style={{ color: speedColor(stat.avgTime) }}>{formatMs(stat.avgTime)}</span>

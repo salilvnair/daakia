@@ -272,8 +272,8 @@ export function AuditLogTab() {
     <div className="flex flex-col h-full min-h-0">
       {/* ─── Toolbar ─── */}
       <div className="flex items-center border-b shrink-0"
-        style={{ height: 28, borderColor: 'var(--color-surface-border)', backgroundColor: 'rgba(255,255,255,0.025)' }}>
-        <div className="flex items-center gap-1.5 flex-1 h-full px-2.5 border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        style={{ height: 28, borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)' }}>
+        <div className="flex items-center gap-1.5 flex-1 h-full px-2.5 border-r" style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 6%, transparent)' }}>
           <SearchIcon size={10} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Filter by module, stage, event…"
@@ -286,14 +286,14 @@ export function AuditLogTab() {
             </button>
           ) : (
             <span className="text-[10px] font-mono tabular-nums px-1 rounded shrink-0 leading-none"
-              style={{ color: 'var(--color-text-muted)', backgroundColor: 'rgba(255,255,255,0.05)' }}>
+              style={{ color: 'var(--color-text-muted)', backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 5%, transparent)' }}>
               {filtered.length}
             </span>
           )}
         </div>
         <div className="flex items-center px-1 shrink-0">
           <button type="button" onClick={load} title="Refresh"
-            className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] transition-colors">
+            className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] transition-colors">
             <RefreshIcon size={12} />
           </button>
           <button type="button" onClick={handleClear} title="Clear all"
@@ -312,7 +312,7 @@ export function AuditLogTab() {
         ) : (
           <table className="w-full text-[11px]">
             <thead className="sticky top-0 z-10 bg-[var(--color-surface)]">
-              <tr className="border-b border-[rgba(255,255,255,0.06)]">
+              <tr className="border-b border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
                 <th className="text-left px-3 py-2 font-medium text-[var(--color-text-muted)] w-[32px]">#</th>
                 <th className="text-left px-2 py-2 font-medium text-[var(--color-text-muted)] w-[90px]">Module</th>
                 <th className="text-left px-2 py-2 font-medium text-[var(--color-text-muted)]">Stage / Event</th>
@@ -346,9 +346,9 @@ export function AuditLogTab() {
                   <Fragment key={key}>
                     <tr
                       onClick={() => setExpanded(isOpen ? null : key)}
-                      className="border-b border-[rgba(255,255,255,0.025)] cursor-pointer transition-colors"
+                      className="border-b border-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] cursor-pointer transition-colors"
                       style={{ background: isOpen ? `color-mix(in srgb, ${color} 5%, transparent)` : undefined }}
-                      onMouseEnter={ev => { if (!isOpen) (ev.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.025)'; }}
+                      onMouseEnter={ev => { if (!isOpen) (ev.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)'; }}
                       onMouseLeave={ev => { if (!isOpen) (ev.currentTarget as HTMLElement).style.background = ''; }}
                     >
                       <td className="px-3 py-2 text-[var(--color-text-muted)] font-mono text-[10px]">{rowNum}</td>
