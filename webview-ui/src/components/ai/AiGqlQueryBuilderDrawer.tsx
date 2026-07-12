@@ -99,7 +99,7 @@ export const AiGqlQueryBuilderDrawer = forwardRef<AiGqlQueryBuilderDrawerHandle,
       const schemaHint = activeTab?.authData?.['gql_schema_sdl']
         ? `\n\nSchema context (excerpt):\n${(activeTab.authData['gql_schema_sdl'] as string).slice(0, 800)}`
         : '';
-      const systemPrompt = resolve('graphql.query.generate.system') || SYSTEM_PROMPT;
+      const systemPrompt = resolve('gql.query.builder.system') || SYSTEM_PROMPT;
       const userPrompt = `${SYSTEM_PROMPT}${schemaHint}\n\nUser request: ${description.trim()}`;
 
       const pid = `ai-gql-qb-${Date.now()}`;

@@ -192,8 +192,8 @@ export function ImportCurlModal({ open, onClose }: ImportCurlModalProps) {
       bodyMode: bodyMode || 'none',
       bodyRaw: bodyRaw || '',
       bodyFormData: bodyFormData && bodyFormData.length > 0
-        ? [...bodyFormData.map(h => ({ ...h, id: crypto.randomUUID() })), { id: crypto.randomUUID(), key: '', value: '', type: 'text', enabled: true }]
-        : [{ id: crypto.randomUUID(), key: '', value: '', type: 'text', enabled: true }],
+        ? [...bodyFormData.map(h => ({ ...h, id: crypto.randomUUID(), type: (h.type === 'file' ? 'file' : 'text') as 'text' | 'file' })), { id: crypto.randomUUID(), key: '', value: '', type: 'text' as const, enabled: true }]
+        : [{ id: crypto.randomUUID(), key: '', value: '', type: 'text' as const, enabled: true }],
       bodyUrlEncoded: bodyUrlEncoded && bodyUrlEncoded.length > 0
         ? [...bodyUrlEncoded.map(h => ({ ...h, id: crypto.randomUUID() })), { id: crypto.randomUUID(), key: '', value: '', enabled: true }]
         : [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
@@ -271,8 +271,8 @@ export function ImportCurlModal({ open, onClose }: ImportCurlModalProps) {
         bodyMode: parsed.bodyMode,
         bodyRaw: parsed.bodyRaw,
         bodyFormData: parsed.bodyFormData.length > 0
-          ? [...parsed.bodyFormData.map(h => ({ ...h, id: crypto.randomUUID() })), { id: crypto.randomUUID(), key: '', value: '', type: 'text', enabled: true }]
-          : [{ id: crypto.randomUUID(), key: '', value: '', type: 'text', enabled: true }],
+          ? [...parsed.bodyFormData.map(h => ({ ...h, id: crypto.randomUUID(), type: (h.type === 'file' ? 'file' : 'text') as 'text' | 'file' })), { id: crypto.randomUUID(), key: '', value: '', type: 'text' as const, enabled: true }]
+          : [{ id: crypto.randomUUID(), key: '', value: '', type: 'text' as const, enabled: true }],
         bodyUrlEncoded: parsed.bodyUrlEncoded.length > 0
           ? [...parsed.bodyUrlEncoded.map(h => ({ ...h, id: crypto.randomUUID() })), { id: crypto.randomUUID(), key: '', value: '', enabled: true }]
           : [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],

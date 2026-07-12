@@ -30,7 +30,7 @@ export function AiSettingsTab() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
 
-  const settings = activeTab?.aiSettings || {};
+  const settings: import('../../../store/tabs-store').AiSettings = activeTab?.aiSettings || {};
   const temperature = settings.temperature ?? 0.7;
   const maxTokens = settings.maxTokens ?? 4096;
   const topP = settings.topP ?? 1;

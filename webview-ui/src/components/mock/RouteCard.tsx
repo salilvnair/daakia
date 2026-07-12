@@ -16,7 +16,8 @@ import { TemplateEditorPanel } from './wiremock/TemplateEditorPanel';
 import { FaultInjectionPanel } from './wiremock/FaultInjectionPanel';
 import { SequencePanel } from './wiremock/SequencePanel';
 import { WebhookPanel } from './wiremock/WebhookPanel';
-import { RouteStatePanel } from './wiremock/StateMachinePanel';
+import { StateMachineTriggerSelect } from './wiremock/StateMachinePanel';
+import type { StateMachineConfig, ConnectedWorkflow } from './mock-types';
 
 type RouteTab = 'basic' | 'matching' | 'advanced';
 
@@ -40,13 +41,14 @@ interface RouteCardProps {
   route: MockRoute;
   isEditing: boolean;
   serverBaseUrl?: string;
-  availableStates?: string[];
+  /** The server's connected workflows + legacy stateMachine — powers the State Machine / Trigger Event selector. */
+  server: { stateMachine?: StateMachineConfig; connectedWorkflows?: ConnectedWorkflow[] };
   onEdit: () => void;
   onUpdate: (patch: Partial<MockRoute>) => void;
   onDelete: () => void;
 }
 
-export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, onEdit, onUpdate, onDelete }: RouteCardProps) {
+export function RouteCard({ route, isEditing, serverBaseUrl, server, onEdit, onUpdate, onDelete }: RouteCardProps) {
   const [contentType, setContentType] = useState<'application/json' | 'application/xml' | 'text/plain'>('application/json');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [headersExpanded, setHeadersExpanded] = useState(false);
@@ -254,6 +256,14 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
               />
             </div>
 
+            {/* State machine (6A.11) */}
+            <StateMachineTriggerSelect
+              server={server}
+              connectedWorkflowId={route.connectedWorkflowId}
+              triggerEvent={route.triggerEvent}
+              onChange={(patch) => onUpdate(patch)}
+            />
+
             {/* Status + Delay */}
             <div className="flex items-center gap-4 pt-1">
               <div className="flex items-center gap-1.5">
@@ -273,6 +283,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
                   value={route.delay}
                   onChange={(ms) => onUpdate({ delay: ms })}
                   size="md"
+                  width={72}
                 />
               </div>
             </div>
@@ -404,11 +415,6 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
           {/* ═══ ADVANCED TAB ════════════════════════════════════════════════ */}
           {activeTab === 'advanced' && (
             <div className="flex flex-col gap-3">
-              {/* State machine (6A.11) */}
-              <div>
-                <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-2">State Machine</p>
-                <RouteStatePanel route={route} onUpdate={onUpdate} availableStates={availableStates} />
-              </div>
               {/* Fault injection + rate limit (6A.13-6A.14) */}
               <FaultInjectionPanel route={route} onUpdate={onUpdate} />
               {/* Webhooks (6A.23) */}

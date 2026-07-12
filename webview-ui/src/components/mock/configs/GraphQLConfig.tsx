@@ -16,6 +16,7 @@ import { logUiEvent } from '../../../store/ui-audit-store';
 import { SequencePanel } from '../wiremock/SequencePanel';
 import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
+import { StateMachineTriggerSelect } from '../wiremock/StateMachinePanel';
 
 type GQLOpTab = 'response' | 'sequence' | 'matching' | 'advanced';
 
@@ -123,7 +124,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
       <p className="text-[10px] text-[var(--color-text-muted)]">
         Define a GraphQL schema (SDL) so the GraphQL client can introspect this mock server and show Schema/Documentation panels.
       </p>
-      <ResizablePanelView id={`mock.gql.schema.${server.id}`} defaultHeight={200} minHeight={80} maxHeight={500}>
+      <ResizablePanelView defaultHeight={200} minHeight={80} maxHeight={500}>
         <EditorView
           value={server.graphqlSchema || 'type Query {\n  hello: String!\n  users: [User!]!\n}\n\ntype User {\n  id: ID!\n  name: String!\n  email: String\n}'}
           onChange={(val) => onUpdate({ graphqlSchema: val })}
@@ -182,6 +183,7 @@ export function GraphQLConfig({ server, onUpdate }: GraphQLConfigProps) {
           op={op}
           gqlUrl={gqlUrl}
           copiedId={copiedId}
+          server={server}
           onCopyEndpoint={copyEndpoint}
           onDelete={() => setDeleteConfirmId(op.id)}
           onUpdate={(patch) => {
@@ -231,12 +233,13 @@ interface GQLOperationCardProps {
   op: GraphQLMockOperation;
   gqlUrl: string;
   copiedId: string | null;
+  server: MockServer;
   onCopyEndpoint: (id: string) => void;
   onDelete: () => void;
   onUpdate: (patch: Partial<GraphQLMockOperation>) => void;
 }
 
-function GQLOperationCard({ op, gqlUrl, copiedId, onCopyEndpoint, onDelete, onUpdate }: GQLOperationCardProps) {
+function GQLOperationCard({ op, gqlUrl, copiedId, server, onCopyEndpoint, onDelete, onUpdate }: GQLOperationCardProps) {
   const [activeTab, setActiveTab] = useState<GQLOpTab>('response');
 
   return (
@@ -309,9 +312,17 @@ function GQLOperationCard({ op, gqlUrl, copiedId, onCopyEndpoint, onDelete, onUp
 
           <div className="p-3 flex flex-col gap-2">
             {activeTab === 'response' && (
-              <ResizablePanelView id={`mock.gql.op.${op.id}`} defaultHeight={80} minHeight={50} maxHeight={400}>
-                <EditorView value={op.response} onChange={(val) => onUpdate({ response: val })} language="json" height="100%" />
-              </ResizablePanelView>
+              <div className="flex flex-col gap-3">
+                <StateMachineTriggerSelect
+                  server={server}
+                  connectedWorkflowId={op.connectedWorkflowId}
+                  triggerEvent={op.triggerEvent}
+                  onChange={(patch) => onUpdate(patch)}
+                />
+                <ResizablePanelView defaultHeight={80} minHeight={50} maxHeight={400}>
+                  <EditorView value={op.response} onChange={(val) => onUpdate({ response: val })} language="json" height="100%" />
+                </ResizablePanelView>
+              </div>
             )}
             {activeTab === 'sequence' && (
               <SequencePanel route={gqlOpToRoute(op)} onUpdate={(patch) => onUpdate(routeToGQLPatch(patch))} />

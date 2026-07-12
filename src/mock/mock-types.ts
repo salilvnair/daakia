@@ -100,16 +100,6 @@ export interface WebhookConfig {
   enabled: boolean;
 }
 
-// ─── Per-route state transition entry (multi-state support) ─────────────────
-
-export interface StateTransitionEntry {
-  id: string;
-  requiredState: string;
-  newState: string;
-  responseBodyOverride?: string;
-  statusCodeOverride?: number;
-}
-
 // ─── State Machine (6A.11-6A.12) ────────────────────────────────────────────
 
 export interface StateMockResponse {
@@ -210,10 +200,25 @@ export interface MockRoute {
   proxyTarget?: string;
 
   // State machine (6A.11)
-  requiredState?: string;
-  newState?: string;
-  stateVariableUpdates?: Record<string, string>;
-  stateTransitions?: StateTransitionEntry[];
+  /**
+   * The real state-machine event this route triggers (e.g. "PAY"), matching
+   * one of the connected canvas workflow's edge event names
+   * (StateMachineConfig.transitions[].label). When set, this route's gating
+   * AND its transition both come entirely from the canvas's own transition
+   * graph — the graph already encodes which states this event is valid from
+   * and where it leads.
+   */
+  triggerEvent?: string;
+  /**
+   * Which connected workflow (MockServerConfig.connectedWorkflows[].workflowId)
+   * `triggerEvent` refers to. Omit when the server has at most one connected
+   * workflow — resolved automatically (falls back to the single entry, or to
+   * the legacy singular `stateMachine` field for hand-authored samples that
+   * never populated `connectedWorkflows`). Required once 2+ workflows are
+   * connected to the same server, since event names aren't guaranteed unique
+   * across workflows.
+   */
+  connectedWorkflowId?: string;
 
   // Fault injection (6A.13)
   fault?: FaultConfig;
@@ -264,6 +269,10 @@ export interface GraphQLMockOperation {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this operation triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface WebSocketMockHandler {
@@ -360,6 +369,10 @@ export interface GrpcMockMethod {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this method triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface SoapMockOperation {
@@ -386,6 +399,10 @@ export interface SoapMockOperation {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this operation triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 /** Sprint 13.32: per-server webhook callback fired when any protocol handler matches */

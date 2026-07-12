@@ -3,7 +3,7 @@
  */
 import { useState } from 'react';
 import { TextInputView, ChipView, ButtonView } from '@salilvnair/dui';
-import type { MockRoute, SoapMockOperation } from '../mock-types';
+import type { MockRoute, SoapMockOperation, GrpcMockMethod } from '../mock-types';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
 
@@ -20,6 +20,8 @@ export interface CatalogEntry {
   rawLabel?: string; // e.g. "SDL", ".proto", "WSDL", "Events"
   /** SOAP-specific: pre-built mock operations to add directly to soapOperations */
   soapOperations?: SoapMockOperation[];
+  /** gRPC-specific: pre-built mock methods to add directly to grpcMethods (grpcProtoFile only controls registration mode, not the handlers) */
+  grpcMethods?: Array<Omit<GrpcMockMethod, 'id' | 'enabled'>>;
 }
 
 export interface Props {
@@ -27,6 +29,8 @@ export interface Props {
   onAddRoutes: (routes: MockRoute[], raw?: string) => void;
   /** Called with SOAP operations when a SOAP catalog entry is added */
   onAddSoapOps?: (ops: SoapMockOperation[]) => void;
+  /** Called with gRPC methods when a gRPC catalog entry is added */
+  onAddGrpcMethods?: (methods: GrpcMockMethod[], raw?: string) => void;
 }
 
 // ─── Template helpers ─────────────────────────────────────────────────────────
@@ -252,6 +256,20 @@ const GRPC_CATALOG: CatalogEntry[] = [
     description: 'User management gRPC service with CRUD operations and streaming.',
     routes: [],
     rawLabel: '.proto',
+    grpcMethods: [
+      { service: 'users.v1.UserService', method: 'GetUser', type: 'unary', response: j({ id: 'usr_001', name: 'Alice Johnson', email: 'alice@example.com', role: 'admin', created_at: 1716800000 }) },
+      { service: 'users.v1.UserService', method: 'ListUsers', type: 'unary', response: j({ users: [{ id: 'usr_001', name: 'Alice Johnson', email: 'alice@example.com', role: 'admin' }, { id: 'usr_002', name: 'Bob Smith', email: 'bob@example.com', role: 'user' }], total: 2, has_next: false }) },
+      { service: 'users.v1.UserService', method: 'CreateUser', type: 'unary', response: j({ id: 'usr_003', name: 'New User', email: 'new@example.com', role: 'user', created_at: 1716900000 }) },
+      { service: 'users.v1.UserService', method: 'UpdateUser', type: 'unary', response: j({ id: 'usr_001', name: 'Alice Johnson Updated', email: 'alice@example.com', role: 'admin', created_at: 1716800000 }) },
+      { service: 'users.v1.UserService', method: 'DeleteUser', type: 'unary', response: j({ success: true }) },
+      {
+        service: 'users.v1.UserService', method: 'WatchUser', type: 'server_streaming', response: j({ type: 'updated', user: { id: 'usr_001', name: 'Alice Johnson' }, ts: 1716900000 }),
+        streamResponses: [
+          { data: j({ type: 'updated', user: { id: 'usr_001', name: 'Alice Johnson' }, ts: 1716900000 }), delayMs: 0 },
+          { data: j({ type: 'updated', user: { id: 'usr_001', role: 'editor' }, ts: 1716900500 }), delayMs: 2000 },
+        ],
+      },
+    ],
     raw: `syntax = "proto3";
 package users.v1;
 option go_package = "users/v1;usersv1";
@@ -289,6 +307,20 @@ message UserEvent { string type = 1; User user = 2; int64 ts = 3; }`,
     description: 'Product catalog gRPC service with inventory and pricing.',
     routes: [],
     rawLabel: '.proto',
+    grpcMethods: [
+      { service: 'products.v1.ProductService', method: 'GetProduct', type: 'unary', response: j({ id: 'prod_1', name: 'MacBook Pro 16"', price: 2499.00, currency: 'USD', in_stock: true, category: 'electronics', quantity: 12 }) },
+      { service: 'products.v1.ProductService', method: 'ListProducts', type: 'unary', response: j({ products: [{ id: 'prod_1', name: 'MacBook Pro 16"', price: 2499.00, currency: 'USD', in_stock: true }, { id: 'prod_2', name: 'AirPods Pro', price: 249.00, currency: 'USD', in_stock: false }], total: 2 }) },
+      { service: 'products.v1.ProductService', method: 'CreateProduct', type: 'unary', response: j({ id: 'prod_3', name: 'New Product', price: 99.00, currency: 'USD', in_stock: true, category: 'electronics', quantity: 50 }) },
+      { service: 'products.v1.ProductService', method: 'UpdateProduct', type: 'unary', response: j({ id: 'prod_1', name: 'MacBook Pro 16"', price: 2299.00, in_stock: true, quantity: 10 }) },
+      { service: 'products.v1.ProductService', method: 'CheckInventory', type: 'unary', response: j({ stock: { prod_1: 12, prod_2: 0 } }) },
+      {
+        service: 'products.v1.ProductService', method: 'PriceStream', type: 'bidi_streaming', response: j({ product_id: 'prod_1', price: 2499.00, ts: 1716900000 }),
+        streamResponses: [
+          { data: j({ product_id: 'prod_1', price: 2499.00, ts: 1716900000 }), delayMs: 0 },
+          { data: j({ product_id: 'prod_1', price: 2399.00, ts: 1716900500 }), delayMs: 2000 },
+        ],
+      },
+    ],
     raw: `syntax = "proto3";
 package products.v1;
 
@@ -327,6 +359,13 @@ message PriceUpdate          { string product_id = 1; double price = 2; int64 ts
     description: 'Authentication and authorization gRPC service.',
     routes: [],
     rawLabel: '.proto',
+    grpcMethods: [
+      { service: 'auth.v1.AuthService', method: 'Login', type: 'unary', response: j({ access_token: 'eyJhbGciOiJIUzI1NiJ9.mock', refresh_token: 'refresh_abc123', expires_in: 3600, token_type: 'Bearer' }) },
+      { service: 'auth.v1.AuthService', method: 'Logout', type: 'unary', response: j({ success: true }) },
+      { service: 'auth.v1.AuthService', method: 'RefreshToken', type: 'unary', response: j({ access_token: 'eyJhbGciOiJIUzI1NiJ9.refreshed', expires_in: 3600 }) },
+      { service: 'auth.v1.AuthService', method: 'ValidateToken', type: 'unary', response: j({ valid: true, user_id: 'usr_001', role: 'admin', expires_at: 1716990000 }) },
+      { service: 'auth.v1.AuthService', method: 'GetPermissions', type: 'unary', response: j({ permissions: ['read', 'write', 'delete'], role: 'admin' }) },
+    ],
     raw: `syntax = "proto3";
 package auth.v1;
 
@@ -571,7 +610,7 @@ function getCatalog(protocol: string): CatalogEntry[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MockApiCatalog({ protocol = 'rest', onAddRoutes, onAddSoapOps }: Props) {
+export function MockApiCatalog({ protocol = 'rest', onAddRoutes, onAddSoapOps, onAddGrpcMethods }: Props) {
   const catalog = getCatalog(protocol);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -587,6 +626,8 @@ export function MockApiCatalog({ protocol = 'rest', onAddRoutes, onAddSoapOps }:
   const add = (entry: CatalogEntry) => {
     if (entry.soapOperations && entry.soapOperations.length > 0 && onAddSoapOps) {
       onAddSoapOps(entry.soapOperations.map(op => ({ ...op, id: crypto.randomUUID() })));
+    } else if (entry.grpcMethods && entry.grpcMethods.length > 0 && onAddGrpcMethods) {
+      onAddGrpcMethods(entry.grpcMethods.map(m => ({ ...m, id: crypto.randomUUID(), enabled: true })), entry.raw);
     } else {
       const routes = entry.routes.map(r => ({ ...r, id: crypto.randomUUID() }));
       onAddRoutes(routes, entry.raw);

@@ -219,7 +219,7 @@ export function AiScenarioGeneratorModal({ onClose }: Props) {
                     <span className="text-[10.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{step.name as string}</span>
                   </div>
                   <p className="text-[10px] font-mono truncate mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{step.url as string}</p>
-                  {step.extractVariable && (
+                  {Boolean(step.extractVariable) && (
                     <p className="text-[9.5px] mt-0.5" style={{ color: 'var(--color-success)' }}>
                       → saves {step.extractPath as string} as {`{{${step.extractVariable}}}`}
                     </p>

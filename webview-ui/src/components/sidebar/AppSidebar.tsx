@@ -414,9 +414,9 @@ function DaakiaAiButton() {
 // ─── AI Provider Status Popup ─────────────────────────────────────────────────
 
 const BADGE_STYLE = {
-  backgroundColor: 'rgba(59,130,246,0.14)',
-  color: '#60a5fa',
-  border: '1px solid rgba(59,130,246,0.28)',
+  backgroundColor: 'color-mix(in srgb, var(--color-info) 14%, transparent)',
+  color: 'var(--color-info)',
+  border: '1px solid color-mix(in srgb, var(--color-info) 28%, transparent)',
 };
 
 function AiProviderStatusIcon() {

@@ -447,7 +447,6 @@ export function MQTTPanel() {
           disabled={connState === 'connected'}
           suggestions={urlSuggestions}
           mockServers={mockSuggestions}
-          protocolHints={['wss://']}
           size="lg"
           borderRadius={6}
         />
@@ -551,7 +550,7 @@ export function MQTTPanel() {
           )}
           {showPreflight && activeTab.url.trim() && <AiPreflightPopover tab={activeTab} onClose={() => setShowPreflight(false)} />}
           {showPatternStatus && activeTab.url.trim() && aiEnabled('patternBaseline') && (
-            <PatternBaselinePopup method="MQTT" url={activeTab.url} onClose={() => setShowPatternStatus(false)} dir={aiOverflowDir} />
+            <PatternBaselinePopup method="MQTT" url={activeTab.url} onClose={() => setShowPatternStatus(false)} />
           )}
         </div>
       </div>
@@ -722,7 +721,7 @@ export function MQTTPanel() {
           <div className="flex items-center gap-2 px-3 py-1 border-b border-[var(--color-surface-border)] flex-shrink-0">
             <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Log</span>
             <div className="flex-1" />
-            <IconButtonView icon={<TrashIcon size={12} />} size="xs" title="Clear log" onClick={handleClear} hoverColor="var(--color-error)" />
+            <IconButtonView icon={<TrashIcon size={12} />} size="xs" title="Clear log" onClick={handleClear} accentColor="var(--color-error)" />
             <IconButtonView icon={<ArrowUpIcon size={12} />} size="xs" title="Scroll to top" onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} />
             <IconButtonView icon={<ArrowDownIcon size={12} />} size="xs" title="Scroll to bottom" onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }} />
             <IconButtonView

@@ -314,7 +314,6 @@ export function SoapUrlBar() {
               method="SOAP"
               url={activeTab.url}
               onClose={() => setShowPatternStatus(false)}
-              dir={overflowDir}
             />
           )}
         </div>

@@ -217,7 +217,7 @@ export function WebSocketConfig({ server, onUpdate }: WebSocketConfigProps) {
             />
           )}
           {handler.enabled && (
-            <ResizablePanelView id={`mock.ws.handler.${handler.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
+            <ResizablePanelView defaultHeight={60} minHeight={40} maxHeight={400}>
               <EditorView
                 value={handler.response}
                 onChange={(val) => updateHandler(handler.id, { response: val })}

@@ -70,7 +70,7 @@ export function ResponseDiffModal({ onClose }: Props) {
       footerLeft={
         <ToggleSwitchView
           checked={pretty}
-          onChange={e => setPretty(e.target.checked)}
+          onChange={v => setPretty(v)}
           label="Pretty JSON"
           accentColor={ACCENT}
           size="sm"

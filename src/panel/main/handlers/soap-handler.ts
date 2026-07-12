@@ -421,8 +421,8 @@ export async function handleImportWsdlToCollection(
             bodyRaw: skeleton || `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">\n  <soapenv:Header/>\n  <soapenv:Body>\n    <!-- ${op.name} -->\n  </soapenv:Body>\n</soapenv:Envelope>`,
             bodyMode: 'raw',
             bodyContentType: 'application/xml',
-            headers: [{ id: randomUUID(), key: 'Content-Type', value: op.soapVersion === '1.2' ? 'application/soap+xml; charset=utf-8' : 'text/xml; charset=utf-8', enabled: true }],
-            soapVersion: op.soapVersion,
+            headers: [{ id: randomUUID(), key: 'Content-Type', value: port.soapVersion === '1.2' ? 'application/soap+xml; charset=utf-8' : 'text/xml; charset=utf-8', enabled: true }],
+            soapVersion: port.soapVersion,
             soapAction: op.soapAction,
           });
 

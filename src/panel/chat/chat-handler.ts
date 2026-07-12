@@ -19,7 +19,7 @@ function stripMention(text: string): string {
 
 function buildMessages(
   systemPrompt: string,
-  history: readonly vscode.ChatRequestTurn[] | readonly vscode.ChatResponseTurn[],
+  history: readonly (vscode.ChatRequestTurn | vscode.ChatResponseTurn)[],
   userText: string,
 ): vscode.LanguageModelChatMessage[] {
   const msgs: vscode.LanguageModelChatMessage[] = [

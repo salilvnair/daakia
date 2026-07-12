@@ -134,17 +134,23 @@
   pointer-events: none;
 }
 .dw-hero-title {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
   color: var(--dw-fg);
-  margin: 0 0 6px 0;
+  margin: 0 0 7px 0;
   letter-spacing: -0.02em;
 }
 .dw-hero-subtitle {
-  font-size: 12px;
-  color: var(--dw-muted);
+  /* Serif body deliberately contrasts with the sans-serif title so the intro
+     reads as "narrative" instead of another UI label (matches ck8t's
+     bsdoc-summary pairing). */
+  font-family: ui-serif, Georgia, 'Times New Roman', Cambria, serif;
+  font-size: 13px;
+  color: var(--dw-fg);
+  opacity: 0.85;
   margin: 0 0 16px 0;
-  line-height: 1.5;
+  line-height: 1.6;
+  max-width: 640px;
 }
 .dw-hero-chips {
   display: flex;
@@ -162,30 +168,62 @@
   border: 1px solid;
 }
 
-/* ─── Section ───────────────────────────────────────── */
+/* ─── Section ───────────────────────────────────────────────────────────────
+   A "section" is `<div><SectionTitle/>...content...</div>` in every View
+   file — the wrapping <div> becomes a real elevated card (border, shadow,
+   rounded corners) via :has(), and SectionTitle itself becomes the card's
+   colored gradient header banner, matching the DocCard+SectionHeader pattern
+   (see convengine-chat-demo's ChatSettingsView / ck8t's BlockDocViewer) —
+   no changes needed in the View files that already render this shape. */
 .dw-section {
   padding: 24px 24px 0;
+}
+div:has(> .dw-section-title) {
+  border-radius: 14px;
+  border: 1px solid var(--dw-border);
+  background: var(--dw-surface);
+  overflow: hidden;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
 }
 .dw-section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 15px;
+  gap: 10px;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--dw-fg);
-  margin: 0 0 14px 0;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--dw-border);
+  color: #fff;
+  margin: 0;
+  padding: 16px 20px;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg,
+    var(--dw-accent) 0%,
+    color-mix(in srgb, var(--dw-accent) 65%, #000 20%) 100%
+  );
+}
+/* Direct children of a section-card div (everything after the title) get
+   consistent card-body padding — the title itself is excluded since it
+   already carries its own gradient-banner padding. */
+div:has(> .dw-section-title) > :not(.dw-section-title) {
+  margin-left: 20px;
+  margin-right: 20px;
+}
+div:has(> .dw-section-title) > :first-of-type.dw-section-title + * {
+  margin-top: 18px;
+}
+div:has(> .dw-section-title) > *:last-child {
+  margin-bottom: 20px;
 }
 .dw-section-emoji {
-  font-size: 18px;
+  font-size: 19px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25));
 }
 .dw-subsection-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--dw-muted);
+  letter-spacing: 0.08em;
+  color: var(--dw-accent);
   margin: 18px 0 8px 0;
 }
 
@@ -196,6 +234,7 @@
   background: var(--dw-surface);
   margin-bottom: 12px;
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
 }
 .dw-card-header {
   display: flex;
@@ -223,11 +262,13 @@
   border: 1px solid var(--dw-border);
   background: var(--dw-surface);
   padding: 12px;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 .dw-feat-card:hover {
-  border-color: color-mix(in srgb, var(--dw-accent) 30%, transparent);
-  background: color-mix(in srgb, var(--dw-accent) 4%, var(--dw-surface));
+  border-color: color-mix(in srgb, var(--dw-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--dw-accent) 5%, var(--dw-surface));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--dw-accent) 12%, transparent);
 }
 .dw-feat-icon {
   font-size: 20px;
@@ -274,50 +315,65 @@
 }
 .dw-step-content {
   flex: 1;
-  font-size: 12px;
+  font-family: ui-serif, Georgia, 'Times New Roman', Cambria, serif;
+  font-size: 12.5px;
   color: var(--dw-fg);
-  line-height: 1.5;
+  line-height: 1.6;
   padding-top: 2px;
 }
 .dw-step-content strong {
+  font-family: var(--vscode-font-family, system-ui);
   color: var(--dw-fg);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* ─── Callouts ──────────────────────────────────────── */
 .dw-callout {
   display: flex;
   gap: 10px;
-  padding: 10px 13px;
-  border-radius: var(--dw-radius);
+  padding: 11px 14px;
+  border-radius: 0 var(--dw-radius) var(--dw-radius) 0;
   border: 1px solid;
+  border-left-width: 3px;
   margin-bottom: 12px;
+  font-family: ui-serif, Georgia, 'Times New Roman', Cambria, serif;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.dw-callout-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+.dw-callout-text { flex: 1; color: var(--dw-fg); }
+.dw-callout-text strong {
+  font-family: var(--vscode-font-family, system-ui);
+  font-weight: 700;
   font-size: 12px;
-  line-height: 1.5;
+  display: block;
+  margin-bottom: 3px;
+  letter-spacing: -0.01em;
 }
-.dw-callout-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
-.dw-callout-text { flex: 1; }
-.dw-callout-text strong { font-weight: 600; display: block; margin-bottom: 2px; }
 .dw-callout.info {
-  background: color-mix(in srgb, #3b82f6 8%, transparent);
-  border-color: color-mix(in srgb, #3b82f6 25%, transparent);
-  color: #93c5fd;
+  background: color-mix(in srgb, #3b82f6 9%, var(--dw-surface));
+  border-color: color-mix(in srgb, #3b82f6 30%, transparent);
+  border-left-color: #3b82f6;
 }
+.dw-callout.info .dw-callout-text strong { color: #60a5fa; }
 .dw-callout.warn {
-  background: color-mix(in srgb, #eab308 8%, transparent);
-  border-color: color-mix(in srgb, #eab308 25%, transparent);
-  color: #fde047;
+  background: color-mix(in srgb, #eab308 9%, var(--dw-surface));
+  border-color: color-mix(in srgb, #eab308 30%, transparent);
+  border-left-color: #eab308;
 }
+.dw-callout.warn .dw-callout-text strong { color: #eab308; }
 .dw-callout.ok {
-  background: color-mix(in srgb, #22c55e 8%, transparent);
-  border-color: color-mix(in srgb, #22c55e 25%, transparent);
-  color: #86efac;
+  background: color-mix(in srgb, #22c55e 9%, var(--dw-surface));
+  border-color: color-mix(in srgb, #22c55e 30%, transparent);
+  border-left-color: #22c55e;
 }
+.dw-callout.ok .dw-callout-text strong { color: #22c55e; }
 .dw-callout.tip {
-  background: color-mix(in srgb, var(--dw-accent) 8%, transparent);
-  border-color: color-mix(in srgb, var(--dw-accent) 25%, transparent);
-  color: var(--dw-accent);
+  background: color-mix(in srgb, var(--dw-accent) 9%, var(--dw-surface));
+  border-color: color-mix(in srgb, var(--dw-accent) 30%, transparent);
+  border-left-color: var(--dw-accent);
 }
+.dw-callout.tip .dw-callout-text strong { color: var(--dw-accent); }
 
 /* ─── Table ─────────────────────────────────────────── */
 .dw-table {

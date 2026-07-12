@@ -1,13 +1,123 @@
 /**
  * StateMachinePanel — Visual state machine editor for scenario-based mock flows (6A.11-6A.12).
- * Per-route state requirements + transitions, plus server-level state machine config.
+ * Per-route/operation "which connected workflow + which of its events gates this" selector,
+ * plus server-level state machine config.
  */
 import { SelectInputView, TextInputView, ButtonView, IconButtonView, EditorView, ResizablePanelView, type SelectOption } from '@salilvnair/dui';
 import { PlusIcon, TrashIcon, ChevronDownIcon } from '../../../icons';
 import { useState } from 'react';
-import type { MockRoute, StateMachineConfig, StateNode, StateTransition, StateTransitionEntry } from '../mock-types';
+import type { StateMachineConfig, StateNode, StateTransition, ConnectedWorkflow } from '../mock-types';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
+
+// ─── State Machine + Trigger Event selector (all protocols) ─────────────────
+// Two-step, event-driven only: pick which connected workflow gates this
+// route/operation (skipped when there's just one, unambiguous), then pick
+// one of that workflow's real transition events. No "manual required state"
+// fallback — the @salilvnair/state-machine engine (and its canvas) has no
+// such concept, so neither does this selector; a route with no event set
+// simply isn't gated at all.
+
+interface StateMachineTriggerSelectProps {
+  /** The server's connected workflows (preferred) and/or its legacy singular stateMachine (fallback, e.g. hand-authored samples). */
+  server: { stateMachine?: StateMachineConfig; connectedWorkflows?: ConnectedWorkflow[] };
+  connectedWorkflowId?: string;
+  triggerEvent?: string;
+  onChange: (patch: { connectedWorkflowId?: string; triggerEvent?: string }) => void;
+}
+
+export function StateMachineTriggerSelect({ server, connectedWorkflowId, triggerEvent, onChange }: StateMachineTriggerSelectProps) {
+  const workflows: ConnectedWorkflow[] = server.connectedWorkflows?.length
+    ? server.connectedWorkflows
+    : server.stateMachine
+      ? [{ workflowId: '', name: 'Connected State Machine', stateMachine: server.stateMachine }]
+      : [];
+
+  if (workflows.length === 0) {
+    return (
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
+          Trigger Event
+        </span>
+        <p style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', lineHeight: 1.5 }}>
+          Connect a state machine workflow (State Machine tab → Connect to Mock Server) to pick from its real event names here.
+        </p>
+      </div>
+    );
+  }
+
+  const singleWorkflow = workflows.length === 1 ? workflows[0] : undefined;
+  const selectedWorkflow = singleWorkflow ?? workflows.find(w => w.workflowId === connectedWorkflowId);
+
+  // Multiple connected workflows: the "State Machine" dropdown below already has
+  // its own real "Select a connected workflow…" unselected state — that's where
+  // a consumer opts out of gating entirely. Once a specific workflow IS picked
+  // there, the event is mandatory: no separate "None" inside Trigger Event too
+  // (that would just be the same "not gated" choice available in two places).
+  // Single connected workflow: there's no "State Machine" selector at all (it's
+  // auto-applied), so "None" here remains the only way a route can stay ungated
+  // while the server still has a workflow connected — several bundled samples
+  // (e.g. orders-api's `GET /api/orders`) rely on exactly this.
+  const realEventOptions: SelectOption[] = Array.from(
+    new Set((selectedWorkflow?.stateMachine?.transitions ?? []).map(t => t.label).filter((l): l is string => !!l)),
+  ).map(e => ({ value: e, label: e }));
+  const eventOptions: SelectOption[] = workflows.length > 1
+    ? realEventOptions
+    : [{ value: '', label: 'None — always matches, no state gating' }, ...realEventOptions];
+
+  return (
+    <div className="flex flex-col gap-2">
+      {workflows.length > 1 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
+            State Machine
+          </span>
+          <SelectInputView
+            options={[{ value: '', label: 'Select a connected workflow…' }, ...workflows.map(w => ({ value: w.workflowId, label: w.name }))]}
+            value={connectedWorkflowId ?? ''}
+            onChange={(v) => onChange({ connectedWorkflowId: (v as string) || undefined, triggerEvent: undefined })}
+            size="sm"
+            accentColor={MOCK_ACCENT}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
+          Trigger Event
+        </span>
+        <SelectInputView
+          options={eventOptions}
+          value={triggerEvent ?? ''}
+          onChange={(v) => onChange({ connectedWorkflowId, triggerEvent: (v as string) || undefined })}
+          size="sm"
+          accentColor={MOCK_ACCENT}
+          disabled={workflows.length > 1 && !selectedWorkflow}
+          placeholder={workflows.length > 1 ? 'Select an event…' : undefined}
+        />
+        <p style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', lineHeight: 1.5 }}>
+          {workflows.length > 1 && !selectedWorkflow
+            ? 'Pick a State Machine above first.'
+            : workflows.length > 1
+            ? "Required once a State Machine is selected — fires directly against the workflow's own transitions, rejected if the event isn't valid from the session's current state."
+            : "When set, a successful match fires this event directly against the workflow's own transitions — rejected if the event isn't valid from the session's current state."}
+        </p>
+      </div>
+
+      {triggerEvent && (
+        <div style={{
+          borderRadius: 7, border: `1px solid color-mix(in srgb, ${MOCK_ACCENT} 20%, transparent)`,
+          background: `color-mix(in srgb, ${MOCK_ACCENT} 6%, transparent)`,
+          padding: '8px 10px',
+        }}>
+          <p style={{ fontSize: 10, color: MOCK_ACCENT, lineHeight: 1.5 }}>
+            Firing event <strong>{triggerEvent}</strong> on a successful match.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Server-level state machine config ───────────────────────────────────────
 
@@ -18,11 +128,11 @@ interface StateMachineEditorProps {
 
 export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps) {
   const [expanded, setExpanded] = useState(false);
-  const cfg: StateMachineConfig = config ?? { initialState: 'default', states: [], transitions: [] };
+  const cfg: StateMachineConfig = config ?? { enabled: true, sessionMode: 'global' as const, defaultState: 'default', states: [], transitions: [] };
 
   const addState = () => {
     const id = `state_${Date.now()}`;
-    onUpdate({ ...cfg, states: [...cfg.states, { id, label: 'New State', color: MOCK_ACCENT }] });
+    onUpdate({ ...cfg, states: [...cfg.states, { id, name: 'New State', x: 0, y: 0, color: MOCK_ACCENT }] });
   };
 
   const updateState = (idx: number, patch: Partial<StateNode>) => {
@@ -44,7 +154,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
       id: `tr_${Date.now()}`,
       from: cfg.states[0]?.id ?? 'default',
       to: cfg.states[1]?.id ?? 'default',
-      triggeredByRouteId: '',
+      routeId: '',
     };
     onUpdate({ ...cfg, transitions: [...cfg.transitions, t] });
   };
@@ -96,8 +206,8 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
           <div className="flex items-center gap-2 pt-2">
             <span className="text-[10px] text-[var(--color-text-muted)]">Initial state</span>
             <TextInputView
-              value={cfg.initialState}
-              onChange={e => onUpdate({ ...cfg, initialState: e.target.value })}
+              value={cfg.defaultState}
+              onChange={e => onUpdate({ ...cfg, defaultState: e.target.value })}
               size="md"
               style={{ width: 140, fontFamily: 'monospace' }}
             />
@@ -107,7 +217,7 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
           {cfg.states.length > 0 && (
             <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] p-3 bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
               <p className="text-[9px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-2">Visual Flow</p>
-              <StateDiagram states={cfg.states} transitions={cfg.transitions} initialState={cfg.initialState} />
+              <StateDiagram states={cfg.states} transitions={cfg.transitions} initialState={cfg.defaultState} />
             </div>
           )}
 
@@ -134,13 +244,13 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
                       style={{ width: 120, fontFamily: 'monospace' }}
                     />
                     <TextInputView
-                      value={s.label ?? s.id}
-                      onChange={e => updateState(idx, { label: e.target.value })}
+                      value={s.name ?? s.id}
+                      onChange={e => updateState(idx, { name: e.target.value })}
                       placeholder="Display label"
                       size="md"
                       style={{ flex: 1 }}
                     />
-                    {cfg.initialState === s.id && (
+                    {cfg.defaultState === s.id && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-[rgba(34,197,94,0.12)] text-[var(--color-success)]">initial</span>
                     )}
                     <IconButtonView
@@ -178,8 +288,8 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
                 <span className="text-[10px] text-[var(--color-text-muted)]">→</span>
                 <StateSelect value={t.to} states={stateIds} onChange={v => updateTransition(idx, { to: v })} />
                 <TextInputView
-                  value={t.triggeredByRouteId}
-                  onChange={e => updateTransition(idx, { triggeredByRouteId: e.target.value })}
+                  value={t.routeId}
+                  onChange={e => updateTransition(idx, { routeId: e.target.value })}
                   placeholder="route id (trigger)"
                   size="md"
                   style={{ flex: 1, fontFamily: 'monospace' }}
@@ -195,295 +305,6 @@ export function StateMachineEditor({ config, onUpdate }: StateMachineEditorProps
             ))}
           </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Per-route state transitions table (multi-entry) ─────────────────────────
-
-const ACCENT = 'var(--color-mock-server)';
-
-interface RouteStatePanelProps {
-  route: MockRoute;
-  onUpdate: (patch: Partial<MockRoute>) => void;
-}
-
-function initEntries(route: MockRoute): StateTransitionEntry[] {
-  if (route.stateTransitions?.length) return route.stateTransitions;
-  // Migrate legacy single-pair on first open
-  if (route.requiredState || route.newState) {
-    return [{
-      id: `tr_${route.id}_0`,
-      requiredState: route.requiredState ?? '',
-      newState: route.newState ?? '',
-    }];
-  }
-  return [];
-}
-
-export function RouteStatePanel({ route, onUpdate }: RouteStatePanelProps) {
-  const entries = route.stateTransitions ?? initEntries(route);
-  const [expandedBody, setExpandedBody] = useState<Set<string>>(new Set());
-
-  const save = (next: StateTransitionEntry[]) => {
-    onUpdate({
-      stateTransitions: next,
-      // Keep legacy fields in sync for backward-compat with engine
-      requiredState: next[0]?.requiredState || undefined,
-      newState: next[0]?.newState || undefined,
-    });
-  };
-
-  const addEntry = () => {
-    save([...entries, { id: `tr_${Date.now()}`, requiredState: '', newState: '' }]);
-  };
-
-  const updateEntry = (id: string, patch: Partial<StateTransitionEntry>) => {
-    save(entries.map(e => e.id === id ? { ...e, ...patch } : e));
-  };
-
-  const removeEntry = (id: string) => {
-    save(entries.filter(e => e.id !== id));
-    setExpandedBody(prev => { const s = new Set(prev); s.delete(id); return s; });
-  };
-
-  const toggleBody = (id: string) => {
-    setExpandedBody(prev => {
-      const s = new Set(prev);
-      if (s.has(id)) s.delete(id); else s.add(id);
-      return s;
-    });
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-
-      {/* ── header ──────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
-            State Transitions
-          </span>
-          {entries.length > 0 && (
-            <span style={{
-              fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
-              background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-              color: ACCENT,
-            }}>
-              {entries.length}
-            </span>
-          )}
-        </div>
-        <ButtonView
-          size="sm"
-          variant="ghost"
-          accentColor={ACCENT}
-          iconLeft={<PlusIcon size={10} />}
-          onClick={addEntry}
-        >
-          Add Transition
-        </ButtonView>
-      </div>
-
-      {/* ── empty hint ──────────────────────────────────────────────── */}
-      {entries.length === 0 && (
-        <div style={{
-          borderRadius: 7, border: '1px dashed color-mix(in srgb, var(--color-text-primary) 9%, transparent)',
-          padding: '10px 12px', textAlign: 'center',
-        }}>
-          <p style={{ fontSize: 11, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', marginBottom: 4 }}>
-            No state transitions yet
-          </p>
-          <p style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', lineHeight: 1.5 }}>
-            Add entries to serve different responses based on session state.
-            <br />
-            Same URL — multiple behaviors.
-          </p>
-        </div>
-      )}
-
-      {/* ── column header (only when entries exist) ─────────────────── */}
-      {entries.length > 0 && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: '14px 1fr 20px 1fr 54px',
-          gap: 6, alignItems: 'center',
-          padding: '0 4px',
-        }}>
-          <span />
-          <span style={{ fontSize: 9, fontWeight: 700, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Required State
-          </span>
-          <span />
-          <span style={{ fontSize: 9, fontWeight: 700, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Transition To
-          </span>
-          <span />
-        </div>
-      )}
-
-      {/* ── entries ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-1.5">
-        {entries.map((entry, i) => {
-          const bodyOpen = expandedBody.has(entry.id);
-          const hasOverride = !!(entry.responseBodyOverride || entry.statusCodeOverride);
-          return (
-            <div key={entry.id} style={{
-              borderRadius: 8,
-              border: '1px solid color-mix(in srgb, var(--color-text-primary) 7%, transparent)',
-              background: 'color-mix(in srgb, var(--color-text-primary) 2%, transparent)',
-              overflow: 'hidden',
-            }}>
-              {/* main row */}
-              <div style={{
-                display: 'grid', gridTemplateColumns: '14px 1fr 20px 1fr 54px',
-                gap: 6, alignItems: 'center', padding: '7px 8px',
-              }}>
-                {/* index */}
-                <span style={{
-                  fontSize: 9, fontWeight: 700, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)',
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-
-                {/* required state */}
-                <TextInputView
-                  value={entry.requiredState}
-                  onChange={e => updateEntry(entry.id, { requiredState: e.target.value })}
-                  placeholder="any state (initial)"
-                  size="sm"
-                  style={{ fontFamily: 'monospace', fontSize: 11 }}
-                />
-
-                {/* arrow */}
-                <span style={{ fontSize: 11, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', textAlign: 'center' }}>→</span>
-
-                {/* new state */}
-                <TextInputView
-                  value={entry.newState}
-                  onChange={e => updateEntry(entry.id, { newState: e.target.value })}
-                  placeholder="no transition"
-                  size="sm"
-                  style={{ fontFamily: 'monospace', fontSize: 11 }}
-                />
-
-                {/* actions: body toggle + delete */}
-                <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                  <IconButtonView
-                    size="sm"
-                    icon={<ChevronDownIcon size={10} />}
-                    title="Response override"
-                    accentColor={hasOverride ? ACCENT : 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)'}
-                    style={{
-                      transform: bodyOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-                      transition: 'transform 150ms',
-                      opacity: bodyOpen || hasOverride ? 1 : 0.5,
-                    }}
-                    onClick={() => toggleBody(entry.id)}
-                  />
-                  <IconButtonView
-                    size="sm"
-                    icon={<TrashIcon size={10} />}
-                    accentColor="var(--color-error)"
-                    title="Remove"
-                    onClick={() => removeEntry(entry.id)}
-                  />
-                </div>
-              </div>
-
-              {/* optional response override panel */}
-              {bodyOpen && (
-                <div style={{
-                  borderTop: '1px solid var(--color-surface-border)',
-                  padding: '8px 10px',
-                  display: 'flex', flexDirection: 'column', gap: 7,
-                  background: 'var(--color-overlay-subtle)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', width: 72, flexShrink: 0 }}>
-                      Status
-                    </span>
-                    <TextInputView
-                      value={entry.statusCodeOverride ? String(entry.statusCodeOverride) : ''}
-                      onChange={e => updateEntry(entry.id, { statusCodeOverride: e.target.value ? Number(e.target.value) : undefined })}
-                      placeholder="inherit"
-                      size="sm"
-                      style={{ width: 80, fontFamily: 'monospace' }}
-                    />
-                    <span style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', marginLeft: 2 }}>
-                      leave blank to use route's status code
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'color-mix(in srgb, var(--color-text-primary) 30%, transparent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Response Body Override
-                    </span>
-                    <ResizablePanelView defaultHeight={80} minHeight={60} maxHeight={300}>
-                      <EditorView
-                        value={entry.responseBodyOverride ?? ''}
-                        onChange={val => updateEntry(entry.id, { responseBodyOverride: val || undefined })}
-                        language="json"
-                        placeholder={'// leave blank to use route\'s main body\n{\n  "status": "shipped"\n}'}
-                        height="100%"
-                        bordered
-                      />
-                    </ResizablePanelView>
-                  </div>
-                </div>
-              )}
-
-              {/* state label chips row */}
-              {(entry.requiredState || entry.newState) && (
-                <div style={{
-                  padding: '4px 10px 6px',
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  borderTop: bodyOpen ? undefined : '1px solid color-mix(in srgb, var(--color-text-primary) 4%, transparent)',
-                }}>
-                  {entry.requiredState ? (
-                    <span style={{
-                      fontSize: 9, padding: '2px 7px', borderRadius: 4, fontFamily: 'monospace',
-                      background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
-                      color: 'var(--color-warning)',
-                    }}>
-                      {entry.requiredState}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 9, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', fontStyle: 'italic' }}>any state</span>
-                  )}
-                  <span style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)' }}>→</span>
-                  {entry.newState ? (
-                    <span style={{
-                      fontSize: 9, padding: '2px 7px', borderRadius: 4, fontFamily: 'monospace',
-                      background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)',
-                      color: 'var(--color-success)',
-                    }}>
-                      {entry.newState}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 9, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', fontStyle: 'italic' }}>no transition</span>
-                  )}
-                  {hasOverride && (
-                    <span style={{
-                      marginLeft: 4, fontSize: 9, padding: '2px 6px', borderRadius: 4,
-                      background: `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
-                      color: ACCENT,
-                    }}>
-                      override
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* hint when entries exist */}
-      {entries.length > 0 && (
-        <p style={{ fontSize: 10, color: 'color-mix(in srgb, var(--color-text-primary) 20%, transparent)', lineHeight: 1.5, marginTop: 2 }}>
-          Entries match top-to-bottom. First match wins. Empty "Required State" matches any session state.
-        </p>
       )}
     </div>
   );
@@ -524,7 +345,7 @@ function StateDiagram({ states, transitions, initialState }: {
                   color: s.color ?? MOCK_ACCENT,
                 }}
               >
-                {s.label ?? s.id}
+                {s.name ?? s.id}
               </div>
               {s.id === initialState && (
                 <span className="text-[8px] text-[var(--color-success)] mt-0.5">▶ initial</span>
@@ -544,7 +365,7 @@ function StateDiagram({ states, transitions, initialState }: {
                           color: target?.color ?? MOCK_ACCENT,
                         }}
                       >
-                        {target?.label ?? t.to}
+                        {target?.name ?? t.to}
                       </div>
                     </div>
                   );

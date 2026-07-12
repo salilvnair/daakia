@@ -220,7 +220,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
                   size="sm"
                 />
               </div>
-              <ResizablePanelView id={`mock.sse.event.${event.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
+              <ResizablePanelView defaultHeight={60} minHeight={40} maxHeight={400}>
                 <EditorView
                   value={event.data}
                   onChange={(val) => updateEvent(event.id, { data: val })}

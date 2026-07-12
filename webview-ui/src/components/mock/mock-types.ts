@@ -166,16 +166,6 @@ export interface RecordedRequest {
   savedAsStub?: boolean;
 }
 
-// ─── Per-route state transition entry (multi-state support) ─────────────────
-
-export interface StateTransitionEntry {
-  id: string;
-  requiredState: string;       // '' = any / initial (no restriction)
-  newState: string;            // '' = no transition
-  responseBodyOverride?: string;  // if set, overrides the route's main body
-  statusCodeOverride?: number;    // if set, overrides the route's main statusCode
-}
-
 // ─── MockRoute (extended with all 6A features) ───────────────────────────────
 
 export interface MockRoute {
@@ -208,12 +198,17 @@ export interface MockRoute {
   bodyFile?: string;
   proxyTarget?: string;
 
-  // State machine (6A.11) — single-pair legacy fields (still honoured for backward compat)
-  requiredState?: string;
-  newState?: string;
-  stateVariableUpdates?: Record<string, string>;
-  // Multi-entry state transitions table — takes priority over requiredState/newState when present
-  stateTransitions?: StateTransitionEntry[];
+  // State machine (6A.11)
+  // Real event name (e.g. "PAY") matched directly against the connected
+  // canvas workflow's transition graph.
+  triggerEvent?: string;
+  /**
+   * Which connected workflow (MockServer.connectedWorkflows[].workflowId)
+   * `triggerEvent` refers to. Omit when the server has at most one connected
+   * workflow — resolved automatically. Required once 2+ workflows are
+   * connected, since event names aren't guaranteed unique across workflows.
+   */
+  connectedWorkflowId?: string;
 
   // Fault injection (6A.13)
   fault?: FaultConfig;
@@ -295,6 +290,10 @@ export interface GraphQLMockOperation {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this operation triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface WebSocketMockHandler {
@@ -359,6 +358,10 @@ export interface GrpcMockMethod {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this method triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface SoapMockOperation {
@@ -385,6 +388,10 @@ export interface SoapMockOperation {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this operation triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface MockLogEntry {

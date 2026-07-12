@@ -292,7 +292,6 @@ export function SocketIOPanel() {
           disabled={connState === 'connected'}
           suggestions={urlSuggestions}
           mockServers={mockSuggestions}
-          protocolHints={['wss://']}
           accentColor="var(--color-protocol-websocket)"
           size="lg"
           borderRadius={6}
@@ -397,7 +396,7 @@ export function SocketIOPanel() {
           )}
           {showPreflight && activeTab.url.trim() && <AiPreflightPopover tab={activeTab} onClose={() => setShowPreflight(false)} />}
           {showPatternStatus && activeTab.url.trim() && aiEnabled('patternBaseline') && (
-            <PatternBaselinePopup method="SIO" url={activeTab.url} onClose={() => setShowPatternStatus(false)} dir={aiOverflowDir} />
+            <PatternBaselinePopup method="SIO" url={activeTab.url} onClose={() => setShowPatternStatus(false)} />
           )}
         </div>
       </div>
@@ -517,7 +516,7 @@ export function SocketIOPanel() {
                 title="Clear log"
                 disabled={events.length === 0}
                 onClick={handleClearMessages}
-                hoverColor="var(--color-error)"
+                accentColor="var(--color-error)"
               />
               <IconButtonView
                 icon={<ArrowUpIcon size={13} />}

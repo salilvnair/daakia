@@ -111,7 +111,7 @@ function buildStateMachine(stubs: GeneratedStub[], record: RecordedRequest): Sta
     y: 80 + Math.floor(i / 3) * 160,
     isInitial: i === 0,
     mockResponses: [{
-      method: (stub.request.method as StateNode['mockResponses'][0]['method']) ?? 'POST',
+      method: (stub.request.method as NonNullable<StateNode['mockResponses']>[0]['method']) ?? 'POST',
       path: stub.request.urlPattern ?? stub.request.urlPathPattern ?? record.path,
       status: stub.response.status ?? 200,
       body: stubBody(stub),

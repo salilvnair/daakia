@@ -14,12 +14,12 @@ export function AiAuthTab() {
 
   const handleAuthTypeChange = useCallback((val: string) => {
     if (!activeTab) return;
-    updateTab(activeTab.id, { authType: val, dirty: true });
+    updateTab(activeTab.id, { authType: val as import('../../../store/tabs-store').AuthType, dirty: true });
   }, [activeTab, updateTab]);
 
-  const handleAuthDataChange = useCallback((data: Record<string, unknown>) => {
+  const handleAuthDataChange = useCallback((data: import('../../shared/editors/AuthEditor').AuthData) => {
     if (!activeTab) return;
-    updateTab(activeTab.id, { authData: data, dirty: true });
+    updateTab(activeTab.id, { authData: data as Record<string, string>, dirty: true });
   }, [activeTab, updateTab]);
 
   if (!activeTab) return null;

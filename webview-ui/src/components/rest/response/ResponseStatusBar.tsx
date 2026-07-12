@@ -40,19 +40,19 @@ export function ResponseStatusBar({ response, requestMethod = 'GET', requestUrl 
   const isError = isNetworkError || response.status >= 400;
   const statusLabel = isNetworkError ? response.statusText || 'Error' : `${response.status} ${response.statusText}`;
   const statusColor = isNetworkError
-    ? 'text-[#ef4444] bg-[rgba(239,68,68,0.12)]'
+    ? 'text-[var(--color-error)] bg-[color-mix(in_srgb,var(--color-error)_12%,transparent)]'
     : response.status < 300
       ? 'text-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)]'
       : response.status < 400
-        ? 'text-[#f59e0b] bg-[rgba(245,158,11,0.12)]'
-        : 'text-[#ef4444] bg-[rgba(239,68,68,0.12)]';
+        ? 'text-[var(--color-warning)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)]'
+        : 'text-[var(--color-error)] bg-[color-mix(in_srgb,var(--color-error)_12%,transparent)]';
 
   const anomaly = useAnomalyCheck(requestUrl, response.time ?? 0);
 
   return (
     <div>
       {response.bodyTruncated && (
-        <div className="flex items-center gap-2 px-4 py-1 bg-[rgba(245,158,11,0.08)] border-t border-[rgba(245,158,11,0.25)] text-[10.5px] text-[#f59e0b]">
+        <div className="flex items-center gap-2 px-4 py-1 bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] border-t border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[10.5px] text-[var(--color-warning)]">
           ⚠ Response body truncated to 512 KB for display. Full size: {response.fullSize ? (response.fullSize / 1024 / 1024).toFixed(2) + ' MB' : 'unknown'}.
         </div>
       )}

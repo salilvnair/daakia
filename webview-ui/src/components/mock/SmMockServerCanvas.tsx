@@ -9,8 +9,9 @@
  *    + stores connectedWorkflowId on the server so routes can reference states
  */
 import { lazy, Suspense, useCallback } from 'react'
+import type { Node } from '@xyflow/react'
 import { useSMWorkspaceStore } from '@salilvnair/state-machine'
-import type { SMachine } from '@salilvnair/state-machine'
+import type { SMachine, SMNodeData } from '@salilvnair/state-machine'
 import type { MockServer, StateMachineConfig, StateNode, StateTransition } from './mock-types'
 
 // State machine canvas CSS (not re-exported by the library — must import from src directly)
@@ -29,8 +30,23 @@ interface Props {
   onUpdate: (patch: Partial<MockServer>) => void
 }
 
+/**
+ * A node's effective state id: the human-readable "State ID" the user typed
+ * in the Inspector (e.g. "idle", "logged_in") when set, falling back to the
+ * raw ReactFlow node id (e.g. "state_1782141662744") otherwise — mirrors the
+ * same fallback the @salilvnair/state-machine library itself uses internally
+ * (see its Topbar.tsx export path and sm-store.ts setActiveState/markNodeError).
+ * Without this, "State ID" is a purely cosmetic field that Daakia's mock
+ * server silently ignores — routes wired against it via Trigger Event would
+ * never match, and canvas-level Mock Responses (state.mockResponses) would
+ * never fire, since they're looked up by this same id.
+ */
+function effectiveStateId(n: Node<SMNodeData>): string {
+  return n.data.stateId?.trim() || n.id
+}
+
 /** Convert SM library nodes/edges → Daakia mock server StateMachineConfig */
-function workflowToMockConfig(machine: SMachine): StateMachineConfig {
+export function workflowToMockConfig(machine: SMachine): StateMachineConfig {
   const nodes = machine.nodes ?? []
   const edges = machine.edges ?? []
 
@@ -39,19 +55,26 @@ function workflowToMockConfig(machine: SMachine): StateMachineConfig {
     const nodeType = data.nodeType as string
     const pos = n.position as { x: number; y: number } | undefined
     return {
-      id: n.id,
+      id: effectiveStateId(n),
       name: (data.label as string) ?? n.id,
       x: pos?.x ?? 0,
       y: pos?.y ?? 0,
       isInitial: nodeType === 'trigger',
       color: nodeTypeToColor(nodeType),
+      mockResponses: data.mockResponses as StateNode['mockResponses'],
     }
   })
 
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
+  const resolveId = (rawId: string) => {
+    const n = nodeById.get(rawId)
+    return n ? effectiveStateId(n) : rawId
+  }
+
   const transitions: StateTransition[] = edges.map((e) => ({
     id: e.id,
-    from: e.source as string,
-    to: e.target as string,
+    from: resolveId(e.source as string),
+    to: resolveId(e.target as string),
     routeId: '',   // user wires this in Routes tab per route
     label: ((e.data as Record<string, unknown>)?.event as string) ?? '',
   }))
@@ -64,7 +87,7 @@ function workflowToMockConfig(machine: SMachine): StateMachineConfig {
     transitions,
     sessionMode: 'header',
     sessionKey: 'X-Session-ID',
-    defaultState: triggerNode?.id ?? (nodes[0]?.id ?? 'initial'),
+    defaultState: triggerNode ? effectiveStateId(triggerNode) : (nodes[0] ? effectiveStateId(nodes[0]) : 'initial'),
   }
 }
 

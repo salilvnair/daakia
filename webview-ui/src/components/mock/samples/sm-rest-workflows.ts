@@ -42,7 +42,7 @@ function machine(
   nodes: Node[],
   edges: Edge[],
 ): SMachine {
-  return { id, name, description, color: '#6366f1', folderId: SM_REST_SAMPLES_FOLDER_ID, nodes, edges, createdAt: NOW, updatedAt: NOW }
+  return { id, name, description, color: '#6366f1', folderId: SM_REST_SAMPLES_FOLDER_ID, nodes: nodes as SMachine['nodes'], edges, createdAt: NOW, updatedAt: NOW }
 }
 
 // Users CRUD
@@ -80,14 +80,17 @@ const productsApi = machine(
 )
 
 // Authentication
+// n2/n3 sit side-by-side (not stacked) since they have edges in BOTH
+// directions (refresh request + REFRESH_OK back) — same x would make the
+// two bezier curves overlap into an unreadable "X" crossing.
 const authApi = machine(
   'sm-wf-auth-api', 'Authentication',
   'JWT auth flow — login, active session, refresh, logout',
   [
-    n('n1', 'trigger',  'Login',           250, 20),
-    n('n2', 'state',    'Authenticated',   250, 160),
-    n('n3', 'state',    'Token Refresh',   250, 300),
-    n('n4', 'terminal', 'Logged Out',      250, 440),
+    n('n1', 'trigger',  'Login',           300, 20),
+    n('n2', 'state',    'Authenticated',   80, 180),
+    n('n3', 'state',    'Token Refresh',   620, 180),
+    n('n4', 'terminal', 'Logged Out',      300, 340),
   ],
   [
     e('e1', 'n1', 'n2', 'POST /auth/login'),
@@ -207,14 +210,16 @@ const payments = machine(
 )
 
 // Health Check
+// n2/n3 side-by-side, not stacked — DEGRADE and RECOVER go opposite
+// directions between the same two nodes.
 const healthCheck = machine(
   'sm-wf-health-check', 'Health / Status',
   'Health probe — healthy, degraded, down',
   [
-    n('n1', 'trigger',  'Check',     250, 20),
-    n('n2', 'state',    'Healthy',   250, 160),
-    n('n3', 'state',    'Degraded',  250, 300),
-    n('n4', 'terminal', 'Down',      250, 440),
+    n('n1', 'trigger',  'Check',     300, 20),
+    n('n2', 'state',    'Healthy',   80, 180),
+    n('n3', 'state',    'Degraded',  620, 180),
+    n('n4', 'terminal', 'Down',      300, 340),
   ],
   [
     e('e1', 'n1', 'n2', 'GET /health'),
@@ -242,20 +247,66 @@ const oauth2Flow = machine(
 )
 
 // Cookie Testing
+// n2/n3 side-by-side, not stacked — EXPIRE and RENEW go opposite directions
+// between the same two nodes, which overlap into an "X" when they share an x.
 const cookieTesting = machine(
   'sm-wf-cookie-testing', 'Cookie Testing',
   'Cookie-based session — active, expired, refresh cycle',
   [
-    n('n1', 'trigger',  'Request',          250, 20),
-    n('n2', 'state',    'Session Active',   250, 160),
-    n('n3', 'state',    'Session Expired',  250, 300),
-    n('n4', 'terminal', 'Done',             250, 440),
+    n('n1', 'trigger',  'Request',          300, 20),
+    n('n2', 'state',    'Session Active',   80, 180),
+    n('n3', 'state',    'Session Expired',  620, 180),
+    n('n4', 'terminal', 'Done',             300, 340),
   ],
   [
     e('e1', 'n1', 'n2', 'POST /session'),
     e('e2', 'n2', 'n3', 'EXPIRE'),
     e('e3', 'n3', 'n2', 'RENEW'),
     e('e4', 'n2', 'n4', 'DELETE /session'),
+  ],
+)
+
+// Auth Flow (Real Validation) — event-driven, node ids ARE the real state ids
+// (unauthenticated/authorized) so re-clicking "Connect to Mock Server" on
+// this canvas reproduces the exact same StateMachineConfig the sample ships
+// with (see rest.ts's 'auth-conditional' entry). Diagonal placement (not
+// stacked, not purely side-by-side) — there's a forward edge, a backward
+// edge, AND a self-loop on each node; a diagonal offset gives the two
+// directional edges' bezier curves enough asymmetry to stay visually
+// distinct instead of overlapping into an "X".
+const authConditional = machine(
+  'sm-wf-auth-conditional', 'Auth Flow (Real Validation)',
+  'Login only succeeds when the request body has real username + password — checked against the request content, not just "any state matches"',
+  [
+    n('unauthenticated', 'trigger', 'Unauthenticated', 60, 60),
+    n('authorized',      'state',   'Authorized',      640, 320),
+  ],
+  [
+    e('e1', 'unauthenticated', 'authorized', 'LOGIN_SUCCESS'),
+    e('e2', 'authorized',      'authorized', 'VIEW_PROFILE'),
+    e('e3', 'authorized',      'unauthenticated', 'LOGOUT'),
+    e('e4', 'unauthenticated', 'unauthenticated', 'LOGIN_FAILED'),
+  ],
+)
+
+// Auth Flow — Partner Login (second workflow, for the multi-workflow-per-server
+// demo). Deliberately a completely separate state graph — its own states,
+// its own event names — connected to the SAME 'auth-conditional' server
+// alongside `authConditional` above. A route reaches this one only when it
+// explicitly sets `connectedWorkflowId: 'sm-wf-auth-conditional-partner'`
+// (see rest.ts's 'auth-conditional' sample, the header-gated
+// POST /api/auth/login variant), proving the State Machine dropdown really
+// scopes a route to one specific connected workflow, not a merged pool.
+const authConditionalPartner = machine(
+  'sm-wf-auth-conditional-partner', 'Auth Flow — Partner Login',
+  'A second, independent workflow connected to the same server — reached only by the route gated on the X-Partner-Id header (Matching tab), never by the regular username/password route.',
+  [
+    n('partner_unauthenticated', 'trigger', 'Partner Unauthenticated', 60, 60),
+    n('partner_authorized',      'state',   'Partner Authorized',      640, 320),
+  ],
+  [
+    e('pe1', 'partner_unauthenticated', 'partner_authorized',      'PARTNER_LOGIN_SUCCESS'),
+    e('pe2', 'partner_authorized',      'partner_unauthenticated', 'PARTNER_LOGOUT'),
   ],
 )
 
@@ -274,12 +325,21 @@ export const SM_REST_WORKFLOW_MAP: Record<string, SMachine> = {
   'health-check':  healthCheck,
   'oauth2-flow':   oauth2Flow,
   'cookie-testing':cookieTesting,
+  'auth-conditional': authConditional,
+  // Lookup-only key (not a real sample id) — installed alongside
+  // 'auth-conditional' via RestSample.additionalWorkflows.
+  'auth-conditional-partner': authConditionalPartner,
 }
 
 /**
- * Idempotent install: injects the folder + workflow into useSMWorkspaceStore
- * only if they don't already exist (checked by fixed ID).
- * Also fires consumer.onSaveMachine / onSaveFolder for DB persistence.
+ * Install (or re-sync) a built-in sample workflow into useSMWorkspaceStore.
+ * Always overwrites nodes/edges/name/description to match the current code
+ * definition — these are Daakia's own bundled samples, not user-authored
+ * canvases, so a shipped fix (e.g. a new event/edge) must actually reach
+ * anyone who already loaded this sample once before, not get silently
+ * skipped because a machine with this id already exists from an earlier
+ * load. The folder is still install-once (nothing to resync there).
+ * Fires consumer.onSaveMachine / onSaveFolder for DB persistence every call.
  */
 export function installSMRestWorkflow(sampleId: string): SMachine | null {
   const workflow = SM_REST_WORKFLOW_MAP[sampleId]
@@ -295,13 +355,16 @@ export function installSMRestWorkflow(sampleId: string): SMachine | null {
     ws._consumer?.onSaveFolder?.(SM_REST_SAMPLES_FOLDER)
   }
 
-  // Ensure workflow exists (idempotent — safe to call multiple times)
-  if (!ws.machines.find(m => m.id === workflow.id)) {
-    useSMWorkspaceStore.setState(s => ({
-      machines: [...s.machines, workflow],
-    }))
-    ws._consumer?.onSaveMachine?.(workflow)
-  }
+  // Upsert the workflow — preserve createdAt if it already existed, refresh
+  // updatedAt, but always take the current code's nodes/edges/name/description.
+  const existing = ws.machines.find(m => m.id === workflow.id)
+  const synced: SMachine = { ...workflow, createdAt: existing?.createdAt ?? workflow.createdAt, updatedAt: Date.now() }
+  useSMWorkspaceStore.setState(s => ({
+    machines: existing
+      ? s.machines.map(m => m.id === workflow.id ? synced : m)
+      : [...s.machines, synced],
+  }))
+  ws._consumer?.onSaveMachine?.(synced)
 
-  return workflow
+  return synced
 }

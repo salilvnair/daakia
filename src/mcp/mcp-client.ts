@@ -206,7 +206,7 @@ export class McpClient extends EventEmitter {
       };
 
       try {
-        this._transport.send(request);
+        this._transport.send(request as unknown as Record<string, unknown>);
       } catch (err) {
         this._pending.delete(id);
         clearTimeout(timer);

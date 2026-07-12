@@ -1,5 +1,6 @@
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { ButtonView, IconButtonView } from '@salilvnair/dui';
 import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
 import { UploadIcon, TrashIcon, RefreshIcon, DownloadIcon, HelpCircleIcon, CheckCircleFilledIcon, WarningTriangleIcon } from '../../icons';
@@ -32,7 +33,7 @@ export function GrpcProtoManager() {
   const updateTab = useTabsStore(s => s.updateTab);
   const [showSamples, setShowSamples] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
+  const btnRef = useRef<HTMLSpanElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
   useClickOutside(popupRef, () => setShowSamples(false), showSamples);
@@ -82,15 +83,15 @@ export function GrpcProtoManager() {
         <h4 className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
           Proto Source
         </h4>
-        <button
-          ref={btnRef}
-          type="button"
-          onClick={() => setShowSamples(!showSamples)}
-          className="w-5 h-5 flex items-center justify-center rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-protocol-grpc)] hover:bg-[rgba(0,184,181,0.08)] cursor-pointer transition-colors"
-          title="Sample Proto Files"
-        >
-          <HelpCircleIcon size={13} />
-        </button>
+        <span ref={btnRef} className="inline-flex">
+          <IconButtonView
+            icon={<HelpCircleIcon size={13} />}
+            size="sm"
+            accentColor={ACCENT}
+            onClick={() => setShowSamples(!showSamples)}
+            tooltip="Sample Proto Files"
+          />
+        </span>
       </div>
 
       {/* Current proto file */}
@@ -99,14 +100,13 @@ export function GrpcProtoManager() {
           <span className="flex-1 text-[12px] font-mono text-[var(--color-text-primary)] truncate">
             {activeTab.grpcProtoFile.split(/[/\\]/).pop()}
           </span>
-          <button
-            type="button"
+          <IconButtonView
+            icon={<TrashIcon size={12} />}
+            size="sm"
+            accentColor="var(--color-error)"
             onClick={handleRemoveProto}
-            className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors"
-            title="Remove proto file"
-          >
-            <TrashIcon size={12} />
-          </button>
+            tooltip="Remove proto file"
+          />
         </div>
       ) : (
         <p className="text-[11px] text-[var(--color-text-muted)]">No proto file loaded</p>
@@ -114,47 +114,47 @@ export function GrpcProtoManager() {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
+        <ButtonView
+          size="sm"
+          accentColor={ACCENT}
           onClick={handleUpload}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium cursor-pointer transition-colors hover:opacity-90"
-          style={{ color: ACCENT, backgroundColor: 'rgba(0,184,181,0.1)' }}
+          iconLeft={<UploadIcon size={12} />}
+          style={{ color: ACCENT, backgroundColor: 'color-mix(in srgb, var(--color-protocol-grpc) 10%, transparent)' }}
         >
-          <UploadIcon size={12} />
           Upload .proto
-        </button>
+        </ButtonView>
 
-        <button
-          type="button"
+        <ButtonView
+          size="sm"
+          accentColor="var(--color-text-muted)"
           onClick={handleReflect}
           disabled={!activeTab.url.trim() || activeTab.grpcReflectionStatus === 'loading'}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {activeTab.grpcReflectionStatus === 'loading' ? (
+          iconLeft={activeTab.grpcReflectionStatus === 'loading' ? (
             <span className="w-3 h-3 border-[1.5px] border-[var(--color-text-muted)] border-t-transparent rounded-full animate-spin" />
           ) : activeTab.grpcReflectionStatus === 'connected' ? (
-            <CheckCircleFilledIcon size={12} style={{ color: '#4ade80' }} />
+            <CheckCircleFilledIcon size={12} style={{ color: 'var(--color-success)' }} />
           ) : activeTab.grpcReflectionStatus === 'warning' ? (
-            <WarningTriangleIcon size={12} style={{ color: '#fbbf24' }} />
+            <WarningTriangleIcon size={12} style={{ color: 'var(--color-warning)' }} />
           ) : (
             <RefreshIcon size={12} />
           )}
+        >
           Server Reflection
-        </button>
+        </ButtonView>
       </div>
 
 
 
       {activeTab.grpcReflectionStatus === 'error' && (
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[rgba(239,68,68,0.06)] border border-[rgba(239,68,68,0.15)]">
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[color-mix(in_srgb,var(--color-error)_6%,transparent)] border border-[color-mix(in_srgb,var(--color-error)_15%,transparent)]">
           <span className="text-[11px] text-[var(--color-error)]">{activeTab.grpcReflectionError || 'Reflection failed'}</span>
         </div>
       )}
 
       {activeTab.grpcReflectionStatus === 'warning' && (
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[rgba(251,191,36,0.06)] border border-[rgba(251,191,36,0.15)]">
-          <WarningTriangleIcon size={11} style={{ color: '#fbbf24' }} />
-          <span className="text-[11px] text-[#fbbf24]">{activeTab.grpcReflectionError || 'No services available'}</span>
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] border border-[color-mix(in_srgb,var(--color-warning)_15%,transparent)]">
+          <WarningTriangleIcon size={11} style={{ color: 'var(--color-warning)' }} />
+          <span className="text-[11px] text-[var(--color-warning)]">{activeTab.grpcReflectionError || 'No services available'}</span>
         </div>
       )}
 
@@ -190,35 +190,35 @@ export function GrpcProtoManager() {
                   <p className="text-[12px] font-medium text-[var(--color-text-primary)] truncate">{sample.label}</p>
                   <p className="text-[10px] text-[var(--color-text-muted)] truncate">{sample.description}</p>
                 </div>
-                <button
-                  type="button"
+                <IconButtonView
+                  icon={<DownloadIcon size={13} />}
+                  size="sm"
+                  accentColor={ACCENT}
                   onClick={() => downloadSample(sample)}
-                  className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-protocol-grpc)] hover:bg-[rgba(0,184,181,0.1)] cursor-pointer transition-colors shrink-0"
-                  title={`Download ${sample.filename}`}
-                >
-                  <DownloadIcon size={13} />
-                </button>
+                  tooltip={`Download ${sample.filename}`}
+                  className="shrink-0"
+                />
               </div>
             ))}
           </div>
 
           {/* Footer */}
           <div className="flex items-center gap-2 px-4 py-3 border-t border-[var(--color-surface-border)]">
-            <button
-              type="button"
+            <ButtonView
+              size="sm"
+              variant="primary"
+              accentColor={ACCENT}
               onClick={() => { downloadAll(); setShowSamples(false); }}
-              className="h-[28px] px-3 text-[11px] font-medium rounded-md text-white cursor-pointer transition-colors hover:opacity-90"
-              style={{ backgroundColor: ACCENT }}
             >
               Download All
-            </button>
-            <button
-              type="button"
+            </ButtonView>
+            <ButtonView
+              size="sm"
+              accentColor="var(--color-text-muted)"
               onClick={() => setShowSamples(false)}
-              className="h-[28px] px-3 text-[11px] font-medium rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] cursor-pointer transition-colors"
             >
               Cancel
-            </button>
+            </ButtonView>
           </div>
         </div>,
         document.body

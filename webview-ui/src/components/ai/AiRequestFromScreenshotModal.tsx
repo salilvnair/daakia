@@ -138,12 +138,13 @@ export function AiRequestFromScreenshotModal({ onClose }: Props) {
     if (!result) return;
     addTab({
       name: (result.name as string) || 'From Screenshot',
-      method: (result.method as string) || 'GET',
+      method: ((result.method as string) || 'GET') as import('../../store/tabs-store').HttpMethod,
       url: (result.url as string) || '',
-      headers: (result.headers as unknown[]) || [],
-      params: (result.queryParams as unknown[]) || [],
+      headers: (result.headers as import('../shared').KeyValueRow[]) || [],
+      params: (result.queryParams as import('../shared').KeyValueRow[]) || [],
       bodyRaw: (result.body as string) || '',
-      bodyType: (result.bodyType as string) || 'json',
+      bodyMode: 'raw' as const,
+      bodyContentType: 'application/json',
     });
     setApplied(true);
     addToast({ type: 'success', message: 'Request created in a new tab!' });
@@ -253,7 +254,7 @@ export function AiRequestFromScreenshotModal({ onClose }: Props) {
               </span>
               <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-primary)' }}>{result.url as string}</span>
             </div>
-            {result.description && (
+            {typeof result.description === 'string' && result.description !== '' && (
               <p className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>{result.description as string}</p>
             )}
             {(result.headers as unknown[])?.length > 0 && (

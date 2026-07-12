@@ -57,11 +57,11 @@ Template for bottleneck-specific recommendations based on observed patterns.`;
 type LoadStage = { label: string; users: string; duration: string; done: boolean };
 
 const METHOD_OPTIONS = [
-  { value: 'GET',    color: 'var(--color-method-get)' },
-  { value: 'POST',   color: 'var(--color-method-post)' },
-  { value: 'PUT',    color: 'var(--color-method-put)' },
-  { value: 'PATCH',  color: 'var(--color-method-patch)' },
-  { value: 'DELETE', color: 'var(--color-method-delete)' },
+  { value: 'GET',    label: 'GET',    color: 'var(--color-method-get)' },
+  { value: 'POST',   label: 'POST',   color: 'var(--color-method-post)' },
+  { value: 'PUT',    label: 'PUT',    color: 'var(--color-method-put)' },
+  { value: 'PATCH',  label: 'PATCH',  color: 'var(--color-method-patch)' },
+  { value: 'DELETE', label: 'DELETE', color: 'var(--color-method-delete)' },
 ];
 
 export function AiAdaptiveLoadTesterModal({ onClose }: Props) {

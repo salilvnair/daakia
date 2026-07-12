@@ -94,7 +94,7 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
     <>
       <ModalView
         open={open}
-        onClose={!running ? onClose : undefined}
+        onClose={() => { if (!running) onClose(); }}
         title="Run collection"
         size="md"
         footerRight={footerRight}

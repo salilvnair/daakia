@@ -149,7 +149,7 @@ export function DevToolsPanel() {
           </button>
         )}
         <button
-          className="flex items-center justify-center w-[22px] h-[22px] rounded text-[var(--color-text-muted)] hover:text-[#ef4444] hover:bg-[var(--color-input-bg)] transition-colors cursor-pointer"
+          className="flex items-center justify-center w-[22px] h-[22px] rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-input-bg)] transition-colors cursor-pointer"
           onClick={close}
           title="Close DevTools"
         >

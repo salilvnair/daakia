@@ -84,10 +84,10 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
     for (const row of rows) {
       addTab({
         name: `${method} ${applyTemplate(urlTemplate, row).split('/').pop()}`,
-        method,
+        method: method as import('../../store/tabs-store').HttpMethod,
         url: applyTemplate(urlTemplate, row),
         bodyRaw: bodyTemplate ? applyTemplate(bodyTemplate, row) : '',
-        bodyType: bodyTemplate ? 'json' : 'none',
+        bodyMode: bodyTemplate ? ('raw' as const) : ('none' as const),
       });
       count++;
     }

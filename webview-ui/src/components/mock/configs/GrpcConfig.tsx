@@ -13,6 +13,7 @@ import { logUiEvent } from '../../../store/ui-audit-store';
 import { SequencePanel } from '../wiremock/SequencePanel';
 import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
+import { StateMachineTriggerSelect } from '../wiremock/StateMachinePanel';
 
 type GrpcMethodTab = 'response' | 'sequence' | 'matching' | 'advanced';
 
@@ -79,6 +80,8 @@ interface GrpcMethodRow {
   priority?: number;
   fault?: import('../mock-types').FaultConfig;
   rateLimit?: import('../mock-types').RateLimitConfig;
+  triggerEvent?: string;
+  connectedWorkflowId?: string;
 }
 
 interface ServiceGroup {
@@ -120,6 +123,8 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
     priority: m.priority,
     fault: m.fault,
     rateLimit: m.rateLimit,
+    triggerEvent: m.triggerEvent,
+    connectedWorkflowId: m.connectedWorkflowId,
   }));
 
   const serviceGroups: ServiceGroup[] = useMemo(() => {
@@ -335,6 +340,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                         key={m.id}
                         method={m}
                         isExpanded={expandedMethodId === m.id}
+                        server={server}
                         onToggleExpand={() => { const next = expandedMethodId === m.id ? null : m.id; setExpandedMethodId(next); useUiStateStore.getState().setPref(`mock.grpc.expandedMethod.${server.id}`, next || ''); }}
                         onUpdate={(patch) => updateMethod(m.id, patch)}
                         onRemove={() => setDeleteConfirm({ type: 'method', id: m.id, label: m.method })}
@@ -384,12 +390,13 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
 interface MethodRowProps {
   method: GrpcMethodRow;
   isExpanded: boolean;
+  server: MockServer;
   onToggleExpand: () => void;
   onUpdate: (patch: Partial<GrpcMethodRow>) => void;
   onRemove: () => void;
 }
 
-function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }: MethodRowProps) {
+function MethodRow({ method: m, isExpanded, server, onToggleExpand, onUpdate, onRemove }: MethodRowProps) {
   const [activeTab, setActiveTab] = useState<GrpcMethodTab>('response');
 
   return (
@@ -488,6 +495,12 @@ function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }
                     />
                   </div>
                 </div>
+                <StateMachineTriggerSelect
+                  server={server}
+                  connectedWorkflowId={m.connectedWorkflowId}
+                  triggerEvent={m.triggerEvent}
+                  onChange={(patch) => onUpdate(patch)}
+                />
                 <div>
                   <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response (JSON)</label>
                   <div className="h-[120px] rounded-md overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)]">

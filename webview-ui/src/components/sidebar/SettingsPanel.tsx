@@ -1,15 +1,14 @@
-import { useState, useEffect, type JSX } from 'react';
-import { ButtonView, TextInputView, ToggleSwitchView, TabView } from '@salilvnair/dui';
+import { useState, useEffect } from 'react';
+import { ButtonView, TextInputView, ToggleSwitchView, TabView, SideNavView, SplitPanelView, type SideNavItem } from '@salilvnair/dui';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, DocumentIcon, ChevronLeftIcon, ChevronRightIcon } from '../../icons';
+import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon } from '../../icons';
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { PromptLibraryPanel } from './PromptLibraryPanel';
 import { AiFeatureSettings } from './AiFeatureSettings';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
 import { AiAuditPanel } from './AiAuditPanel';
-import { DaakiaWikiPanel } from './wiki/DaakiaWikiPanel';
-import { DaakiaViewPage } from '../../pages/wiki/daakia-view/DaakiaViewPage';
+import { DaakiaViewPage, WIKI_TABS, type TabId as WikiTabId } from '../../pages/wiki/daakia-view/DaakiaViewPage';
 import { useMockStore } from '../../store/mock-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { CookieManager } from '../power/CookieManager';
@@ -26,32 +25,55 @@ import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 
-type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'wiki' | 'wiki-new' | 'power-features';
+type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load';
 
-const SECTIONS: { id: SettingsSection; label: string; icon: JSX.Element }[] = [
-  { id: 'general',        label: 'General',         icon: <SettingsIcon size={14} /> },
-  { id: 'theme',          label: 'Theme',            icon: <SunIcon size={14} /> },
-  { id: 'mock-server',    label: 'Mock Server',      icon: <ServerIcon size={14} /> },
-  { id: 'llm',            label: 'LLM Provider',     icon: <CpuIcon size={14} /> },
-  { id: 'ai-features',    label: 'AI Features',      icon: <SparkleIcon size={14} /> },
-  { id: 'prompt-library', label: 'Prompt Library',   icon: <AgentIcon size={14} /> },
-  { id: 'ai-audit',       label: 'AI Audit',         icon: <SparkleIcon size={14} /> },
-  { id: 'devtools',       label: 'Developer Tools',  icon: <CodeBracketsIcon size={14} /> },
-  { id: 'wiki',           label: 'Daakia Wiki',       icon: <DocumentIcon size={14} /> },
-  { id: 'wiki-new',       label: 'Wiki New',          icon: <SparkleIcon size={14} /> },
-  { id: 'power-features', label: 'Power Features',    icon: <CodeBracketsIcon size={14} /> },
+/** A settings-section id, or a wiki tab id prefixed `wiki:` — the wiki's own tabs are nested as this nav's "Wiki" group instead of DaakiaViewPage rendering a second, independent SideNavView. */
+type ActiveNavId = SettingsSection | `wiki:${WikiTabId}`;
+
+const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: React.ReactNode }> = {
+  'general':         { label: 'General',        icon: <SettingsIcon size={14} /> },
+  'theme':           { label: 'Theme',           icon: <SunIcon size={14} /> },
+  'mock-server':     { label: 'Mock Server',     icon: <ServerIcon size={14} /> },
+  'llm':             { label: 'LLM Provider',    icon: <CpuIcon size={14} /> },
+  'ai-features':     { label: 'AI Features',     icon: <SparkleIcon size={14} /> },
+  'prompt-library':  { label: 'Prompt Library',  icon: <AgentIcon size={14} /> },
+  'ai-audit':        { label: 'AI Audit',        icon: <SparkleIcon size={14} /> },
+  'devtools':        { label: 'Developer Tools', icon: <CodeBracketsIcon size={14} /> },
+  'power-features':  { label: 'Power Features',  icon: <CodeBracketsIcon size={14} /> },
+};
+
+const SETTINGS_NAV_ITEMS: SideNavItem[] = [
+  { id: 'g-general', label: 'General', isGroup: true, children: [
+    { id: 'general', label: SETTINGS_SECTION_META.general.label, icon: SETTINGS_SECTION_META.general.icon },
+    { id: 'theme', label: SETTINGS_SECTION_META.theme.label, icon: SETTINGS_SECTION_META.theme.icon },
+  ] },
+  { id: 'g-server', label: 'Server', isGroup: true, children: [
+    { id: 'mock-server', label: SETTINGS_SECTION_META['mock-server'].label, icon: SETTINGS_SECTION_META['mock-server'].icon },
+  ] },
+  { id: 'g-ai', label: 'AI', isGroup: true, children: [
+    { id: 'llm', label: SETTINGS_SECTION_META.llm.label, icon: SETTINGS_SECTION_META.llm.icon },
+    { id: 'ai-features', label: SETTINGS_SECTION_META['ai-features'].label, icon: SETTINGS_SECTION_META['ai-features'].icon },
+    { id: 'prompt-library', label: SETTINGS_SECTION_META['prompt-library'].label, icon: SETTINGS_SECTION_META['prompt-library'].icon },
+    { id: 'ai-audit', label: SETTINGS_SECTION_META['ai-audit'].label, icon: SETTINGS_SECTION_META['ai-audit'].icon },
+  ] },
+  { id: 'g-advanced', label: 'Advanced', isGroup: true, children: [
+    { id: 'devtools', label: SETTINGS_SECTION_META.devtools.label, icon: SETTINGS_SECTION_META.devtools.icon },
+    { id: 'power-features', label: SETTINGS_SECTION_META['power-features'].label, icon: SETTINGS_SECTION_META['power-features'].icon },
+  ] },
+  { id: 'g-wiki', label: 'Wiki', isGroup: true, children: WIKI_TABS.map(t => ({ id: `wiki:${t.id}`, label: t.label, icon: t.icon })) },
 ];
 
+const ALL_SECTION_IDS = new Set<string>(SETTINGS_NAV_ITEMS.flatMap(g => (g.children ?? []).map(c => c.id)));
+
 export function SettingsPanel() {
-  const storedSection = useUiStateStore(s => s.prefs['settings.section']) as SettingsSection | undefined;
-  const validStored = storedSection && SECTIONS.some(s => s.id === storedSection) ? storedSection : 'general';
-  const [activeSection, setActiveSectionLocal] = useState<SettingsSection>(validStored);
-  const [navCollapsed, setNavCollapsed] = useState(false);
+  const storedSection = useUiStateStore(s => s.prefs['settings.section']) as ActiveNavId | undefined;
+  const validStored = storedSection && ALL_SECTION_IDS.has(storedSection) ? storedSection : 'general';
+  const [activeSection, setActiveSectionLocal] = useState<ActiveNavId>(validStored);
   const [promptTarget, setPromptTarget] = useState<AiPromptTemplateKey | null>(null);
 
-  const setActiveSection = (section: SettingsSection) => {
+  const setActiveSection = (section: ActiveNavId) => {
     setActiveSectionLocal(section);
     useUiStateStore.getState().setPref('settings.section', section);
   };
@@ -61,86 +83,69 @@ export function SettingsPanel() {
     setActiveSection('prompt-library');
   };
 
-  const current = SECTIONS.find(s => s.id === activeSection) ?? SECTIONS[0];
+  const isWiki = activeSection.startsWith('wiki:');
+  const wikiTabId = isWiki ? (activeSection.slice(5) as WikiTabId) : null;
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
-      {/* Left navigation */}
-      <div
-        className="flex-shrink-0 border-r border-[var(--color-surface-border)] flex flex-col transition-all duration-200"
-        style={{ width: navCollapsed ? 40 : 200 }}
-      >
-        <div className="flex items-center px-2 py-2.5 border-b border-[var(--color-surface-border)] gap-1.5">
-          {!navCollapsed && (
-            <span className="text-[13px] font-medium text-[var(--color-text-primary)] flex-1">Settings</span>
-          )}
-          <button
-            type="button"
-            title={navCollapsed ? 'Show navigation' : 'Hide navigation'}
-            onClick={() => setNavCollapsed(v => !v)}
-            className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] cursor-pointer transition-colors flex-shrink-0 ml-auto"
+      <SplitPanelView
+        direction="horizontal"
+        defaultSplit={22}
+        minFirstPct={12}
+        minSecondPct={40}
+        accentColor="var(--color-settings)"
+        first={
+          // Grouped, searchable, badge-counted nav (same DUI SideNavView the
+          // wiki itself uses) — fillContainer lets the split's drag handle
+          // control width instead of SideNavView's own fixed-pixel sizing;
+          // collapsible is off since dragging narrow already serves that role.
+          <SideNavView
+            items={SETTINGS_NAV_ITEMS}
+            activeId={activeSection}
+            onSelect={(id) => setActiveSection(id as ActiveNavId)}
+            defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-advanced', 'g-wiki']}
+            fillContainer
+            collapsible={false}
+            accentColor="var(--color-settings)"
+            searchable
+            searchPlaceholder="Search settings..."
+            size="sm"
+            className="border-r border-[var(--color-surface-border)]"
+          />
+        }
+        second={
+          <div
+            className={`h-full flex-1 overflow-y-auto${isWiki ? ' overflow-hidden' : ''}`}
+            style={isWiki ? { display: 'flex', flexDirection: 'column' } : undefined}
           >
-            {navCollapsed ? <ChevronRightIcon size={12} /> : <ChevronLeftIcon size={12} />}
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-1 py-1">
-          {SECTIONS.map((sec) => (
-            <button
-              key={sec.id}
-              type="button"
-              onClick={() => setActiveSection(sec.id)}
-              title={navCollapsed ? sec.label : undefined}
-              className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-md cursor-pointer text-left transition-colors text-[12px] ${
-                navCollapsed ? 'justify-center' : ''
-              } ${
-                activeSection === sec.id
-                  ? 'bg-[rgba(42,157,143,0.12)] text-[var(--color-settings)] font-medium'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]'
-              }`}
-            >
-              {sec.icon}
-              {!navCollapsed && <span>{sec.label}</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Right content area */}
-      <div
-        className={`flex-1 overflow-y-auto${activeSection === 'wiki' || activeSection === 'wiki-new' ? ' overflow-hidden' : ''}`}
-        style={activeSection === 'wiki' || activeSection === 'wiki-new' ? { display: 'flex', flexDirection: 'column' } : undefined}
-      >
-        {activeSection === 'general' ? (
-          <GeneralSettings />
-        ) : activeSection === 'mock-server' ? (
-          <MockServerSettings />
-        ) : activeSection === 'llm' ? (
-          <LlmProviderSettings />
-        ) : activeSection === 'ai-features' ? (
-          <AiFeatureSettings onNavigateToPrompt={handleNavigateToPrompt} />
-        ) : activeSection === 'prompt-library' ? (
-          <PromptLibraryPanel externalTarget={promptTarget} onTargetConsumed={() => setPromptTarget(null)} />
-        ) : activeSection === 'ai-audit' ? (
-          <AiAuditPanel />
-        ) : activeSection === 'wiki-new' ? (
-          <DaakiaViewPage />
-        ) : activeSection === 'wiki' ? (
-          <DaakiaWikiPanel />
-        ) : activeSection === 'power-features' ? (
-          <PowerFeaturesPanel />
-        ) : activeSection === 'devtools' ? (
-          <DevToolsSettingsPage />
-        ) : activeSection === 'theme' ? (
-          <ThemeSettings />
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
-            <div className="flex flex-col items-center gap-2">
-              <span className="opacity-50">{current.icon}</span>
-              <p className="text-[13px]">{current.label} — coming next sprint</p>
-            </div>
+            {activeSection === 'general' ? (
+              <GeneralSettings />
+            ) : activeSection === 'mock-server' ? (
+              <MockServerSettings />
+            ) : activeSection === 'llm' ? (
+              <LlmProviderSettings />
+            ) : activeSection === 'ai-features' ? (
+              <AiFeatureSettings onNavigateToPrompt={handleNavigateToPrompt} />
+            ) : activeSection === 'prompt-library' ? (
+              <PromptLibraryPanel externalTarget={promptTarget} onTargetConsumed={() => setPromptTarget(null)} />
+            ) : activeSection === 'ai-audit' ? (
+              <AiAuditPanel />
+            ) : isWiki ? (
+              <DaakiaViewPage
+                hideNav
+                activeId={wikiTabId!}
+                onSelect={(id) => setActiveSection(`wiki:${id}`)}
+              />
+            ) : activeSection === 'power-features' ? (
+              <PowerFeaturesPanel />
+            ) : activeSection === 'devtools' ? (
+              <DevToolsSettingsPage />
+            ) : activeSection === 'theme' ? (
+              <ThemeSettings />
+            ) : null}
           </div>
-        )}
-      </div>
+        }
+      />
     </div>
   );
 }
@@ -626,8 +631,8 @@ function MockServerSettings() {
           </div>
 
           {/* Info */}
-          <div className="p-3 rounded-md bg-[rgba(234,179,8,0.06)] border border-[rgba(234,179,8,0.15)]">
-            <p className="text-[12px] text-[#eab308] font-medium mb-1">How it works</p>
+          <div className="p-3 rounded-md bg-[color-mix(in_srgb,var(--color-warning)_6%,transparent)] border border-[color-mix(in_srgb,var(--color-warning)_15%,transparent)]">
+            <p className="text-[12px] text-[var(--color-warning)] font-medium mb-1">How it works</p>
             <ul className="text-[11px] text-[var(--color-text-muted)] space-y-1">
               <li>• Mock servers run as real HTTP servers in the extension host</li>
               <li>• Routes are hot-reloaded — changes apply instantly to running servers</li>

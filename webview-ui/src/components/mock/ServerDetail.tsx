@@ -301,9 +301,9 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
               id: crypto.randomUUID(),
               method: r.method as MockRoute['method'],
               path: r.path,
-              statusCode: r.responseStatus,
-              headers: r.responseHeaders,
-              body: r.responseBody,
+              statusCode: r.response.status,
+              headers: r.response.headers,
+              body: r.response.body ?? '',
               delay: 0,
               enabled: true,
             }));
@@ -387,6 +387,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
             }
           }}
           onAddSoapOps={ops => onUpdate({ soapOperations: [...(server.soapOperations ?? []), ...ops] })}
+          onAddGrpcMethods={(methods, raw) => onUpdate({ grpcMethods: [...(server.grpcMethods ?? []), ...methods], ...(raw ? { grpcProtoFile: raw } : {}) })}
         />
       )}
 

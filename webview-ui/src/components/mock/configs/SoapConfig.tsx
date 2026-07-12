@@ -14,6 +14,7 @@ import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGenerateP
 import { SequencePanel } from '../wiremock/SequencePanel';
 import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
+import { StateMachineTriggerSelect } from '../wiremock/StateMachinePanel';
 
 type SoapOpTab = 'response' | 'sequence' | 'matching' | 'advanced';
 
@@ -83,6 +84,8 @@ interface OperationRow {
   priority?: number;
   fault?: import('../mock-types').FaultConfig;
   rateLimit?: import('../mock-types').RateLimitConfig;
+  triggerEvent?: string;
+  connectedWorkflowId?: string;
 }
 
 interface ServiceGroup {
@@ -129,6 +132,8 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
     priority: op.priority,
     fault: op.fault,
     rateLimit: op.rateLimit,
+    triggerEvent: op.triggerEvent,
+    connectedWorkflowId: op.connectedWorkflowId,
   }));
 
   const serviceGroups: ServiceGroup[] = useMemo(() => {
@@ -160,16 +165,16 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
   const removeService = (serviceName: string) => { update(operations.filter(op => op.service !== serviceName)); setDeleteConfirm(null); };
 
   const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
-    const newOps: SoapMockOperation[] = [];
+    const newOps: OperationRow[] = [];
     for (const item of items) {
       const svc = item.data as { service?: string; operations?: Array<{ operation?: string; soapAction?: string; response?: string }> };
       const svcName = svc.service || item.name || 'NewService';
       const ops = Array.isArray(svc.operations) ? svc.operations : [];
       if (ops.length === 0) {
-        newOps.push({ id: crypto.randomUUID(), service: svcName, operation: 'NewOperation', soapAction: `http://example.com/${svcName}/NewOperation`, responseType: 'static', response: `<Response><message>OK</message></Response>`, delay: 0, enabled: true });
+        newOps.push({ id: crypto.randomUUID(), service: svcName, operation: 'NewOperation', soapAction: `http://example.com/${svcName}/NewOperation`, responseType: 'static', response: `<Response><message>OK</message></Response>`, delay: 0, enabled: true, serviceEnabled: true });
       } else {
         for (const op of ops) {
-          newOps.push({ id: crypto.randomUUID(), service: svcName, operation: op.operation || 'NewOperation', soapAction: op.soapAction || `http://example.com/${svcName}/${op.operation || 'NewOperation'}`, responseType: 'static', response: op.response || `<Response><message>OK</message></Response>`, delay: 0, enabled: true });
+          newOps.push({ id: crypto.randomUUID(), service: svcName, operation: op.operation || 'NewOperation', soapAction: op.soapAction || `http://example.com/${svcName}/${op.operation || 'NewOperation'}`, responseType: 'static', response: op.response || `<Response><message>OK</message></Response>`, delay: 0, enabled: true, serviceEnabled: true });
         }
       }
     }
@@ -343,6 +348,7 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
                         key={op.id}
                         operation={op}
                         isExpanded={expandedOpId === op.id}
+                        server={server}
                         onToggleExpand={() => { const next = expandedOpId === op.id ? null : op.id; setExpandedOpId(next); useUiStateStore.getState().setPref(`mock.soap.expandedOp.${server.id}`, next || ''); }}
                         onUpdate={(patch) => updateOperation(op.id, patch)}
                         onRemove={() => setDeleteConfirm({ type: 'operation', id: op.id, label: op.operation })}
@@ -392,12 +398,13 @@ export function SoapConfig({ server, onUpdate }: SoapConfigProps) {
 interface OperationItemProps {
   operation: OperationRow;
   isExpanded: boolean;
+  server: MockServer;
   onToggleExpand: () => void;
   onUpdate: (patch: Partial<OperationRow>) => void;
   onRemove: () => void;
 }
 
-function OperationItem({ operation: op, isExpanded, onToggleExpand, onUpdate, onRemove }: OperationItemProps) {
+function OperationItem({ operation: op, isExpanded, server, onToggleExpand, onUpdate, onRemove }: OperationItemProps) {
   const cfg = RESPONSE_TYPE_CONFIG[op.responseType] || RESPONSE_TYPE_CONFIG.static;
   const [activeTab, setActiveTab] = useState<SoapOpTab>('response');
 
@@ -468,6 +475,12 @@ function OperationItem({ operation: op, isExpanded, onToggleExpand, onUpdate, on
                     <TextInputView value={op.soapAction} onChange={(e) => onUpdate({ soapAction: e.target.value })} size="md" style={{ width: '100%', fontFamily: 'monospace' }} />
                   </div>
                 </div>
+                <StateMachineTriggerSelect
+                  server={server}
+                  connectedWorkflowId={op.connectedWorkflowId}
+                  triggerEvent={op.triggerEvent}
+                  onChange={(patch) => onUpdate(patch)}
+                />
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response Type</label>
@@ -534,7 +547,9 @@ function OperationItem({ operation: op, isExpanded, onToggleExpand, onUpdate, on
 
             {activeTab === 'sequence' && <SequencePanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />}
             {activeTab === 'matching' && <MatchBuilderPanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />}
-            {activeTab === 'advanced' && <FaultInjectionPanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />}
+            {activeTab === 'advanced' && (
+              <FaultInjectionPanel route={opToRoute(op)} onUpdate={(patch) => onUpdate(routeToOpPatch(patch))} />
+            )}
           </div>
         </div>
       )}

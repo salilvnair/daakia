@@ -314,7 +314,7 @@ const PROTOCOL_IDLE: Record<string, IdleFormConfig> = {
       pasteLabel: '📋 Paste .proto',
       pastePlaceholder: `syntax = "proto3";\n\npackage users;\n\nservice UserService {\n  rpc GetUser (GetUserRequest) returns (User);\n  rpc ListUsers (ListUsersRequest) returns (ListUsersResponse);\n}\n\nmessage User { string id = 1; string name = 2; string email = 3; }`,
       contextPrefixPaste: 'Protocol Buffer definition',
-      pasteLanguage: 'plaintext',
+      pasteLanguage: 'proto',
     },
   },
   soap: {

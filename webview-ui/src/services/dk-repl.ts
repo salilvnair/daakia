@@ -334,6 +334,39 @@ declare var dk: any;
 
 // ─── Monaco Autocomplete Definitions ─────────────────────────────────────────
 
+// ─── Shared Monaco registration (dk completions + type defs) ─────────────────
+//
+// Registers real `dk.` IntelliSense (suppresses "Cannot find name 'dk'" via
+// addExtraLib, provides the member-completion popup via getDkCompletions)
+// against the shared 'javascript' language service — Monaco's language
+// providers are process-wide, not per-editor-instance, so this only needs to
+// run once no matter how many script editors (Pre-request/Post-response tabs,
+// DevTools Console REPL) end up calling it. Idempotent: repeat calls are
+// no-ops after the first.
+
+let dkLanguageSupportRegistered = false;
+
+export function registerDkLanguageSupport(monaco: any): void {
+  if (dkLanguageSupportRegistered) return;
+  dkLanguageSupportRegistered = true;
+
+  monaco.languages.typescript.javascriptDefaults.addExtraLib(DK_TYPE_DEFS, 'ts:daakia-dk.d.ts');
+
+  monaco.languages.registerCompletionItemProvider('javascript', {
+    triggerCharacters: ['.'],
+    provideCompletionItems: (model: any, position: any) => {
+      const textUntilPosition = model.getValueInRange({
+        startLineNumber: position.lineNumber,
+        startColumn: 1,
+        endLineNumber: position.lineNumber,
+        endColumn: position.column,
+      });
+      const suggestions = getDkCompletions(textUntilPosition, monaco, position);
+      return { suggestions };
+    },
+  });
+}
+
 export function getDkCompletions(textUntilPosition: string, monaco: any, position: any) {
   const range = {
     startLineNumber: position.lineNumber,

@@ -1,4 +1,4 @@
-import { SelectInputView, TextInputView, CheckboxView } from '@salilvnair/dui';
+import { SelectInputView, TextInputView, CheckboxView, ButtonView } from '@salilvnair/dui';
 import { RefreshIcon } from '../../../icons';
 
 export interface AuthData {
@@ -346,16 +346,17 @@ function OAuth2Section({ authData, onAuthDataChange, onGetToken, loading, accent
       {/* Get Token button */}
       <div className={ROW}>
         <span className={LABEL} />
-        <button
-          type="button"
+        <ButtonView
+          variant="primary"
+          size="md"
           onClick={onGetToken}
           disabled={loading || !authData.oauth2TokenUrl || !authData.oauth2ClientId}
-          className="h-[30px] px-3 text-[11px] font-medium rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5 transition-opacity"
-          style={{ backgroundColor: accentColor || 'var(--color-primary)', color: 'var(--color-btn-primary-text, #fff)' }}
+          loading={loading}
+          accentColor={accentColor}
+          iconLeft={!loading ? <RefreshIcon size={12} /> : undefined}
         >
-          <RefreshIcon size={12} className={loading ? 'animate-spin' : ''} />
           {loading ? 'Fetching...' : 'Get Token'}
-        </button>
+        </ButtonView>
       </div>
     </div>
   );

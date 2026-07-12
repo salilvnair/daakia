@@ -54,9 +54,21 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
       const smConfig = sample.stateMachine ?? server.stateMachine ?? undefined;
       const existing: ConnectedWorkflow[] = server.connectedWorkflows ?? [];
       const already = existing.find(w => w.workflowId === workflow.id);
-      const connectedWorkflows: ConnectedWorkflow[] = already
+      let connectedWorkflows: ConnectedWorkflow[] = already
         ? existing
-        : [...existing, { workflowId: workflow.id, name: workflow.name }];
+        : [...existing, { workflowId: workflow.id, name: workflow.name, stateMachine: smConfig }];
+
+      // Install + connect any additional workflows this sample ships with
+      // (e.g. a second, independent auth flow reached only by a header-gated
+      // route) — each carries its own stateMachine directly on the
+      // ConnectedWorkflow entry, since only ONE workflow can use the
+      // server-level `stateMachine` fallback slot.
+      for (const [lookupKey, extraStateMachine] of Object.entries(sample.additionalWorkflows ?? {})) {
+        const extraWorkflow = installSMRestWorkflow(lookupKey);
+        if (!extraWorkflow) continue;
+        if (connectedWorkflows.find(w => w.workflowId === extraWorkflow.id)) continue;
+        connectedWorkflows = [...connectedWorkflows, { workflowId: extraWorkflow.id, name: extraWorkflow.name, stateMachine: extraStateMachine }];
+      }
 
       onUpdate({ routes, description: sample.description, connectedWorkflows, connectedWorkflowId: workflow.id, stateMachine: smConfig });
 
@@ -130,6 +142,7 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
             route={route}
             isEditing={editingRoute === route.id}
             serverBaseUrl={server.running && server.port ? `http://localhost:${server.port}` : undefined}
+            server={server}
             onEdit={() => onEditRoute(editingRoute === route.id ? null : route.id)}
             onUpdate={(patch) => onUpdateRoute(route.id, patch)}
             onDelete={() => onDeleteRoute(route.id)}

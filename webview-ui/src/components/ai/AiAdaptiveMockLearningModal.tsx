@@ -124,11 +124,7 @@ export function AiAdaptiveMockLearningModal({ onClose, onApply }: Props) {
             Apply Rules
           </ButtonView>
         ) : (status === 'idle' || status === 'done') ? (
-          <AIButtonView label="Analyze & Build Mock" size="md" accentColor={ACCENT} disabled={status === 'processing'} onClick={handleAnalyze} />
-        ) : status === 'idle' ? (
-          <ButtonView size="md" variant="primary" accentColor="var(--color-error)" disabled={!targetUrl.trim()} onClick={handleStartRecording}>
-            Record Traffic
-          </ButtonView>
+          <AIButtonView label="Analyze & Build Mock" size="md" accentColor={ACCENT} onClick={handleAnalyze} />
         ) : undefined
       }
     >

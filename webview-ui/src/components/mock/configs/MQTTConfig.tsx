@@ -229,7 +229,7 @@ export function MQTTConfig({ server, onUpdate }: MQTTConfigProps) {
                   size="sm"
                 />
               </div>
-              <ResizablePanelView id={`mock.mqtt.topic.${topic.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
+              <ResizablePanelView defaultHeight={60} minHeight={40} maxHeight={400}>
                 <EditorView
                   value={topic.payload}
                   onChange={(val) => updateTopic(topic.id, { payload: val })}

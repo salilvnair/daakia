@@ -41,7 +41,7 @@ export function AiMcpSchemaViewerModal({ tools, onClose }: Props) {
     const toolSummary = tools.map(t => {
       const props = t.inputSchema?.properties || {};
       const fields = Object.entries(props as Record<string, any>)
-        .map(([k, v]) => `  - ${k} (${v.type || 'any'}${t.inputSchema?.required?.includes(k) ? ', required' : ''}): ${v.description || ''}`)
+        .map(([k, v]) => `  - ${k} (${v.type || 'any'}${(t.inputSchema?.required as string[] | undefined)?.includes(k) ? ', required' : ''}): ${v.description || ''}`)
         .join('\n');
       return `### ${t.name}\n${t.description || 'No description'}\n**Parameters:**\n${fields || '  None'}`;
     }).join('\n\n');

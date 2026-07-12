@@ -15,8 +15,29 @@
     "theme": "dark"
   },
   "changelog": "CHANGELOG.md",
-  "categories": ["Testing", "Other", "Debuggers"],
-  "keywords": ["api", "rest", "http", "postman", "graphql", "soap", "grpc", "websocket", "mqtt", "mock", "collections", "openapi", "swagger", "ai", "mcp", "copilot"],
+  "categories": [
+    "Testing",
+    "Other",
+    "Debuggers"
+  ],
+  "keywords": [
+    "api",
+    "rest",
+    "http",
+    "postman",
+    "graphql",
+    "soap",
+    "grpc",
+    "websocket",
+    "mqtt",
+    "mock",
+    "collections",
+    "openapi",
+    "swagger",
+    "ai",
+    "mcp",
+    "copilot"
+  ],
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -137,6 +158,14 @@
       {
         "command": "daakia.rebuildSqlite",
         "title": "Daakia: Rebuild SQLite"
+      },
+      {
+        "command": "daakia.exportCollectionsToWorkspace",
+        "title": "Daakia: Export Collections to Workspace (Git Sync)"
+      },
+      {
+        "command": "daakia.importCollectionsFromWorkspace",
+        "title": "Daakia: Import Collections from Workspace (Git Sync)"
       }
     ],
     "menus": {
@@ -212,6 +241,16 @@
           "type": "boolean",
           "default": true,
           "description": "Store response body in history entries."
+        },
+        "daakia.gitSync.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Git-native collections: automatically write collections to .daakia.json files in the workspace after every change, and import external edits (e.g. after git pull)."
+        },
+        "daakia.gitSync.folder": {
+          "type": "string",
+          "default": "daakia/collections",
+          "description": "Workspace-relative folder for git-synced collection files."
         }
       }
     },
@@ -227,24 +266,30 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build:all",
-    "build:all": "npm run build:webview && npm run build:ext",
+    "typecheck": "tsc --noEmit -p tsconfig.json && cd webview-ui && npx tsc --noEmit",
+    "build:all": "npm run typecheck && npm run build:webview && npm run build:ext",
     "build:ext": "node esbuild.js",
     "build:webview": "cd webview-ui && node node_modules/vite/bin/vite.js build",
     "watch": "node esbuild.js --watch",
     "dev:webview": "cd webview-ui && node node_modules/vite/bin/vite.js",
     "lint": "eslint src/ --ext .ts",
     "backup": "node scripts/zip_daakia_latest.js",
+    "audit:ai-handlers": "node scripts/audit-ai-message-contracts.mjs",
     "vscode:package": "vsce package",
     "vscode:publish": "vsce publish",
     "vscode:publish:patch": "vsce publish patch",
     "vscode:publish:minor": "vsce publish minor",
     "vscode:publish:major": "vsce publish major",
     "test:e2e": "node out/test/runTests.js",
-    "pretest:e2e": "npm run build:ext"
+    "pretest:e2e": "npm run build:ext && tsc -p tsconfig.test.json",
+    "compile:test": "tsc -p tsconfig.test.json",
+    "test:webview": "cd webview-ui && npx vitest run",
+    "run:collection": "node cli/daakia-run.mjs"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.7.15",
+    "@salilvnair/state-machine": "file:../state-machine",
     "aedes": "^1.0.2",
     "axios": "^1.7.0",
     "fast-xml-parser": "^5.8.0",
@@ -260,20 +305,20 @@
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^22.0.0",
     "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.99.0",
     "@types/ws": "^8.18.1",
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/vsce": "^3.0.0",
     "archiver": "^8.0.0",
     "esbuild": "^0.24.0",
+    "glob": "^11.0.0",
+    "mocha": "^10.4.0",
     "svg2ttf": "^6.1.0",
     "svgicons2svgfont": "^15.0.1",
     "ttf2woff": "^3.0.0",
-    "typescript": "^5.7.0",
-    "@vscode/vsce": "^3.0.0",
-    "@vscode/test-electron": "^2.4.0",
-    "@types/mocha": "^10.0.0",
-    "mocha": "^10.4.0",
-    "glob": "^11.0.0"
+    "typescript": "^5.7.0"
   }
 }

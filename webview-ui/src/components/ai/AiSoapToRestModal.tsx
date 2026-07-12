@@ -46,8 +46,8 @@ export function AiSoapToRestModal({ onClose }: Props) {
   const streamRef = useRef('');
 
   useEffect(() => {
-    if (activeTab?.wsdl) setWsdl(activeTab.wsdl as string);
-  }, [activeTab?.wsdl]);
+    if (activeTab?.soapWsdlRaw) setWsdl(activeTab.soapWsdlRaw);
+  }, [activeTab?.soapWsdlRaw]);
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -61,9 +61,9 @@ export function AiSoapToRestModal({ onClose }: Props) {
   }, []);
 
   const migrate = () => {
-    if (!activeTab || !(wsdl || activeTab?.wsdl) || loading) return;
+    if (!activeTab || !(wsdl || activeTab?.soapWsdlRaw) || loading) return;
     streamRef.current = ''; setOutput(''); setError(''); setLoading(true);
-    const source = wsdl || String(activeTab?.wsdl || '');
+    const source = wsdl || (activeTab?.soapWsdlRaw ?? '');
     postMsg({
       type: 'aiChat',
       tabId: activeTab.id,
@@ -142,7 +142,7 @@ openapi: "3.1.0"
           action="generate"
           size="md"
           accentColor={ACCENT}
-          disabled={(!wsdl.trim() && !activeTab?.wsdl) || loading}
+          disabled={(!wsdl.trim() && !activeTab?.soapWsdlRaw) || loading}
           onClick={migrate}
         />
       }

@@ -1,31 +1,149 @@
 /**
  * mock-state-machine.ts — Stateful behavior runtime for WireMock-grade mocking.
  * Implements 6A.11: named states, transitions triggered by requests, state variables, session tracking.
+ *
+ * Backed by the real @salilvnair/state-machine engine (StateMachineEngine) —
+ * the same engine the canvas "Run" debugger in the state-machine editor uses
+ * — instead of a separate hand-rolled reimplementation. A route's
+ * `triggerEvent` is matched directly against the connected canvas workflow's
+ * own transition graph (config.transitions[].label) and fires via
+ * `engine.send()`, exactly like the canvas Run debugger — no synthetic
+ * per-route event keys or raw state overrides.
+ *
+ * One runtime instance = one connected workflow's state machine (see
+ * mock-runtime.ts, which keys instances by `${serverId}::${workflowId}` so a
+ * server with multiple connected workflows gets independent session tracking
+ * per workflow).
+ *
+ * @salilvnair/state-machine is ESM-only; this extension host compiles to
+ * CommonJS, so the engine class is loaded once via a dynamic import() (see
+ * preloadStateMachineEngine, awaited by startMockServer() before any server
+ * with a state machine starts) rather than a static top-level import. The
+ * types below are a small structural mirror of the library's own shapes
+ * (StateDefinition/TransitionDefinition/StateMachineConfig in
+ * @salilvnair/state-machine/core/types) — kept local so this file doesn't
+ * need a static cross-module type import across the CJS/ESM boundary.
  */
-import type { StateMachineConfig, StateTransition } from './mock-types';
+import type { StateMachineConfig } from './mock-types';
 
-interface SessionState {
-  currentState: string;
-  variables: Record<string, unknown>;
-  createdAt: number;
+interface EngineInstance {
+  readonly currentState: string | null;
+  readonly context: Record<string, unknown>;
+  start(): void;
+  canSend(eventType: string): boolean;
+  send(event: { type: string; payload?: unknown }): Promise<boolean>;
+  setState(stateId: string): void;
+  getResponseForRoute(method: string, path: string): { status: number; body: string } | null;
+}
+
+interface EngineCtor {
+  new (config: LibConfig): EngineInstance;
+}
+
+interface LibStateDefinition {
+  id: string;
+  label?: string;
+  initial?: boolean;
+  mockResponses?: Array<{ method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; path: string; status: number; body: string }>;
+  meta?: { x?: number; y?: number; color?: string };
+}
+interface LibTransitionDefinition {
+  id?: string;
+  from: string;
+  to: string;
+  event: string;
+}
+interface LibConfig {
+  id: string;
+  name: string;
+  states: LibStateDefinition[];
+  transitions: LibTransitionDefinition[];
+  context?: Record<string, unknown>;
+}
+
+let EngineCtor: EngineCtor | null = null;
+
+/**
+ * Lazily loads the real engine class. Must be awaited (see startMockServer()
+ * in mock-server-manager.ts, which awaits this before starting any server
+ * with `config.stateMachine?.enabled`) before the first StateMachineRuntime
+ * is constructed — the constructor itself stays synchronous for every other
+ * caller in mock-http-server.ts's hot request path.
+ */
+export async function preloadStateMachineEngine(): Promise<void> {
+  if (EngineCtor) return;
+  const mod = await import('@salilvnair/state-machine/engine');
+  EngineCtor = mod.StateMachineEngine as unknown as EngineCtor;
+}
+
+interface SessionEntry {
+  engine: EngineInstance;
   lastActivity: number;
 }
 
+/** Converts Daakia's StateMachineConfig (mock-types.ts) into the engine's config shape. */
+function toLibraryConfig(config: StateMachineConfig): LibConfig {
+  const states: LibStateDefinition[] = config.states.map((s) => ({
+    id: s.id,
+    label: s.name,
+    initial: s.id === config.defaultState,
+    mockResponses: s.mockResponses,
+    meta: { x: s.x, y: s.y, color: s.color },
+  }));
+
+  // Ensure exactly one state is marked initial even if defaultState doesn't
+  // match any configured state id — mirrors the old runtime's
+  // `defaultState || 'initial'` fallback (start() throws with none marked).
+  if (!states.some((s) => s.initial) && states.length > 0) {
+    states[0].initial = true;
+  }
+
+  // Canvas-authored transitions: event = the real event name from the edge
+  // (config.transitions[].label, e.g. "PAY") — this is the graph a route's
+  // `triggerEvent` gets matched against. Falls back to `routeId` only for
+  // very old hand-crafted configs that predate the `label` field.
+  const transitions: LibTransitionDefinition[] = config.transitions.map((t) => ({
+    id: t.id,
+    from: t.from,
+    to: t.to,
+    event: t.label || t.routeId,
+  }));
+
+  return {
+    id: 'daakia-mock-server',
+    name: 'Daakia Mock Server',
+    states,
+    transitions,
+    context: {},
+  };
+}
+
 /**
- * StateMachineRuntime manages per-session state for a single mock server.
+ * StateMachineRuntime manages per-session state for a single mock server,
+ * backed by one real StateMachineEngine instance per session.
  * Sessions are identified by cookie / header value (or a global singleton).
  */
 export class StateMachineRuntime {
   private config: StateMachineConfig;
-  private sessions = new Map<string, SessionState>();
+  private libConfig: LibConfig;
+  private sessions = new Map<string, SessionEntry>();
   private readonly SESSION_TTL = 30 * 60 * 1000; // 30 min idle expiry
 
   constructor(config: StateMachineConfig) {
+    if (!EngineCtor) {
+      throw new Error('StateMachineRuntime: preloadStateMachineEngine() must be awaited before constructing a runtime');
+    }
     this.config = config;
+    this.libConfig = toLibraryConfig(config);
   }
 
   updateConfig(config: StateMachineConfig) {
     this.config = config;
+    this.libConfig = toLibraryConfig(config);
+    // Existing sessions keep running against their engine's original config
+    // snapshot — hot-reloading routes doesn't retroactively rewrite a live
+    // session's state graph, only new sessions pick up the fresh config
+    // (same behavior as before this change).
   }
 
   // ─── Session resolution ───────────────────────────────────────────────────
@@ -44,105 +162,61 @@ export class StateMachineRuntime {
     return '__global__';
   }
 
-  getSession(sessionKey: string): SessionState {
+  private getEngine(sessionKey: string): EngineInstance {
     this.evictExpiredSessions();
-    if (!this.sessions.has(sessionKey)) {
-      this.sessions.set(sessionKey, {
-        currentState: this.config.defaultState || 'initial',
-        variables: {},
-        createdAt: Date.now(),
-        lastActivity: Date.now(),
-      });
+    let entry = this.sessions.get(sessionKey);
+    if (!entry) {
+      const engine = new EngineCtor!(this.libConfig);
+      engine.start();
+      entry = { engine, lastActivity: Date.now() };
+      this.sessions.set(sessionKey, entry);
     }
-    const session = this.sessions.get(sessionKey)!;
-    session.lastActivity = Date.now();
-    return session;
+    entry.lastActivity = Date.now();
+    return entry.engine;
   }
 
   getCurrentState(sessionKey: string): string {
-    return this.getSession(sessionKey).currentState;
+    return this.getEngine(sessionKey).currentState ?? '';
   }
 
   getVariables(sessionKey: string): Record<string, unknown> {
-    return this.getSession(sessionKey).variables;
+    return this.getEngine(sessionKey).context;
   }
 
   // ─── Transition application ───────────────────────────────────────────────
 
   /**
-   * Given a matched routeId and sessionKey, find and apply the transition (if any).
-   * Returns the new state name, or null if no transition fired.
+   * A route's `triggerEvent` (e.g. "PAY") — matched directly against the
+   * canvas's own transition graph (config.transitions[].label). No
+   * requiredState/newState needed: the graph already knows which states
+   * "PAY" is valid from and where it leads, exactly like the canvas's
+   * Dispatch Event panel. Used for route-matching gating (does this route
+   * apply in the current state) without mutating anything.
    */
-  applyTransition(routeId: string, sessionKey: string, variableUpdates?: Record<string, string>): string | null {
-    if (!this.config.enabled) return null;
-
-    const session = this.getSession(sessionKey);
-    const currentState = session.currentState;
-
-    const transition = this.findTransition(routeId, currentState);
-    if (!transition) return null;
-
-    // Apply state variable updates
-    if (variableUpdates) {
-      Object.entries(variableUpdates).forEach(([k, v]) => {
-        // Support expressions like: counter + 1
-        if (v.includes('+') || v.includes('-')) {
-          const parts = v.split(/([+-])/);
-          const base = session.variables[parts[0].trim()];
-          const op = parts[1];
-          const amount = parseFloat(parts[2].trim());
-          const current = parseFloat(String(base ?? 0));
-          session.variables[k] = op === '+' ? current + amount : current - amount;
-        } else {
-          session.variables[k] = v;
-        }
-      });
-    }
-
-    // Transition to new state
-    session.currentState = transition.to;
-    return transition.to;
+  canFireEvent(sessionKey: string, event: string): boolean {
+    if (!this.config.enabled) return false;
+    return this.getEngine(sessionKey).canSend(event);
   }
 
-  private findTransition(routeId: string, currentState: string): StateTransition | undefined {
-    return this.config.transitions.find(t =>
-      t.routeId === routeId && t.from === currentState,
-    );
+  /** Actually fires a route's `triggerEvent` through the real engine. */
+  async fireEvent(sessionKey: string, event: string): Promise<boolean> {
+    if (!this.config.enabled) return false;
+    return this.getEngine(sessionKey).send({ type: event });
   }
 
   /**
    * Returns the mock response configured on the current state node for the given method + path.
-   * Called on every request — state mock responses take precedence over the route default body
-   * but are overridden by route-level transition entry overrides (more specific).
+   * Called on every request — state mock responses take precedence over the route's default body.
    */
   getStateResponseForRoute(method: string, path: string, sessionKey: string): { status: number; body: string } | null {
     if (!this.config.enabled) return null;
-    const currentState = this.getCurrentState(sessionKey);
-    const stateNode = this.config.states.find((s) => s.id === currentState);
-    if (!stateNode?.mockResponses?.length) return null;
-    const m = method.toUpperCase();
-    const match = stateNode.mockResponses.find((r) => r.method === m && r.path === path);
-    if (!match) return null;
-    return { status: match.status, body: match.body };
-  }
-
-  /**
-   * Check if a route is accessible in the current state.
-   * Returns true if route has no requiredState OR currentState matches.
-   */
-  routeAllowedInState(requiredState: string | undefined, sessionKey: string): boolean {
-    if (!this.config.enabled || !requiredState) return true;
-    return this.getCurrentState(sessionKey) === requiredState;
+    return this.getEngine(sessionKey).getResponseForRoute(method, path);
   }
 
   /** Reset a specific session to initial state */
   resetSession(sessionKey: string) {
-    this.sessions.set(sessionKey, {
-      currentState: this.config.defaultState || 'initial',
-      variables: {},
-      createdAt: Date.now(),
-      lastActivity: Date.now(),
-    });
+    this.sessions.delete(sessionKey);
+    this.getEngine(sessionKey);
   }
 
   /** Reset all sessions */
@@ -152,17 +226,17 @@ export class StateMachineRuntime {
 
   /** Get all active sessions (for debugging) */
   getAllSessions(): Array<{ key: string; state: string; variables: Record<string, unknown> }> {
-    return Array.from(this.sessions.entries()).map(([key, s]) => ({
+    return Array.from(this.sessions.entries()).map(([key, entry]) => ({
       key,
-      state: s.currentState,
-      variables: s.variables,
+      state: entry.engine.currentState ?? '',
+      variables: entry.engine.context,
     }));
   }
 
   private evictExpiredSessions() {
     const now = Date.now();
-    for (const [key, session] of this.sessions.entries()) {
-      if (now - session.lastActivity > this.SESSION_TTL) {
+    for (const [key, entry] of this.sessions.entries()) {
+      if (now - entry.lastActivity > this.SESSION_TTL) {
         this.sessions.delete(key);
       }
     }

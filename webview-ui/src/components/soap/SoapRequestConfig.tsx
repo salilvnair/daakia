@@ -258,8 +258,8 @@ export function SoapRequestConfig() {
             <AuthEditor
               authType={activeTab.authType}
               authData={activeTab.authData}
-              onAuthTypeChange={(t) => updateTab(activeTab.id, { authType: t, dirty: true })}
-              onAuthDataChange={(d) => updateTab(activeTab.id, { authData: d, dirty: true })}
+              onAuthTypeChange={(t) => updateTab(activeTab.id, { authType: t as import('../../store/tabs-store').AuthType, dirty: true })}
+              onAuthDataChange={(d) => updateTab(activeTab.id, { authData: d as Record<string, string>, dirty: true })}
               accentColor={ACCENT}
             />
           </div>
@@ -287,7 +287,7 @@ export function SoapRequestConfig() {
 
         {activeSubTab === 'wsdl' && (
           <div className="h-full flex flex-col min-h-0">
-            {aiEnabled('soapWsdlExplainer') && (activeTab.soapOperations?.length || activeTab.soapService) && (
+            {aiEnabled('soapWsdlExplainer') && (activeTab.soapServices?.length || activeTab.soapService) && (
               <div className="flex items-center justify-end px-3 py-1 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-surface)]">
                 <ButtonView
                   size="xs"

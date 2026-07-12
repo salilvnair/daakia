@@ -312,15 +312,16 @@ export interface AiToolDef {
   };
 }
 
+/** All fields optional — consumers apply defaults at read time (see AiSettingsTab). */
 export interface AiSettings {
-  temperature: number;
-  maxTokens: number;
-  topP: number;
-  frequencyPenalty: number;
-  presencePenalty: number;
-  stream: boolean;
-  stopSequences: string[];
-  responseFormat: 'text' | 'json_object';
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  stream?: boolean;
+  stopSequences?: string[];
+  responseFormat?: 'text' | 'json_object';
   seed?: number;
 }
 

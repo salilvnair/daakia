@@ -225,7 +225,7 @@ export function SoapResponsePanel() {
                 ? Object.entries(hdrs).map(([key, val]) => (
                     <div key={key} className="flex items-center gap-2 text-[11px] font-mono">
                       <span className="text-[var(--color-text-secondary)] font-semibold">{key}:</span>
-                      <span className="text-[var(--color-text-primary)]">{val}</span>
+                      <span className="text-[var(--color-text-primary)]">{String(val)}</span>
                     </div>
                   ))
                 : <p className="text-[11px] text-[var(--color-text-muted)]">No response headers</p>;

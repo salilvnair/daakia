@@ -277,7 +277,6 @@ export function SSEPanel() {
           disabled={connState === 'connected'}
           suggestions={urlSuggestions}
           mockServers={mockSuggestions}
-          protocolHints={['http://', 'https://']}
           accentColor="var(--color-protocol-websocket)"
           size="lg"
           borderRadius={6}
@@ -385,7 +384,7 @@ export function SSEPanel() {
           )}
           {showPreflight && activeTab.url.trim() && <AiPreflightPopover tab={activeTab} onClose={() => setShowPreflight(false)} />}
           {showPatternStatus && activeTab.url.trim() && aiEnabled('patternBaseline') && (
-            <PatternBaselinePopup method="SSE" url={activeTab.url} onClose={() => setShowPatternStatus(false)} dir={aiOverflowDir} />
+            <PatternBaselinePopup method="SSE" url={activeTab.url} onClose={() => setShowPatternStatus(false)} />
           )}
         </div>
       </div>
@@ -472,7 +471,7 @@ export function SSEPanel() {
                 title="Clear log"
                 disabled={events.length === 0}
                 onClick={handleClear}
-                hoverColor="var(--color-error)"
+                accentColor="var(--color-error)"
               />
               <IconButtonView
                 icon={<ArrowUpIcon size={13} />}

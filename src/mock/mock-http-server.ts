@@ -22,14 +22,14 @@ import type {
 import { resolveAll } from '../services/variables';
 import { routeMatchesRequest, sortRoutesByPriority, extractPathParams, parseCookies } from './mock-matcher';
 import { renderTemplate, type TemplateRequestContext } from './mock-template-engine';
-import { StateMachineRuntime } from './mock-state-machine';
+import type { StateMachineRuntime } from './mock-state-machine';
+import { getStateMachineRuntime, disposeStateMachineRuntime, effectiveWorkflowId } from './mock-runtime';
 import { RateLimiter, SequenceTracker } from './mock-rate-limiter';
 
 export type LogCallback = (entry: MockLogEntry) => void;
 export type RecordCallback = (entry: RecordedRequest) => void;
 
 interface ServerRuntimeState {
-  stateMachine: StateMachineRuntime | null;
   rateLimiter: RateLimiter;
   sequenceTracker: SequenceTracker;
   globalRateLimiter: RateLimiter;
@@ -37,29 +37,20 @@ interface ServerRuntimeState {
 
 const runtimeStates = new Map<string, ServerRuntimeState>();
 
-function getRuntime(serverId: string, config: MockServerConfig): ServerRuntimeState {
+function getRuntime(serverId: string): ServerRuntimeState {
   if (!runtimeStates.has(serverId)) {
     runtimeStates.set(serverId, {
-      stateMachine: config.stateMachine?.enabled
-        ? new StateMachineRuntime(config.stateMachine)
-        : null,
       rateLimiter: new RateLimiter(),
       sequenceTracker: new SequenceTracker(),
       globalRateLimiter: new RateLimiter(),
     });
   }
-  const rt = runtimeStates.get(serverId)!;
-  // Update state machine config if it changed
-  if (config.stateMachine?.enabled && !rt.stateMachine) {
-    rt.stateMachine = new StateMachineRuntime(config.stateMachine);
-  } else if (config.stateMachine && rt.stateMachine) {
-    rt.stateMachine.updateConfig(config.stateMachine);
-  }
-  return rt;
+  return runtimeStates.get(serverId)!;
 }
 
 export function disposeRuntime(serverId: string) {
   runtimeStates.delete(serverId);
+  disposeStateMachineRuntime(serverId);
 }
 
 export function createHttpServer(
@@ -84,7 +75,7 @@ export function createHttpServer(
     req.on('data', chunk => { reqBody += chunk; });
     req.on('end', async () => {
       const currentConfig = getConfig();
-      const runtime = getRuntime(currentConfig.id, currentConfig);
+      const runtime = getRuntime(currentConfig.id);
 
       // ─── Global rate limiting ──────────────────────────────────────────────
       if (currentConfig.globalRateLimit?.enabled) {
@@ -131,24 +122,25 @@ export function createHttpServer(
       const sortedRoutes = sortRoutesByPriority(currentConfig.routes);
       let matchedRoute: MockRoute | undefined;
       let matchedParams: Record<string, string> = {};
-
-      let matchedTransitionEntry: import('./mock-types').StateTransitionEntry | undefined;
+      let matchedStateMachine: StateMachineRuntime | null = null;
 
       for (const r of sortedRoutes) {
         const result = routeMatchesRequest(r, reqCtx);
         if (result.matched) {
-          if (runtime.stateMachine) {
-            const sk = runtime.stateMachine.resolveSessionKey(req.headers as Record<string, string>, cookies);
-            if (r.stateTransitions?.length) {
-              // Multi-entry mode: find first entry whose requiredState matches current state
-              const currentState = runtime.stateMachine.getCurrentState(sk);
-              const entry = r.stateTransitions.find(t => !t.requiredState || t.requiredState === currentState);
-              if (!entry) continue; // none of the entries match — skip route
-              matchedTransitionEntry = entry;
-            } else if (r.requiredState) {
-              // Legacy single-pair mode
-              if (!runtime.stateMachine.routeAllowedInState(r.requiredState, sk)) continue;
-            }
+          if (r.triggerEvent) {
+            // Event-driven gating: does this event have a valid transition
+            // from the session's current state on the connected workflow
+            // this route references?
+            const sm = getStateMachineRuntime(currentConfig.id, effectiveWorkflowId(r, currentConfig), currentConfig);
+            if (!sm) continue; // triggerEvent set but no matching connected/enabled workflow
+            const sk = sm.resolveSessionKey(req.headers as Record<string, string>, cookies);
+            if (!sm.canFireEvent(sk, r.triggerEvent)) continue;
+            matchedStateMachine = sm;
+          } else {
+            // No triggerEvent — still resolve a runtime if this route's
+            // workflow is unambiguous, so session-scoped state vars / state
+            // mock-response overrides still apply even without gating.
+            matchedStateMachine = getStateMachineRuntime(currentConfig.id, effectiveWorkflowId(r, currentConfig), currentConfig);
           }
           matchedRoute = r;
           matchedParams = result.params;
@@ -188,7 +180,7 @@ export function createHttpServer(
       }
 
       // ─── Session key for state machine ─────────────────────────────────────
-      const sessionKey = runtime.stateMachine?.resolveSessionKey(req.headers as Record<string, string>, cookies) ?? '__global__';
+      const sessionKey = matchedStateMachine?.resolveSessionKey(req.headers as Record<string, string>, cookies) ?? '__global__';
 
       // ─── Global fault injection (6A.15) ───────────────────────────────────
       const globalFault = currentConfig.globalFault;
@@ -221,7 +213,7 @@ export function createHttpServer(
 
       const host = req.headers['host']?.split(':')[0] ?? 'localhost';
       const port = parseInt(req.headers['host']?.split(':')[1] ?? '80') || 80;
-      const stateVars = runtime.stateMachine?.getVariables(sessionKey) ?? {};
+      const stateVars = matchedStateMachine?.getVariables(sessionKey) ?? {};
 
       const templateCtx: TemplateRequestContext = {
         url: req.url ?? pathname,
@@ -304,23 +296,13 @@ export function createHttpServer(
         }
 
         // State node mock response override — applies when current session state has a
-        // matching method+path response defined on the canvas (screenshot 5 panel).
-        // Takes precedence over the route default body but is overridden by transition entry.
-        if (runtime.stateMachine) {
-          const stateMockResp = runtime.stateMachine.getStateResponseForRoute(method, pathname, sessionKey);
+        // matching method+path response defined on the canvas. Takes precedence over
+        // the route's default body.
+        if (matchedStateMachine) {
+          const stateMockResp = matchedStateMachine.getStateResponseForRoute(method, pathname, sessionKey);
           if (stateMockResp) {
             responseBody = stateMockResp.body;
             statusCode = stateMockResp.status;
-          }
-        }
-
-        // State transition entry overrides (multi-entry mode) — most specific, wins last
-        if (matchedTransitionEntry) {
-          if (matchedTransitionEntry.responseBodyOverride != null && matchedTransitionEntry.responseBodyOverride !== '') {
-            responseBody = resolveAll(matchedTransitionEntry.responseBodyOverride);
-          }
-          if (matchedTransitionEntry.statusCodeOverride) {
-            statusCode = matchedTransitionEntry.statusCodeOverride;
           }
         }
 
@@ -332,14 +314,10 @@ export function createHttpServer(
         res.end(responseBody);
 
         // ─── State machine transition (6A.11) ──────────────────────────────
-        if (runtime.stateMachine) {
-          if (matchedTransitionEntry?.newState) {
-            // Multi-entry mode: apply direct state override
-            runtime.stateMachine.getSession(sessionKey).currentState = matchedTransitionEntry.newState;
-          } else {
-            // Legacy single-pair mode
-            runtime.stateMachine.applyTransition(route.id, sessionKey, route.stateVariableUpdates);
-          }
+        // Fire the canvas's own event — target state and validity both come
+        // from the graph, nothing route-local.
+        if (matchedStateMachine && route.triggerEvent) {
+          void matchedStateMachine.fireEvent(sessionKey, route.triggerEvent);
         }
 
         // ─── Webhooks (6A.23) ──────────────────────────────────────────────

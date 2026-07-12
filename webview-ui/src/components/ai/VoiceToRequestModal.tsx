@@ -12,6 +12,23 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 
+// ─── Minimal Web Speech API typings (not in lib.dom) ─────────────────────────
+interface SpeechRecognitionResultLite { 0: { transcript: string }; length: number }
+interface SpeechRecognitionEventLite { results: ArrayLike<SpeechRecognitionResultLite> }
+interface SpeechRecognitionLite {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLite) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLite;
+
+
 interface Props {
   onClose: () => void;
 }
@@ -51,12 +68,13 @@ export function VoiceToRequestModal({ onClose }: Props) {
 
   const accRef = useRef('');
   const reqIdRef = useRef('');
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLite | null>(null);
   const addTab = useTabsStore(s => s.addTab);
   const addToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition as typeof window.SpeechRecognition;
+    const w = window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor };
+    const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognition) { setSupported(false); return; }
 
     const recognition = new SpeechRecognition();
@@ -64,7 +82,7 @@ export function VoiceToRequestModal({ onClose }: Props) {
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: SpeechRecognitionEventLite) => {
       const text = Array.from(event.results)
         .map(r => r[0].transcript)
         .join(' ');
@@ -137,12 +155,13 @@ export function VoiceToRequestModal({ onClose }: Props) {
     if (!result) return;
     addTab({
       name: (result.name as string) || 'Voice Request',
-      method: (result.method as string) || 'GET',
+      method: ((result.method as string) || 'GET') as import('../../store/tabs-store').HttpMethod,
       url: (result.url as string) || '',
-      headers: (result.headers as unknown[]) || [],
-      params: (result.queryParams as unknown[]) || [],
+      headers: (result.headers as import('../shared').KeyValueRow[]) || [],
+      params: (result.queryParams as import('../shared').KeyValueRow[]) || [],
       bodyRaw: (result.body as string) || '',
-      bodyType: (result.bodyType as string) || 'json',
+      bodyMode: 'raw' as const,
+      bodyContentType: 'application/json',
     });
     setApplied(true);
     addToast({ type: 'success', message: 'Request created in new tab!' });
@@ -263,7 +282,7 @@ export function VoiceToRequestModal({ onClose }: Props) {
                 style={{ backgroundColor: 'var(--color-info)' }}>{result.method as string}</span>
               <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-primary)' }}>{result.url as string}</span>
             </div>
-            {result.body && <p className="text-[10px] font-mono truncate mt-1" style={{ color: 'var(--color-text-muted)' }}>{result.body as string}</p>}
+            {typeof result.body === 'string' && result.body !== '' && <p className="text-[10px] font-mono truncate mt-1" style={{ color: 'var(--color-text-muted)' }}>{result.body}</p>}
           </div>
         )}
       </div>

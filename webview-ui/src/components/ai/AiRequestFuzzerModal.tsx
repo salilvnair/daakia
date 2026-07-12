@@ -287,7 +287,7 @@ Generate the fuzz payloads:`;
           size="md"
           iconLeft={<PlayIcon size={11} />}
           onClick={handleRunFuzz}
-          disabled={phase === 'running' || payloads.length === 0}
+          disabled={payloads.length === 0}
         >
           Run Fuzz Tests ({filtered.length})
         </ButtonView>

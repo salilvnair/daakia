@@ -30,7 +30,7 @@ const FORMAT_LANGUAGE: Record<string, EditorLanguage> = {
   postman:       'json',
   wiremock:      'json',
   sdl:           'graphql',
-  proto:         'plaintext',
+  proto:         'proto',
   wsdl:          'xml',
   'json-events': 'json',
 };
@@ -144,7 +144,10 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
   const cfg = getProtocolConfig(protocol);
   const ACCENT = getAccent(protocol);
   const [format, setFormat] = useState<ImportFormat>(cfg.formats[0].id);
-  const [content, setContent] = useState('');
+  // Seed with the format's example so the visible placeholder is a real, clickable
+  // one-click demo instead of an inert display-only fallback (Parse & Preview used to
+  // silently no-op because `content` stayed '' while the editor showed placeholder text).
+  const [content, setContent] = useState(() => cfg.placeholder(cfg.formats[0].id));
   const [result, setResult] = useState<ImportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [contractMode, setContractMode] = useState(false);
@@ -208,7 +211,6 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
   };
 
   const currentHint = cfg.hint(format);
-  const currentPlaceholder = cfg.placeholder(format);
 
   return (
     <div className="flex flex-col gap-3">
@@ -219,7 +221,7 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
           <PilledTabView
             tabs={formatTabs}
             activeId={format}
-            onChange={id => { setFormat(id as ImportFormat); setResult(null); setContractResult(null); }}
+            onChange={id => { setFormat(id as ImportFormat); setContent(cfg.placeholder(id as ImportFormat)); setResult(null); setContractResult(null); }}
             mode="pill"
             accentColor={ACCENT}
           />
@@ -256,7 +258,7 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
           style={{ borderColor: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}
         >
           <EditorView
-            value={content || currentPlaceholder}
+            value={content}
             onChange={v => setContent(v ?? '')}
             language={editorLanguage}
             height="220px"
@@ -360,7 +362,7 @@ function ParseResultView({ result, protocol, accent, onImport }: { result: Impor
               <div className="rounded-lg overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
                 <EditorView
                   value={result.raw.slice(0, 1000)}
-                  language={protocol === 'soap' ? 'xml' : protocol === 'graphql' ? 'graphql' : 'plaintext'}
+                  language={protocol === 'soap' ? 'xml' : protocol === 'graphql' ? 'graphql' : protocol === 'grpc' ? 'proto' : 'plaintext'}
                   readOnly
                   height="100px"
                   fontSize={10}

@@ -51,8 +51,8 @@ export function AiGqlFederationModal({ onClose }: Props) {
     if (!activeTab) return;
     streamRef.current = ''; setAnalysis(''); setError(''); setLoading(true);
 
-    const schema = activeTab.graphqlSchema || activeTab.introspectionSchema || '';
-    const query = activeTab.graphqlQuery || activeTab.body || '';
+    const schema = activeTab.authData?.['gql_schema_sdl'] || activeTab.authData?.['gql_schema'] || '';
+    const query = activeTab.bodyRaw || '';
 
     const prompts: Record<FederationMode, string> = {
       overview: `You are a GraphQL Federation expert. ${schema ? `Given this GraphQL schema:\n\`\`\`graphql\n${String(schema).slice(0, 2000)}\n\`\`\`` : 'Without a specific schema loaded,'} explain:

@@ -5,6 +5,7 @@ import { useDebugStore } from '../../../store/debug-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { ContextMenu } from '../menus/ContextMenu';
 import { useAiScriptAutocomplete, type AiAutocompleteMode } from '../../../hooks/useAiScriptAutocomplete';
+import { registerDkLanguageSupport } from '../../../services/dk-repl';
 import { SparkleIcon } from '../../../icons';
 import { AiContractTestGenerator, type AiContractTestHandle } from '../../ai/AiContractTestGenerator';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
@@ -240,7 +241,16 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
               pausedLine={currentPausedLine}
               onToggleBreakpoint={handleToggleBreakpoint}
               onGlyphContextMenu={handleGlyphContextMenu}
-              onEditorMount={handleEditorMount(currentPhase)}
+              onEditorMount={(editor, monaco) => {
+                registerDkLanguageSupport(monaco);
+                handleEditorMount(currentPhase)(editor, monaco);
+                // Test-only hook, mirrors the __devtoolsStoreRef pattern in
+                // App.tsx — lets e2e tests assert the dk IntelliSense wiring
+                // actually took effect at runtime, not just that the source
+                // code calls it.
+                (window as any).__monacoRef = monaco;
+                (window as any).__scriptsEditorRef = editor;
+              }}
             />
           {/* Conditional breakpoint inline input */}
           {condInput && (

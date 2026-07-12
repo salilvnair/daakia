@@ -184,6 +184,15 @@ export const METHOD_COLORS: Record<string, string> = {
   CUSTOM: '#a855f7',       // Custom purple
 };
 
+// ─── gRPC Stream Type Colors ──────────────────────────────────────────────────
+// Distinct per-RPC-type hues used by GrpcMethodSelector's method list icons.
+export const GRPC_STREAM_TYPE_COLORS: Record<'unary' | 'server_streaming' | 'client_streaming' | 'bidi_streaming', string> = {
+  unary: '#60a5fa',            // blue-400 — single request/response
+  server_streaming: '#fbbf24', // amber-400 — server pushes multiple responses
+  client_streaming: '#4ade80', // green-400 — client pushes multiple requests
+  bidi_streaming: '#f472b6',   // pink-400 — both directions stream simultaneously
+};
+
 // ─── Toast Type Config ───────────────────────────────────────────────────────
 
 export interface ToastTypeStyle {

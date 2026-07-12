@@ -86,7 +86,7 @@ function RecordingConfig({ server, onUpdate, onToggle }: {
   return (
     <div className="flex flex-col gap-3">
       {/* Recording toggle */}
-      <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: server.recordingMode ? 'rgba(239,68,68,0.08)' : 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)', border: `1px solid ${server.recordingMode ? 'rgba(239,68,68,0.2)' : 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)'}` }}>
+      <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: server.recordingMode ? 'color-mix(in srgb, var(--color-error) 8%, transparent)' : 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)', border: `1px solid ${server.recordingMode ? 'color-mix(in srgb, var(--color-error) 20%, transparent)' : 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)'}` }}>
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
             {server.recordingMode && <span className="w-[6px] h-[6px] rounded-full bg-[var(--color-error)] animate-pulse" />}
@@ -310,11 +310,11 @@ function RequestDetail({ record }: { record: RecordedRequest }) {
 
 function methodColor(method: string) {
   const map: Record<string, { bg: string; text: string }> = {
-    GET: { bg: 'rgba(34,197,94,0.12)', text: 'var(--color-success)' },
-    POST: { bg: 'rgba(14,165,233,0.12)', text: 'var(--color-info)' },
-    PUT: { bg: 'rgba(234,179,8,0.12)', text: 'var(--color-warning)' },
-    PATCH: { bg: 'rgba(168,85,247,0.12)', text: '#a855f7' },
-    DELETE: { bg: 'rgba(239,68,68,0.12)', text: 'var(--color-error)' },
+    GET: { bg: 'color-mix(in srgb, var(--color-success) 12%, transparent)', text: 'var(--color-success)' },
+    POST: { bg: 'color-mix(in srgb, var(--color-info) 12%, transparent)', text: 'var(--color-info)' },
+    PUT: { bg: 'color-mix(in srgb, var(--color-warning) 12%, transparent)', text: 'var(--color-warning)' },
+    PATCH: { bg: 'color-mix(in srgb, var(--color-sidebar-collections) 12%, transparent)', text: 'var(--color-sidebar-collections)' },
+    DELETE: { bg: 'color-mix(in srgb, var(--color-error) 12%, transparent)', text: 'var(--color-error)' },
   };
   return map[method] ?? { bg: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)', text: 'var(--color-text-muted)' };
 }

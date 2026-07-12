@@ -118,7 +118,7 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ToggleSwitchView
-            checked={route.isTemplate}
+            checked={route.isTemplate ?? false}
             onChange={(v) => onUpdate({ isTemplate: v })}
             accentColor={MOCK_ACCENT}
             size="xs"
@@ -175,7 +175,7 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
             {/* Template side */}
             <div className="flex flex-col gap-1">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Template</span>
-              <ResizablePanelView id={`tpl.${route.id}.body`} defaultHeight={140} minHeight={80} maxHeight={400}>
+              <ResizablePanelView defaultHeight={140} minHeight={80} maxHeight={400}>
                 <EditorView value={route.body} onChange={v => onUpdate({ body: v })} language="json" height="100%" />
               </ResizablePanelView>
             </div>

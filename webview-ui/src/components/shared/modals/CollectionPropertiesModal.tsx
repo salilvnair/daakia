@@ -91,7 +91,7 @@ export function CollectionPropertiesModal({ open, collectionName, properties, on
               authType={authType}
               authData={authData}
               onAuthTypeChange={setAuthType}
-              onAuthDataChange={setAuthData}
+              onAuthDataChange={(d) => setAuthData(d as Record<string, string>)}
             />
             <p className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-1.5 px-1">
               <InfoCircleIcon size={12} className="shrink-0" />

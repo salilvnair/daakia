@@ -254,7 +254,7 @@ export function executeGrpcClientStream(
       }
     });
 
-    activeStreams.set(params.tabId, call);
+    if (call) activeStreams.set(params.tabId, call);
   }).catch((err) => {
     onEvent({
       tabId: params.tabId,
@@ -311,10 +311,11 @@ export function executeGrpcBidiStream(
       if (m.key) metadata.set(m.key, m.value);
     }
 
-    call = client[methodName](metadata);
-    activeStreams.set(params.tabId, call);
+    const stream: grpc.ClientDuplexStream<unknown, unknown> = client[methodName](metadata);
+    call = stream;
+    activeStreams.set(params.tabId, stream);
 
-    call.on('data', (data: unknown) => {
+    stream.on('data', (data: unknown) => {
       onEvent({
         tabId: params.tabId,
         type: 'message',
@@ -324,7 +325,7 @@ export function executeGrpcBidiStream(
       });
     });
 
-    call.on('end', () => {
+    stream.on('end', () => {
       activeStreams.delete(params.tabId);
       onEvent({
         tabId: params.tabId,
@@ -336,7 +337,7 @@ export function executeGrpcBidiStream(
       });
     });
 
-    call.on('error', (err: grpc.ServiceError) => {
+    stream.on('error', (err: grpc.ServiceError) => {
       activeStreams.delete(params.tabId);
       onEvent({
         tabId: params.tabId,

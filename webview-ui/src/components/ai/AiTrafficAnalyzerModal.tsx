@@ -47,7 +47,7 @@ ${sample}`;
 
 export function AiTrafficAnalyzerModal({ protocol, messages, onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const getTemplate = useAiPromptTemplatesStore(s => s.getTemplate);
+  const getTemplate = useAiPromptTemplatesStore(s => s.resolve);
   const [analysis, setAnalysis] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

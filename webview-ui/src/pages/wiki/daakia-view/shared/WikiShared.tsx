@@ -1,6 +1,57 @@
 /**
- * WikiShared.tsx — Reusable building blocks for the Daakia Wiki panel
+ * WikiShared.tsx — Reusable building blocks for the Daakia Wiki panel.
+ * Ported from the old components/sidebar/wiki/ system into the capture-based
+ * wiki (E-wiki-content-migration) — ID prefixes and class names (dw-*) kept
+ * as-is so WikiShared.css (copied from DaakiaWikiPanel.css) still applies.
  */
+import './WikiShared.css';
+
+// ─── Chip color palette ────────────────────────────────────────────────────────
+// A varied multi-hue palette (matching the FeatureChip pattern in
+// convengine-chat-demo's docs) — round-robin assigned so a row of chips reads
+// as colorful and distinct instead of one repeated accent color.
+const CHIP_PALETTE = ['#6366f1', '#0ea5e9', '#8b5cf6', '#10b981', '#ec4899', '#f59e0b', '#f97316', '#14b8a6', '#f43f5e'];
+
+/** Turn a plain label list into hero-chip objects with round-robin colors. */
+export function chips(labels: string[]): { label: string; color: string }[] {
+  return labels.map((label, i) => ({ label, color: CHIP_PALETTE[i % CHIP_PALETTE.length] }));
+}
+
+// ─── Hero banner ──────────────────────────────────────────────────────────────
+// Full-width gradient header pinned above a WikiScrollPage's scrollable body
+// (see the `hero` prop on WikiScrollPage) — picks up the active tab's accent
+// color automatically since DaakiaViewPage sets --color-accent on its root.
+interface WikiHeroProps {
+  emoji: string;
+  title: string;
+  subtitle: string;
+  chips?: { label: string; color?: string }[];
+}
+export function WikiHero({ emoji, title, subtitle, chips }: WikiHeroProps) {
+  return (
+    <div className="dw-hero">
+      <h1 className="dw-hero-title">{emoji} {title}</h1>
+      <p className="dw-hero-subtitle">{subtitle}</p>
+      {chips && chips.length > 0 && (
+        <div className="dw-hero-chips">
+          {chips.map(c => (
+            <span
+              key={c.label}
+              className="dw-hero-chip"
+              style={{
+                borderColor: `color-mix(in srgb, ${c.color || 'var(--dw-accent)'} 45%, transparent)`,
+                color: c.color || 'var(--dw-accent)',
+                background: `color-mix(in srgb, ${c.color || 'var(--dw-accent)'} 12%, transparent)`,
+              }}
+            >
+              {c.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Callout ─────────────────────────────────────────────────────────────────
 interface CalloutProps {

@@ -29,7 +29,7 @@ const ACCENT = 'var(--color-protocol-ai)';
 
 // ─── Provider brand meta — icon + accent color keyed by provider ID ───────────
 type BrandIconProps = { size?: number };
-type BrandMeta = { color: string; Icon: (props: BrandIconProps) => JSX.Element };
+type BrandMeta = { color: string; Icon: (props: BrandIconProps) => React.ReactElement };
 
 const PROVIDER_BRAND_META: Record<string, BrandMeta> = {
   openai:         { color: PROVIDER_BRAND_COLORS.openai,         Icon: OpenAiProviderIcon },
@@ -778,7 +778,7 @@ export function LlmProviderSettings() {
           )}
 
           {/* Info */}
-          <div className="p-3 rounded-md border" style={{ backgroundColor: 'rgba(139,92,246,0.06)', borderColor: 'rgba(139,92,246,0.15)' }}>
+          <div className="p-3 rounded-md border" style={{ backgroundColor: 'color-mix(in srgb, var(--color-sidebar-collections) 6%, transparent)', borderColor: 'color-mix(in srgb, var(--color-sidebar-collections) 15%, transparent)' }}>
             <p className="text-[12px] font-medium mb-1" style={{ color: ACCENT }}>API Keys</p>
             <ul className="text-[11px] text-[var(--color-text-muted)] space-y-1">
               <li>• Keys are stored securely in the OS keychain (macOS Keychain / Windows Credential Store / Linux Secret Service) — never in plain text</li>

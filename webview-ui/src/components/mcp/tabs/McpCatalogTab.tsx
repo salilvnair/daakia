@@ -88,10 +88,9 @@ export function McpCatalogTab() {
       <div className="px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
         <SearchInputView
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(v) => setQuery(v)}
           placeholder="Search MCP servers…"
           size="md"
-          accentColor={ACCENT}
           style={{ width: '100%' }}
         />
         <p className="text-[10px] mt-1 text-[var(--color-text-muted)] opacity-70">

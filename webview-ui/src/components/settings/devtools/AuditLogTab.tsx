@@ -208,7 +208,7 @@ function PayloadBlock({ label, value, color, lang = 'plaintext' }: {
         {label}
       </span>
       <div className="rounded-lg overflow-hidden border relative" style={{ borderColor: `color-mix(in srgb, ${color} 15%, transparent)` }}>
-        <CodeEditor value={display.slice(0, 6000)} language={language} readOnly height={`${height}px`} />
+        <CodeEditor value={display.slice(0, 6000)} language={language as import('../../shared').CodeLanguage} readOnly height={`${height}px`} />
         <div onMouseDown={handleDragStart}
           className="absolute bottom-0 left-0 right-0 h-[7px] flex items-center justify-center select-none z-10"
           style={{ cursor: 'ns-resize', backgroundColor: `color-mix(in srgb, ${color} 8%, var(--color-surface))`, borderTop: `1px solid color-mix(in srgb, ${color} 20%, transparent)` }}

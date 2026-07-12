@@ -6,8 +6,9 @@ import * as http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { MockServerConfig, GraphQLMockOperation, MockLogEntry } from './mock-types';
 import { buildIntrospectionResponse } from './mock-graphql-schema';
-import { matchRules, matchBody } from './mock-matcher';
+import { matchRules, matchBody, parseCookies } from './mock-matcher';
 import { pickSequenceItem, evaluateFault, checkRateLimit, sleep } from './mock-protocol-helpers';
+import { getStateMachineRuntime, effectiveWorkflowId } from './mock-runtime';
 
 export type LogCallback = (entry: MockLogEntry) => void;
 
@@ -396,6 +397,18 @@ function handleGraphQLQuery(
     }
   }
 
+  // ── State machine gating (event-driven) ──
+  const stateMachine = getStateMachineRuntime(currentConfig.id, effectiveWorkflowId(match, currentConfig), currentConfig);
+  const sessionKey = stateMachine
+    ? stateMachine.resolveSessionKey(reqHeaders, parseCookies(reqHeaders['cookie'] || ''))
+    : '__global__';
+  if (match.triggerEvent && stateMachine && !stateMachine.canFireEvent(sessionKey, match.triggerEvent)) {
+    const responseBody = JSON.stringify({ data: null, errors: [{ message: `No mock for operation "${queryOpName || opType}" (state gate: "${match.triggerEvent}" not valid from the current state)` }] });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(responseBody);
+    return;
+  }
+
   const doSend = async () => {
     // ── Fault injection (Sprint 13.2) ──
     const fault = evaluateFault(match!.fault);
@@ -434,6 +447,10 @@ function handleGraphQLQuery(
 
     res.writeHead(statusCode, { 'Content-Type': 'application/json' });
     res.end(responseBody);
+
+    if (match!.triggerEvent && stateMachine) {
+      void stateMachine.fireEvent(sessionKey, match!.triggerEvent);
+    }
 
     onLog?.({
       id: crypto.randomUUID(),

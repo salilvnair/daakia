@@ -50,11 +50,11 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
       description: sample.description,
       socketioHandlers: sample.handlers.map(h => ({
         id: crypto.randomUUID(),
-        eventName: h.eventName,
-        responseEvent: h.responseEvent,
+        event: 'message' as const,
+        listenEvent: h.listenEvent,
+        emitEvent: h.emitEvent,
         response: h.response,
         broadcast: h.broadcast,
-        room: h.room || '',
         delay: 0,
         enabled: true,
       })),
@@ -66,11 +66,11 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
     onUpdate({
       socketioHandlers: [...handlers, {
         id: crypto.randomUUID(),
-        eventName: '',
-        responseEvent: '',
+        event: 'message' as const,
+        listenEvent: '',
+        emitEvent: '',
         response: '{"ack": true}',
         broadcast: false,
-        room: '',
         delay: 0,
         enabled: true,
       }],
@@ -173,7 +173,7 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
               size="xs"
             />
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded text-[var(--color-protocol-socketio)] bg-[rgba(156,163,175,0.12)]">
-              {handler.eventName || 'event'}
+              {handler.listenEvent || 'event'}
             </span>
             <div className="flex-1" />
             {handler.enabled && (
@@ -205,29 +205,22 @@ export function SocketIOConfig({ server, onUpdate }: SocketIOConfigProps) {
             <>
               <div className="flex items-center gap-2">
                 <TextInputView
-                  value={handler.eventName}
-                  onChange={(e) => updateHandler(handler.id, { eventName: e.target.value })}
+                  value={handler.listenEvent}
+                  onChange={(e) => updateHandler(handler.id, { listenEvent: e.target.value })}
                   placeholder="Listen event name"
                   size="md"
                   style={{ flex: 1, fontFamily: 'monospace' }}
                 />
                 <span className="text-[10px] text-[var(--color-text-muted)]">→</span>
                 <TextInputView
-                  value={handler.responseEvent}
-                  onChange={(e) => updateHandler(handler.id, { responseEvent: e.target.value })}
+                  value={handler.emitEvent}
+                  onChange={(e) => updateHandler(handler.id, { emitEvent: e.target.value })}
                   placeholder="Emit event name"
                   size="md"
                   style={{ flex: 1, fontFamily: 'monospace' }}
                 />
-                <TextInputView
-                  value={handler.room || ''}
-                  onChange={(e) => updateHandler(handler.id, { room: e.target.value })}
-                  placeholder="Room (optional)"
-                  size="md"
-                  style={{ width: 100, fontFamily: 'monospace' }}
-                />
               </div>
-              <ResizablePanelView id={`mock.io.handler.${handler.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
+              <ResizablePanelView defaultHeight={60} minHeight={40} maxHeight={400}>
                 <EditorView
                   value={handler.response}
                   onChange={(val) => updateHandler(handler.id, { response: val })}

@@ -105,7 +105,7 @@ interface Props {
 }
 
 export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: Props) {
-  const cfg: StateMachineConfig = config ?? { initialState: '', states: [], transitions: [] };
+  const cfg: StateMachineConfig = config ?? { enabled: true, sessionMode: 'global' as const, defaultState: '', states: [], transitions: [] };
   const smCfg = getSmProtocol(protocol);
 
   const [positions, setPositions] = useState<Record<string, NodePos>>(() => buildInitialPositions(cfg.states));
@@ -161,7 +161,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
       ...cfg,
       states: remaining,
       transitions: cfg.transitions.filter(t => t.from !== id && t.to !== id),
-      initialState: cfg.initialState === id ? (remaining[0]?.id ?? '') : cfg.initialState,
+      defaultState: cfg.defaultState === id ? (remaining[0]?.id ?? '') : cfg.defaultState,
     });
     if (selectedNode === id) setSelectedNode(null);
   };
@@ -181,8 +181,8 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
     const isFirst = cfg.states.length === 0;
     onUpdate({
       ...cfg,
-      states: [...cfg.states, { id, label: `State ${n}` }],
-      initialState: isFirst ? id : cfg.initialState,
+      states: [...cfg.states, { id, name: `State ${n}`, x: 0, y: 0 }],
+      defaultState: isFirst ? id : cfg.defaultState,
     });
     setSelectedNode(id);
     setSelectedEdge(null);
@@ -199,7 +199,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
           from: t.from === id ? patch.id! : t.from,
           to: t.to === id ? patch.id! : t.to,
         })),
-        initialState: cfg.initialState === id ? patch.id! : cfg.initialState,
+        defaultState: cfg.defaultState === id ? patch.id! : cfg.defaultState,
       });
       if (selectedNode === id) setSelectedNode(patch.id!);
     } else {
@@ -219,7 +219,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
         const exists = cfg.transitions.some(t => t.from === connecting.fromId && t.to === id);
         if (!exists) {
           logUiEvent('mock.sm_add_trans', { from: connecting.fromId, to: id });
-          onUpdate({ ...cfg, transitions: [...cfg.transitions, { id: `tr_${Date.now()}`, from: connecting.fromId, to: id, triggeredByRouteId: '' }] });
+          onUpdate({ ...cfg, transitions: [...cfg.transitions, { id: `tr_${Date.now()}`, from: connecting.fromId, to: id, routeId: '' }] });
         }
       }
       setConnecting(null);
@@ -365,7 +365,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
                     />
                     <text x={cx} y={cy - 38} textAnchor="middle" fontSize={8.5}
                       fill={color} fontFamily="monospace" className="pointer-events-none select-none">
-                      {(t.triggeredByRouteId || 'self').slice(0, 16)}
+                      {(t.routeId || 'self').slice(0, 16)}
                     </text>
                   </g>
                 );
@@ -388,10 +388,10 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
                     markerEnd={isSelected ? 'url(#sm-arr-sel)' : 'url(#sm-arr)'}
                     className="cursor-pointer"
                   />
-                  {t.triggeredByRouteId && (
+                  {t.routeId && (
                     <text x={mx} y={my - 7} textAnchor="middle" fontSize={8.5}
                       fill={color} fontFamily="monospace" className="pointer-events-none select-none">
-                      {t.triggeredByRouteId.slice(0, 18)}
+                      {t.routeId.slice(0, 18)}
                     </text>
                   )}
                 </g>
@@ -416,7 +416,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
             {cfg.states.map(s => {
               const pos = positions[s.id] ?? { x: 60, y: 80 };
               const isSelected = s.id === selectedNode;
-              const isInitial = s.id === cfg.initialState;
+              const isInitial = s.id === cfg.defaultState;
               const isConnecting = connecting?.fromId === s.id;
               const nodeColor = isInitial ? SUCCESS : ACCENT;
 
@@ -454,18 +454,18 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
                   {/* Label */}
                   <text
                     x={(isInitial ? NODE_W + 4 : NODE_W) / 2}
-                    y={isInitial ? NODE_H / 2 - 4 : (s.label && s.label !== s.id ? NODE_H / 2 - 5 : NODE_H / 2 + 4)}
+                    y={isInitial ? NODE_H / 2 - 4 : (s.name && s.name !== s.id ? NODE_H / 2 - 5 : NODE_H / 2 + 4)}
                     textAnchor="middle" fontSize={10.5}
                     fill={isSelected ? nodeColor : `color-mix(in srgb, ${nodeColor} 75%, var(--color-text-muted))`}
                     fontFamily="monospace"
                     fontWeight={isSelected ? '600' : '500'}
                     className="pointer-events-none select-none"
                   >
-                    {(s.label && s.label !== s.id ? s.label : s.id).slice(0, 13)}
+                    {(s.name && s.name !== s.id ? s.name : s.id).slice(0, 13)}
                   </text>
 
                   {/* Sub-label: id when label differs */}
-                  {s.label && s.label !== s.id && !isInitial && (
+                  {s.name && s.name !== s.id && !isInitial && (
                     <text
                       x={NODE_W / 2} y={NODE_H / 2 + 9}
                       textAnchor="middle" fontSize={8}
@@ -574,16 +574,16 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
                         className="flex items-center gap-1.5 px-2 py-1.5 rounded text-left w-full transition-colors hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]"
                       >
                         <div className="w-[7px] h-[7px] rounded-full flex-shrink-0"
-                          style={{ background: s.id === cfg.initialState ? SUCCESS : ACCENT }} />
+                          style={{ background: s.id === cfg.defaultState ? SUCCESS : ACCENT }} />
                         <div className="flex flex-col min-w-0 flex-1">
                           <span className="text-[10px] font-mono truncate" style={{ color: 'var(--color-text-primary)' }}>
-                            {s.label && s.label !== s.id ? s.label : s.id}
+                            {s.name && s.name !== s.id ? s.name : s.id}
                           </span>
-                          {s.label && s.label !== s.id && (
+                          {s.name && s.name !== s.id && (
                             <span className="text-[8.5px] font-mono truncate" style={{ color: 'var(--color-text-muted)' }}>{s.id}</span>
                           )}
                         </div>
-                        {s.id === cfg.initialState && (
+                        {s.id === cfg.defaultState && (
                           <span className="text-[7.5px] font-medium px-1 py-0.5 rounded flex-shrink-0"
                             style={{ background: 'rgba(34,197,94,0.12)', color: SUCCESS }}>
                             initial
@@ -638,14 +638,14 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
               <div className="flex flex-col gap-1.5">
                 <label className="text-[9px]" style={{ color: 'var(--color-text-muted)' }}>Display label</label>
                 <TextInputView
-                  value={selectedStateData.label ?? selectedStateData.id}
-                  onChange={e => updateState(selectedStateData.id, { label: e.target.value })}
+                  value={selectedStateData.name ?? selectedStateData.id}
+                  onChange={e => updateState(selectedStateData.id, { name: e.target.value })}
                   placeholder="Human-readable name"
                   size="md"
                   style={{ width: '100%' }}
                 />
               </div>
-              {cfg.initialState === selectedStateData.id ? (
+              {cfg.defaultState === selectedStateData.id ? (
                 <div className="flex items-center gap-1.5 text-[10px] font-medium" style={{ color: SUCCESS }}>
                   <span>▶</span>
                   <span>This is the initial state</span>
@@ -655,7 +655,7 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
                   size="md"
                   variant="ghost"
                   accentColor={SUCCESS}
-                  onClick={() => { logUiEvent('mock.sm_initial', { stateId: selectedStateData.id }); onUpdate({ ...cfg, initialState: selectedStateData.id }); }}
+                  onClick={() => { logUiEvent('mock.sm_initial', { stateId: selectedStateData.id }); onUpdate({ ...cfg, defaultState: selectedStateData.id }); }}
                   style={{ width: '100%' }}
                 >
                   Set as Initial
@@ -701,8 +701,8 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
               <div className="flex flex-col gap-1.5">
                 <label className="text-[9px]" style={{ color: 'var(--color-text-muted)' }}>{smCfg.triggerLabel}</label>
                 <TextInputView
-                  value={selectedTransData.triggeredByRouteId}
-                  onChange={e => updateTransition(selectedTransData.id, { triggeredByRouteId: e.target.value })}
+                  value={selectedTransData.routeId}
+                  onChange={e => updateTransition(selectedTransData.id, { routeId: e.target.value })}
                   placeholder={smCfg.triggerPlaceholder}
                   size="md"
                   style={{ fontFamily: 'monospace', width: '100%' }}
@@ -720,8 +720,8 @@ export function MockStateMachineEditor({ config, protocol = 'rest', onUpdate }: 
       <div className="flex items-center gap-2">
         <span className="text-[9.5px] flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>Initial state</span>
         <TextInputView
-          value={cfg.initialState}
-          onChange={e => onUpdate({ ...cfg, initialState: e.target.value })}
+          value={cfg.defaultState}
+          onChange={e => onUpdate({ ...cfg, defaultState: e.target.value })}
           size="md"
           style={{ width: 150, fontFamily: 'monospace' }}
         />

@@ -184,7 +184,7 @@ function SequenceItem({ item, index, onUpdate, onRemove }: {
 
       {bodyExpanded && (
         <div className="px-2.5 pb-2">
-          <ResizablePanelView id={`seq.${item.id}`} defaultHeight={80} minHeight={40} maxHeight={300}>
+          <ResizablePanelView defaultHeight={80} minHeight={40} maxHeight={300}>
             <EditorView value={item.body} onChange={v => onUpdate({ body: v })} language="json" height="100%" />
           </ResizablePanelView>
         </div>

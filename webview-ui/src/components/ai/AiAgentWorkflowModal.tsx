@@ -241,7 +241,7 @@ export function AiAgentWorkflowModal({ collectionId, collectionName, protocol, o
                   {analysisError ? (
                     <p className="text-[11.5px] text-[var(--color-error)]">Error: {analysisError}</p>
                   ) : analysis ? (
-                    <MdViewer content={analysis + (phase === 'analyzing' ? ' ▌' : '')} fontSize={12} />
+                    <MdViewer content={analysis + (phase === 'analyzing' ? ' ▌' : '')} />
                   ) : (
                     <div className="flex items-center gap-2 py-2">
                       <SpinnerIcon size={13} style={{ color: ACCENT }} />

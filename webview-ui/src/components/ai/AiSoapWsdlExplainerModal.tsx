@@ -35,13 +35,13 @@ Keep explanations concise, practical, and developer-friendly.`;
 
 export function AiSoapWsdlExplainerModal({ onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const getTemplate = useAiPromptTemplatesStore(s => s.getTemplate);
+  const getTemplate = useAiPromptTemplatesStore(s => s.resolve);
   const [explanation, setExplanation] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const streamRef = useRef('');
 
-  const wsdlOperations = activeTab?.soapOperations;
+  const wsdlOperations = activeTab?.soapServices;
   const hasWsdl = !!(wsdlOperations?.length || activeTab?.soapService);
 
   useEffect(() => {

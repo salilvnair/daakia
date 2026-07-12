@@ -33,6 +33,7 @@ export function handleMqttConnect(
   const lastWillTopic = msg.lastWillTopic ? resolveEnvString(msg.lastWillTopic as string, vars) : undefined;
   const lastWillMessage = msg.lastWillMessage ? resolveEnvString(msg.lastWillMessage as string, vars) : undefined;
   const lastWillQos = (msg.lastWillQos as 0 | 1 | 2) || 0;
+  const subscriptions = (msg.subscriptions as unknown[] | undefined) ?? [];
   const lastWillRetain = msg.lastWillRetain === true;
 
   // Close existing connection for this tab

@@ -513,7 +513,7 @@ function SaveTreeNode({
   expandedIds: Set<string>;
   renamingId: string | null;
   renameValue: string;
-  renameRef: React.RefObject<HTMLInputElement>;
+  renameRef: React.RefObject<HTMLInputElement | null>;
   onSelect: (id: string | null) => void;
   onToggleExpand: (id: string) => void;
   onAddSubfolder: (parentId: string) => void;

@@ -232,7 +232,6 @@ export function GraphQLUrlBar() {
             method="GQL"
             url={activeTab.url}
             onClose={() => setShowPatternStatus(false)}
-            dir={overflowDir}
           />
         )}
       </div>

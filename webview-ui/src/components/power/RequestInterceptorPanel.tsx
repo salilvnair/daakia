@@ -115,7 +115,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
   const openSelected = () => {
     const sel = captured.filter(r => r.selected);
     sel.slice(0, 20).forEach(r => {
-      addTab({ name: `${r.method} ${r.url.split('/').pop()}`, method: r.method, url: r.url, headers: Object.entries(r.headers).map(([key, value]) => ({ key, value, enabled: true })), bodyRaw: r.body || '', bodyType: r.body ? 'json' : 'none' });
+      addTab({ name: `${r.method} ${r.url.split('/').pop()}`, method: r.method as import('../../store/tabs-store').HttpMethod, url: r.url, headers: Object.entries(r.headers).map(([key, value]) => ({ id: crypto.randomUUID(), key, value, enabled: true })), bodyRaw: r.body || '', bodyMode: r.body ? ('raw' as const) : ('none' as const) });
     });
     addToast({ type: 'success', message: `Opened ${Math.min(sel.length, 20)} request tabs` });
   };
@@ -228,7 +228,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                 <div className="col-span-2">
                   <ToggleSwitchView
                     checked={config.excludeStaticAssets}
-                    onChange={e => setConfig(c => ({ ...c, excludeStaticAssets: e.target.checked }))}
+                    onChange={v => setConfig(c => ({ ...c, excludeStaticAssets: v }))}
                     label="Exclude static assets (.js/.css/.png…)"
                     accentColor={ACCENT}
                     size="sm"
@@ -378,7 +378,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                   size="md"
                   accentColor={ACCENT}
                   onClick={() => {
-                    addTab({ method: selectedReq.method, url: selectedReq.url, headers: Object.entries(selectedReq.headers).map(([key, value]) => ({ key, value, enabled: true })), bodyRaw: selectedReq.body || '', bodyType: selectedReq.body ? 'json' : 'none' });
+                    addTab({ method: selectedReq.method as import('../../store/tabs-store').HttpMethod, url: selectedReq.url, headers: Object.entries(selectedReq.headers).map(([key, value]) => ({ id: crypto.randomUUID(), key, value, enabled: true })), bodyRaw: selectedReq.body || '', bodyMode: selectedReq.body ? ('raw' as const) : ('none' as const) });
                     addToast({ type: 'success', message: 'Opened as new tab' });
                   }}
                 >

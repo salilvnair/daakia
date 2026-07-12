@@ -206,7 +206,7 @@ function WorkflowCard({ index, workflow, protocolColor, protocolLabel, onUnlink,
 
 // ── legacy single card (backward-compat) ──────────────────────────────────────
 
-function LegacySingleCard({ server, onOpenEditor, onUnlink }: Props) {
+function LegacySingleCard({ server, onOpenEditor, onUnlink, onConnectNew }: Props) {
   const machine = useSMWorkspaceStore((s) =>
     s.machines.find((m) => m.id === server.connectedWorkflowId)
   )

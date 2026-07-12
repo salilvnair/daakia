@@ -10,6 +10,7 @@ import * as path from 'path';
 import type { MockServerConfig, MockLogEntry, GrpcMockMethod } from './mock-types';
 import { matchRules, matchBody } from './mock-matcher';
 import { pickSequenceItem, evaluateFault, checkRateLimit, getState, setState, sleep } from './mock-protocol-helpers';
+import { getStateMachineRuntime, effectiveWorkflowId } from './mock-runtime';
 
 type LogCallback = (entry: MockLogEntry) => void;
 
@@ -36,11 +37,14 @@ export async function createGrpcServer(
 ): Promise<http.Server> {
   const methods = (config.grpcMethods || []).filter(m => m.enabled !== false && m.serviceEnabled !== false);
   const grpcServer = new grpc.Server();
-
+  // Each method resolves its own state machine runtime (per its
+  // connectedWorkflowId) once at handler-creation time — methods themselves
+  // are also a one-time snapshot (see file header), so this matches the
+  // existing non-hot-reload behavior rather than making it worse.
   if (config.grpcProtoFile) {
-    await registerFromProto(grpcServer, config.grpcProtoFile, methods, config.id, onLog);
+    await registerFromProto(grpcServer, config.grpcProtoFile, methods, config.id, onLog, config);
   } else {
-    registerGeneric(grpcServer, methods, config.id, onLog);
+    registerGeneric(grpcServer, methods, config.id, onLog, config);
   }
 
   // Register server reflection so clients can auto-discover services/methods
@@ -82,9 +86,24 @@ export async function cleanupGrpcServer(id: string): Promise<void> {
   if (!state) return;
 
   return new Promise((resolve) => {
-    state.server.tryShutdown(() => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
       grpcServers.delete(id);
       resolve();
+    };
+    // Graceful shutdown waits for in-flight RPCs to drain, which can hang if
+    // a client connection lingers (e.g. an idle keep-alive from a previous
+    // test). Force-close the underlying socket after a short grace period so
+    // the port is never held open indefinitely.
+    const forceTimer = setTimeout(() => {
+      state.server.forceShutdown();
+      finish();
+    }, 1500);
+    state.server.tryShutdown(() => {
+      clearTimeout(forceTimer);
+      finish();
     });
   });
 }
@@ -97,6 +116,7 @@ async function registerFromProto(
   methods: Array<{ id?: string; service: string; method: string; type: string; response: string; responseScript?: string; streamResponses?: Array<{ data: string; delayMs: number }>; enabled?: boolean }>,
   serverId: string,
   onLog?: LogCallback,
+  serverConfig?: MockServerConfig,
 ) {
   const packageDefinition = await protoLoader.load(protoFile, {
     keepCase: true,
@@ -120,7 +140,7 @@ async function registerFromProto(
     if (!serviceConstructor || !(serviceConstructor as any).service) continue;
     const handlers: Record<string, any> = {};
     for (const mc of svcMethods) {
-      handlers[mc.method] = createHandler(mc as any, serverId, onLog);
+      handlers[mc.method] = createHandler(mc as any, serverId, onLog, serverConfig);
     }
     server.addService((serviceConstructor as any).service, handlers);
   }
@@ -133,6 +153,7 @@ function registerGeneric(
   methods: Array<{ id?: string; service: string; method: string; type: string; response: string; responseScript?: string; streamResponses?: Array<{ data: string; delayMs: number }>; enabled?: boolean }>,
   serverId: string,
   onLog?: LogCallback,
+  serverConfig?: MockServerConfig,
 ) {
   const serviceMethodMap = new Map<string, typeof methods>();
   for (const m of methods) {
@@ -155,7 +176,7 @@ function registerGeneric(
         responseSerialize: (v: any) => Buffer.from(JSON.stringify(v)),
         responseDeserialize: (buf: Buffer) => JSON.parse(buf.toString()),
       };
-      handlers[mc.method] = createHandler(mc as any, serverId, onLog);
+      handlers[mc.method] = createHandler(mc as any, serverId, onLog, serverConfig);
     }
     server.addService(serviceDef, handlers);
   }
@@ -167,9 +188,27 @@ function createHandler(
   config: GrpcMockMethod & { delay?: number; statusCode?: number },
   serverId: string,
   onLog?: LogCallback,
+  serverConfig?: MockServerConfig,
 ) {
   const methodFull = `${config.service}/${config.method}`;
   const delay = config.delay || 0;
+
+  // Resolved once per method (methods are a one-time snapshot — see file
+  // header) against this specific method's connectedWorkflowId.
+  const stateMachine = serverConfig
+    ? getStateMachineRuntime(serverId, effectiveWorkflowId(config, serverConfig), serverConfig)
+    : null;
+
+  // Resolve a session key from gRPC metadata (its header equivalent) —
+  // gRPC has no cookie concept, so session mode 'cookie' falls back to global.
+  const sessionKeyFromMetadata = (metadata: grpc.Metadata): string => {
+    if (!stateMachine) return '__global__';
+    const hdrs: Record<string, string> = {};
+    for (const [k, v] of Object.entries(metadata.getMap())) {
+      hdrs[k] = Array.isArray(v) ? v.join(', ') : String(v);
+    }
+    return stateMachine.resolveSessionKey(hdrs, {});
+  };
 
   // Sprint 13.12: probability-based status code injection
   const getStatusCode = () => {
@@ -218,6 +257,18 @@ function createHandler(
           callback({ code: grpc.status.NOT_FOUND, details: 'No handler matched (metadata mismatch)' });
           return;
         }
+        // Real request-content check — same bodyMatcher used by REST/GraphQL/SOAP.
+        if (config.bodyMatcher && !matchBody(config.bodyMatcher, JSON.stringify(call.request))) {
+          callback({ code: grpc.status.NOT_FOUND, details: 'No handler matched (body mismatch)' });
+          return;
+        }
+        // State machine gating — does this method's event have a valid
+        // transition from the session's current state (resolved from metadata)?
+        const sessionKey = sessionKeyFromMetadata(call.metadata);
+        if (config.triggerEvent && stateMachine && !stateMachine.canFireEvent(sessionKey, config.triggerEvent)) {
+          callback({ code: grpc.status.FAILED_PRECONDITION, details: `Event "${config.triggerEvent}" not valid from the current state` });
+          return;
+        }
         // Rate limit (Sprint 13.11 extended)
         if (!checkRateLimit(config.id, config.rateLimit)) {
           callback({ code: grpc.status.RESOURCE_EXHAUSTED, details: 'Rate limit exceeded' });
@@ -238,6 +289,9 @@ function createHandler(
             const response = pickResponse(call.request);
             emitLog(onLog, serverId, 'outgoing', methodFull, JSON.stringify(response));
             callback(null, response);
+            if (config.triggerEvent && stateMachine) {
+              void stateMachine.fireEvent(sessionKey, config.triggerEvent);
+            }
           }
         };
         respond().catch(() => callback({ code: grpc.status.INTERNAL, details: 'Mock server error' }));
@@ -247,12 +301,20 @@ function createHandler(
       return (call: grpc.ServerWritableStream<any, any>) => {
         emitLog(onLog, serverId, 'incoming', methodFull, JSON.stringify(call.request));
         if (!checkMetadata(call.metadata)) { call.destroy({ code: grpc.status.NOT_FOUND, details: 'No handler matched' } as any); return; }
+        const streamSessionKey = sessionKeyFromMetadata(call.metadata);
+        if (config.triggerEvent && stateMachine && !stateMachine.canFireEvent(streamSessionKey, config.triggerEvent)) {
+          call.destroy({ code: grpc.status.FAILED_PRECONDITION, details: `Event "${config.triggerEvent}" not valid from the current state` } as any);
+          return;
+        }
 
         const statusCode = getStatusCode();
         if (statusCode > 0) {
           const fn = () => call.destroy({ code: statusCode, details: `Mock error: gRPC status ${statusCode}` } as any);
           if (delay > 0) setTimeout(fn, delay); else fn();
           return;
+        }
+        if (config.triggerEvent && stateMachine) {
+          void stateMachine.fireEvent(streamSessionKey, config.triggerEvent);
         }
         // Sprint 13.13: sequences
         const items = getStreamItems();
@@ -274,6 +336,11 @@ function createHandler(
     case 'client_streaming':
       return (call: grpc.ServerReadableStream<any, any>, callback: grpc.sendUnaryData<any>) => {
         if (!checkMetadata(call.metadata)) { callback({ code: grpc.status.NOT_FOUND, details: 'No handler matched' }); return; }
+        const csSessionKey = sessionKeyFromMetadata(call.metadata);
+        if (config.triggerEvent && stateMachine && !stateMachine.canFireEvent(csSessionKey, config.triggerEvent)) {
+          callback({ code: grpc.status.FAILED_PRECONDITION, details: `Event "${config.triggerEvent}" not valid from the current state` });
+          return;
+        }
         call.on('data', (msg: any) => {
           emitLog(onLog, serverId, 'incoming', methodFull, JSON.stringify(msg));
           if (config.bodyMatcher) {
@@ -298,6 +365,9 @@ function createHandler(
             const response = pickResponse();
             emitLog(onLog, serverId, 'outgoing', methodFull, JSON.stringify(response));
             callback(null, response);
+            if (config.triggerEvent && stateMachine) {
+              void stateMachine.fireEvent(csSessionKey, config.triggerEvent);
+            }
           }
         });
       };
@@ -305,6 +375,11 @@ function createHandler(
     case 'bidi_streaming':
       return (call: grpc.ServerDuplexStream<any, any>) => {
         if (!checkMetadata(call.metadata)) { call.destroy({ code: grpc.status.NOT_FOUND, details: 'No handler matched' } as any); return; }
+        const bidiSessionKey = sessionKeyFromMetadata(call.metadata);
+        if (config.triggerEvent && stateMachine && !stateMachine.canFireEvent(bidiSessionKey, config.triggerEvent)) {
+          call.destroy({ code: grpc.status.FAILED_PRECONDITION, details: `Event "${config.triggerEvent}" not valid from the current state` } as any);
+          return;
+        }
         const statusCode = getStatusCode();
         if (statusCode > 0) {
           const fn = () => call.destroy({ code: statusCode, details: `Mock error: gRPC status ${statusCode}` } as any);
@@ -321,6 +396,9 @@ function createHandler(
           const response = pickResponse(msg);
           call.write(response);
           emitLog(onLog, serverId, 'outgoing', methodFull, JSON.stringify(response));
+          if (config.triggerEvent && stateMachine) {
+            void stateMachine.fireEvent(bidiSessionKey, config.triggerEvent);
+          }
         });
         call.on('end', () => call.end());
       };

@@ -34,7 +34,7 @@ export function LivePlayground({ code: initialCode, content, themeMode, vars }: 
   // Scoped color overrides — applied ONLY to the preview pane, not the whole page
   const [colorOverrides, setColorOverrides] = useState<Record<string, string>>({});
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const prevErrorRef = useRef(false);
 
   const handleVarChange = useCallback((cssVar: string, value: string | null) => {
