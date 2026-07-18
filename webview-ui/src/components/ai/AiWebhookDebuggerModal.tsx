@@ -7,7 +7,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView, MultilineInputView, TextInputView } from '@salilvnair/dui';
+import { ModalView, AIButtonView, EditorView, TextInputView, ResizablePanelView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -110,7 +110,7 @@ Simple Node.js/Express webhook handler for this specific event type.`,
     <ModalView
       open
       onClose={onClose}
-      title="Webhook Debugger ✦"
+      title="Webhook Debugger"
       size="xl"
       headerColor={ACCENT}
       headerIcon={
@@ -120,7 +120,7 @@ Simple Node.js/Express webhook handler for this specific event type.`,
       }
       footerRight={
         <AIButtonView
-          label={loading ? 'Analyzing…' : 'Analyze ✦'}
+          label={loading ? 'Analyzing…' : 'Analyze'}
           size="md"
           accentColor={ACCENT}
           disabled={!payload.trim() || loading}
@@ -131,19 +131,22 @@ Simple Node.js/Express webhook handler for this specific event type.`,
     >
       <div className="flex flex-1 min-h-0 gap-0 -mx-4" style={{ minHeight: 360 }}>
         {/* Left: inputs */}
-        <div className="flex flex-col w-[340px] flex-shrink-0 border-r min-h-0" style={{ borderColor: 'var(--color-surface-border)' }}>
+        <div className="flex flex-col w-[480px] flex-shrink-0 border-r min-h-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
             <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Webhook Payload</span>
           </div>
-          <div className="flex-1 p-3">
-            <MultilineInputView
-              value={payload}
-              onChange={e => setPayload(e.target.value)}
-              rows={12}
-              size="md"
-              width="fw"
-              placeholder="Paste webhook JSON payload…"
-            />
+          <div className="flex-1 p-3 min-h-0">
+            <ResizablePanelView defaultHeight={320} minHeight={160} maxHeight={640} style={{ width: '100%' }}>
+              <EditorView
+                value={payload}
+                onChange={setPayload}
+                language="json"
+                height="100%"
+                size="md"
+                placeholder="Paste webhook JSON payload…"
+                bordered={false}
+              />
+            </ResizablePanelView>
           </div>
           {/* HMAC inputs */}
           <div className="border-t p-3 flex flex-col gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>

@@ -109,7 +109,7 @@ export function AiDeepSecurityAuditModal({ collectionNode, onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Deep Security Audit ✦"
+      title="Deep Security Audit"
       subtitle={collectionNode.name}
       size="lg"
       headerColor={ACCENT}

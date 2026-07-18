@@ -136,6 +136,14 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('daakia.openCommandPalette', () => {
+      if (MainPanel.currentPanel) {
+        MainPanel.currentPanel.postMessage({ type: 'openCommandPalette' });
+      }
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('daakia.importCollection', async () => {
       const uri = await vscode.window.showOpenDialog({
         canSelectMany: false,

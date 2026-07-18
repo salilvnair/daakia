@@ -148,6 +148,7 @@ export function SoapUrlBar() {
       id: 'save-as',
       label: 'Save as',
       icon: <SaveIcon size={13} />,
+      iconColor: 'var(--color-ctx-close-saved)',
       onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
     },
   ];
@@ -282,25 +283,25 @@ export function SoapUrlBar() {
               {aiEnabled('soapWsdlExplainer') && (
                 <button type="button"
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
-                  style={{ color: ACCENT }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
                   onMouseLeave={e => { e.currentTarget.style.background = ''; }}
                   onClick={() => { setShowWsdlExplainer(true); setShowOverflow(false); }}
                 >
-                  <SparkleIcon size={12} style={{ color: ACCENT, flexShrink: 0 }} />
-                  WSDL Explainer ✦
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                  WSDL Explainer
                 </button>
               )}
               {aiEnabled('soapToRest') && (
                 <button type="button"
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
-                  style={{ color: ACCENT }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
                   onMouseLeave={e => { e.currentTarget.style.background = ''; }}
                   onClick={() => { setShowSoapToRest(true); setShowOverflow(false); }}
                 >
-                  <SparkleIcon size={12} style={{ color: ACCENT, flexShrink: 0 }} />
-                  SOAP → REST Migrator ✦
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                  SOAP → REST Migrator
                 </button>
               )}
             </div>

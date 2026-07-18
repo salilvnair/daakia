@@ -154,7 +154,7 @@ export function SoapRequestConfig() {
                     iconLeft={<SparkleIcon size={10} />}
                     title="AI Envelope Generator"
                     onClick={() => bodyGenRef.current?.open()}
-                    style={{ color: ACCENT }}
+                    style={{ color: 'var(--color-protocol-ai)' }}
                   >
                     Generate ✦
                   </ButtonView>
@@ -166,7 +166,7 @@ export function SoapRequestConfig() {
                     iconLeft={<SparkleIcon size={10} />}
                     title="AI XML Fuzzer"
                     onClick={() => setShowFuzzer(true)}
-                    style={{ color: ACCENT }}
+                    style={{ color: 'var(--color-protocol-ai)' }}
                   >
                     Fuzz ✦
                   </ButtonView>
@@ -295,7 +295,7 @@ export function SoapRequestConfig() {
                   iconLeft={<SparkleIcon size={10} />}
                   title="AI WSDL Explainer — plain-English explanation of all operations"
                   onClick={() => setShowWsdlExplainer(true)}
-                  style={{ color: ACCENT }}
+                  style={{ color: 'var(--color-protocol-ai)' }}
                 >
                   WSDL Explainer ✦
                 </ButtonView>

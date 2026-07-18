@@ -295,7 +295,6 @@ function DaakiaAiHero() {
       {/* Right: sparkle accent */}
       <div className="flex items-center gap-1 opacity-40">
         <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)' }} />
-        <SparkleIcon size={8} style={{ color: 'var(--color-protocol-ai)' }} />
       </div>
     </div>
   );

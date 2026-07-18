@@ -203,7 +203,7 @@ function TrafficLog({ recorded, onClear, onImport, onAddRoutes, onApplyStateMach
               iconLeft={<SparkleIcon size={11} />}
               onClick={() => setEnrichTarget(selectedRecord)}
             >
-              AI Enrich ✦
+              AI Enrich
             </ButtonView>
           )}
           {checked.size > 0 && onImport && (

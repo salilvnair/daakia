@@ -13,3 +13,4 @@ vite.webview.config.ts
 .vscode
 plan
 *.vsix
+local-server

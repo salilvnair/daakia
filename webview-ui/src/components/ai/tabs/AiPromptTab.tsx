@@ -143,16 +143,15 @@ export function AiPromptTab() {
       {/* User Prompt Section */}
       <div className="flex flex-col gap-2 flex-1 min-h-0">
         <span className="text-[11px] text-[var(--color-text-muted)]">User Prompt</span>
-        <div className="flex flex-col flex-1 p-2.5 rounded-md border border-[var(--color-surface-border)] bg-[var(--color-surface-raised)]">
+        <div className="flex flex-col flex-1 min-h-0 p-2.5 rounded-md border border-[var(--color-surface-border)] bg-[var(--color-surface-raised)]">
           <MultilineInputView
             value={userPrompt}
             onChange={handleUserPromptChange}
             placeholder="Enter user prompt here..."
             rows={5}
-            resize="vertical"
             size="md"
             accentColor={ACCENT}
-            className="flex-1"
+            className="flex-1 min-h-0"
           />
         </div>
       </div>

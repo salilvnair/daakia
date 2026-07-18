@@ -4,12 +4,13 @@ import { useTabsStore } from '../../../store/tabs-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
+import { useUiStateStore } from '../../../store/ui-state-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ImportExportIcon, type CollectionProperties } from '../../shared';
 import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
-import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon } from '../../../icons';
+import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon } from '../../../icons';
 import { SidebarSkeleton } from '../../shared/display/SidebarSkeleton';
 import { AiEnvExtractModal } from '../../ai/AiEnvExtractModal';
 import { AiCollectionOrganizerModal } from '../../ai/AiCollectionOrganizerModal';
@@ -33,10 +34,21 @@ import { AiCompatibilityScorerModal } from '../../ai/AiCompatibilityScorerModal'
 import { AiDocGeneratorModal } from '../../ai/AiDocGeneratorModal';
 import { AiSmartTestSuiteModal } from '../../ai/AiSmartTestSuiteModal';
 import { InsomniaImportModal } from '../../power/InsomniaImportModal';
-import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, UptimeMonitorIcon, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
 
 // ────────────── Main Component ──────────────
+
+/** View-only alphabetical sort (Postman "Folders first, A to Z") — folders already render before requests structurally, this just reorders each level by name. Does not touch stored sort_order. */
+function sortTreeAlpha(nodes: CollectionTreeNode[]): CollectionTreeNode[] {
+  return [...nodes]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(n => ({
+      ...n,
+      children: sortTreeAlpha(n.children),
+      requests: [...n.requests].sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+}
 
 function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
   const size = 20;
@@ -105,6 +117,12 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [reqContextMenu, setReqContextMenu] = useState<{ position: { x: number; y: number }; req: CollectionRequest } | null>(null);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const addToast = useToastStore((s) => s.addToast);
+
+  // Sidebar-view-only sort mode (Postman-style "Folders first, Default / A to Z") —
+  // doesn't touch sort_order in storage, just how this tree renders.
+  const sortPrefKey = `collections.sortMode.${protocol}`;
+  const [sortMode, setSortModeState] = useState<'default' | 'alpha'>(() => (useUiStateStore.getState().getPref(sortPrefKey, 'default') as 'default' | 'alpha') || 'default');
+  const setSortMode = (mode: 'default' | 'alpha') => { setSortModeState(mode); useUiStateStore.getState().setPref(sortPrefKey, mode); };
 
   // Properties modal state
   const [propertiesTarget, setPropertiesTarget] = useState<{ id: string; name: string; properties: CollectionProperties } | null>(null);
@@ -525,27 +543,27 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       ...(aiEnabled('organizeWithAi')      ? [{ id: 'ai-organize',              label: 'Organize with AI',       shortcut: 'O', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-warning)' }} />,      onClick: () => { const n = findNodeById(tree, targetId); if (n) setOrganizeNode(n); close(); } }] : []),
       ...(aiEnabled('buildApiFlow')        ? [{ id: 'ai-flow-builder',          label: 'Build API Flow',         shortcut: 'F',                     icon: <SparkleIcon size={13} style={{ color: 'var(--color-primary)' }} />,      onClick: () => { setShowFlowBuilder(true); close(); } }] : []),
       ...(aiEnabled('testWithAiAgent')     ? [{ id: 'ai-agent-workflow',        label: 'Test with AI Agent',     shortcut: 'T', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-success)' }} />,      onClick: () => { const n = findNodeById(tree, targetId); if (n) setAgentWorkflowNode(n); close(); } }] : []),
-      ...(aiEnabled('collectionOptimizer') ? [{ id: 'ai-collection-optimizer',  label: 'AI Optimize ✦',          shortcut: 'A', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-protocol-ai)' }} />,  onClick: () => { const n = findNodeById(tree, targetId); if (n) setCollectionOptimizerNode(n); close(); } }] : []),
-      ...(aiEnabled('sequenceComposer')    ? [{ id: 'ai-sequence-composer',     label: 'Sequence Composer ✦',    shortcut: 'Q', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-primary)' }} />,      onClick: () => { setShowSequenceComposer(true); close(); } }] : []),
+      ...(aiEnabled('collectionOptimizer') ? [{ id: 'ai-collection-optimizer',  label: 'AI Optimize',          shortcut: 'A', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-protocol-ai)' }} />,  onClick: () => { const n = findNodeById(tree, targetId); if (n) setCollectionOptimizerNode(n); close(); } }] : []),
+      ...(aiEnabled('sequenceComposer')    ? [{ id: 'ai-sequence-composer',     label: 'Sequence Composer',    shortcut: 'Q', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-primary)' }} />,      onClick: () => { setShowSequenceComposer(true); close(); } }] : []),
     ];
     const catAnalysis: DuiContextMenuItem[] = [
       ...(aiEnabled('generateChangelog')   ? [{ id: 'ai-changelog',         label: 'Generate Changelog',    shortcut: 'C', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { const n = findNodeById(tree, targetId); if (n) setChangelogNode(n); close(); } }] : []),
       ...(aiEnabled('dependencyGraph')     ? [{ id: 'ai-dependency-graph',  label: 'Dependency Graph',      shortcut: 'G', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { const n = findNodeById(tree, targetId); if (n) setDependencyGraphNode(n); close(); } }] : []),
       ...(aiEnabled('checkCompliance')     ? [{ id: 'ai-compliance',        label: 'Check Compliance',      shortcut: 'L', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-error)' }} />,   onClick: () => { const n = findNodeById(tree, targetId); if (n) setComplianceNode(n); close(); } }] : []),
       ...(aiEnabled('generateSdk')         ? [{ id: 'ai-sdk-generator',     label: 'Generate SDK',          shortcut: 'K', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { const n = findNodeById(tree, targetId); if (n) setSdkGeneratorNode(n); close(); } }] : []),
-      ...(aiEnabled('docAutoGenerator')    ? [{ id: 'ai-doc-generator',     label: 'Generate Docs ✦',       shortcut: 'D', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { const n = findNodeById(tree, targetId); if (n) setDocGeneratorNode(n); close(); } }] : []),
-      ...(aiEnabled('apiChangelogMonitor') ? [{ id: 'ai-changelog-monitor', label: 'Changelog Monitor ✦',   shortcut: 'M', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { const n = findNodeById(tree, targetId); if (n) setChangelogNode(n); close(); } }] : []),
+      ...(aiEnabled('docAutoGenerator')    ? [{ id: 'ai-doc-generator',     label: 'Generate Docs',       shortcut: 'D', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { const n = findNodeById(tree, targetId); if (n) setDocGeneratorNode(n); close(); } }] : []),
+      ...(aiEnabled('apiChangelogMonitor') ? [{ id: 'ai-changelog-monitor', label: 'Changelog Monitor',   shortcut: 'M', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { const n = findNodeById(tree, targetId); if (n) setChangelogNode(n); close(); } }] : []),
     ];
     const catSecurity: DuiContextMenuItem[] = [
-      ...(aiEnabled('deepSecurityAudit')   ? [{ id: 'ai-security-audit',  label: 'Security Audit ✦',     shortcut: 'U', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-error)' }} />,   onClick: () => { const n = findNodeById(tree, targetId); if (n) setSecurityAuditNode(n); close(); } }] : []),
-      ...(aiEnabled('compatibilityScorer') ? [{ id: 'ai-compatibility',   label: 'Compare Versions ✦',   shortcut: 'Y', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { const n = findNodeById(tree, targetId); if (n) setCompatibilityScorerNode(n); close(); } }] : []),
+      ...(aiEnabled('deepSecurityAudit')   ? [{ id: 'ai-security-audit',  label: 'Security Audit',     shortcut: 'U', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-error)' }} />,   onClick: () => { const n = findNodeById(tree, targetId); if (n) setSecurityAuditNode(n); close(); } }] : []),
+      ...(aiEnabled('compatibilityScorer') ? [{ id: 'ai-compatibility',   label: 'Compare Versions',   shortcut: 'Y', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { const n = findNodeById(tree, targetId); if (n) setCompatibilityScorerNode(n); close(); } }] : []),
       ...(aiEnabled('optimizeRequests')    ? [{ id: 'ai-optimizer',       label: 'Optimize Requests',    shortcut: 'Z', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { const n = findNodeById(tree, targetId); if (n) setOptimizerNode(n); close(); } }] : []),
       ...(aiEnabled('regressionDetector')  ? [{ id: 'ai-regression',      label: 'Regression Detector',  shortcut: 'E', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-error)' }} />,   onClick: () => { const n = findNodeById(tree, targetId); if (n) setRegressionNode(n); close(); } }] : []),
-      ...(aiEnabled('regressionGuardian')  ? [{ id: 'ai-regression-guard',label: 'Regression Guard ✦',   shortcut: 'R', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-error)' }} />,   onClick: () => { const n = findNodeById(tree, targetId); if (n) setRegressionGuardNode(n); close(); } }] : []),
+      ...(aiEnabled('regressionGuardian')  ? [{ id: 'ai-regression-guard',label: 'Regression Guard',   shortcut: 'R', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-error)' }} />,   onClick: () => { const n = findNodeById(tree, targetId); if (n) setRegressionGuardNode(n); close(); } }] : []),
     ];
     const catTesting: DuiContextMenuItem[] = [
-      ...(aiEnabled('smartTestSuiteGen') ? [{ id: 'ai-smart-test-suite', label: 'Smart Test Suite ✦',    shortcut: 'X', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { const n = findNodeById(tree, targetId); if (n) setSmartTestSuiteNode(n); close(); } }] : []),
-      ...(aiEnabled('apiKnowledgeGraph') ? [{ id: 'ai-knowledge-graph',  label: 'API Knowledge Graph ✦', shortcut: 'H', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { const n = findNodeById(tree, targetId); if (n) setKnowledgeGraphNode(n); close(); } }] : []),
+      ...(aiEnabled('smartTestSuiteGen') ? [{ id: 'ai-smart-test-suite', label: 'Smart Test Suite',    shortcut: 'X', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { const n = findNodeById(tree, targetId); if (n) setSmartTestSuiteNode(n); close(); } }] : []),
+      ...(aiEnabled('apiKnowledgeGraph') ? [{ id: 'ai-knowledge-graph',  label: 'API Knowledge Graph', shortcut: 'H', disabled: !hasReqs, icon: <SparkleIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { const n = findNodeById(tree, targetId); if (n) setKnowledgeGraphNode(n); close(); } }] : []),
     ];
 
     const aiSub: DuiContextMenuItem[] = [];
@@ -574,6 +592,23 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           { id: 'export-httpie',  label: 'HTTPie',              shortcut: 'H', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionHttpie',   collectionId: targetId }); close(); } },
           { id: 'export-openapi', label: 'OpenAPI 3.0',         shortcut: 'O', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi',  collectionId: targetId }); close(); } },
           { id: 'export-docs',    label: 'API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocs',     collectionId: targetId }); close(); } },
+        ],
+      },
+      {
+        id: 'mock-collection', label: 'Mock', icon: <ServerIcon size={13} style={{ color: 'var(--color-warning)' }} />, disabled: !hasReqs,
+        onClick: () => {
+          const collectAll = (n: CollectionTreeNode): CollectionRequest[] => [...n.requests, ...n.children.flatMap(collectAll)];
+          const reqs = collectAll(node).map(r => ({ name: r.name, method: r.method, url: r.url }));
+          useTabsStore.getState().openMockServerTab();
+          setTimeout(() => window.postMessage({ type: 'mockRequestFromSidebar', name: targetName, requests: reqs }, '*'), 250);
+          close();
+        },
+      },
+      {
+        id: 'sort', label: 'Sort', icon: <SortIcon size={13} />,
+        children: [
+          { id: 'sort-default', label: 'Folders first, Default', icon: sortMode === 'default' ? <CheckIcon size={13} style={{ color: 'var(--color-success)' }} /> : <span style={{ width: 13, display: 'inline-block' }} />, onClick: () => { setSortMode('default'); close(); } },
+          { id: 'sort-alpha', label: 'Folders first, A to Z', icon: sortMode === 'alpha' ? <CheckIcon size={13} style={{ color: 'var(--color-success)' }} /> : <span style={{ width: 13, display: 'inline-block' }} />, onClick: () => { setSortMode('alpha'); close(); } },
         ],
       },
       { id: 'sep4', label: '', separator: true },
@@ -606,6 +641,8 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
         return filterToIds(tree);
       })()
     : filterTree(tree, search);
+
+  const sortedTree = sortMode === 'alpha' ? sortTreeAlpha(filteredTree) : filteredTree;
 
   // Auto-expand when searching
   useEffect(() => {
@@ -794,7 +831,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
             </button>
           </div>
         ) : (
-          filteredTree.map(node => (
+          sortedTree.map(node => (
             <TreeNode
               key={node.id}
               node={node}
@@ -914,12 +951,27 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           position={reqContextMenu.position}
           onClose={() => setReqContextMenu(null)}
           items={[
-            { id: 'open', label: 'Open', shortcut: 'O', icon: <ExternalLinkIcon size={13} />, onClick: () => { handleOpenRequest(reqContextMenu.req); setReqContextMenu(null); } },
-            { id: 'open-new-tab', label: 'Open in New Tab', shortcut: 'T', icon: <PlusSquareIcon size={13} />, onClick: () => { handleOpenRequest(reqContextMenu.req, true); setReqContextMenu(null); } },
-            { id: 'rename', label: 'Rename', shortcut: 'N', icon: <RenameIcon size={13} />, onClick: () => { setRenamingId(reqContextMenu.req.id); setRenameValue(reqContextMenu.req.name); setRenamingType('request'); setReqContextMenu(null); } },
-            { id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, onClick: () => { postCollMsg({ type: 'duplicateRequest', id: reqContextMenu.req.id }); setReqContextMenu(null); } },
+            { id: 'open', label: 'Open', shortcut: 'O', icon: <ExternalLinkIcon size={13} style={{ color: 'var(--color-info)' }} />, onClick: () => { handleOpenRequest(reqContextMenu.req); setReqContextMenu(null); } },
+            { id: 'open-new-tab', label: 'Open in New Tab', shortcut: 'T', icon: <PlusSquareIcon size={13} style={{ color: 'var(--color-info)' }} />, onClick: () => { handleOpenRequest(reqContextMenu.req, true); setReqContextMenu(null); } },
+            { id: 'rename', label: 'Rename', shortcut: 'N', icon: <RenameIcon size={13} style={{ color: 'var(--color-ctx-rename)' }} />, onClick: () => { setRenamingId(reqContextMenu.req.id); setRenameValue(reqContextMenu.req.name); setRenamingType('request'); setReqContextMenu(null); } },
+            { id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} style={{ color: 'var(--color-ctx-duplicate)' }} />, onClick: () => { postCollMsg({ type: 'duplicateRequest', id: reqContextMenu.req.id }); setReqContextMenu(null); } },
             { id: 'sep1', label: '', separator: true },
-            { id: 'documentation', label: 'Documentation', disabled: true, icon: <DocumentIcon size={13} /> },
+            { id: 'document-request', label: 'Document Request', shortcut: 'M', icon: <DocumentIcon size={13} style={{ color: 'var(--color-info)' }} />, onClick: () => {
+              const req = reqContextMenu.req;
+              setDocGeneratorNode({ id: req.id, name: req.name, parent_id: null, sort_order: 0, children: [], requests: [req] });
+              setReqContextMenu(null);
+            } },
+            { id: 'monitor-request', label: 'Monitor Request', shortcut: 'O', icon: <UptimeMonitorIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => {
+              const req = reqContextMenu.req;
+              window.postMessage({ type: 'openMonitorFor', name: req.name, method: req.method, url: req.url }, '*');
+              setReqContextMenu(null);
+            } },
+            { id: 'mock-request', label: 'Mock Request', shortcut: 'K', icon: <ServerIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => {
+              const req = reqContextMenu.req;
+              useTabsStore.getState().openMockServerTab();
+              setTimeout(() => window.postMessage({ type: 'mockRequestFromSidebar', name: req.name, method: req.method, url: req.url }, '*'), 250);
+              setReqContextMenu(null);
+            } },
             { id: 'sep2', label: '', separator: true },
             { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} />, onClick: () => { setDeleteTarget({ id: reqContextMenu.req.id, type: 'request', name: reqContextMenu.req.name }); setReqContextMenu(null); } },
           ] as DuiContextMenuItem[]}

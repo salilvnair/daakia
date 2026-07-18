@@ -42,6 +42,17 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
 
   const isJson = response.contentType.includes('json');
   const hasBody = !!response.body?.trim();
+  // The JSON tab's own purpose is showing JSON — sniff the body itself
+  // rather than trusting the server's Content-Type header, which error/404
+  // responses very commonly omit or send as text/plain even when the body
+  // is genuine JSON. Without this, EditorView falls back to the 'plaintext'
+  // language, which has no JSON tokenizer (only bracket-pair colorization),
+  // so keys/strings/values render with no syntax coloring at all.
+  const looksLikeJson = useMemo(() => {
+    const trimmed = response.body?.trim();
+    if (!trimmed) return false;
+    try { JSON.parse(trimmed); return true; } catch { return false; }
+  }, [response.body]);
 
   const filteredBody = useMemo(() => {
     if (!filterQuery.trim()) { setFilterError(null); return formattedBody; }
@@ -183,7 +194,7 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
       <div className="flex-1 min-h-0">
         <EditorView
           value={filteredBody}
-          language={(getResponseLanguage(response.contentType) === 'text' ? 'plaintext' : getResponseLanguage(response.contentType)) as EditorLanguage}
+          language={(isJson || looksLikeJson ? 'json' : (getResponseLanguage(response.contentType) === 'text' ? 'plaintext' : getResponseLanguage(response.contentType))) as EditorLanguage}
           readOnly
           height="100%"
           wordWrap={wrapLines}

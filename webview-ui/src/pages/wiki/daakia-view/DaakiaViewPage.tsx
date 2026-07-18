@@ -45,6 +45,10 @@ const TAB_BY_ID = Object.fromEntries(TABS.map(t => [t.id, t]));
 /** Flat {id, label, icon} list — for hosts (e.g. SettingsPanel) that want to nest these as their own group's children instead of rendering DaakiaViewPage's own SideNavView. */
 export const WIKI_TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = TABS.map(t => ({ id: t.id, label: t.label, icon: t.icon }));
 
+/** Full {id, label, color, icon} list — used by QuickStartView to render clickable
+ * "go to this tab" cards with the exact same color/icon every other nav surface uses. */
+export const WIKI_TABS_FULL: Tab[] = TABS;
+
 const NAV_ITEMS: SideNavItem[] = [
   { id: 'g-start', label: 'Get Started', isGroup: true, children: [
     { id: 'quick-start', label: TAB_BY_ID['quick-start'].label, icon: TAB_BY_ID['quick-start'].icon },
@@ -99,8 +103,13 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
       )}
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden relative min-w-0">
-        {activeId === 'quick-start'    && <QuickStartView />}
+      {/* dw-root defines every --dw-* color variable (WikiShared.css) that
+          section cards/callouts/badges/hero depend on — without it those
+          rules resolve against unset custom properties (invalid border/
+          background, not just "default styled"), which is why the wiki
+          previously rendered as borderless, backgroundless floating text. */}
+      <div className="dw-root flex-1 overflow-hidden relative min-w-0">
+        {activeId === 'quick-start'    && <QuickStartView onNavigate={onSelect} />}
         {activeId === 'rest'           && <RestView />}
         {activeId === 'gql'            && <GqlView />}
         {activeId === 'websocket'      && <WebSocketView />}

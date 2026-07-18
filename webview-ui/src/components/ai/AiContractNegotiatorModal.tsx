@@ -8,13 +8,13 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView, MultilineInputView } from '@salilvnair/dui';
+import { ModalView, AIButtonView, EditorView, ResizablePanelView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-info)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const SYSTEM_PROMPT = `You are an API contract negotiation expert. Given two teams' API contract descriptions (or OpenAPI spec excerpts), identify all incompatibilities and propose resolutions.
 
@@ -78,7 +78,7 @@ export function AiContractNegotiatorModal({ onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="AI Contract Negotiator ✦"
+      title="AI Contract Negotiator"
       size="xl"
       headerColor={ACCENT}
       headerIcon={
@@ -102,27 +102,33 @@ export function AiContractNegotiatorModal({ onClose }: Props) {
           Paste API contracts from two teams. AI identifies every incompatibility, proposes resolutions, and generates adapter stub mocks so both teams can develop independently.
         </p>
         <div className="flex gap-3">
-          <div className="flex-1">
+          <div className="flex-1 flex flex-col">
             <label className="text-[10px] font-medium mb-1 block" style={{ color: 'var(--color-text-secondary)' }}>Team A Contract</label>
-            <MultilineInputView
-              value={teamASpec}
-              onChange={e => setTeamASpec(e.target.value)}
-              placeholder="Paste OpenAPI spec, endpoint list, or contract description for Team A..."
-              rows={6}
-              size="md"
-              width="fw"
-            />
+            <ResizablePanelView defaultHeight={160} minHeight={100} maxHeight={480} style={{ width: '100%' }}>
+              <EditorView
+                value={teamASpec}
+                onChange={setTeamASpec}
+                language="yaml"
+                height="100%"
+                size="md"
+                placeholder="Paste OpenAPI spec, endpoint list, or contract description for Team A..."
+                bordered={false}
+              />
+            </ResizablePanelView>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 flex flex-col">
             <label className="text-[10px] font-medium mb-1 block" style={{ color: 'var(--color-text-secondary)' }}>Team B Contract</label>
-            <MultilineInputView
-              value={teamBSpec}
-              onChange={e => setTeamBSpec(e.target.value)}
-              placeholder="Paste OpenAPI spec, endpoint list, or contract description for Team B..."
-              rows={6}
-              size="md"
-              width="fw"
-            />
+            <ResizablePanelView defaultHeight={160} minHeight={100} maxHeight={480} style={{ width: '100%' }}>
+              <EditorView
+                value={teamBSpec}
+                onChange={setTeamBSpec}
+                language="yaml"
+                height="100%"
+                size="md"
+                placeholder="Paste OpenAPI spec, endpoint list, or contract description for Team B..."
+                bordered={false}
+              />
+            </ResizablePanelView>
           </div>
         </div>
         {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}

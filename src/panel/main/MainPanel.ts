@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
+import { getSqliteStatus, getDbPath, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
 // Handler imports
@@ -141,7 +141,7 @@ export class MainPanel {
 
   public refreshInitialState() {
     const status = getSqliteStatus();
-    this.postMessage({ type: 'init', sqliteOk: status.ok, sqliteError: status.error });
+    this.postMessage({ type: 'init', sqliteOk: status.ok, sqliteError: status.error, dbPath: getDbPath() });
 
     initMockLogForwarding(this._post);
     initSmWorkflowStorage();
@@ -468,6 +468,31 @@ export class MainPanel {
           if (uri) {
             fs.writeFileSync(uri.fsPath, content, 'utf-8');
           }
+        });
+        break;
+      }
+
+      // Real WireMock project export — mappings/*.json + __files/*, zipped so it
+      // can be unzipped straight into a WireMock --root-dir.
+      case 'exportMockServerWiremockZip': {
+        const mappings = (msg.mappings as { filename: string; content: string }[]) ?? [];
+        const files = (msg.files as { filename: string; content: string }[]) ?? [];
+        const filename = (msg.filename as string) ?? 'wiremock-export.zip';
+        vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(filename),
+          filters: { 'Zip Archive': ['zip'] },
+          saveLabel: 'Save',
+          title: 'Save WireMock Export',
+        }).then(uri => {
+          if (!uri) return;
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { ZipArchive } = require('archiver');
+          const output = fs.createWriteStream(uri.fsPath);
+          const archive = new ZipArchive({ zlib: { level: 9 } });
+          archive.pipe(output);
+          for (const m of mappings) archive.append(m.content, { name: `mappings/${m.filename}` });
+          for (const f of files) archive.append(f.content, { name: `__files/${f.filename}` });
+          archive.finalize();
         });
         break;
       }

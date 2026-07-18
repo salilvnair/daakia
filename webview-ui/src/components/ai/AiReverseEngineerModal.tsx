@@ -15,7 +15,7 @@ import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
 import { SparkleIcon, CloseCircleIcon, FolderImportIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
-import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
+import { ModalView, AIButtonView, EditorView, ButtonView } from '@salilvnair/dui';
 
 // ─── HAR types (minimal) ──────────────────────────────────────────────────────
 
@@ -220,8 +220,8 @@ export function AiReverseEngineerModal({ onClose }: Props) {
       size="lg"
       headerColor={ACCENT}
       headerIcon={
-        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: ACCENT }}>
-          <FolderImportIcon size={14} style={{ color: '#fff' }} />
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <FolderImportIcon size={14} style={{ color: ACCENT }} />
         </div>
       }
       footerLeft={
@@ -302,14 +302,17 @@ export function AiReverseEngineerModal({ onClose }: Props) {
               )}
             </div>
           </div>
-          <MultilineInputView
-            value={rawText.slice(0, 200000)}
-            onChange={e => { setRawText(e.target.value); setPhase('idle'); setParseError(''); }}
-            rows={6}
-            size="md"
-            width="fw"
-            placeholder='{"log": {"entries": [...]}}'
-          />
+          <div style={{ height: 130 }}>
+            <EditorView
+              value={rawText.slice(0, 200000)}
+              onChange={v => { setRawText(v); setPhase('idle'); setParseError(''); }}
+              language="json"
+              height="100%"
+              size="md"
+              placeholder='{"log": {"entries": [...]}}'
+              bordered
+            />
+          </div>
           {parseError && (
             <p className="text-[10.5px] mt-1" style={{ color: 'var(--color-error)' }}>{parseError}</p>
           )}

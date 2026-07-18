@@ -5,6 +5,7 @@
  * as-is so WikiShared.css (copied from DaakiaWikiPanel.css) still applies.
  */
 import './WikiShared.css';
+import { MdViewer } from '../../../../components/shared/display/MdViewer';
 
 // ─── Chip color palette ────────────────────────────────────────────────────────
 // A varied multi-hue palette (matching the FeatureChip pattern in
@@ -67,6 +68,47 @@ export function Callout({ type, title, children }: CalloutProps) {
       <div className="dw-callout-text">
         {title && <strong>{title}</strong>}
         {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Protocol title card ────────────────────────────────────────────────────
+/** The single top-level card every protocol wiki page opens with — the SAME
+ * gradient banner treatment as SectionTitle (not a small text-only header)
+ * merged as this card's own header, with the real "click this icon" note
+ * (showing the actual left-rail icon graphic, not a text-only Badge pill)
+ * as the card body directly beneath it — one seamless card, no gap between
+ * the name banner and the instruction under it. */
+export function ProtocolActivateNote({ icon, color, name, suffix, actionText, extraIcons, children }: { icon: React.ReactNode; color: string; name: string; suffix?: React.ReactNode; actionText?: React.ReactNode; extraIcons?: Array<{ icon: React.ReactNode; color: string }>; children?: React.ReactNode }) {
+  const iconBox = (ic: React.ReactNode, c: string, key?: string) => (
+    <span
+      key={key}
+      className="inline-flex items-center justify-center rounded-lg flex-shrink-0"
+      style={{ width: 32, height: 32, backgroundColor: `color-mix(in srgb, ${c} 15%, transparent)` }}
+    >
+      {ic}
+    </span>
+  );
+  return (
+    <div className="dw-card" style={{ borderColor: `color-mix(in srgb, ${color} 45%, var(--dw-border))`, padding: 0 }}>
+      <div
+        className="dw-section-title"
+        style={{
+          margin: 0,
+          background: `linear-gradient(135deg, ${color} 0%, color-mix(in srgb, ${color} 65%, #000 20%) 100%)`,
+        }}
+      >
+        {name}
+      </div>
+      <div className="dw-card-body">
+        <span className="inline-flex items-center gap-2 align-middle flex-wrap text-[13px] text-[var(--dw-fg)]">
+          Click
+          {iconBox(icon, color)}
+          {extraIcons?.map((e, i) => <span key={`extra-wrap-${i}`} className="inline-flex items-center gap-2">/{iconBox(e.icon, e.color, `extra-${i}`)}</span>)}
+          {actionText ?? <>in the left protocol rail to switch to {name} mode{suffix ?? '.'}</>}
+        </span>
+        {children && <div className="mt-3">{children}</div>}
       </div>
     </div>
   );
@@ -274,12 +316,32 @@ export function AuthTabPanel() {
 }
 
 // ─── Section title ────────────────────────────────────────────────────────────
-export function SectionTitle({ emoji, children }: { emoji: string; children: React.ReactNode }) {
+export function SectionTitle({ id, emoji, children }: { id?: string; emoji: string; children: React.ReactNode }) {
   return (
-    <h2 className="dw-section-title">
+    <h2 id={id} className="dw-section-title">
       <span className="dw-section-emoji">{emoji}</span>
       {children}
     </h2>
+  );
+}
+
+// ─── Table of contents bar — pinned row of jump links ─────────────────────────
+// Scrolls the target SectionTitle (by id) into view within whichever scrollable
+// ancestor contains it — works regardless of nesting since scrollIntoView walks
+// up the real scroll chain, not a hardcoded ref.
+export interface TocItem { id: string; emoji: string; label: string }
+export function TocBar({ items }: { items: TocItem[] }) {
+  const handleClick = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  return (
+    <div className="dw-toc-bar">
+      {items.map(item => (
+        <button key={item.id} type="button" className="dw-toc-bar-item" onClick={() => handleClick(item.id)}>
+          <span>{item.emoji}</span>{item.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -327,9 +389,37 @@ export function Badge({ variant, children }: { variant: 'rest' | 'graphql' | 'ws
   return <span className={`dw-badge ${variant}`}>{children}</span>;
 }
 
+/** Colored pill for a protocol name using its exact accent color — used
+ * wherever a protocol name appears in a table/list (e.g. Mock Server's
+ * per-protocol config table) so every protocol is colored consistently,
+ * including ones without a dedicated Badge variant (SSE, Socket.IO, MQTT). */
+export function ProtocolChip({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="dw-protocol-chip"
+      style={{ color, background: `color-mix(in srgb, ${color} 12%, transparent)`, borderColor: `color-mix(in srgb, ${color} 30%, transparent)` }}
+    >
+      {label}
+    </span>
+  );
+}
+
 // ─── Code ─────────────────────────────────────────────────────────────────────
 export function Code({ children }: { children: React.ReactNode }) {
   return <code className="dw-code">{children}</code>;
+}
+
+// ─── Multi-line code block — real, syntax-highlighted, copy-pasteable ────────
+// Renders through MdViewer (the same marked+highlight.js renderer used for AI
+// chat responses) so wiki examples get real per-token coloring, a language
+// pill, and a copy button instead of flat monospace text.
+export function CodeBlock({ label, lang = 'javascript', children }: { label?: string; lang?: string; children: string }) {
+  return (
+    <div className="dw-codeblock-wrap">
+      {label && <div className="dw-codeblock-label">{label}</div>}
+      <MdViewer content={'```' + lang + '\n' + children + '\n```'} />
+    </div>
+  );
 }
 
 // ─── Slash command card ───────────────────────────────────────────────────────

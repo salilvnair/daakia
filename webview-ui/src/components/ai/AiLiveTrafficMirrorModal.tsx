@@ -104,7 +104,7 @@ export function AiLiveTrafficMirrorModal({ onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Live Traffic Mirror & AI Analysis ✦"
+      title="Live Traffic Mirror & AI Analysis"
       subtitle={
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }} />

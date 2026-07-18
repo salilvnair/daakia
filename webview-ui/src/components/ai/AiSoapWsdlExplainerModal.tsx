@@ -17,7 +17,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-protocol-soap)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const SYSTEM_PROMPT = `You are a SOAP/WSDL expert. Given a WSDL definition or service info, explain it in plain English for a developer who is new to this service.
 
@@ -89,7 +89,7 @@ export function AiSoapWsdlExplainerModal({ onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="WSDL Explainer ✦"
+      title="WSDL Explainer"
       size="lg"
       headerColor={ACCENT}
       headerIcon={

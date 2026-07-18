@@ -380,6 +380,18 @@ export function AiAuditPanel() {
   // Load on mount
   useEffect(() => { loadEntries(); }, [loadEntries]);
 
+  // Test-only hook for wiki capture — a fresh e2e session's DB has zero real
+  // AI audit entries (nothing triggered a real AI call), so the capture
+  // pipeline seeds example rows directly into this panel's own local state
+  // instead, same pattern as WebSocketPanel/SSEPanel's __*CaptureSeed hooks.
+  useEffect(() => {
+    (window as any).__aiAuditCaptureSeed = (seeded: CeAuditEntry[]) => {
+      setLoading(false);
+      setEntries(seeded);
+    };
+    return () => { delete (window as any).__aiAuditCaptureSeed; };
+  }, []);
+
   const handleRefresh = () => {
     setLoading(true);
     loadEntries();

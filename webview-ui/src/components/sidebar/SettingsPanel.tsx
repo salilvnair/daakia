@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ButtonView, TextInputView, ToggleSwitchView, TabView, SideNavView, SplitPanelView, type SideNavItem } from '@salilvnair/dui';
+import { ButtonView, TextInputView, ToggleSwitchView, TabView, SideNavView, SplitPanelView, CopyButtonView, type SideNavItem } from '@salilvnair/dui';
+import { useDbStatusStore } from '../../store/db-status-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon } from '../../icons';
@@ -72,6 +73,16 @@ export function SettingsPanel() {
   const validStored = storedSection && ALL_SECTION_IDS.has(storedSection) ? storedSection : 'general';
   const [activeSection, setActiveSectionLocal] = useState<ActiveNavId>(validStored);
   const [promptTarget, setPromptTarget] = useState<AiPromptTemplateKey | null>(null);
+
+  // Re-sync whenever the pref changes, not just on mount — lets an already-
+  // mounted Settings tab jump to a new section when something outside this
+  // component (e.g. the command palette) writes settings.section directly,
+  // instead of only picking it up the next time this component remounts.
+  useEffect(() => {
+    if (storedSection && ALL_SECTION_IDS.has(storedSection)) {
+      setActiveSectionLocal(storedSection);
+    }
+  }, [storedSection]);
 
   const setActiveSection = (section: ActiveNavId) => {
     setActiveSectionLocal(section);
@@ -189,6 +200,7 @@ function GeneralSettings() {
 // ────────── General > General ──────────
 
 function GeneralGeneralContent() {
+  const dbPath = useDbStatusStore((s) => s.dbPath);
   const [followRedirects, setFollowRedirects] = useState(true);
   const [sslVerification, setSslVerification] = useState(true);
   const [timeout, setTimeout_] = useState(0);
@@ -284,6 +296,22 @@ function GeneralGeneralContent() {
           accentColor="var(--color-settings)"
           style={{ width: 120 }}
         />
+      </div>
+
+      {/* Database Location (read-only) */}
+      <div>
+        <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Database Location</p>
+        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">Where Daakia's SQLite database (history, collections, environments, AI data) is stored on disk</p>
+        <div className="flex items-center gap-1.5">
+          <TextInputView
+            value={dbPath || 'Loading…'}
+            readOnly
+            size="md"
+            accentColor="var(--color-settings)"
+            style={{ flex: 1, fontFamily: 'var(--vscode-editor-font-family, monospace)', fontSize: 11 }}
+          />
+          {dbPath && <CopyButtonView text={dbPath} title="Copy path" />}
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import type { GrpcStreamMessage } from '../../store/tabs-store';
@@ -6,8 +6,7 @@ import { RequestProgressOverlay } from '../shared';
 import { ScriptResultsView } from '../shared/display/ScriptResultsView';
 import { cancelRequest } from '../../services/request';
 import { ArrowUpIcon, ArrowDownIcon, WandIcon } from '../../icons';
-import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
-import { DataSchemaModal } from '../rest/response/DataSchemaModal';
+import { AiAssistPopover, type AssistMode } from '../ai/AiAssistPopover';
 import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
@@ -39,9 +38,9 @@ export function GrpcResponsePanel() {
   const activeTabId = useTabsStore(s => s.activeTabId);
   const storedSubTab = useUiStateStore(s => s.prefs[`grpc.response.subtab.${activeTabId}`]);
   const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'body');
-  const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
-  const [showPatternLearning, setShowPatternLearning] = useState(false);
+  const explainRef = useRef<HTMLDivElement>(null);
+  const followUpRef = useRef<HTMLDivElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const responseBody = activeTab?.response?.body ?? '';
   const [displayBody, setDisplayBody] = useState(responseBody);
@@ -111,70 +110,72 @@ export function GrpcResponsePanel() {
           accentColor={ACCENT}
         />
         {response && activeSubTab === 'body' && (
-          <div className="flex items-center gap-1.5 pb-1.5">
+          <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
             {aiEnabled('explainGrpc') && (
-              <AiActionButton
-                mode="explain"
-                label="Explain"
-                response={response}
-                requestMethod="gRPC"
-                requestUrl={activeTab.url || ''}
-                open={activePopup === 'explain'}
-                onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
-              />
+              <>
+                <div ref={explainRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+                  <AIButtonView
+                    action="explain"
+                    label="Explain"
+                    size="xs"
+                    accentColor="var(--color-protocol-ai)"
+                    onClick={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
+                  />
+                </div>
+                {activePopup === 'explain' && (
+                  <AiAssistPopover
+                    mode="explain"
+                    response={response}
+                    requestMethod="gRPC"
+                    requestUrl={activeTab.url || ''}
+                    onClose={() => setActivePopup(null)}
+                    anchorEl={explainRef.current}
+                  />
+                )}
+              </>
             )}
             {aiEnabled('followUpsGrpc') && (
-              <AiActionButton
-                mode="follow-up"
-                label="Follow-ups"
-                response={response}
-                requestMethod="gRPC"
-                requestUrl={activeTab.url || ''}
-                open={activePopup === 'follow-up'}
-                onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
-              />
-            )}
-            {aiEnabled('schemaGrpc') && (
-              <AIButtonView
-                action="ask"
-                label="Schema"
-                size="sm"
-                accentColor="var(--color-protocol-ai)"
-                onClick={() => setShowSchema(true)}
-              />
+              <>
+                <div ref={followUpRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+                  <AIButtonView
+                    action="ask"
+                    label="Follow-ups"
+                    size="xs"
+                    accentColor="var(--color-protocol-ai)"
+                    onClick={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
+                  />
+                </div>
+                {activePopup === 'follow-up' && (
+                  <AiAssistPopover
+                    mode="follow-up"
+                    response={response}
+                    requestMethod="gRPC"
+                    requestUrl={activeTab.url || ''}
+                    onClose={() => setActivePopup(null)}
+                    anchorEl={followUpRef.current}
+                  />
+                )}
+              </>
             )}
             {aiEnabled('patternBaseline') && (
-              <AIButtonView
-                action="ask"
-                label="Baseline"
-                size="sm"
-                accentColor={showPatternLearning ? 'var(--color-protocol-ai)' : undefined}
-                onClick={() => setShowPatternLearning(p => !p)}
-              />
+              <div className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+                <AiResponsePatternLearning
+                  responseBody={response.body || ''}
+                  method="gRPC"
+                  url={activeTab.url || ''}
+                  status={response.status}
+                />
+              </div>
             )}
-            {(aiEnabled('assertGeneration') || aiEnabled('semanticValidator') || aiEnabled('responseTransformer') || aiEnabled('responseDiff')) && (
-              <AiResponseActionsMenu
-                tabId={activeTab.id}
-                response={response}
-                requestMethod="gRPC"
-                requestUrl={activeTab.url || ''}
-              />
-            )}
+            <AiResponseActionsMenu
+              tabId={activeTab.id}
+              response={response}
+              requestMethod="gRPC"
+              requestUrl={activeTab.url || ''}
+            />
           </div>
         )}
       </div>
-
-      {/* Pattern Learning panel */}
-      {showPatternLearning && response && aiEnabled('patternBaseline') && (
-        <div className="border-b border-[var(--color-surface-border)]">
-          <AiResponsePatternLearning
-            responseBody={response.body || ''}
-            method="gRPC"
-            url={activeTab.url || ''}
-            status={response.status}
-          />
-        </div>
-      )}
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
@@ -239,9 +240,6 @@ export function GrpcResponsePanel() {
           <ScriptResultsView response={response} />
         )}
       </div>
-      {showSchema && response && (
-        <DataSchemaModal body={response.body || ''} onClose={() => setShowSchema(false)} />
-      )}
     </div>
   );
 }

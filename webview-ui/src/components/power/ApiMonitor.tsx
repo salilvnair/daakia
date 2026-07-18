@@ -26,6 +26,8 @@ interface MonitorRule {
 
 interface Props {
   onClose: () => void;
+  /** Pre-fills and opens the "Add Monitor" form immediately — used by the sidebar's "Monitor Request" action. */
+  prefill?: { name: string; method: string; url: string };
 }
 
 const STORAGE_KEY = 'daakia:monitor-rules';
@@ -46,11 +48,12 @@ const STATUS_COLOR = (status?: number) => {
   return 'var(--color-error)';
 };
 
-export function ApiMonitor({ onClose }: Props) {
+export function ApiMonitor({ onClose, prefill }: Props) {
   const [rules, setRules] = useState<MonitorRule[]>(loadRules);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(!!prefill);
   const [newRule, setNewRule] = useState<Partial<MonitorRule>>({
-    method: 'GET', intervalMinutes: 5, alertOnStatus: [4, 5], alertOnSlowMs: 3000, enabled: true, consecutiveFailures: 0,
+    method: prefill?.method || 'GET', intervalMinutes: 5, alertOnStatus: [4, 5], alertOnSlowMs: 3000, enabled: true, consecutiveFailures: 0,
+    name: prefill?.name, url: prefill?.url,
   });
   const addToast = useToastStore(s => s.addToast);
 

@@ -57,7 +57,7 @@ export function AiCrossProtocolOrchestratorModal({ onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Cross-Protocol Orchestrator ✦"
+      title="Cross-Protocol Orchestrator"
       size="lg"
       headerColor={ACCENT}
       headerIcon={

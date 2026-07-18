@@ -24,7 +24,7 @@
  * @salilvnair/state-machine/core/types) — kept local so this file doesn't
  * need a static cross-module type import across the CJS/ESM boundary.
  */
-import type { StateMachineConfig } from './mock-types';
+import type { StateMachineConfig, StateTransition } from './mock-types';
 
 interface EngineInstance {
   readonly currentState: string | null;
@@ -196,6 +196,62 @@ export class StateMachineRuntime {
   canFireEvent(sessionKey: string, event: string): boolean {
     if (!this.config.enabled) return false;
     return this.getEngine(sessionKey).canSend(event);
+  }
+
+  /**
+   * Events that CAN fire right now from the session's current state, each
+   * with the human-readable name of the state it leads to. Used to tell a
+   * caller whose request was gated exactly what their real options are,
+   * instead of naming one hardcoded example step.
+   */
+  getAvailableEvents(sessionKey: string): Array<{ event: string; toState: string }> {
+    const current = this.getCurrentState(sessionKey);
+    const stateName = (id: string) => this.config.states.find((s) => s.id === id)?.name ?? id;
+    const seen = new Set<string>();
+    const out: Array<{ event: string; toState: string }> = [];
+    for (const t of this.config.transitions) {
+      if (t.from !== current) continue;
+      const event = t.label || t.routeId;
+      if (seen.has(event)) continue;
+      seen.add(event);
+      out.push({ event, toState: stateName(t.to) });
+    }
+    return out;
+  }
+
+  /**
+   * BFS over the transition graph to find the shortest ordered sequence of
+   * events that would make `targetEvent` fireable from the session's
+   * current state. Returns `[]` if targetEvent is already fireable, `null`
+   * if no sequence of events reaches a state that unlocks it.
+   */
+  findEventPathTo(sessionKey: string, targetEvent: string): string[] | null {
+    const start = this.getCurrentState(sessionKey);
+    const byFrom = new Map<string, StateTransition[]>();
+    for (const t of this.config.transitions) {
+      const list = byFrom.get(t.from) ?? [];
+      list.push(t);
+      byFrom.set(t.from, list);
+    }
+    const unlocks = (stateId: string) => (byFrom.get(stateId) ?? []).some((t) => (t.label || t.routeId) === targetEvent);
+
+    if (unlocks(start)) return [];
+
+    const visited = new Set<string>([start]);
+    const queue: Array<{ state: string; path: string[] }> = [{ state: start, path: [] }];
+    while (queue.length > 0) {
+      const { state, path } = queue.shift()!;
+      for (const t of byFrom.get(state) ?? []) {
+        const event = t.label || t.routeId;
+        const nextPath = [...path, event];
+        if (unlocks(t.to)) return nextPath;
+        if (!visited.has(t.to)) {
+          visited.add(t.to);
+          queue.push({ state: t.to, path: nextPath });
+        }
+      }
+    }
+    return null;
   }
 
   /** Actually fires a route's `triggerEvent` through the real engine. */

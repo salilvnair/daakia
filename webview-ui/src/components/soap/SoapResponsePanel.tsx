@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { RequestProgressOverlay } from '../shared';
 import { ScriptResultsView } from '../shared/display/ScriptResultsView';
 import { cancelRequest } from '../../services/request';
-import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
+import { AiAssistPopover, type AssistMode } from '../ai/AiAssistPopover';
 import { DataSchemaModal } from '../rest/response/DataSchemaModal';
 import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { WandIcon } from '../../icons';
-import { EditorView, CopyButtonView, TabView, IconButtonView, type TabItem } from '@salilvnair/dui';
+import { EditorView, CopyButtonView, TabView, IconButtonView, AIButtonView, type TabItem } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
 
@@ -44,6 +44,8 @@ export function SoapResponsePanel() {
   const [showSchema, setShowSchema] = useState(false);
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const explainRef = useRef<HTMLDivElement>(null);
+  const followUpRef = useRef<HTMLDivElement>(null);
   const responseBody = activeTab?.response?.body ?? '';
   const [displayBody, setDisplayBody] = useState(responseBody);
   useEffect(() => { setDisplayBody(responseBody); }, [responseBody]);
@@ -122,30 +124,50 @@ export function SoapResponsePanel() {
         {activeSubTab === 'body' && (
           <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
             {aiEnabled('explainSoap') && (
-              <AiActionButton
-                mode="explain"
-                label="Explain"
-                size="xs"
-                accentColor="var(--color-accent)"
-                response={response}
-                requestMethod="SOAP"
-                requestUrl={activeTab.url || ''}
-                open={activePopup === 'explain'}
-                onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
-              />
+              <>
+                <div ref={explainRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+                  <AIButtonView
+                    action="explain"
+                    label="Explain"
+                    size="xs"
+                    accentColor="var(--color-protocol-ai)"
+                    onClick={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
+                  />
+                </div>
+                {activePopup === 'explain' && (
+                  <AiAssistPopover
+                    mode="explain"
+                    response={response}
+                    requestMethod="SOAP"
+                    requestUrl={activeTab.url || ''}
+                    onClose={() => setActivePopup(null)}
+                    anchorEl={explainRef.current}
+                  />
+                )}
+              </>
             )}
             {aiEnabled('followUpsSoap') && (
-              <AiActionButton
-                mode="follow-up"
-                label="Follow-ups"
-                size="xs"
-                accentColor="var(--color-accent)"
-                response={response}
-                requestMethod="SOAP"
-                requestUrl={activeTab.url || ''}
-                open={activePopup === 'follow-up'}
-                onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
-              />
+              <>
+                <div ref={followUpRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+                  <AIButtonView
+                    action="ask"
+                    label="Follow-ups"
+                    size="xs"
+                    accentColor="var(--color-protocol-ai)"
+                    onClick={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
+                  />
+                </div>
+                {activePopup === 'follow-up' && (
+                  <AiAssistPopover
+                    mode="follow-up"
+                    response={response}
+                    requestMethod="SOAP"
+                    requestUrl={activeTab.url || ''}
+                    onClose={() => setActivePopup(null)}
+                    anchorEl={followUpRef.current}
+                  />
+                )}
+              </>
             )}
             {isFailure && aiEnabled('smartRetryAdvisor') && (
               <AiSmartRetryAdvisor
@@ -156,12 +178,14 @@ export function SoapResponsePanel() {
               />
             )}
             {aiEnabled('patternBaseline') && (
-              <AiResponsePatternLearning
-                responseBody={response.body || ''}
-                method="SOAP"
-                url={activeTab.url || ''}
-                status={response.status}
-              />
+              <div className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+                <AiResponsePatternLearning
+                  responseBody={response.body || ''}
+                  method="SOAP"
+                  url={activeTab.url || ''}
+                  status={response.status}
+                />
+              </div>
             )}
             {(aiEnabled('assertGeneration') || aiEnabled('semanticValidator') || aiEnabled('responseTransformer') || aiEnabled('responseDiff')) && (
               <AiResponseActionsMenu

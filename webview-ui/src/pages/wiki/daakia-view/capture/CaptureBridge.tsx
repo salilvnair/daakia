@@ -23,10 +23,12 @@ import { useSidebarDataStore, type CollectionTreeNode, type HistoryEntry } from 
 import { useEnvStore, type Environment } from '../../../../store/env-store';
 import { useDevToolsStore, type ConsoleLogEntry, type NetworkEntry, type DevToolsTab } from '../../../../store/devtools-store';
 import type { MockServer } from '../../../../components/mock/mock-types';
+import { installSMRestWorkflow } from '../../../../components/mock/samples/sm-rest-workflows';
+import { useSMWorkspaceStore, useSMTabsStore } from '@salilvnair/state-machine';
 import { getVsCodeApi } from '../../../../vscode';
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow';
   selector?: string;       // CSS selector — click, type
   text?: string;           // type
   ms?: number;             // wait
@@ -39,6 +41,12 @@ export interface CaptureDirective {
   // row selectors. Resolves against whatever tab is active AT RUN TIME, so the
   // orchestrator never needs to know the generated tab id ahead of time.
   subtab?: string;         // setActiveTabSubtab — e.g. 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'variables'
+  /** setActiveTabSubtab — pref-key prefix; defaults to 'rest' for backward compat (e.g. 'ws' writes ws.subtab.<id>). */
+  subtabProtocol?: string;
+  /** setResponseSubtab — response-panel sub-tab (grpc/soap/rest). Uses per-protocol pref key. */
+  responseProtocol?: 'rest' | 'grpc' | 'soap';
+  /** clickText — 0-based index into matching elements; -1 = last match; default 0. */
+  nthMatch?: number;
   server?: MockServer;     // addMockServer — full control, selects it as active afterward
   // seedSidebarData — populate the Collections/History sidebar panels (empty by
   // default in a fresh capture session) with example data before opening them.
@@ -52,6 +60,38 @@ export interface CaptureDirective {
   logs?: Array<Omit<ConsoleLogEntry, 'id'>>;
   networkEntries?: Array<Omit<NetworkEntry, 'id'>>;
   devToolsTab?: DevToolsTab;
+  // seedRealtimeState — pushes into the WS/SSE/SocketIO/MQTT panel's own
+  // module-level message cache via a test-only window hook each panel exposes
+  // (__wsCaptureSeed / __sseCaptureSeed / __sioCaptureSeed / __mqttCaptureSeed),
+  // since that state lives outside useTabsStore and can't be seeded via `patch`.
+  realtimeProtocol?: 'ws' | 'sse' | 'sio' | 'mqtt';
+  realtimeMessages?: Record<string, unknown>[];
+  realtimeConnState?: 'disconnected' | 'connecting' | 'connected';
+  realtimeSocketId?: string;
+  // seedAiAudit — pushes into AiAuditPanel's own local entries state via a
+  // test-only window hook (__aiAuditCaptureSeed), same pattern as
+  // seedRealtimeState, since real audit entries only exist after a real AI
+  // call and a fresh e2e session's DB has none.
+  aiAuditEntries?: Record<string, unknown>[];
+  // key — dispatches a real keydown at window level so app-level shortcut
+  // handlers (registerShortcut/keyboard-registry.ts) fire exactly as they
+  // would for a real user keypress (e.g. Ctrl/Cmd+K for the command palette).
+  key?: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  // openStateMachineTab — opens (or focuses) Daakia's own State Machine
+  // canvas tab, optionally linked to a mock server.
+  serverId?: string;
+  // seedStateMachineWorkflow — installs one of the built-in sample workflows
+  // (sm-rest-workflows.ts) into the state-machine library's own
+  // useSMWorkspaceStore, then opens it as a workflow tab (useSMTabsStore) so
+  // CenterPane's activeTabId-keyed effect loads its real nodes/edges onto
+  // the canvas — mirrors exactly what WorkflowsPanel.tsx's own "Open" click
+  // does. Both stores live inside @salilvnair/state-machine, entirely
+  // outside useTabsStore/useMockStore, so there's no other way to seed them.
+  sampleId?: string;
 }
 
 function setReactControlledValue(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
@@ -123,8 +163,30 @@ async function runDirective(d: CaptureDirective): Promise<void> {
       return;
     }
     case 'clickText': {
-      const el = await waitForText(d.text!);
-      el.click();
+      // Support nthMatch (default 0 = first, -1 = last) for repeated labels
+      // (e.g. gRPC has "Metadata" in both the request AND response tab strips).
+      const nth = d.nthMatch ?? 0;
+      const start = Date.now();
+      const timeoutMs = 3000;
+      let target: HTMLElement | null = null;
+      while (Date.now() - start < timeoutMs) {
+        const candidates = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+          .filter(el => el.children.length === 0 && el.textContent?.trim() === d.text);
+        if (candidates.length > (nth < 0 ? 0 : nth)) {
+          const raw = nth < 0 ? candidates[candidates.length + nth] : candidates[nth];
+          let walk: HTMLElement | null = raw;
+          for (let i = 0; i < 5 && walk; i++) {
+            if (walk.tagName === 'BUTTON') { target = walk; break; }
+            if (walk.className && String(walk.className).includes('cursor-pointer')) { target = walk; break; }
+            walk = walk.parentElement;
+          }
+          target = target ?? raw;
+          break;
+        }
+        await new Promise(r => setTimeout(r, 50));
+      }
+      if (!target) throw new Error(`clickText: no match ${nth} for "${d.text}"`);
+      target.click();
       return;
     }
     case 'type': {
@@ -156,7 +218,23 @@ async function runDirective(d: CaptureDirective): Promise<void> {
     }
     case 'setActiveTabSubtab': {
       const id = useTabsStore.getState().activeTabId;
-      if (id) useUiStateStore.getState().setPref(`rest.subtab.${id}`, d.subtab ?? 'params');
+      const prefix = d.subtabProtocol ?? 'rest';
+      if (id) useUiStateStore.getState().setPref(`${prefix}.subtab.${id}`, d.subtab ?? 'params');
+      return;
+    }
+    case 'seedRealtimeState': {
+      const hookName = { ws: '__wsCaptureSeed', sse: '__sseCaptureSeed', sio: '__sioCaptureSeed', mqtt: '__mqttCaptureSeed' }[d.realtimeProtocol!];
+      const fn = hookName ? (window as any)[hookName] : undefined;
+      if (!fn) throw new Error(`seedRealtimeState: ${hookName} not mounted yet — the target panel must be open first`);
+      fn(d.realtimeMessages ?? [], d.realtimeConnState ?? 'connected', d.realtimeSocketId);
+      return;
+    }
+    case 'setResponseSubtab': {
+      // Response-panel sub-tab uses a per-protocol pref key
+      // (e.g. `grpc.response.subtab.<id>`, `soap.response.subtab.<id>`).
+      const id = useTabsStore.getState().activeTabId;
+      const proto = d.responseProtocol ?? 'grpc';
+      if (id) useUiStateStore.getState().setPref(`${proto}.response.subtab.${id}`, d.subtab ?? 'body');
       return;
     }
     case 'openMockServerTab': {
@@ -225,6 +303,46 @@ async function runDirective(d: CaptureDirective): Promise<void> {
       editor.trigger('keyboard', 'editor.action.triggerSuggest', {});
       return;
     }
+    case 'closeModals': {
+      // ModalView (dui2) listens for a real document-level Escape keydown and
+      // calls its own onClose — dispatching one closes WHICHEVER modal is
+      // currently open, generically, regardless of which screen/test left it
+      // mounted. Modals can stack (ModalView's _mountLayer), so fire a few
+      // with waits in between rather than assuming a single layer.
+      for (let i = 0; i < 3; i++) {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return;
+    }
+    case 'seedAiAudit': {
+      const fn = (window as any).__aiAuditCaptureSeed;
+      if (!fn) throw new Error('seedAiAudit: __aiAuditCaptureSeed not mounted yet — open the AI Audit settings section first');
+      fn(d.aiAuditEntries ?? []);
+      return;
+    }
+    case 'key': {
+      window.dispatchEvent(new KeyboardEvent('keydown', {
+        key: d.key ?? '',
+        ctrlKey: d.ctrlKey ?? false,
+        metaKey: d.metaKey ?? false,
+        shiftKey: d.shiftKey ?? false,
+        altKey: d.altKey ?? false,
+        bubbles: true,
+      }));
+      return;
+    }
+    case 'openStateMachineTab': {
+      useTabsStore.getState().openStateMachineTab(d.serverId);
+      return;
+    }
+    case 'seedStateMachineWorkflow': {
+      const machine = installSMRestWorkflow(d.sampleId!);
+      if (!machine) throw new Error(`seedStateMachineWorkflow: unknown sampleId "${d.sampleId}"`);
+      useSMTabsStore.getState().openWorkflowTab(machine.id, machine.name, machine.color);
+      useSMWorkspaceStore.getState().setActiveMachine(machine.id);
+      return;
+    }
     case 'assertNoDkTypeError': {
       // Direct proof that addExtraLib(DK_TYPE_DEFS) actually suppressed the
       // "Cannot find name 'dk'" diagnostic the user's screenshot showed (the
@@ -273,7 +391,22 @@ export function CaptureBridge() {
           .filter(el => (el.className && String(el.className).includes('monaco')) || (el.id && el.id.includes('monaco')))
           .map(el => el.outerHTML)
           .join('');
-        const html = monacoStyles + (root?.outerHTML ?? '');
+        // DUI's ModalView (GenerateCodeModal, ImportCurlModal, every other
+        // popup) renders via createPortal(..., document.body) — a SIBLING of
+        // #root, not a descendant — so a bare #root capture silently drops
+        // any modal that's open at capture time. Append every extra direct
+        // child of <body> (i.e. anything that isn't #root itself) so open
+        // modals are captured too. These portals use `position: fixed;
+        // inset: 0`, which — once injected into CaptureCard's `transform:
+        // scale(...)` frame — is correctly re-contained to that frame's
+        // design box (a CSS transform establishes a new containing block for
+        // fixed-position descendants), so the modal renders at the right
+        // size relative to the rest of the capture.
+        const portalHtml = Array.from(document.body.children)
+          .filter(el => el.id !== 'root')
+          .map(el => el.outerHTML)
+          .join('');
+        const html = monacoStyles + (root?.outerHTML ?? '') + portalHtml;
         getVsCodeApi().postMessage({ type: 'wiki:capture:result', id, html });
       } catch (err) {
         getVsCodeApi().postMessage({ type: 'wiki:capture:error', id, error: err instanceof Error ? err.message : String(err) });

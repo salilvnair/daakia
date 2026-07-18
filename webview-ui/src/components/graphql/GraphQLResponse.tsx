@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { RequestProgressOverlay } from '../shared';
 import { cancelRequest } from '../../services/request';
-import { AiActionButton, type AssistMode } from '../ai/AiAssistPopover';
+import { AiAssistPopover, type AssistMode } from '../ai/AiAssistPopover';
 import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { EditorView, CopyButtonView } from '@salilvnair/dui';
+import { EditorView, CopyButtonView, AIButtonView } from '@salilvnair/dui';
 
 /**
  * GraphQL Response panel — shows JSON response, errors, and metadata.
@@ -16,6 +16,8 @@ export function GraphQLResponse() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const explainRef = useRef<HTMLDivElement>(null);
+  const followUpRef = useRef<HTMLDivElement>(null);
 
   if (!activeTab) return null;
 
@@ -82,30 +84,50 @@ export function GraphQLResponse() {
         <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Response</span>
         <div className="flex items-center gap-1.5">
           {aiEnabled('explainGraphql') && (
-            <AiActionButton
-              mode="explain"
-              label="Explain"
-              size="xs"
-              accentColor="var(--color-accent)"
-              response={response}
-              requestMethod="GQL"
-              requestUrl={activeTab.url || ''}
-              open={activePopup === 'explain'}
-              onOpen={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
-            />
+            <>
+              <div ref={explainRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+                <AIButtonView
+                  action="explain"
+                  label="Explain"
+                  size="xs"
+                  accentColor="var(--color-protocol-ai)"
+                  onClick={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
+                />
+              </div>
+              {activePopup === 'explain' && (
+                <AiAssistPopover
+                  mode="explain"
+                  response={response}
+                  requestMethod="GQL"
+                  requestUrl={activeTab.url || ''}
+                  onClose={() => setActivePopup(null)}
+                  anchorEl={explainRef.current}
+                />
+              )}
+            </>
           )}
           {aiEnabled('followUpsGraphql') && (
-            <AiActionButton
-              mode="follow-up"
-              label="Follow-ups"
-              size="xs"
-              accentColor="var(--color-accent)"
-              response={response}
-              requestMethod="GQL"
-              requestUrl={activeTab.url || ''}
-              open={activePopup === 'follow-up'}
-              onOpen={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
-            />
+            <>
+              <div ref={followUpRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+                <AIButtonView
+                  action="ask"
+                  label="Follow-ups"
+                  size="xs"
+                  accentColor="var(--color-protocol-ai)"
+                  onClick={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
+                />
+              </div>
+              {activePopup === 'follow-up' && (
+                <AiAssistPopover
+                  mode="follow-up"
+                  response={response}
+                  requestMethod="GQL"
+                  requestUrl={activeTab.url || ''}
+                  onClose={() => setActivePopup(null)}
+                  anchorEl={followUpRef.current}
+                />
+              )}
+            </>
           )}
           {isFailure && aiEnabled('smartRetryAdvisor') && (
             <AiSmartRetryAdvisor
@@ -116,12 +138,14 @@ export function GraphQLResponse() {
             />
           )}
           {aiEnabled('patternBaseline') && (
-            <AiResponsePatternLearning
-              responseBody={response.body || ''}
-              method="GQL"
-              url={activeTab.url || ''}
-              status={response.status}
-            />
+            <div className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+              <AiResponsePatternLearning
+                responseBody={response.body || ''}
+                method="GQL"
+                url={activeTab.url || ''}
+                status={response.status}
+              />
+            </div>
           )}
           {(aiEnabled('assertGeneration') || aiEnabled('semanticValidator') || aiEnabled('responseTransformer') || aiEnabled('responseDiff')) && (
             <AiResponseActionsMenu

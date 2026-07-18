@@ -81,7 +81,7 @@ Start the output with ${format === 'yaml' ? 'openapi: "3.1.0"' : '{"openapi": "3
     <ModalView
       open
       onClose={onClose}
-      title="OpenAPI 3.1 Generator ✦"
+      title="OpenAPI 3.1 Generator"
       size="xl"
       headerColor={ACCENT}
       headerIcon={
@@ -120,7 +120,7 @@ Start the output with ${format === 'yaml' ? 'openapi: "3.1.0"' : '{"openapi": "3
           <p className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
             Scan all open REST/GraphQL tabs and generate a complete OpenAPI 3.1 spec with schemas, examples, and auth schemes.
           </p>
-          <AIButtonView label="Generate OpenAPI Spec ✦" size="md" accentColor={ACCENT} onClick={generate} />
+          <AIButtonView label="Generate OpenAPI Spec" size="md" accentColor={ACCENT} onClick={generate} />
         </div>
       )}
       {error && <p className="text-[11px] px-3 py-2 rounded-lg mb-3" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>{error}</p>}

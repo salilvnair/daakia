@@ -300,7 +300,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
               onClick={() => setShowMockIntelligence(true)}
               title="AI Mock Intelligence — learn from real API responses"
             >
-              Intelligence ✦
+              Intelligence
             </ButtonView>
           )}
           {aiEnabled('adaptiveMockLearning') && (
@@ -312,7 +312,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
               onClick={() => setShowAdaptiveLearning(true)}
               title="Adaptive Mock Learning — record real traffic, AI builds smart mock rules"
             >
-              AI Learn ✦
+              AI Learn
             </ButtonView>
           )}
           {aiEnabled('aiScenarioComposer') && (
@@ -324,7 +324,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
               onClick={() => setShowScenarioComposer(true)}
               title="AI Scenario Composer — describe complex scenarios in plain English"
             >
-              Compose ✦
+              Compose
             </ButtonView>
           )}
         </div>

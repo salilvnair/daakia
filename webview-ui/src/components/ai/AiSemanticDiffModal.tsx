@@ -9,7 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
-import { ModalView, AIButtonView, MultilineInputView } from '@salilvnair/dui';
+import { ModalView, AIButtonView, EditorView } from '@salilvnair/dui';
 
 interface Props {
   responseBodyA?: string;
@@ -116,14 +116,15 @@ export function AiSemanticDiffModal({ responseBodyA = '', responseBodyB = '', on
           <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
             Response A (old)
           </div>
-          <div className="flex-1 p-3">
-            <MultilineInputView
+          <div className="flex-1 p-3 min-h-0">
+            <EditorView
               value={bodyA}
-              onChange={e => { setBodyA(e.target.value); setError(''); }}
-              rows={12}
+              onChange={v => { setBodyA(v); setError(''); }}
+              language="json"
+              height="100%"
               size="md"
-              width="fw"
               placeholder='{"userName": "John", "userId": 123}'
+              bordered
             />
           </div>
         </div>
@@ -133,14 +134,15 @@ export function AiSemanticDiffModal({ responseBodyA = '', responseBodyB = '', on
           <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>
             Response B (new)
           </div>
-          <div className="flex-1 p-3">
-            <MultilineInputView
+          <div className="flex-1 p-3 min-h-0">
+            <EditorView
               value={bodyB}
-              onChange={e => { setBodyB(e.target.value); setError(''); }}
-              rows={12}
+              onChange={v => { setBodyB(v); setError(''); }}
+              language="json"
+              height="100%"
               size="md"
-              width="fw"
               placeholder='{"username": "John", "id": 123, "createdAt": "2026-01-01"}'
+              bordered
             />
           </div>
         </div>

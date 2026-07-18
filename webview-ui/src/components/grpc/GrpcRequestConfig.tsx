@@ -95,8 +95,8 @@ export function GrpcRequestConfig() {
                   <AIButtonView
                     action="generate"
                     label="Generate ✦"
-                    size="sm"
-                    accentColor={ACCENT}
+                    size="xs"
+                    accentColor="var(--color-protocol-ai)"
                     onClick={() => bodyGenRef.current?.open()}
                   />
                 )}
@@ -104,8 +104,8 @@ export function GrpcRequestConfig() {
                   <AIButtonView
                     action="fuzz"
                     label="Fuzz ✦"
-                    size="sm"
-                    accentColor={ACCENT}
+                    size="xs"
+                    accentColor="var(--color-protocol-ai)"
                     onClick={() => setShowFuzzer(true)}
                   />
                 )}

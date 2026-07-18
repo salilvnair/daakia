@@ -64,6 +64,7 @@ const sioSaveItems: ContextMenuItem[] = [
     id: 'save-as',
     label: 'Save as',
     icon: <SaveIcon size={13} />,
+    iconColor: 'var(--color-ctx-close-saved)',
     onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
   },
 ];
@@ -103,6 +104,16 @@ export function SocketIOPanel() {
     setSocketIdLocal(v);
     if (activeTabId) socketIdCache.set(activeTabId, v);
   }, [activeTabId]);
+
+  // Test-only hook for the wiki capture harness — seeds a realistic connected
+  // state + event log without a real Socket.IO connection (see CaptureBridge.tsx).
+  useEffect(() => {
+    (window as any).__sioCaptureSeed = (evts: SocketIOEvent[], state: ConnectionState, sockId?: string) => {
+      setEvents(evts);
+      setConnState(state);
+      if (sockId) setSocketId(sockId);
+    };
+  }, [setEvents, setConnState, setSocketId]);
 
   // Persisted fields — read from authData, write back on change
   const ad = activeTab?.authData || {};
@@ -421,7 +432,7 @@ export function SocketIOPanel() {
                 activeTab={activeSubTab}
                 onChange={(id) => setActiveSubTab(id as SubTab)}
                 variant="underline"
-                size="sm"
+                size="md"
                 accentColor="var(--color-protocol-websocket)"
               />
             </div>
@@ -548,7 +559,7 @@ export function SocketIOPanel() {
                 messages={events.filter(e => e.direction === 'received' && e.data).map(e => e.data!)}
                 hasError={!!error}
                 errorMsg={error || ''}
-                accentColor="var(--color-protocol-socketio)"
+                accentColor="var(--color-protocol-ai)"
                 trafficAnalyzerFlag="sioTrafficAnalyzer"
               />
             </div>

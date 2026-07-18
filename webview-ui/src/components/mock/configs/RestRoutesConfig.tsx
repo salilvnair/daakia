@@ -54,20 +54,34 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
       const smConfig = sample.stateMachine ?? server.stateMachine ?? undefined;
       const existing: ConnectedWorkflow[] = server.connectedWorkflows ?? [];
       const already = existing.find(w => w.workflowId === workflow.id);
+      // Heal the matching entry's stateMachine if it's missing, even when
+      // `already` is set — a server saved before this sample's stateMachine
+      // config was correctly attached to connectedWorkflows would otherwise
+      // keep a permanently-empty `.stateMachine` forever: getStateMachineRuntime()
+      // returns null for every triggerEvent-gated route on that workflow, so
+      // every route silently 404s with "no route matches" instead of ever
+      // reaching gating/matcher logic — and clicking Load Sample again on
+      // that same server never self-healed it, since the old code reused the
+      // stale entry verbatim whenever `already` was set. Only touches
+      // `stateMachine`, not `name`, so a user's custom workflow rename isn't
+      // clobbered by re-loading the sample.
       let connectedWorkflows: ConnectedWorkflow[] = already
-        ? existing
+        ? (already.stateMachine ? existing : existing.map(w => w.workflowId === workflow.id ? { ...w, stateMachine: smConfig } : w))
         : [...existing, { workflowId: workflow.id, name: workflow.name, stateMachine: smConfig }];
 
       // Install + connect any additional workflows this sample ships with
       // (e.g. a second, independent auth flow reached only by a header-gated
       // route) — each carries its own stateMachine directly on the
       // ConnectedWorkflow entry, since only ONE workflow can use the
-      // server-level `stateMachine` fallback slot.
+      // server-level `stateMachine` fallback slot. Same upsert reasoning as
+      // above applies here too.
       for (const [lookupKey, extraStateMachine] of Object.entries(sample.additionalWorkflows ?? {})) {
         const extraWorkflow = installSMRestWorkflow(lookupKey);
         if (!extraWorkflow) continue;
-        if (connectedWorkflows.find(w => w.workflowId === extraWorkflow.id)) continue;
-        connectedWorkflows = [...connectedWorkflows, { workflowId: extraWorkflow.id, name: extraWorkflow.name, stateMachine: extraStateMachine }];
+        const alreadyExtra = connectedWorkflows.find(w => w.workflowId === extraWorkflow.id);
+        connectedWorkflows = alreadyExtra
+          ? (alreadyExtra.stateMachine ? connectedWorkflows : connectedWorkflows.map(w => w.workflowId === extraWorkflow.id ? { ...w, stateMachine: extraStateMachine } : w))
+          : [...connectedWorkflows, { workflowId: extraWorkflow.id, name: extraWorkflow.name, stateMachine: extraStateMachine }];
       }
 
       onUpdate({ routes, description: sample.description, connectedWorkflows, connectedWorkflowId: workflow.id, stateMachine: smConfig });

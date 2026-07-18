@@ -332,6 +332,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
           protocol={server.protocol}
           server={server}
           onExport={(format, content, filename) => postMsg({ type: 'exportMockServer', serverId: server.id, format, content, filename })}
+          onExportZip={(mappings, files, filename) => postMsg({ type: 'exportMockServerWiremockZip', serverId: server.id, mappings, files, filename })}
         />
       )}
 

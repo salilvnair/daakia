@@ -97,7 +97,7 @@ export function AiTrafficAnalyzerModal({ protocol, messages, onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title={`${LABEL} Traffic Analyzer ✦`}
+      title={`${LABEL} Traffic Analyzer`}
       subtitle={`${messages.length} messages`}
       size="lg"
       headerColor={ACCENT}

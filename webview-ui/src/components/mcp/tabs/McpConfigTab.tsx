@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useTabsStore, type McpServerConfig } from '../../../store/tabs-store';
-import { ButtonView, EditorView } from '@salilvnair/dui';
+import { ButtonView, CopyButtonView, EditorView } from '@salilvnair/dui';
+import { DocumentIcon, UploadIcon, CheckIcon } from '../../../icons';
 
 const ACCENT = 'var(--color-protocol-mcp)';
 
@@ -95,12 +96,6 @@ export function McpConfigTab() {
     setError(null);
   }, []);
 
-  const handleCopy = useCallback(() => {
-    if (jsonText) {
-      navigator.clipboard.writeText(jsonText).catch(() => {});
-    }
-  }, [jsonText]);
-
   if (!activeTab) return null;
 
   return (
@@ -110,14 +105,18 @@ export function McpConfigTab() {
         <span className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wide flex-1">
           MCP Server Config (Claude Desktop format)
         </span>
-        <ButtonView size="md" variant="accent" accentColor={ACCENT} onClick={handleLoadExample}>
+        <ButtonView size="xs" variant="ghost" iconLeft={<DocumentIcon size={10} />} onClick={handleLoadExample} style={{ color: ACCENT }}>
           Load Example
         </ButtonView>
-        <ButtonView size="md" variant="accent" accentColor={ACCENT} onClick={handleCopy} disabled={!jsonText}>
-          Copy
-        </ButtonView>
-        <ButtonView size="md" variant="accent" accentColor={applied ? 'var(--color-success)' : ACCENT} onClick={handleApply}>
-          {applied ? '✓ Applied' : 'Apply Config'}
+        <CopyButtonView text={jsonText} size="xs" title="Copy config" />
+        <ButtonView
+          size="xs"
+          variant="ghost"
+          iconLeft={applied ? <CheckIcon size={10} /> : <UploadIcon size={10} />}
+          onClick={handleApply}
+          style={{ color: applied ? 'var(--color-success)' : ACCENT }}
+        >
+          {applied ? 'Applied' : 'Apply Config'}
         </ButtonView>
       </div>
 

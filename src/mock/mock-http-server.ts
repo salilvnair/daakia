@@ -123,6 +123,14 @@ export function createHttpServer(
       let matchedRoute: MockRoute | undefined;
       let matchedParams: Record<string, string> = {};
       let matchedStateMachine: StateMachineRuntime | null = null;
+      // First route whose method/path/headers/body matchers all passed but
+      // was rejected purely by Trigger Event gating — a "near miss". If the
+      // whole loop ends without a real match, this is almost always the
+      // caller's actual intent (e.g. POST /api/auth/logout on a session
+      // that was never logged in) and deserves a specific, meaningful
+      // response instead of the generic "no route matches at all" 404,
+      // which wrongly implies the endpoint doesn't exist.
+      let gatedNearMiss: { route: MockRoute; currentState: string; sm: StateMachineRuntime; sk: string } | undefined;
 
       for (const r of sortedRoutes) {
         const result = routeMatchesRequest(r, reqCtx);
@@ -134,7 +142,10 @@ export function createHttpServer(
             const sm = getStateMachineRuntime(currentConfig.id, effectiveWorkflowId(r, currentConfig), currentConfig);
             if (!sm) continue; // triggerEvent set but no matching connected/enabled workflow
             const sk = sm.resolveSessionKey(req.headers as Record<string, string>, cookies);
-            if (!sm.canFireEvent(sk, r.triggerEvent)) continue;
+            if (!sm.canFireEvent(sk, r.triggerEvent)) {
+              if (!gatedNearMiss) gatedNearMiss = { route: r, currentState: sm.getCurrentState(sk), sm, sk };
+              continue;
+            }
             matchedStateMachine = sm;
           } else {
             // No triggerEvent — still resolve a runtime if this route's
@@ -154,11 +165,66 @@ export function createHttpServer(
         return;
       }
 
+      if (!matchedRoute && gatedNearMiss) {
+        // The request genuinely matched a real, configured route — it's
+        // rejected purely because the session hasn't reached the state this
+        // route's Trigger Event requires (e.g. calling /logout before ever
+        // logging in). Returning the generic "no route matches at all" 404
+        // here would be actively misleading — the endpoint exists; the
+        // caller's sequence of calls is what's wrong. 409 Conflict + a
+        // message naming the exact event and current state gives a caller
+        // (human or AI) enough to fix their own test sequence immediately,
+        // instead of a route-listing dump.
+        const { route: r, currentState, sm, sk } = gatedNearMiss;
+        const availableEvents = sm.getAvailableEvents(sk);
+        const requiredEventPath = sm.findEventPathTo(sk, r.triggerEvent!);
+        let hint: string;
+        if (requiredEventPath && requiredEventPath.length > 0) {
+          hint = `Fire ${requiredEventPath.map((e) => `"${e}"`).join(' then ')} first — that will make "${r.triggerEvent}" reachable.`;
+        } else if (availableEvents.length > 0) {
+          hint = `From the current state, you can fire: ${availableEvents.map((e) => `"${e.event}" (→ "${e.toState}")`).join(', ')}.`;
+        } else {
+          hint = `No events can currently fire from state "${currentState}" — this session is a dead end.`;
+        }
+        const responseBody = JSON.stringify({
+          error: 'Conflict',
+          message: `${method} ${pathname} exists, but its Trigger Event "${r.triggerEvent}" cannot fire from the current session state ("${currentState}"). ${hint}`,
+          requiredEvent: r.triggerEvent,
+          currentState,
+          availableEvents: availableEvents.map((e) => e.event),
+          requiredEventPath: requiredEventPath ?? undefined,
+        });
+        res.writeHead(409, { 'Content-Type': 'application/json' });
+        res.end(responseBody);
+        logRequest(onLog, config, method, pathname, 409, req.headers as Record<string, string>, queryParams, reqBody, responseBody, Date.now() - startTime);
+        return;
+      }
+
       if (!matchedRoute) {
+        // Annotate routes that structurally match this method/path but were
+        // skipped purely because of Trigger Event gating (line ~137 above) —
+        // otherwise a gated route (e.g. GET /api/profile requiring a prior
+        // login) appears in this list looking like a normal, callable route,
+        // when calling it exactly as shown will 404 again until the session
+        // reaches the required state.
+        const availableRoutes = currentConfig.routes.filter(r => r.enabled).map(r => {
+          const label = `${r.method} ${r.path}`;
+          if (!r.triggerEvent) return label;
+          const sm = getStateMachineRuntime(currentConfig.id, effectiveWorkflowId(r, currentConfig), currentConfig);
+          // Distinct from "gated but currently unreachable" (below) — this
+          // route can NEVER match, on any request, until its connected
+          // workflow's config is actually attached (most commonly: a server
+          // saved before RestRoutesConfig's applySample() upserted
+          // connectedWorkflows[].stateMachine — re-run Load Sample to fix).
+          if (!sm) return `${label} (misconfigured — connected workflow for event "${r.triggerEvent}" has no stateMachine config; re-run Load Sample on this server)`;
+          const sk = sm.resolveSessionKey(req.headers as Record<string, string>, cookies);
+          if (sm.canFireEvent(sk, r.triggerEvent)) return label;
+          return `${label} (requires event "${r.triggerEvent}" — not reachable from the current session state)`;
+        });
         const responseBody = JSON.stringify({
           error: 'Not Found',
           message: `No mock route matches ${method} ${pathname}`,
-          availableRoutes: currentConfig.routes.filter(r => r.enabled).map(r => `${r.method} ${r.path}`),
+          availableRoutes,
         });
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(responseBody);

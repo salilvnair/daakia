@@ -17,7 +17,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-protocol-grpc)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const SYSTEM_PROMPT = `You are a gRPC and Protocol Buffers expert. Given a gRPC service definition (from reflection or a proto file), explain it in plain English for a developer who is new to this service.
 
@@ -92,7 +92,7 @@ export function AiGrpcProtoExplainerModal({ onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Proto Explainer ✦"
+      title="Proto Explainer"
       size="lg"
       headerColor={ACCENT}
       headerIcon={

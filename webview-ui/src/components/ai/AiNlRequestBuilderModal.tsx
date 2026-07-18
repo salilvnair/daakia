@@ -145,7 +145,7 @@ export function AiNlRequestBuilderModal({ protocol, currentUrl, onApply, onClose
     <ModalView
       open
       onClose={onClose}
-      title="Natural Language Request Builder ✦"
+      title="Natural Language Request Builder"
       size="md"
       headerColor="var(--color-protocol-ai)"
       headerIcon={
@@ -160,7 +160,7 @@ export function AiNlRequestBuilderModal({ protocol, currentUrl, onApply, onClose
       headerRight={protocolBadge}
       footerLeft={
         <AIButtonView
-          label={loading ? 'Building…' : 'Build ✦'}
+          label={loading ? 'Building…' : 'Build'}
           size="md"
           accentColor={ACCENT}
           disabled={!description.trim() || loading}

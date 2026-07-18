@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { SelectInputView, SplitButtonView, ButtonView, TextInputView, IconButtonView } from '@salilvnair/dui';
-import type { SelectOption, SplitButtonViewItem } from '@salilvnair/dui';
-import { ProtocolMcpBadge, ConnectIcon, DisconnectIcon, SaveIcon, SparkleIcon, CloseIcon } from '../../icons';
+import { SelectInputView, DropDownButtonView, ButtonView, TextInputView, IconButtonView } from '@salilvnair/dui';
+import type { SelectOption, ContextMenuItem } from '@salilvnair/dui';
+import { ProtocolMcpBadge, ConnectIcon, DisconnectIcon, SaveIcon, SparkleIcon, CloseIcon, MoreVerticalIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { saveRequest } from '../../services/request';
 import { AiMcpPromptBuilderModal } from '../ai/AiMcpPromptBuilderModal';
@@ -16,7 +16,7 @@ const TRANSPORT_OPTIONS: SelectOption[] = [
   { value: 'http', label: 'HTTP/SSE' },
 ];
 
-const saveItems: SplitButtonViewItem[] = [
+const saveItems: ContextMenuItem[] = [
   { id: 'save-as', label: 'Save as', icon: <SaveIcon size={12} />, iconColor: 'var(--color-ctx-close-saved)', onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }) },
 ];
 
@@ -27,7 +27,20 @@ export function McpUrlBar() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
   const [showPromptBuilder, setShowPromptBuilder] = useState(false);
+  const [showOverflow, setShowOverflow] = useState(false);
+  const [overflowDir, setOverflowDir] = useState<'down' | 'up'>('down');
+  const overflowRef = useRef<HTMLDivElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setShowOverflow(false);
+      }
+    };
+    if (showOverflow) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showOverflow]);
 
   const transport = activeTab?.mcpTransport || 'stdio';
   const command = activeTab?.mcpCommand || '';
@@ -155,33 +168,60 @@ export function McpUrlBar() {
           {loading ? 'Cancel' : connected ? 'Disconnect' : 'Connect'}
         </ButtonView>
 
-        {/* Save SplitButton */}
-        <SplitButtonView
+        {/* Save */}
+        <DropDownButtonView
           label="Save"
+          icon={<SaveIcon size={13} />}
           variant="secondary"
           size="lg"
-          onClick={() => {
+          onPrimaryClick={() => {
             if (!activeTab) return;
             const saved = saveRequest(activeTab);
             if (saved) updateTab(activeTab.id, { dirty: false });
           }}
-          icon={<SaveIcon size={13} />}
           items={saveItems}
+          align="right"
         />
 
-        {/* Prompt Builder ✦ */}
-        {aiEnabled('mcpPromptBuilder') && (
-          <ButtonView
-            variant="secondary"
+        {/* AI Tools ⋮ menu */}
+        <div className="flex-shrink-0 relative" ref={overflowRef}>
+          <IconButtonView
+            icon={<MoreVerticalIcon size={15} />}
+            title="AI tools"
             size="lg"
-            onClick={() => setShowPromptBuilder(true)}
-            iconLeft={<SparkleIcon size={11} />}
-            accentColor={ACCENT}
-            color={ACCENT}
-          >
-            Prompt Builder ✦
-          </ButtonView>
-        )}
+            active={showOverflow}
+            onClick={() => {
+              if (!showOverflow && overflowRef.current) {
+                const rect = overflowRef.current.getBoundingClientRect();
+                setOverflowDir((window.innerHeight - rect.bottom) < 180 ? 'up' : 'down');
+              }
+              setShowOverflow(p => !p);
+            }}
+          />
+
+          {showOverflow && (
+            <div
+              className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${overflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
+              style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
+            >
+              <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
+                <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>AI Tools</p>
+              </div>
+              {aiEnabled('mcpPromptBuilder') && (
+                <button type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                  onClick={() => { setShowPromptBuilder(true); setShowOverflow(false); }}
+                >
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                  Prompt Builder
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       {showPromptBuilder && <AiMcpPromptBuilderModal onClose={() => setShowPromptBuilder(false)} />}
     </>

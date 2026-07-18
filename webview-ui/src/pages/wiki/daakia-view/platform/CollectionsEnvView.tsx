@@ -1,6 +1,18 @@
 import { WikiScrollPage, CaptureCard } from '../capture/CaptureScrollView';
-import { WikiHero, SectionTitle, SubTitle, Steps, FeatureGrid, Callout, WikiTable, Code, Collapsible, WikiCard, Divider, chips } from '../shared/WikiShared';
+import { WikiHero, SectionTitle, SubTitle, Steps, FeatureGrid, Callout, WikiTable, Code, Collapsible, WikiCard, Divider, ProtocolActivateNote, chips, TocBar, type TocItem } from '../shared/WikiShared';
+import { CollectionsFolderIcon, ClockIcon, LayersIcon } from '../../../../icons';
 import { PLATFORM_CAPTURES } from './captures';
+
+const TOC_ITEMS: TocItem[] = [
+  { id: 'ce-collections', emoji: '📁', label: 'Collections' },
+  { id: 'ce-environments', emoji: '🌿', label: 'Environments' },
+  { id: 'ce-history', emoji: '🕐', label: 'History' },
+  { id: 'ce-auth', emoji: '🔒', label: 'Auth' },
+  { id: 'ce-scripts', emoji: '📝', label: 'Scripts' },
+  { id: 'ce-cookies', emoji: '🍪', label: 'Cookies' },
+  { id: 'ce-timeline', emoji: '⏱️', label: 'Timeline' },
+  { id: 'ce-devtools', emoji: '🛠️', label: 'DevTools' },
+];
 
 // A pixel `crop` here (x/width slice of the capture, to zoom into just the
 // sidebar panel) previously lived on this constant, but it kept silently
@@ -17,18 +29,37 @@ import { PLATFORM_CAPTURES } from './captures';
 
 export function CollectionsEnvView() {
   const byId = Object.fromEntries(PLATFORM_CAPTURES.map(c => [c.id, c]));
+  const cap = (id: string) => byId[id] && <CaptureCard entry={byId[id]} />;
   return (
-    <WikiScrollPage hero={
-      <WikiHero
-        emoji="🗂️"
-        title="Collections, Environments & More"
-        subtitle="Everything that lives around a request — folders, variables, history, auth, scripts, cookies, and the request timeline."
-        chips={chips(['Collections', 'Environments', 'History', 'Auth', 'Scripts', 'Cookies'])}
-      />
-    }>
+    <WikiScrollPage
+      hero={
+        <WikiHero
+          emoji="🗂️"
+          title="Collections, Environments & More"
+          subtitle="Everything that lives around a request — folders, variables, history, auth, scripts, cookies, and the request timeline."
+          chips={chips(['Collections', 'Environments', 'History', 'Auth', 'Scripts', 'Cookies'])}
+        />
+      }
+      toc={<TocBar items={TOC_ITEMS} />}
+    >
       {/* ─── Collections ──────────────────────────────────────────── */}
       <div>
-        <SectionTitle emoji="📁">Collections</SectionTitle>
+        <ProtocolActivateNote
+          icon={<CollectionsFolderIcon size={18} style={{ color: 'var(--color-sidebar-collections)' }} />}
+          color="var(--color-sidebar-collections)"
+          name="Collections, Environments & More"
+          extraIcons={[
+            { icon: <ClockIcon size={18} style={{ color: 'var(--color-sidebar-history)' }} />, color: 'var(--color-sidebar-history)' },
+            { icon: <LayersIcon size={18} style={{ color: 'var(--color-sidebar-environments)' }} />, color: 'var(--color-sidebar-environments)' },
+          ]}
+          actionText="in the right sidebar — Collections, History, or Environments."
+        />
+      </div>
+
+      <Divider />
+
+      <div>
+        <SectionTitle id="ce-collections" emoji="📁">Collections</SectionTitle>
         <FeatureGrid items={[
           { emoji: '📂', title: 'Organize', desc: 'Create nested folders and group requests by domain, project, or environment.' },
           { emoji: '✏️', title: 'CRUD', desc: 'Right-click any item — Rename, Duplicate, Delete, Move — inline editing.' },
@@ -39,25 +70,52 @@ export function CollectionsEnvView() {
         <WikiTable
           headers={['Format', 'How to Import', 'What you get']}
           rows={[
-            ['Postman v2.1', 'Right-click → Import from Postman', 'Full collection tree, headers, bodies, env vars'],
+            ['Postman v2.0/2.1', 'Right-click → Import from Postman', 'Full collection tree, headers, bodies, env vars'],
             ['OpenAPI 3.0', 'Right-click → Import from OpenAPI', 'Endpoints as requests with path params as {{param}}'],
             ['Swagger 2.0', 'Right-click → Import from OpenAPI', 'Same as OpenAPI 3.0'],
             ['HAR File', 'Right-click → Import from HAR', 'Requests grouped by domain with full headers & bodies'],
             ['Bruno', 'Right-click → Import from Bruno', 'Folder structure, .bru files, disabled entries (~ prefix)'],
+            ['Insomnia', 'Right-click → Import from Insomnia', 'Workspace/request tree, environments'],
+            ['Thunder Client', 'Right-click → Import from Thunder Client', 'Collection tree and saved requests'],
+            ['HTTPie', 'Right-click → Import from HTTPie', 'Single requests from HTTPie command syntax'],
           ]}
         />
+        <SubTitle>Export Formats</SubTitle>
+        <WikiTable
+          headers={['Format', 'Notes']}
+          rows={[
+            ['Daakia JSON', 'Native format — round-trips perfectly back into Daakia'],
+            ['Postman', 'Collection v2.1-compatible JSON'],
+            ['Insomnia', 'Insomnia workspace export'],
+            ['Bruno (.bru)', 'Bruno\'s plain-text request format'],
+            ['HTTPie', 'Command-line HTTPie syntax, one file per request'],
+            ['OpenAPI 3.0', 'Reverse-generated spec from your requests'],
+            ['API Docs (Markdown)', 'Human-readable Markdown documentation of the collection'],
+          ]}
+        />
+        <Callout type="info">
+          The top-level sidebar toolbar's "Export as JSON" shortcut isn't wired up yet (shows a "not implemented" toast)
+          — use right-click → Export on a specific collection for the real export flow.
+        </Callout>
         <SubTitle>Collection Properties</SubTitle>
         <WikiCard title="Collection-Level Settings" icon="⚙️">
           <Steps steps={[
             'Right-click a collection → <strong>Properties</strong>',
-            '<strong>Variables tab</strong>: Set variables for all requests in this collection',
-            '<strong>Auth tab</strong>: Set shared auth (Bearer, Basic, OAuth) — all child requests inherit it',
-            '<strong>Scripts tab</strong>: Pre-request and post-response scripts that run for ALL requests in the collection',
+            '<strong>Variables tab</strong>: Set variables for all requests directly in this collection/folder',
+            '<strong>Auth tab</strong>: Set shared auth (Bearer, Basic, OAuth) — requests directly inside inherit it',
+            '<strong>Scripts tab</strong>: Pre-request and post-response scripts that run for requests directly in this collection/folder',
           ]} />
-          <Callout type="info">
-            Auth priority: Request-level auth overrides collection auth. Collection auth overrides no auth.
+          <Callout type="warn">
+            Inheritance is <strong>one level deep only</strong> — a request only inherits from the folder it's
+            directly placed in, not from that folder's parent or the collection root. Nesting a request two folders
+            deep does NOT walk up the chain to find auth/scripts/variables set higher up; set them on the immediate
+            containing folder.
           </Callout>
         </WikiCard>
+        {cap('collections-properties-variables')}
+        {cap('collections-properties-authorization')}
+        {cap('collections-properties-headers')}
+        {cap('collections-properties-scripts')}
         <SubTitle>Collection Runner</SubTitle>
         <Steps steps={[
           'Right-click a collection → <strong>Run Collection</strong>',
@@ -66,6 +124,15 @@ export function CollectionsEnvView() {
           'See live progress: current request, pass/fail status per request',
           'Use <strong>Stop</strong> button to abort mid-run',
         ]} />
+        {cap('collections-runner-runner')}
+        <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+          A separate <strong>CLI export</strong> turns the same run into a standalone command — for running the exact
+          same sequence outside VS Code, e.g. in a CI pipeline.
+        </p>
+        {cap('collections-runner-cli')}
+        <SubTitle>Creating & Importing</SubTitle>
+        {cap('collections-new-item-modal')}
+        {cap('collections-import-insomnia-modal')}
         {byId['platform-sidebar-collections'] && <CaptureCard entry={byId['platform-sidebar-collections']} />}
       </div>
 
@@ -73,9 +140,9 @@ export function CollectionsEnvView() {
 
       {/* ─── Environments ─────────────────────────────────────────── */}
       <div>
-        <SectionTitle emoji="🌿">Environments & Variables</SectionTitle>
+        <SectionTitle id="ce-environments" emoji="🌿">Environments & Variables</SectionTitle>
         <Callout type="tip" title="Variable Priority (Highest → Lowest)">
-          Request Variables → Active Environment → Collection Variables → Global Variables
+          Request Variables → Collection Variables → Active Environment → Global Environment
         </Callout>
         <SubTitle>Creating Environments</SubTitle>
         <Steps steps={[
@@ -91,17 +158,21 @@ export function CollectionsEnvView() {
           rows={[
             ['Default', 'Value shown in plain text', 'Base URLs, usernames, non-sensitive config'],
             ['Secret', 'Value masked (••••••) — eye icon to reveal', 'API keys, passwords, tokens'],
-            ['Global', 'Available to ALL environments, no need to switch', 'App-wide constants like app name, version'],
           ]}
         />
+        <Callout type="info">
+          "Global" isn't a per-variable toggle inside a normal environment — it's a whole separate, always-active{' '}
+          <strong>Global</strong> environment. Variables you add there resolve everywhere without switching, which is
+          why they act like app-wide constants.
+        </Callout>
         <SubTitle>Script-Level Variables</SubTitle>
         <WikiTable
           headers={['API', 'Example']}
           rows={[
-            ['Read var from script', <Code>daakia.environment.get("baseUrl")</Code>],
-            ['Write var from script', <Code>daakia.environment.set("token", response.json.token)</Code>],
-            ['Collection var', <Code>daakia.collectionVariables.set("id", "42")</Code>],
-            ['Global var', <Code>daakia.globals.set("sessionId", crypto.randomUUID())</Code>],
+            ['Read var from script', <Code>dk.env.get("baseUrl")</Code>],
+            ['Write var from script', <Code>dk.env.set("token", dk.response.json().token)</Code>],
+            ['Collection var', <Code>dk.collectionVariables.set("id", "42")</Code>],
+            ['Global var', <Code>dk.globals.set("sessionId", crypto.randomUUID())</Code>],
           ]}
         />
         <Callout type="info" title="Escape Syntax">
@@ -109,13 +180,14 @@ export function CollectionsEnvView() {
           E.g. <Code>{'$daakia_{username}_$'}</Code> sends literal text <Code>{'{{username}}'}</Code>.
         </Callout>
         {byId['platform-sidebar-environments'] && <CaptureCard entry={byId['platform-sidebar-environments']} />}
+        {cap('platform-global-variables-modal')}
       </div>
 
       <Divider />
 
       {/* ─── History ──────────────────────────────────────────────── */}
       <div>
-        <SectionTitle emoji="🕐">History</SectionTitle>
+        <SectionTitle id="ce-history" emoji="🕐">History</SectionTitle>
         <FeatureGrid items={[
           { emoji: '📋', title: 'Auto-recorded', desc: 'Every sent request is saved automatically — method, URL, status, time.' },
           { emoji: '▶️', title: 'Replay', desc: 'Click any history entry to open it in a new tab with full headers, body, and auth.' },
@@ -132,7 +204,7 @@ export function CollectionsEnvView() {
 
       {/* ─── Authentication ───────────────────────────────────────── */}
       <div>
-        <SectionTitle emoji="🔒">Authentication</SectionTitle>
+        <SectionTitle id="ce-auth" emoji="🔒">Authentication</SectionTitle>
         <SubTitle>Built-in Auth Types</SubTitle>
         <WikiTable
           headers={['Type', 'What it sends', 'Best for']}
@@ -166,29 +238,31 @@ export function CollectionsEnvView() {
           </Callout>
         </WikiCard>
         <Callout type="tip">
-          Set auth once at the <strong>collection</strong> level — all requests inside inherit it.
-          Override per-request if needed. Right-click collection → Properties → Auth tab.
+          Set auth once on a collection or folder — requests placed directly inside inherit it (one level, see the
+          inheritance note above). Override per-request if needed. Right-click → Properties → Auth tab.
         </Callout>
       </div>
+      {cap('platform-auth-main')}
 
       <Divider />
 
       {/* ─── Scripts & Testing ────────────────────────────────────── */}
       <div>
-        <SectionTitle emoji="📝">Scripts & Testing</SectionTitle>
+        <SectionTitle id="ce-scripts" emoji="📝">Scripts & Testing</SectionTitle>
         <Callout type="info" title="What are Scripts?">
           JavaScript snippets that run before a request (Pre-request) or after the response (Post-response).
           Use them to set dynamic headers, chain requests, and write automated test assertions.
         </Callout>
+        {cap('platform-scripts-main')}
         <SubTitle>Pre-Request Scripts</SubTitle>
         <WikiTable
           headers={['Task', 'Code Example']}
           rows={[
-            ['Set env variable', <Code>{'daakia.environment.set("ts", Date.now().toString())'}</Code>],
-            ['Read env variable', <Code>{'const host = daakia.environment.get("baseUrl")'}</Code>],
-            ['Log something', <Code>{'console.log("Request URL:", daakia.request.url)'}</Code>],
+            ['Set env variable', <Code>{'dk.env.set("ts", Date.now().toString())'}</Code>],
+            ['Read env variable', <Code>{'const host = dk.env.get("baseUrl")'}</Code>],
+            ['Log something', <Code>{'console.log("Request URL:", dk.request.url)'}</Code>],
             ['Abort request', <Code>{'throw new Error("Abort: missing auth token!")'}</Code>],
-            ['Set request header', <Code>{'daakia.request.headers["X-Ts"] = Date.now().toString()'}</Code>],
+            ['Set request header', <Code>{'dk.request.headers["X-Ts"] = Date.now().toString()'}</Code>],
           ]}
         />
         <SubTitle>Assertion Matchers</SubTitle>
@@ -204,19 +278,29 @@ export function CollectionsEnvView() {
             [<Code>toBeLessThan(n)</Code>, 'Value < n'],
             [<Code>toHaveProperty(key)</Code>, 'Object has property key'],
             [<Code>toHaveStatus(code)</Code>, 'Response status equals code'],
+            [<Code>toHaveLength(n)</Code>, 'String/array has length n'],
+            [<Code>toMatchSchema(schema)</Code>, "Value matches a JSON Schema-like shape — the real way to assert a type (e.g. { type: 'array' })"],
           ]}
         />
-        <SubTitle>daakia.response Object</SubTitle>
+        <SubTitle>dk.response Object</SubTitle>
         <WikiTable
           headers={['Property', 'Type', 'Value']}
           rows={[
-            [<Code>daakia.response.status</Code>, 'number', 'HTTP status code (200, 201, 404...)'],
-            [<Code>daakia.response.body</Code>, 'string', 'Raw response body as string'],
-            [<Code>daakia.response.time</Code>, 'number', 'Total response time in milliseconds'],
-            [<Code>daakia.response.headers</Code>, 'object', 'Response headers as key-value map'],
-            [<Code>daakia.response.size</Code>, 'number', 'Response size in bytes'],
+            [<Code>dk.response.status</Code>, 'number', 'HTTP status code (200, 201, 404...)'],
+            [<Code>dk.response.body</Code>, 'string', 'Raw response body as string'],
+            [<Code>dk.response.json()</Code>, 'method', 'Parses body as JSON — returns null if it isn\'t valid JSON'],
+            [<Code>dk.response.time</Code>, 'number', 'Total response time in milliseconds'],
+            [<Code>dk.response.headers</Code>, 'object', 'Response headers as key-value map'],
+            [<Code>dk.response.size</Code>, 'number', 'Response size in bytes'],
           ]}
         />
+        <Callout type="warn">
+          There's no <Code>daakia.*</Code> namespace — every script API is under <Code>dk.*</Code> (e.g. <Code>dk.env</Code>,{' '}
+          <Code>dk.request</Code>, <Code>dk.response</Code>, <Code>dk.test</Code>, <Code>dk.expect</Code>). Methods like{' '}
+          <Code>dk.setVariable</Code>, <Code>dk.fetch</Code>, or <Code>.toBeArray()</Code> that show up in older AI-generated
+          scripts don't exist — use <Code>dk.env.set</Code>, <Code>dk.sendRequest({'{ url }'})</Code>, and{' '}
+          <Code>toMatchSchema({'{ type: \'array\' }'})</Code> instead.
+        </Callout>
         <Collapsible title="Collection-Level Scripts">
           Collection scripts run BEFORE request-level scripts (pre-request) and AFTER them (post-response).
           Order: Collection Pre → Request Pre → HTTP call → Request Post → Collection Post.
@@ -228,7 +312,7 @@ export function CollectionsEnvView() {
 
       {/* ─── Cookies ──────────────────────────────────────────────── */}
       <div>
-        <SectionTitle emoji="🍪">Cookies</SectionTitle>
+        <SectionTitle id="ce-cookies" emoji="🍪">Cookies</SectionTitle>
         <FeatureGrid items={[
           { emoji: '📥', title: 'Auto-capture', desc: 'Cookies from Set-Cookie headers are automatically stored per domain.' },
           { emoji: '📤', title: 'Auto-send', desc: 'Stored cookies are sent with subsequent requests to the same domain.' },
@@ -240,12 +324,13 @@ export function CollectionsEnvView() {
           Test cookie flows: <Code>GET /cookies/set?name=daakia</Code> → <Code>GET /cookies</Code> → second request automatically includes the cookie.
         </Callout>
       </div>
+      {cap('platform-cookie-manager')}
 
       <Divider />
 
       {/* ─── Timeline ─────────────────────────────────────────────── */}
       <div>
-        <SectionTitle emoji="⏱️">Timeline & Network</SectionTitle>
+        <SectionTitle id="ce-timeline" emoji="⏱️">Timeline & Network</SectionTitle>
         <SubTitle>Timeline Breakdown</SubTitle>
         <WikiTable
           headers={['Phase', 'What it measures']}
@@ -273,7 +358,7 @@ export function CollectionsEnvView() {
 
       {/* ─── DevTools ─────────────────────────────────────────────── */}
       <div>
-        <SectionTitle emoji="🛠️">DevTools Panel</SectionTitle>
+        <SectionTitle id="ce-devtools" emoji="🛠️">DevTools Panel</SectionTitle>
         <Callout type="info" title="Not the same as the Response panel">
           The bottom DevTools panel is app-wide — it aggregates script console output and network activity across every tab, independent of whichever single request/response you're currently looking at.
         </Callout>
@@ -290,6 +375,14 @@ export function CollectionsEnvView() {
           Every request Daakia sends — across REST, GraphQL, gRPC, SOAP, and realtime protocols — appears here with full headers, bodies, timing, and size, so you can review past traffic without re-running anything.
         </Callout>
         {byId['platform-devtools-network'] && <CaptureCard entry={byId['platform-devtools-network']} />}
+        <SubTitle>AI Insights & Performance</SubTitle>
+        <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+          Two more DevTools sub-tabs: AI Insights surfaces patterns/anomalies across recent traffic automatically,
+          and Performance tracks the extension's own memory footprint and timing — separate from any single
+          request's Timeline tab.
+        </p>
+        {cap('devtools-ai-insights')}
+        {cap('devtools-performance')}
       </div>
     </WikiScrollPage>
   );

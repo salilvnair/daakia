@@ -105,7 +105,7 @@ export function AiCompatibilityScorerModal({ collectionNode, onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="API Compatibility Scorer ✦"
+      title="API Compatibility Scorer"
       subtitle={collectionNode.name}
       size="xl"
       headerColor={ACCENT}

@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-protocol-mock)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 export function AiMockIntelligenceModal({ onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
@@ -83,7 +83,7 @@ Output as a JSON array of WireMock stub objects. Format:
     <ModalView
       open
       onClose={onClose}
-      title="Mock Intelligence ✦"
+      title="Mock Intelligence"
       size="xl"
       headerColor={ACCENT}
       headerIcon={
@@ -107,7 +107,7 @@ Output as a JSON array of WireMock stub objects. Format:
           <p className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
             Analyze real API responses from open tabs and generate WireMock-compatible mock rules automatically.
           </p>
-          <AIButtonView label="Generate Mock Rules ✦" size="md" accentColor={ACCENT} onClick={generate} />
+          <AIButtonView label="Generate Mock Rules" size="md" accentColor={ACCENT} onClick={generate} />
         </div>
       )}
       {error && <p className="text-[11px] px-3 py-2 rounded-lg mb-3" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>{error}</p>}

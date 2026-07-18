@@ -4,7 +4,6 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
@@ -14,13 +13,10 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-protocol-mcp)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 export function AiMcpPromptBuilderModal({ onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
-  const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
-  const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
-  const providers = useAiProvidersStore(s => s.providers);
   const [description, setDescription] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,12 +40,7 @@ export function AiMcpPromptBuilderModal({ onClose }: Props) {
     if (!activeTab || !description.trim() || loading) return;
     streamRef.current = ''; setResult(''); setError(''); setLoading(true);
 
-    // Resolve active AI provider/model — prefer what's on the tab, fall back to store defaults
-    const provider = activeTab.aiProvider || defaultProviderId;
-    const providerInfo = providers.find(p => p.id === provider);
-    const model = activeTab.aiModel || defaultModelId || providerInfo?.models.find(m => m.enabled)?.id || '';
-
-    const userPrompt = `You are an MCP (Model Context Protocol) expert. The user wants to accomplish the following goal using MCP tools:
+    const userMessage = `You are an MCP (Model Context Protocol) expert. The user wants to accomplish the following goal using MCP tools:
 
 "${description}"
 
@@ -68,28 +59,14 @@ Format your response with:
 ## Recommended Prompt
 ## Example Usage`;
 
-    postMsg({
-      type: 'ai:send',
-      tabId: activeTab.id,
-      provider,
-      model,
-      baseUrl: '',
-      systemPrompts: [],
-      userPrompt,
-      conversation: [],
-      tools: [],
-      settings: {},
-      mcpServerConfigs: [],
-      images: [],
-      envId: activeTab.envId,
-    });
+    postMsg({ type: 'aiStream', payload: { userMessage, templateKey: 'mcp.prompt.build' } });
   };
 
   return (
     <ModalView
       open
       onClose={onClose}
-      title="MCP Prompt Builder ✦"
+      title="MCP Prompt Builder"
       size="lg"
       headerColor={ACCENT}
       headerIcon={
@@ -99,7 +76,7 @@ Format your response with:
       }
       footerRight={
         <AIButtonView
-          label={loading ? 'Building…' : 'Build Prompt ✦'}
+          label={loading ? 'Building…' : 'Build Prompt'}
           size="md"
           accentColor={ACCENT}
           disabled={!description.trim() || loading}
@@ -122,11 +99,11 @@ Format your response with:
         <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Available tools: <span style={{ color: ACCENT }}>{availableTools}</span></span>
 
         {error && <p className="text-[11px] px-3 py-2 rounded-lg mb-3" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>{error}</p>}
-        {loading && !result && <p className="text-[11px] animate-pulse text-center py-12" style={{ color: ACCENT }}>Analyzing tools and building prompt sequence…</p>}
+        {loading && !result && <p className="text-[11px] animate-pulse" style={{ color: ACCENT }}>Analyzing tools and building prompt sequence…</p>}
         {!result && !loading && !error && (
-          <div className="flex flex-col items-center gap-3 py-12 text-center">
-            <SparkleIcon size={24} style={{ color: ACCENT, opacity: 0.4 }} />
-            <p className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>Describe your goal above and AI will build a structured MCP prompt with the optimal tool call sequence.</p>
+          <div className="flex items-center gap-2">
+            <SparkleIcon size={14} style={{ color: ACCENT, opacity: 0.5, flexShrink: 0 }} />
+            <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Describe your goal above and AI will build a structured MCP prompt with the optimal tool call sequence.</p>
           </div>
         )}
         {result && <MdViewer content={result} />}

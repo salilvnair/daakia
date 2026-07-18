@@ -80,7 +80,7 @@ Format as clean, shareable markdown that can be saved as a .md file or pasted in
     <ModalView
       open
       onClose={onClose}
-      title="Export Session ✦"
+      title="Export Session"
       size="lg"
       headerColor={ACCENT}
       headerIcon={

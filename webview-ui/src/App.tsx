@@ -25,6 +25,8 @@ import { SoapPanel } from './components/soap';
 import { AiPanel } from './components/ai/AiPanel';
 import { DaakiaAiPanel } from './components/ai/DaakiaAiPanel';
 import { McpPanel } from './components/mcp/McpPanel';
+import { CommandPaletteView } from './components/shared/command-palette/CommandPaletteView';
+import { ApiMonitor } from './components/power/ApiMonitor';
 import { useTabsStore } from './store/tabs-store';
 import { useToastStore } from './store/toast-store';
 import { useEnvStore } from './store/env-store';
@@ -54,10 +56,27 @@ import { CaptureBridge } from './pages/wiki/daakia-view/capture/CaptureBridge';
 
 type FocusedPanel = 'request' | 'response' | null;
 
+const PROTOCOL_SIDEBAR_PREFIX: Record<string, string> = {
+  rest: '', graphql: 'gql-', websocket: 'ws-', grpc: 'grpc-', soap: 'soap-', ai: 'ai-', mcp: 'mcp-',
+};
+
 export default function App() {
   const [sqliteStatus, setSqliteStatus] = useState<{ ok: boolean; error?: string }>({ ok: true });
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>('collections');
   const [saveAsTabId, setSaveAsTabId] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [monitorPrefill, setMonitorPrefill] = useState<{ name: string; method: string; url: string } | null>(null);
+
+  // Sidebar "Monitor Request" — opens the Power Features API Monitor pre-filled
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'openMonitorFor') {
+        setMonitorPrefill({ name: event.data.name, method: event.data.method, url: event.data.url });
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
   const activeProtocol = useTabsStore(s => s.activeProtocol);
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
@@ -74,46 +93,31 @@ export default function App() {
     };
   }, []);
 
-  // Remap sidebar section when protocol changes so icons match active protocol
+  // Remap sidebar section when protocol changes so icons match active protocol.
+  // Generic + symmetric: strips whichever protocol prefix is present, then
+  // re-applies the new protocol's prefix. A per-protocol if/else here previously
+  // only recognized a subset of "from" prefixes per branch (e.g. rest's branch
+  // never recognized `soap-`/`grpc-`), so a `soap-collections` section left over
+  // from a prior SOAP visit would survive untouched on every other protocol —
+  // invisible there (didn't match that protocol's own section list) but still set —
+  // and would then pop back open the instant the user returned to SOAP, looking
+  // like SOAP "always" force-opens the panel even after the user closed it.
   const prevProtocolRef = useRef(activeProtocol);
   useEffect(() => {
     if (prevProtocolRef.current === activeProtocol) return;
     prevProtocolRef.current = activeProtocol;
-    // Map current section to equivalent in new protocol
-    if (activeProtocol === 'rest') {
-      if (sidebarSection?.startsWith('gql-') || sidebarSection?.startsWith('ws-')) {
-        const base = sidebarSection.replace(/^(gql|ws)-/, '');
-        if (['collections', 'history'].includes(base)) setSidebarSection(base as SidebarSection);
-        else setSidebarSection('collections');
+    if (!sidebarSection || sidebarSection === 'environments' || sidebarSection === 'debug') return;
+    // gql-docs / gql-schema have no equivalent section in other protocols
+    if (sidebarSection === 'gql-docs' || sidebarSection === 'gql-schema') {
+      if (activeProtocol !== 'graphql') {
+        setSidebarSection(activeProtocol === 'rest' ? 'collections' : `${PROTOCOL_SIDEBAR_PREFIX[activeProtocol]}collections` as SidebarSection);
       }
-    } else if (activeProtocol === 'graphql') {
-      if (sidebarSection === 'collections') setSidebarSection('gql-collections');
-      else if (sidebarSection === 'history') setSidebarSection('gql-history');
-      else if (sidebarSection?.startsWith('ws-')) {
-        const base = sidebarSection.replace('ws-', 'gql-');
-        setSidebarSection(base as SidebarSection);
-      }
-    } else if (activeProtocol === 'websocket') {
-      if (sidebarSection === 'collections') setSidebarSection('ws-collections');
-      else if (sidebarSection === 'history') setSidebarSection('ws-history');
-      else if (sidebarSection?.startsWith('gql-')) {
-        const base = sidebarSection.replace('gql-', '');
-        if (['collections', 'history'].includes(base)) setSidebarSection(`ws-${base}` as SidebarSection);
-        else setSidebarSection('ws-collections');
-      }
-    } else if (activeProtocol === 'grpc') {
-      if (sidebarSection === 'collections' || sidebarSection?.startsWith('gql-') || sidebarSection?.startsWith('ws-')) {
-        setSidebarSection('grpc-collections');
-      } else if (sidebarSection === 'history') {
-        setSidebarSection('grpc-history');
-      }
-    } else if (activeProtocol === 'soap') {
-      if (sidebarSection === 'collections' || sidebarSection?.startsWith('gql-') || sidebarSection?.startsWith('ws-') || sidebarSection?.startsWith('grpc-')) {
-        setSidebarSection('soap-collections');
-      } else if (sidebarSection === 'history') {
-        setSidebarSection('soap-history');
-      }
+      return;
     }
+    const base = sidebarSection.replace(/^(gql|ws|grpc|soap|ai|mcp)-/, '');
+    if (base !== 'collections' && base !== 'history') return;
+    const next = `${PROTOCOL_SIDEBAR_PREFIX[activeProtocol] ?? ''}${base}` as SidebarSection;
+    if (next !== sidebarSection) setSidebarSection(next);
   }, [activeProtocol, sidebarSection]);
 
   // Sidebar resizable
@@ -252,6 +256,16 @@ export default function App() {
     if (input) { input.focus(); input.select(); }
   }, 'Focus URL bar');
 
+  // Cmd+K (Mac) / Ctrl+K (Win/Linux) — Global command palette
+  useKeyboardShortcut('app.command-palette-meta', { key: 'k', metaKey: true }, (e) => {
+    e.preventDefault();
+    setPaletteOpen(prev => !prev);
+  }, 'Command palette');
+  useKeyboardShortcut('app.command-palette-ctrl', { key: 'k', ctrlKey: true }, (e) => {
+    e.preventDefault();
+    setPaletteOpen(prev => !prev);
+  }, 'Command palette');
+
   // Right-click context menu is handled by <RightClickMenu /> component
 
   // ── Sidebar splitter drag ──
@@ -318,7 +332,7 @@ export default function App() {
   }, [focusedPanel]);
 
   // Extension host → webview message routing (extracted to app/use-extension-messages.ts)
-  useExtensionMessages({ setSqliteStatus, setSaveAsTabId, setSplitPercent, setFocusedPanel, setSidebarSection, setSidebarOpen, setSidebarWidth });
+  useExtensionMessages({ setSqliteStatus, setSaveAsTabId, setSplitPercent, setFocusedPanel, setSidebarSection, setSidebarOpen, setSidebarWidth, setPaletteOpen });
 
   // Persist env store changes (activeEnvId, environments) to DB — always mounted
   useEffect(() => {
@@ -432,6 +446,16 @@ export default function App() {
       <DebugHud />
       {/* Headless wiki capture automation driver — passive until wiki:capture:run is received */}
       <CaptureBridge />
+      {/* Global Cmd+K / Ctrl+K command palette */}
+      <CommandPaletteView
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onOpenSidebarSection={(section) => { setSidebarOpen(true); setSidebarSection(section); }}
+      />
+      {/* Sidebar "Monitor Request" — pre-filled API Monitor */}
+      {monitorPrefill && (
+        <ApiMonitor prefill={monitorPrefill} onClose={() => setMonitorPrefill(null)} />
+      )}
       {/* Left protocol icon rail */}
       <div className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-r border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
         <ProtocolIcon

@@ -14,7 +14,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-warning)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const SYSTEM_PROMPT = `You are a chaos engineering expert (Chaos Monkey principles). Design a complete chaos test plan for an API system.
 
@@ -86,7 +86,7 @@ export function AiChaosEngineeringModal({ onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Chaos Engineering Planner ✦"
+      title="Chaos Engineering Planner"
       size="lg"
       headerColor={ACCENT}
       headerIcon={
@@ -123,7 +123,11 @@ export function AiChaosEngineeringModal({ onClose }: Props) {
           {TARGETS.map(t => (
             <button key={t.id} type="button" onClick={() => setTarget(t.id)}
               className="h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer"
-              style={{ background: target === t.id ? ACCENT : 'transparent', color: target === t.id ? '#fff' : 'var(--color-text-muted)', border: `1px solid ${target === t.id ? ACCENT : 'var(--color-surface-border)'}` }}>
+              style={{
+                background: target === t.id ? `color-mix(in srgb, ${ACCENT} 15%, transparent)` : 'transparent',
+                color: target === t.id ? ACCENT : 'var(--color-text-muted)',
+                border: `1px solid ${target === t.id ? `color-mix(in srgb, ${ACCENT} 35%, transparent)` : 'var(--color-surface-border)'}`,
+              }}>
               {t.label}
             </button>
           ))}

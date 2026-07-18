@@ -14,7 +14,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-protocol-sse)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 export function AiSseEventSuggesterModal({ observedEventTypes, onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
@@ -52,7 +52,7 @@ export function AiSseEventSuggesterModal({ observedEventTypes, onClose }: Props)
     <ModalView
       open
       onClose={onClose}
-      title="Event Suggester ✦"
+      title="Event Suggester"
       size="md"
       headerColor={ACCENT}
       headerIcon={

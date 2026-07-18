@@ -100,6 +100,50 @@ const EXAMPLE_NETWORK = [
 // happened to say "LLM Provider" instead of the real nav button). Note:
 // 'wiki-new' is intentionally absent here — Wiki is now a SideNavView GROUP
 // (its own header isn't a selectable leaf); see 'settings-wiki' below.
+// A fresh e2e session's real AI-audit DB table has zero rows (nothing in the
+// suite ever makes a real AI call), so settings-ai-audit would otherwise
+// capture a genuine-but-boring "0 records" empty state — seeded here via
+// AiAuditPanel's test-only __aiAuditCaptureSeed hook instead, same pattern
+// as seedRealtimeState for the WS/SSE/SIO/MQTT panels.
+const EXAMPLE_AI_AUDIT_ENTRIES = [
+  {
+    audit_id: 1, conversation_id: 'conv-001', stage: 'rest.body.generate', model: 'gpt-4o',
+    system_prompt: 'You are an API assistant that generates realistic JSON request bodies from a description.',
+    user_prompt: 'Generate a body for creating a new user with name, email, and role.',
+    request_payload: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: 'Generate a body for creating a new user' }] }),
+    response_payload: JSON.stringify({ name: 'New User', email: 'new@example.com', role: 'user' }, null, 2),
+    headers: JSON.stringify({ 'content-type': 'application/json' }),
+    duration_ms: 842, created_at: new Date(Date.now() - 60_000).toISOString(),
+  },
+  {
+    audit_id: 2, conversation_id: 'conv-002', stage: 'rest.assert.generate', model: 'gpt-4o',
+    system_prompt: 'You are an API assistant that writes dk.test() assertions from a response body.',
+    user_prompt: 'Write assertions verifying the users array is non-empty and total is a number.',
+    request_payload: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: 'Write assertions...' }] }),
+    response_payload: "dk.test('users is non-empty', () => { dk.expect(dk.response.json().users.length).toBeGreaterThan(0); });",
+    headers: JSON.stringify({ 'content-type': 'application/json' }),
+    duration_ms: 611, created_at: new Date(Date.now() - 180_000).toISOString(),
+  },
+  {
+    audit_id: 3, conversation_id: 'conv-003', stage: 'mock.rest.generate', model: 'claude-sonnet-5',
+    system_prompt: 'You generate realistic mock REST routes from a short description.',
+    user_prompt: 'Generate CRUD routes for a users API.',
+    request_payload: JSON.stringify({ model: 'claude-sonnet-5', messages: [{ role: 'user', content: 'Generate CRUD routes for a users API' }] }),
+    response_payload: JSON.stringify({ routes: [{ method: 'GET', path: '/api/users' }] }, null, 2),
+    headers: JSON.stringify({ 'content-type': 'application/json' }),
+    duration_ms: 1204, error: null, created_at: new Date(Date.now() - 300_000).toISOString(),
+  },
+  {
+    audit_id: 4, conversation_id: 'conv-004', stage: 'DAAKIA_AI', model: 'gpt-4o',
+    system_prompt: 'You are Daakia AI, an assistant embedded in an API client.',
+    user_prompt: 'Why did my last request return a 401?',
+    request_payload: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: 'Why did my last request return a 401?' }] }),
+    response_payload: 'A 401 means the Authorization header was missing or the bearer token expired — check the Auth tab on the Login request.',
+    headers: JSON.stringify({ 'content-type': 'application/json' }),
+    duration_ms: 733, error: 'Rate limited, retried once', created_at: new Date(Date.now() - 420_000).toISOString(),
+  },
+];
+
 const SETTINGS_SECTIONS: Array<{ sectionId: string; captureId: string; label: string }> = [
   { sectionId: 'general', captureId: 'settings-general', label: 'Settings — General' },
   { sectionId: 'theme', captureId: 'settings-theme', label: 'Settings — Theme' },
@@ -271,6 +315,16 @@ const SCREENS: ScreenSpec[] = [
       { action: 'wait', ms: 600 },
       { action: 'click', selector: `[data-nav-id="${s.sectionId}"]` },
       { action: 'wait', ms: 400 },
+      // power-features previously captured a leaked-open AI modal (e.g. Bulk
+      // URL Tester) from earlier activity in this long-lived webview session
+      // — CaptureBridge's body-child portal scan picks up whatever's still
+      // mounted. Close it so this screen shows the real Power Features grid.
+      ...(s.sectionId === 'power-features' ? [{ action: 'closeModals' as const }, { action: 'wait' as const, ms: 300 }] : []),
+      // ai-audit's real DB table is empty in a fresh e2e session (nothing
+      // triggers a real AI call) — seed example rows into AiAuditPanel's own
+      // local state via its test-only hook instead of capturing a genuine
+      // but boring "0 records" state.
+      ...(s.sectionId === 'ai-audit' ? [{ action: 'seedAiAudit' as const, aiAuditEntries: EXAMPLE_AI_AUDIT_ENTRIES as any }, { action: 'wait' as const, ms: 300 }] : []),
     ],
   })),
   {
@@ -349,6 +403,41 @@ suite('Daakia Wiki Capture — Platform (Sidebar, DevTools, Settings)', () => {
     });
   }
 
+  // Command palette (Cmd+K / Ctrl+K) — dedicated test (not a plain SCREENS
+  // entry) because it needs a follow-up runCapture to close itself again
+  // afterward, via the same Ctrl+K toggle that opened it (App.tsx's
+  // setPaletteOpen(prev => !prev)); leaving it open would bleed a
+  // dk_cmdk__overlay portal into every capture suite that runs after this
+  // one in the same long-lived webview session.
+  test('capture platform-command-palette', async function () {
+    this.timeout(20_000);
+    await runCapture(MainPanel, [
+      { action: 'closeAllTabs' },
+      { action: 'addTab', patch: BASE_REST_TAB },
+      ...closeSidebarPanel(),
+      { action: 'closeDevTools' },
+    ]);
+    const html = await runCapture(MainPanel, [
+      { action: 'key', key: 'k', ctrlKey: true },
+      { action: 'wait', ms: 400 },
+    ]);
+    if (html.length < 200) throw new Error(`platform-command-palette: captured HTML looks too small (${html.length} chars)`);
+    const file = 'platform-command-palette.html';
+    fs.writeFileSync(path.join(OUT_DIR, file), html, 'utf-8');
+    manifest.push({
+      id: 'platform-command-palette',
+      label: 'Command Palette (Cmd+K / Ctrl+K)',
+      explanation: 'Search protocols, requests, collections, and settings from anywhere without touching the mouse — opened with Cmd+K (Mac) or Ctrl+K (Windows/Linux).',
+      file,
+    });
+    // Close it again (same Ctrl+K toggle) so it doesn't stay open into the
+    // next capture suite.
+    await runCapture(MainPanel, [
+      { action: 'key', key: 'k', ctrlKey: true },
+      { action: 'wait', ms: 200 },
+    ]);
+  });
+
   // This suite is the only one that ever opens the Collections/History/
   // Environments sidebar panel or the DevTools panel — every other
   // wiki-capture-*.test.ts suite shares this same long-lived webview session
@@ -367,7 +456,19 @@ suite('Daakia Wiki Capture — Platform (Sidebar, DevTools, Settings)', () => {
     ]);
   });
 
+  // Merge into the existing manifest rather than overwriting it — this test file
+  // may only cover a subset of the screens that end up in manifest.json (others
+  // were added by a different test file, or copied in directly); overwriting
+  // would silently delete every entry this run didn't touch.
   suiteTeardown(() => {
-    if (manifest.length > 0) fs.writeFileSync(path.join(OUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');
+    if (manifest.length === 0) return;
+    const manifestPath = path.join(OUT_DIR, 'manifest.json');
+    let existing: Array<{ id: string; label: string; explanation: string; file: string }> = [];
+    if (fs.existsSync(manifestPath)) {
+      try { existing = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')); } catch { existing = []; }
+    }
+    const byId = new Map(existing.map(e => [e.id, e]));
+    for (const e of manifest) byId.set(e.id, e);
+    fs.writeFileSync(manifestPath, JSON.stringify(Array.from(byId.values()), null, 2), 'utf-8');
   });
 });

@@ -18,6 +18,7 @@ import { useAiProvidersStore } from '../store/ai-providers-store';
 import { useSidebarDataStore } from '../store/sidebar-data-store';
 import { useAiKeysStore } from '../store/ai-keys-store';
 import { useAiFeaturesStore } from '../store/ai-features-store';
+import { useDbStatusStore } from '../store/db-status-store';
 import { useAiHistoryStore } from '../store/ai-history-store';
 import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_DEFAULTS } from '../store/prompt-template';
 import { useAiConversationStore } from '../store/ai-conversation-store';
@@ -42,10 +43,11 @@ export interface ExtensionMessageCtx {
   setSidebarSection: (s: SidebarSection) => void;
   setSidebarOpen: (open: boolean) => void;
   setSidebarWidth: (w: number) => void;
+  setPaletteOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
 }
 
 export function useExtensionMessages(ctx: ExtensionMessageCtx) {
-  const { setSqliteStatus, setSaveAsTabId, setSplitPercent, setFocusedPanel, setSidebarSection, setSidebarOpen, setSidebarWidth } = ctx;
+  const { setSqliteStatus, setSaveAsTabId, setSplitPercent, setFocusedPanel, setSidebarSection, setSidebarOpen, setSidebarWidth, setPaletteOpen } = ctx;
   // Mounted once for the app lifetime — setters from useState are stable.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -70,6 +72,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
       switch (msg.type) {
         case 'init': {
           setSqliteStatus({ ok: msg.sqliteOk, error: msg.sqliteError });
+          useDbStatusStore.getState().setDbStatus({ dbPath: msg.dbPath, sqliteOk: msg.sqliteOk, sqliteError: msg.sqliteError });
           // Load persisted Daakia AI conversation on startup
           useAiConversationStore.getState().loadFromDb();
           // Restore saved theme (7.6, E3.x system theme)
@@ -352,6 +355,10 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
         }
         case 'openSaveAs': {
           setSaveAsTabId(msg.tabId);
+          break;
+        }
+        case 'openCommandPalette': {
+          setPaletteOpen(prev => !prev);
           break;
         }
         case 'toast': {

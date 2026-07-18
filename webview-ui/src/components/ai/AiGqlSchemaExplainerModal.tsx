@@ -17,7 +17,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-protocol-graphql)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const SYSTEM_PROMPT = `You are a GraphQL documentation expert. Given a GraphQL SDL schema, explain it in plain English for a developer who is new to this API.
 
@@ -84,7 +84,7 @@ export function AiGqlSchemaExplainerModal({ onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Schema Explainer ✦"
+      title="Schema Explainer"
       size="lg"
       headerColor={ACCENT}
       headerIcon={

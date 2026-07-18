@@ -450,7 +450,7 @@ export function AiEnrichModal({ record, onClose, onAddRoutes, onApplyStateMachin
     <ModalView
       open
       onClose={onClose}
-      title="AI Enrich Captured Traffic ✦"
+      title="AI Enrich Captured Traffic"
       subtitle={requestSummary}
       size="lg"
       headerColor={ACCENT}
@@ -482,7 +482,7 @@ export function AiEnrichModal({ record, onClose, onAddRoutes, onApplyStateMachin
       }
       footerRight={
         <AIButtonView
-          label={loading ? 'Enriching…' : 'Generate Variations ✦'}
+          label={loading ? 'Enriching…' : 'Generate Variations'}
           size="md"
           accentColor={ACCENT}
           disabled={!entityName.trim() || !alternatives.trim() || loading}
@@ -624,7 +624,7 @@ export function AiEnrichModal({ record, onClose, onAddRoutes, onApplyStateMachin
           <div className="flex flex-col items-center gap-2 py-8">
             <SparkleIcon size={22} style={{ color: ACCENT, opacity: 0.35 }} />
             <p className="text-[11px] text-center text-[var(--color-text-muted)]">
-              Enter the entity name and alternatives above, then click <strong>Generate Variations ✦</strong>
+              Enter the entity name and alternatives above, then click <strong>Generate Variations</strong>
             </p>
           </div>
         ) : null}

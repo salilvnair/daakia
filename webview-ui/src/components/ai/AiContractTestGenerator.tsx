@@ -10,7 +10,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useTabsStore } from '../../store/tabs-store';
 import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { ModalView, ButtonView, MultilineInputView } from '@salilvnair/dui';
+import { ModalView, ButtonView, EditorView } from '@salilvnair/dui';
 
 // ─── Handle ───────────────────────────────────────────────────────────────────
 export interface AiContractTestHandle {
@@ -184,14 +184,17 @@ export const AiContractTestGenerator = forwardRef<AiContractTestHandle, Props>(
               Schema / OpenAPI spec{' '}
               <span style={{ fontWeight: 400, fontStyle: 'italic', color: 'var(--color-text-muted)' }}>(optional)</span>
             </label>
-            <MultilineInputView
-              size="md"
-              value={schema}
-              onChange={e => setSchema(e.target.value)}
-              rows={5}
-              style={{ fontFamily: 'var(--vscode-editor-font-family, monospace)', fontSize: '11.5px', width: '100%' }}
-              placeholder={`Paste JSON Schema or OpenAPI path definition:\n{\n  "type": "object",\n  "required": ["id", "name"],\n  "properties": {...}\n}`}
-            />
+            <div style={{ height: 110 }}>
+              <EditorView
+                size="md"
+                value={schema}
+                onChange={setSchema}
+                language="json"
+                height="100%"
+                placeholder={`Paste JSON Schema or OpenAPI path definition:\n{\n  "type": "object",\n  "required": ["id", "name"],\n  "properties": {...}\n}`}
+                bordered
+              />
+            </div>
           </div>
 
           {/* No response warning */}

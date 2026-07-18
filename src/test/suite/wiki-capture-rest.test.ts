@@ -170,9 +170,19 @@ suite('Daakia Wiki Capture — REST', () => {
     });
   }
 
+  // Merge into the existing manifest rather than overwriting it — this test file
+  // may only cover a subset of the screens that end up in manifest.json (others
+  // were added by a different test file, or copied in directly); overwriting
+  // would silently delete every entry this run didn't touch.
   suiteTeardown(() => {
-    if (manifest.length > 0) {
-      fs.writeFileSync(path.join(OUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');
+    if (manifest.length === 0) return;
+    const manifestPath = path.join(OUT_DIR, 'manifest.json');
+    let existing: Array<{ id: string; label: string; explanation: string; file: string }> = [];
+    if (fs.existsSync(manifestPath)) {
+      try { existing = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')); } catch { existing = []; }
     }
+    const byId = new Map(existing.map(e => [e.id, e]));
+    for (const e of manifest) byId.set(e.id, e);
+    fs.writeFileSync(manifestPath, JSON.stringify(Array.from(byId.values()), null, 2), 'utf-8');
   });
 });

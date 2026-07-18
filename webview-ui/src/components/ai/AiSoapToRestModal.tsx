@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-protocol-soap)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const PLACEHOLDER_WSDL = `<definitions name="UserService"
   targetNamespace="http://example.com/user"
@@ -122,7 +122,7 @@ openapi: "3.1.0"
     <ModalView
       open
       onClose={onClose}
-      title="SOAP → REST Migrator ✦"
+      title="SOAP → REST Migrator"
       size="xl"
       headerColor={ACCENT}
       headerGradient
@@ -138,7 +138,7 @@ openapi: "3.1.0"
       }
       footerLeft={
         <AIButtonView
-          label={loading ? 'Migrating…' : 'Migrate to REST ✦'}
+          label={loading ? 'Migrating…' : 'Migrate to REST'}
           action="generate"
           size="md"
           accentColor={ACCENT}

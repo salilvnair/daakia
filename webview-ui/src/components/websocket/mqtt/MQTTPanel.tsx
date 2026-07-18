@@ -75,6 +75,15 @@ export function MQTTPanel() {
     if (activeTabId) errorCache.set(activeTabId, v);
   }, [activeTabId]);
 
+  // Test-only hook for the wiki capture harness — seeds a realistic connected
+  // state + message log without a real MQTT broker connection (see CaptureBridge.tsx).
+  useEffect(() => {
+    (window as any).__mqttCaptureSeed = (msgs: MqttMessage[], state: ConnectionState) => {
+      setMessages(msgs);
+      setConnState(state);
+    };
+  }, [setMessages, setConnState]);
+
   // Persisted fields — read from authData, write back on change
   const ad = activeTab?.authData || {};
   const [subscriptions, setSubscriptionsLocal] = useState<MqttSubscription[]>(() => {
@@ -376,7 +385,7 @@ export function MQTTPanel() {
   }, [activeTab]);
 
   const saveItems: ContextMenuItem[] = [
-    { id: 'save-as', label: 'Save As...', icon: <SaveIcon size={12} />, onClick: () => postMsg({ type: 'openSaveAs', tabId: activeTab?.id }) },
+    { id: 'save-as', label: 'Save As...', icon: <SaveIcon size={12} />, iconColor: 'var(--color-ctx-close-saved)', onClick: () => postMsg({ type: 'openSaveAs', tabId: activeTab?.id }) },
   ];
 
   // Splitter handlers
@@ -740,7 +749,7 @@ export function MQTTPanel() {
               messages={messages.filter(m => m.direction === 'received').map(m => m.payload)}
               hasError={!!error}
               errorMsg={error || ''}
-              accentColor="var(--color-protocol-mqtt)"
+              accentColor="var(--color-protocol-ai)"
               showTopicSuggester={true}
               subscribedTopics={subscriptions.map(s => s.topic)}
             />

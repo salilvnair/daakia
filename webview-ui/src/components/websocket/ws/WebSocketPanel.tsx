@@ -74,6 +74,15 @@ export function WebSocketPanel() {
     });
   }, [activeTabId]);
 
+  // Test-only hook for the wiki capture harness — seeds a realistic connected
+  // state + message log without a real socket connection (see CaptureBridge.tsx).
+  useEffect(() => {
+    (window as any).__wsCaptureSeed = (msgs: WsMessage[], state: ConnectionState) => {
+      setMessages(msgs);
+      setConnState(state);
+    };
+  }, [setMessages, setConnState]);
+
   // Restore per-tab state on tab change
   useEffect(() => {
     setConnStateLocal(wsConnStateCache.get(activeTabId!) || 'disconnected');
@@ -368,19 +377,19 @@ export function WebSocketPanel() {
     ...(activeTab.url.trim() && aiEnabled('preflightCheck') ? [{
       id: 'preflight',
       label: 'Pre-flight Check',
-      icon: <SparkleIcon size={12} />,
+      icon: <SparkleIcon size={12} style={{ color: 'var(--color-warning)' }} />,
       onClick: () => { setShowPreflight(true); setShowAiMenu(false); },
     }] : []),
     ...(aiEnabled('daakiaAiChat') ? [{
       id: 'ask-ai',
       label: 'Ask AI',
-      icon: <SparkleIcon size={12} />,
+      icon: <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)' }} />,
       onClick: () => { openDaakiaAiTab(); setShowAiMenu(false); },
     }] : []),
     ...(activeTab.url.trim() && aiEnabled('patternBaseline') ? [{
       id: 'pattern-baseline',
       label: 'Pattern Baseline',
-      icon: <SparkleIcon size={12} />,
+      icon: <SparkleIcon size={12} style={{ color: 'var(--color-info)' }} />,
       onClick: () => { setShowPatternStatus(p => !p); setShowAiMenu(false); },
     }] : []),
   ];
@@ -534,7 +543,7 @@ export function WebSocketPanel() {
                         size="xs"
                         label="Generate ✦"
                         onClick={() => bodyGenRef.current?.open()}
-                        accentColor={ACCENT}
+                        accentColor="var(--color-protocol-ai)"
                       />
                     )}
                     {/* Send */}
@@ -625,7 +634,7 @@ export function WebSocketPanel() {
             <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Log</span>
             <div className="flex items-center gap-0.5">
               <IconButtonView
-                size="sm"
+                size="xs"
                 icon={<TrashIcon size={12} />}
                 title="Clear log"
                 disabled={messages.length === 0}
@@ -633,21 +642,21 @@ export function WebSocketPanel() {
                 onClick={handleClearMessages}
               />
               <IconButtonView
-                size="sm"
+                size="xs"
                 icon={<ArrowUpIcon size={13} />}
                 title="Scroll to top"
                 disabled={messages.length === 0}
                 onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
               />
               <IconButtonView
-                size="sm"
+                size="xs"
                 icon={<ArrowDownIcon size={13} />}
                 title="Scroll to bottom"
                 disabled={messages.length === 0}
                 onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }}
               />
               <IconButtonView
-                size="sm"
+                size="xs"
                 icon={<AutoScrollIcon size={14} />}
                 title={autoScroll ? 'Autoscroll: Turn off' : 'Autoscroll: Turn on'}
                 active={autoScroll}
@@ -671,7 +680,7 @@ export function WebSocketPanel() {
                 messages={messages.filter(m => m.direction === 'received').map(m => m.data)}
                 hasError={!!lastError}
                 errorMsg={lastError || ''}
-                accentColor={ACCENT}
+                accentColor="var(--color-protocol-ai)"
                 trafficAnalyzerFlag="wsTrafficAnalyzer"
               />
             </div>
@@ -712,6 +721,7 @@ const wsSaveItems: ContextMenuItem[] = [
     id: 'save-as',
     label: 'Save as',
     icon: <SaveIcon size={12} />,
+    iconColor: 'var(--color-ctx-close-saved)',
     onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
   },
 ];

@@ -114,8 +114,16 @@
 }
 
 /* ─── Hero ──────────────────────────────────────────── */
+/* Compact single-row header — was a tall multi-line hero banner; this is a
+   pinned strip (see WikiScrollPage), so it eats into content space on every
+   scroll position and needs to stay small. */
 .dw-hero {
-  padding: 28px 28px 24px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 3px;
   background: linear-gradient(135deg,
     color-mix(in srgb, var(--dw-accent) 10%, var(--dw-surface)),
     color-mix(in srgb, var(--dw-ai) 6%, var(--dw-surface))
@@ -124,46 +132,34 @@
   position: relative;
   overflow: hidden;
 }
-.dw-hero::before {
-  content: '';
-  position: absolute;
-  top: -40px; right: -40px;
-  width: 200px; height: 200px;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--dw-accent) 15%, transparent), transparent 70%);
-  pointer-events: none;
-}
 .dw-hero-title {
-  font-size: 22px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--dw-fg);
-  margin: 0 0 7px 0;
-  letter-spacing: -0.02em;
+  margin: 0;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 .dw-hero-subtitle {
-  /* Serif body deliberately contrasts with the sans-serif title so the intro
-     reads as "narrative" instead of another UI label (matches ck8t's
-     bsdoc-summary pairing). */
-  font-family: ui-serif, Georgia, 'Times New Roman', Cambria, serif;
-  font-size: 13px;
+  font-size: 10.5px;
   color: var(--dw-fg);
-  opacity: 0.85;
-  margin: 0 0 16px 0;
-  line-height: 1.6;
-  max-width: 640px;
+  opacity: 0.65;
+  margin: 0;
+  line-height: 1.3;
 }
 .dw-hero-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+  margin-left: auto;
 }
 .dw-hero-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
+  gap: 4px;
+  padding: 1px 7px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 500;
   border: 1px solid;
 }
@@ -200,6 +196,42 @@ div:has(> .dw-section-title) {
     var(--dw-accent) 0%,
     color-mix(in srgb, var(--dw-accent) 65%, #000 20%) 100%
   );
+  /* Leaves room below the pinned TocBar when a jump-link scrolls this
+     section's card into view — otherwise the sticky bar covers the title. */
+  scroll-margin-top: 42px;
+}
+
+/* ─── Table of contents bar (pinned below the hero) ────────────────────── */
+.dw-toc-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  overflow-x: auto;
+  background: var(--dw-panel);
+  border-bottom: 1px solid var(--dw-border);
+  flex-shrink: 0;
+}
+.dw-toc-bar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--dw-muted);
+  background: transparent;
+  border: 1px solid var(--dw-border);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.dw-toc-bar-item:hover {
+  color: var(--dw-accent);
+  border-color: color-mix(in srgb, var(--dw-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--dw-accent) 8%, transparent);
 }
 /* Direct children of a section-card div (everything after the title) get
    consistent card-body padding — the title itself is excluded since it
@@ -315,14 +347,12 @@ div:has(> .dw-section-title) > *:last-child {
 }
 .dw-step-content {
   flex: 1;
-  font-family: ui-serif, Georgia, 'Times New Roman', Cambria, serif;
   font-size: 12.5px;
   color: var(--dw-fg);
   line-height: 1.6;
   padding-top: 2px;
 }
 .dw-step-content strong {
-  font-family: var(--vscode-font-family, system-ui);
   color: var(--dw-fg);
   font-weight: 700;
 }
@@ -336,14 +366,12 @@ div:has(> .dw-section-title) > *:last-child {
   border: 1px solid;
   border-left-width: 3px;
   margin-bottom: 12px;
-  font-family: ui-serif, Georgia, 'Times New Roman', Cambria, serif;
   font-size: 12.5px;
   line-height: 1.6;
 }
 .dw-callout-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
 .dw-callout-text { flex: 1; color: var(--dw-fg); }
 .dw-callout-text strong {
-  font-family: var(--vscode-font-family, system-ui);
   font-weight: 700;
   font-size: 12px;
   display: block;
@@ -445,6 +473,17 @@ div:has(> .dw-section-title) > *:last-child {
   border-radius: 3px;
   background: color-mix(in srgb, var(--dw-accent) 10%, transparent);
   color: var(--dw-accent);
+}
+
+/* ─── Multi-line code block (real, syntax-highlighted via MdViewer) ────── */
+.dw-codeblock-wrap { margin-bottom: 4px; }
+.dw-codeblock-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dw-accent);
+  margin-bottom: 4px;
 }
 
 /* ─── Shortcut row ──────────────────────────────────── */
@@ -808,10 +847,12 @@ div:has(> .dw-section-title) > *:last-child {
 }
 
 /* ─── Divider ───────────────────────────────────────── */
+/* No margin here deliberately — the parent WikiScrollPage flex container
+   already applies a consistent gap between every child, so a Divider's own
+   margin would stack on top of that gap instead of replacing it. */
 .dw-divider {
   height: 1px;
   background: var(--dw-border);
-  margin: 20px 0;
 }
 
 /* ─── Protocol row ──────────────────────────────────── */
@@ -848,33 +889,42 @@ div:has(> .dw-section-title) > *:last-child {
 .dw-details {
   border-radius: var(--dw-radius);
   border: 1px solid var(--dw-border);
+  border-left: 3px solid var(--dw-border);
   background: var(--dw-surface);
   margin-bottom: 8px;
   overflow: hidden;
+  transition: border-left-color 0.15s;
 }
+.dw-details[open] { border-left-color: var(--dw-accent); }
 .dw-details > summary {
-  padding: 9px 13px;
+  padding: 10px 14px;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
   color: var(--dw-fg);
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  transition: background 0.15s;
+}
+.dw-details > summary:hover {
+  background: color-mix(in srgb, var(--dw-accent) 6%, transparent);
 }
 .dw-details > summary::-webkit-details-marker { display: none; }
 .dw-details > summary::before {
   content: '▶';
   font-size: 9px;
-  color: var(--dw-muted);
+  color: var(--dw-accent);
   transition: transform 0.15s;
+  flex-shrink: 0;
 }
 .dw-details[open] > summary::before { transform: rotate(90deg); }
 .dw-details-body {
-  padding: 0 13px 12px;
+  padding: 2px 14px 13px;
   font-size: 12px;
   color: var(--dw-muted);
-  line-height: 1.5;
+  line-height: 1.6;
   border-top: 1px solid var(--dw-border);
+  padding-top: 10px;
 }

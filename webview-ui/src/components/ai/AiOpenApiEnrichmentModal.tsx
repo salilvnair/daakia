@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView, MultilineInputView, CopyButtonView } from '@salilvnair/dui';
+import { ModalView, AIButtonView, EditorView, CopyButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -108,15 +108,17 @@ export function AiOpenApiEnrichmentModal({ onClose }: Props) {
         {/* Input */}
         <div className="flex flex-col flex-1 min-w-0 gap-2">
           <p className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Partial/Minimal Spec (YAML or JSON)</p>
-          <MultilineInputView
-            autoFocus
-            value={spec}
-            onChange={e => { setSpec(e.target.value); setError(''); }}
-            rows={16}
-            size="md"
-            width="fw"
-            placeholder={`openapi: "3.0.3"\ninfo:\n  title: My API\n  version: "1.0"\npaths:\n  /users:\n    get:\n      responses:\n        "200":\n          description: OK`}
-          />
+          <div className="flex-1 min-h-0">
+            <EditorView
+              value={spec}
+              onChange={v => { setSpec(v); setError(''); }}
+              language="yaml"
+              height="100%"
+              size="md"
+              placeholder={`openapi: "3.0.3"\ninfo:\n  title: My API\n  version: "1.0"\npaths:\n  /users:\n    get:\n      responses:\n        "200":\n          description: OK`}
+              bordered
+            />
+          </div>
         </div>
 
         {/* Output */}

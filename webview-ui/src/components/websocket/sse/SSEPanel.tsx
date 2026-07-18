@@ -75,6 +75,15 @@ export function SSEPanel() {
     if (activeTabId) errorCache.set(activeTabId, v);
   }, [activeTabId]);
 
+  // Test-only hook for the wiki capture harness — seeds a realistic connected
+  // state + event log without a real SSE connection (see CaptureBridge.tsx).
+  useEffect(() => {
+    (window as any).__sseCaptureSeed = (evts: SseEvent[], state: ConnectionState) => {
+      setEvents(evts);
+      setConnState(state);
+    };
+  }, [setEvents, setConnState]);
+
   // Persisted field — read from authData
   const ad = activeTab?.authData || {};
   const [eventType, setEventTypeLocal] = useState(ad['sse_eventType'] || 'data');
@@ -248,6 +257,7 @@ export function SSEPanel() {
       id: 'save-as',
       label: 'Save as',
       icon: <SaveIcon size={13} />,
+      iconColor: 'var(--color-ctx-close-saved)',
       onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
     },
   ];
@@ -503,7 +513,7 @@ export function SSEPanel() {
                 messages={events.filter(e => e.eventType !== '__system__' && e.eventType !== '__error__' && e.eventType !== '__disconnect__').map(e => e.data)}
                 hasError={!!error}
                 errorMsg={error || ''}
-                accentColor="var(--color-protocol-sse)"
+                accentColor="var(--color-protocol-ai)"
                 trafficAnalyzerFlag="sseTrafficAnalyzer"
                 showEventSuggester={true}
                 observedEventTypes={[...new Set(events.filter(e => !['__system__','__error__','__disconnect__'].includes(e.eventType)).map(e => e.eventType))]}

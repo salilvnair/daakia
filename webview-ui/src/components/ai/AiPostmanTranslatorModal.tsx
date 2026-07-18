@@ -2,17 +2,29 @@
  * AiPostmanTranslatorModal — Translate Postman pm.* test scripts to Daakia dk.* automatically.
  * Task 10.13 — AI Postman Script Translator · Gate: postmanTranslator
  */
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { ModalView, AIButtonView, MultilineInputView, CopyButtonView } from '@salilvnair/dui';
+import { ModalView, AIButtonView, EditorView, CopyButtonView, ResizablePanelView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
 }
 
 const ACCENT = 'var(--color-protocol-ai)';
+
+// Models occasionally leak reasoning/preamble before the requested code fence despite
+// instructions — extract just the fenced block (or the tail after an opened-but-not-yet-closed
+// fence while streaming) so stray text never corrupts the shown/copied code.
+function extractCode(raw: string): string {
+  const trimmed = raw.trim();
+  const closed = trimmed.match(/```(?:\w+)?\n?([\s\S]*?)```/);
+  if (closed) return closed[1].trim();
+  const openIdx = trimmed.indexOf('```');
+  if (openIdx !== -1) return trimmed.slice(openIdx).replace(/^```(?:\w+)?\n?/, '').trim();
+  return trimmed;
+}
 
 const EXAMPLE = `pm.test("Status is 200", function() {
   pm.response.to.have.status(200);
@@ -59,8 +71,8 @@ Postman → Daakia equivalents:
 - pm.test("name", fn) → dk.test("name", fn)
 - pm.response.to.have.status(200) → dk.response.status === 200 (or dk.expect(dk.response.status).toBe(200))
 - pm.response.json() → dk.response.json()
-- pm.response.text() → dk.response.text()
-- pm.expect(x).to.be.an("array") → dk.expect(x).toBeArray()
+- pm.response.text() → dk.response.body (already the raw response text)
+- pm.expect(x).to.be.an("array") → dk.expect(x).toMatchSchema({ type: 'array' })
 - pm.expect(x).to.equal(y) → dk.expect(x).toBe(y)
 - pm.expect(x).to.include(y) → dk.expect(x).toContain(y)
 - pm.expect(x).to.have.length(n) → dk.expect(x).toHaveLength(n)
@@ -68,26 +80,28 @@ Postman → Daakia equivalents:
 - pm.environment.set("key", val) → dk.env.set("key", val)
 - pm.environment.get("key") → dk.env.get("key")
 - pm.globals.set("key", val) → dk.globals.set("key", val)
-- pm.collectionVariables.set("key", val) → dk.collection.set("key", val)
-- pm.sendRequest(url, cb) → await dk.fetch(url) (async)
-- console.log(x) → dk.log(x)
+- pm.collectionVariables.set("key", val) → dk.collectionVariables.set("key", val)
+- pm.sendRequest(url, cb) → await dk.sendRequest({ url }) (async, returns { status, statusText, headers, body })
+- console.log(x) → console.log(x) (unchanged — Daakia captures native console output directly)
 
 Postman script to translate:
 \`\`\`javascript
 ${input.trim()}
 \`\`\`
 
-Output ONLY the translated Daakia dk.* script with no explanation. Use the same variable names and test logic.`,
+Respond with nothing but a single \`\`\`javascript code fence containing the translated script — no preamble, no reasoning, no commentary before or after the fence. Use the same variable names and test logic.`,
       }],
       stream: true,
     });
   };
 
+  const displayOutput = useMemo(() => extractCode(output), [output]);
+
   return (
     <ModalView
       open
       onClose={onClose}
-      title="Postman → Daakia Translator ✦"
+      title="Postman → Daakia Translator"
       size="xl"
       headerColor={ACCENT}
       headerIcon={
@@ -96,11 +110,11 @@ Output ONLY the translated Daakia dk.* script with no explanation. Use the same 
         </div>
       }
       headerRight={
-        output ? <CopyButtonView text={output} size="md" /> : undefined
+        output ? <CopyButtonView text={displayOutput} size="md" /> : undefined
       }
       footerRight={
         <AIButtonView
-          label={loading ? 'Translating…' : 'Translate ✦'}
+          label={loading ? 'Translating…' : 'Translate'}
           size="md"
           accentColor={ACCENT}
           disabled={!input.trim() || loading}
@@ -115,15 +129,18 @@ Output ONLY the translated Daakia dk.* script with no explanation. Use the same 
           <div className="px-3 py-1.5 border-b flex items-center gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
             <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Postman pm.*</span>
           </div>
-          <div className="flex-1 p-3">
-            <MultilineInputView
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              rows={14}
-              size="md"
-              width="fw"
-              placeholder="Paste your Postman pm.* test script here…"
-            />
+          <div className="flex-1 p-3 min-h-0">
+            <ResizablePanelView defaultHeight={320} minHeight={160} maxHeight={640} style={{ width: '100%' }}>
+              <EditorView
+                value={input}
+                onChange={setInput}
+                language="javascript"
+                height="100%"
+                size="md"
+                placeholder="Paste your Postman pm.* test script here…"
+                bordered={false}
+              />
+            </ResizablePanelView>
           </div>
         </div>
 
@@ -132,16 +149,25 @@ Output ONLY the translated Daakia dk.* script with no explanation. Use the same 
           <div className="px-3 py-1.5 border-b flex items-center gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
             <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: ACCENT }}>Daakia dk.*</span>
           </div>
-          <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-3">
-            {loading && !output && <p className="text-[11px] animate-pulse" style={{ color: ACCENT }}>Translating…</p>}
-            {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-            {output && (
-              <pre className="text-[11.5px] font-mono whitespace-pre-wrap" style={{ color: 'var(--color-text-primary)' }}>{output}</pre>
-            )}
-            {!loading && !output && !error && (
-              <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Translation will appear here…</p>
-            )}
-          </div>
+          {loading && !output && <p className="text-[11px] animate-pulse px-3 py-2" style={{ color: ACCENT }}>Translating…</p>}
+          {error && <p className="text-[11px] px-3 py-2" style={{ color: 'var(--color-error)' }}>{error}</p>}
+          {output && (
+            <div className="flex-1 p-3 min-h-0">
+              <ResizablePanelView defaultHeight={320} minHeight={160} maxHeight={640} style={{ width: '100%' }}>
+                <EditorView
+                  value={displayOutput}
+                  language="javascript"
+                  height="100%"
+                  size="md"
+                  readOnly
+                  bordered={false}
+                />
+              </ResizablePanelView>
+            </div>
+          )}
+          {!loading && !output && !error && (
+            <p className="text-[11px] px-3 py-2" style={{ color: 'var(--color-text-muted)' }}>Translation will appear here…</p>
+          )}
         </div>
       </div>
     </ModalView>

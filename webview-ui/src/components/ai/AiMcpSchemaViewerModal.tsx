@@ -14,7 +14,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-protocol-mcp)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 export function AiMcpSchemaViewerModal({ tools, onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
@@ -73,7 +73,7 @@ Be concise but thorough. Use ## Tool Name headers for each tool.`,
     <ModalView
       open
       onClose={onClose}
-      title="MCP Schema Viewer ✦"
+      title="MCP Schema Viewer"
       subtitle={`${tools.length} tool${tools.length !== 1 ? 's' : ''}`}
       size="lg"
       headerColor={ACCENT}

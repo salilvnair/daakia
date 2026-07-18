@@ -81,7 +81,7 @@ export function AiSchemaDriftModal({ onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Schema Drift Monitor ✦"
+      title="Schema Drift Monitor"
       size="lg"
       headerColor={ACCENT}
       headerIcon={

@@ -22,7 +22,7 @@ export function RequestAiToolbar({ tab, activeSection, onOpenFuzzer }: RequestAi
       action="fuzz"
       label="Fuzz"
       size="xs"
-      accentColor="var(--color-error)"
+      accentColor="var(--color-protocol-ai)"
       onClick={onOpenFuzzer}
     />
   );

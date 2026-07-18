@@ -150,7 +150,7 @@ export function GraphQLEditor() {
                     iconLeft={<SparkleIcon size={10} />}
                     title="AI Query Builder — describe what you want, AI writes the query"
                     onClick={() => qbRef.current?.open()}
-                    style={{ color: ACCENT }}
+                    style={{ color: 'var(--color-protocol-ai)' }}
                   >
                     Query Builder
                   </ButtonView>
@@ -163,7 +163,7 @@ export function GraphQLEditor() {
                     iconLeft={<SparkleIcon size={10} />}
                     title="Schema Explainer — AI explains all types and operations"
                     onClick={() => setShowSchemaExplainer(true)}
-                    style={{ color: ACCENT }}
+                    style={{ color: 'var(--color-protocol-ai)' }}
                   >
                     Schema Explainer
                   </ButtonView>
@@ -241,7 +241,7 @@ export function GraphQLEditor() {
                   iconLeft={<SparkleIcon size={10} />}
                   title="AI Variable Fuzzer"
                   onClick={() => setShowFuzzer(true)}
-                  style={{ color: ACCENT }}
+                  style={{ color: 'var(--color-protocol-ai)' }}
                 >
                   Fuzz ✦
                 </ButtonView>

@@ -88,7 +88,7 @@ This exceeds the 2σ anomaly threshold. Please analyze the likely root causes an
     <ModalView
       open
       onClose={onClose}
-      title="Performance Anomaly Detected ✦"
+      title="Performance Anomaly Detected"
       subtitle={url}
       size="md"
       headerColor={ACCENT}

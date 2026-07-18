@@ -11,6 +11,7 @@
  * old wiki — E-wiki-content-migration) instead of only a flat capture list.
  */
 import { useRef, useLayoutEffect, useState, useCallback } from 'react';
+import './CaptureScrollView.css';
 
 export interface CaptureEntry {
   id: string;
@@ -30,6 +31,10 @@ export interface CaptureCrop {
 }
 
 // Design size the captures were taken at — see wiki-capture-*.test.ts.
+// Kept in sync with CaptureScrollView.css's .dw-capture-frozen overrides,
+// which freeze captured content's w-screen/h-screen (100vw/100vh) to this
+// same size — those units otherwise resolve against the wiki viewer's real
+// window, not this fixed design box. Change both together.
 const DESIGN_WIDTH = 1280;
 const DESIGN_HEIGHT = 720;
 
@@ -64,6 +69,7 @@ export function CaptureCard({ entry, crop }: { entry: CaptureEntry; crop?: Captu
         style={{ height: DESIGN_HEIGHT * scale }}
       >
         <div
+          className="dw-capture-frozen"
           style={{
             width: DESIGN_WIDTH,
             height: DESIGN_HEIGHT,
@@ -75,9 +81,13 @@ export function CaptureCard({ entry, crop }: { entry: CaptureEntry; crop?: Captu
           dangerouslySetInnerHTML={{ __html: entry.html }}
         />
       </div>
-      <div className="px-1">
-        <h3 className="text-[12px] font-semibold text-[var(--color-text-primary)] mb-1">{entry.label}</h3>
-        <p className="text-[11px] leading-relaxed text-[var(--color-text-muted)]">{entry.explanation}</p>
+      <div className="dw-capture-caption">
+        <div className="dw-capture-caption-eyebrow">
+          <span className="dw-capture-caption-dot" />
+          LIVE CAPTURE
+        </div>
+        <h3 className="dw-capture-caption-title">{entry.label}</h3>
+        <p className="dw-capture-caption-desc">{entry.explanation}</p>
       </div>
     </div>
   );
@@ -86,13 +96,16 @@ export function CaptureCard({ entry, crop }: { entry: CaptureEntry; crop?: Captu
 /** Generic scrollable, max-width-capped container — the shell CaptureScrollView
  * uses internally, exposed so pages can mix CaptureCards with rich content.
  * An optional `hero` (see WikiHero in WikiShared.tsx) renders full-width and
- * pinned above the scrollable body, like a docs-page header. */
-export function WikiScrollPage({ children, hero }: { children: React.ReactNode; hero?: React.ReactNode }) {
+ * pinned above the scrollable body, like a docs-page header. An optional
+ * `toc` (see TocBar in WikiShared.tsx) renders pinned just below the hero —
+ * both stay visible while the body underneath scrolls. */
+export function WikiScrollPage({ children, hero, toc }: { children: React.ReactNode; hero?: React.ReactNode; toc?: React.ReactNode }) {
   return (
     <div className="h-full w-full flex flex-col overflow-hidden">
       {hero}
+      {toc}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[900px] mx-auto flex flex-col gap-8 p-4">
+        <div className="max-w-[1160px] mx-auto flex flex-col gap-5 px-6 py-4">
           {children}
         </div>
       </div>

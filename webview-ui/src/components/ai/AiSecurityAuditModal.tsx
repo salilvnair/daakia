@@ -13,7 +13,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-error)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 export function AiSecurityAuditModal({ onClose }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
@@ -86,7 +86,7 @@ End with a **## Summary** section with total counts by severity and an overall s
     <ModalView
       open
       onClose={onClose}
-      title="Security Audit ✦"
+      title="Security Audit"
       subtitle={scanned > 0 ? `${scanned} tab${scanned !== 1 ? 's' : ''} scanned` : undefined}
       size="xl"
       headerColor={ACCENT}

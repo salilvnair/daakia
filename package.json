@@ -125,6 +125,10 @@
         "title": "Daakia: Focus URL Bar"
       },
       {
+        "command": "daakia.openCommandPalette",
+        "title": "Daakia: Open Command Palette"
+      },
+      {
         "command": "daakia.importCollection",
         "title": "Daakia: Import Collection",
         "icon": "$(cloud-download)"
@@ -181,32 +185,38 @@
       {
         "command": "daakia.sendRequest",
         "key": "ctrl+enter",
-        "when": "daakia.focused"
+        "when": "activeWebviewPanelId == 'daakia.mainPanel'"
       },
       {
         "command": "daakia.newRequest",
         "key": "ctrl+n",
-        "when": "daakia.focused"
+        "when": "activeWebviewPanelId == 'daakia.mainPanel'"
       },
       {
         "command": "daakia.saveRequest",
         "key": "ctrl+s",
-        "when": "daakia.focused"
+        "when": "activeWebviewPanelId == 'daakia.mainPanel'"
       },
       {
         "command": "daakia.closeTab",
         "key": "ctrl+w",
-        "when": "daakia.focused"
+        "when": "activeWebviewPanelId == 'daakia.mainPanel'"
       },
       {
         "command": "daakia.importCollection",
         "key": "ctrl+shift+i",
-        "when": "daakia.focused"
+        "when": "activeWebviewPanelId == 'daakia.mainPanel'"
       },
       {
         "command": "daakia.focusUrl",
         "key": "ctrl+l",
-        "when": "daakia.focused"
+        "when": "activeWebviewPanelId == 'daakia.mainPanel'"
+      },
+      {
+        "command": "daakia.openCommandPalette",
+        "key": "ctrl+k",
+        "mac": "cmd+k",
+        "when": "activeWebviewPanelId == 'daakia.mainPanel'"
       }
     ],
     "configuration": {
@@ -284,7 +294,10 @@
     "pretest:e2e": "npm run build:ext && tsc -p tsconfig.test.json",
     "compile:test": "tsc -p tsconfig.test.json",
     "test:webview": "cd webview-ui && npx vitest run",
-    "run:collection": "node cli/daakia-run.mjs"
+    "run:collection": "node cli/daakia-run.mjs",
+    "local-server:build": "node local-server/build.js",
+    "local-server:watch": "node local-server/build.js --watch",
+    "local-server": "npm run local-server:build && node local-server/dist/server.js"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",
@@ -304,6 +317,8 @@
     "ws": "^8.20.1"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.0.0",
@@ -313,7 +328,9 @@
     "@vscode/test-electron": "^2.4.0",
     "@vscode/vsce": "^3.0.0",
     "archiver": "^8.0.0",
+    "cors": "^2.8.6",
     "esbuild": "^0.24.0",
+    "express": "^5.2.1",
     "glob": "^11.0.0",
     "mocha": "^10.4.0",
     "svg2ttf": "^6.1.0",

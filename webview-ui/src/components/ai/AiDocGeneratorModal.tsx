@@ -113,7 +113,7 @@ export function AiDocGeneratorModal({ collectionNode, onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Documentation Generator ✦"
+      title="Documentation Generator"
       subtitle={collectionNode.name}
       size="lg"
       headerColor={ACCENT}

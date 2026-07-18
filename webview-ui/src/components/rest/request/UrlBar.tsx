@@ -104,16 +104,16 @@ export function UrlBar() {
   };
 
   const sendItems: ContextMenuItem[] = [
-    { id: 'send-download', label: 'Send and Download', icon: <DownloadIcon size={13} />, onClick: handleSendAndDownload },
+    { id: 'send-download', label: 'Send and Download', icon: <DownloadIcon size={13} style={{ color: 'var(--color-info)' }} />, onClick: handleSendAndDownload },
     { id: 'sep-1', label: '', separator: true },
-    { id: 'import-curl', label: 'Import cURL', icon: <CopyIcon size={13} />, onClick: () => { logUiEvent('rest.import_curl'); setShowImportCurl(true); } },
-    { id: 'show-code', label: 'Show code', icon: <CodeIcon size={13} />, onClick: () => { logUiEvent('rest.show_code'); setShowGenerateCode(true); } },
+    { id: 'import-curl', label: 'Import cURL', icon: <CopyIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { logUiEvent('rest.import_curl'); setShowImportCurl(true); } },
+    { id: 'show-code', label: 'Show code', icon: <CodeIcon size={13} style={{ color: 'var(--color-primary)' }} />, onClick: () => { logUiEvent('rest.show_code'); setShowGenerateCode(true); } },
     { id: 'sep-2', label: '', separator: true },
-    { id: 'clear-all', label: 'Clear all', icon: <RefreshIcon size={13} />, onClick: handleClearAll },
+    { id: 'clear-all', label: 'Clear all', icon: <RefreshIcon size={13} style={{ color: 'var(--color-ctx-close-batch)' }} />, onClick: handleClearAll },
   ];
 
   const saveItems: ContextMenuItem[] = [
-    { id: 'save-as', label: 'Save as', icon: <SaveIcon size={13} />, onClick: () => { logUiEvent('rest.save_as'); postMsg({ type: 'openSaveAs', tabId: tab.id }); } },
+    { id: 'save-as', label: 'Save as', icon: <SaveIcon size={13} style={{ color: 'var(--color-ctx-close-saved)' }} />, onClick: () => { logUiEvent('rest.save_as'); postMsg({ type: 'openSaveAs', tabId: tab.id }); } },
   ];
 
   // Pre-flight internals for dropdown item color
@@ -253,7 +253,7 @@ export function UrlBar() {
                 onClick={() => { setShowNlRequestBuilder(true); setShowOverflow(false); }}
               >
                 <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
-                NL Request Builder ✦
+                NL Request Builder
               </button>
             )}
 
@@ -267,7 +267,7 @@ export function UrlBar() {
                 onClick={() => { setShowAdaptiveLoadTester(true); setShowOverflow(false); }}
               >
                 <SparkleIcon size={12} style={{ color: 'var(--color-protocol-rest)', flexShrink: 0 }} />
-                Adaptive Load Tester ✦
+                Adaptive Load Tester
               </button>
             )}
 
@@ -281,7 +281,7 @@ export function UrlBar() {
                 onClick={() => { setShowSchemaDrift(true); setShowOverflow(false); }}
               >
                 <SparkleIcon size={12} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
-                Schema Drift Monitor ✦
+                Schema Drift Monitor
               </button>
             )}
           </div>

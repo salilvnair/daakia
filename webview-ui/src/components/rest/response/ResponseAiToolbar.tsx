@@ -25,12 +25,12 @@ export function ResponseAiToolbar({ tabId, response, requestMethod, requestUrl }
     <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
       {aiEnabled('explainRest') && (
         <>
-          <div ref={explainRef}>
+          <div ref={explainRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
             <AIButtonView
               action="explain"
               label="Explain"
               size="xs"
-              accentColor="var(--color-accent)"
+              accentColor="var(--color-protocol-ai)"
               onClick={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
             />
           </div>
@@ -49,12 +49,12 @@ export function ResponseAiToolbar({ tabId, response, requestMethod, requestUrl }
 
       {aiEnabled('followUpsRest') && (
         <>
-          <div ref={followUpRef}>
+          <div ref={followUpRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
             <AIButtonView
               action="ask"
               label="Follow-ups"
               size="xs"
-              accentColor="var(--color-accent)"
+              accentColor="var(--color-protocol-ai)"
               onClick={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
             />
           </div>

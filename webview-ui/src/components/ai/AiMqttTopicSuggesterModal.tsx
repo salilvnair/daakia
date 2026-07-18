@@ -15,7 +15,7 @@ interface Props {
   onSubscribe?: (topic: string) => void;
 }
 
-const ACCENT = 'var(--color-protocol-mqtt)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 export function AiMqttTopicSuggesterModal({ subscribedTopics, onClose, onSubscribe }: Props) {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
@@ -53,7 +53,7 @@ export function AiMqttTopicSuggesterModal({ subscribedTopics, onClose, onSubscri
     <ModalView
       open
       onClose={onClose}
-      title="Topic Suggester ✦"
+      title="Topic Suggester"
       size="md"
       headerColor={ACCENT}
       headerIcon={

@@ -118,21 +118,21 @@ export function McpToolsTab() {
         {/* 10.6: Schema Viewer ✦ */}
         {aiEnabled('schemaRest') && tools.length > 0 && (
           <button type="button" onClick={() => setShowSchemaViewer(true)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium cursor-pointer transition-all"
-            style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+            className="flex items-center flex-shrink-0 whitespace-nowrap gap-[3px] px-[6px] h-[20px] rounded text-[9px] font-medium cursor-pointer transition-all"
+            style={{ color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' }}
             title="AI explains all tool schemas"
           >
-            <SparkleIcon size={9} />Schema ✦
+            <SparkleIcon size={10} />Schema ✦
           </button>
         )}
         {/* 10.5: Fuzz ✦ */}
         {aiEnabled('requestFuzzer') && (
           <button type="button" onClick={() => setShowFuzzer(true)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-medium cursor-pointer transition-all"
-            style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
+            className="flex items-center flex-shrink-0 whitespace-nowrap gap-[3px] px-[6px] h-[20px] rounded text-[9px] font-medium cursor-pointer transition-all"
+            style={{ color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' }}
             title="AI generates edge-case tool inputs"
           >
-            <SparkleIcon size={9} />Fuzz ✦
+            <SparkleIcon size={10} />Fuzz ✦
           </button>
         )}
       </div>

@@ -84,7 +84,7 @@ export function GraphQLUrlBar() {
       id: 'save-as',
       label: 'Save as',
       icon: <SaveIcon size={13} />,
-      // iconColor: 'var(--color-ctx-close-saved)',
+      iconColor: 'var(--color-ctx-close-saved)',
       onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
     },
   ];
@@ -209,13 +209,13 @@ export function GraphQLUrlBar() {
             {aiEnabled('gqlFederation') && (
               <button type="button"
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
-                style={{ color: ACCENT }}
-                onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
+                style={{ color: 'var(--color-protocol-ai)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
                 onMouseLeave={e => { e.currentTarget.style.background = ''; }}
                 onClick={() => { setShowFederationModal(true); setShowOverflow(false); }}
               >
-                <SparkleIcon size={12} style={{ color: ACCENT, flexShrink: 0 }} />
-                Federation Explorer ✦
+                <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                Federation Explorer
               </button>
             )}
           </div>

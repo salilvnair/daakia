@@ -109,7 +109,7 @@ export function AiAdaptiveMockLearningModal({ onClose, onApply }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Adaptive Mock Learning ✦"
+      title="Adaptive Mock Learning"
       subtitle={status === 'recording' ? 'Recording' : status === 'processing' ? 'Analyzing' : status === 'done' ? 'Done' : 'Idle'}
       size="lg"
       headerColor={ACCENT}

@@ -7,6 +7,8 @@ import { ModalView, ButtonView, TextInputView, SelectInputView } from '@salilvna
 import { postMsg } from '../../vscode';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { useMockStore } from '../../store/mock-store';
+import { useTabsStore } from '../../store/tabs-store';
+import { useToastStore } from '../../store/toast-store';
 import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
 import { MOCK_PROTOCOL_COLORS } from '../../colors';
 import { ServerIcon, WebSocketIcon, SSEIcon, SocketIOIcon, MQTTIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../icons';
@@ -130,6 +132,37 @@ export function MockServerPanel() {
         }
         case 'mockServer:error': {
           setServers(prev => prev.map(s => s.id === msg.id ? { ...s, running: false } : s));
+          break;
+        }
+        // Sidebar "Mock Request" / "Mock" (collection) — build stub route(s) from
+        // real request(s) and drop them into a shared "Quick Mocks" REST server.
+        case 'mockRequestFromSidebar': {
+          const toRoute = (method: string, url: string): MockRoute => {
+            let path = url || '/';
+            try {
+              const u = new URL(url, 'http://placeholder');
+              path = u.pathname + u.search;
+            } catch { /* not a full URL — keep raw string as the path */ }
+            if (!path.startsWith('/')) path = '/' + path;
+            return { ...createDefaultRoute(), id: crypto.randomUUID(), method: (method as MockRoute['method']) || 'GET', path, statusCode: 200, body: '{}' };
+          };
+          const reqList: { method: string; url: string }[] = msg.requests ?? [{ method: msg.method, url: msg.url }];
+          const newRoutes = reqList.map(r => toRoute(r.method, r.url));
+
+          const current = serversRef.current;
+          let target = current.find(s => s.protocol === 'rest' && s.name === 'Quick Mocks');
+          let updated: MockServer[];
+          if (target) {
+            updated = current.map(s => s.id === target!.id ? { ...s, routes: [...s.routes, ...newRoutes] } : s);
+          } else {
+            target = { ...createDefaultServer('Quick Mocks', 'rest'), routes: newRoutes };
+            updated = [...current, target];
+          }
+          setServers(updated);
+          setActiveServerId(target.id);
+          useTabsStore.getState().openMockServerTab();
+          useToastStore.getState().addToast({ type: 'success', message: `Added ${newRoutes.length} mock route${newRoutes.length > 1 ? 's' : ''} to "Quick Mocks"` });
+          setTimeout(persistConfigs, 50);
           break;
         }
       }
@@ -264,6 +297,15 @@ export function MockServerPanel() {
           soapOperations: server.soapOperations,
           aiScenarios: server.aiScenarios,
           mcpTools: server.mcpTools,
+          // Without these, the RUNNING server's config never carries the
+          // state-machine connection at all — getStateMachineRuntime()
+          // always returns null for every triggerEvent-gated route
+          // regardless of what Load Sample / the State Machine tab set on
+          // the webview's own local state or the persisted JSON config,
+          // since startMockServer() only ever sees this exact payload.
+          stateMachine: server.stateMachine,
+          connectedWorkflowId: server.connectedWorkflowId,
+          connectedWorkflows: server.connectedWorkflows,
         },
       });
     }

@@ -102,7 +102,7 @@ export function AiSequenceComposerModal({ protocol, onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Sequence Composer ✦"
+      title="Sequence Composer"
       size="lg"
       elevated
       headerColor={ACCENT}

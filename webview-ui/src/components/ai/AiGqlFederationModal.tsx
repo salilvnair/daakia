@@ -13,7 +13,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-protocol-graphql)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const FEDERATION_MODES = [
   { key: 'overview', label: 'Federation Overview' },
@@ -143,7 +143,7 @@ Include SDL examples for both approaches showing the same entity in each style.`
     <ModalView
       open
       onClose={onClose}
-      title="GraphQL Federation Explorer ✦"
+      title="GraphQL Federation Explorer"
       size="lg"
       headerColor={ACCENT}
       headerIcon={

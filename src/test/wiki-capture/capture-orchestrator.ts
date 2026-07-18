@@ -17,7 +17,7 @@
  */
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow';
   selector?: string;
   text?: string;
   ms?: number;
@@ -29,6 +29,16 @@ export interface CaptureDirective {
   patch?: Record<string, unknown>;
   /** setActiveTabSubtab */
   subtab?: string;
+  subtabProtocol?: string;
+  /** setResponseSubtab — which protocol's response-panel pref-key namespace to write to. */
+  responseProtocol?: 'rest' | 'grpc' | 'soap';
+  /** clickText — 0-based match index; -1 = last match; default 0. */
+  nthMatch?: number;
+  /** seedRealtimeState — pushes into the WS/SSE/SocketIO/MQTT panel's own message cache. */
+  realtimeProtocol?: 'ws' | 'sse' | 'sio' | 'mqtt';
+  realtimeMessages?: Record<string, unknown>[];
+  realtimeConnState?: 'disconnected' | 'connecting' | 'connected';
+  realtimeSocketId?: string;
   /** addMockServer — passed through verbatim as a MockServer on the webview side. */
   server?: Record<string, unknown>;
   /** seedSidebarData — passed through verbatim to useSidebarDataStore on the webview side. */
@@ -42,6 +52,18 @@ export interface CaptureDirective {
   logs?: Record<string, unknown>[];
   networkEntries?: Record<string, unknown>[];
   devToolsTab?: string;
+  /** seedAiAudit */
+  aiAuditEntries?: Record<string, unknown>[];
+  /** key */
+  key?: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  /** openStateMachineTab */
+  serverId?: string;
+  /** seedStateMachineWorkflow */
+  sampleId?: string;
 }
 
 interface CaptureMessage { type: string; id: string; html?: string; error?: string }

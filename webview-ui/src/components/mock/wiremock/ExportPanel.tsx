@@ -22,6 +22,57 @@ export interface Props {
   protocol?: string;
   server: MockServer;
   onExport: (format: ExportFormat, content: string, filename: string) => void;
+  /** Real WireMock project export — a zip with mappings/*.json + __files/*.json, ready to drop into a WireMock instance. */
+  onExportZip?: (mappings: { filename: string; content: string }[], files: { filename: string; content: string }[], filename: string) => void;
+}
+
+// ─── Real WireMock project export (mappings/ + __files/, zipped) ──────────────
+// Distinct from the flat single-file "WireMock JSON" preview below — that one
+// is a quick-look preview, not something WireMock's file layout actually accepts.
+
+function slugifyRoute(method: string, path: string, used: Set<string>): string {
+  const base = `${method.toLowerCase()}_${(path.replace(/^\//, '').replace(/[^a-z0-9]+/gi, '_').replace(/_+$/, '')) || 'root'}`;
+  let name = base;
+  let i = 2;
+  while (used.has(name)) name = `${base}_${i++}`;
+  used.add(name);
+  return name;
+}
+
+function toWiremockUrlMatcher(path: string): { key: 'urlPath' | 'urlPathTemplate'; value: string } {
+  // Daakia's :param path syntax -> WireMock 3.x's {param} template syntax
+  if (path.includes(':')) {
+    return { key: 'urlPathTemplate', value: path.replace(/:([a-zA-Z0-9_]+)/g, '{$1}') };
+  }
+  return { key: 'urlPath', value: path.split('?')[0] };
+}
+
+export function buildWiremockProjectExport(server: MockServer): { mappings: { filename: string; content: string }[]; files: { filename: string; content: string }[] } {
+  const used = new Set<string>();
+  const mappings: { filename: string; content: string }[] = [];
+  const files: { filename: string; content: string }[] = [];
+  for (const r of server.routes ?? []) {
+    const slug = slugifyRoute(r.method, r.path, used);
+    const { key, value } = toWiremockUrlMatcher(r.path);
+    let isJson = true;
+    try { JSON.parse(r.body || ''); } catch { isJson = false; }
+    const bodyFileName = `${slug}.${isJson ? 'json' : 'txt'}`;
+    const mapping = {
+      request: {
+        ...(r.method !== 'ANY' ? { method: r.method } : {}),
+        [key]: value,
+      },
+      response: {
+        status: r.statusCode,
+        ...(r.headers && Object.keys(r.headers).length ? { headers: r.headers } : {}),
+        bodyFileName,
+        ...(r.delay ? { fixedDelayMilliseconds: r.delay } : {}),
+      },
+    };
+    mappings.push({ filename: `${slug}.json`, content: JSON.stringify(mapping, null, 2) });
+    files.push({ filename: bodyFileName, content: r.body || '' });
+  }
+  return { mappings, files };
 }
 
 // ─── REST exports ──────────────────────────────────────────────────────────────
@@ -462,7 +513,7 @@ function getExportOptions(protocol: string): ExportOption[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ExportPanel({ protocol = 'rest', server, onExport }: Props) {
+export function ExportPanel({ protocol = 'rest', server, onExport, onExportZip }: Props) {
   const options = getExportOptions(protocol);
   const [selected, setSelected] = useState(options[0].id);
   const [preview, setPreview] = useState('');
@@ -506,7 +557,30 @@ export function ExportPanel({ protocol = 'rest', server, onExport }: Props) {
         >
           Download {opt.filename(server)}
         </ButtonView>
+        {opt.id === 'wiremock' && onExportZip && (
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor={MOCK_ACCENT}
+            onClick={() => {
+              const { mappings, files } = buildWiremockProjectExport(server);
+              const zipName = `${server.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'mock'}-wiremock.zip`;
+              onExportZip(mappings, files, zipName);
+            }}
+          >
+            Export to WireMock (.zip)
+          </ButtonView>
+        )}
       </div>
+      {opt.id === 'wiremock' && (
+        <p className="text-[10px] text-[var(--color-text-muted)] opacity-70 -mt-1 leading-relaxed">
+          The single-file preview above is for a quick look — <strong>Export to WireMock (.zip)</strong> produces the real
+          <code className="mx-1 px-1 rounded" style={{ background: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)' }}>mappings/</code>
+          +
+          <code className="mx-1 px-1 rounded" style={{ background: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)' }}>__files/</code>
+          layout WireMock's <code>--root-dir</code> actually expects — unzip it straight into your WireMock project.
+        </p>
+      )}
 
       {/* Preview */}
       {preview && (

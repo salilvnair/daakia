@@ -18,7 +18,7 @@ interface Props {
   onApply: (query: string) => void;
 }
 
-const ACCENT = 'var(--color-protocol-graphql)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const SYSTEM_PROMPT = `You are a GraphQL expert. Given a plain-English description of what the user wants to query or mutate, generate a valid GraphQL operation.
 
@@ -95,7 +95,7 @@ export function AiGqlQueryBuilderModal({ onClose, onApply }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Query Builder ✦"
+      title="Query Builder"
       size="md"
       headerColor={ACCENT}
       headerIcon={

@@ -95,7 +95,7 @@ Repeat for each domain.
     <ModalView
       open
       onClose={onClose}
-      title="Request Clustering ✦"
+      title="Request Clustering"
       subtitle={tabCount > 0 ? `${tabCount} request${tabCount !== 1 ? 's' : ''}` : undefined}
       size="xl"
       headerColor={ACCENT}

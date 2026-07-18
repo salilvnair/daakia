@@ -102,7 +102,7 @@ export function AiAdaptiveLoadTesterModal({ onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Adaptive Load Tester ✦"
+      title="Adaptive Load Tester"
       size="md"
       headerColor={ACCENT}
       headerIcon={

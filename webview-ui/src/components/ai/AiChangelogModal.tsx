@@ -11,7 +11,7 @@ import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { type CollectionTreeNode } from '../../services/collections';
-import { ModalView, AIButtonView, ButtonView, MultilineInputView, CopyButtonView } from '@salilvnair/dui';
+import { ModalView, AIButtonView, ButtonView, EditorView, CopyButtonView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface Props {
@@ -204,16 +204,17 @@ export function AiChangelogModal({ collectionNode, onClose }: Props) {
           <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
             Previous version <span style={{ fontWeight: 400, fontStyle: 'italic', color: 'var(--color-text-muted)' }}>(paste exported JSON, cURL list, or request names)</span>
           </label>
-          <MultilineInputView
-            autoFocus
-            value={previousVersion}
-            onChange={e => { setPreviousVersion(e.target.value); previousVersionRef.current = e.target.value; setError(''); setChangelog(''); }}
-            rows={7}
-            size="md"
-            width="fw"
-            placeholder={`Paste the old version here — any format works:\n• Exported Daakia JSON\n• List of "METHOD /path — Name" lines\n• Postman/Insomnia collection JSON\n• Just a list of endpoint names`}
-            style={{ fontFamily: 'monospace', fontSize: 11 }}
-          />
+          <div style={{ height: 150 }}>
+            <EditorView
+              value={previousVersion}
+              onChange={v => { setPreviousVersion(v); previousVersionRef.current = v; setError(''); setChangelog(''); }}
+              language="json"
+              height="100%"
+              size="md"
+              placeholder={`Paste the old version here — any format works:\n• Exported Daakia JSON\n• List of "METHOD /path — Name" lines\n• Postman/Insomnia collection JSON\n• Just a list of endpoint names`}
+              bordered
+            />
+          </div>
         </div>
 
         {error && <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>{error}</p>}

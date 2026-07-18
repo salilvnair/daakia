@@ -109,7 +109,7 @@ export function AiSmartTestSuiteModal({ collectionNode, onClose }: Props) {
     <ModalView
       open
       onClose={onClose}
-      title="Smart Test Suite Generator ✦"
+      title="Smart Test Suite Generator"
       subtitle={collectionNode.name}
       size="lg"
       headerColor={ACCENT}

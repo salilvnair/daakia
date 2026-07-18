@@ -403,7 +403,7 @@ export function AiActionButton({
         ref={btnRef}
         type="button"
         onClick={onOpen}
-        className="flex items-center cursor-pointer transition-all border"
+        className="flex items-center flex-shrink-0 whitespace-nowrap cursor-pointer transition-all border"
         style={{
           height: base.height,
           paddingLeft: base.paddingX,
@@ -412,6 +412,8 @@ export function AiActionButton({
           fontSize: base.fontSize,
           fontWeight: compact ? 400 : 500,
           borderRadius,
+          wordBreak: 'keep-all',
+          overflowWrap: 'normal',
           color: btnAccent,
           borderColor: open
             ? `color-mix(in srgb, ${btnAccent} 45%, var(--color-surface-border))`
