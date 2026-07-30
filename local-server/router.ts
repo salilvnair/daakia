@@ -560,6 +560,27 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     }
 
+    // ── Settings (mirrors MainPanel._sendSettings/_saveSettings verbatim) ──
+    case 'getSettings': {
+      const defaults = {
+        followRedirects: true,
+        sslVerification: true,
+        timeout: 0,
+        encoding: 'enable',
+        saveResponseInHistory: true,
+        proxy: { mode: 'none' },
+      };
+      const stored = getSetting<Record<string, unknown>>('general') ?? {};
+      post({ type: 'settingsData', settings: { ...defaults, ...stored } });
+      break;
+    }
+    case 'saveSettings': {
+      const settings = msg.settings as Record<string, unknown>;
+      const existing = getSetting<Record<string, unknown>>('general') ?? {};
+      setSetting('general', { ...existing, ...settings });
+      break;
+    }
+
     default:
       console.log(`[local-server] no handler wired for message type "${msg.type}" — add one in local-server/router.ts if you need it`);
   }

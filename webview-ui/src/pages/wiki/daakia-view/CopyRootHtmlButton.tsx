@@ -42,6 +42,12 @@ async function copyRootHtml(): Promise<boolean> {
   }
 }
 
+// Permanently hidden from the UI — no feature build should ever show this
+// icon. The Ctrl+Shift+1 capture hotkey stays live (still useful for future
+// wiki-capture sessions), it just has no visible button anymore. Flip
+// SHOW_BUTTON back to true only for an active wiki-capture session.
+const SHOW_BUTTON = false;
+
 export function CopyRootHtmlButton() {
   const [copied, setCopied] = useState(false);
 
@@ -65,6 +71,8 @@ export function CopyRootHtmlButton() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  if (!SHOW_BUTTON) return null;
 
   return (
     <button

@@ -297,7 +297,11 @@
     "run:collection": "node cli/daakia-run.mjs",
     "local-server:build": "node local-server/build.js",
     "local-server:watch": "node local-server/build.js --watch",
-    "local-server": "npm run local-server:build && node local-server/dist/server.js"
+    "local-server": "npm run local-server:build && node local-server/dist/server.js",
+    "demo-video:record": "node scripts/demo-video/record.js",
+    "demo-video:compose": "node scripts/demo-video/compose.js",
+    "demo-video": "npm run demo-video:record && npm run demo-video:compose",
+    "showcase": "npm run demo-video:record && node scripts/demo-video/compose.js --gif"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",
@@ -333,6 +337,7 @@
     "express": "^5.2.1",
     "glob": "^11.0.0",
     "mocha": "^10.4.0",
+    "playwright": "^1.62.0",
     "svg2ttf": "^6.1.0",
     "svgicons2svgfont": "^15.0.1",
     "ttf2woff": "^3.0.0",

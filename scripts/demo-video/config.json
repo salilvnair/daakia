@@ -1,0 +1,137 @@
+{
+  "appUrl": "http://localhost:5173",
+  "output": {
+    "name": "daakia_showcase",
+    "width": 1280,
+    "height": 800,
+    "fps": 25
+  },
+  "transitions": {
+    "type": "zoomin",
+    "durationSec": 0.7
+  },
+  "intro": {
+    "enabled": true,
+    "durationSec": 3.2,
+    "title": "Daakia",
+    "tagline": "One API client. Every protocol.",
+    "badges": ["REST", "GraphQL", "WebSocket", "gRPC", "SOAP", "Mock Server"],
+    "accentColor": "#2ad4a8",
+    "effect": "static"
+  },
+  "segments": [
+    {
+      "id": "rest",
+      "label": "REST",
+      "recipe": "restRequest",
+      "effect": "static",
+      "trimStartSec": 1.5,
+      "options": { "url": "https://jsonplaceholder.typicode.com/users/1" }
+    },
+    {
+      "id": "json_body",
+      "label": "JSON Body",
+      "recipe": "jsonBodyType",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "ai_chat",
+      "label": "Daakia AI",
+      "recipe": "aiChatType",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "ws",
+      "label": "WebSocket",
+      "recipe": "wsMessageType",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "graphql",
+      "label": "GraphQL",
+      "recipe": "graphqlQueryType",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "grpc",
+      "label": "gRPC",
+      "recipe": "grpcMessageType",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "soap",
+      "label": "SOAP",
+      "recipe": "soapEnvelopeType",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "mcp",
+      "label": "MCP",
+      "recipe": "mcpServerType",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "mock",
+      "label": "Mock Server",
+      "recipe": "mockServerRun",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "devtools",
+      "label": "DevTools",
+      "recipe": "devToolsShow",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "collections",
+      "label": "Collections",
+      "recipe": "collectionsCreate",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "history",
+      "label": "History",
+      "recipe": "historyShow",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "environment",
+      "label": "Environment",
+      "recipe": "environmentCreate",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "settings_general",
+      "label": "Settings — General",
+      "recipe": "settingsShow",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "settings_provider",
+      "label": "Settings — LLM Provider",
+      "recipe": "settingsProviderShow",
+      "effect": "static",
+      "trimStartSec": 1.5
+    },
+    {
+      "id": "settings_prompt",
+      "label": "Settings — Prompt Library",
+      "recipe": "settingsPromptShow",
+      "effect": "static",
+      "trimStartSec": 1.5
+    }
+  ]
+}

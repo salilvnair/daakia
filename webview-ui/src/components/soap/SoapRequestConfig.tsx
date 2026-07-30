@@ -156,7 +156,7 @@ export function SoapRequestConfig() {
                     onClick={() => bodyGenRef.current?.open()}
                     style={{ color: 'var(--color-protocol-ai)' }}
                   >
-                    Generate ✦
+                    Generate
                   </ButtonView>
                 )}
                 {aiEnabled('requestFuzzer') && (
@@ -168,7 +168,7 @@ export function SoapRequestConfig() {
                     onClick={() => setShowFuzzer(true)}
                     style={{ color: 'var(--color-protocol-ai)' }}
                   >
-                    Fuzz ✦
+                    Fuzz
                   </ButtonView>
                 )}
               </div>
@@ -297,7 +297,7 @@ export function SoapRequestConfig() {
                   onClick={() => setShowWsdlExplainer(true)}
                   style={{ color: 'var(--color-protocol-ai)' }}
                 >
-                  WSDL Explainer ✦
+                  WSDL Explainer
                 </ButtonView>
               </div>
             )}

@@ -243,7 +243,7 @@ export function GraphQLEditor() {
                   onClick={() => setShowFuzzer(true)}
                   style={{ color: 'var(--color-protocol-ai)' }}
                 >
-                  Fuzz ✦
+                  Fuzz
                 </ButtonView>
               </div>
             )}

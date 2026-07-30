@@ -122,7 +122,7 @@ export function McpToolsTab() {
             style={{ color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' }}
             title="AI explains all tool schemas"
           >
-            <SparkleIcon size={10} />Schema ✦
+            <SparkleIcon size={10} />Schema
           </button>
         )}
         {/* 10.5: Fuzz ✦ */}
@@ -132,7 +132,7 @@ export function McpToolsTab() {
             style={{ color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' }}
             title="AI generates edge-case tool inputs"
           >
-            <SparkleIcon size={10} />Fuzz ✦
+            <SparkleIcon size={10} />Fuzz
           </button>
         )}
       </div>

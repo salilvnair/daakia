@@ -13,6 +13,10 @@
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-showcase.gif" alt="Daakia demo — REST, GraphQL, gRPC, SOAP, WebSocket, MCP, Mock Server, Collections, History, Environments, DevTools, and Settings" width="100%" />
+</p>
+
 ---
 
 ## Table of Contents

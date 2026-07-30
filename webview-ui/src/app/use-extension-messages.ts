@@ -19,6 +19,7 @@ import { useSidebarDataStore } from '../store/sidebar-data-store';
 import { useAiKeysStore } from '../store/ai-keys-store';
 import { useAiFeaturesStore } from '../store/ai-features-store';
 import { useDbStatusStore } from '../store/db-status-store';
+import { useAppSettingsStore } from '../store/app-settings-store';
 import { useAiHistoryStore } from '../store/ai-history-store';
 import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_DEFAULTS } from '../store/prompt-template';
 import { useAiConversationStore } from '../store/ai-conversation-store';
@@ -75,6 +76,9 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           useDbStatusStore.getState().setDbStatus({ dbPath: msg.dbPath, sqliteOk: msg.sqliteOk, sqliteError: msg.sqliteError });
           // Load persisted Daakia AI conversation on startup
           useAiConversationStore.getState().loadFromDb();
+          // Load persisted General/Encoding/Proxy settings once — Settings panel reads/writes
+          // through this store instead of each sub-tab independently re-fetching on mount.
+          useAppSettingsStore.getState().load();
           // Restore saved theme (7.6, E3.x system theme)
           const savedTheme = localStorage.getItem('daakia-theme');
           const resolvedTheme: 'dark' | 'light' =
@@ -96,6 +100,10 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
         }
         case 'aiConversation:data': {
           useAiConversationStore.getState().setMessages(msg.messages || []);
+          break;
+        }
+        case 'settingsData': {
+          useAppSettingsStore.getState().setSettings(msg.settings || {});
           break;
         }
         case 'responseData': {
