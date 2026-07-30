@@ -4,9 +4,10 @@
   <img src="images/daakia-icon.png" alt="Daakia" width="128" height="128" />
 </p>
 
-> **Daakia** (*डाकिया*, "The Messenger") — A powerful, multi-protocol API client built as a
+> **Daakia** (*डाकिया*, "The Messenger") — A multi-protocol API client built as a
 > first-class VS Code extension. Think **Postman + Insomnia + Bruno**, but living inside your
-> editor with deep AI integration, script debugging, mock servers, and support for 6+ protocols.
+> editor — REST, GraphQL, gRPC, SOAP, WebSocket/SSE/Socket.IO/MQTT, and MCP, with a stateful
+> mock server, a script debugger, an in-app documentation wiki, and 20+ AI-powered tools.
 
 [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-1.99%2B-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
@@ -22,6 +23,7 @@
 ## Table of Contents
 
 - [Supported Protocols](#supported-protocols)
+- [UI Layout](#ui-layout)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [Getting Started](#getting-started)
@@ -33,14 +35,18 @@
   - [SOAP](#soap)
   - [WebSocket / Realtime](#websocket--realtime)
   - [MCP Client](#mcp-client)
-- [Mock Server](#mock-server)
+- [Mock Server — Stateful, Multi-Protocol](#mock-server--stateful-multi-protocol)
 - [Scripts & Debugger](#scripts--debugger)
+- [AI Assistant](#ai-assistant)
+- [AI Power Tools](#ai-power-tools)
+- [Command Palette](#command-palette)
+- [Wiki — In-App Documentation](#wiki--in-app-documentation)
 - [Settings](#settings)
-- [AI Panel](#ai-panel)
 - [Developer Tools](#developer-tools)
+- [Import / Export](#import--export)
+- [Collection Sync (git-native)](#collection-sync-git-native)
 - [Tech Stack](#tech-stack)
 - [Design Principles](#design-principles)
-- [Development Roadmap](#development-roadmap)
 - [License](#license)
 
 ---
@@ -51,81 +57,54 @@ Daakia is a **multi-protocol** API client. Each protocol has its own execution e
 UI panels, sidebar context, and store state. Switch between protocols using the
 **left icon rail** — everything updates instantly.
 
-| Protocol | Icon Color | Execution Engine | Status |
-|----------|-----------|-----------------|--------|
-| **REST** | Indigo `#6366f1` | Axios (extension host) | ✅ Complete |
-| **GraphQL** | Pink `#E535AB` | HTTP POST + WebSocket (subscriptions) | ✅ Complete |
-| **gRPC** | Blue `#3b82f6` | `@grpc/grpc-js` + proto-loader | ✅ Complete |
-| **SOAP** | Coral `#f97316` | `soap` + WSDL parser | ✅ Complete |
-| **WebSocket** | Green `#3c790a` | `ws` (Node.js) | ✅ Complete |
-| **SSE** | Teal `#14b8a6` | Axios streaming | ✅ Complete |
-| **Socket.IO** | Amber `#f59e0b` | `socket.io-client` | ✅ Complete |
-| **MQTT** | Purple `#a855f7` | `mqtt` + Aedes broker (mock) | ✅ Complete |
-| **AI** | Purple `#8b5cf6` | LLM providers (OpenAI, Anthropic, Google, Ollama, Groq, etc.) | ✅ Complete |
-| **MCP** | Cyan `#06b6d4` | Custom MCP stdio/HTTP transport | ✅ Complete |
+| Protocol | Execution Engine | Status |
+|----------|-----------------|--------|
+| **REST** | Axios (extension host) | ✅ |
+| **GraphQL** | HTTP POST + WebSocket (subscriptions), schema introspection | ✅ |
+| **gRPC** | `@grpc/grpc-js` + proto-loader, server reflection | ✅ |
+| **SOAP** | `soap` + WSDL parser, WS-Security | ✅ |
+| **WebSocket** | `ws` (Node.js), auto-reconnect | ✅ |
+| **SSE** | Axios streaming | ✅ |
+| **Socket.IO** | `socket.io-client` | ✅ |
+| **MQTT** | `mqtt` + Aedes broker (for mocking) | ✅ |
+| **MCP** (Model Context Protocol) | Custom stdio + HTTP/SSE transport | ✅ |
+| **AI** | 13 LLM providers, tool calling, streaming | ✅ |
 
 ---
 
 ## UI Layout
-
-Daakia's interface is organized into three main zones:
 
 ```
  ┌──────────┬───────────────────────────────────────┬──────────────┐
  │  LEFT    │          MAIN CONTENT AREA            │    RIGHT     │
  │ SIDEBAR  │  ┌─────────────────────────────────┐  │   SIDEBAR    │
  │          │  │ Tab Bar (drag-drop, ctx menu)   │  │              │
- │ REST ●   │  ├─────────────────────────────────┤  │ Collections  │
- │ GQL  ●   │  │ URL Bar (per-protocol, per-tab) │  │ History      │
- │ RT   ●   │  ├─────────────────────────────────┤  │ Environments │
- │ gRPC ●   │  │ Request Config (top)            │  │              │
- │ SOAP ●   │  │ ─── draggable splitter ───      │  │              │
- │ AI   ●   │  │ Response/Conversation (bottom)  │  │              │
- │ MCP  ●   │  └─────────────────────────────────┘  │              │
+ │ REST     │  ├─────────────────────────────────┤  │ Collections  │
+ │ GraphQL  │  │ URL Bar (per-protocol, per-tab) │  │ History      │
+ │ RealTime │  ├─────────────────────────────────┤  │ Environments │
+ │ gRPC     │  │ Request Config (top)            │  │              │
+ │ SOAP     │  │ ─── draggable splitter ───      │  │              │
+ │ AI       │  │ Response/Conversation (bottom)  │  │              │
+ │ MCP      │  └─────────────────────────────────┘  │              │
  │          │                                       │              │
  │ ──────── │                                       │ ──────────   │
- │ Mock  ●  │                                       │ Settings ⚙   │
- │ Dev   ●  │                                       │              │
+ │ Mock     │                                       │ Settings ⚙   │
+ │ DevTools │                                       │              │
  └──────────┴───────────────────────────────────────┴──────────────┘
 ```
 
-### Left Protocol Rail (7 Protocols + Tools)
-
-| Icon | Protocol | Accent Color | Description |
-|------|----------|-------------|-------------|
-| 🟣 | **REST** | `#6366f1` (Indigo) | Default protocol — HTTP request builder |
-| 🩷 | **GraphQL** | `#E535AB` (Pink) | Schema-aware query/mutation/subscription |
-| 🟢 | **Realtime** | `#3c790a` (Green) | WebSocket + SSE + Socket.IO + MQTT |
-| 🔵 | **gRPC** | `#3b82f6` (Blue) | Proto file management + RPC invocation |
-| 🟠 | **SOAP** | `#f97316` (Coral) | WSDL parsing + envelope editing |
-| 🟣 | **AI** | `#8b5cf6` (Purple) | Multi-provider LLM chat + tool calling |
-| 🩵 | **MCP** | `#06b6d4` (Cyan) | MCP server testing (stdio + HTTP) |
-| 🟡 | **Mock Server** | Yellow | Multi-protocol mock server management |
-| ⚙️ | **DevTools** | Protocol accent | Console, Network, Timeline, Performance |
-
-Each protocol icon highlights when active with a glow background in its accent color.
-The scrollbar thumb color and key UI accents automatically match the active protocol.
-
-### Tab Bar
-- **Tabs per protocol**: REST, GraphQL, gRPC, SOAP, WebSocket, AI, MCP
-- **Special tabs**: Settings, Mock Server
-- **Drag-and-drop reorder**, right-click context menu (Close, Close Others, Close to Right)
-- **Dirty indicator**: Orange dot when unsaved changes exist
-- **Per-tab environment selector**: Choose which environment variables apply to each tab
-- **Loading spinner**: Animated spinner during request execution or AI streaming
-
-### Resizable Split Panels
-- **Vertical splitter** between request config (top) and response/conversation (bottom)
-- **Pill-grip handle**: Drag to resize, double-click to reset to 50/50
-- **Focused panel**: Click top or bottom to snap to 70/30 or 25/75
-- Split position is **persisted per protocol** across sessions
-
-### Right Sidebar (Context-Aware)
-- **REST / GraphQL / SOAP**: Collections, History, Environments
-- **WebSocket / Realtime / AI / MCP**: No sidebar panels
-- **Settings gear** always available at bottom
-- Sidebar panels slide in/out with animated transitions
-- Sidebar width is resizable and persisted
+- **Left protocol rail** — one icon per protocol plus Mock Server and DevTools; each
+  glows in its own accent color when active, and key UI accents (scrollbar thumb,
+  focus rings) follow the active protocol.
+- **Tab bar** — per-protocol tabs with drag-and-drop reorder, a right-click context
+  menu (Close / Close Others / Close to Right), a dirty-state dot, and a per-tab
+  environment selector.
+- **Resizable split panels** — request config (top) and response/conversation (bottom),
+  with a draggable pill-grip handle; the split position persists per protocol.
+- **Right sidebar** — Collections, History, and Environments for REST/GraphQL/SOAP;
+  the Settings gear is always available at the bottom.
+- The global **Command Palette** (`Cmd/Ctrl+K`) reaches almost everything below without
+  touching the mouse — see [Command Palette](#command-palette).
 
 ---
 
@@ -137,41 +116,30 @@ The scrollbar thumb color and key UI accents automatically match the active prot
 - **Body modes**: JSON, XML, HTML, Text, JavaScript, form-data (with file upload), URL-encoded, binary, GraphQL
 - **Auth types**: None, Bearer Token, Basic Auth, API Key, OAuth 2.0 (all grant types + PKCE), AWS Signature
 - **Variable substitution**: `{{variable}}` and `${variable}` syntax with layered resolution (request → env → collection → global)
-- **Variable highlighting**: Indigo-tinted tokens in URL, header, and body inputs
 
 ### Response Viewer
 - **Body views**: Pretty-printed JSON, Raw text, Preview (HTML/image)
-- **Response tabs**: Body, Headers, Cookies (with domain/path/expires), Test Results, Timeline
-- **Status badge**: Color-coded (green 2xx, yellow 3xx, red 4xx/5xx)
-- **Timeline**: Total time visualization + DNS/connect/TLS/first-byte breakdown
-- **Search**: Find-in-response across all views
+- **Response tabs**: Body, Headers, Cookies, Test Results, Timeline
+- **Timeline**: DNS/connect/TLS/first-byte breakdown
+- **Search**: Ctrl+F inside the response panel opens Monaco's built-in find widget
+- **Large responses**: bodies over 512 KB are truncated for display with a warning banner; the full file is always saved to disk
 
 ### Collections & Environments
-- **Nested folders**: Recursive tree with drag-and-drop reorder, hover actions, expand/collapse
-- **Collection-level**: Variables, auth (inherited by child requests), pre-request/test scripts
-- **Environments**: Create/edit/delete, global variables, secret type (masked with `***`)
-- **Variable resolution engine**: Request vars > Env vars > Collection vars > Global vars
-- **Collection runner**: Execute all requests in sequence with delay, stop-on-error, progress tracking
-- **Import**: Postman Collection v2.1, OpenAPI/Swagger 3.x + 2.x, HAR (HTTP Archive), Bruno `.bru` files
-- **Export**: Daakia JSON, Postman-compatible JSON, OpenAPI spec
+- **Nested folders**: recursive tree, drag-and-drop reorder, hover actions, search
+- **Collection-level**: variables, auth (inherited by child requests), pre-request/test scripts
+- **Environments**: create/edit/delete, global variables, secret values masked with `***`
+- **Variable resolution**: request vars → env vars → collection vars → global vars
+- **Collection runner**: execute every request in sequence with delay, stop-on-error, progress tracking
 
 ### Request History
-- Auto-saved on every send with full response body
-- Search, replay to new tab, clear history
+- Auto-saved on every send with the full response body
+- Search, replay to a new tab, clear history
 - Configurable max entries (default: 500)
 
 ### Code Generation
-- **12 languages**: cURL, JavaScript (fetch + axios), Python (requests), Go (net/http), Java (HttpClient), C# (HttpClient), PHP (cURL), Ruby (Net::HTTP), wget
-- **Line numbers + syntax highlighting**: Via Monaco editor
-- **Copy to clipboard**: One-click copy
-- **Generate from any request**: Click "Show Code" in the Send dropdown
-
-### Import Formats
-- **cURL**: Paste a cURL command → auto-populated request tab
-- **Postman Collection v2.1**: Full folder + request hierarchy
-- **OpenAPI/Swagger**: 3.x & 2.x (YAML or JSON) → collections with paths as folders
-- **HAR**: HTTP Archive files grouped by domain
-- **Bruno**: Parse `.bru` files and folder structure
+- 12 target snippets: cURL, JavaScript (fetch + axios), Python (requests), Go (net/http),
+  Java (HttpClient), C# (HttpClient), PHP (cURL), Ruby (Net::HTTP), wget — generated from
+  the Send dropdown's "Show Code"
 
 ---
 
@@ -183,47 +151,57 @@ The scrollbar thumb color and key UI accents automatically match the active prot
 ┌────────────────────────── VS Code Extension Host ──────────────────────────┐
 │                                                                             │
 │  extension.ts ──► MainPanel.ts ──► postMessage ──► React Webview           │
-│       │                  │                                                   │
-│       ▼                  ▼                                                   │
-│  ┌─────────┐    ┌───────────────┐    ┌──────────────┐    ┌───────────┐    │
-│  │ SQLite  │    │ HTTP Executor │    │ Mock Server   │    │ AI Exec.  │    │
-│  │ (sql.js)│    │   (Axios)     │    │  (Express)    │    │ (Copilot) │    │
-│  └─────────┘    └───────────────┘    └──────────────┘    └───────────┘    │
+│       │                  │                                                 │
+│       ▼                  ▼                                                 │
+│  ┌─────────┐    ┌───────────────┐    ┌───────────────┐   ┌────────────┐  │
+│  │ SQLite  │    │ HTTP Executor │    │ Mock Servers   │   │ AI / Chat  │  │
+│  │ (sql.js)│    │   (Axios)     │    │ (per protocol, │   │ Participant│  │
+│  │         │    │               │    │  state-machine │   │ (Copilot)  │  │
+│  │         │    │               │    │  backed)       │   │            │  │
+│  └─────────┘    └───────────────┘    └───────────────┘   └────────────┘  │
 │                                                                             │
-│  Message Handlers (5 modules):                                              │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
-│  │ REST     │ │ GraphQL  │ │ gRPC     │ │ SOAP     │ │ Realtime │        │
-│  │ Handler  │ │ Handler  │ │ Handler  │ │ Handler  │ │ Handler  │        │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘        │
+│  Message handlers — one per protocol (REST, GraphQL, gRPC, SOAP, Realtime,│
+│  MCP), plus git-sync, mock-server, and AI handler modules.                │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌────────────────────────── Webview UI (React 19) ────────────────────────────┐
 │                                                                             │
 │  App.tsx                                                                    │
-│  ├── Left Protocol Rail (REST | GraphQL | WebSocket | SSE | Socket.IO ...) │
+│  ├── Left Protocol Rail                                                    │
 │  ├── TabBar (tabs-store.ts — Zustand)                                      │
-│  ├── URL Bar (per-protocol)                                                │
-│  ├── Main Content Area (per-protocol panels)                               │
-│  │   ├── REST: UrlBar + RequestConfig + ResponsePanel                      │
-│  │   ├── GraphQL: GraphQLPanel + SchemaPanel + Response                    │
-│  │   ├── gRPC: ProtoManager + MethodSelector + RequestConfig               │
-│  │   ├── SOAP: WsdlBrowser + OperationSelector + EnvelopeEditor            │
-│  │   ├── WebSocket: ConnectionPanel + MessageLog + Composer                │
-│  │   └── MCP: McpUrlBar + RequestTabs + ResponsePanel                      │
-│  └── Right Sidebar (context-aware, per-protocol)                           │
+│  ├── Main Content Area (per-protocol panels, built from @salilvnair/dui)   │
+│  └── Right Sidebar (Collections / History / Environments, context-aware)   │
 │                                                                             │
-│  Zustand Stores (11): tabs, collections, env, toast, sidebar, debug,       │
-│                       devtools, ui-state, url-suggestions, ai-providers,    │
-│                       mock                                                  │
+│  Zustand stores: tabs, collections, env, toast, sidebar, devtools,         │
+│  ui-state, url-suggestions, ai-providers, ai-features, mock, prompt-       │
+│  template, and the embedded @salilvnair/state-machine workspace stores.    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Component library — `@salilvnair/dui`
+
+The entire webview UI is built on [`@salilvnair/dui`](https://www.npmjs.com/package/@salilvnair/dui),
+a shared React 19 component library (also used by other Daakia-family projects) —
+65+ components (`ButtonView`, `ModalView`, `TextInputView`, `SelectInputView`,
+`EditorView`, `TabView`, `SideNavView`, `KeyValueTableView`, and more), a single
+CSS-variable theme, and an optional Monaco-backed code editor. Two hard rules
+flow from this: no native `<select>` anywhere in the app, and every color comes
+from a `var(--color-*)` token, never a hardcoded hex value — see
+[Design Principles](#design-principles).
+
+### Stateful mocking — `@salilvnair/state-machine`
+
+The Mock Server's "connect this route to a workflow" experience is powered by
+[`@salilvnair/state-machine`](https://github.com/salilvnair/state-machine), a
+standalone visual state-machine library (React Flow canvas, ck8t card style)
+embedded directly into the Mock Server tab. See
+[Mock Server — Stateful, Multi-Protocol](#mock-server--stateful-multi-protocol).
+
 ### Storage
 
-All persistent data lives in a single SQLite file at `~/.salilvnair/daakia-vsce/db/daakia.db`, using **sql.js** (SQLite compiled to WASM). This means:
-- **No native addons** — works on all platforms without compilation
-- **Graceful degradation** — if SQLite fails to load, the UI shows a Rebuild button
-- **Tables**: collections, folders, requests, environments, environment_variables, global_variables, history, cookies, mock_servers, mock_routes, mock_logs, settings, audit_log
+All persistent data lives in a single SQLite file at `~/.salilvnair/daakia-vsce/db/daakia.db`,
+via **sql.js** (SQLite compiled to WASM) — no native addons, works unmodified on every
+platform. If the DB fails to load, the UI offers a one-click Rebuild.
 
 ---
 
@@ -236,34 +214,22 @@ All persistent data lives in a single SQLite file at `~/.salilvnair/daakia-vsce/
 ### Install from VSIX (Manual)
 
 ```bash
-# 1. Build the project
 npm run build:all
-
-# 2. Package into .vsix
 npm run vscode:package
-
-# 3. Install in VS Code
-code --install-extension daakia-1.0.0.vsix
+code --install-extension daakia-*.vsix
 ```
 
 ### Development
 
 ```bash
-# Install dependencies
 nvm use 22
 npm install
-
-# Build everything
 npm run build:all
 
-# Watch mode (auto-rebuild extension)
-npm run watch
+npm run watch          # watch mode, extension host
+npm run dev:webview    # Vite dev server, hot reload for the UI
 
-# Dev webview server (hot reload for UI)
-npm run dev:webview
-
-# Run extension in VS Code debugger
-# Press F5 → Extension Development Host window opens
+# Press F5 in VS Code → Extension Development Host window opens
 ```
 
 ---
@@ -272,16 +238,16 @@ npm run dev:webview
 
 | Command | Description |
 |---------|-------------|
-| `npm run build:all` | Build extension (esbuild) + webview (Vite) |
+| `npm run build:all` | Typecheck + build extension (esbuild) + build webview (Vite) |
 | `npm run build:ext` | Build extension only |
 | `npm run build:webview` | Build webview only |
-| `npm run watch` | Watch mode for extension |
-| `npm run dev:webview` | Vite dev server for webview (hot reload) |
-| `npm run vscode:package` | Package into `.vsix` file |
-| `npm run vscode:publish` | Publish to VS Code Marketplace |
-| `npm run vscode:publish:patch` | Bump patch version + publish |
+| `npm run watch` | Watch mode for the extension |
+| `npm run dev:webview` | Vite dev server for the webview (hot reload) |
+| `npm run local-server` | Standalone dev backend (real SQLite + mock servers) for browser-only UI testing |
+| `npm run vscode:package` | Package into a `.vsix` file |
+| `npm run vscode:publish` | Publish to the VS Code Marketplace (current `package.json` version) |
+| `npm run vscode:publish:patch` / `:minor` / `:major` | Bump semver and publish in one step |
 | `npm run lint` | ESLint on `src/` |
-| `npm run backup` | Create backup zip |
 
 ---
 
@@ -289,147 +255,93 @@ npm run dev:webview
 
 ### REST API
 
-The flagship protocol. Full Postman-compatible request builder with every feature you'd expect.
+The flagship protocol — a full Postman-compatible request builder.
 
-**Request Builder:**
-- Method selector + URL bar with method-colored badge
+- Method selector + URL bar with a method-colored badge
 - Config tabs: Params, Headers, Body, Auth, Variables, Scripts (Pre-request & Post-response)
 - Body sub-tabs: none, JSON, XML, Text, HTML, JavaScript, form-data, URL-encoded, binary, GraphQL
-- SplitButton Send: Send, Send & Download, Import cURL, Show Code, Clear All
-- SplitButton Save: Save (in-place), Save As (tree-browser modal)
-
-**Response Viewer:**
-- Body views: Pretty JSON (code-folded), Raw text, Preview
-- Headers table with search
-- Cookies table: name, value, domain, path, expires, httpOnly, secure
-- Test Results table: assertion name, status (pass/fail), error message
-- Timeline: waterfall-style DNS → Connect → TLS → Request → Response timing
-
-**Sidebar (REST):**
-- **Collections**: Recursive tree with folders, drag-drop, hover actions (run/add/edit/delete), search
-- **History**: Chronological list, search by URL/method, replay to new tab
-- **Environments**: Create/edit/delete, variable table with secret toggle, global variables
+- Split Send button: Send, Send & Download, Import cURL, Show Code, Clear All
+- Split Save button: Save (in-place), Save As (tree-browser modal)
+- Response: Pretty JSON, Raw, Preview, Headers table, Cookies table, Test Results, Timeline
 
 ### GraphQL
 
 Schema-aware GraphQL client with introspection and auto-complete.
 
-**Features:**
-- Query/Mutation editor with syntax highlighting (Monaco)
-- Variables and Headers panels
-- **Schema introspection**: Connect to endpoint → auto-discover types, queries, mutations, subscriptions
-- **Schema Explorer** sidebar: Browse types, fields, arguments, enums
-- **Auto-complete**: Type-aware suggestions from introspected schema
-- **Subscriptions**: Live WebSocket-based subscription viewer
-- **Query tabs**: Multiple named queries per request
-- Query prettification and formatting
+- Query/Mutation editor with syntax highlighting (Monaco), separate Variables and Headers panels
+- **Schema introspection** — connect to an endpoint to auto-discover types, queries, mutations,
+  subscriptions, browsable in a Schema Explorer sidebar with type-aware auto-complete
+- **Subscriptions** — live WebSocket-based subscription viewer
 - Separate collections and history from REST
 
 ### gRPC
 
-Full gRPC client with proto file management and reflection support.
-
-**Features:**
-- **Proto Manager**: Import `.proto` files, browse services and methods
-- **Method Selector**: Dropdown of all available RPC methods
-- **Request Config**: JSON message body editor with Monaco
-- **Metadata**: Custom gRPC metadata pairs
-- **Server Reflection**: Auto-discover services from gRPC reflection endpoint
-- **Response Panel**: JSON response viewer with status/error details
-- **Deadline**: Configurable timeout per request
-- **Sample protos**: Built-in sample `.proto` files for testing
+- **Proto Manager** — import `.proto` files, browse services and methods
+- **Server Reflection** — auto-discover services from a gRPC reflection endpoint (no `.proto` needed)
+- Method selector, JSON message body editor (Monaco), custom metadata pairs
+- Configurable per-request deadline
 
 ### SOAP
 
-Enterprise-grade SOAP client with WSDL parsing and WS-Security support.
-
-**Features:**
-- **WSDL Browser**: Import WSDL by URL or file → auto-discover operations
-- **Operation Selector**: Dropdown of all available SOAP operations
-- **Envelope Editor**: XML body with syntax highlighting (Monaco)
-- **Form Editor**: Key-value input for each operation parameter
-- **Head ers Editor**: Custom SOAP headers (WS-Security, custom namespaces)
-- **Attachments**: MTOM and SwA attachment support
-- **Assertions**: Response assertions for SOAP body content
-- **SOAPUI Import**: Import existing SOAPUI projects
-- **WS-Security**: Username Token, Timestamp, Signature support
+- **WSDL import** — by URL or file, auto-discovers every operation
+- Envelope editor (XML, Monaco) and a generated Form editor per operation
+- **WS-Security** — Username Token, Timestamp, Signature
+- MTOM/SwA attachments, response assertions on SOAP body content
 
 ### WebSocket / Realtime
 
-Unified realtime client supporting 4 sub-protocols.
+One unified panel covers four sub-protocols:
 
-**WebSocket:**
-- Connect with custom headers and sub-protocols
-- Send/receive text and binary messages
-- Message log with timestamps and direction indicators (↑ sent / ↓ received)
-- Auto-reconnect with exponential backoff
-- Connection status indicator (connected/disconnected/connecting/error)
-
-**SSE (Server-Sent Events):**
-- Connect to SSE endpoint
-- Real-time event stream with type filtering
-- Event log with ID, type, data, and timestamp
-- Auto-reconnect on connection loss
-
-**Socket.IO:**
-- Connect to Socket.IO endpoints with namespace support
-- Send and listen to custom events
-- Event log with event name, payload, direction
-
-**MQTT:**
-- Connect to MQTT brokers with client options
-- Subscribe to topics with QoS levels (0, 1, 2)
-- Publish messages to topics with retain flag
-- Message log with topic, payload, QoS
+- **WebSocket** — custom headers/sub-protocols, text/binary messages (with a hex+ASCII
+  dump for binary frames), message templates, auto-reconnect with exponential backoff
+- **SSE** — real-time event stream with type filtering, auto-reconnect
+- **Socket.IO** — namespace support, custom event send/listen
+- **MQTT** — QoS 0/1/2, retain flag, topic subscribe/publish
 
 ### MCP Client
 
-Model Context Protocol client for testing and debugging MCP servers.
+A dedicated protocol for testing and debugging Model Context Protocol servers.
 
-**Features:**
-- **Connect**: stdio (subprocess) or HTTP transport
-- **Tool Browser**: List and invoke MCP tools with custom parameters
-- **Resource Browser**: List and read MCP resources
-- **Prompt Browser**: List and execute MCP prompts
-- **Response Panel**: JSON response viewer with syntax highlighting
-- **Request Tabs**: Params, Headers, Body configuration
+- **Transports**: stdio (subprocess) or HTTP/SSE
+- **Multi-server per tab** — connect to several MCP servers simultaneously, with per-server
+  status dots and merged capabilities
+- Tool / Resource / Prompt browsers, an Auth tab (Bearer/API-key for HTTP, env-var table
+  for stdio), a Config tab that imports Claude Desktop's `mcpServers` JSON directly, and a
+  curated 20-server Catalog for one-click add
 
 ---
 
-## Mock Server
+## Mock Server — Stateful, Multi-Protocol
 
-Daakia includes a full-featured **multi-protocol mock server** — create realistic API
-mocks that run locally inside VS Code.
+Daakia's mock server runs locally inside VS Code and covers every supported protocol
+(REST, GraphQL, gRPC, SOAP, WebSocket, SSE, Socket.IO, MQTT), with per-route config
+for status code, headers, response body, and artificial delay.
 
-**Supported Protocols:**
-| Protocol | Mock Engine |
-|----------|------------|
-| HTTP/REST | Express.js with path matching, delay, variable responses |
-| GraphQL | Custom GraphQL mock with schema-based response generation |
-| gRPC | gRPC mock server with `.proto`-defined services |
-| SOAP | SOAP mock with WSDL-based operation responses |
-| WebSocket | WS mock with configurable message patterns |
-| SSE | SSE mock with configurable event streams |
-| Socket.IO | Socket.IO mock with namespace + event routing |
-| MQTT | Aedes MQTT broker mock |
+**What makes it more than a static mock**: any route (or gRPC method, or GraphQL
+operation, or SOAP operation) can be gated by a real **State Machine** workflow —
+built on the embedded `@salilvnair/state-machine` canvas. Pick which workflow a route
+is connected to, then pick a real **Trigger Event** from that workflow's transition
+graph; when a request hits the route, the runtime fires that event against the
+workflow exactly like the canvas's own "Run" debugger would, and the response returned
+can change depending on which state the machine is currently in. Multiple workflows
+connected to the same server track independent state per workflow, so you can model
+things like "the third `GET /order/:id` after a `POST /order` returns `shipped`"
+without writing any server code.
 
-**Mock Features:**
-- Create from scratch or use built-in **OAuth Sample** template
-- Per-route configuration: method, path, status code, headers, response body
-- Delay simulation (add artificial latency)
-- Response templates with random data generation
-- Start/stop individual mock servers
-- **Request logger**: See all incoming requests with method, path, headers, body, timestamp
 - Multiple mock servers can run simultaneously on different ports
-- "Generate with AI" buttons (ready for Sprint 4 AI integration)
+- Full request logger — every incoming request with method, path, headers, body, timestamp
+- Export a running mock as a real WireMock project (mappings + `__files`), or generate
+  a standalone server (Node.js HTTP, Dockerfile, Apollo Server, `@grpc/grpc-js` server,
+  Node.js SOAP server, `ws`/SSE/Socket.IO server, or an Aedes MQTT broker) — see
+  [Import / Export](#import--export)
 
 ---
 
 ## Scripts & Debugger
 
-Daakia includes a **VS Code-style JavaScript debugger** inside the webview — set
-breakpoints, step through code, inspect variables, hover for values, all without
-leaving your API client.
+A **VS Code-style JavaScript debugger** lives inside the webview — set breakpoints,
+step through pre-request/post-response scripts, inspect variables, hover for values,
+all without leaving Daakia.
 
 ### Script Types
 
@@ -441,320 +353,213 @@ leaving your API client.
 
 ### Script API (`dk.*`)
 
-Scripts run in a **sandboxed Node.js `vm` context** with access to the `dk` global:
+Scripts run in a sandboxed Node.js `vm` context with a `dk` global:
 
-**Environment & Variables:**
-- `dk.env.set(name, value)` — Set environment variable (persisted)
-- `dk.env.get(name)` — Read variable from any scope (env → collection → global)
-- `dk.env.secret(name, value)` — Store secret (masked as `***` in UI and logs)
-- `dk.globals.set(name, value)` / `dk.globals.get(name)` — Global variable scope
+- `dk.env.set/get/secret` — environment variable read/write, secrets masked as `***`
+- `dk.globals.set/get` — global variable scope
+- `dk.request` / `dk.response` — read-only request, and (post-response only) response with `.status`/`.headers`/`.body`/`.time`/`.json()`
+- `dk.sendRequest({...})` — sub-requests from inside a script (e.g. auto-login)
+- `dk.test(name, fn)` + `dk.expect(value)` — assertions (`.toBe`, `.toContain`, `.toBeLessThan`, `.toHaveProperty`, ...)
+- `dk.console.log/warn/error` — logged to the DevTools Console tab
+- `dk.crypto.md5/sha1/sha256/hmac/base64/uuid`, `dk.oauth` — utility helpers
 
-**Request & Response:**
-- `dk.request` — Read-only: `.method`, `.url`, `.headers`, `.body`
-- `dk.response` — Post-response only: `.status`, `.headers`, `.body`, `.time`, `.json()`
-- `dk.sendRequest({ method, url, headers, body })` — Make sub-requests from scripts
+### Debugger
 
-**Test Assertions:**
-- `dk.test(name, fn)` — Define a test case
-- `dk.expect(value).toBe(expected)` / `.not.toBe()` / `.toContain()` / `.toBeLessThan()` / `.toBeGreaterThan()` / `.toHaveProperty()`
+- Click a line-number gutter to set a breakpoint (persists with the request)
+- A pill-shaped, draggable HUD toolbar appears when execution pauses: Continue / Step Over /
+  Step Into / Step Out / Restart / Stop
+- **Run & Debug sidebar**: Variables (expandable tree), Watch expressions, Call Stack, Breakpoints list
+- Hover any variable while paused to see its live value; the current line highlights yellow
+- Debug mode auto-activates the moment a breakpoint is set — no separate "start debugging" step
+- Test results land in the Response panel's Tests tab (`N passed` / `N failed`) — tests run
+  even without any breakpoints set
 
-**Utilities:**
-- `dk.console.log/warn/error(...)` — Log to DevTools Console tab
-- `dk.crypto.md5/sha1/sha256/hmac/base64/uuid()` — Crypto helpers
-- `dk.oauth` — OAuth2 token management
+---
 
-### Debugger Features
+## AI Assistant
 
-**Breakpoints:**
-- Click line numbers in the gutter to toggle breakpoints (red dot appears)
-- Multiple breakpoints can be set across both pre-request and post-response scripts
-- Breakpoints persist per-request (saved with the request)
-- Toggle individual breakpoints on/off from the Run & Debug sidebar panel
-- Remove all breakpoints with confirmation dialog
+Daakia ships AI in two complementary surfaces:
 
-**Debug Controls (HUD Toolbar):**
-- Pill-shaped toolbar appears at **top center** when execution pauses
-- Semi-transparent backdrop blur, protocol-accented border
-- Buttons: ▶ Continue, ⤿ Step Over, ↓ Step Into, ↑ Step Out, ↻ Restart, ■ Stop
-- **Draggable**: Grab the dotted grip handle to reposition horizontally
-- HUD resets to default center position on each new debug session
+### 1. In-app AI panel
 
-**Variable Inspection:**
-- **Run & Debug sidebar panel** (bug icon in left rail):
-  - **VARIABLES**: Tree view of all in-scope variables, expandable objects/arrays
-  - **WATCH**: Add custom expressions (e.g., `user.name`, `numbers.length`), evaluated live
-  - **CALL STACK**: Current execution frame
-  - **BREAKPOINTS**: List all breakpoints with file/line, enable/disable toggle, remove all
-- **Variable hover**: While paused, hover any variable in the editor to see its current value in a tooltip (type + value)
-- **Yellow highlight**: Current execution line is highlighted yellow with a small arrow in the gutter
+A full LLM playground built into the app — its own protocol tab, with a URL bar
+(provider + model selector), five config tabs (Prompt, Authorization, Tools, MCP,
+Settings — temperature/max tokens/top_p/penalties/stream/stop sequences/seed/response
+format), and a streaming conversation panel with tool-call cards.
 
-**Debug Flow:**
-- Debug mode **auto-activates** when any breakpoint is set — no separate "debug" button needed
-- `debugger;` statement in scripts also triggers a pause
-- **Step Over** skips function internals (calls complete, you stay on the next line)
-- **Continue** runs to the next breakpoint or to completion
-- **Stop** immediately terminates execution (HUD disappears, yellow highlight clears)
-- Editor is **read-only** while debugging (prevents accidental edits mid-session)
-- Runtime errors during debug (e.g., null property access) end the session and show the error in Console
+**13 built-in providers**, each with real model IDs pulled live from the source:
 
-**Test Results:**
-- Appear in the Response panel's **Tests** tab
-- Each result row: assertion name, green check (passed) or red ✕ (failed), error detail on failure
-- Badge count shows `N passed` / `N failed`
-- Tests run even without breakpoints — debugging is optional
+| Provider | Sample models |
+|---|---|
+| **GitHub Copilot** | `auto`, `gpt-4o`, `claude-sonnet-4-5`, `gemini-2.0-flash`, `o3-mini` (live list from `vscode.lm`) |
+| **OpenAI** | `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, `gpt-4.1`, `gpt-4o`, `o3-pro`, `o4-mini` |
+| **Anthropic** | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-3-7-sonnet-20250219`, `claude-3-5-haiku-20241022` |
+| **Google AI** | `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-pro` |
+| **Ollama** (local) | `llama3.3`, `qwen2.5`, `deepseek-r1`, `mistral`, `codellama` |
+| **Groq** | `compound-beta`, Llama 4 Maverick/Scout, `llama-3.3-70b-versatile`, Kimi K2 |
+| **Together AI** | Llama 3.1 405B/70B, DeepSeek R1 |
+| **Mistral AI** | Mistral Large/Small, Codestral |
+| **xAI** | `grok-3`, `grok-3-mini` |
+| **DeepSeek** | V4 Pro/Flash, V3, R1 |
+| **Azure OpenAI** | Azure deployment variants |
+| **Custom** | any OpenAI-compatible endpoint |
+| **Daakia Mock** | points at a local Daakia AI mock server, for offline dev |
 
-### Script Examples
+### 2. `@daakia` Copilot Chat participant
 
-**Pre-request: Set a timestamp variable**
-```javascript
-const ts = new Date().toISOString();
-dk.env.set('requestTime', ts);
-console.log('Request timestamp:', ts);
-```
+Registered as a real VS Code chat participant (`daakia.copilot`) — type `@daakia` in
+Copilot Chat. Five explicit slash commands (`/request`, `/mock`, `/test`, `/curl`,
+`/explain`) plus free-text intent classification that routes to **11 total specialized
+agents**: request builder, mock generator, test-script generator, cURL converter,
+response explainer, general Q&A, SOAP, GraphQL, XSD→request, documentation generator,
+and security review — each with its own system prompt, heuristic-matched first with an
+LLM fallback for ambiguous phrasing.
 
-**Pre-request: Auto-login + store token (sub-request)**
-```javascript
-const login = dk.sendRequest({
-  method: 'POST',
-  url: 'https://api.example.com/auth/login',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ username: 'auto', password: 'pass123' })
-});
-const token = login.json().access_token;
-dk.env.set('auth_token', token);
-```
+---
 
-**Post-response: Assertions + extract data**
-```javascript
-dk.test('Status is 200', () => {
-  dk.expect(dk.response.status).toBe(200);
-});
+## AI Power Tools
 
-dk.test('Response time OK', () => {
-  dk.expect(dk.response.time).toBeLessThan(5000);
-});
+Beyond chat, the AI panel's toolbar exposes a catalog of task-specific tools (each
+individually toggleable in **Settings → AI Features**):
 
-const body = dk.response.json();
-dk.env.set('userId', body.user.id);
-```
+| Tool | What it does |
+|---|---|
+| **Export** | Exports the AI conversation (prompts, responses, generated requests) as a Markdown report |
+| **@ Prompts** | Quick-insert picker into the AI Prompt Library |
+| **OpenAPI** | Generates a full OpenAPI 3.1 spec (YAML/JSON) from the active collection or open tabs |
+| **Security** | Scans open tabs for security anti-patterns |
+| **pm→dk** | Translates Postman `pm.*` test scripts to Daakia's `dk.*` API automatically |
+| **Webhook** | Analyzes webhook payloads, validates HMAC signatures, explains structure |
+| **Cluster** | Groups request history into logical API domains, auto-organized into collections |
+| **Orchestrate** | Turns a plain-English multi-protocol user journey into a coordinated, pass/fail-tracked test timeline |
+| **Chaos** | Designs a chaos-engineering test plan — fault scenarios, order, probability, protocols, duration — plus a risk matrix and resilience report |
+| **Contracts** | Diffs two teams' OpenAPI specs, proposes resolutions, and generates adapter stub mocks so both teams can develop independently |
+| **Traffic** | Proxy mode — mirrors real API traffic into Daakia, analyzes patterns live, auto-updates mocks, flags anomalies |
 
-**Pre-request: Abort on condition**
-```javascript
-if (!dk.env.get('auth_token')) {
-  throw new Error('No auth token — aborting request');
-}
-// Request is NOT sent when pre-request script throws
-```
+Plus a longer tail available from Collections' context menu and elsewhere: a deep
+per-collection Security Audit, Voice-to-Request, Request-from-Screenshot, API Flow
+Builder, Response Transformer, Request-from-Logs, Scenario Generator, Adaptive Mock
+Learning, Semantic Validator, and more.
+
+---
+
+## Command Palette
+
+`Cmd/Ctrl+K` opens a global command palette covering essentially the whole app:
+New Request, Navigate, Settings, per-protocol "Go to Tab" (REST/GraphQL/SOAP),
+Developer Tools, Collections & Environments, currently open tabs, and the full AI
+feature catalog from above — each AI tool is reachable here even if you don't know
+which panel it normally lives in.
+
+---
+
+## Wiki — In-App Documentation
+
+**Settings → Wiki** is a tabbed, scrollable, in-app documentation system built from
+real screenshots of the running app (Quick Start, REST, GraphQL, WebSocket/Realtime,
+gRPC, SOAP, Mock Server, Collections & Env, AI Assistant, Settings), interleaved with
+written explanations, code samples, and callouts for each screen — so help is a click
+away without leaving the editor, and it never drifts from what the UI actually looks
+like since the screenshots are real captures, not mockups.
 
 ---
 
 ## Settings
 
-Daakia's Settings panel provides centralized configuration across 5 sections:
-
-### General
-- **Follow Redirects**: Toggle automatic HTTP 3xx redirect following
-- **SSL Certificate Verification**: Toggle SSL/TLS certificate validation
-- **Save Response in History**: Store response body + headers in history entries
-- **Request Timeout**: Maximum wait time in milliseconds (default: 30000)
-- **Max History Entries**: Auto-delete oldest entries above this limit (default: 500)
-
-### Encoding
-- Request/response character encoding configuration
-
-### Proxy
-- HTTP/HTTPS proxy host, port, and authentication
-- Bypass list for hosts that should skip the proxy (e.g., `localhost, 127.0.0.1, *.internal.com`)
-
-### LLM Provider
-- Enable/disable individual AI providers
-- Configure API keys per provider (stored securely)
-- Set custom base URLs for self-hosted or compatible endpoints
-- Per-provider model enable/disable toggles
-
-### Mock Server
-- Default port range for mock servers
-- Auto-start behavior
+| Section | Covers |
+|---|---|
+| **General** | Follow redirects, SSL verification, save response in history, request timeout, max history entries |
+| **Theme** | Dark/Light toggle, persists across sessions |
+| **Mock Server** | Default port range, auto-start behavior |
+| **LLM Provider** | Enable/disable providers, API keys (stored via VS Code SecretStorage), custom base URLs, per-provider model toggles |
+| **AI Features** | Per-tool on/off switches for every [AI Power Tool](#ai-power-tools) |
+| **Prompt Library** | Manage saved prompt templates and agent system prompts, with reset-to-default |
+| **AI Audit** | Full LLM call audit trail — model, prompts, payloads, timing |
+| **Developer Tools** | Memory Footprint, Audit Log, Audit Config, DB Explorer, Debug Snapshot |
+| **Power Features** | 8 cards: Cookie Manager, Proxy Settings, Client Certificates, API Monitor, Request Interceptor, Response Diff, Bulk URL Tester, Load Tester |
+| **Wiki** | The in-app documentation described above |
 
 ---
 
 ## Developer Tools
 
-Daakia's **DevTools panel** provides deep observability into every request, script
-execution, and system metric. Toggle it from the left rail (bottom icon).
+Two distinct surfaces, both reachable from the app:
 
-### Console Tab
-- **Script logs**: All `dk.console.log/warn/error` output with timestamps
-- **Error traces**: Full stack traces from script failures
-- **Runtime messages**: Request lifecycle events, connection status changes
-- **REPL**: Interactive JavaScript evaluation against the live script sandbox —
-  test expressions, query variables, prototype snippets without modifying scripts
-- Collapsible log groups, copy-to-clipboard, clear all
+**The DevTools panel** (rail icon, bottom-left) — a resizable bottom panel with
+**Console** (script logs, error traces, a REPL for live expression evaluation),
+**Network** (every request across every protocol — method/status/URL/duration/size,
+click for full request/response detail), and **Performance** (heap/RSS/external
+memory/CPU, auto-refreshing).
 
-### Network Tab
-- **Request list** (left panel): Table with METHOD, STATUS, URL, DURATION, SIZE columns
-  - Method badges color-coded: GET green, POST yellow, PUT blue, DELETE red, PATCH purple
-  - Status badges color-coded: 2xx green, 3xx blue, 4xx orange, 5xx red, 0/error red
-  - gRPC status: 0 = green OK, non-zero = red error with gRPC status code
-  - Click any row to see full details
-- **Detail panel** (right): Three sub-tabs per selected request
-  - **Request**: Method, full URL, request headers table with copy buttons, request body
-  - **Response**: Status code, status text, response headers table, response body
-  - **Network Logs**: Expandable timeline of request/response events with timestamps,
-    method badges, status badges, protocol badges (REST/gRPC/SOAP/GraphQL)
-- **Protocol coverage**: All protocols — REST, GraphQL, gRPC, SOAP, AI, MCP
-
-### Timeline Tab
-- Chronological event log of all activity across the session
-- Each entry shows: timestamp, event type (request/response/error/script/connection),
-  protocol badge, method, URL, status, duration
-
-### Performance Tab
-- **Real-time metrics**:
-  - Heap Used / Heap Total (with progress bar)
-  - RSS (Resident Set Size)
-  - External Memory
-  - Array Buffers
-  - CPU Usage %
-  - System Uptime
-- Auto-refreshes every 2 seconds while the tab is open
-
-### Debug Snapshot
-- One-click copy of complete diagnostic JSON including:
-  - SQLite database status and file path
-  - All audit log entries
-  - Extension version and VS Code version
-  - System information (OS, arch, Node version, Electron version)
-
-### DB Explorer
-- Browse all SQLite tables in a tree view
-- Select any table to view rows in a paginated table
-- View row count, column names, and data types
-- Delete individual rows
-- Expand JSON columns inline
+**Settings → Developer Tools** — a separate, DB-focused surface: Memory Footprint,
+Audit Log (browse/filter/delete `ce_audit` entries), Audit Config, DB Explorer
+(browse every SQLite table, expand JSON cells, delete rows), and a one-click Debug
+Snapshot export (DB status, memory, versions, recent errors, as JSON).
 
 ---
 
-## AI Panel
+## Import / Export
 
-Daakia includes a **fully functional AI chat panel** — an LLM playground built directly
-into your API client. Configure prompts, define tools, connect to any provider, and
-have multi-turn conversations with streaming responses.
+**Import**: Postman Collection v2.1, OpenAPI/Swagger (2.x & 3.x, YAML or JSON), HAR
+(HTTP Archive), Bruno `.bru`, HTTPie, Thunder Client.
 
-**URL Bar:**
-- **Provider selector**: Dropdown of all enabled LLM providers
-- **Model selector**: Per-provider model list, filtered by enabled models
-- **Auto-initialization**: Fresh AI tabs auto-select the first enabled provider + model
-- **Send button**: Submits the conversation with current user prompt + system messages
-- **Loading indicator**: Animated spinning dots during streaming responses
+**Export** (per-collection, right-click menu): Daakia JSON, Postman-compatible JSON,
+Insomnia, Bruno `.bru`, HTTPie, OpenAPI 3.0, and a Markdown API-docs export.
 
-**Config Tabs (5 tabs with PillTabs UI):**
-
-| Tab | Description |
-|-----|-------------|
-| **Prompt** | System prompts (multi-card, add/remove) + user prompt textarea |
-| **Authorization** | Shared AuthEditor — Bearer Token, Basic Auth, API Key, OAuth 2.0 |
-| **Tools** | Define function tools the AI can call: name, description, JSON Schema parameters |
-| **MCP** | Connect to MCP servers for additional tools/resources/prompts |
-| **Settings** | Temperature (0–2), max tokens, top_p, frequency/presence penalty, stream toggle, stop sequences, seed, response format (text/JSON) |
-
-**Conversation Panel (bottom half):**
-- **Message bubbles**: User (purple, right-aligned) / Assistant (gray, left-aligned) / Tool responses (border, JSON viewer)
-- **Role labels + timestamps**: Each message shows role, time, and token usage badge
-- **Tool call cards**: Expandable cards showing function name + arguments (JSON)
-- **Auto-scroll**: Automatically scrolls to latest message
-- **Streaming indicator**: "AI is thinking..." with animated pulsing dots
-- **Clear conversation**: Trash button in header to reset conversation
-
-**Supported LLM Providers (7 built-in):**
-
-| Provider | Models |
-|----------|--------|
-| **OpenAI** | GPT-5.4, GPT-5.4 Mini, GPT-5.4 Nano, GPT-5.3 Codex, GPT-4.1, GPT-4o, o3 Pro, o4 Mini |
-| **Anthropic** | Claude Opus 4.8, Claude Sonnet 4.6, Claude 3.7 Sonnet, Claude 3.5 Haiku |
-| **Google AI** | Gemini 2.5 Pro/Flash, Gemini 2.0 Flash, Gemini 1.5 Pro |
-| **Ollama (Local)** | Llama 3.3, Qwen 2.5, DeepSeek R1, Mistral, Code Llama |
-| **Groq** | Compound Beta, Llama 4 Maverick/Scout, Llama 3.3 70B, Qwen 3 32B, Kimi K2 |
-| **Together AI** | Llama 3.1 405B, Llama 3.1 70B, DeepSeek R1 |
-| **Mistral AI** | Mistral Large, Mistral Small, Codestral, Ministral |
-
-Plus **Custom Provider** support for any OpenAI-compatible API (LM Studio, Azure, self-hosted, etc.).
-
-**Coming in Sprint 4:**
-- `@daakia` Chat Participant in VS Code Copilot Chat
-- 10 specialized agents (REST, SOAP, Mock, Test Script, cURL, FAQ, GraphQL, Documentation, Security, XSD2Request)
-- Inline AI actions: "Ask AI why" on errors, AI response explainer, AI body/header generators
-- SSE bridge for real-time streaming from extension host to webview
+**Mock Server export**: a real WireMock project (mappings + `__files`, zipped), or a
+generated standalone server for the target protocol (Node.js HTTP server + Dockerfile,
+GraphQL via `graphql-http` or Apollo Server, a real `@grpc/grpc-js` server, a Node.js
+SOAP server, or `ws`/SSE/Socket.IO/Aedes-MQTT servers) — so a mock built visually in
+Daakia can leave the editor as a runnable project.
 
 ---
 
-## Developer Tools
+## Collection Sync (git-native)
 
-**Built-in DevTools panel**:
-
-| Tab | Description |
-|-----|-------------|
-| **Console** | Script execution logs, error traces, runtime messages |
-| **Network** | Request/response timing waterfall, DNS/TCP/TLS breakdown |
-| **Timeline** | Chronological event log with metadata columns |
-| **Performance** | Real-time metrics: heap used/total, RSS, external memory, CPU %, uptime |
-| **Debug Snapshot** | Copy raw diagnostic JSON — DB status, audit entries, versions, system info |
-| **DB Explorer** | Browse all SQLite tables — view rows, select, delete, row count, JSON expand |
+`daakia.exportCollectionsToWorkspace` / `daakia.importCollectionsFromWorkspace` (VS Code
+Command Palette) write every collection out as diffable `<protocol>.daakia.json` files
+inside your workspace, so they can be committed, code-reviewed, and diffed like any
+other file — and re-imported on another machine after a `git pull`. An optional
+auto-export mode (`daakia.gitSync.enabled`) debounces a write on every collection
+mutation and watches the sync folder for external changes to re-import automatically.
+No GitHub/git credentials are ever touched by the extension — actual `git add/commit/push`
+stays entirely in your own hands via VS Code's Source Control panel.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Extension Host** | TypeScript 5.7, VS Code Extension API | Backend execution, DB, message routing |
-| **Bundler (ext)** | esbuild | Fast TypeScript → JS bundling |
-| **Webview UI** | React 19 + TypeScript | Component-based UI rendering |
-| **Bundler (webview)** | Vite 6 | Dev server + production build |
-| **Styling** | Tailwind CSS v4 + CSS custom properties | Indigo-themed design system |
-| **State** | Zustand 5 | Lightweight, hook-based state management |
-| **Code Editor** | Monaco Editor (self-hosted) | Syntax highlighting for all body types |
-| **Storage** | sql.js (SQLite WASM) | No native addons, cross-platform DB |
-| **HTTP Client** | Axios | All HTTP/S request execution |
-| **gRPC** | `@grpc/grpc-js` + `@grpc/proto-loader` | gRPC client + proto file loading |
-| **SOAP** | `soap` + `fast-xml-parser` | SOAP client + XML parsing |
-| **WebSocket** | `ws` | WebSocket connections from extension host |
-| **Socket.IO** | `socket.io-client` | Socket.IO client |
-| **MQTT** | `mqtt` + `aedes` | MQTT client + broker (for mock) |
-| **Protobuf** | `protobufjs` | Protocol Buffer parsing |
-| **Mock Server** | Express.js | HTTP/REST mock server |
-| **Path Matching** | `path-to-regexp` | URL pattern matching for mocks |
-| **YAML** | `js-yaml` | OpenAPI/Swagger YAML parsing |
-| **UUID** | `uuid` | Unique ID generation |
+| Layer | Technology |
+|-------|-----------|
+| **Extension Host** | TypeScript 5.7, VS Code Extension API, esbuild |
+| **Webview UI** | React 19, Vite 6 |
+| **Styling** | Tailwind CSS v4 + CSS custom properties |
+| **Component Library** | [`@salilvnair/dui`](https://www.npmjs.com/package/@salilvnair/dui) — shared design system |
+| **State Machine** | [`@salilvnair/state-machine`](https://github.com/salilvnair/state-machine) — stateful mock workflows |
+| **State** | Zustand 5 |
+| **Code Editor** | Monaco (`@monaco-editor/react` + `monaco-editor`, wrapped by DUI's `EditorView`) |
+| **Storage** | sql.js (SQLite compiled to WASM) — no native addons |
+| **HTTP Client** | Axios |
+| **gRPC** | `@grpc/grpc-js` + `@grpc/proto-loader` + `protobufjs` |
+| **SOAP** | `soap` + `fast-xml-parser` |
+| **WebSocket / Socket.IO / MQTT** | `ws`, `socket.io-client`, `mqtt` + `aedes` (mock broker) |
+| **YAML** | `js-yaml` (OpenAPI/Swagger parsing) |
+| **Path matching** | `path-to-regexp` (mock route matching) |
 
 ---
 
 ## Design Principles
 
-1. **No hardcoded colors** — All colors via CSS variables or `daakia-colors.ts`. Never hex values in TSX.
-2. **No inline SVGs** — All icons in `daakia-icons.tsx`. Import from `../../icons`.
-3. **No native `<select>`** — Always use `StyledDropdown` with floating menu + keyboard nav.
-4. **No backdrop-close modals** — Only X button or Cancel/Close buttons dismiss modals.
-5. **No browser right-click menu** — Globally disabled; use custom `ContextMenu` component.
-6. **Protocol separation** — Each protocol is self-contained (own panels, sidebar, stores, execution).
-7. **Confirm all destructive actions** — Use `ConfirmDialog` component, no inline confirmations.
-8. **Stable scrollbars** — All scrollable areas use `overflow-y-auto [scrollbar-gutter:stable]`.
-9. **Help icons** — Always use shared `InfoPopup` component (title + description + code badges + wiki link).
-10. **postMessage bridge** — All extension ↔ webview communication through typed message handlers.
-
----
-
-## Development Roadmap
-
-| Sprint | Status | Focus |
-|--------|--------|-------|
-| **Sprint 1** | ✅ Complete | Foundation: Extension scaffold, webview UI, SQLite, HTTP executor, mock server, response panel, tab system, URL bar, request config, Monaco editor, sidebar |
-| **Sprint 2** | ✅ Complete | Request Builder: SplitButton, SaveAsModal, nested collections, code generation (12 languages), cURL import, collection runner, environments persistence, variable substitution |
-| **Sprint 3** | ✅ Complete | Advanced: Collection variables/auth/scripts, OAuth2, variable resolution engine, Postman/OpenAPI/HAR/Bruno import, script execution engine, cookie jar, timeline, MainPanel refactor |
-| **Sprint 5** | ✅ Complete | Multi-protocol: gRPC, WebSocket/SSE/Socket.IO/MQTT, protocol rail restructure, script debugger, DevTools panel |
-| **Sprint 6** | ✅ Complete | SOAP protocol, MCP client, multi-protocol mock servers |
-| **Sprint 7** | ✅ Complete | Settings panel (General/Encoding/Proxy/LLM/Mock), DevTools (Console/Network/Timeline/Performance/Snapshot/DB Explorer), Run & Debug sidebar |
-| **Sprint 4** | 🔄 Partial | AI Panel complete (multi-provider chat + tool calling + streaming). Remaining: `@daakia` Chat Participant, 10 specialized agents, SSE bridge, inline AI actions |
+1. **No hardcoded colors** — every color is a `var(--color-*)` token or comes from `daakia-colors.ts`
+2. **No inline SVGs** — every icon lives in `daakia-icons.tsx`
+3. **No native `<select>`** — always DUI's `SelectInputView`/`StyledDropdown`
+4. **No backdrop-close modals** — only an explicit X or Cancel/Close button dismisses a modal
+5. **No browser right-click menu** — globally disabled; a custom `ContextMenu` component takes over
+6. **Protocol separation** — each protocol is self-contained: own panels, sidebar, stores, execution
+7. **Confirm all destructive actions** — via a shared `ConfirmDialog`, never an inline confirmation
+8. **Stable scrollbars** — every scrollable area reserves gutter space so content never shifts
+9. **Help icons** — always the shared `InfoPopup` (title + description + code badges + wiki link), never a bare toast or direct link
+10. **postMessage bridge** — all extension ↔ webview communication goes through typed message handlers
 
 ---
 

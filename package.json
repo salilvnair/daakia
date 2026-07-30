@@ -306,7 +306,7 @@
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.7.15",
-    "@salilvnair/state-machine": "file:../state-machine",
+    "@salilvnair/state-machine": "^1.0.0",
     "aedes": "^1.0.2",
     "axios": "^1.7.0",
     "fast-xml-parser": "^5.8.0",
