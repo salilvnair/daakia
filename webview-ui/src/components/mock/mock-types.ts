@@ -101,6 +101,13 @@ export interface WebhookConfig {
 
 // ─── State Machine (6A.11-6A.12) ────────────────────────────────────────────
 
+export interface StateMockResponse {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  status: number;
+  body: string;
+}
+
 export interface StateNode {
   id: string;
   name: string;
@@ -108,6 +115,7 @@ export interface StateNode {
   y: number;
   isInitial?: boolean;
   color?: string;
+  mockResponses?: StateMockResponse[];
 }
 
 export interface StateTransition {
@@ -125,6 +133,17 @@ export interface StateMachineConfig {
   sessionMode: 'cookie' | 'header' | 'global';
   sessionKey?: string;
   defaultState: string;
+}
+
+/** One workflow connection on a mock server — supports multiple per server. */
+export interface ConnectedWorkflow {
+  workflowId: string;
+  name: string;
+  /** e.g. "POST /checkout" or "*" for any route */
+  routePattern?: string;
+  /** Trigger event name that starts this workflow */
+  event?: string;
+  stateMachine?: StateMachineConfig;
 }
 
 // ─── Record & Playback (6A.16-6A.18) ────────────────────────────────────────
@@ -180,9 +199,16 @@ export interface MockRoute {
   proxyTarget?: string;
 
   // State machine (6A.11)
-  requiredState?: string;
-  newState?: string;
-  stateVariableUpdates?: Record<string, string>;
+  // Real event name (e.g. "PAY") matched directly against the connected
+  // canvas workflow's transition graph.
+  triggerEvent?: string;
+  /**
+   * Which connected workflow (MockServer.connectedWorkflows[].workflowId)
+   * `triggerEvent` refers to. Omit when the server has at most one connected
+   * workflow — resolved automatically. Required once 2+ workflows are
+   * connected, since event names aren't guaranteed unique across workflows.
+   */
+  connectedWorkflowId?: string;
 
   // Fault injection (6A.13)
   fault?: FaultConfig;
@@ -234,6 +260,9 @@ export interface MockServer {
 
   // WireMock-grade features (6A)
   stateMachine?: StateMachineConfig;
+  connectedWorkflowId?: string;
+  /** Multiple workflow connections — supersedes single connectedWorkflowId */
+  connectedWorkflows?: ConnectedWorkflow[];
   globalFault?: FaultConfig;
   globalRateLimit?: RateLimitConfig;
   recordingMode?: boolean;
@@ -261,6 +290,10 @@ export interface GraphQLMockOperation {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this operation triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface WebSocketMockHandler {
@@ -325,6 +358,10 @@ export interface GrpcMockMethod {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this method triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface SoapMockOperation {
@@ -332,7 +369,7 @@ export interface SoapMockOperation {
   service: string;
   operation: string;
   soapAction: string;
-  responseType: 'static' | 'script' | 'fault';
+  responseType: 'static' | 'script' | 'fault' | 'file';
   response: string;
   responseScript?: string;
   faultCode?: string;
@@ -340,6 +377,8 @@ export interface SoapMockOperation {
   delay: number;
   enabled: boolean;
   serviceEnabled?: boolean;
+  /** Absolute or relative path to a file to serve as response body */
+  bodyFile?: string;
   // Advanced matching + sequencing (shared with REST RouteCard)
   responses?: ResponseSequenceItem[];
   sequenceMode?: SequenceMode;
@@ -349,6 +388,10 @@ export interface SoapMockOperation {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this operation triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface MockLogEntry {

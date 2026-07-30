@@ -2,13 +2,27 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useDevToolsStore } from '../../store/devtools-store';
-import { StyledDropdown, SplitButton, type DropdownOption, type SplitButtonItem } from '../shared';
 import { ProtocolAiBadge, SendIcon, SaveIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { saveRequest } from '../../services/request';
+import {
+  SelectInputView,
+  TextInputView,
+  ButtonView,
+  DropDownButtonView,
+  type ContextMenuItem,
+} from '@salilvnair/dui';
 
-const saveItems: SplitButtonItem[] = [
-  { id: 'save-as', label: 'Save as', icon: <SaveIcon size={12} />, iconColor: 'var(--color-ctx-close-saved)', onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }) },
+const ACCENT = 'var(--color-protocol-ai)';
+
+const saveItems: ContextMenuItem[] = [
+  {
+    id: 'save-as',
+    label: 'Save as',
+    icon: <SaveIcon size={12} />,
+    iconColor: 'var(--color-ctx-close-saved)',
+    onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
+  },
 ];
 
 /**
@@ -18,7 +32,6 @@ export function AiUrlBar() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
   const providers = useAiProvidersStore(s => s.providers);
-
   const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
   const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
 
@@ -28,12 +41,10 @@ export function AiUrlBar() {
   const loading = activeTab?.aiStreaming || activeTab?.loading || false;
 
   // Sync provider/model from store defaults.
-  // Runs on: tab change, providers list change, or default provider/model change.
   // Only skips update when the user has manually chosen a provider via the dropdown
   // (aiProviderManual=true). Auto-initialized tabs always follow the stored default.
   useEffect(() => {
     if (!activeTab) return;
-    // If user explicitly set a provider via dropdown, never auto-override it
     if (activeTab.aiProviderManual) return;
 
     const defProvider = providers.find(p => p.id === defaultProviderId && p.enabled)
@@ -43,8 +54,6 @@ export function AiUrlBar() {
       const defModel = defProvider.id === defaultProviderId
         ? (defaultModelId || defProvider.models.find(m => m.enabled)?.id || '')
         : (defProvider.models.find(m => m.enabled)?.id || '');
-      // Sync provider, model, and base URL if any of them drifted from the default
-      // (catches: new tab before providers loaded, Settings baseUrl change, first render)
       const expectedUrl = defProvider.baseUrl || '';
       if (
         activeTab.aiProvider !== defProvider.id ||
@@ -61,13 +70,13 @@ export function AiUrlBar() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab?.id, activeTab?.aiProviderManual, providers, defaultProviderId, defaultModelId]);
 
-  const providerOptions: DropdownOption[] = useMemo(() =>
+  const providerOptions = useMemo(() =>
     providers.filter(p => p.enabled).map(p => ({ value: p.id, label: p.name })),
   [providers]);
 
   const providerInfo = useMemo(() => providers.find(p => p.id === provider), [providers, provider]);
 
-  const modelOptions: DropdownOption[] = useMemo(() => {
+  const modelOptions = useMemo(() => {
     if (!providerInfo) return [];
     return providerInfo.models.filter(m => m.enabled).map(m => ({ value: m.id, label: m.name }));
   }, [providerInfo]);
@@ -80,12 +89,12 @@ export function AiUrlBar() {
     const defaultUrl = info?.baseUrl || '';
     updateTab(activeTab.id, {
       aiProvider: val,
-      aiProviderManual: true,  // user explicitly chose — stop auto-following defaults
+      aiProviderManual: true,
       aiModel: defaultModel,
       url: defaultUrl,
       dirty: true,
     });
-  }, [activeTab, updateTab]);
+  }, [activeTab, providers, updateTab]);
 
   const handleModelChange = useCallback((val: string) => {
     if (!activeTab) return;
@@ -114,21 +123,20 @@ export function AiUrlBar() {
       tools: activeTab.aiTools || [],
       settings: activeTab.aiSettings || {},
       mcpServerConfigs: activeTab.mcpServerConfigs || [],
-      images: activeTab.aiImages || [], // 6D.22 — multimodal image attachments
+      images: activeTab.aiImages || [],
       envId: activeTab.envId,
     };
     postMsg(aiPayload);
 
-    // ── DevTools: God-level AI request audit log ──────────────────────────
-    const providerInfo = useAiProvidersStore.getState().providers.find(p => p.id === provider);
-    const modelInfo = providerInfo?.models.find(m => m.id === model);
+    const providerInfoCurrent = useAiProvidersStore.getState().providers.find(p => p.id === provider);
+    const modelInfo = providerInfoCurrent?.models.find(m => m.id === model);
     useDevToolsStore.getState().addLog({
       level: 'info',
       args: [
         `📡 AI Request Sent → ${provider}/${model}`,
         {
           provider,
-          providerName: providerInfo?.name || provider,
+          providerName: providerInfoCurrent?.name || provider,
           model,
           modelName: modelInfo?.name || model,
           systemPrompts: activeTab.aiSystemPrompts || [],
@@ -145,7 +153,6 @@ export function AiUrlBar() {
       scriptPhase: 'ai',
     });
 
-    // Add user message to conversation and clear prompt
     if (userPrompt) {
       const userMsg = {
         id: crypto.randomUUID(),
@@ -166,74 +173,72 @@ export function AiUrlBar() {
   if (!activeTab) return null;
 
   return (
-    <div className="url-bar">
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-panel)]">
       {/* Protocol badge */}
       <ProtocolAiBadge size={28} />
 
-      {/* Provider selector — auto width based on content */}
-      <div className="shrink-0">
-        <StyledDropdown
-          options={providerOptions}
-          value={provider}
-          onChange={handleProviderChange}
-          accentColor="var(--color-protocol-ai)"
+      {/* Provider selector */}
+      <SelectInputView
+        options={providerOptions}
+        value={provider}
+        onChange={handleProviderChange}
+        size="lg"
+        accentColor={ACCENT}
+      />
+
+      {/* Model selector or free-text input */}
+      {modelOptions.length > 0 ? (
+        <SelectInputView
+          options={modelOptions}
+          value={model}
+          onChange={handleModelChange}
+          size="lg"
+          accentColor={ACCENT}
         />
-      </div>
+      ) : (
+        <TextInputView
+          value={model}
+          onChange={(e) => activeTab && updateTab(activeTab.id, { aiModel: e.target.value, dirty: true })}
+          placeholder="Model name"
+          size="lg"
+          className="w-[140px]"
+        />
+      )}
 
-      {/* Model selector — auto width based on content */}
-      <div className="shrink-0">
-        {modelOptions.length > 0 ? (
-          <StyledDropdown
-            options={modelOptions}
-            value={model}
-            onChange={handleModelChange}
-            accentColor="var(--color-protocol-ai)"
-          />
-        ) : (
-          <input
-            type="text"
-            value={model}
-            onChange={(e) => activeTab && updateTab(activeTab.id, { aiModel: e.target.value, dirty: true })}
-            placeholder="Model name"
-            className="url-bar-input w-[140px]"
-          />
-        )}
-      </div>
-
-      {/* URL input — only show for non-Copilot providers that use a real HTTP base URL */}
+      {/* URL input — non-copilot providers only */}
       {provider !== 'copilot' && (
-        <input
-          type="text"
+        <TextInputView
           value={url}
           onChange={handleUrlChange}
           placeholder="API base URL"
-          className="url-bar-input ml-1"
+          size="lg"
+          className="flex-1"
         />
       )}
 
       {/* Send button */}
-      <button
-        type="button"
+      <ButtonView
+        label={loading ? 'Sending...' : 'Send'}
+        variant="primary"
+        size="lg"
+        accentColor={ACCENT}
+        iconLeft={<SendIcon size={13} />}
+        disabled={loading || (provider !== 'copilot' && !url.trim())}
         onClick={handleSend}
-        disabled={loading}
-        className="url-bar-send"
-        style={{ backgroundColor: 'var(--color-protocol-ai)', paddingLeft: '16px', paddingRight: '16px' }}
-      >
-        <SendIcon size={13} />
-        <span>{loading ? 'Sending...' : 'Send'}</span>
-      </button>
+      />
 
-      {/* Save SplitButton */}
-      <SplitButton
+      {/* Save split button */}
+      <DropDownButtonView
         label="Save"
         variant="secondary"
-        onClick={() => {
+        size="lg"
+        items={saveItems}
+        align="right"
+        onPrimaryClick={() => {
           if (!activeTab) return;
           const saved = saveRequest(activeTab);
           if (saved) updateTab(activeTab.id, { dirty: false });
         }}
-        icon={<SaveIcon size={13} />}
-        items={saveItems}
       />
     </div>
   );

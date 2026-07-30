@@ -14,12 +14,12 @@ export function SidebarSkeleton({ rows = 6 }: { rows?: number }) {
         >
           {/* Icon placeholder */}
           <div
-            className="w-[16px] h-[16px] rounded bg-[rgba(255,255,255,0.06)] sidebar-shimmer"
+            className="w-[16px] h-[16px] rounded bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] sidebar-shimmer"
             style={{ animationDelay: `${i * 120}ms` }}
           />
           {/* Text placeholder */}
           <div
-            className="h-[10px] rounded-sm bg-[rgba(255,255,255,0.06)] sidebar-shimmer"
+            className="h-[10px] rounded-sm bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] sidebar-shimmer"
             style={{
               width: `${45 + Math.sin(i * 1.5) * 25}%`,
               animationDelay: `${i * 120 + 60}ms`,

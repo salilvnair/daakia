@@ -17,6 +17,7 @@ import {
   setPortRange,
   setLogCallback,
 } from '../../../mock/mock-server-manager';
+import { importOpenApi, importPostman, importWireMock } from '../../../mock/mock-importer';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -136,4 +137,66 @@ export function handleUpdateMockGrpcMethods(msg: Record<string, unknown>) {
   const id = msg.id as string;
   const methods = msg.methods as any[];
   updateMockServerGrpcMethods(id, methods);
+}
+
+/**
+ * Full spec import — parses OpenAPI/Postman/WireMock in the extension host where
+ * js-yaml and the full schema resolver are available, then returns complete MockRoute[]
+ * with generated bodies instead of empty `{}`.
+ */
+export function handleImportMockSpec(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const requestId = msg.requestId as string;
+  const format = msg.format as string;
+  const content = msg.content as string;
+
+  try {
+    let result: { routes: unknown[]; warnings: string[] };
+    if (format === 'openapi') {
+      result = importOpenApi(content);
+    } else if (format === 'postman') {
+      result = importPostman(content);
+    } else if (format === 'wiremock') {
+      result = importWireMock(content);
+    } else {
+      postMessage({ type: 'mockServer:importResult', requestId, routes: [], warnings: [], errors: [`Unsupported format: ${format}`], routeCount: 0 });
+      return;
+    }
+    postMessage({
+      type: 'mockServer:importResult',
+      requestId,
+      routes: result.routes,
+      warnings: result.warnings,
+      errors: [],
+      routeCount: result.routes.length,
+    });
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    postMessage({ type: 'mockServer:importResult', requestId, routes: [], warnings: [], errors: [error], routeCount: 0 });
+  }
+}
+
+/**
+ * Patch stateMachine + connectedWorkflowId on a specific server.
+ * Called from the standalone SM tab so the connection is persisted even
+ * when MockServerPanel is not mounted (and its debounced saveAll won't run).
+ */
+export function handlePatchStateMachine(msg: Record<string, unknown>) {
+  const serverId            = msg.serverId as string;
+  if (!serverId) return;
+
+  const configs = loadSavedConfigs();
+  const idx = configs.findIndex((c: any) => c.id === serverId);
+  if (idx < 0) return;
+
+  const patch: Record<string, unknown> = {};
+
+  // stateMachine — null means explicitly cleared
+  if ('stateMachine' in msg) patch.stateMachine = msg.stateMachine ?? undefined;
+  // connectedWorkflowId — null means explicitly cleared
+  if ('connectedWorkflowId' in msg) patch.connectedWorkflowId = msg.connectedWorkflowId ?? undefined;
+  // connectedWorkflows array
+  if ('connectedWorkflows' in msg) patch.connectedWorkflows = msg.connectedWorkflows ?? [];
+
+  configs[idx] = { ...configs[idx], ...patch };
+  saveConfigs(configs);
 }

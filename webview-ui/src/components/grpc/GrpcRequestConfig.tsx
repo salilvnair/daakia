@@ -1,25 +1,25 @@
 import { useState, useMemo, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { PillTabs, KeyValueTable, CodeEditor, AuthEditor, ScriptsEditor } from '../shared';
-import type { PillTab, KeyValueRow } from '../shared';
+import { AuthEditor, ScriptsEditor } from '../shared';
+import type { KeyValueRow } from '../shared';
 import { GrpcProtoManager } from './GrpcProtoManager';
-import { SparkleIcon } from '../../icons';
 import { AiHeaderSuggest } from '../ai/AiHeaderSuggest';
 import { AiBodyGenerate } from '../ai/AiBodyGenerate';
 import type { AiBodyGenerateHandle } from '../ai/AiBodyGenerate';
 import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
 import { AiGrpcProtoExplainerModal } from '../ai/AiGrpcProtoExplainerModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import { WandIcon } from '../../icons';
+import {
+  TabView,
+  EditorView,
+  KeyValueTableView,
+  AIButtonView,
+  IconButtonView,
+  type TabItem,
+} from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-grpc)';
-
-const tabs: PillTab[] = [
-  { id: 'message', label: 'Message' },
-  { id: 'metadata', label: 'Metadata' },
-  { id: 'proto', label: 'Service Definition' },
-  { id: 'auth', label: 'Auth' },
-  { id: 'scripts', label: 'Scripts' },
-];
 
 /**
  * GrpcRequestConfig — sub-tabs: Message (JSON editor), Metadata (KV table),
@@ -36,16 +36,23 @@ export function GrpcRequestConfig() {
 
   if (!activeTab) return null;
 
-  // Add dot/badge indicators
-  const tabsWithBadges = useMemo(() => tabs.map(t => {
-    switch (t.id) {
-      case 'message': return { ...t, dot: !!(activeTab.grpcMessage) };
-      case 'metadata': return { ...t, badge: (activeTab.grpcMetadata || []).filter(m => m.enabled && m.key).length };
-      case 'auth': return { ...t, dot: activeTab.authType !== 'none' };
-      case 'scripts': return { ...t, dot: !!(activeTab.preRequestScript?.trim()) || !!(activeTab.postResponseScript?.trim()) };
-      default: return t;
-    }
-  }), [activeTab]);
+  const tabItems: TabItem[] = useMemo(() => [
+    { id: 'message', label: 'Message', dot: !!(activeTab.grpcMessage), dotColor: ACCENT },
+    {
+      id: 'metadata',
+      label: 'Metadata',
+      badge: (activeTab.grpcMetadata || []).filter(m => m.enabled && m.key).length || undefined,
+      badgeColor: ACCENT,
+    },
+    { id: 'proto', label: 'Service Definition' },
+    { id: 'auth', label: 'Auth', dot: activeTab.authType !== 'none', dotColor: ACCENT },
+    {
+      id: 'scripts',
+      label: 'Scripts',
+      dot: !!(activeTab.preRequestScript?.trim()) || !!(activeTab.postResponseScript?.trim()),
+      dotColor: ACCENT,
+    },
+  ], [activeTab]);
 
   const handleMetadataChange = (rows: KeyValueRow[]) => {
     updateTab(activeTab.id, { grpcMetadata: rows, dirty: true });
@@ -55,11 +62,11 @@ export function GrpcRequestConfig() {
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[var(--color-surface)]">
       {/* Sub-tabs */}
       <div className="px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
-        <PillTabs
-          tabs={tabsWithBadges}
+        <TabView
+          tabs={tabItems}
           activeTab={activeSubTab}
           onChange={setActiveSubTab}
-          size="sm"
+          size="md"
           variant="underline"
           accentColor={ACCENT}
         />
@@ -69,47 +76,49 @@ export function GrpcRequestConfig() {
       <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">
         {activeSubTab === 'message' && (
           <div className="h-full flex flex-col min-h-0">
-            {/* 8.15 & 8.16: Message toolbar */}
-            {(aiEnabled('bodyGenerator') || aiEnabled('requestFuzzer')) && (
-              <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] flex-shrink-0">
-                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Request Message (JSON)</span>
-                <div className="flex items-center gap-1">
-                  {aiEnabled('bodyGenerator') && (
-                    <button
-                      type="button"
-                      onClick={() => bodyGenRef.current?.open()}
-                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                      style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
-                      title="AI Message Generator"
-                    >
-                      <SparkleIcon size={10} />
-                      Generate ✦
-                    </button>
-                  )}
-                  {aiEnabled('requestFuzzer') && (
-                    <button
-                      type="button"
-                      onClick={() => setShowFuzzer(true)}
-                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                      style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
-                      title="AI Request Fuzzer"
-                    >
-                      <SparkleIcon size={10} />
-                      Fuzz ✦
-                    </button>
-                  )}
-                </div>
+            {/* Message toolbar — always visible */}
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] flex-shrink-0">
+              <span className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>Request Message (JSON)</span>
+              <div className="flex items-center gap-1">
+                <IconButtonView
+                  icon={<WandIcon size={12} />}
+                  size="sm"
+                  title="Prettify JSON"
+                  onClick={() => {
+                    try {
+                      const formatted = JSON.stringify(JSON.parse(activeTab.grpcMessage || '{}'), null, 2);
+                      updateTab(activeTab.id, { grpcMessage: formatted, dirty: true });
+                    } catch { /* invalid JSON */ }
+                  }}
+                />
+                {aiEnabled('bodyGenerator') && (
+                  <AIButtonView
+                    action="generate"
+                    label="Generate ✦"
+                    size="xs"
+                    accentColor="var(--color-protocol-ai)"
+                    onClick={() => bodyGenRef.current?.open()}
+                  />
+                )}
+                {aiEnabled('requestFuzzer') && (
+                  <AIButtonView
+                    action="fuzz"
+                    label="Fuzz ✦"
+                    size="xs"
+                    accentColor="var(--color-protocol-ai)"
+                    onClick={() => setShowFuzzer(true)}
+                  />
+                )}
               </div>
-            )}
+            </div>
             <div className="flex-1 min-h-0">
-              <CodeEditor
+              <EditorView
                 value={activeTab.grpcMessage || '{\n  \n}'}
                 onChange={(val) => updateTab(activeTab.id, { grpcMessage: val, dirty: true })}
                 language="json"
                 className="h-full"
               />
             </div>
-            {/* 8.15: Body generator drawer */}
             {aiEnabled('bodyGenerator') && (
               <AiBodyGenerate
                 ref={bodyGenRef}
@@ -125,7 +134,6 @@ export function GrpcRequestConfig() {
 
         {activeSubTab === 'metadata' && (
           <div className="h-full flex flex-col min-h-0">
-            {/* 8.14: Metadata Suggest ✦ */}
             {aiEnabled('headerAutocomplete') && (
               <AiHeaderSuggest
                 tabId={activeTab.id}
@@ -147,7 +155,7 @@ export function GrpcRequestConfig() {
               />
             )}
             <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-3">
-              <KeyValueTable
+              <KeyValueTableView
                 rows={activeTab.grpcMetadata || [{ id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true }]}
                 onChange={handleMetadataChange}
                 showDescription={false}
@@ -160,19 +168,15 @@ export function GrpcRequestConfig() {
 
         {activeSubTab === 'proto' && (
           <div className="h-full flex flex-col min-h-0">
-            {/* 8.17: Proto Explainer button */}
             {aiEnabled('grpcProtoExplainer') && (activeTab.grpcServices?.length || activeTab.grpcProtoFile) && (
               <div className="flex items-center justify-end px-3 py-1.5 border-b border-[var(--color-surface-border)] flex-shrink-0">
-                <button
-                  type="button"
+                <AIButtonView
+                  action="explain"
+                  label="Proto Explainer ✦"
+                  size="sm"
+                  accentColor={ACCENT}
                   onClick={() => setShowProtoExplainer(true)}
-                  className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                  style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}
-                  title="AI Proto Explainer — plain-English explanation of all services and methods"
-                >
-                  <SparkleIcon size={10} />
-                  Proto Explainer ✦
-                </button>
+                />
               </div>
             )}
             <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">

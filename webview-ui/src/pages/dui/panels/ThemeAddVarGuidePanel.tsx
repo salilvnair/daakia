@@ -1,4 +1,4 @@
-import { ChipView, CodeBlockView } from '../../../dui';
+import { ChipView, CodeBlockView } from '@salilvnair/dui';
 
 // ─── Guide step component ─────────────────────────────────────────────────────
 
@@ -351,7 +351,7 @@ export function ThemeAddVarGuidePanel() {
         </Body>
 
         <SectionLabel label="The interface" />
-        <CodeBlockView language="typescript" code={CODE_SCHEMA_INTERFACE} showCopy />
+        <CodeBlockView language="typescript" code={CODE_SCHEMA_INTERFACE} showCopyButton />
 
         <SectionLabel label="Add your entry" />
         <Body>
@@ -360,7 +360,7 @@ export function ThemeAddVarGuidePanel() {
           <Code>status</Code>, <Code>protocols</Code>, <Code>component_button</Code>, and more.
           Create a new group name if none fits — it becomes its own section header in the editor.
         </Body>
-        <CodeBlockView language="typescript" code={CODE_SCHEMA_ADD} showCopy />
+        <CodeBlockView language="typescript" code={CODE_SCHEMA_ADD} showCopyButton />
 
         <HintBox color="var(--color-primary)" icon="💡">
           The <strong>key</strong> becomes the YAML path on export (e.g.{' '}
@@ -383,14 +383,14 @@ export function ThemeAddVarGuidePanel() {
         </Body>
 
         <SectionLabel label="Add to @theme block" />
-        <CodeBlockView language="css" code={CODE_CSS_VAR} showCopy />
+        <CodeBlockView language="css" code={CODE_CSS_VAR} showCopyButton />
 
         <SectionLabel label="Optional — light mode override" />
         <Body>
           If your variable needs a different shade in light mode, add a{' '}
           <Code>[data-theme="light"]</Code> block below the <Code>@theme</Code> declaration.
         </Body>
-        <CodeBlockView language="css" code={CODE_LIGHT_DARK_BLOCK} showCopy />
+        <CodeBlockView language="css" code={CODE_LIGHT_DARK_BLOCK} showCopyButton />
 
         <SwatchRow items={[
           { label: 'Dark value',  color: '#a78bfa', note: '--color-my-highlight (dark)' },
@@ -403,7 +403,7 @@ export function ThemeAddVarGuidePanel() {
           that don't support CSS vars), add it to the <Code>palette</Code> object too.
           Components that only use inline <Code>style</Code> attributes or CSS files don't need this.
         </Body>
-        <CodeBlockView language="typescript" code={CODE_PALETTE} showCopy />
+        <CodeBlockView language="typescript" code={CODE_PALETTE} showCopyButton />
 
         <HintBox color="var(--color-info)" icon="ℹ️">
           Most DUI components already accept <Code>color</Code> or <Code>accentColor</Code> as a CSS
@@ -425,10 +425,10 @@ export function ThemeAddVarGuidePanel() {
         </Body>
 
         <SectionLabel label="Inline styles and DUI component props" />
-        <CodeBlockView language="tsx" code={CODE_USE_INLINE} showCopy />
+        <CodeBlockView language="tsx" code={CODE_USE_INLINE} showCopyButton />
 
         <SectionLabel label="CSS files and Tailwind arbitrary values" />
-        <CodeBlockView language="css" code={CODE_USE_CSS} showCopy />
+        <CodeBlockView language="css" code={CODE_USE_CSS} showCopyButton />
 
         <HintBox color="var(--color-error)" icon="🚫">
           <strong>Rule:</strong> NEVER write a hardcoded hex value like <Code>#a78bfa</Code> in a{' '}
@@ -496,7 +496,7 @@ export function ThemeAddVarGuidePanel() {
           use <Code>LiveColorCustomizer</Code> directly. Pass the same <Code>cssVar</Code> and <Code>yamlKey</Code>{' '}
           from your SCHEMA entry.
         </Body>
-        <CodeBlockView language="tsx" code={CODE_LIVE_CUSTOMIZER} showCopy />
+        <CodeBlockView language="tsx" code={CODE_LIVE_CUSTOMIZER} showCopyButton />
 
         <HintBox color="var(--color-warning)" icon="✨">
           Changes made in the Theme editor or LiveColorCustomizer are applied via{' '}

@@ -2,6 +2,7 @@
  * ExportPanel — protocol-aware export for REST, GraphQL, gRPC, SOAP, and Realtime mocks.
  */
 import { useState } from 'react';
+import { ButtonView, TabView, CopyButtonView, EditorView, type TabItem, type EditorLanguage } from '@salilvnair/dui';
 import type { MockServer } from '../mock-types';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
@@ -12,6 +13,7 @@ interface ExportOption {
   id: ExportFormat;
   label: string;
   description: string;
+  language: EditorLanguage;
   generate: (server: MockServer) => string;
   filename: (server: MockServer) => string;
 }
@@ -19,7 +21,58 @@ interface ExportOption {
 export interface Props {
   protocol?: string;
   server: MockServer;
-  onExport: (format: ExportFormat) => void;
+  onExport: (format: ExportFormat, content: string, filename: string) => void;
+  /** Real WireMock project export — a zip with mappings/*.json + __files/*.json, ready to drop into a WireMock instance. */
+  onExportZip?: (mappings: { filename: string; content: string }[], files: { filename: string; content: string }[], filename: string) => void;
+}
+
+// ─── Real WireMock project export (mappings/ + __files/, zipped) ──────────────
+// Distinct from the flat single-file "WireMock JSON" preview below — that one
+// is a quick-look preview, not something WireMock's file layout actually accepts.
+
+function slugifyRoute(method: string, path: string, used: Set<string>): string {
+  const base = `${method.toLowerCase()}_${(path.replace(/^\//, '').replace(/[^a-z0-9]+/gi, '_').replace(/_+$/, '')) || 'root'}`;
+  let name = base;
+  let i = 2;
+  while (used.has(name)) name = `${base}_${i++}`;
+  used.add(name);
+  return name;
+}
+
+function toWiremockUrlMatcher(path: string): { key: 'urlPath' | 'urlPathTemplate'; value: string } {
+  // Daakia's :param path syntax -> WireMock 3.x's {param} template syntax
+  if (path.includes(':')) {
+    return { key: 'urlPathTemplate', value: path.replace(/:([a-zA-Z0-9_]+)/g, '{$1}') };
+  }
+  return { key: 'urlPath', value: path.split('?')[0] };
+}
+
+export function buildWiremockProjectExport(server: MockServer): { mappings: { filename: string; content: string }[]; files: { filename: string; content: string }[] } {
+  const used = new Set<string>();
+  const mappings: { filename: string; content: string }[] = [];
+  const files: { filename: string; content: string }[] = [];
+  for (const r of server.routes ?? []) {
+    const slug = slugifyRoute(r.method, r.path, used);
+    const { key, value } = toWiremockUrlMatcher(r.path);
+    let isJson = true;
+    try { JSON.parse(r.body || ''); } catch { isJson = false; }
+    const bodyFileName = `${slug}.${isJson ? 'json' : 'txt'}`;
+    const mapping = {
+      request: {
+        ...(r.method !== 'ANY' ? { method: r.method } : {}),
+        [key]: value,
+      },
+      response: {
+        status: r.statusCode,
+        ...(r.headers && Object.keys(r.headers).length ? { headers: r.headers } : {}),
+        bodyFileName,
+        ...(r.delay ? { fixedDelayMilliseconds: r.delay } : {}),
+      },
+    };
+    mappings.push({ filename: `${slug}.json`, content: JSON.stringify(mapping, null, 2) });
+    files.push({ filename: bodyFileName, content: r.body || '' });
+  }
+  return { mappings, files };
 }
 
 // ─── REST exports ──────────────────────────────────────────────────────────────
@@ -29,7 +82,8 @@ const REST_EXPORTS: ExportOption[] = [
     id: 'nodejs',
     label: 'Node.js HTTP Server',
     description: 'Standalone server using the built-in `http` module — zero dependencies. Run with: node mock-server.js',
-    filename: s => 'mock-server.js',
+    language: 'javascript',
+    filename: () => 'mock-server.js',
     generate: s => {
       const routes = (s.routes ?? []).map(r => ({ method: r.method, path: r.path, status: r.statusCode, body: r.body, headers: r.headers, delay: r.delay }));
       return `/**
@@ -54,7 +108,8 @@ http.createServer((req, res) => {
     id: 'wiremock',
     label: 'WireMock JSON',
     description: 'WireMock stub mappings JSON — compatible with WireMock standalone. Place in mappings/ directory.',
-    filename: s => 'wiremock-mappings.json',
+    language: 'json',
+    filename: () => 'wiremock-mappings.json',
     generate: s => JSON.stringify({
       mappings: (s.routes ?? []).map(r => ({
         request: { method: r.method === 'ANY' ? 'ANY' : r.method, url: r.path },
@@ -66,7 +121,8 @@ http.createServer((req, res) => {
     id: 'docker',
     label: 'Dockerfile',
     description: 'Dockerfile to containerize the Node.js mock server. Build and run with Docker.',
-    filename: s => 'Dockerfile',
+    language: 'plaintext',
+    filename: () => 'Dockerfile',
     generate: s => `# Daakia Mock Server — ${s.name}
 FROM node:18-alpine
 WORKDIR /app
@@ -84,6 +140,7 @@ const GRAPHQL_EXPORTS: ExportOption[] = [
     id: 'graphql-http',
     label: 'graphql-http Server',
     description: 'Standalone GraphQL server using the `graphql-http` package with hardcoded mock resolvers.',
+    language: 'javascript',
     filename: () => 'mock-graphql-server.js',
     generate: s => `/**
  * GraphQL Mock Server — Generated by Daakia  |  ${s.name}
@@ -119,6 +176,7 @@ http.createServer((req, res) => {
     id: 'apollo',
     label: 'Apollo Server',
     description: 'Standalone GraphQL server using Apollo Server 4 with mock resolvers.',
+    language: 'javascript',
     filename: () => 'mock-apollo-server.js',
     generate: s => `/**
  * Apollo GraphQL Mock — Generated by Daakia  |  ${s.name}
@@ -158,6 +216,7 @@ const GRPC_EXPORTS: ExportOption[] = [
     id: 'grpc-js',
     label: 'gRPC Server (@grpc/grpc-js)',
     description: 'Standalone gRPC mock server using @grpc/grpc-js. Returns hardcoded mock responses.',
+    language: 'javascript',
     filename: () => 'mock-grpc-server.js',
     generate: s => `/**
  * gRPC Mock Server — Generated by Daakia  |  ${s.name}
@@ -202,6 +261,7 @@ const SOAP_EXPORTS: ExportOption[] = [
     id: 'soap-node',
     label: 'Node.js SOAP Server',
     description: 'Standalone SOAP mock server returning hardcoded XML envelopes for each operation.',
+    language: 'javascript',
     filename: () => 'mock-soap-server.js',
     generate: s => `/**
  * SOAP Mock Server — Generated by Daakia  |  ${s.name}
@@ -250,6 +310,7 @@ const WEBSOCKET_EXPORTS: ExportOption[] = [
     id: 'ws',
     label: 'WebSocket Server (ws)',
     description: 'Standalone WebSocket mock server using the `ws` npm package. Echoes events back.',
+    language: 'javascript',
     filename: () => 'mock-ws-server.js',
     generate: s => `/**
  * WebSocket Mock Server — Generated by Daakia  |  ${s.name}
@@ -300,6 +361,7 @@ const SSE_EXPORTS: ExportOption[] = [
     id: 'sse-node',
     label: 'SSE Server (Node.js built-in)',
     description: 'Standalone Server-Sent Events mock using the built-in http module — zero dependencies.',
+    language: 'javascript',
     filename: () => 'mock-sse-server.js',
     generate: s => `/**
  * SSE Mock Server — Generated by Daakia  |  ${s.name}
@@ -349,6 +411,7 @@ const SOCKETIO_EXPORTS: ExportOption[] = [
     id: 'socketio',
     label: 'Socket.IO Server',
     description: 'Standalone Socket.IO mock server with mock event handlers.',
+    language: 'javascript',
     filename: () => 'mock-socketio-server.js',
     generate: s => `/**
  * Socket.IO Mock Server — Generated by Daakia  |  ${s.name}
@@ -392,6 +455,7 @@ const MQTT_EXPORTS: ExportOption[] = [
     id: 'aedes',
     label: 'MQTT Broker (aedes)',
     description: 'Standalone MQTT mock broker using the `aedes` package. Intercepts and auto-responds to subscribed topics.',
+    language: 'javascript',
     filename: () => 'mock-mqtt-broker.js',
     generate: s => `/**
  * MQTT Mock Broker — Generated by Daakia  |  ${s.name}
@@ -449,75 +513,93 @@ function getExportOptions(protocol: string): ExportOption[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ExportPanel({ protocol = 'rest', server, onExport }: Props) {
+export function ExportPanel({ protocol = 'rest', server, onExport, onExportZip }: Props) {
   const options = getExportOptions(protocol);
   const [selected, setSelected] = useState(options[0].id);
   const [preview, setPreview] = useState('');
-  const [copied, setCopied] = useState(false);
 
   const opt = options.find(o => o.id === selected) ?? options[0];
 
-  const generate = () => setPreview(opt.generate(server));
+  const tabs: TabItem[] = options.map(o => ({ id: o.id, label: o.label }));
 
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(preview); }
-    catch {
-      const el = document.createElement('textarea');
-      el.value = preview; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
-    }
-    setCopied(true); setTimeout(() => setCopied(false), 2000);
-  };
+  const generate = () => setPreview(opt.generate(server));
 
   return (
     <div className="flex flex-col gap-3">
       {/* Format tabs */}
-      <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.08)]">
-        {options.map(o => (
-          <button key={o.id} type="button"
-            onClick={() => { setSelected(o.id); setPreview(''); }}
-            className="h-[32px] px-3 text-[11px] font-medium cursor-pointer transition-colors whitespace-nowrap"
-            style={{
-              borderBottom: selected === o.id ? `2px solid ${MOCK_ACCENT}` : '2px solid transparent',
-              color: selected === o.id ? MOCK_ACCENT : 'var(--color-text-muted)',
-              marginBottom: '-1px',
-            }}>
-            {o.label}
-          </button>
-        ))}
-      </div>
+      <TabView
+        tabs={tabs}
+        activeTab={selected}
+        onChange={id => { setSelected(id); setPreview(''); }}
+        variant="underline"
+        size="sm"
+        accentColor={MOCK_ACCENT}
+      />
 
       {/* Description */}
       <p className="text-[10px] text-[var(--color-text-muted)] opacity-70 leading-relaxed">{opt.description}</p>
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        <button type="button" onClick={generate}
-          className="h-[30px] px-4 text-[11px] font-medium rounded cursor-pointer"
-          style={{ background: `color-mix(in srgb, ${MOCK_ACCENT} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${MOCK_ACCENT} 30%, transparent)`, color: MOCK_ACCENT }}>
+        <ButtonView
+          size="md"
+          variant="ghost"
+          accentColor={MOCK_ACCENT}
+          onClick={generate}
+        >
           Generate Preview
-        </button>
-        <button type="button" onClick={() => onExport(selected)}
-          className="h-[30px] px-4 text-[11px] font-medium rounded cursor-pointer"
-          style={{ background: `color-mix(in srgb, ${MOCK_ACCENT} 25%, transparent)`, border: `1px solid color-mix(in srgb, ${MOCK_ACCENT} 40%, transparent)`, color: MOCK_ACCENT }}>
+        </ButtonView>
+        <ButtonView
+          size="md"
+          variant="ghost"
+          accentColor={MOCK_ACCENT}
+          onClick={() => onExport(selected, opt.generate(server), opt.filename(server))}
+        >
           Download {opt.filename(server)}
-        </button>
+        </ButtonView>
+        {opt.id === 'wiremock' && onExportZip && (
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor={MOCK_ACCENT}
+            onClick={() => {
+              const { mappings, files } = buildWiremockProjectExport(server);
+              const zipName = `${server.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'mock'}-wiremock.zip`;
+              onExportZip(mappings, files, zipName);
+            }}
+          >
+            Export to WireMock (.zip)
+          </ButtonView>
+        )}
       </div>
+      {opt.id === 'wiremock' && (
+        <p className="text-[10px] text-[var(--color-text-muted)] opacity-70 -mt-1 leading-relaxed">
+          The single-file preview above is for a quick look — <strong>Export to WireMock (.zip)</strong> produces the real
+          <code className="mx-1 px-1 rounded" style={{ background: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)' }}>mappings/</code>
+          +
+          <code className="mx-1 px-1 rounded" style={{ background: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)' }}>__files/</code>
+          layout WireMock's <code>--root-dir</code> actually expects — unzip it straight into your WireMock project.
+        </p>
+      )}
 
       {/* Preview */}
       {preview && (
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Preview — {opt.filename(server)}</span>
-            <button type="button" onClick={copy}
-              className="h-[22px] px-2 text-[10px] rounded cursor-pointer"
-              style={{ color: copied ? 'var(--color-success)' : MOCK_ACCENT, background: `color-mix(in srgb, ${MOCK_ACCENT} 10%, transparent)` }}>
-              {copied ? '✓ Copied' : 'Copy'}
-            </button>
+            <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">
+              Preview — {opt.filename(server)}
+            </span>
+            <CopyButtonView text={preview} size="sm" accentColor={MOCK_ACCENT} title="Copy code" />
           </div>
-          <pre className="p-3 rounded-lg text-[10px] font-mono text-[var(--color-text-muted)] overflow-auto max-h-[320px] whitespace-pre"
-            style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.07)' }}>
-            {preview}
-          </pre>
+          <div className="rounded-lg overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
+            <EditorView
+              value={preview}
+              language={opt.language}
+              readOnly
+              height="280px"
+              fontSize={11}
+            />
+          </div>
         </div>
       )}
     </div>

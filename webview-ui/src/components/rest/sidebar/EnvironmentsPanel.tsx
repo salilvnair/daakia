@@ -3,11 +3,12 @@ import { postMsg } from '../../../vscode';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../../store/env-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useToastStore } from '../../../store/toast-store';
-import { ConfirmDialog, ContextMenu, type ContextMenuItem, ImportExportIcon } from '../../shared';
+import { ConfirmDialog, ImportExportIcon } from '../../shared';
 import { EnvironmentModal } from '../../shared';
-import { InfoPopup } from '../../shared/display/InfoPopup';
-import { TrashIcon, RenameIcon, CopyIcon, PlusIcon, MoreVerticalIcon, GlobeIcon, CheckCircleFilledIcon, LayersIcon, FolderImportIcon, FolderExportIcon } from '../../../icons';
+import { TrashIcon, RenameIcon, CopyIcon, PlusIcon, MoreVerticalIcon, GlobeIcon, CheckCircleFilledIcon, FolderImportIcon, FolderExportIcon, SearchIcon, HelpCircleIcon } from '../../../icons';
 import { getProtocolAccent } from '../../../colors';
+import { IconButtonView, TextInputView, ContextMenuView, InfoPopupView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 export function EnvironmentsPanel() {
   const activeProtocol = useTabsStore(s => s.activeProtocol);
@@ -26,6 +27,7 @@ export function EnvironmentsPanel() {
   const addToast = useToastStore(s => s.addToast);
 
   const activateEnv = (envId: string | null) => {
+    logUiEvent('env.activate', { envId });
     setActiveEnvironment(envId);
     // Sync to the active tab's envId (Global is always merged, so tab gets null or a custom env)
     if (activeTabId) {
@@ -41,8 +43,10 @@ export function EnvironmentsPanel() {
   const [prevActiveEnvId, setPrevActiveEnvId] = useState<string | null>(null);
   const [showDeleteEnvConfirm, setShowDeleteEnvConfirm] = useState<string | null>(null);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: ContextMenuItem[]; targetId: string; kind: string } | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const infoAnchorRef = useRef<HTMLDivElement>(null);
+  const [headerMenu, setHeaderMenu] = useState<{ kind: 'importExport' | 'more'; x: number; y: number } | null>(null);
+  const [rowMenu, setRowMenu] = useState<{ position: { x: number; y: number }; envId: string } | null>(null);
 
   // React to external request to edit an environment (e.g. from TabBar env icon)
   useEffect(() => {
@@ -97,6 +101,7 @@ export function EnvironmentsPanel() {
   const customEnvs = filteredEnvironments.filter(env => env.id !== GLOBAL_ENV_ID && env.id !== createdEnvId);
 
   const openCreateModal = () => {
+    logUiEvent('env.create');
     setPrevActiveEnvId(activeEnvId);
     const newId = addEnvironment('New Environment');
     // Restore active env so the list doesn't deselect during editing
@@ -131,31 +136,30 @@ export function EnvironmentsPanel() {
     setEditingEnvId(null);
   };
 
-  const duplicateEnv = (envId: string) => {
+  const duplicateEnv = useCallback((envId: string) => {
     const duplicateId = duplicateEnvironment(envId);
     if (duplicateId) {
       setEditingEnvId(duplicateId);
       setEditingTitle('Edit Environment');
       setCreatedEnvId(null);
     }
-  };
+  }, [duplicateEnvironment]);
 
-  const exportAll = () => {
+  const exportAll = useCallback(() => {
     postMsg({ type: 'exportEnvironmentsJson', environments, activeEnvId });
-  };
+  }, [environments, activeEnvId]);
 
-  const exportOne = (envId: string) => {
+  const exportOne = useCallback((envId: string) => {
     const env = environments.find(item => item.id === envId);
     if (!env) return;
     postMsg({ type: 'exportEnvironmentsJson', environments: [env], activeEnvId: env.id });
-  };
+  }, [environments]);
 
-  const handleDeleteEnv = (envId: string) => {
-    setShowDeleteEnvConfirm(envId);
-  };
+  const handleDeleteEnv = (envId: string) => setShowDeleteEnvConfirm(envId);
 
   const confirmDeleteEnv = () => {
     if (showDeleteEnvConfirm) {
+      logUiEvent('env.delete', { envId: showDeleteEnvConfirm });
       removeEnvironment(showDeleteEnvConfirm);
       setShowDeleteEnvConfirm(null);
     }
@@ -167,82 +171,39 @@ export function EnvironmentsPanel() {
     setShowDeleteAllConfirm(false);
   };
 
-  // Open import/export context menu
-  const openImportExportMenu = (e: React.MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const items: ContextMenuItem[] = [
-      { id: 'import-postman',  label: 'Import from Postman',     shortcut: 'P', icon: <FolderImportIcon size={14} />, iconColor: 'var(--color-info)' },
-      { id: 'import-insomnia', label: 'Import from Insomnia',    shortcut: 'I', icon: <FolderImportIcon size={14} />, iconColor: 'var(--color-info)' },
-      { id: 'import-json',     label: 'Import Daakia JSON',      shortcut: 'J', icon: <FolderImportIcon size={14} />, iconColor: 'var(--color-info)' },
-      { id: 'import-dotenv',   label: 'Import .env file',        shortcut: '.', icon: <FolderImportIcon size={14} />, iconColor: 'var(--color-info)' },
-      { id: 'sep1', label: '', separator: true },
-      { id: 'export-json',     label: 'Export as Daakia JSON',   shortcut: 'E', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
-      { id: 'export-postman',  label: 'Export as Postman',       shortcut: 'M', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
-      { id: 'export-bruno',    label: 'Export as Bruno .env',    shortcut: 'B', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
-      { id: 'export-insomnia', label: 'Export as Insomnia',      shortcut: 'N', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
-      { id: 'export-httpie',   label: 'Export as HTTPie session', shortcut: 'H', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
-    ];
-    setContextMenu({ position: { x: rect.right - 220, y: rect.bottom + 6 }, items, targetId: '', kind: 'importExport' });
-  };
-
-  // Open more options context menu
-  const openMoreMenu = (e: React.MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const items: ContextMenuItem[] = [
-      { id: 'delete-all', label: 'Delete all environments', danger: true, shortcut: 'D', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)' },
-    ];
-    setContextMenu({ position: { x: rect.right - 220, y: rect.bottom + 6 }, items, targetId: '', kind: 'more' });
-  };
-
-  // Open row-level context menu (on 3-dot click)
   const openRowMenu = (e: React.MouseEvent, envId: string) => {
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const isGlobal = envId === GLOBAL_ENV_ID;
-    const items: ContextMenuItem[] = [
-      { id: 'edit',      label: 'Edit',           shortcut: 'E', icon: <RenameIcon size={14} />,     iconColor: 'var(--color-ctx-rename)' },
-      ...(!isGlobal ? [{ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={14} />, iconColor: 'var(--color-ctx-duplicate)' }] : []),
-      { id: 'export',    label: 'Export as JSON', shortcut: 'X', icon: <FolderExportIcon size={14} />, iconColor: 'var(--color-warning)' },
-      ...(!isGlobal ? [
-        { id: 'sep1', label: '', separator: true },
-        { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)' },
-      ] : []),
-    ];
-    setContextMenu({ position: { x: rect.right - 200, y: rect.bottom + 4 }, items, targetId: envId, kind: 'row' });
+    setRowMenu({ position: { x: rect.right - 200, y: rect.bottom + 4 }, envId });
   };
 
-  // Handle context menu selection
-  const handleContextMenuSelect = useCallback((actionId: string) => {
-    if (!contextMenu) return;
-    const { targetId, kind } = contextMenu;
+  const buildRowMenuItems = useCallback((envId: string): DuiContextMenuItem[] => {
+    const isGlobal = envId === GLOBAL_ENV_ID;
 
-    if (kind === 'importExport') {
-      switch (actionId) {
-        case 'import-postman':  postMsg({ type: 'importEnvironmentsPostman' }); break;
-        case 'import-insomnia': postMsg({ type: 'importEnvironmentsInsomnia' }); break;
-        case 'import-json':     postMsg({ type: 'importEnvironmentsJson' }); break;
-        case 'import-dotenv':   postMsg({ type: 'importEnvironmentsDotEnv' }); break;
-        case 'export-json':     exportAll(); break;
-        case 'export-postman':  postMsg({ type: 'exportEnvironmentsPostman', environments, activeEnvId }); break;
-        case 'export-bruno':    postMsg({ type: 'exportEnvironmentsBruno', environments, activeEnvId }); break;
-        case 'export-insomnia': postMsg({ type: 'exportEnvironmentsInsomnia', environments, activeEnvId }); break;
-        case 'export-httpie':   postMsg({ type: 'exportEnvironmentsHttpie', environments, activeEnvId }); break;
-      }
-    } else if (kind === 'more') {
-      if (actionId === 'delete-all') setShowDeleteAllConfirm(true);
-    } else if (kind === 'row') {
-      switch (actionId) {
-        case 'edit': openEditModal(targetId); break;
-        case 'duplicate': duplicateEnv(targetId); break;
-        case 'export': exportOne(targetId); break;
-        case 'delete': handleDeleteEnv(targetId); break;
-      }
+    if (isGlobal) {
+      return [
+        { id: 'edit', label: 'Edit', shortcut: 'E', icon: <RenameIcon size={14} style={{ color: 'var(--color-ctx-rename)' }} />, onClick: () => { openEditModal(envId); setRowMenu(null); } },
+        { id: 'sep-import', label: '', separator: true },
+        { id: 'import-postman',  label: 'Import from Postman',  shortcut: 'P', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsPostman' }); setRowMenu(null); } },
+        { id: 'import-insomnia', label: 'Import from Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsInsomnia' }); setRowMenu(null); } },
+        { id: 'import-json',     label: 'Import Daakia JSON',   shortcut: 'J', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsJson' }); setRowMenu(null); } },
+        { id: 'import-dotenv',   label: 'Import .env file',     shortcut: '.', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsDotEnv' }); setRowMenu(null); } },
+        { id: 'sep-export', label: '', separator: true },
+        { id: 'export', label: 'Export as JSON', shortcut: 'X', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { exportOne(envId); setRowMenu(null); } },
+      ] as DuiContextMenuItem[];
     }
-    setContextMenu(null);
-  }, [contextMenu]);
+
+    return [
+      { id: 'edit',      label: 'Edit',           shortcut: 'E', icon: <RenameIcon size={14} style={{ color: 'var(--color-ctx-rename)' }} />,     onClick: () => { openEditModal(envId); setRowMenu(null); } },
+      { id: 'duplicate', label: 'Duplicate',       shortcut: 'D', icon: <CopyIcon size={14} style={{ color: 'var(--color-ctx-duplicate)' }} />,  onClick: () => { duplicateEnv(envId); setRowMenu(null); } },
+      { id: 'export',    label: 'Export as JSON',  shortcut: 'X', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { exportOne(envId); setRowMenu(null); } },
+      { id: 'sep1', label: '', separator: true },
+      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={14} />, onClick: () => { handleDeleteEnv(envId); setRowMenu(null); } },
+    ] as DuiContextMenuItem[];
+  }, [duplicateEnv, exportOne]);
 
   return (
-    <div className="flex flex-col h-full relative" ref={panelRef}>
+    <div className="flex flex-col h-full relative">
       <div className="px-4 py-3 border-b border-[var(--color-surface-border)] text-[13px] text-[var(--color-text-secondary)] flex items-center gap-2">
         <span>Environments</span>
       </div>
@@ -260,12 +221,13 @@ export function EnvironmentsPanel() {
       )}
 
       <div className="px-3 py-2 border-b border-[var(--color-surface-border)]">
-        <input
-          type="text"
+        <TextInputView
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search"
-          className="w-full h-[32px] px-3 text-[12px] rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+          size="sm"
+          width="fw"
+          iconLeft={<SearchIcon size={13} style={{ color: 'var(--color-text-muted)' }} />}
         />
       </div>
 
@@ -279,55 +241,101 @@ export function EnvironmentsPanel() {
           <span>New</span>
         </button>
 
-        <div className="flex items-center gap-1.5">
-          <InfoPopup
+        <div className="flex items-center gap-1">
+          <div ref={infoAnchorRef} style={{ display: 'inline-flex' }}>
+            <IconButtonView
+              icon={<HelpCircleIcon size={14} />}
+              size="sm"
+              tooltip="About Environments"
+              active={infoOpen}
+              style={{ borderRadius: '50%' }}
+              onClick={() => setInfoOpen(o => !o)}
+            />
+          </div>
+          <InfoPopupView
+            open={infoOpen}
+            onClose={() => setInfoOpen(false)}
+            anchorEl={infoAnchorRef.current}
             title="Environments"
             description="Global variables are always available in every request. Select an environment to override or add scoped variables."
             items={[
-              { code: '{{variable}}', label: 'Use in any request field' },
-              { code: '${variable}', label: 'Alternate syntax (same effect)' },
-              { code: '$daakia_{x}_$', label: 'Escape: outputs literal {{x}}' },
-              { code: '$daakia_$x$_$', label: 'Escape: outputs literal ${x}' },
-              { code: 'Global', label: 'Always active, shared across all envs' },
-              { code: 'Custom', label: 'Activate to override global values' },
+              { code: '{{variable}}', description: 'Use in any request field' },
+              { code: '${variable}', description: 'Alternate syntax (same effect)' },
+              { code: '$daakia_{x}_$', description: 'Escape: outputs literal {{x}}' },
+              { code: 'Global', description: 'Always active, shared across all envs' },
+              { code: 'Custom', description: 'Activate to override global values' },
             ]}
             footer="Tip: Variables resolve at send time. Use $daakia_ escape to send raw {{var}} text without resolving."
-            wikiSlug="environments"
-            accentColor={getProtocolAccent(activeProtocol as any)}
+            width={320}
           />
-          <button
-            type="button"
-            title="Import / Export"
-            onClick={openImportExportMenu}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)] cursor-pointer transition-colors"
-          >
-            <ImportExportIcon size="1.1em" />
-          </button>
+
+          <IconButtonView
+            icon={<ImportExportIcon size="1.1em" />}
+            size="sm"
+            tooltip="Import / Export"
+            onClick={(e) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setHeaderMenu(headerMenu?.kind === 'importExport' ? null : { kind: 'importExport', x: rect.right, y: rect.bottom + 4 });
+            }}
+          />
+
           {customEnvs.length > 0 && (
-          <button
-            type="button"
-            title="More Options"
-            onClick={openMoreMenu}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)] cursor-pointer transition-colors"
-          >
-            <MoreVerticalIcon size={14} />
-          </button>
+            <IconButtonView
+              icon={<MoreVerticalIcon size={14} />}
+              size="sm"
+              tooltip="More Options"
+              onClick={(e) => {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                setHeaderMenu(headerMenu?.kind === 'more' ? null : { kind: 'more', x: rect.right, y: rect.bottom + 4 });
+              }}
+            />
           )}
         </div>
       </div>
+
+      {/* Import/Export context menu */}
+      <ContextMenuView
+        open={headerMenu?.kind === 'importExport'}
+        anchorEl={null}
+        position={headerMenu?.kind === 'importExport' ? { x: headerMenu.x - 220, y: headerMenu.y } : undefined}
+        onClose={() => setHeaderMenu(null)}
+        items={[
+          { id: 'import-postman',  label: 'Import from Postman',      shortcut: 'P', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsPostman' }); setHeaderMenu(null); } },
+          { id: 'import-insomnia', label: 'Import from Insomnia',     shortcut: 'I', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsInsomnia' }); setHeaderMenu(null); } },
+          { id: 'import-json',     label: 'Import Daakia JSON',       shortcut: 'J', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsJson' }); setHeaderMenu(null); } },
+          { id: 'import-dotenv',   label: 'Import .env file',         shortcut: '.', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'importEnvironmentsDotEnv' }); setHeaderMenu(null); } },
+          { id: 'sep1', label: '', separator: true },
+          { id: 'export-json',     label: 'Export as Daakia JSON',    shortcut: 'E', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { exportAll(); setHeaderMenu(null); } },
+          { id: 'export-postman',  label: 'Export as Postman',        shortcut: 'M', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportEnvironmentsPostman', environments, activeEnvId }); setHeaderMenu(null); } },
+          { id: 'export-bruno',    label: 'Export as Bruno .env',     shortcut: 'B', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportEnvironmentsBruno', environments, activeEnvId }); setHeaderMenu(null); } },
+          { id: 'export-insomnia', label: 'Export as Insomnia',       shortcut: 'N', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportEnvironmentsInsomnia', environments, activeEnvId }); setHeaderMenu(null); } },
+          { id: 'export-httpie',   label: 'Export as HTTPie session',  shortcut: 'H', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportEnvironmentsHttpie', environments, activeEnvId }); setHeaderMenu(null); } },
+        ] as DuiContextMenuItem[]}
+      />
+
+      {/* More options context menu */}
+      <ContextMenuView
+        open={headerMenu?.kind === 'more'}
+        anchorEl={null}
+        position={headerMenu?.kind === 'more' ? { x: headerMenu.x - 220, y: headerMenu.y } : undefined}
+        onClose={() => setHeaderMenu(null)}
+        items={[
+          { id: 'delete-all', label: 'Delete all environments', danger: true, shortcut: 'D', icon: <TrashIcon size={14} style={{ color: 'var(--color-error)' }} />, onClick: () => { setShowDeleteAllConfirm(true); setHeaderMenu(null); } },
+        ] as DuiContextMenuItem[]}
+      />
 
       <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-1 py-1 space-y-1">
         {customEnvs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full px-4 text-center">
             <p className="text-[12px] text-[var(--color-text-muted)] mb-3">No custom environments yet</p>
-            <button
-              type="button"
+            <ButtonView
+              variant="primary"
+              size="md"
+              accentColor={getProtocolAccent(activeProtocol as any)}
               onClick={openCreateModal}
-              className="h-[30px] px-3 rounded-md text-white hover:opacity-90 cursor-pointer text-[12px]"
-              style={{ backgroundColor: getProtocolAccent(activeProtocol as any) }}
             >
               + New Environment
-            </button>
+            </ButtonView>
           </div>
         ) : (
           customEnvs.map((env) => (
@@ -343,6 +351,17 @@ export function EnvironmentsPanel() {
         )}
       </div>
 
+      {/* Row-level context menu */}
+      {rowMenu && (
+        <ContextMenuView
+          open={true}
+          anchorEl={null}
+          position={rowMenu.position}
+          onClose={() => setRowMenu(null)}
+          items={buildRowMenuItems(rowMenu.envId)}
+        />
+      )}
+
       <EnvironmentModal
         open={!!editingEnvId}
         envId={editingEnvId}
@@ -352,21 +371,10 @@ export function EnvironmentsPanel() {
         accentColor={getProtocolAccent(activeProtocol)}
       />
 
-      {/* Shared context menu */}
-      {contextMenu && (
-        <ContextMenu
-          items={contextMenu.items}
-          position={contextMenu.position}
-          onSelect={handleContextMenuSelect}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
-
-      {/* Delete single env confirm */}
       {showDeleteEnvConfirm && (
         <ConfirmDialog
           title="Delete Environment?"
-          message={`This environment and all its variables will be permanently deleted.`}
+          message="This environment and all its variables will be permanently deleted."
           confirmLabel="Delete"
           danger
           onConfirm={confirmDeleteEnv}
@@ -374,7 +382,6 @@ export function EnvironmentsPanel() {
         />
       )}
 
-      {/* Delete all envs confirm */}
       {showDeleteAllConfirm && (
         <ConfirmDialog
           title="Delete All Environments?"
@@ -424,27 +431,21 @@ function EnvironmentRow({
           {env.name}
         </span>
         <div className={`items-center gap-1 ${isGlobal || active ? 'flex' : 'invisible group-hover:visible flex'}`}>
-          <MiniIconButton title="Edit" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-            <RenameIcon size={12} />
-          </MiniIconButton>
-          <MiniIconButton title="More" onClick={(e) => { e.stopPropagation(); onOpenMenu(e); }}>
-            <MoreVerticalIcon size={12} />
-          </MiniIconButton>
+          <IconButtonView
+            icon={<RenameIcon size={12} />}
+            size="sm"
+            tooltip="Edit"
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          />
+          <IconButtonView
+            icon={<MoreVerticalIcon size={12} />}
+            size="sm"
+            tooltip="More"
+            onClick={(e) => { e.stopPropagation(); onOpenMenu(e); }}
+          />
         </div>
       </div>
     </div>
   );
 }
 
-function MiniIconButton({ title, onClick, children }: { title: string; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className="w-7 h-7 flex items-center justify-center rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)] cursor-pointer transition-colors"
-    >
-      {children}
-    </button>
-  );
-}

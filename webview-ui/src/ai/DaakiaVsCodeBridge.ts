@@ -231,15 +231,15 @@ export function installDaakiaBridges() {
 
       // Store user message and read conversation history
       const userMsg = {
-        id: crypto.randomUUID(),
+        id: crypto.randomUUID() as string,
         role: 'user' as const,
         content: message,
         timestamp: Date.now(),
       };
-      let currentHistory: typeof userMsg[];
+      let currentHistory: import('../store/tabs-store').AiMessage[];
       if (tab.type === 'daakia-ai') {
         // Global persisted conversation store for Daakia AI tab
-        currentHistory = useAiConversationStore.getState().messages as typeof userMsg[];
+        currentHistory = useAiConversationStore.getState().messages;
         useAiConversationStore.getState().addUserMessage(userMsg);
         useAiConversationStore.getState().setStreaming(true);
       } else {

@@ -5,11 +5,11 @@
  * via the rest.performance.insights template. Shows actionable optimization suggestions.
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
+import { ModalView, AIButtonView } from '@salilvnair/dui';
 
 interface RequestResult {
   id: string;
@@ -144,122 +144,81 @@ export function AiPerformanceInsightsModal({ collectionName, results, onClose }:
   const slowest = times.length > 0 ? Math.max(...times) : 0;
   const errors = results.filter(r => r.error || r.status >= 400).length;
 
-  const modal = (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Performance Insights"
+      subtitle={`${collectionName} · ${results.length} requests · avg ${avgTime}ms · max ${slowest}ms${errors > 0 ? ` · ${errors} error${errors > 1 ? 's' : ''}` : ''}`}
+      size="xl"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={
+        !loading && analysis ? (
+          <AIButtonView label="Re-analyze" size="md" accentColor={ACCENT} onClick={handleAnalyze} />
+        ) : undefined
+      }
     >
-      <div
-        className="w-[680px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0"
-          style={{ borderColor: 'var(--color-surface-border)' }}
-        >
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Performance Insights</p>
-            <p className="text-[11px] text-[var(--color-text-muted)] truncate">
-              {collectionName} · {results.length} requests · avg {avgTime}ms · max {slowest}ms
-              {errors > 0 && <span className="ml-1" style={{ color: 'var(--color-error)' }}>· {errors} error{errors > 1 ? 's' : ''}</span>}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer"
-          >
-            <CloseIcon size={12} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-          {/* Quick stats chips */}
-          {results.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {[
-                { label: 'Total', value: `${results.length}` },
-                { label: 'Avg', value: `${avgTime}ms` },
-                { label: 'Slowest', value: `${slowest}ms` },
-                { label: 'Errors', value: `${errors}`, accent: errors > 0 },
-              ].map(chip => (
-                <span
-                  key={chip.label}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px]"
-                  style={{
-                    backgroundColor: chip.accent
-                      ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
-                      : `color-mix(in srgb, ${ACCENT} 10%, var(--color-surface-hover))`,
-                    color: chip.accent ? 'var(--color-error)' : ACCENT,
-                    border: `1px solid color-mix(in srgb, ${chip.accent ? 'var(--color-error)' : ACCENT} 25%, transparent)`,
-                  }}
-                >
-                  <span className="opacity-70">{chip.label}:</span>
-                  <span className="font-medium">{chip.value}</span>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && !analysis && (
-            <div className="flex gap-1 items-center py-4">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Analyzing performance metrics…</span>
-            </div>
-          )}
-
-          {analysis && (
-            <div
-              className="rounded-lg border p-4"
-              style={{
-                borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
-                backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))`,
-              }}
-            >
-              <MdViewer content={analysis} />
-              {loading && (
-                <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse align-text-bottom"
-                  style={{ backgroundColor: ACCENT }} />
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div
-          className="flex items-center justify-between px-5 py-3 border-t flex-shrink-0"
-          style={{ borderColor: 'var(--color-surface-border)' }}
-        >
-          <div>
-            {!loading && analysis && (
-              <button
-                type="button"
-                onClick={handleAnalyze}
-                className="text-[11px] underline cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Quick stats chips */}
+        {results.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {[
+              { label: 'Total', value: `${results.length}` },
+              { label: 'Avg', value: `${avgTime}ms` },
+              { label: 'Slowest', value: `${slowest}ms` },
+              { label: 'Errors', value: `${errors}`, accent: errors > 0 },
+            ].map(chip => (
+              <span
+                key={chip.label}
+                className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px]"
+                style={{
+                  backgroundColor: chip.accent
+                    ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
+                    : `color-mix(in srgb, ${ACCENT} 10%, var(--color-surface-hover))`,
+                  color: chip.accent ? 'var(--color-error)' : ACCENT,
+                  border: `1px solid color-mix(in srgb, ${chip.accent ? 'var(--color-error)' : ACCENT} 25%, transparent)`,
+                }}
               >
-                Re-analyze
-              </button>
+                <span className="opacity-70">{chip.label}:</span>
+                <span className="font-medium">{chip.value}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
+
+        {loading && !analysis && (
+          <div className="flex gap-1 items-center py-4">
+            {[0, 150, 300].map(d => (
+              <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
+                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
+            ))}
+            <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Analyzing performance metrics…</span>
+          </div>
+        )}
+
+        {analysis && (
+          <div
+            className="rounded-lg border p-4"
+            style={{
+              borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
+              backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))`,
+            }}
+          >
+            <MdViewer content={analysis} />
+            {loading && (
+              <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse align-text-bottom"
+                style={{ backgroundColor: ACCENT }} />
             )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-[30px] px-4 text-[12px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-          >
-            Close
-          </button>
-        </div>
+        )}
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

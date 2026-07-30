@@ -37,7 +37,7 @@ export function MqttMessageRow({ message, subscriptions }: { message: MqttMessag
 
   if (message.direction === 'system') {
     return (
-      <div className="flex items-center gap-2 py-1 text-[11px] text-[var(--color-text-muted)] border-b border-[rgba(255,255,255,0.03)]">
+      <div className="flex items-center gap-2 py-1 text-[11px] text-[var(--color-text-muted)] border-b border-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)]">
         <span className="text-[9px] px-1.5 py-0.5 rounded bg-[rgba(139,92,246,0.1)] text-[var(--color-protocol-mqtt)]">SYS</span>
         <span className="flex-1 truncate">{message.payload}</span>
         <span className="text-[10px] opacity-60">{time}</span>
@@ -50,9 +50,9 @@ export function MqttMessageRow({ message, subscriptions }: { message: MqttMessag
   const dirIcon = message.direction === 'published' ? <ArrowUpIcon size={10} /> : <ArrowDownLeftIcon size={10} />;
 
   return (
-    <div className="border-b border-[rgba(255,255,255,0.03)]">
+    <div className="border-b border-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)]">
       <div
-        className="flex items-center gap-2 py-1.5 text-[11px] cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+        className="flex items-center gap-2 py-1.5 text-[11px] cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
         <span style={{ color: dotColor }}>{dirIcon}</span>
@@ -69,7 +69,7 @@ export function MqttMessageRow({ message, subscriptions }: { message: MqttMessag
       </div>
       {expanded && (
         <div className="pl-6 pb-2">
-          <pre className="text-[11px] font-mono text-[var(--color-text-primary)] bg-[rgba(0,0,0,0.2)] rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
+          <pre className="text-[11px] font-mono text-[var(--color-text-primary)] bg-[var(--color-code-bg)] rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
             {tryFormatJson(message.payload)}
           </pre>
         </div>

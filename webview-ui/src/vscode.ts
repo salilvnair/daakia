@@ -1,4 +1,5 @@
 /** VS Code webview API wrapper — safe to use in browser dev mode too */
+import { createLocalServerBridge } from './dev-bridge';
 
 export type VsCodeApi = {
   postMessage: (msg: unknown) => void;
@@ -18,11 +19,12 @@ export function getVsCodeApi(): VsCodeApi {
     } else if (typeof acquireVsCodeApi !== 'undefined') {
       _api = acquireVsCodeApi();
     } else {
-      _api = {
-        postMessage: (msg) => console.log('[vscode mock postMessage]', msg),
-        getState: () => ({}),
-        setState: () => {},
-      };
+      // Browser dev mode (Vite preview, no real VS Code host) — bridge to
+      // local-server/ over WebSocket so the UI is driven by real backend
+      // logic (SQLite, mock servers, request execution) instead of a no-op
+      // mock. Degrades gracefully to the old no-op behavior if local-server
+      // isn't running — see dev-bridge.ts.
+      _api = createLocalServerBridge();
     }
   }
   return _api;

@@ -152,7 +152,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
               value={row.key}
               onChange={(e) => updateRow(idx, { key: e.target.value })}
               placeholder="Field name"
-              className="w-full h-[28px] px-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+              className="w-full h-[28px] px-2.5 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
             />
 
             {/* Type dropdown */}
@@ -170,7 +170,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
                 value={row.value}
                 onChange={(e) => updateRow(idx, { value: e.target.value })}
                 placeholder="Value"
-                className="w-full h-[28px] px-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+                className="w-full h-[28px] px-2.5 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
               />
             ) : (
               <div className="flex items-center gap-2 h-[28px]">

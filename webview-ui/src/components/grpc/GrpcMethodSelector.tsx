@@ -5,38 +5,32 @@ import type { GrpcMethodType, GrpcServiceDef } from '../../store/tabs-store';
 import { GrpcUnaryIcon, GrpcServerStreamIcon, GrpcClientStreamIcon, GrpcBidiStreamIcon, CheckCircleFilledIcon, RefreshIcon, ChevronDownIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useClickOutside } from '../../hooks/useClickOutside';
+import { GRPC_STREAM_TYPE_COLORS } from '../../colors/daakia-colors';
 
 const EMPTY_SERVICES: GrpcServiceDef[] = [];
 
-/**
- * Stream type color scheme:
- * - Unary: blue (single request/response)
- * - Server Streaming: amber/yellow (server pushes multiple responses)
- * - Client Streaming: green (client pushes multiple requests)
- * - Bidi Streaming: pink/rose (both directions stream simultaneously)
- */
 const STREAM_TYPE_CONFIG: Record<GrpcMethodType, { icon: typeof GrpcUnaryIcon; color: string; label: string; description: string }> = {
   unary: {
     icon: GrpcUnaryIcon,
-    color: '#60a5fa', // blue-400
+    color: GRPC_STREAM_TYPE_COLORS.unary,
     label: 'Unary',
     description: 'Single request → single response',
   },
   server_streaming: {
     icon: GrpcServerStreamIcon,
-    color: '#fbbf24', // amber-400
+    color: GRPC_STREAM_TYPE_COLORS.server_streaming,
     label: 'Server Stream',
     description: 'Single request → stream of responses',
   },
   client_streaming: {
     icon: GrpcClientStreamIcon,
-    color: '#4ade80', // green-400
+    color: GRPC_STREAM_TYPE_COLORS.client_streaming,
     label: 'Client Stream',
     description: 'Stream of requests → single response',
   },
   bidi_streaming: {
     icon: GrpcBidiStreamIcon,
-    color: '#f472b6', // pink-400
+    color: GRPC_STREAM_TYPE_COLORS.bidi_streaming,
     label: 'Bidi Stream',
     description: 'Stream of requests ↔ stream of responses',
   },
@@ -208,7 +202,7 @@ export function GrpcMethodSelector() {
               filteredServices.map(svc => (
                 <div key={svc.name}>
                   {/* Service category header */}
-                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] bg-[rgba(255,255,255,0.02)] border-b border-[var(--color-surface-border)]">
+                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] border-b border-[var(--color-surface-border)]">
                     {svc.name.split('.').pop() || svc.name}
                   </div>
                   {/* Methods */}
@@ -223,7 +217,7 @@ export function GrpcMethodSelector() {
                         onClick={() => handleSelect(m.fullName, m.type)}
                         className={`flex items-center gap-2.5 w-full px-3 py-[7px] text-left cursor-pointer transition-colors ${
                           isSelected
-                            ? 'bg-[rgba(0,184,181,0.1)]'
+                            ? 'bg-[color-mix(in_srgb,var(--color-protocol-grpc)_10%,transparent)]'
                             : 'hover:bg-[var(--color-item-hover-bg)]'
                         }`}
                       >
@@ -245,9 +239,9 @@ export function GrpcMethodSelector() {
           </div>
 
           {/* Footer — reflection source */}
-          <div className="flex items-center justify-between px-3 py-2 border-t border-[var(--color-surface-border)] bg-[rgba(255,255,255,0.02)]">
+          <div className="flex items-center justify-between px-3 py-2 border-t border-[var(--color-surface-border)] bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
             <span className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-muted)]">
-              <CheckCircleFilledIcon size={10} style={{ color: '#4ade80' }} />
+              <CheckCircleFilledIcon size={10} style={{ color: 'var(--color-success)' }} />
               Using server reflection.
             </span>
             <button

@@ -6,6 +6,7 @@
 import * as http from 'http';
 import { WebSocketServer } from 'ws';
 import { createWebSocketStream } from 'ws';
+// @ts-expect-error TS1479 — aedes ships ESM-only; esbuild bundles it into the CJS output
 import { Aedes } from 'aedes';
 import type { MockServerConfig, MQTTMockTopic, MockLogEntry } from './mock-types';
 import { resolveAll } from '../services/variables';

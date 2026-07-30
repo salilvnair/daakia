@@ -79,14 +79,47 @@ export function buildSchemaPrompt(lang: SchemaLang, jsonPreview: string): string
   }
 }
 
-/** Badge color per group for the UI */
+/** Badge color per group — uses CSS variables so they respect the active theme */
 export const GROUP_BADGE_COLORS: Record<string, string> = {
-  'TypeScript': '#3b82f6',   // blue
-  'JavaScript': '#f59e0b',   // amber
-  'JSON':       '#10b981',   // emerald
-  'Python':     '#06b6d4',   // cyan
-  'JVM':        '#f97316',   // orange
-  'Systems':    '#ef4444',   // red
-  '.NET':       '#8b5cf6',   // violet
-  'Mobile':     '#ec4899',   // pink
+  'TypeScript': 'var(--color-method-put)',       // blue
+  'JavaScript': 'var(--color-warning)',           // amber
+  'JSON':       'var(--color-success)',           // green
+  'Python':     'var(--color-method-head)',       // cyan
+  'JVM':        'var(--color-method-post)',       // amber-orange
+  'Systems':    'var(--color-error)',             // red
+  '.NET':       'var(--color-protocol-mqtt)',     // violet
+  'Mobile':     'var(--color-method-options)',    // pink
 };
+
+/**
+ * Pre-built SelectOption-compatible list for the language picker.
+ * Shared by DataSchemaModal and DuiShowcase — single source of truth.
+ * Typed as a plain object array so the service layer stays DUI-free.
+ */
+export const SCHEMA_LANG_OPTIONS: Array<{
+  value: string;
+  label: string;
+  isHeader?: boolean;
+  badge?: { label: string; color: string };
+}> = [
+  { value: 'h-ts',             label: 'TypeScript',            isHeader: true },
+  { value: 'typescript',       label: 'TypeScript / Interfaces', badge: { label: 'TS',    color: GROUP_BADGE_COLORS['TypeScript'] } },
+  { value: 'typescript-zod',   label: 'TypeScript / Zod',        badge: { label: 'ZOD',   color: GROUP_BADGE_COLORS['TypeScript'] } },
+  { value: 'h-js',             label: 'JavaScript',            isHeader: true },
+  { value: 'javascript',       label: 'JavaScript / JSDoc',       badge: { label: 'JS',    color: GROUP_BADGE_COLORS['JavaScript'] } },
+  { value: 'h-json',           label: 'JSON',                  isHeader: true },
+  { value: 'json-schema',      label: 'JSON Schema (draft-07)',   badge: { label: 'JSON',  color: GROUP_BADGE_COLORS['JSON']       } },
+  { value: 'h-py',             label: 'Python',                isHeader: true },
+  { value: 'python-pydantic',  label: 'Python / Pydantic v2',    badge: { label: 'PY',    color: GROUP_BADGE_COLORS['Python']     } },
+  { value: 'python-dataclass', label: 'Python / dataclass',      badge: { label: 'PY',    color: GROUP_BADGE_COLORS['Python']     } },
+  { value: 'h-jvm',            label: 'JVM',                   isHeader: true },
+  { value: 'java',             label: 'Java / POJO',              badge: { label: 'JAVA',  color: GROUP_BADGE_COLORS['JVM']        } },
+  { value: 'kotlin',           label: 'Kotlin / data class',      badge: { label: 'KT',    color: GROUP_BADGE_COLORS['JVM']        } },
+  { value: 'h-sys',            label: 'Systems',               isHeader: true },
+  { value: 'go',               label: 'Go / struct',              badge: { label: 'GO',    color: GROUP_BADGE_COLORS['Systems']    } },
+  { value: 'rust',             label: 'Rust / serde',             badge: { label: 'RS',    color: GROUP_BADGE_COLORS['Systems']    } },
+  { value: 'h-net',            label: '.NET',                  isHeader: true },
+  { value: 'csharp',           label: 'C# / record',              badge: { label: 'CS',    color: GROUP_BADGE_COLORS['.NET']       } },
+  { value: 'h-mobile',         label: 'Mobile',                isHeader: true },
+  { value: 'swift',            label: 'Swift / Codable',          badge: { label: 'SWIFT', color: GROUP_BADGE_COLORS['Mobile']     } },
+];

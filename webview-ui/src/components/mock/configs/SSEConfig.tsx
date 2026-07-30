@@ -3,13 +3,19 @@
  */
 import { useState } from 'react';
 import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern } from '../../../icons';
-import { CodeEditor, StyledDropdown, Checkbox, ResizablePanel, ConfirmDialog, DurationInput, type DropdownOption } from '../../shared';
+import {
+  ButtonView, IconButtonView, SelectInputView, CheckboxView,
+  DurationInputView, EditorView, ResizablePanelView, ToggleSwitchView,
+  TextInputView, type SelectOption,
+} from '@salilvnair/dui';
+import { ConfirmDialog } from '../../shared';
 import { SSE_SAMPLES } from '../samples';
 import type { MockServer } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import type { SSEMockEvent } from '../mock-types';
 
-const SSE_SAMPLE_OPTIONS: DropdownOption[] = [
+const SSE_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
   ...SSE_SAMPLES.map(s => ({ value: s.id, label: s.label })),
 ];
@@ -39,6 +45,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
     if (!sampleId) return;
     const sample = SSE_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'sse' });
     setSelectedSample(sampleId);
     onUpdate({
       description: sample.description,
@@ -55,6 +62,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
   };
 
   const addEvent = () => {
+    logUiEvent('mock.cfg_add', { protocol: 'sse' });
     onUpdate({
       sseEvents: [...events, {
         id: crypto.randomUUID(),
@@ -78,11 +86,13 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
 
   const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
     const newEvents: SSEMockEvent[] = items.map(item => {
-      const d = item.data as { eventName?: string; data?: string; intervalMs?: number };
+      const d = item.data as { eventName?: string; data?: unknown; intervalMs?: number };
+      const dataStr = typeof d.data === 'string' ? d.data
+        : d.data != null ? JSON.stringify(d.data, null, 2) : '{"hello":"world"}';
       return {
         id: crypto.randomUUID(),
         eventName: d.eventName || item.name || 'message',
-        data: d.data || '{"hello":"world"}',
+        data: dataStr,
         intervalMs: d.intervalMs ?? 5000,
         delay: 0,
         repeat: true,
@@ -97,8 +107,8 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">SSE Events ({events.length})</span>
         <div className="flex items-center gap-1.5">
-          <StyledDropdown
-            size="sm"
+          <SelectInputView
+            size="md"
             options={SSE_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
@@ -115,23 +125,21 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
             accentVar="var(--color-protocol-sse)"
             onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <button
-            type="button"
+          <ButtonView
+            size="md"
+            accentColor="var(--color-protocol-sse)"
             onClick={addEvent}
-            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: 'var(--color-protocol-sse)', borderColor: 'color-mix(in srgb, var(--color-protocol-sse) 30%, transparent)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--color-protocol-sse) 10%, transparent)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-          >+ Add Event</button>
+          >
+            + Add Event
+          </ButtonView>
           {events.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowDeleteAll(true)}
+            <IconButtonView
+              size="md"
+              icon={<TrashIcon size={12} />}
               title="Delete All Events"
-              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
-              <TrashIcon size={12} />
-            </button>
+              accentColor="var(--color-error)"
+              onClick={() => setShowDeleteAll(true)}
+            />
           )}
         </div>
       </div>
@@ -146,7 +154,6 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
             ? 'border-[var(--color-surface-border)] bg-[var(--color-surface)]'
             : 'border-[var(--color-surface-border)] bg-[var(--color-panel)]'
         }`}>
-          {/* Disabled overlay */}
           {!event.enabled && (
             <div className="absolute inset-0 rounded-lg z-10 pointer-events-none overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg bg-[var(--color-muted-fallback)]" />
@@ -155,76 +162,72 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
           )}
 
           <div className={`flex items-center gap-2 ${!event.enabled ? 'opacity-50' : ''}`}>
-            <button
-              type="button"
-              onClick={() => updateEvent(event.id, { enabled: !event.enabled })}
-              className="relative z-20 w-[28px] h-[14px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-              style={{ backgroundColor: event.enabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-              title={event.enabled ? 'Disable' : 'Enable'}
-            >
-              <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: event.enabled ? '16px' : '2px' }} />
-            </button>
+            <ToggleSwitchView
+              checked={event.enabled}
+              onChange={(v) => updateEvent(event.id, { enabled: v })}
+              accentColor="var(--color-success)"
+              size="xs"
+            />
             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded text-[var(--color-protocol-sse)] bg-[rgba(245,158,11,0.12)]">
               {event.eventName || 'message'}
             </span>
             <div className="flex-1" />
             {event.enabled && (
-              <Checkbox
+              <CheckboxView
                 checked={event.repeat}
                 onChange={(v) => updateEvent(event.id, { repeat: v })}
                 label="Repeat"
-                className="text-[10px]"
+                size="sm"
               />
             )}
             {sseUrl && event.enabled && (
-              <button
-                type="button"
-                onClick={() => copySseUrl(event.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
+              <IconButtonView
+                size="sm"
+                icon={copiedId === event.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
                 title="Copy SSE URL"
-              >
-                {copiedId === event.id ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-              </button>
+                onClick={() => copySseUrl(event.id)}
+              />
             )}
             {event.enabled && (
-              <button
-                type="button"
+              <IconButtonView
+                size="sm"
+                icon={<TrashIcon size={12} />}
+                accentColor="var(--color-error)"
                 onClick={() => setDeleteConfirmId(event.id)}
-                className="text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer"
-              >
-                <TrashIcon size={12} />
-              </button>
+              />
             )}
           </div>
           {event.enabled && (
             <>
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
+                <TextInputView
                   value={event.eventName}
                   onChange={(e) => updateEvent(event.id, { eventName: e.target.value })}
                   placeholder="Event name"
-                  className="flex-1 h-[26px] px-2.5 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+                  size="md"
+                  style={{ fontFamily: 'monospace', flex: 1 }}
                 />
-                <DurationInput
+                <DurationInputView
                   value={event.intervalMs}
                   onChange={(ms) => updateEvent(event.id, { intervalMs: ms })}
                   placeholder="Interval"
+                  size="sm"
                 />
-                <DurationInput
+                <DurationInputView
                   value={event.delay}
                   onChange={(ms) => updateEvent(event.id, { delay: ms })}
                   placeholder="Delay"
+                  size="sm"
                 />
               </div>
-              <ResizablePanel id={`mock.sse.event.${event.id}`} defaultHeight={60} minHeight={40} maxHeight={400}>
-                <CodeEditor
+              <ResizablePanelView defaultHeight={60} minHeight={40} maxHeight={400}>
+                <EditorView
                   value={event.data}
                   onChange={(val) => updateEvent(event.id, { data: val })}
                   language="json"
                   height="100%"
                 />
-              </ResizablePanel>
+              </ResizablePanelView>
             </>
           )}
         </div>
@@ -257,6 +260,7 @@ export function SSEConfig({ server, onUpdate }: SSEConfigProps) {
           confirmLabel="Delete All"
           danger
           onConfirm={() => {
+            logUiEvent('mock.cfg_clear', { count: events.length, protocol: 'sse' });
             onUpdate({ sseEvents: [] });
             setShowDeleteAll(false);
           }}

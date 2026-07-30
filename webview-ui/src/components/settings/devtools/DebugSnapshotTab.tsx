@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { postMsg } from '../../../vscode';
 import { CopyButton, CodeEditor } from '../../shared';
 import { RefreshIcon, DownloadIcon } from '../../../icons';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 interface SnapshotData {
   generatedAt: string;
@@ -104,6 +105,7 @@ export function DebugSnapshotTab() {
 
   const handleDownload = () => {
     if (!json) return;
+    logUiEvent('devtools.snapshot_dl');
     const blob = new Blob([json], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

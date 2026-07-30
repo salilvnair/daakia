@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as vscode from 'vscode';
 
 type SqlJsDatabase = import('sql.js').Database;
 
@@ -21,7 +22,11 @@ let _saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 export async function initDb(extensionPath: string): Promise<void> {
   _extensionPath = extensionPath;
-  const configuredPath = ''; // TODO: read from settings
+  // `daakia.dbPath` setting, then DAAKIA_TEST_DB_PATH (used by the e2e test harness to
+  // isolate its database from the developer's real one), then the default location.
+  const configuredPath = vscode.workspace.getConfiguration('daakia').get<string>('dbPath')?.trim()
+    || process.env.DAAKIA_TEST_DB_PATH
+    || '';
   _dbPath = configuredPath || path.join(os.homedir(), '.salilvnair', 'daakia-vsce', 'db', 'daakia.db');
 
   try {
@@ -1351,6 +1356,53 @@ export interface AiFeatureFlags {
   aiScenarioManager: boolean;
   // AI Chat & Panels
   daakiaAiChat: boolean;
+  // GraphQL AI (Sprint 8)
+  gqlQueryBuilder: boolean;
+  gqlSchemaExplainer: boolean;
+  gqlFederation: boolean;
+  // gRPC / SOAP AI (Sprint 8)
+  grpcProtoExplainer: boolean;
+  soapWsdlExplainer: boolean;
+  soapToRest: boolean;
+  // Realtime AI (Sprint 9)
+  wsTrafficAnalyzer: boolean;
+  sseTrafficAnalyzer: boolean;
+  sseEventSuggester: boolean;
+  mqttTopicSuggester: boolean;
+  sioTrafficAnalyzer: boolean;
+  // MCP & Platform AI (Sprint 10)
+  mcpPromptBuilder: boolean;
+  openApiGenerator: boolean;
+  securityAudit: boolean;
+  mockIntelligence: boolean;
+  postmanTranslator: boolean;
+  webhookDebugger: boolean;
+  requestClustering: boolean;
+  // Agents & Autonomous Intelligence (Sprint 11)
+  autoDiscovery: boolean;
+  sequenceComposer: boolean;
+  regressionGuardian: boolean;
+  apiChangelogMonitor: boolean;
+  // Analytics, Security & Documentation (Sprint 12)
+  intelligenceDashboard: boolean;
+  compatibilityScorer: boolean;
+  smartTestSuiteGen: boolean;
+  deepSecurityAudit: boolean;
+  docAutoGenerator: boolean;
+  apiKnowledgeGraph: boolean;
+  contractNegotiator: boolean;
+  collectionOptimizer: boolean;
+  // Multi-Agent Orchestration & Adaptive Mock Intelligence (Sprint 14)
+  crossProtocolOrchestrator: boolean;
+  chaosEngineeringPlanner: boolean;
+  adaptiveMockLearning: boolean;
+  aiScenarioComposer: boolean;
+  // Additional platform/request features
+  nlRequestBuilder: boolean;
+  performanceAnomalyDetector: boolean;
+  liveTrafficMirror: boolean;
+  adaptiveLoadTester: boolean;
+  schemaDriftMonitor: boolean;
 }
 
 export const DEFAULT_AI_FEATURES: AiFeatureFlags = {
@@ -1401,6 +1453,45 @@ export const DEFAULT_AI_FEATURES: AiFeatureFlags = {
   mockAiGenerate: true,
   aiScenarioManager: true,
   daakiaAiChat: true,
+  gqlQueryBuilder: true,
+  gqlSchemaExplainer: true,
+  gqlFederation: true,
+  grpcProtoExplainer: true,
+  soapWsdlExplainer: true,
+  soapToRest: true,
+  wsTrafficAnalyzer: true,
+  sseTrafficAnalyzer: true,
+  sseEventSuggester: true,
+  mqttTopicSuggester: true,
+  sioTrafficAnalyzer: true,
+  mcpPromptBuilder: true,
+  openApiGenerator: true,
+  securityAudit: true,
+  mockIntelligence: true,
+  postmanTranslator: true,
+  webhookDebugger: true,
+  requestClustering: true,
+  autoDiscovery: true,
+  sequenceComposer: true,
+  regressionGuardian: true,
+  apiChangelogMonitor: true,
+  intelligenceDashboard: true,
+  compatibilityScorer: true,
+  smartTestSuiteGen: true,
+  deepSecurityAudit: true,
+  docAutoGenerator: true,
+  apiKnowledgeGraph: true,
+  contractNegotiator: true,
+  collectionOptimizer: true,
+  crossProtocolOrchestrator: true,
+  chaosEngineeringPlanner: true,
+  adaptiveMockLearning: true,
+  aiScenarioComposer: true,
+  nlRequestBuilder: true,
+  performanceAnomalyDetector: true,
+  liveTrafficMirror: true,
+  adaptiveLoadTester: true,
+  schemaDriftMonitor: true,
 };
 
 // ── daakia_ai_feature table CRUD ───────────────────────────────────────────────

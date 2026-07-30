@@ -3,8 +3,6 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
 import { postMsg } from '../../vscode';
 import { PlayIcon, SaveIcon, StopSquareIcon, UploadIcon, MoreVerticalIcon, SparkleIcon } from '../../icons';
-import { SplitButton, HighlightedInput } from '../shared';
-import type { SplitButtonItem } from '../shared';
 import { saveRequest } from '../../services/request';
 import { SoapWsdlImport } from './SoapWsdlImport';
 import { logUiEvent } from '../../store/ui-audit-store';
@@ -15,9 +13,19 @@ import { PatternBaselinePopup } from '../ai/AiRequestPatternStatus';
 import { AiSoapToRestModal } from '../ai/AiSoapToRestModal';
 import { AiSoapWsdlExplainerModal } from '../ai/AiSoapWsdlExplainerModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import {
+  SelectTextInputView,
+  ButtonView,
+  DropDownButtonView,
+  IconButtonView,
+  type ContextMenuItem,
+} from '@salilvnair/dui';
 
-const saveItems: SplitButtonItem[] = [
-  { id: 'save-as', label: 'Save as', icon: <SaveIcon size={12} />, iconColor: 'var(--color-ctx-close-saved)', onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }) },
+const ACCENT = 'var(--color-protocol-soap)';
+
+const SOAP_VERSION_OPTIONS = [
+  { value: '1.1', label: '1.1', color: ACCENT },
+  { value: '1.2', label: '1.2', color: ACCENT },
 ];
 
 const DEFAULT_ENVELOPE_11 = `<?xml version="1.0" encoding="UTF-8"?>
@@ -36,10 +44,6 @@ const DEFAULT_ENVELOPE_12 = `<?xml version="1.0" encoding="UTF-8"?>
   </soap:Body>
 </soap:Envelope>`;
 
-/**
- * SoapUrlBar — mirrors GrpcUrlBar layout:
- * [1.1] [WSDL] [endpoint input] [Operation Selector dropdown] [Invoke] [Save]
- */
 export function SoapUrlBar() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const openDaakiaAiTab = useTabsStore(s => s.openDaakiaAiTab);
@@ -55,7 +59,6 @@ export function SoapUrlBar() {
   const [showSoapToRest, setShowSoapToRest] = useState(false);
   const [showWsdlExplainer, setShowWsdlExplainer] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
-  const overflowBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -70,11 +73,9 @@ export function SoapUrlBar() {
   const soapVersion = activeTab?.soapVersion || '1.1';
   const soapAction = activeTab?.soapAction || '';
 
-  // When user selects a mock server from suggestions, auto-load WSDL
   const handleMockServerSelect = useCallback((url: string) => {
     if (!activeTab) return;
-    const wsdlUrl = `${url}?wsdl`;
-    postMsg({ type: 'soap:loadWsdl', tabId: activeTab.id, url: wsdlUrl });
+    postMsg({ type: 'soap:loadWsdl', tabId: activeTab.id, url: `${url}?wsdl` });
   }, [activeTab]);
 
   const handleInvoke = useCallback(() => {
@@ -85,7 +86,6 @@ export function SoapUrlBar() {
     logUiEvent('soap.invoke', { url: endpoint, operation: activeTab.soapOperation });
     const envelope = activeTab.soapEnvelope || (soapVersion === '1.2' ? DEFAULT_ENVELOPE_12 : DEFAULT_ENVELOPE_11);
 
-    // Collect enabled attachments for MTOM
     const enabledAttachments = (activeTab.soapAttachments || [])
       .filter(a => a.enabled && a.base64Data)
       .map(a => ({ contentId: a.contentId, contentType: a.contentType, filename: a.filename, base64Data: a.base64Data }));
@@ -124,13 +124,14 @@ export function SoapUrlBar() {
 
   const handleSave = useCallback(() => {
     if (!activeTab) return;
+    logUiEvent('soap.save', { url: activeTab.url });
     const saved = saveRequest(activeTab);
     if (saved) updateTab(activeTab.id, { dirty: false });
   }, [activeTab, updateTab]);
 
-  const toggleVersion = useCallback(() => {
+  const handleVersionChange = useCallback((v: string) => {
     if (!activeTab) return;
-    const newVersion = soapVersion === '1.1' ? '1.2' : '1.1';
+    const newVersion = v as '1.1' | '1.2';
     const currentEnvelope = activeTab.soapEnvelope || '';
     const isDefault = !currentEnvelope || currentEnvelope === DEFAULT_ENVELOPE_11 || currentEnvelope === DEFAULT_ENVELOPE_12;
     updateTab(activeTab.id, {
@@ -138,103 +139,102 @@ export function SoapUrlBar() {
       ...(isDefault ? { soapEnvelope: newVersion === '1.2' ? DEFAULT_ENVELOPE_12 : DEFAULT_ENVELOPE_11 } : {}),
       dirty: true,
     });
-  }, [activeTab, updateTab, soapVersion]);
+  }, [activeTab, updateTab]);
 
   if (!activeTab) return null;
 
+  const saveItems: ContextMenuItem[] = [
+    {
+      id: 'save-as',
+      label: 'Save as',
+      icon: <SaveIcon size={13} />,
+      iconColor: 'var(--color-ctx-close-saved)',
+      onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
+    },
+  ];
+
   return (
     <>
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)]">
-        {/* SOAP version pill — taller, wider */}
-        <button
-          type="button"
-          onClick={toggleVersion}
-          className="h-[36px] px-3 text-[11px] font-bold rounded-md cursor-pointer transition-colors bg-[color-mix(in_srgb,var(--color-protocol-soap)_15%,transparent)] text-[var(--color-protocol-soap)] hover:bg-[color-mix(in_srgb,var(--color-protocol-soap)_25%,transparent)] flex-shrink-0"
-          title={`SOAP ${soapVersion} — click to toggle`}
-        >
-          {soapVersion}
-        </button>
-
-        {/* Import WSDL button — taller, wider */}
-        <button
-          type="button"
-          onClick={() => setWsdlImportOpen(true)}
-          className="h-[36px] px-3 text-[11px] font-medium rounded-md cursor-pointer transition-colors border border-[var(--color-surface-border)] bg-transparent text-[var(--color-text-muted)] hover:text-[var(--color-protocol-soap)] hover:border-[var(--color-protocol-soap)] flex items-center gap-1.5 flex-shrink-0"
+      <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 bg-[var(--color-panel)]">
+        {/* Import WSDL button */}
+        <ButtonView
+          label="WSDL"
+          iconLeft={<UploadIcon size={11} />}
+          variant="secondary"
+          size="lg"
+          onClick={() => { logUiEvent('soap.import_wsdl'); setWsdlImportOpen(true); }}
           title="Import WSDL"
-        >
-          <UploadIcon size={11} />
-          WSDL
-        </button>
+        />
 
-        {/* Endpoint input */}
+        {/* Version (1.1 / 1.2) + Endpoint URL — unified DUI component */}
         <div className="flex-[2] min-w-0">
-          <HighlightedInput
-            value={activeTab.url}
-            onChange={(val) => updateTab(activeTab.id, { url: val, dirty: true })}
+          <SelectTextInputView
+            selectOptions={SOAP_VERSION_OPTIONS}
+            selectValue={soapVersion}
+            onSelectChange={handleVersionChange}
+            inputValue={activeTab.url}
+            onInputChange={(val) => updateTab(activeTab.id, { url: val, dirty: true })}
+            onMockServerSelect={handleMockServerSelect}
             onKeyDown={(e) => { if (e.key === 'Enter') handleInvoke(); }}
             placeholder="http://localhost:8080/soap"
             suggestions={urlSuggestions}
             mockServers={mockSuggestions}
-            onMockServerSelect={handleMockServerSelect}
-            accentColor="var(--color-protocol-soap)"
-            protocolHints={[]}
+            accentColor={ACCENT}
+            size="lg"
+            width="fullWidth"
           />
         </div>
 
-        {/* Operation selector — textbox with dropdown (like GrpcMethodSelector) */}
+        {/* Operation selector */}
         <SoapOperationSelector />
 
-        {/* Invoke / Cancel button */}
+        {/* Invoke / Cancel */}
         {activeTab.loading ? (
-          <button
-            type="button"
+          <ButtonView
+            label="Cancel"
+            iconLeft={<StopSquareIcon size={12} />}
+            variant="danger"
+            size="lg"
             onClick={handleCancel}
-            className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[var(--color-error)] text-white hover:opacity-90 cursor-pointer transition-opacity flex items-center gap-1.5 flex-shrink-0"
-          >
-            <StopSquareIcon size={12} />
-            Cancel
-          </button>
+          />
         ) : (
-          <button
-            type="button"
-            onClick={handleInvoke}
+          <ButtonView
+            label="Invoke"
+            iconLeft={<PlayIcon size={12} />}
+            variant="primary"
+            size="lg"
+            accentColor={ACCENT}
             disabled={!activeTab.url.trim()}
-            className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[var(--color-protocol-soap)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity flex items-center gap-1.5 flex-shrink-0"
-          >
-            <PlayIcon size={12} />
-            Invoke
-          </button>
+            onClick={handleInvoke}
+          />
         )}
 
-        {/* Save SplitButton */}
-        <SplitButton
+        {/* Save */}
+        <DropDownButtonView
           label="Save"
-          variant="secondary"
-          onClick={handleSave}
           icon={<SaveIcon size={13} />}
+          variant="secondary"
+          size="lg"
+          onPrimaryClick={handleSave}
           items={saveItems}
+          align="right"
         />
 
         {/* AI Tools ⋮ menu */}
         <div className="flex-shrink-0 relative" ref={overflowRef}>
-          <button
-            ref={overflowBtnRef}
-            type="button"
+          <IconButtonView
+            icon={<MoreVerticalIcon size={15} />}
+            title="AI tools"
+            size="lg"
+            active={showOverflow}
             onClick={() => {
-              if (!showOverflow && overflowBtnRef.current) {
-                const rect = overflowBtnRef.current.getBoundingClientRect();
+              if (!showOverflow && overflowRef.current) {
+                const rect = overflowRef.current.getBoundingClientRect();
                 setOverflowDir((window.innerHeight - rect.bottom) < 180 ? 'up' : 'down');
               }
               setShowOverflow(p => !p);
             }}
-            title="AI tools"
-            className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
-            style={{ color: showOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)', backgroundColor: showOverflow ? 'rgba(255,255,255,0.08)' : 'transparent' }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = showOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
-          >
-            <MoreVerticalIcon size={15} />
-          </button>
+          />
 
           {showOverflow && (
             <div
@@ -283,25 +283,25 @@ export function SoapUrlBar() {
               {aiEnabled('soapWsdlExplainer') && (
                 <button type="button"
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
-                  style={{ color: 'var(--color-protocol-soap)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-soap) 8%, transparent)`; }}
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
                   onMouseLeave={e => { e.currentTarget.style.background = ''; }}
                   onClick={() => { setShowWsdlExplainer(true); setShowOverflow(false); }}
                 >
-                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-soap)', flexShrink: 0 }} />
-                  WSDL Explainer ✦
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                  WSDL Explainer
                 </button>
               )}
               {aiEnabled('soapToRest') && (
                 <button type="button"
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left"
-                  style={{ color: 'var(--color-protocol-soap)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-soap) 8%, transparent)`; }}
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
                   onMouseLeave={e => { e.currentTarget.style.background = ''; }}
                   onClick={() => { setShowSoapToRest(true); setShowOverflow(false); }}
                 >
-                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-soap)', flexShrink: 0 }} />
-                  SOAP → REST Migrator ✦
+                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />
+                  SOAP → REST Migrator
                 </button>
               )}
             </div>
@@ -315,17 +315,13 @@ export function SoapUrlBar() {
               method="SOAP"
               url={activeTab.url}
               onClose={() => setShowPatternStatus(false)}
-              dir={overflowDir}
             />
           )}
         </div>
       </div>
 
-      {/* WSDL Import Modal */}
       <SoapWsdlImport open={wsdlImportOpen} onClose={() => setWsdlImportOpen(false)} />
-      {/* 8.25: SOAP WSDL Explainer */}
       {showWsdlExplainer && <AiSoapWsdlExplainerModal onClose={() => setShowWsdlExplainer(false)} />}
-      {/* 10.14: SOAP → REST Migrator */}
       {showSoapToRest && <AiSoapToRestModal onClose={() => setShowSoapToRest(false)} />}
     </>
   );

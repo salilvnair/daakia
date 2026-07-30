@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { HTTP_REQUEST_HEADERS, SENSITIVE_HEADERS, HEADER_VALUE_SUGGESTIONS } from './http-headers';
 import { ConfirmDialog } from '../modals/ConfirmDialog';
 import { TrashIcon, BulkEditIcon, PlusIcon, CheckCircleFilledIcon, EyeIcon, EyeOffIcon } from '../../../icons';
+import { IconButtonView } from '@salilvnair/dui';
 
 export interface KeyValueRow {
   id: string;
@@ -129,44 +130,31 @@ export function KeyValueTable({
           <span className="text-[12px] text-[var(--color-text-muted)] font-medium">{label}</span>
         )}
         {!label && <div />}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {toolbarExtra}
-          <button
-            type="button"
+          <IconButtonView
+            icon={<TrashIcon size={14} />}
+            size="md"
+            tooltip="Clear all"
+            disabled={!rows.some(r => r.key || r.value)}
+            style={{ '--dui-hover-color': 'var(--color-error)', '--dui-hover-bg': 'color-mix(in srgb, var(--color-error) 8%, transparent)' } as React.CSSProperties}
             onClick={() => { if (rows.some(r => r.key || r.value)) setShowClearConfirm(true); }}
-            className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
-              rows.some(r => r.key || r.value)
-                ? 'text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)]'
-                : 'text-[var(--color-text-muted)] opacity-30 cursor-default'
-            }`}
-            title="Clear all"
-          >
-            <TrashIcon size={14} />
-          </button>
-          <button
-            type="button"
+          />
+          <IconButtonView
+            icon={<BulkEditIcon size={14} />}
+            size="md"
+            tooltip="Bulk edit"
+            active={bulkEdit}
+            activeColor={accentColor}
             onClick={() => { if (bulkEdit) fromBulkText(bulkTextRef.current); setBulkEdit(!bulkEdit); }}
-            className={`w-7 h-7 flex items-center justify-center rounded cursor-pointer transition-colors ${
-              bulkEdit
-                ? 'bg-[rgba(99,102,241,0.12)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]'
-            }`}
-            style={bulkEdit && accentColor ? { color: accentColor } : bulkEdit ? { color: 'var(--color-primary)' } : undefined}
-            title="Bulk edit"
-          >
-            <BulkEditIcon size={14} />
-          </button>
-          <button
-            type="button"
+          />
+          <IconButtonView
+            icon={<PlusIcon size={14} />}
+            size="md"
+            tooltip="Add new row"
+            style={{ '--dui-hover-color': accentColor || 'var(--color-primary)', '--dui-hover-bg': `color-mix(in srgb, ${accentColor || 'var(--color-primary)'} 8%, transparent)` } as React.CSSProperties}
             onClick={addRow}
-            className="w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:bg-[rgba(99,102,241,0.08)] cursor-pointer transition-colors"
-            style={{ '--hover-color': accentColor || 'var(--color-primary)' } as React.CSSProperties}
-            title="Add new row"
-            onMouseEnter={e => (e.currentTarget.style.color = accentColor || 'var(--color-primary)')}
-            onMouseLeave={e => (e.currentTarget.style.color = '')}
-          >
-            <PlusIcon size={14} />
-          </button>
+          />
         </div>
       </div>
       )}
@@ -245,7 +233,7 @@ function BulkEditArea({ defaultValue, onChangeRef, accentColor }: { defaultValue
         onChange={(e) => setText(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full min-h-[160px] px-3 py-2.5 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-y"
+        className="w-full min-h-[160px] px-3 py-2.5 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-y"
         style={focused ? { borderColor: highlight } : undefined}
         placeholder={`Content-Type: application/json\nAuthorization: Bearer token123\n# X-Debug: true`}
         spellCheck={false}
@@ -406,7 +394,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
           onBlur={() => setTimeout(() => { setKeyFocused(false); setKeyHighlight(-1); }, 150)}
           onKeyDown={handleKeyInputKeyDown}
           placeholder={placeholder?.key || 'Key'}
-          className="w-full px-2.5 py-1 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
+          className="w-full px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
         />
         {/* Autocomplete dropdown */}
         {showDropdown && (
@@ -440,7 +428,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
           onBlur={() => setTimeout(() => { setValueFocused(false); setValueHighlight(-1); }, 150)}
           onKeyDown={handleValueInputKeyDown}
           placeholder={placeholder?.value || 'Value'}
-          className="w-full px-2.5 py-1 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
+          className="w-full px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
         />
         {/* Value autocomplete dropdown */}
         {showValueDropdown && (
@@ -485,7 +473,7 @@ function KeyValueRow({ row, idx, showDescription, placeholder, autocompleteKeys,
             value={row.description || ''}
             onChange={(e) => onUpdate(idx, 'description', e.target.value)}
             placeholder="Description"
-            className="w-full px-2.5 py-1 rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
+            className="w-full px-2.5 py-1 rounded-md bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] text-[12px] h-[28px]"
           />
         </div>
       )}

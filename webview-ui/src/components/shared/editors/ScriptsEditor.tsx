@@ -1,11 +1,11 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
-import { PillTabs } from '../controls/PillTabs';
-import { CodeEditor } from './CodeEditor';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { TabView, EditorView, ButtonView } from '@salilvnair/dui';
 import { SnippetsPanel } from './SnippetsPanel';
 import { useDebugStore } from '../../../store/debug-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { ContextMenu } from '../menus/ContextMenu';
 import { useAiScriptAutocomplete, type AiAutocompleteMode } from '../../../hooks/useAiScriptAutocomplete';
+import { registerDkLanguageSupport } from '../../../services/dk-repl';
 import { SparkleIcon } from '../../../icons';
 import { AiContractTestGenerator, type AiContractTestHandle } from '../../ai/AiContractTestGenerator';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
@@ -47,6 +47,14 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
 
   const { active: debugActive, phase: debugPhase } = useDebugStore();
   const activeTabId = useTabsStore(s => s.activeTabId) || '';
+
+  // When a breakpoint row is clicked, navigate to its phase + line
+  const navigatePhase = useDebugStore(s => s.navigatePhase);
+  useEffect(() => {
+    if (!navigatePhase) return;
+    setActiveScript(navigatePhase);
+    useDebugStore.getState().setNavigatePhase(null);
+  }, [navigatePhase]);
   const currentPhase = activeScript === 'pre-request' ? 'pre-request' : 'post-response';
   const bpKey = `${activeTabId}:${currentPhase}`;
   const breakpointsRaw = useDebugStore(s => s.breakpoints[bpKey]);
@@ -135,90 +143,87 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
       <div className="flex items-center justify-between border-b border-[var(--color-surface-border)]">
-        <PillTabs
+        <TabView
           tabs={[
             { id: 'pre-request', label: 'Pre-request', dot: !!preRequestScript.trim() },
             { id: 'post-response', label: 'Post-response', dot: !!postResponseScript.trim() },
           ]}
           activeTab={activeScript}
           onChange={setActiveScript}
-          size="sm"
+          size="md"
           variant="underline"
           accentColor={accentColor}
         />
         <div className="flex items-center gap-1 mr-2">
           {/* AI Contract Test — post-response only, gated by contractTestGenerator flag */}
           {contractTestAllowed && activeScript === 'post-response' && (
-            <button
-              type="button"
+            <ButtonView
+              size="xs"
+              variant="ghost"
+              iconLeft={<SparkleIcon size={10} />}
               title="Generate contract tests with AI"
               onClick={() => contractTestRef.current?.open()}
-              className="flex items-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
               style={{ color: 'var(--color-success)' }}
             >
-              <SparkleIcon size={10} />
-              <span>Tests</span>
-            </button>
+              Tests
+            </ButtonView>
           )}
           {/* AI Autocomplete toggle — gated by scriptAutocomplete flag */}
           {autocompleteAllowed && (
-          <button
-            type="button"
-            title={aiEnabled ? 'AI autocomplete ON — click to disable' : 'AI autocomplete OFF — click to enable (Ctrl+Alt+Space)'}
-            onClick={() => setAiEnabled(e => !e)}
-            className={`flex items-center gap-1 px-1.5 py-1 text-[10px] font-medium rounded cursor-pointer transition-colors ${
-              aiEnabled
-                ? 'text-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-            }`}
-            style={aiEnabled ? { backgroundColor: 'color-mix(in srgb, #a78bfa 18%, transparent)', color: '#a78bfa' } : undefined}
-          >
-            <SparkleIcon size={10} />
-            <span>AI</span>
-          </button>
+            <ButtonView
+              size="xs"
+              variant="ghost"
+              iconLeft={<SparkleIcon size={10} />}
+              title={aiEnabled ? 'AI autocomplete ON — click to disable' : 'AI autocomplete OFF — click to enable (Ctrl+Alt+Space)'}
+              onClick={() => setAiEnabled(e => !e)}
+              style={aiEnabled
+                ? { backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 18%, transparent)', color: 'var(--color-protocol-ai)' }
+                : { color: 'var(--color-text-muted)' }
+              }
+            >
+              AI
+            </ButtonView>
           )}
           {/* Mode toggle — only visible when AI autocomplete is enabled & allowed */}
           {autocompleteAllowed && aiEnabled && (
-            <button
-              type="button"
+            <ButtonView
+              size="xs"
+              variant="ghost"
               title={aiMode === 'on-demand' ? 'On-demand mode (Ctrl+Alt+Space) — click for auto' : 'Auto mode (triggers after idle) — click for on-demand'}
               onClick={() => setAiMode(m => m === 'on-demand' ? 'on-type' : 'on-demand')}
-              className="px-1.5 py-1 text-[9px] font-medium rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-              style={{ backgroundColor: 'color-mix(in srgb, #a78bfa 8%, transparent)', color: '#a78bfa' }}
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)', color: 'var(--color-protocol-ai)' }}
             >
               {aiMode === 'on-demand' ? '⌃⌥Space' : 'auto'}
-            </button>
+            </ButtonView>
           )}
           {/* Snippets toggle */}
-          <button
-            type="button"
+          <ButtonView
+            size="xs"
+            variant="ghost"
+            title={showSnippets ? 'Hide snippets' : 'Show snippets'}
             onClick={() => {
               const newVal = !showSnippets;
               setShowSnippets(newVal);
-              if (!newVal) snippetsClosed = true;
-              else snippetsClosed = false;
+              snippetsClosed = !newVal;
             }}
-            className={`px-2 py-1 text-[10px] font-medium rounded cursor-pointer transition-colors ${
-              showSnippets
-                ? 'text-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-            }`}
-            style={showSnippets ? { backgroundColor: accentColor ? `color-mix(in srgb, ${accentColor} 15%, transparent)` : 'rgba(99,102,241,0.15)', color: accentColor || 'var(--color-primary)' } : undefined}
+            style={showSnippets
+              ? { backgroundColor: accentColor ? `color-mix(in srgb, ${accentColor} 15%, transparent)` : 'color-mix(in srgb, var(--color-primary) 15%, transparent)', color: accentColor || 'var(--color-primary)' }
+              : { color: 'var(--color-text-muted)' }
+            }
           >
             Snippets
-          </button>
+          </ButtonView>
         </div>
       </div>
 
       <div className="flex flex-1 min-h-[200px] gap-0">
         <div className="flex-1 min-w-0 relative">
-            <CodeEditor
+            <EditorView
               key={`${activeTabId}-${currentPhase}`}
               value={activeScript === 'pre-request' ? preRequestScript : postResponseScript}
               onChange={(val) => {
                 if (activeScript === 'pre-request') onPreRequestScriptChange(val);
                 else onPostResponseScriptChange(val);
-                // Prune breakpoints that exceed new line count
                 const newLineCount = val.split('\n').length;
                 if (activeTabId) {
                   useDebugStore.getState().pruneBreakpoints(activeTabId, currentPhase, newLineCount);
@@ -228,13 +233,24 @@ export function ScriptsEditor({ preRequestScript, postResponseScript, onPreReque
               readOnly={isDebuggingThisScript}
               placeholder={`// ${activeScript === 'pre-request' ? 'Pre-request script (JavaScript)...' : 'Post-response script — runs after the response is received...'}`}
               height="100%"
+              bordered
+              debugSupported
               breakpoints={breakpoints}
               disabledBreakpoints={disabledBreakpoints}
               conditionalBreakpointLines={conditionalLines}
               pausedLine={currentPausedLine}
               onToggleBreakpoint={handleToggleBreakpoint}
               onGlyphContextMenu={handleGlyphContextMenu}
-              onEditorMount={handleEditorMount(currentPhase)}
+              onEditorMount={(editor, monaco) => {
+                registerDkLanguageSupport(monaco);
+                handleEditorMount(currentPhase)(editor, monaco);
+                // Test-only hook, mirrors the __devtoolsStoreRef pattern in
+                // App.tsx — lets e2e tests assert the dk IntelliSense wiring
+                // actually took effect at runtime, not just that the source
+                // code calls it.
+                (window as any).__monacoRef = monaco;
+                (window as any).__scriptsEditorRef = editor;
+              }}
             />
           {/* Conditional breakpoint inline input */}
           {condInput && (

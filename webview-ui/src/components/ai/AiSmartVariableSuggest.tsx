@@ -81,7 +81,7 @@ export function AiSmartVariableSuggest({ value, onChange, fieldType, placeholder
     if (match) {
       const prefix = match[1];
       setVarPrefix(prefix);
-      const scored = scoreVariables(variables, fieldType, prefix);
+      const scored = scoreVariables(variables.map(v => ({ key: v.key, value: v.currentValue || v.initialValue })), fieldType, prefix);
       setSuggestions(scored);
       setShowSuggestions(scored.length > 0);
     } else {

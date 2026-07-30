@@ -3,7 +3,7 @@
  * Toggle template mode on a route, with Monaco editor and live rendered preview.
  */
 import { useState, useCallback } from 'react';
-import { CodeEditor, ResizablePanel } from '../../shared';
+import { EditorView, ResizablePanelView, ToggleSwitchView, ButtonView } from '@salilvnair/dui';
 import { SparkleIcon, ChevronDownIcon } from '../../../icons';
 import type { MockRoute } from '../mock-types';
 
@@ -117,14 +117,12 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
       {/* Template toggle */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onUpdate({ isTemplate: !route.isTemplate })}
-            className="relative w-[32px] h-[16px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-            style={{ backgroundColor: route.isTemplate ? MOCK_ACCENT : 'var(--color-muted-fallback)' }}
-          >
-            <span className="absolute top-[2px] w-[12px] h-[12px] rounded-full bg-white transition-all" style={{ left: route.isTemplate ? '18px' : '2px' }} />
-          </button>
+          <ToggleSwitchView
+            checked={route.isTemplate ?? false}
+            onChange={(v) => onUpdate({ isTemplate: v })}
+            accentColor={MOCK_ACCENT}
+            size="xs"
+          />
           <span className="text-[11px] font-medium text-[var(--color-text-muted)]">
             {route.isTemplate ? 'Template mode ON' : 'Template mode OFF'}
           </span>
@@ -132,30 +130,20 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
         </div>
         {route.isTemplate && (
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setShowHelpers(v => !v)}
-              className="h-[22px] px-2 text-[10px] rounded cursor-pointer transition-colors"
-              style={{ color: MOCK_ACCENT, background: showHelpers ? `color-mix(in srgb, ${MOCK_ACCENT} 15%, transparent)` : 'transparent', border: `1px solid color-mix(in srgb, ${MOCK_ACCENT} 25%, transparent)` }}
-            >
+            <ButtonView size="md" variant="ghost" accentColor={MOCK_ACCENT} onClick={() => setShowHelpers(v => !v)}>
               Helpers
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPreview(v => !v)}
-              className="h-[22px] px-2 text-[10px] rounded cursor-pointer transition-colors"
-              style={{ color: 'var(--color-info)', background: showPreview ? 'rgba(14,165,233,0.1)' : 'transparent', border: '1px solid rgba(14,165,233,0.2)' }}
-            >
+            </ButtonView>
+            <ButtonView size="md" variant="ghost" accentColor="var(--color-info)" onClick={() => setShowPreview(v => !v)}>
               {showPreview ? 'Hide Preview' : 'Live Preview'}
-            </button>
+            </ButtonView>
           </div>
         )}
       </div>
 
       {/* Helper catalog (6A.8) */}
       {route.isTemplate && showHelpers && (
-        <div className="rounded-lg border border-[rgba(255,255,255,0.08)] overflow-hidden">
-          <div className="px-3 py-2 bg-[rgba(255,255,255,0.03)] border-b border-[rgba(255,255,255,0.07)]">
+        <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] overflow-hidden">
+          <div className="px-3 py-2 bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] border-b border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
             <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Helper Catalog — click to insert</span>
           </div>
           <div className="p-2 grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto">
@@ -163,15 +151,16 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
               <div key={cat.category}>
                 <p className="text-[9px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-1 px-1">{cat.category}</p>
                 {cat.items.map(item => (
-                  <button
+                  <ButtonView
                     key={item}
-                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    accentColor={MOCK_ACCENT}
                     onClick={() => insertHelper(item)}
-                    title={`Insert ${item}`}
-                    className="w-full text-left px-1.5 py-0.5 text-[10px] font-mono rounded hover:bg-[rgba(255,255,255,0.06)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors truncate"
+                    className="w-full !justify-start font-mono text-[10px] truncate"
                   >
                     {item}
-                  </button>
+                  </ButtonView>
                 ))}
               </div>
             ))}
@@ -186,36 +175,40 @@ export function TemplateEditorPanel({ route, onUpdate }: Props) {
             {/* Template side */}
             <div className="flex flex-col gap-1">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Template</span>
-              <ResizablePanel id={`tpl.${route.id}.body`} defaultHeight={140} minHeight={80} maxHeight={400}>
-                <CodeEditor value={route.body} onChange={v => onUpdate({ body: v })} language="json" height="100%" />
-              </ResizablePanel>
+              <ResizablePanelView defaultHeight={140} minHeight={80} maxHeight={400}>
+                <EditorView value={route.body} onChange={v => onUpdate({ body: v })} language="json" height="100%" />
+              </ResizablePanelView>
             </div>
             {/* Preview side */}
             <div className="flex flex-col gap-1">
               <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Preview</span>
               <div
                 className="flex-1 min-h-[140px] px-2.5 py-2 rounded-md text-[11px] font-mono overflow-auto"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', color: 'var(--color-text-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                style={{ background: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)', border: '1px solid color-mix(in srgb, var(--color-text-primary) 7%, transparent)', color: 'var(--color-text-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
                 dangerouslySetInnerHTML={{ __html: preview }}
               />
             </div>
           </div>
           {/* Sample request input */}
           <div>
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => setShowHelpers(v => !v)}
               className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer mb-1"
             >
               <ChevronDownIcon size={10} /> Sample Request (for preview)
-            </button>
-            <textarea
-              value={sampleJson}
-              onChange={e => { setSampleJson(e.target.value); setPreviewError(''); }}
-              rows={4}
-              className="w-full px-2.5 py-2 text-[10px] font-mono rounded-md bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.07)] text-[var(--color-text-muted)] focus:outline-none resize-none"
-              spellCheck={false}
-            />
+            </div>
+            <ResizablePanelView defaultHeight={80} minHeight={60} maxHeight={300}>
+              <EditorView
+                value={sampleJson}
+                onChange={val => { setSampleJson(val); setPreviewError(''); }}
+                language="json"
+                placeholder='{"username": "alice", "orderId": 42}'
+                height="100%"
+                bordered
+              />
+            </ResizablePanelView>
             {previewError && <p className="text-[10px] text-[var(--color-error)]">{previewError}</p>}
           </div>
         </div>

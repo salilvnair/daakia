@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { PlusIcon, CloseIcon } from '../../icons';
 
@@ -8,6 +8,17 @@ export interface QueryTab {
   query: string;
   variables: string;
 }
+
+/** authData is declared Record<string,string>, but gql_queries has always been
+ *  persisted as a QueryTab[] — these helpers contain the cast to this file. */
+function readQueries(authData: Record<string, string> | undefined): QueryTab[] {
+  return (authData?.['gql_queries'] as unknown as QueryTab[]) || [];
+}
+function asAuthValue(queries: QueryTab[]): string {
+  return queries as unknown as string;
+}
+
+const ACCENT = 'var(--color-protocol-graphql)';
 
 /**
  * GraphQL Query Tabs — inner tabs within the Query sub-tab for multiple queries per connection.
@@ -19,10 +30,13 @@ export function GraphQLQueryTabs() {
   // ── All hooks declared unconditionally at the top ──────────────────────────
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const handleSelectQuery = useCallback((queryId: string) => {
     if (!activeTab) return;
-    const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
+    const queries: QueryTab[] = readQueries(activeTab.authData);
     const currentActive = activeTab.authData?.['gql_active_query'] || '';
 
     const updated = queries.map(q =>
@@ -38,7 +52,7 @@ export function GraphQLQueryTabs() {
       bodyRaw: selected.query,
       authData: {
         ...activeTab.authData,
-        gql_queries: updated,
+        gql_queries: asAuthValue(updated),
         gql_active_query: queryId,
         gql_variables: selected.variables,
       },
@@ -47,7 +61,7 @@ export function GraphQLQueryTabs() {
 
   const handleAddQuery = useCallback(() => {
     if (!activeTab) return;
-    const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
+    const queries: QueryTab[] = readQueries(activeTab.authData);
     const currentActive = activeTab.authData?.['gql_active_query'] || '';
 
     const updated = queries.map(q =>
@@ -68,7 +82,7 @@ export function GraphQLQueryTabs() {
       bodyRaw: '',
       authData: {
         ...activeTab.authData,
-        gql_queries: [...updated, newQuery],
+        gql_queries: asAuthValue([...updated, newQuery]),
         gql_active_query: newId,
         gql_variables: '{}',
       },
@@ -78,7 +92,7 @@ export function GraphQLQueryTabs() {
   const handleCloseQuery = useCallback((e: React.MouseEvent, queryId: string) => {
     e.stopPropagation();
     if (!activeTab) return;
-    const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
+    const queries: QueryTab[] = readQueries(activeTab.authData);
     if (queries.length <= 1) return;
 
     const remaining = queries.filter(q => q.id !== queryId);
@@ -90,31 +104,46 @@ export function GraphQLQueryTabs() {
         bodyRaw: next.query,
         authData: {
           ...activeTab.authData,
-          gql_queries: remaining,
+          gql_queries: asAuthValue(remaining),
           gql_active_query: next.id,
           gql_variables: next.variables,
         },
       });
     } else {
       updateTab(activeTab.id, {
-        authData: { ...activeTab.authData, gql_queries: remaining },
+        authData: { ...activeTab.authData, gql_queries: asAuthValue(remaining) },
       });
     }
   }, [activeTab, updateTab]);
 
   const handleRenameQuery = useCallback((queryId: string, name: string) => {
     if (!activeTab) return;
-    const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
+    const queries: QueryTab[] = readQueries(activeTab.authData);
     const updated = queries.map(q => q.id === queryId ? { ...q, name } : q);
     updateTab(activeTab.id, {
-      authData: { ...activeTab.authData, gql_queries: updated },
+      authData: { ...activeTab.authData, gql_queries: asAuthValue(updated) },
     });
   }, [activeTab, updateTab]);
+
+  const startEditing = (e: React.MouseEvent, q: QueryTab) => {
+    e.stopPropagation();
+    setEditingId(q.id);
+    setEditingName(q.name);
+    // Focus the input on next frame
+    requestAnimationFrame(() => editInputRef.current?.select());
+  };
+
+  const commitEdit = () => {
+    if (editingId && editingName.trim()) {
+      handleRenameQuery(editingId, editingName.trim());
+    }
+    setEditingId(null);
+  };
 
   // ── Early returns AFTER all hooks ──────────────────────────────────────────
   if (!activeTab) return null;
 
-  const queries: QueryTab[] = activeTab.authData?.['gql_queries'] || [];
+  const queries: QueryTab[] = readQueries(activeTab.authData);
   const activeQueryId: string = activeTab.authData?.['gql_active_query'] || '';
 
   // If no query tabs exist, don't render the bar (single-query mode)
@@ -125,23 +154,39 @@ export function GraphQLQueryTabs() {
       {queries.map(q => (
         <div
           key={q.id}
-          onClick={() => handleSelectQuery(q.id)}
+          onClick={() => { if (editingId !== q.id) handleSelectQuery(q.id); }}
           className={`group flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors border-b-2 max-w-[140px] ${
             q.id === activeQueryId
-              ? 'text-[var(--color-protocol-graphql)] border-[var(--color-protocol-graphql)] bg-[rgba(229,53,171,0.04)]'
+              ? 'border-[var(--color-protocol-graphql)] bg-[color-mix(in_srgb,var(--color-protocol-graphql)_4%,transparent)]'
               : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
           }`}
+          style={{ color: q.id === activeQueryId ? ACCENT : undefined }}
         >
-          <span
-            className="truncate"
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              const newName = prompt('Rename query tab:', q.name);
-              if (newName?.trim()) handleRenameQuery(q.id, newName.trim());
-            }}
-          >
-            {q.name}
-          </span>
+          {editingId === q.id ? (
+            <input
+              ref={editInputRef}
+              value={editingName}
+              onChange={e => setEditingName(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={e => {
+                if (e.key === 'Enter') commitEdit();
+                if (e.key === 'Escape') setEditingId(null);
+                e.stopPropagation();
+              }}
+              onClick={e => e.stopPropagation()}
+              className="truncate bg-transparent outline-none border-b border-[var(--color-protocol-graphql)] min-w-0 w-full text-[11px]"
+              style={{ color: ACCENT }}
+              autoFocus
+            />
+          ) : (
+            <span
+              className="truncate"
+              onDoubleClick={(e) => startEditing(e, q)}
+              title="Double-click to rename"
+            >
+              {q.name}
+            </span>
+          )}
           {queries.length > 1 && (
             <button
               type="button"
@@ -173,7 +218,7 @@ export function initMultiQuery(tabId: string) {
   const { tabs, updateTab } = useTabsStore.getState();
   const tab = tabs.find(t => t.id === tabId);
   if (!tab) return;
-  if (tab.authData?.['gql_queries']?.length) return;
+  if (readQueries(tab.authData).length) return;
 
   const firstQuery: QueryTab = {
     id: crypto.randomUUID(),
@@ -192,7 +237,7 @@ export function initMultiQuery(tabId: string) {
   updateTab(tabId, {
     authData: {
       ...tab.authData,
-      gql_queries: [firstQuery, secondQuery],
+      gql_queries: asAuthValue([firstQuery, secondQuery]),
       gql_active_query: secondQuery.id,
     },
     bodyRaw: '',

@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTabsStore, type McpServerConfig, type McpToolDef } from '../../../store/tabs-store';
-import { PlusIcon, TrashIcon, RefreshIcon, McpToolIcon, ConnectIcon, DisconnectIcon } from '../../../icons';
-import { StyledDropdown, ConfirmDialog, type DropdownOption } from '../../shared';
+import { PlusIcon, TrashIcon, McpToolIcon, ConnectIcon, DisconnectIcon } from '../../../icons';
+import { ConfirmDialog } from '../../shared';
+import { ButtonView, IconButtonView, TextInputView, SelectInputView, MultilineInputView } from '@salilvnair/dui';
 import { postMsg } from '../../../vscode';
 
 interface McpServerState {
@@ -11,7 +12,7 @@ interface McpServerState {
   error?: string;
 }
 
-const TRANSPORT_OPTIONS: DropdownOption[] = [
+const TRANSPORT_OPTIONS = [
   { value: 'stdio', label: 'stdio (spawn subprocess)' },
   { value: 'http', label: 'http (JSON-RPC POST)' },
 ];
@@ -180,15 +181,9 @@ export function AiMcpTab() {
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={handleAddServer}
-          className="h-[26px] px-2.5 text-[11px] font-medium rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
-          style={{ color: ACCENT, border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)` }}
-        >
-          <PlusIcon size={11} />
+        <ButtonView size="md" variant="accent" accentColor={ACCENT} iconLeft={<PlusIcon size={11} />} onClick={handleAddServer}>
           Add Server
-        </button>
+        </ButtonView>
       </div>
 
       {/* Empty state */}
@@ -240,45 +235,26 @@ export function AiMcpTab() {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-0.5">
-                {state.connected ? (
-                  <button
-                    type="button"
-                    onClick={() => handleToggleTools(server.id)}
-                    className="h-[24px] px-2 text-[10px] rounded-md cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]"
-                  >
+              <div className="flex items-center gap-1">
+                {state.connected && (
+                  <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={() => handleToggleTools(server.id)}>
                     {showTools === server.id ? 'Hide' : 'Tools'}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => state.connected ? handleDisconnect(server.id) : handleConnect(server.id)}
+                  </ButtonView>
+                )}
+                <ButtonView
+                  size="sm"
+                  variant="primary"
+                  accentColor={state.connected ? 'var(--color-error)' : state.connecting ? 'var(--color-warning)' : 'var(--color-success)'}
+                  iconLeft={state.connected ? <DisconnectIcon size={11} /> : <ConnectIcon size={11} />}
                   disabled={state.connecting}
-                  className={`h-[24px] px-2 text-[10px] rounded-md cursor-pointer transition-colors flex items-center gap-1 ${
-                    state.connected
-                      ? 'bg-[var(--color-error)] text-white hover:opacity-90'
-                      : state.connecting
-                      ? 'text-[var(--color-warning)] opacity-70'
-                      : 'text-[var(--color-success)] hover:bg-[rgba(34,197,94,0.08)]'
-                  }`}
+                  onClick={() => state.connected ? handleDisconnect(server.id) : handleConnect(server.id)}
                 >
-                  {state.connected ? <DisconnectIcon size={11} /> : <ConnectIcon size={11} />}
                   {state.connecting ? 'Connecting...' : state.connected ? 'Disconnect' : 'Connect'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingServer({ ...server })}
-                  className="h-[24px] px-2 text-[10px] rounded-md cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]"
-                >
+                </ButtonView>
+                <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={() => setEditingServer({ ...server })}>
                   Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteId(server.id)}
-                  className="h-[24px] w-[24px] flex items-center justify-center rounded-md cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-                >
-                  <TrashIcon size={11} />
-                </button>
+                </ButtonView>
+                <IconButtonView size="sm" icon={<TrashIcon size={11} />} accentColor="var(--color-error)" onClick={() => setDeleteId(server.id)} />
               </div>
             </div>
 
@@ -337,12 +313,13 @@ export function AiMcpTab() {
           {/* Name */}
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-[var(--color-text-muted)]">Name</label>
-            <input
-              type="text"
+            <TextInputView
               value={editingServer.name}
               onChange={(e) => setEditingServer({ ...editingServer, name: e.target.value })}
               placeholder="test-db-server"
-              className="h-[28px] px-2.5 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] rounded-md text-[var(--color-text-primary)] outline-none"
+              size="md"
+              accentColor={ACCENT}
+              style={{ width: '100%' }}
             />
           </div>
 
@@ -351,23 +328,24 @@ export function AiMcpTab() {
             <label className="text-[11px] text-[var(--color-text-muted)]">
               Description <span className="opacity-60">(optional — used as LLM hint)</span>
             </label>
-            <input
-              type="text"
+            <TextInputView
               value={editingServer.description || ''}
               onChange={(e) => setEditingServer({ ...editingServer, description: e.target.value })}
               placeholder="PostgreSQL schema introspection and query tools"
-              className="h-[28px] px-2.5 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] rounded-md text-[var(--color-text-primary)] outline-none"
+              size="md"
+              accentColor={ACCENT}
+              style={{ width: '100%' }}
             />
           </div>
 
           {/* Transport */}
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-[var(--color-text-muted)]">Transport</label>
-            <StyledDropdown
+            <SelectInputView
               options={TRANSPORT_OPTIONS}
               value={editingServer.transport}
               onChange={(v) => setEditingServer({ ...editingServer, transport: v as 'stdio' | 'http' })}
-              size="sm"
+              size="md"
               accentColor={ACCENT}
             />
           </div>
@@ -378,12 +356,13 @@ export function AiMcpTab() {
               {/* Command */}
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-[var(--color-text-muted)]">Command</label>
-                <input
-                  type="text"
+                <TextInputView
                   value={editingServer.command || ''}
                   onChange={(e) => setEditingServer({ ...editingServer, command: e.target.value })}
                   placeholder="C:\path\to\python.exe"
-                  className="h-[28px] px-2.5 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] rounded-md text-[var(--color-text-primary)] outline-none font-mono"
+                  size="md"
+                  accentColor={ACCENT}
+                  style={{ width: '100%', fontFamily: 'monospace' }}
                 />
               </div>
 
@@ -412,12 +391,13 @@ export function AiMcpTab() {
                 <label className="text-[11px] text-[var(--color-text-muted)]">
                   Working Directory <span className="opacity-60">(optional — for finding config files like app_mcp.yml)</span>
                 </label>
-                <input
-                  type="text"
+                <TextInputView
                   value={editingServer.workingDir || ''}
                   onChange={(e) => setEditingServer({ ...editingServer, workingDir: e.target.value })}
                   placeholder="C:\Users\salilvnair\workspace\experiments\postgres_mcp"
-                  className="h-[28px] px-2.5 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] rounded-md text-[var(--color-text-primary)] outline-none font-mono"
+                  size="md"
+                  accentColor={ACCENT}
+                  style={{ width: '100%', fontFamily: 'monospace' }}
                 />
               </div>
             </>
@@ -427,34 +407,25 @@ export function AiMcpTab() {
           {editingServer.transport === 'http' && (
             <div className="flex flex-col gap-1">
               <label className="text-[11px] text-[var(--color-text-muted)]">URL</label>
-              <input
-                type="text"
+              <TextInputView
                 value={editingServer.url || ''}
                 onChange={(e) => setEditingServer({ ...editingServer, url: e.target.value })}
                 placeholder="http://localhost:3000/mcp"
-                className="h-[28px] px-2.5 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] rounded-md text-[var(--color-text-primary)] outline-none font-mono"
+                size="md"
+                accentColor={ACCENT}
+                style={{ width: '100%', fontFamily: 'monospace' }}
               />
             </div>
           )}
 
           {/* Form actions */}
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setEditingServer(null)}
-              className="h-[28px] px-3 text-[11px] rounded-md cursor-pointer transition-colors text-[var(--color-error)] border border-[rgba(239,68,68,0.3)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
+            <ButtonView size="md" accentColor="var(--color-error)" onClick={() => setEditingServer(null)}>
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveServer}
-              disabled={!editingServer.name.trim()}
-              className="h-[28px] px-3 text-[11px] rounded-md cursor-pointer transition-colors text-white disabled:opacity-50"
-              style={{ backgroundColor: ACCENT }}
-            >
+            </ButtonView>
+            <ButtonView size="md" variant="primary" accentColor={ACCENT} disabled={!editingServer.name.trim()} onClick={handleSaveServer}>
               Save
-            </button>
+            </ButtonView>
           </div>
         </div>
       )}
@@ -508,13 +479,15 @@ function EnvTextarea({ envVars, onChange }: { envVars: Record<string, string>; o
   }, [text, onChange]);
 
   return (
-    <textarea
+    <MultilineInputView
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={parseAndSync}
       placeholder="GITHUB_TOKEN=ghp_xxx"
       rows={2}
-      className="px-2.5 py-1.5 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] rounded-md text-[var(--color-text-primary)] outline-none font-mono resize-vertical focus:border-[var(--color-protocol-ai)]"
+      size="md"
+      accentColor={ACCENT}
+      style={{ width: '100%', fontFamily: 'monospace' }}
     />
   );
 }
@@ -540,13 +513,15 @@ function ArgsTextarea({ args, onChange }: { args: string[]; onChange: (args: str
   }, [text, onChange]);
 
   return (
-    <textarea
+    <MultilineInputView
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={parseAndSync}
       placeholder={"-m\napp_mcp.server\n--conn\npostgresql://user:pass@host:5432/db"}
       rows={4}
-      className="px-2.5 py-1.5 text-[12px] bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] rounded-md text-[var(--color-text-primary)] outline-none font-mono resize-vertical focus:border-[var(--color-protocol-ai)]"
+      size="md"
+      accentColor={ACCENT}
+      style={{ width: '100%', fontFamily: 'monospace' }}
     />
   );
 }

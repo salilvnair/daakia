@@ -9,6 +9,7 @@
  * - Custom provider form with endpoint URL, API key, model name, custom headers
  */
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import { ButtonView, IconButtonView, TextInputView, ToggleSwitchView, ModalView } from '@salilvnair/dui';
 import { useAiProvidersStore, type AiProviderConfig, type AiModelConfig } from '../../store/ai-providers-store';
 import { useAiKeysStore } from '../../store/ai-keys-store';
 import {
@@ -22,12 +23,13 @@ import { PROVIDER_BRAND_COLORS } from '../../colors/daakia-colors';
 import { ConfirmDialog } from '../shared';
 import { postMsg } from '../../vscode';
 import { AI_PROVIDERS } from '../ai/ai-providers';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
 // ─── Provider brand meta — icon + accent color keyed by provider ID ───────────
 type BrandIconProps = { size?: number };
-type BrandMeta = { color: string; Icon: (props: BrandIconProps) => JSX.Element };
+type BrandMeta = { color: string; Icon: (props: BrandIconProps) => React.ReactElement };
 
 const PROVIDER_BRAND_META: Record<string, BrandMeta> = {
   openai:         { color: PROVIDER_BRAND_COLORS.openai,         Icon: OpenAiProviderIcon },
@@ -43,34 +45,6 @@ const PROVIDER_BRAND_META: Record<string, BrandMeta> = {
 };
 
 // ────────── Reusable sub-components ──────────
-
-function MiniToggle({ value, onChange, accent }: { value: boolean; onChange: (v: boolean) => void; accent?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      className="w-[36px] h-[20px] rounded-full cursor-pointer transition-colors flex-shrink-0 relative"
-      style={{ backgroundColor: value ? (accent || ACCENT) : 'rgba(255,255,255,0.15)' }}
-      title={value ? 'Enabled — click to disable' : 'Disabled — click to enable'}
-    >
-      <span className="absolute top-[3px] w-[14px] h-[14px] rounded-full bg-white transition-transform" style={{ left: value ? '19px' : '3px' }} />
-    </button>
-  );
-}
-
-function InlineEdit({ value, onChange, placeholder, className }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
-}) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      className={`bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-md px-2 py-1 text-[12px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-protocol-ai)] transition-colors ${className || ''}`}
-    />
-  );
-}
 
 // ────────── API Key Manager ──────────
 
@@ -93,17 +67,18 @@ function ApiKeyManager({ providerId }: { providerId: string }) {
   if (editing) {
     return (
       <div className="flex items-center gap-2 mt-2">
-        <input
+        <TextInputView
           type="password"
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
           placeholder="Paste API key..."
-          autoFocus
-          className="flex-1 h-[26px] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-md px-2 text-[11px] focus:outline-none focus:border-[var(--color-protocol-ai)] font-mono"
+          size="sm"
+          accentColor={ACCENT}
+          style={{ flex: 1, fontFamily: 'monospace' }}
         />
-        <button type="button" onClick={handleSave} className="px-2 py-1 text-[11px] rounded-md cursor-pointer text-white" style={{ backgroundColor: ACCENT }}>Save</button>
-        <button type="button" onClick={() => { setEditing(false); setDraft(''); }} className="px-2 py-1 text-[11px] rounded-md cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]">Cancel</button>
+        <ButtonView size="sm" variant="primary" accentColor={ACCENT} onClick={handleSave}>Save</ButtonView>
+        <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={() => { setEditing(false); setDraft(''); }}>Cancel</ButtonView>
       </div>
     );
   }
@@ -115,13 +90,11 @@ function ApiKeyManager({ providerId }: { providerId: string }) {
         <>
           <span className="text-[11px] text-[var(--color-text-muted)]">API key stored</span>
           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)', color: ACCENT }}>••••••••</span>
-          <button type="button" onClick={() => setEditing(true)} className="text-[11px] cursor-pointer ml-1" style={{ color: ACCENT }}>Update</button>
-          <button type="button" onClick={() => setConfirmDelete(true)} className="text-[11px] cursor-pointer text-[var(--color-error)] ml-1">Remove</button>
+          <ButtonView size="xs" accentColor={ACCENT} onClick={() => setEditing(true)}>Update</ButtonView>
+          <ButtonView size="xs" accentColor="var(--color-error)" onClick={() => setConfirmDelete(true)}>Remove</ButtonView>
         </>
       ) : (
-        <button type="button" onClick={() => setEditing(true)} className="text-[11px] cursor-pointer" style={{ color: ACCENT }}>
-          + Add API key
-        </button>
+        <ButtonView size="xs" accentColor={ACCENT} onClick={() => setEditing(true)}>+ Add API key</ButtonView>
       )}
       {confirmDelete && (
         <ConfirmDialog
@@ -170,10 +143,10 @@ function ModelPills({ models, accent = ACCENT, selectedModelId, onPillClick }: {
             className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-all font-mono"
             style={
               isSelected
-                ? { backgroundColor: '#0a0a0a', color: '#ffffff', border: `1.5px solid ${accent}`, fontWeight: 600 }
+                ? { backgroundColor: 'var(--color-inverse-surface)', color: 'var(--color-inverse-text)', border: `1.5px solid ${accent}`, fontWeight: 600 }
                 : m.enabled
                   ? { backgroundColor: `color-mix(in srgb, ${accent} 12%, transparent)`, color: accent, border: `1px solid color-mix(in srgb, ${accent} 28%, transparent)` }
-                  : { backgroundColor: 'transparent', color: 'var(--color-text-muted)', border: '1px solid rgba(255,255,255,0.12)', opacity: 0.5 }
+                  : { backgroundColor: 'transparent', color: 'var(--color-text-muted)', border: '1px solid var(--color-surface-border)', opacity: 0.5 }
             }
           >
             {isSelected && <CheckIcon size={9} strokeWidth={3} className="flex-shrink-0" style={{ color: accent }} />}
@@ -205,9 +178,9 @@ function ModelRow({
   return (
     <div className="flex items-center gap-2 py-1 group">
       <div className="w-[14px]" />
-      <MiniToggle value={model.enabled} onChange={() => toggleModel(providerId, model.id)} accent={accent} />
-      <InlineEdit value={model.name} onChange={v => updateModel(providerId, model.id, { name: v })} placeholder="Display name" className="w-[140px] h-[26px]" />
-      <InlineEdit value={model.id} onChange={v => updateModel(providerId, model.id, { id: v })} placeholder="model-id" className="flex-1 h-[26px] font-mono text-[11px]" />
+      <ToggleSwitchView checked={model.enabled} onChange={() => toggleModel(providerId, model.id)} accentColor={accent} size="xs" />
+      <TextInputView value={model.name} onChange={e => updateModel(providerId, model.id, { name: e.target.value })} placeholder="Display name" size="sm" accentColor={accent} style={{ width: 140 }} />
+      <TextInputView value={model.id} onChange={e => updateModel(providerId, model.id, { id: e.target.value })} placeholder="model-id" size="sm" accentColor={accent} style={{ flex: 1, fontFamily: 'monospace', fontSize: 11 }} />
 
       {/* Radio circle — select as default model. Disabled models can't be selected. */}
       <button
@@ -227,9 +200,7 @@ function ModelRow({
         <RadioSelectIcon size={13} selected={isSelected} />
       </button>
 
-      <button type="button" onClick={onDelete} className="opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer p-1 rounded hover:bg-[rgba(255,80,80,0.12)]" title="Delete model">
-        <TrashIcon size={12} className="text-[var(--color-error)]" />
-      </button>
+      <IconButtonView size="sm" icon={<TrashIcon size={12} />} accentColor="var(--color-error)" className="opacity-0 group-hover:opacity-100" onClick={onDelete} />
     </div>
   );
 }
@@ -274,13 +245,13 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
   return (
     <div className="rounded-lg overflow-hidden group/card" style={{ border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`, backgroundColor: 'transparent' }}>
       {/* Provider header row */}
-      <div className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors" onClick={() => setExpanded(!expanded)}>
+      <div className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors" onClick={() => setExpanded(!expanded)}>
         {expanded
           ? <ChevronDownIcon size={12} style={{ color: accent }} className="flex-shrink-0" />
           : <ChevronRightIcon size={12} style={{ color: accent }} className="flex-shrink-0" />
         }
         <div onClick={e => e.stopPropagation()} className="flex items-center">
-          <MiniToggle value={provider.enabled} onChange={() => toggleProvider(provider.id)} accent={accent} />
+          <ToggleSwitchView checked={provider.enabled} onChange={() => { logUiEvent('settings.llm_provider_chg', { providerId: provider.id, enabled: !provider.enabled }); toggleProvider(provider.id); }} accentColor={accent} size="xs" />
         </div>
         {/* Brand icon */}
         {BrandIcon && (
@@ -288,9 +259,9 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
             <BrandIcon size={18} />
           </div>
         )}
-        <InlineEdit value={provider.name} onChange={v => updateProvider(provider.id, { name: v })} placeholder="Provider name" className="w-[120px] h-[26px] font-medium" />
-        <InlineEdit value={provider.id} onChange={v => updateProvider(provider.id, { id: v })} placeholder="provider-id" className="w-[100px] h-[26px] font-mono text-[11px]" />
-        <InlineEdit value={provider.baseUrl} onChange={v => updateProvider(provider.id, { baseUrl: v })} placeholder="https://api.example.com/v1" className="flex-1 h-[26px] font-mono text-[11px]" />
+        <TextInputView value={provider.name} onChange={e => updateProvider(provider.id, { name: e.target.value })} placeholder="Provider name" size="sm" accentColor={accent} style={{ width: 120 }} />
+        <TextInputView value={provider.id} onChange={e => updateProvider(provider.id, { id: e.target.value })} placeholder="provider-id" size="sm" accentColor={accent} style={{ width: 100, fontFamily: 'monospace', fontSize: 11 }} />
+        <TextInputView value={provider.baseUrl} onChange={e => updateProvider(provider.id, { baseUrl: e.target.value })} placeholder="https://api.example.com/v1" size="sm" accentColor={accent} style={{ flex: 1, fontFamily: 'monospace', fontSize: 11 }} />
         <span className="text-[10px] text-[var(--color-text-muted)] flex-shrink-0 ml-1">{provider.models.length} model{provider.models.length !== 1 ? 's' : ''}</span>
         {/* Default provider selector — always visible when default, shown on hover otherwise */}
         <button
@@ -302,9 +273,7 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
         >
           <RadioSelectIcon size={13} selected={isDefault} />
         </button>
-        <button type="button" onClick={e => { e.stopPropagation(); setDeleteTarget({ type: 'provider' }); }} className="opacity-60 hover:opacity-100 transition-opacity cursor-pointer p-1 rounded hover:bg-[rgba(255,80,80,0.12)]" title="Delete provider">
-          <TrashIcon size={12} className="text-[var(--color-error)]" />
-        </button>
+        <IconButtonView size="sm" icon={<TrashIcon size={12} />} accentColor="var(--color-error)" className="opacity-60 hover:opacity-100" onClick={e => { e.stopPropagation(); setDeleteTarget({ type: 'provider' }); }} />
       </div>
 
       {/* Model pills — collapsed: click a pill to set it as the default model */}
@@ -326,21 +295,19 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
 
       {/* Expanded model list */}
       {expanded && (
-        <div className="border-t bg-[rgba(0,0,0,0.15)] px-3 py-1.5" style={{ borderColor: `color-mix(in srgb, ${accent} 15%, transparent)` }}>
+        <div className="border-t bg-[var(--color-overlay-subtle)] px-3 py-1.5" style={{ borderColor: `color-mix(in srgb, ${accent} 15%, transparent)` }}>
           {/* View mode toggle + Add model */}
           <div className="flex items-center gap-2 mb-1">
             <div className="w-[14px]" />
             <span className="text-[10px] uppercase tracking-wider flex-1" style={{ color: accent, opacity: 0.7 }}>Models</span>
-            <div className="flex items-center gap-1 mr-2">
+            <div className="flex items-center gap-1 mr-1">
               {(['pills', 'list'] as ViewMode[]).map(m => (
-                <button key={m} type="button" onClick={() => setViewMode(m)} className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer transition-colors ${viewMode === m ? 'text-white' : 'text-[var(--color-text-muted)]'}`} style={viewMode === m ? { backgroundColor: accent } : {}}>
+                <ButtonView key={m} size="xs" accentColor={viewMode === m ? accent : 'var(--color-text-muted)'} onClick={() => setViewMode(m)}>
                   {m === 'pills' ? '● Badges' : '≡ List'}
-                </button>
+                </ButtonView>
               ))}
             </div>
-            <button type="button" onClick={handleAddModel} className="flex items-center gap-1 text-[11px] cursor-pointer px-2 py-0.5 rounded-md transition-colors hover:bg-[rgba(255,255,255,0.06)]" style={{ color: accent }}>
-              <PlusIcon size={11} /><span>Add</span>
-            </button>
+            <ButtonView size="xs" accentColor={accent} iconLeft={<PlusIcon size={11} />} onClick={handleAddModel}>Add</ButtonView>
           </div>
 
           {provider.models.length === 0 ? (
@@ -396,6 +363,7 @@ function CustomProviderForm({ onAdd }: { onAdd: (p: AiProviderConfig) => void })
 
   const handleAdd = () => {
     if (!name.trim() || !baseUrl.trim()) return;
+    logUiEvent('settings.llm_custom_add', { name: name.trim(), baseUrl: baseUrl.trim() });
     const id = `custom-${Date.now()}`;
     const models: AiModelConfig[] = modelId.trim()
       ? [{ id: modelId.trim(), name: modelName.trim() || modelId.trim(), enabled: true }]
@@ -405,28 +373,62 @@ function CustomProviderForm({ onAdd }: { onAdd: (p: AiProviderConfig) => void })
     setShow(false);
   };
 
-  if (!show) {
-    return (
-      <button type="button" onClick={() => setShow(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-md cursor-pointer border border-[rgba(255,255,255,0.12)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.04)]">
-        <PlusIcon size={12} />Custom provider (OpenAI-compatible)
-      </button>
-    );
-  }
+  const canAdd = name.trim() && baseUrl.trim();
 
   return (
-    <div className="p-3 rounded-lg border border-[rgba(255,255,255,0.10)] bg-[rgba(0,0,0,0.15)] flex flex-col gap-2">
-      <p className="text-[11px] font-medium text-[var(--color-text-primary)]">Add Custom Provider</p>
-      <div className="grid grid-cols-2 gap-2">
-        <InlineEdit value={name} onChange={setName} placeholder="Provider name (e.g. Ollama)" className="h-[28px]" />
-        <InlineEdit value={baseUrl} onChange={setBaseUrl} placeholder="Base URL (e.g. http://localhost:11434/v1)" className="h-[28px] font-mono text-[11px]" />
-        <InlineEdit value={modelName} onChange={setModelName} placeholder="Model display name" className="h-[28px]" />
-        <InlineEdit value={modelId} onChange={setModelId} placeholder="Model ID (e.g. llama3.2)" className="h-[28px] font-mono text-[11px]" />
-      </div>
-      <div className="flex gap-2">
-        <button type="button" onClick={handleAdd} disabled={!name.trim() || !baseUrl.trim()} className="px-3 py-1.5 text-[11px] rounded-md cursor-pointer text-white disabled:opacity-40" style={{ backgroundColor: ACCENT }}>Add Provider</button>
-        <button type="button" onClick={() => setShow(false)} className="px-3 py-1.5 text-[11px] rounded-md cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]">Cancel</button>
-      </div>
-    </div>
+    <>
+      <ButtonView
+        size="md"
+        variant="primary"
+        accentColor={ACCENT}
+        iconLeft={<PlusIcon size={12} />}
+        onClick={() => setShow(true)}
+      >
+        Custom Provider
+      </ButtonView>
+      {show && (
+        <ModalView
+          open
+          title="Add Custom Provider"
+          subtitle="OpenAI-compatible endpoint"
+          headerColor={ACCENT}
+          size="md"
+          onClose={() => setShow(false)}
+          footerRight={
+            <ButtonView
+              size="md"
+              variant="primary"
+              accentColor={ACCENT}
+              disabled={!canAdd}
+              onClick={handleAdd}
+            >
+              Add Provider
+            </ButtonView>
+          }
+        >
+          <div className="flex flex-col gap-3 p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[11px] text-[var(--color-text-muted)] mb-1">Provider Name</p>
+                <TextInputView value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Ollama" size="md" accentColor={ACCENT} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <p className="text-[11px] text-[var(--color-text-muted)] mb-1">Base URL</p>
+                <TextInputView value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="http://localhost:11434/v1" size="md" accentColor={ACCENT} style={{ width: '100%', fontFamily: 'monospace', fontSize: 11 }} />
+              </div>
+              <div>
+                <p className="text-[11px] text-[var(--color-text-muted)] mb-1">Model Display Name</p>
+                <TextInputView value={modelName} onChange={e => setModelName(e.target.value)} placeholder="Model display name" size="md" accentColor={ACCENT} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <p className="text-[11px] text-[var(--color-text-muted)] mb-1">Model ID</p>
+                <TextInputView value={modelId} onChange={e => setModelId(e.target.value)} placeholder="e.g. llama3.2" size="md" accentColor={ACCENT} style={{ width: '100%', fontFamily: 'monospace', fontSize: 11 }} />
+              </div>
+            </div>
+          </div>
+        </ModalView>
+      )}
+    </>
   );
 }
 
@@ -470,7 +472,7 @@ function DaakiaMockProviderCard({ provider }: { provider: AiProviderConfig }) {
       <div className="flex items-center gap-2 px-3 py-2.5">
         <DaakiaMockProviderIcon size={20} />
         <div onClick={e => e.stopPropagation()}>
-          <MiniToggle value={provider.enabled} onChange={handleToggle} accent={DAAKIA_MOCK_ACCENT} />
+          <ToggleSwitchView checked={provider.enabled} onChange={handleToggle} accentColor={DAAKIA_MOCK_ACCENT} size="xs" />
         </div>
         <span className="text-[13px] font-semibold flex-1" style={{ color: DAAKIA_MOCK_ACCENT }}>DaakiaAI (Mock)</span>
         <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: `color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 15%, transparent)`, color: DAAKIA_MOCK_ACCENT }}>
@@ -502,11 +504,13 @@ function DaakiaMockProviderCard({ provider }: { provider: AiProviderConfig }) {
         {/* Mock AI server URL */}
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-[var(--color-text-muted)] flex-shrink-0 w-[110px]">Mock AI Server URL</span>
-          <InlineEdit
+          <TextInputView
             value={provider.baseUrl}
-            onChange={handleBaseUrlChange}
+            onChange={e => handleBaseUrlChange(e.target.value)}
             placeholder="http://localhost:8888/v1"
-            className="flex-1 h-[26px] font-mono text-[11px]"
+            size="sm"
+            accentColor={DAAKIA_MOCK_ACCENT}
+            style={{ flex: 1, fontFamily: 'monospace', fontSize: 11 }}
           />
         </div>
 
@@ -519,7 +523,7 @@ function DaakiaMockProviderCard({ provider }: { provider: AiProviderConfig }) {
             className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-mono cursor-pointer transition-all"
             style={
               isDefault && defaultModelId === 'mock1-model'
-                ? { backgroundColor: '#0a0a0a', color: '#ffffff', border: `1.5px solid ${DAAKIA_MOCK_ACCENT}`, fontWeight: 600 }
+                ? { backgroundColor: 'var(--color-inverse-surface)', color: 'var(--color-inverse-text)', border: `1.5px solid ${DAAKIA_MOCK_ACCENT}`, fontWeight: 600 }
                 : { backgroundColor: `color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 12%, transparent)`, color: DAAKIA_MOCK_ACCENT, border: `1px solid color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 28%, transparent)` }
             }
           >
@@ -604,7 +608,7 @@ function CopilotProviderCard({ provider }: { provider: AiProviderConfig }) {
       <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         {expanded ? <ChevronDownIcon size={12} style={{ color: COPILOT_ACCENT }} /> : <ChevronRightIcon size={12} style={{ color: COPILOT_ACCENT }} />}
         <div onClick={e => e.stopPropagation()} className="flex items-center">
-          <MiniToggle value={provider.enabled} onChange={handleToggle} accent={COPILOT_ACCENT} />
+          <ToggleSwitchView checked={provider.enabled} onChange={handleToggle} accentColor={COPILOT_ACCENT} size="xs" />
         </div>
         <CopilotBrandIcon size={20} />
         <span className="text-[13px] font-semibold flex-1" style={{ color: COPILOT_ACCENT }}>GitHub Copilot</span>
@@ -743,9 +747,9 @@ export function LlmProviderSettings() {
           {/* Action bar */}
           <div className="flex items-center gap-2 flex-wrap">
             <CustomProviderForm onAdd={addProvider} />
-            <button type="button" onClick={() => setResetConfirm(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-md cursor-pointer transition-colors border border-[rgba(255,255,255,0.12)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.04)]">
+            <ButtonView size="md" variant="primary" accentColor="var(--color-error)" onClick={() => setResetConfirm(true)}>
               Reset to Defaults
-            </button>
+            </ButtonView>
           </div>
 
           {/* Provider list — DaakiaAI Mock first, then Copilot, then others */}
@@ -774,7 +778,7 @@ export function LlmProviderSettings() {
           )}
 
           {/* Info */}
-          <div className="p-3 rounded-md border" style={{ backgroundColor: 'rgba(139,92,246,0.06)', borderColor: 'rgba(139,92,246,0.15)' }}>
+          <div className="p-3 rounded-md border" style={{ backgroundColor: 'color-mix(in srgb, var(--color-sidebar-collections) 6%, transparent)', borderColor: 'color-mix(in srgb, var(--color-sidebar-collections) 15%, transparent)' }}>
             <p className="text-[12px] font-medium mb-1" style={{ color: ACCENT }}>API Keys</p>
             <ul className="text-[11px] text-[var(--color-text-muted)] space-y-1">
               <li>• Keys are stored securely in the OS keychain (macOS Keychain / Windows Credential Store / Linux Secret Service) — never in plain text</li>

@@ -29,16 +29,16 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: str
       }`}
       style={{
         borderColor: config.border,
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-        borderRight: '1px solid rgba(255,255,255,0.06)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderTop: '1px solid color-mix(in srgb, var(--color-text-primary) 6%, transparent)',
+        borderRight: '1px solid color-mix(in srgb, var(--color-text-primary) 6%, transparent)',
+        borderBottom: '1px solid color-mix(in srgb, var(--color-text-primary) 6%, transparent)',
         background: `${config.bg}`,
         backdropFilter: 'blur(12px)',
       }}
     >
       <span
         className="w-5 h-5 flex items-center justify-center rounded-full text-[11px] font-bold flex-shrink-0"
-        style={{ background: config.border, color: '#fff' }}
+        style={{ background: config.border, color: 'var(--color-btn-primary-text)' }}
       >
         {config.icon}
       </span>

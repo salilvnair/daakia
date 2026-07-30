@@ -31,10 +31,10 @@ export function SoapWsdlBrowser() {
 
   if (services.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <SchemaIcon size={32} className="text-[var(--color-text-muted)] opacity-40 mb-3" />
-        <p className="text-[12px] text-[var(--color-text-muted)]">No WSDL loaded</p>
-        <p className="text-[10px] text-[var(--color-text-muted)] opacity-60 mt-1">Import a WSDL to browse services, operations, and XSD schemas</p>
+      <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-6 text-[var(--color-text-muted)]">
+        <SchemaIcon size={28} className="opacity-20" />
+        <p className="text-[12px]">No WSDL loaded</p>
+        <p className="text-[10px] opacity-60">Import a WSDL to browse services, operations, and XSD schemas</p>
       </div>
     );
   }
@@ -119,7 +119,7 @@ export function SoapWsdlBrowser() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Toolbar — compact single row */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-[var(--color-surface-border)] bg-[rgba(0,0,0,0.15)]">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-overlay-subtle)]">
         {/* Search */}
         <input
           type="text"
@@ -132,10 +132,10 @@ export function SoapWsdlBrowser() {
         <div className="flex-1" />
 
         {/* Expand/Collapse */}
-        <button onClick={expandAll} className="w-[22px] h-[22px] flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.08)] cursor-pointer transition-colors" title="Expand all">
+        <button onClick={expandAll} className="w-[22px] h-[22px] flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] cursor-pointer transition-colors" title="Expand all">
           <ExpandAllIcon size={13} />
         </button>
-        <button onClick={collapseAll} className="w-[22px] h-[22px] flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.08)] cursor-pointer transition-colors" title="Collapse all">
+        <button onClick={collapseAll} className="w-[22px] h-[22px] flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] cursor-pointer transition-colors" title="Collapse all">
           <CollapseAllIcon size={13} />
         </button>
 
@@ -148,7 +148,7 @@ export function SoapWsdlBrowser() {
             className={`px-2 h-full text-[10px] font-medium cursor-pointer transition-colors ${
               viewMode === 'details'
                 ? 'bg-[color-mix(in_srgb,var(--color-protocol-soap)_20%,transparent)] text-[var(--color-protocol-soap)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.04)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]'
             }`}
           >Details</button>
           <button
@@ -156,7 +156,7 @@ export function SoapWsdlBrowser() {
             className={`px-2 h-full text-[10px] font-medium cursor-pointer transition-colors border-l border-[var(--color-surface-border)] ${
               viewMode === 'xml'
                 ? 'bg-[color-mix(in_srgb,var(--color-protocol-soap)_20%,transparent)] text-[var(--color-protocol-soap)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.04)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]'
             }`}
           >XML</button>
         </div>
@@ -275,17 +275,17 @@ function OperationDetail({ operation, port, parentKey, expanded, toggle, rawWsdl
   const properties = (schema?.properties as Record<string, SchemaField> | undefined) || extractSchemaProperties(schema);
 
   return (
-    <div className="ml-[44px] mr-3 my-1 rounded border border-[rgba(232,121,249,0.12)] bg-[rgba(0,0,0,0.2)] overflow-hidden">
+    <div className="ml-[44px] mr-3 my-1 rounded border border-[color-mix(in_srgb,var(--color-protocol-soap)_12%,transparent)] bg-[var(--color-overlay-subtle)] overflow-hidden">
       {/* Meta */}
-      <div className="px-4 py-2 border-b border-[rgba(255,255,255,0.04)] flex flex-col gap-0.5">
+      <div className="px-4 py-2 border-b border-[var(--color-surface-border)] flex flex-col gap-0.5">
         <MetaRow label="SOAPAction" value={operation.soapAction || '(none)'} accent />
         <MetaRow label="Style" value={operation.style === 'rpc' ? 'RPC/Literal' : 'Document/Literal'} />
         <MetaRow label="SOAP" value={port.soapVersion} />
       </div>
 
       {/* Request */}
-      <div className="group border-b border-[rgba(255,255,255,0.04)]">
-        <div className="flex items-center gap-1.5 px-4 py-1.5 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors select-none" onClick={() => toggle(inputKey)}>
+      <div className="group border-b border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]">
+        <div className="flex items-center gap-1.5 px-4 py-1.5 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors select-none" onClick={() => toggle(inputKey)}>
           {inputExpanded ? <ChevronDownIcon size={9} className="text-[var(--color-text-muted)]" /> : <ChevronRightIcon size={9} className="text-[var(--color-text-muted)]" />}
           <span className="text-[7px] font-bold px-1 py-[1px] rounded bg-[rgba(74,222,128,0.12)] text-[#4ade80]">REQ</span>
           <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{operation.inputMessage || operation.name}</span>
@@ -302,7 +302,7 @@ function OperationDetail({ operation, port, parentKey, expanded, toggle, rawWsdl
 
       {/* Response */}
       <div className="group">
-        <div className="flex items-center gap-1.5 px-4 py-1.5 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors select-none" onClick={() => toggle(outputKey)}>
+        <div className="flex items-center gap-1.5 px-4 py-1.5 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors select-none" onClick={() => toggle(outputKey)}>
           {outputExpanded ? <ChevronDownIcon size={9} className="text-[var(--color-text-muted)]" /> : <ChevronRightIcon size={9} className="text-[var(--color-text-muted)]" />}
           <span className="text-[7px] font-bold px-1 py-[1px] rounded bg-[rgba(251,146,60,0.12)] text-[#fb923c]">RES</span>
           <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{operation.outputMessage || `${operation.name}Response`}</span>
@@ -335,15 +335,15 @@ function SchemaTable({ properties, parentKey, expanded, toggle, rawWsdl, operati
   if (!properties || Object.keys(properties).length === 0) {
     const fields = parsedFields || [];
     return (
-      <div className="rounded border border-[rgba(255,255,255,0.06)] overflow-hidden">
+      <div className="rounded border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] overflow-hidden">
         <table className="w-full text-[10px]">
-          <thead><tr className="bg-[rgba(255,255,255,0.03)]">
+          <thead><tr className="bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)]">
             <th className="text-left px-2 py-1 font-medium text-[var(--color-text-muted)]">Field</th>
             <th className="text-left px-2 py-1 font-medium text-[var(--color-text-muted)]">Type</th>
           </tr></thead>
           <tbody>
             {fields.length > 0 ? fields.map(f => (
-              <tr key={f.name} className="border-t border-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.02)]">
+              <tr key={f.name} className="border-t border-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
                 <td className="px-2 py-[3px] font-mono text-[var(--color-protocol-soap)]">{f.name}</td>
                 <td className="px-2 py-[3px]"><TypeBadge type={f.type} /></td>
               </tr>
@@ -357,9 +357,9 @@ function SchemaTable({ properties, parentKey, expanded, toggle, rawWsdl, operati
   }
 
   return (
-    <div className="rounded border border-[rgba(255,255,255,0.06)] overflow-hidden">
+    <div className="rounded border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] overflow-hidden">
       <table className="w-full text-[10px]">
-        <thead><tr className="bg-[rgba(255,255,255,0.03)]">
+        <thead><tr className="bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)]">
           <th className="text-left px-2 py-1 font-medium text-[var(--color-text-muted)] w-[16px]"></th>
           <th className="text-left px-2 py-1 font-medium text-[var(--color-text-muted)]">Field</th>
           <th className="text-left px-2 py-1 font-medium text-[var(--color-text-muted)]">Type</th>
@@ -386,7 +386,7 @@ function SchemaRow({ name, field, parentKey, expanded, toggle, depth }: {
   return (
     <>
       <tr
-        className={`border-t border-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.02)] select-none ${hasChildren ? 'cursor-pointer' : ''}`}
+        className={`border-t border-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] select-none ${hasChildren ? 'cursor-pointer' : ''}`}
         onClick={hasChildren ? () => toggle(fieldKey) : undefined}
       >
         <td className="px-1 py-[3px]" style={{ paddingLeft: `${4 + depth * 10}px` }}>
@@ -403,7 +403,7 @@ function SchemaRow({ name, field, parentKey, expanded, toggle, depth }: {
         <td className="px-2 py-[3px] text-[9px] text-[var(--color-text-muted)]">{field.minOccurs === 0 ? '—' : '✓'}</td>
       </tr>
       {field.enum && fieldExpanded && (
-        <tr className="border-t border-[rgba(255,255,255,0.02)]"><td></td>
+        <tr className="border-t border-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]"><td></td>
           <td colSpan={3} className="px-2 py-1">
             <div className="flex flex-wrap gap-1">{field.enum.map(v => <span key={v} className="text-[9px] px-1.5 py-0.5 rounded bg-[rgba(251,191,36,0.08)] text-[#fbbf24] font-mono">{v}</span>)}</div>
           </td>
@@ -421,15 +421,15 @@ function ResponseTable({ operationName, rawWsdl }: { operationName: string; rawW
   const fields = useMemo(() => extractResponseFields(rawWsdl, operationName), [rawWsdl, operationName]);
 
   return (
-    <div className="rounded border border-[rgba(255,255,255,0.06)] overflow-hidden">
+    <div className="rounded border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] overflow-hidden">
       <table className="w-full text-[10px]">
-        <thead><tr className="bg-[rgba(255,255,255,0.03)]">
+        <thead><tr className="bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)]">
           <th className="text-left px-2 py-1 font-medium text-[var(--color-text-muted)]">Field</th>
           <th className="text-left px-2 py-1 font-medium text-[var(--color-text-muted)]">Type</th>
         </tr></thead>
         <tbody>
           {fields.length > 0 ? fields.map(f => (
-            <tr key={f.name} className="border-t border-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.02)]">
+            <tr key={f.name} className="border-t border-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
               <td className="px-2 py-[3px] font-mono text-[var(--color-protocol-soap)]">{f.name}</td>
               <td className="px-2 py-[3px]"><TypeBadge type={f.type} /></td>
             </tr>
@@ -449,7 +449,7 @@ function XmlView({ rawWsdl, onCopy, copied }: { rawWsdl: string; onCopy: () => v
   }
   return (
     <div className="relative h-full">
-      <button onClick={onCopy} className="absolute top-2 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-[rgba(255,255,255,0.06)] border border-[var(--color-surface-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.1)] cursor-pointer transition-colors" title="Copy WSDL XML">
+      <button onClick={onCopy} className="absolute top-2 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] border border-[var(--color-surface-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] cursor-pointer transition-colors" title="Copy WSDL XML">
         {copied ? <CheckIcon size={10} className="text-[var(--color-success)]" /> : <CopyIcon size={10} />}
         {copied ? 'Copied' : 'Copy'}
       </button>
@@ -488,7 +488,7 @@ function TreeRow({ depth, expanded, onToggle, icon, label, sublabel, badge, sele
   return (
     <div
       className={`group flex items-center gap-1.5 pr-2 py-[4px] cursor-pointer select-none transition-colors ${
-        selected ? 'bg-[color-mix(in_srgb,var(--color-protocol-soap)_10%,transparent)]' : 'hover:bg-[rgba(255,255,255,0.03)]'
+        selected ? 'bg-[color-mix(in_srgb,var(--color-protocol-soap)_10%,transparent)]' : 'hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)]'
       }`}
       style={{ paddingLeft: `${12 + depth * 16}px` }}
       onClick={onToggle}
@@ -508,7 +508,7 @@ function TreeRow({ depth, expanded, onToggle, icon, label, sublabel, badge, sele
       {copyXml && (
         <button
           onClick={(e) => { e.stopPropagation(); copyXml(); }}
-          className={`opacity-0 group-hover:opacity-100 w-[16px] h-[16px] flex items-center justify-center rounded hover:bg-[rgba(255,255,255,0.1)] transition-all cursor-pointer shrink-0 ${badge ? 'ml-1.5' : 'ml-auto'} ${copied ? '!opacity-100' : ''}`}
+          className={`opacity-0 group-hover:opacity-100 w-[16px] h-[16px] flex items-center justify-center rounded hover:bg-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] transition-all cursor-pointer shrink-0 ${badge ? 'ml-1.5' : 'ml-auto'} ${copied ? '!opacity-100' : ''}`}
           title="Copy XML"
         >
           {copied ? <CheckIcon size={8} className="text-[var(--color-success)]" /> : <XmlTagIcon size={8} className="text-[var(--color-text-muted)]" />}
@@ -522,7 +522,7 @@ function CopyXmlBtn({ onClick, copied }: { onClick: (e: React.MouseEvent) => voi
   return (
     <button
       onClick={onClick}
-      className={`opacity-0 group-hover:opacity-100 w-[16px] h-[16px] flex items-center justify-center rounded hover:bg-[rgba(255,255,255,0.1)] transition-all cursor-pointer shrink-0 ${copied ? '!opacity-100' : ''}`}
+      className={`opacity-0 group-hover:opacity-100 w-[16px] h-[16px] flex items-center justify-center rounded hover:bg-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] transition-all cursor-pointer shrink-0 ${copied ? '!opacity-100' : ''}`}
       title="Copy XML"
     >
       {copied ? <CheckIcon size={8} className="text-[var(--color-success)]" /> : <XmlTagIcon size={8} className="text-[var(--color-text-muted)]" />}
@@ -545,7 +545,7 @@ function StyleBadge({ style }: { style: string }) {
 
 function TypeBadge({ type }: { type: string }) {
   let color = 'var(--color-text-muted)';
-  let bg = 'rgba(255,255,255,0.04)';
+  let bg = 'color-mix(in srgb, var(--color-text-primary) 4%, transparent)';
   if (type === 'string' || type === 'xsd:string') { color = '#4ade80'; bg = 'rgba(74,222,128,0.08)'; }
   else if (['integer', 'int', 'long', 'short', 'decimal', 'float', 'double', 'number', 'xsd:int', 'xsd:integer', 'xsd:long', 'xsd:decimal'].includes(type)) { color = '#60a5fa'; bg = 'rgba(96,165,250,0.08)'; }
   else if (type === 'boolean' || type === 'xsd:boolean') { color = '#fbbf24'; bg = 'rgba(251,191,36,0.08)'; }

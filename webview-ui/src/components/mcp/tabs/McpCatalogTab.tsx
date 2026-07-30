@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useTabsStore, type McpServerConfig } from '../../../store/tabs-store';
+import { SearchInputView, ButtonView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-mcp)';
 
@@ -84,14 +85,13 @@ export function McpCatalogTab() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Search */}
-      <div className="px-3 py-2.5 border-b shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-        <input
-          type="text"
+      <div className="px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
+        <SearchInputView
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search MCP servers (e.g. database, github, browser…)"
-          className="w-full h-[28px] px-2.5 rounded-md text-[12px] focus:outline-none"
-          style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
+          onChange={(v) => setQuery(v)}
+          placeholder="Search MCP servers…"
+          size="md"
+          style={{ width: '100%' }}
         />
         <p className="text-[10px] mt-1 text-[var(--color-text-muted)] opacity-70">
           {results.length} of {CATALOG.length} servers · Click "Add" to add to your MCP config
@@ -134,22 +134,16 @@ export function McpCatalogTab() {
                   ))}
                 </div>
               </div>
-              <button
-                type="button"
+              <ButtonView
+                size="sm"
+                variant="ghost"
+                accentColor={isAdded ? 'var(--color-success)' : isExisting ? 'var(--color-text-muted)' : ACCENT}
                 onClick={() => handleAdd(entry)}
                 disabled={isExisting}
-                className="shrink-0 text-[11px] px-2 py-0.5 rounded cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-default mt-0.5"
-                style={{
-                  backgroundColor: isAdded
-                    ? 'color-mix(in srgb, var(--color-success) 15%, transparent)'
-                    : isExisting
-                    ? 'var(--color-surface-hover)'
-                    : `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
-                  color: isAdded ? 'var(--color-success)' : isExisting ? 'var(--color-text-muted)' : ACCENT,
-                }}
+                className="shrink-0 mt-0.5"
               >
                 {isAdded ? '✓ Added' : isExisting ? 'Exists' : 'Add'}
-              </button>
+              </ButtonView>
             </div>
           );
         })}

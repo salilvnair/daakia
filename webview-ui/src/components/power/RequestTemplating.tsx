@@ -84,10 +84,10 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
     for (const row of rows) {
       addTab({
         name: `${method} ${applyTemplate(urlTemplate, row).split('/').pop()}`,
-        method,
+        method: method as import('../../store/tabs-store').HttpMethod,
         url: applyTemplate(urlTemplate, row),
         bodyRaw: bodyTemplate ? applyTemplate(bodyTemplate, row) : '',
-        bodyType: bodyTemplate ? 'json' : 'none',
+        bodyMode: bodyTemplate ? ('raw' as const) : ('none' as const),
       });
       count++;
     }
@@ -103,7 +103,7 @@ export function RequestTemplating({ requestUrl = '', requestMethod = 'GET', requ
   const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
       <div className="w-[740px] max-h-[92vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: '#1a1a1f', borderColor: 'var(--color-surface-border)' }}>
+        style={{ backgroundColor: 'var(--color-elevated)', borderColor: 'var(--color-surface-border)' }}>
 
         <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
           <div className="flex-1">

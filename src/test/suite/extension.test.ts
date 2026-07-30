@@ -25,14 +25,21 @@ suite('Daakia Extension — Activation', () => {
     assert.ok(commands.includes('daakia.openPanel'), 'daakia.openPanel command should be registered');
   });
 
-  test('daakia.newTab command is registered', async () => {
+  test('daakia.newRequest command is registered', async () => {
     const commands = await vscode.commands.getCommands(true);
-    assert.ok(commands.includes('daakia.newTab'), 'daakia.newTab command should be registered');
+    assert.ok(commands.includes('daakia.newRequest'), 'daakia.newRequest command should be registered');
   });
 
   test('daakia.importCollection command is registered', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('daakia.importCollection'), 'daakia.importCollection command should be registered');
+  });
+
+  test('daakia.changeDbLocation command is registered', async () => {
+    // Was declared in package.json but had no handler at all (E-changedb-location-command-missing) —
+    // vscode.commands.getCommands(true) only lists commands with a real registerCommand handler.
+    const commands = await vscode.commands.getCommands(true);
+    assert.ok(commands.includes('daakia.changeDbLocation'), 'daakia.changeDbLocation command should be registered');
   });
 });
 
@@ -48,7 +55,7 @@ suite('Daakia Extension — Storage', () => {
 suite('Daakia Extension — Webview Panel', () => {
   test('Opening panel does not throw', async () => {
     await assert.doesNotReject(
-      () => vscode.commands.executeCommand('daakia.openPanel'),
+      async () => { await vscode.commands.executeCommand('daakia.openPanel'); },
       'Opening the Daakia panel should not throw'
     );
   });

@@ -3,11 +3,11 @@
  * Task 10.16 — AI Webhook Debugger · Gate: webhookDebugger
  */
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, EditorView, TextInputView, ResizablePanelView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -106,75 +106,83 @@ Simple Node.js/Express webhook handler for this specific event type.`,
     });
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }} onMouseDown={e => e.stopPropagation()}>
-      <div className="relative flex flex-col rounded-2xl border shadow-2xl overflow-hidden" style={{ backgroundColor: 'var(--color-panel)', borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`, width: 820, maxHeight: '87vh' }}>
-        <div className="flex items-center justify-between px-5 py-3.5 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="flex items-center gap-2">
-            <SparkleIcon size={14} style={{ color: ACCENT }} />
-            <span className="text-[13px] font-semibold" style={{ color: ACCENT }}>Webhook Debugger ✦</span>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Webhook Debugger"
+      size="xl"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Analyzing…' : 'Analyze'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={!payload.trim() || loading}
+          loading={loading}
+          onClick={analyze}
+        />
+      }
+    >
+      <div className="flex flex-1 min-h-0 gap-0 -mx-4" style={{ minHeight: 360 }}>
+        {/* Left: inputs */}
+        <div className="flex flex-col w-[480px] flex-shrink-0 border-r min-h-0" style={{ borderColor: 'var(--color-surface-border)' }}>
+          <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
+            <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Webhook Payload</span>
           </div>
-          <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-[var(--color-hover)] cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
-            <CloseIcon size={13} />
-          </button>
+          <div className="flex-1 p-3 min-h-0">
+            <ResizablePanelView defaultHeight={320} minHeight={160} maxHeight={640} style={{ width: '100%' }}>
+              <EditorView
+                value={payload}
+                onChange={setPayload}
+                language="json"
+                height="100%"
+                size="md"
+                placeholder="Paste webhook JSON payload…"
+                bordered={false}
+              />
+            </ResizablePanelView>
+          </div>
+          {/* HMAC inputs */}
+          <div className="border-t p-3 flex flex-col gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
+            <div>
+              <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Webhook Secret (optional)</label>
+              <TextInputView
+                value={secret}
+                onChange={e => setSecret(e.target.value)}
+                size="md"
+                width="fw"
+                placeholder="whsec_…"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Received Signature (optional)</label>
+              <TextInputView
+                value={signature}
+                onChange={e => setSignature(e.target.value)}
+                size="md"
+                width="fw"
+                placeholder="t=1701732000,v1=abc…"
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          {/* Left: inputs */}
-          <div className="flex flex-col w-[340px] flex-shrink-0 border-r min-h-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-            <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Webhook Payload</span>
-            </div>
-            <textarea
-              value={payload}
-              onChange={e => setPayload(e.target.value)}
-              className="flex-1 p-3 text-[11px] font-mono resize-none outline-none bg-transparent"
-              style={{ color: 'var(--color-text-primary)' }}
-              placeholder="Paste webhook JSON payload…"
-            />
-            {/* HMAC inputs */}
-            <div className="border-t p-3 flex flex-col gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <div>
-                <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Webhook Secret (optional)</label>
-                <input type="password" value={secret} onChange={e => setSecret(e.target.value)}
-                  className="w-full h-[28px] px-2 rounded text-[11px] outline-none"
-                  style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-                  placeholder="whsec_…"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Received Signature (optional)</label>
-                <input type="text" value={signature} onChange={e => setSignature(e.target.value)}
-                  className="w-full h-[28px] px-2 rounded text-[11px] outline-none"
-                  style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-                  placeholder="t=1701732000,v1=abc…"
-                />
-              </div>
-              <button type="button" onClick={analyze} disabled={!payload.trim() || loading}
-                className="flex items-center justify-center gap-2 h-[32px] px-4 rounded-lg text-[11.5px] font-semibold cursor-pointer text-white hover:opacity-90 disabled:opacity-40"
-                style={{ backgroundColor: ACCENT }}
-              >
-                <SparkleIcon size={10} />{loading ? 'Analyzing…' : 'Analyze ✦'}
-              </button>
-            </div>
-          </div>
-
-          {/* Right: analysis */}
-          <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-5 min-h-0 min-w-0">
-            {error && <p className="text-[11px] px-3 py-2 rounded-lg mb-3" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>{error}</p>}
-            {loading && !analysis && <p className="text-[11px] animate-pulse" style={{ color: ACCENT }}>Analyzing webhook payload…</p>}
-            {analysis && <MdViewer content={analysis} />}
-            {!loading && !analysis && !error && (
-              <p className="text-[12px] text-center py-12" style={{ color: 'var(--color-text-muted)' }}>Paste a webhook payload and click Analyze ✦</p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer hover:bg-[var(--color-hover)]" style={{ color: 'var(--color-text-muted)' }}>Close</button>
+        {/* Right: analysis */}
+        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-5 min-h-0 min-w-0">
+          {error && <p className="text-[11px] px-3 py-2 rounded-lg mb-3" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>{error}</p>}
+          {loading && !analysis && <p className="text-[11px] animate-pulse" style={{ color: ACCENT }}>Analyzing webhook payload…</p>}
+          {analysis && <MdViewer content={analysis} />}
+          {!loading && !analysis && !error && (
+            <p className="text-[12px] text-center py-12" style={{ color: 'var(--color-text-muted)' }}>Paste a webhook payload and click Analyze ✦</p>
+          )}
         </div>
       </div>
-    </div>,
-    document.body
+    </ModalView>
   );
 }

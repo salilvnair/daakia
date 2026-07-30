@@ -2,17 +2,61 @@
  * REST mock server sample routes.
  * Each sample provides 3 routes with method, path, status, headers, and body.
  */
-import type { MockRoute } from '../mock-types';
+import type { MockRoute, StateMachineConfig, StateNode, StateTransition } from '../mock-types';
 
 export interface RestSample {
   id: string;
   label: string;
   description: string;
   routes: Array<Omit<MockRoute, 'id'>>;
+  /** Auto-enabled server-level state machine config — applied when loading this sample */
+  stateMachine?: StateMachineConfig;
+  /**
+   * Extra workflows to auto-connect alongside `stateMachine` — keyed by a
+   * lookup key into sm-rest-workflows.ts's SM_REST_WORKFLOW_MAP (for the
+   * canvas id/name) paired with the real StateMachineConfig that actually
+   * drives routes referencing it via connectedWorkflowId. Lets one sample
+   * demonstrate multiple simultaneously connected workflows on one server.
+   */
+  additionalWorkflows?: Record<string, StateMachineConfig>;
 }
 
-function route(method: MockRoute['method'], path: string, statusCode: number, body: string, headers: Record<string, string> = {}): Omit<MockRoute, 'id'> {
-  return { method, path, statusCode, body, headers: { 'Content-Type': 'application/json', ...headers }, delay: 0, enabled: true };
+function route(
+  method: MockRoute['method'],
+  path: string,
+  statusCode: number,
+  body: string,
+  headers: Record<string, string> = {},
+  triggerEvent?: string,
+): Omit<MockRoute, 'id'> {
+  return {
+    method, path, statusCode, body,
+    headers: { 'Content-Type': 'application/json', ...headers },
+    delay: 0, enabled: true,
+    ...(triggerEvent ? { triggerEvent } : {}),
+  };
+}
+
+/** Build a server-level StateMachineConfig for header-based session tracking. */
+function smCfg(
+  states: Array<{ id: string; name: string; initial?: boolean; mockResponses?: StateNode['mockResponses'] }>,
+  transitions: Array<{ from: string; to: string; label: string }>,
+): StateMachineConfig {
+  const nodes: StateNode[] = states.map((s, i) => ({
+    id: s.id, name: s.name, x: 250, y: 20 + i * 120,
+    isInitial: s.initial, mockResponses: s.mockResponses,
+  }));
+  const edges: StateTransition[] = transitions.map((t, i) => ({
+    id: `t${i + 1}`, from: t.from, to: t.to, routeId: '', label: t.label,
+  }));
+  return {
+    enabled: true,
+    sessionMode: 'header',
+    sessionKey: 'X-Session-ID',
+    defaultState: states.find(s => s.initial)?.id ?? states[0]?.id ?? '',
+    states: nodes,
+    transitions: edges,
+  };
 }
 
 export const REST_SAMPLES: RestSample[] = [
@@ -40,10 +84,37 @@ export const REST_SAMPLES: RestSample[] = [
     id: 'auth-api',
     label: 'Authentication',
     description: 'JWT-based auth flow with login, token refresh, and logout',
+    stateMachine: smCfg(
+      [
+        { id: 'logged_out', name: 'LoggedOut', initial: true },
+        { id: 'authenticated', name: 'Authenticated' },
+      ],
+      [
+        { from: 'logged_out', to: 'authenticated', label: 'LOGIN' },
+        { from: 'authenticated', to: 'authenticated', label: 'LOGIN' }, // re-login while already authenticated
+        { from: 'authenticated', to: 'authenticated', label: 'REFRESH' },
+        { from: 'authenticated', to: 'logged_out', label: 'LOGOUT' },
+      ],
+    ),
     routes: [
-      route('POST', '/api/auth/login', 200, '{\n  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ",\n  "refreshToken": "rt_abc123def456",\n  "expiresIn": 3600,\n  "user": { "id": "u1", "email": "user@example.com", "name": "John Doe" }\n}', { 'X-Auth-Provider': 'local' }),
-      route('POST', '/api/auth/refresh', 200, '{\n  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.newtoken",\n  "expiresIn": 3600\n}'),
-      route('POST', '/api/auth/logout', 200, '{\n  "message": "Successfully logged out"\n}'),
+      // login: works from either state (LoggedOut → Authenticated, or re-login while Authenticated)
+      route('POST', '/api/auth/login', 200,
+        '{\n  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ",\n  "refreshToken": "rt_abc123def456",\n  "expiresIn": 3600,\n  "user": { "id": "u1", "email": "user@example.com", "name": "John Doe" }\n}',
+        { 'X-Auth-Provider': 'local' },
+        'LOGIN',
+      ),
+      // refresh: only works when Authenticated, issues new token, stays Authenticated
+      route('POST', '/api/auth/refresh', 200,
+        '{\n  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refreshed",\n  "expiresIn": 3600\n}',
+        {},
+        'REFRESH',
+      ),
+      // logout: Authenticated → LoggedOut
+      route('POST', '/api/auth/logout', 200,
+        '{\n  "message": "Successfully logged out"\n}',
+        {},
+        'LOGOUT',
+      ),
     ],
   },
   {
@@ -59,11 +130,55 @@ export const REST_SAMPLES: RestSample[] = [
   {
     id: 'orders-api',
     label: 'Orders / E-Commerce',
-    description: 'Order management with listing, creation, and status updates',
+    description: 'Order lifecycle — state transitions drive status: pending → processing → shipped → delivered',
+    stateMachine: smCfg(
+      [
+        {
+          id: 'pending', name: 'Pending', initial: true,
+          mockResponses: [{ method: 'POST', path: '/api/orders', status: 201, body: '{\n  "id": "ord-004",\n  "status": "pending",\n  "total": 159.98,\n  "estimatedDelivery": "2026-05-28"\n}' }],
+        },
+        {
+          id: 'processing', name: 'Processing',
+          mockResponses: [{ method: 'POST', path: '/api/orders', status: 200, body: '{\n  "id": "ord-004",\n  "status": "processing",\n  "trackingNumber": null,\n  "updatedAt": "2026-05-22T08:00:00Z"\n}' }],
+        },
+        {
+          id: 'shipped', name: 'Shipped',
+          mockResponses: [{ method: 'POST', path: '/api/orders', status: 200, body: '{\n  "id": "ord-004",\n  "status": "shipped",\n  "trackingNumber": "1Z999AA10123456784",\n  "updatedAt": "2026-05-22T12:00:00Z"\n}' }],
+        },
+        { id: 'delivered', name: 'Delivered' },
+      ],
+      [
+        // POST /api/orders repeatedly cycles the same order through stages
+        { from: 'pending', to: 'processing', label: 'CREATE' },
+        { from: 'processing', to: 'shipped', label: 'CREATE' },
+        { from: 'shipped', to: 'delivered', label: 'CREATE' },
+        // PATCH /api/orders/:id/status advances explicitly (independent of CREATE)
+        { from: 'processing', to: 'shipped', label: 'SHIP' },
+        { from: 'shipped', to: 'delivered', label: 'DELIVER' },
+      ],
+    ),
     routes: [
-      route('GET', '/api/orders', 200, '{\n  "orders": [\n    { "id": "ord-001", "status": "delivered", "total": 89.99, "items": 3, "createdAt": "2026-05-18" },\n    { "id": "ord-002", "status": "shipped", "total": 249.50, "items": 1, "createdAt": "2026-05-20" },\n    { "id": "ord-003", "status": "processing", "total": 34.99, "items": 2, "createdAt": "2026-05-21" }\n  ]\n}'),
-      route('POST', '/api/orders', 201, '{\n  "id": "ord-004",\n  "status": "pending",\n  "total": 159.98,\n  "items": [\n    { "productId": "p1", "name": "Widget", "quantity": 2, "price": 79.99 }\n  ],\n  "estimatedDelivery": "2026-05-28"\n}', { 'X-Order-Id': 'ord-004' }),
-      route('PATCH', '/api/orders/:id/status', 200, '{\n  "id": "ord-003",\n  "status": "shipped",\n  "trackingNumber": "1Z999AA10123456784",\n  "updatedAt": "2026-05-21T18:00:00Z"\n}'),
+      route('GET', '/api/orders', 200,
+        '{\n  "orders": [\n    { "id": "ord-001", "status": "delivered", "total": 89.99, "items": 3, "createdAt": "2026-05-18" },\n    { "id": "ord-002", "status": "shipped", "total": 249.50, "items": 1, "createdAt": "2026-05-20" },\n    { "id": "ord-003", "status": "processing", "total": 34.99, "items": 2, "createdAt": "2026-05-21" }\n  ]\n}',
+      ),
+      // POST /api/orders: same URL, response varies by the order's current stage
+      // (state node Mock Responses above override this default body/status)
+      route('POST', '/api/orders', 201,
+        '{\n  "id": "ord-004",\n  "status": "pending",\n  "total": 159.98,\n  "items": [{ "productId": "p1", "name": "Widget", "quantity": 2, "price": 79.99 }],\n  "estimatedDelivery": "2026-05-28"\n}',
+        { 'X-Order-Id': 'ord-004' },
+        'CREATE',
+      ),
+      // PATCH: advance status explicitly — two routes, one per stage
+      route('PATCH', '/api/orders/:id/status', 200,
+        '{\n  "id": "ord-003",\n  "status": "shipped",\n  "trackingNumber": "1Z999AA10123456784",\n  "updatedAt": "2026-05-22T12:00:00Z"\n}',
+        {},
+        'SHIP',
+      ),
+      route('PATCH', '/api/orders/:id/status', 200,
+        '{\n  "id": "ord-003",\n  "status": "delivered",\n  "deliveredAt": "2026-05-25T09:00:00Z"\n}',
+        {},
+        'DELIVER',
+      ),
     ],
   },
   {
@@ -99,21 +214,94 @@ export const REST_SAMPLES: RestSample[] = [
   {
     id: 'payments',
     label: 'Payments / Stripe-like',
-    description: 'Payment processing API with charges, balance, and refunds',
+    description: 'Payment lifecycle — initiated → pending → processing → succeeded → refunded',
+    stateMachine: smCfg(
+      [
+        {
+          id: 'not_started', name: 'Not Started', initial: true,
+          mockResponses: [{ method: 'POST', path: '/api/payments/charge', status: 202, body: '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "pending",\n  "description": "Pro Plan Subscription"\n}' }],
+        },
+        {
+          id: 'pending', name: 'Pending',
+          mockResponses: [{ method: 'POST', path: '/api/payments/charge', status: 200, body: '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "processing"\n}' }],
+        },
+        {
+          id: 'processing', name: 'Processing',
+          mockResponses: [{ method: 'POST', path: '/api/payments/charge', status: 200, body: '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "succeeded",\n  "receipt_url": "https://pay.example.com/receipts/ch_abc123"\n}' }],
+        },
+        { id: 'succeeded', name: 'Succeeded' },
+        { id: 'refunded', name: 'Refunded' },
+      ],
+      [
+        { from: 'not_started', to: 'pending', label: 'CHARGE' },
+        { from: 'pending', to: 'processing', label: 'CHARGE' },
+        { from: 'processing', to: 'succeeded', label: 'CHARGE' },
+        { from: 'succeeded', to: 'refunded', label: 'REFUND' },
+      ],
+    ),
     routes: [
-      route('POST', '/api/payments/charge', 200, '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "succeeded",\n  "description": "Pro Plan Subscription",\n  "receipt_url": "https://pay.example.com/receipts/ch_abc123",\n  "created": 1716321600\n}', { 'Idempotency-Key': 'idk_unique123' }),
-      route('GET', '/api/payments/balance', 200, '{\n  "available": [\n    { "amount": 125000, "currency": "usd" }\n  ],\n  "pending": [\n    { "amount": 4500, "currency": "usd" }\n  ]\n}'),
-      route('POST', '/api/payments/refund', 200, '{\n  "id": "re_xyz789",\n  "charge": "ch_abc123",\n  "amount": 2999,\n  "status": "succeeded",\n  "reason": "requested_by_customer"\n}'),
+      // POST /api/payments/charge: cycles through payment states on repeat calls
+      // (state node Mock Responses above override this default body/status)
+      route('POST', '/api/payments/charge', 202,
+        '{\n  "id": "ch_abc123",\n  "amount": 2999,\n  "currency": "usd",\n  "status": "pending",\n  "description": "Pro Plan Subscription"\n}',
+        { 'Idempotency-Key': 'idk_unique123' },
+        'CHARGE',
+      ),
+      route('GET', '/api/payments/balance', 200,
+        '{\n  "available": [{ "amount": 125000, "currency": "usd" }],\n  "pending": [{ "amount": 4500, "currency": "usd" }]\n}',
+      ),
+      // POST /api/payments/refund: only works after Succeeded
+      route('POST', '/api/payments/refund', 200,
+        '{\n  "id": "re_xyz789",\n  "charge": "ch_abc123",\n  "amount": 2999,\n  "status": "succeeded",\n  "reason": "requested_by_customer"\n}',
+        {},
+        'REFUND',
+      ),
     ],
   },
   {
     id: 'health-check',
     label: 'Health / Status',
-    description: 'Service health monitoring with status checks and configuration',
+    description: 'Health probe simulation — GET /health cycles through healthy → degraded → down → recovery',
+    stateMachine: smCfg(
+      [
+        {
+          id: 'starting', name: 'Starting', initial: true,
+          mockResponses: [{ method: 'GET', path: '/health', status: 200, body: '{\n  "status": "healthy",\n  "version": "2.1.0",\n  "uptime": 864000,\n  "services": { "database": "connected", "cache": "connected", "queue": "connected" }\n}' }],
+        },
+        {
+          id: 'healthy', name: 'Healthy',
+          mockResponses: [{ method: 'GET', path: '/health', status: 200, body: '{\n  "status": "degraded",\n  "version": "2.1.0",\n  "uptime": 864000,\n  "services": { "database": "connected", "cache": "slow", "queue": "connected" },\n  "warnings": ["Cache latency elevated"]\n}' }],
+        },
+        {
+          id: 'degraded', name: 'Degraded',
+          mockResponses: [{ method: 'GET', path: '/health', status: 503, body: '{\n  "status": "down",\n  "version": "2.1.0",\n  "uptime": 864000,\n  "services": { "database": "disconnected", "cache": "disconnected", "queue": "disconnected" },\n  "error": "Database connection pool exhausted"\n}' }],
+        },
+        {
+          id: 'down', name: 'Down',
+          mockResponses: [{ method: 'GET', path: '/health', status: 200, body: '{\n  "status": "healthy",\n  "version": "2.1.0",\n  "uptime": 864060,\n  "services": { "database": "connected", "cache": "connected", "queue": "connected" },\n  "recovered": true\n}' }],
+        },
+      ],
+      [
+        { from: 'starting', to: 'healthy', label: 'CHECK' },
+        { from: 'healthy', to: 'degraded', label: 'CHECK' },
+        { from: 'degraded', to: 'down', label: 'CHECK' },
+        { from: 'down', to: 'healthy', label: 'CHECK' },
+      ],
+    ),
     routes: [
-      route('GET', '/health', 200, '{\n  "status": "healthy",\n  "version": "2.1.0",\n  "uptime": 864000,\n  "services": {\n    "database": "connected",\n    "cache": "connected",\n    "queue": "connected"\n  }\n}', { 'X-Version': '2.1.0' }),
-      route('GET', '/api/status', 200, '{\n  "api": "operational",\n  "latency": { "p50": 12, "p95": 45, "p99": 120 },\n  "requestsPerMinute": 2500,\n  "errorRate": 0.02\n}'),
-      route('GET', '/api/config', 200, '{\n  "environment": "production",\n  "region": "us-east-1",\n  "features": {\n    "darkMode": true,\n    "betaFeatures": false,\n    "maxUploadSize": 10485760\n  },\n  "maintenance": false\n}'),
+      // GET /health: each call advances degradation — great for chaos testing
+      // (state node Mock Responses above override this default body/status)
+      route('GET', '/health', 200,
+        '{\n  "status": "healthy",\n  "version": "2.1.0",\n  "uptime": 864000\n}',
+        { 'X-Version': '2.1.0' },
+        'CHECK',
+      ),
+      route('GET', '/api/status', 200,
+        '{\n  "api": "operational",\n  "latency": { "p50": 12, "p95": 45, "p99": 120 },\n  "requestsPerMinute": 2500,\n  "errorRate": 0.02\n}',
+      ),
+      route('GET', '/api/config', 200,
+        '{\n  "environment": "production",\n  "region": "us-east-1",\n  "features": { "darkMode": true, "betaFeatures": false, "maxUploadSize": 10485760 },\n  "maintenance": false\n}',
+      ),
     ],
   },
   {
@@ -265,6 +453,114 @@ return {
       route('POST', '/api/login', 200, '{\n  "message": "Login successful",\n  "user": { "id": "u1", "name": "John Doe", "email": "john@example.com" }\n}', { 'Set-Cookie': 'session_id=abc123xyz; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600' }),
       route('GET', '/api/profile', 200, '{\n  "id": "u1",\n  "name": "John Doe",\n  "email": "john@example.com",\n  "role": "admin",\n  "preferences": { "theme": "dark", "language": "en" }\n}', { 'Set-Cookie': 'last_visit=2026-05-27T18:00:00Z; Path=/; Max-Age=86400' }),
       route('POST', '/api/logout', 200, '{\n  "message": "Logged out successfully"\n}', { 'Set-Cookie': 'session_id=; Path=/; HttpOnly; Max-Age=0' }),
+    ],
+  },
+  {
+    id: 'auth-conditional',
+    label: 'Auth Flow (Real Validation)',
+    description: 'Login only succeeds when the request body actually has non-empty username + password — checked against the real request content, not just "any state matches". Wrong/missing credentials get a 401 and no state change. Uses the event-driven Trigger Event mode: open the State Machine tab to see the connected workflow, or any route\'s Response tab to see its Trigger Event. Ships with a SECOND connected workflow ("Auth Flow — Partner Login") to demo per-route workflow selection: send the X-Partner-Id header on POST /api/auth/login (any value, no body needed) to route through the partner workflow instead — open that route\'s Response tab to see the State Machine dropdown pick "Auth Flow — Partner Login" and its Trigger Event scoped to PARTNER_LOGIN_SUCCESS only.',
+    additionalWorkflows: {
+      'auth-conditional-partner': {
+        enabled: true,
+        sessionMode: 'header',
+        sessionKey: 'X-Session-ID',
+        defaultState: 'partner_unauthenticated',
+        states: [
+          { id: 'partner_unauthenticated', name: 'Partner Unauthenticated', x: 250, y: 20, isInitial: true },
+          { id: 'partner_authorized', name: 'Partner Authorized', x: 250, y: 200 },
+        ],
+        transitions: [
+          { id: 'partner-t1', from: 'partner_unauthenticated', to: 'partner_authorized', routeId: '', label: 'PARTNER_LOGIN_SUCCESS' },
+          { id: 'partner-t2', from: 'partner_authorized', to: 'partner_unauthenticated', routeId: '', label: 'PARTNER_LOGOUT' },
+        ],
+      },
+    },
+    stateMachine: {
+      enabled: true,
+      sessionMode: 'header',
+      sessionKey: 'X-Session-ID',
+      defaultState: 'unauthenticated',
+      states: [
+        { id: 'unauthenticated', name: 'Unauthenticated', x: 250, y: 20, isInitial: true },
+        { id: 'authorized', name: 'Authorized', x: 250, y: 200 },
+      ],
+      transitions: [
+        { id: 'auth-t1', from: 'unauthenticated', to: 'authorized', routeId: '', label: 'LOGIN_SUCCESS' },
+        { id: 'auth-t2', from: 'authorized', to: 'authorized', routeId: '', label: 'VIEW_PROFILE' },
+        { id: 'auth-t3', from: 'authorized', to: 'unauthenticated', routeId: '', label: 'LOGOUT' },
+        { id: 'auth-t4', from: 'unauthenticated', to: 'unauthenticated', routeId: '', label: 'LOGIN_FAILED' },
+      ],
+    },
+    routes: [
+      // Partner login — matched purely on a custom header's presence (Matching
+      // tab), regardless of body. Highest priority (0) so it's tried before
+      // the username/password route below on the same path+method. Scoped to
+      // the SECOND connected workflow via connectedWorkflowId — demonstrates
+      // that a route's Trigger Event is resolved against ONE specific
+      // workflow, not a merged pool of every connected workflow's events.
+      {
+        method: 'POST', path: '/api/auth/login', statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: '{\n  "success": true,\n  "partner": true,\n  "token": "eyJhbGciOiJIUzI1NiJ9.partner-demo-token",\n  "message": "Partner logged in"\n}',
+        delay: 0, enabled: true, priority: 0,
+        headerMatchers: [{ id: 'partner-hdr', key: 'X-Partner-Id', matchType: 'present', value: '' }],
+        connectedWorkflowId: 'sm-wf-auth-conditional-partner',
+        triggerEvent: 'PARTNER_LOGIN_SUCCESS',
+      },
+      // Real validation: only matches when the body actually contains non-empty
+      // "username" and "password" fields (checked via a regex bodyMatcher against
+      // the real request content) — the request itself decides whether this fires.
+      {
+        method: 'POST', path: '/api/auth/login', statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: '{\n  "success": true,\n  "token": "eyJhbGciOiJIUzI1NiJ9.demo-token",\n  "message": "Logged in"\n}',
+        delay: 0, enabled: true, priority: 1,
+        bodyMatcher: { matchType: 'regex', value: '(?=.*"username"\\s*:\\s*"[^"]+")(?=.*"password"\\s*:\\s*"[^"]+")' },
+        connectedWorkflowId: 'sm-wf-auth-conditional',
+        triggerEvent: 'LOGIN_SUCCESS',
+      },
+      // Fallback — no partner header, body didn't have both real fields either.
+      // No matchers (always matches), lowest priority. Fires a real event too
+      // (LOGIN_FAILED, a self-loop that keeps the session unauthenticated) —
+      // a failed attempt is still a real, traceable event, not an unfired
+      // "None". Only valid from "unauthenticated", so it can't fire while an
+      // already-authorized session happens to hit this route.
+      {
+        method: 'POST', path: '/api/auth/login', statusCode: 401,
+        headers: { 'Content-Type': 'application/json' },
+        body: '{\n  "success": false,\n  "error": "username and password are required"\n}',
+        delay: 0, enabled: true,
+        connectedWorkflowId: 'sm-wf-auth-conditional',
+        triggerEvent: 'LOGIN_FAILED',
+      },
+      // Protected resource — the graph only allows VIEW_PROFILE from
+      // "authorized", so this 404s until a real login has actually fired.
+      {
+        method: 'GET', path: '/api/profile', statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: '{\n  "user": "demo",\n  "authorized": true\n}',
+        delay: 0, enabled: true,
+        connectedWorkflowId: 'sm-wf-auth-conditional',
+        triggerEvent: 'VIEW_PROFILE',
+      },
+      // Partner logout — same header-gating + priority pattern as partner login.
+      {
+        method: 'POST', path: '/api/auth/logout', statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: '{\n  "success": true,\n  "partner": true,\n  "message": "Partner logged out"\n}',
+        delay: 0, enabled: true, priority: 0,
+        headerMatchers: [{ id: 'partner-hdr-logout', key: 'X-Partner-Id', matchType: 'present', value: '' }],
+        connectedWorkflowId: 'sm-wf-auth-conditional-partner',
+        triggerEvent: 'PARTNER_LOGOUT',
+      },
+      {
+        method: 'POST', path: '/api/auth/logout', statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: '{\n  "success": true,\n  "message": "Logged out"\n}',
+        delay: 0, enabled: true,
+        connectedWorkflowId: 'sm-wf-auth-conditional',
+        triggerEvent: 'LOGOUT',
+      },
     ],
   },
 ];

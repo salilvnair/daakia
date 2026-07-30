@@ -114,8 +114,8 @@ export function DurationInput({ value, onChange, placeholder = '0', accentColor,
               onClick={() => handleUnitChange(opt.value)}
               className={`w-full px-3 py-1.5 text-[11px] text-right cursor-pointer transition-colors ${
                 unit === opt.value
-                  ? 'bg-[rgba(255,255,255,0.08)]'
-                  : 'hover:bg-[rgba(255,255,255,0.05)]'
+                  ? 'bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)]'
+                  : 'hover:bg-[color-mix(in_srgb,var(--color-text-primary)_5%,transparent)]'
               }`}
               style={{ color: opt.color }}
             >

@@ -88,7 +88,7 @@ export function InfoPopup({ title, description, items, footer, wikiSlug, accentC
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="w-5 h-5 flex items-center justify-center rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] cursor-pointer transition-colors"
+        className="w-5 h-5 flex items-center justify-center rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] cursor-pointer transition-colors"
         title="Help"
       >
         <HelpCircleIcon size={13} />

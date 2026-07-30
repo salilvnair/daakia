@@ -67,7 +67,24 @@ export type DevToolsTab = 'console' | 'network' | 'performance' | 'ai-insights';
 
 export type LogFilter = 'all' | LogLevel;
 
+export interface TimelinePhase {
+  name: string;
+  startMs: number;
+  durationMs: number;
+  color?: string;
+}
+
+export interface TimelineEntry {
+  id: string;
+  requestName: string;
+  totalMs: number;
+  phases: TimelinePhase[];
+}
+
 interface DevToolsStore {
+  timelineEntries: TimelineEntry[];
+  addTimelineEntry: (entry: TimelineEntry) => void;
+  clearTimeline: () => void;
   // Panel state
   isOpen: boolean;
   activeTab: DevToolsTab;
@@ -110,6 +127,7 @@ export const useDevToolsStore = create<DevToolsStore>((set) => ({
   panelHeight: 200,
 
   logs: [],
+  timelineEntries: [],
   logFilter: 'all',
 
   networkEntries: [],
@@ -133,6 +151,8 @@ export const useDevToolsStore = create<DevToolsStore>((set) => ({
     ],
   })),
   clearLogs: () => set({ logs: [] }),
+  addTimelineEntry: (entry) => set(s => ({ timelineEntries: [...s.timelineEntries.slice(-49), entry] })),
+  clearTimeline: () => set({ timelineEntries: [] }),
   setLogFilter: (filter) => set({ logFilter: filter }),
 
   // Network actions

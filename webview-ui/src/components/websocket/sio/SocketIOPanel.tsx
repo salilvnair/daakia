@@ -10,13 +10,25 @@ import {
   CopyIcon, CheckIcon, InfoCircleIcon, WarningTriangleIcon, DownloadIcon, WrapLinesIcon,
   CheckCircleFilledIcon, SSEIcon, MoreVerticalIcon, SparkleIcon,
 } from '../../../icons';
-import { HighlightedInput, CodeEditor, StyledDropdown, AuthEditor, SplitButton } from '../../shared';
-import type { DropdownOption, SplitButtonItem } from '../../shared';
+import {
+  HighlightedInputView,
+  ButtonView,
+  DropDownButtonView,
+  IconButtonView,
+  TextInputView,
+  SelectInputView,
+  EditorView,
+  TabView,
+  CopyButtonView,
+  type ContextMenuItem,
+} from '@salilvnair/dui';
+import { AuthEditor } from '../../shared';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
 import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 // ────────── Types ──────────
 
@@ -37,6 +49,25 @@ const eventsCache = new Map<string, SocketIOEvent[]>();
 const connStateCache = new Map<string, ConnectionState>();
 const errorCache = new Map<string, string | null>();
 const socketIdCache = new Map<string, string | null>();
+
+// ────────── Format Options ──────────
+
+const formatOptions = [
+  { value: 'json', label: 'JSON' },
+  { value: 'raw', label: 'RAW' },
+];
+
+// ────────── Save Items ──────────
+
+const sioSaveItems: ContextMenuItem[] = [
+  {
+    id: 'save-as',
+    label: 'Save as',
+    icon: <SaveIcon size={13} />,
+    iconColor: 'var(--color-ctx-close-saved)',
+    onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
+  },
+];
 
 // ────────── Socket.IO Panel ──────────
 
@@ -73,6 +104,16 @@ export function SocketIOPanel() {
     setSocketIdLocal(v);
     if (activeTabId) socketIdCache.set(activeTabId, v);
   }, [activeTabId]);
+
+  // Test-only hook for the wiki capture harness — seeds a realistic connected
+  // state + event log without a real Socket.IO connection (see CaptureBridge.tsx).
+  useEffect(() => {
+    (window as any).__sioCaptureSeed = (evts: SocketIOEvent[], state: ConnectionState, sockId?: string) => {
+      setEvents(evts);
+      setConnState(state);
+      if (sockId) setSocketId(sockId);
+    };
+  }, [setEvents, setConnState, setSocketId]);
 
   // Persisted fields — read from authData, write back on change
   const ad = activeTab?.authData || {};
@@ -121,7 +162,6 @@ export function SocketIOPanel() {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const aiOverflowRef = useRef<HTMLDivElement>(null);
-  const aiOverflowBtnRef = useRef<HTMLButtonElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const openDaakiaAiTab = useTabsStore(s => s.openDaakiaAiTab);
 
@@ -189,6 +229,7 @@ export function SocketIOPanel() {
     if (!activeTab) return;
     const url = activeTab.url.trim();
     if (!url) return;
+    logUiEvent('sio.connect', { url });
     setConnState('connecting');
     setError(null);
     postMsg({ type: 'socketio:connect', tabId: activeTab.id, url, namespace, headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [], authType: activeTab.authType, authData: activeTab.authData, envId: activeTab.envId });
@@ -196,16 +237,18 @@ export function SocketIOPanel() {
 
   const handleDisconnect = useCallback(() => {
     if (!activeTab) return;
+    logUiEvent('sio.disconnect');
     postMsg({ type: 'socketio:disconnect', tabId: activeTab.id });
   }, [activeTab]);
 
   const handleSend = useCallback(() => {
     if (!activeTab || connState !== 'connected' || !eventName.trim()) return;
+    logUiEvent('sio.emit', { event: eventName.trim() });
     postMsg({ type: 'socketio:emit', tabId: activeTab.id, event: eventName.trim(), data: eventData.trim() || undefined, envId: activeTab.envId });
     if (clearOnSend) { setEventName(''); setEventData(''); }
   }, [activeTab, connState, eventName, eventData, clearOnSend]);
 
-  const handleClearMessages = useCallback(() => setEvents([]), [setEvents]);
+  const handleClearMessages = useCallback(() => { logUiEvent('sio.clear'); setEvents([]); }, [setEvents]);
 
   // Splitter handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => { e.preventDefault(); (e.target as HTMLElement).setPointerCapture(e.pointerId); setIsDragging(true); }, []);
@@ -240,6 +283,11 @@ export function SocketIOPanel() {
 
   const statusColor = connState === 'connected' ? 'var(--color-success)' : connState === 'connecting' ? 'var(--color-warning)' : 'var(--color-text-muted)';
 
+  const subTabItems = [
+    { id: 'communication', label: 'Communication' },
+    { id: 'authorization', label: 'Authorization' },
+  ];
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* URL bar */}
@@ -247,71 +295,80 @@ export function SocketIOPanel() {
         <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-socketio)] bg-[rgba(167,139,250,0.12)]">SIO</span>
         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-colors" style={{ backgroundColor: statusColor }} title={connState} />
 
-        <div className="flex-[2] min-w-0">
-          <HighlightedInput
-            value={activeTab.url}
-            onChange={(v) => updateTab(activeTab.id, { url: v })}
-            onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
-            placeholder="wss://echo.websocket.org"
-            disabled={connState === 'connected'}
-            suggestions={urlSuggestions}
-            mockServers={mockSuggestions}
-            protocolHints={['wss://']}
-            accentColor="var(--color-protocol-websocket)"
-          />
-        </div>
+        <HighlightedInputView
+          value={activeTab.url}
+          onChange={(v) => updateTab(activeTab.id, { url: v })}
+          onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
+          placeholder="wss://echo.websocket.org"
+          disabled={connState === 'connected'}
+          suggestions={urlSuggestions}
+          mockServers={mockSuggestions}
+          accentColor="var(--color-protocol-websocket)"
+          size="lg"
+          borderRadius={6}
+        />
 
         {/* Namespace / path */}
-        <input
-          type="text"
+        <TextInputView
           value={namespace}
           onChange={(e) => setNamespace(e.target.value)}
           disabled={connState === 'connected'}
-          className="w-[200px] h-[36px] px-2.5 text-[12px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] rounded-md outline-none focus:border-[var(--color-accent)] disabled:opacity-50 placeholder:text-[var(--color-text-muted)]"
           title="Namespace / Path"
           placeholder="/socket.io"
+          size="lg"
+          style={{ width: 200 }}
         />
 
         {connState === 'disconnected' ? (
-          <button type="button" onClick={handleConnect} disabled={!activeTab.url.trim()} className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[var(--color-protocol-socketio)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity flex items-center gap-1.5 flex-shrink-0">
-            <ConnectIcon size={12} /> Connect
-          </button>
+          <ButtonView
+            label="Connect"
+            iconLeft={<ConnectIcon size={12} />}
+            size="lg"
+            variant="primary"
+            accentColor="var(--color-protocol-socketio)"
+            disabled={!activeTab.url.trim()}
+            onClick={handleConnect}
+          />
         ) : (
-          <button type="button" onClick={handleDisconnect} className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[rgba(239,68,68,0.12)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.2)] cursor-pointer transition-colors flex items-center gap-1.5 flex-shrink-0">
-            <DisconnectIcon size={12} /> Disconnect
-          </button>
+          <ButtonView
+            label="Disconnect"
+            iconLeft={<DisconnectIcon size={12} />}
+            size="lg"
+            variant="danger"
+            onClick={handleDisconnect}
+          />
         )}
 
         {/* Save SplitButton */}
-        <SplitButton
+        <DropDownButtonView
           label="Save"
+          icon={<SaveIcon size={12} />}
+          items={sioSaveItems}
+          size="lg"
           variant="secondary"
-          onClick={() => {
+          accentColor="var(--color-surface-border)"
+          onPrimaryClick={() => {
             const saved = saveRequest(activeTab);
             if (saved) updateTab(activeTab.id, { dirty: false });
           }}
-          icon={<SaveIcon />}
-          items={sioSaveItems}
+          align="right"
         />
 
-        {/* 9.29: AI Tools ⋮ menu */}
+        {/* AI Tools ⋮ menu */}
         <div className="flex-shrink-0 relative" ref={aiOverflowRef}>
-          <button ref={aiOverflowBtnRef} type="button"
-            onClick={() => {
-              if (!showAiOverflow && aiOverflowBtnRef.current) {
-                const rect = aiOverflowBtnRef.current.getBoundingClientRect();
+          <IconButtonView
+            icon={<MoreVerticalIcon size={15} />}
+            title="AI tools"
+            size="lg"
+            active={showAiOverflow}
+            onClick={(e) => {
+              if (!showAiOverflow) {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 setAiOverflowDir((window.innerHeight - rect.bottom) < 160 ? 'up' : 'down');
               }
               setShowAiOverflow(p => !p);
             }}
-            title="AI tools"
-            className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
-            style={{ color: showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)', backgroundColor: showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent' }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
-          >
-            <MoreVerticalIcon size={15} />
-          </button>
+          />
           {showAiOverflow && (
             <div className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${aiOverflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
               style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
@@ -350,7 +407,7 @@ export function SocketIOPanel() {
           )}
           {showPreflight && activeTab.url.trim() && <AiPreflightPopover tab={activeTab} onClose={() => setShowPreflight(false)} />}
           {showPatternStatus && activeTab.url.trim() && aiEnabled('patternBaseline') && (
-            <PatternBaselinePopup method="SIO" url={activeTab.url} onClose={() => setShowPatternStatus(false)} dir={aiOverflowDir} />
+            <PatternBaselinePopup method="SIO" url={activeTab.url} onClose={() => setShowPatternStatus(false)} />
           )}
         </div>
       </div>
@@ -367,14 +424,17 @@ export function SocketIOPanel() {
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {/* Sub-tabs */}
             <div className="flex items-center border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] px-2">
-              {(['communication', 'authorization'] as SubTab[]).map(tab => (
-                <button key={tab} type="button" onClick={() => setActiveSubTab(tab)}
-                  className={`px-3 py-2 text-[11px] font-medium capitalize cursor-pointer transition-colors border-b-2 ${activeSubTab === tab ? 'text-[var(--color-protocol-socketio)] border-[var(--color-protocol-socketio)]' : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'}`}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  {tab === 'communication' && events.length > 0 && <span className="ml-1 w-1.5 h-1.5 inline-block rounded-full relative -top-[1px] bg-[var(--color-protocol-socketio)]" />}
-                </button>
-              ))}
+              <TabView
+                tabs={subTabItems.map(t => ({
+                  ...t,
+                  badge: t.id === 'communication' && events.length > 0 ? events.length : undefined,
+                }))}
+                activeTab={activeSubTab}
+                onChange={(id) => setActiveSubTab(id as SubTab)}
+                variant="underline"
+                size="md"
+                accentColor="var(--color-protocol-websocket)"
+              />
             </div>
 
             {/* Sub-tab content */}
@@ -384,25 +444,36 @@ export function SocketIOPanel() {
                   {/* Event name input */}
                   <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
                     <SSEIcon size={14} className="text-[var(--color-protocol-socketio)] flex-shrink-0" />
-                    <input
-                      type="text"
+                    <TextInputView
                       value={eventName}
                       onChange={(e) => setEventName(e.target.value)}
                       placeholder="Event/Topic Name"
-                      className="flex-1 h-[28px] px-2.5 text-[12px] bg-transparent text-[var(--color-text-primary)] border-none outline-none placeholder:text-[var(--color-text-muted)]"
+                      size="md"
+                      style={{ flex: 1 }}
                     />
                   </div>
                   {/* Toolbar: Message + JSON/Raw + Send + Clear */}
                   <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Message</span>
-                      <StyledDropdown options={formatOptions} value={messageFormat} onChange={(v) => setMessageFormat(v as MessageFormat)} size="xs" accentColor="var(--color-protocol-socketio)" />
+                      <SelectInputView
+                        options={formatOptions}
+                        value={messageFormat}
+                        onChange={(v) => setMessageFormat(v as MessageFormat)}
+                        size="md"
+                        accentColor="var(--color-protocol-socketio)"
+                      />
                     </div>
                     <div className="flex items-center gap-1">
-                      <button type="button" onClick={handleSend} disabled={connState !== 'connected' || !eventName.trim()}
-                        className="h-[26px] px-2.5 text-[11px] font-medium text-[var(--color-protocol-socketio)] hover:bg-[rgba(20,184,166,0.08)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center gap-1.5 rounded-md">
-                        <SendIcon size={11} /> Send
-                      </button>
+                      <ButtonView
+                        label="Send"
+                        iconLeft={<SendIcon size={11} />}
+                        size="xs"
+                        variant="ghost"
+                        accentColor="var(--color-protocol-socketio)"
+                        disabled={connState !== 'connected' || !eventName.trim()}
+                        onClick={handleSend}
+                      />
                       <button type="button" onClick={() => setClearOnSend(!clearOnSend)}
                         className="h-[26px] px-2 text-[11px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] cursor-pointer transition-colors flex items-center gap-1.5 rounded-md">
                         <CheckCircleFilledIcon size={13} checked={clearOnSend} /> Clear input
@@ -411,7 +482,7 @@ export function SocketIOPanel() {
                   </div>
                   {/* Code editor */}
                   <div className="flex-1 min-h-0">
-                    <CodeEditor value={eventData} onChange={setEventData} language={messageFormat === 'json' ? 'json' : 'plaintext'} height="100%" placeholder="Message" />
+                    <EditorView value={eventData} onChange={setEventData} language={messageFormat === 'json' ? 'json' : 'plaintext'} height="100%" placeholder="Message" />
                   </div>
                 </>
               )}
@@ -450,10 +521,36 @@ export function SocketIOPanel() {
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
             <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Log</span>
             <div className="flex items-center gap-0.5">
-              <button type="button" onClick={handleClearMessages} disabled={events.length === 0} className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md" title="Clear log"><TrashIcon size={12} /></button>
-              <button type="button" onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} disabled={events.length === 0} className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md" title="Scroll to top"><ArrowUpIcon size={13} /></button>
-              <button type="button" onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }} disabled={events.length === 0} className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md" title="Scroll to bottom"><ArrowDownIcon size={13} /></button>
-              <button type="button" onClick={() => setAutoScroll(!autoScroll)} className={`h-[26px] w-[26px] flex items-center justify-center cursor-pointer transition-colors rounded-md ${autoScroll ? 'text-[var(--color-success)] hover:bg-[rgba(34,197,94,0.08)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'}`} title={autoScroll ? 'Autoscroll: on' : 'Autoscroll: off'}><AutoScrollIcon size={14} /></button>
+              <IconButtonView
+                icon={<TrashIcon size={12} />}
+                size="xs"
+                title="Clear log"
+                disabled={events.length === 0}
+                onClick={handleClearMessages}
+                accentColor="var(--color-error)"
+              />
+              <IconButtonView
+                icon={<ArrowUpIcon size={13} />}
+                size="xs"
+                title="Scroll to top"
+                disabled={events.length === 0}
+                onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              />
+              <IconButtonView
+                icon={<ArrowDownIcon size={13} />}
+                size="xs"
+                title="Scroll to bottom"
+                disabled={events.length === 0}
+                onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }}
+              />
+              <IconButtonView
+                icon={<AutoScrollIcon size={14} />}
+                size="xs"
+                title={autoScroll ? 'Autoscroll: on' : 'Autoscroll: off'}
+                active={autoScroll}
+                accentColor="var(--color-success)"
+                onClick={() => setAutoScroll(!autoScroll)}
+              />
               {/* 9.24-9.28: AI log actions */}
               <AiRealtimeLogActions
                 tabId={activeTab.id}
@@ -462,7 +559,7 @@ export function SocketIOPanel() {
                 messages={events.filter(e => e.direction === 'received' && e.data).map(e => e.data!)}
                 hasError={!!error}
                 errorMsg={error || ''}
-                accentColor="var(--color-protocol-socketio)"
+                accentColor="var(--color-protocol-ai)"
                 trafficAnalyzerFlag="sioTrafficAnalyzer"
               />
             </div>
@@ -486,32 +583,12 @@ export function SocketIOPanel() {
   );
 }
 
-// ────────── Format Options ──────────
-
-const formatOptions: DropdownOption[] = [
-  { value: 'json', label: 'JSON' },
-  { value: 'raw', label: 'RAW' },
-];
-
-// ────────── Save Items ──────────
-
-const sioSaveItems: SplitButtonItem[] = [
-  {
-    id: 'save-as',
-    label: 'Save as',
-    icon: <SaveIcon />,
-    iconColor: 'var(--color-ctx-close-saved)',
-    onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
-  },
-];
-
 // ────────── Log Entry ──────────
 
 function SioLogEntry({ event }: { event: SocketIOEvent }) {
   const [expanded, setExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<'json' | 'raw'>('json');
   const [wordWrap, setWordWrap] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const isSent = event.direction === 'sent';
   const isSystem = event.direction === 'system';
@@ -525,12 +602,10 @@ function SioLogEntry({ event }: { event: SocketIOEvent }) {
     try { const p = JSON.parse(event.data); formattedData = JSON.stringify(p, null, 2); isJson = true; } catch { /* keep raw */ }
   }
 
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(event.data || '');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  const logTabItems = [
+    ...(isJson ? [{ id: 'json', label: 'JSON' }] : []),
+    { id: 'raw', label: 'Raw' },
+  ];
 
   return (
     <div className="border-b border-[var(--color-surface-border)] last:border-b-0 group/row">
@@ -559,9 +634,9 @@ function SioLogEntry({ event }: { event: SocketIOEvent }) {
         {/* Copy + chevron */}
         <div className="flex items-center gap-0.5 flex-shrink-0">
           {event.data && (
-            <button type="button" onClick={handleCopy} className={`h-[24px] w-[24px] flex items-center justify-center cursor-pointer rounded transition-colors opacity-0 group-hover/row:opacity-100 ${copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'}`} title="Copy">
-              {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
-            </button>
+            <div className="opacity-0 group-hover/row:opacity-100 transition-opacity">
+              <CopyButtonView text={event.data} size="xs" />
+            </div>
           )}
           {!isSystem && event.data && <ChevronDownIcon size={14} className={`text-[var(--color-text-muted)] transition-transform duration-150 ${expanded ? '' : '-rotate-90'}`} />}
         </div>
@@ -571,14 +646,38 @@ function SioLogEntry({ event }: { event: SocketIOEvent }) {
       {expanded && event.data && (
         <div className="border-t border-[var(--color-surface-border)] bg-[var(--color-panel)]">
           <div className="flex items-center justify-between px-3 py-1">
-            <div className="flex items-center gap-0">
-              {isJson && <button type="button" onClick={() => setViewMode('json')} className={`px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors border-b-2 ${viewMode === 'json' ? 'text-[var(--color-text-primary)] border-[var(--color-protocol-socketio)]' : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'}`}>JSON</button>}
-              <button type="button" onClick={() => setViewMode('raw')} className={`px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors border-b-2 ${viewMode === 'raw' || !isJson ? 'text-[var(--color-text-primary)] border-[var(--color-protocol-socketio)]' : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'}`}>Raw</button>
-            </div>
+            <TabView
+              tabs={logTabItems}
+              activeTab={viewMode}
+              onChange={(id) => setViewMode(id as 'json' | 'raw')}
+              variant="underline"
+              size="xs"
+              accentColor="var(--color-protocol-socketio)"
+            />
             <div className="flex items-center gap-0.5">
-              <button type="button" onClick={() => setWordWrap(!wordWrap)} className={`h-[24px] w-[24px] flex items-center justify-center cursor-pointer rounded transition-colors ${wordWrap ? 'text-[var(--color-protocol-socketio)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`} title="Word wrap"><WrapLinesIcon size={12} /></button>
-              <button type="button" onClick={(e) => { e.stopPropagation(); const blob = new Blob([event.data!], { type: 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `sio-${event.id.slice(0,8)}.${isJson ? 'json' : 'txt'}`; a.click(); URL.revokeObjectURL(url); }}
-                className="h-[24px] w-[24px] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer rounded transition-colors" title="Download"><DownloadIcon size={12} /></button>
+              <IconButtonView
+                icon={<WrapLinesIcon size={12} />}
+                size="xs"
+                title="Word wrap"
+                active={wordWrap}
+                accentColor="var(--color-protocol-socketio)"
+                onClick={() => setWordWrap(!wordWrap)}
+              />
+              <IconButtonView
+                icon={<DownloadIcon size={12} />}
+                size="xs"
+                title="Download"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const blob = new Blob([event.data!], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `sio-${event.id.slice(0, 8)}.${isJson ? 'json' : 'txt'}`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              />
             </div>
           </div>
           <pre className={`px-3 pb-2 text-[11px] font-mono text-[var(--color-text-primary)] leading-relaxed ${wordWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre overflow-x-auto'}`}>

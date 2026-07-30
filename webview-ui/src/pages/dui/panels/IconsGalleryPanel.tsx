@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import * as Icons from '../../../icons/daakia-icons';
-import { TextInputView } from '../../../dui';
+import { TextInputView } from '@salilvnair/dui';
 import { SearchIcon, CopyIcon, CheckIcon } from '../../../icons';
 
 type IconEntry = {

@@ -1,0 +1,102 @@
+import { useRef, useState } from 'react';
+import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { AiAssistPopover, type AssistMode } from '../../ai/AiAssistPopover';
+import { AiResponsePatternLearning } from '../../ai/AiResponsePatternLearning';
+import { AiSmartRetryAdvisor } from '../../ai/AiSmartRetryAdvisor';
+import { AiResponseActionsMenu } from './AiResponseActionsMenu';
+import { AIButtonView } from '@salilvnair/dui';
+import type { ResponseData } from '../../../store/tabs-store';
+
+interface ResponseAiToolbarProps {
+  tabId: string;
+  response: ResponseData;
+  requestMethod: string;
+  requestUrl: string;
+}
+
+export function ResponseAiToolbar({ tabId, response, requestMethod, requestUrl }: ResponseAiToolbarProps) {
+  const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
+  const explainRef = useRef<HTMLDivElement>(null);
+  const followUpRef = useRef<HTMLDivElement>(null);
+  const isError = response.status >= 400;
+
+  return (
+    <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
+      {aiEnabled('explainRest') && (
+        <>
+          <div ref={explainRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+            <AIButtonView
+              action="explain"
+              label="Explain"
+              size="xs"
+              accentColor="var(--color-protocol-ai)"
+              onClick={() => setActivePopup(p => p === 'explain' ? null : 'explain')}
+            />
+          </div>
+          {activePopup === 'explain' && (
+            <AiAssistPopover
+              mode="explain"
+              response={response}
+              requestMethod={requestMethod}
+              requestUrl={requestUrl}
+              onClose={() => setActivePopup(null)}
+              anchorEl={explainRef.current}
+            />
+          )}
+        </>
+      )}
+
+      {aiEnabled('followUpsRest') && (
+        <>
+          <div ref={followUpRef} className="flex-shrink-0" style={{ whiteSpace: 'nowrap' }}>
+            <AIButtonView
+              action="ask"
+              label="Follow-ups"
+              size="xs"
+              accentColor="var(--color-protocol-ai)"
+              onClick={() => setActivePopup(p => p === 'follow-up' ? null : 'follow-up')}
+            />
+          </div>
+          {activePopup === 'follow-up' && (
+            <AiAssistPopover
+              mode="follow-up"
+              response={response}
+              requestMethod={requestMethod}
+              requestUrl={requestUrl}
+              onClose={() => setActivePopup(null)}
+              anchorEl={followUpRef.current}
+            />
+          )}
+        </>
+      )}
+
+      {isError && aiEnabled('smartRetryAdvisor') && (
+        <AiSmartRetryAdvisor
+          status={response.status}
+          responseBody={response.body || ''}
+          method={requestMethod}
+          url={requestUrl}
+        />
+      )}
+
+      {aiEnabled('recordBaseline') && (
+        <div className="relative">
+          <AiResponsePatternLearning
+            responseBody={response.body || ''}
+            method={requestMethod}
+            url={requestUrl}
+            status={response.status}
+          />
+        </div>
+      )}
+
+      <AiResponseActionsMenu
+        tabId={tabId}
+        response={response}
+        requestMethod={requestMethod}
+        requestUrl={requestUrl}
+      />
+    </div>
+  );
+}

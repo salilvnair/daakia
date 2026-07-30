@@ -6,10 +6,10 @@
  * reports which break.
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
+import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 
 interface VariationResult {
   index: number;
@@ -46,7 +46,6 @@ Return ONLY the JSON array, no explanation.`;
 
 export function AiRequestReplayVariationsModal({ requestMethod, requestUrl, requestBody, onClose }: Props) {
   const [description, setDescription] = useState(PRESETS[0].prompt);
-  const [fieldToVary, setFieldToVary] = useState('');
   const [variations, setVariations] = useState<string[]>([]);
   const [results, setResults] = useState<VariationResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -148,119 +147,115 @@ export function AiRequestReplayVariationsModal({ requestMethod, requestUrl, requ
   const passCount = results.filter(r => r.passed).length;
   const failCount = results.filter(r => !r.passed).length;
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[720px] max-h-[92vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Request Replay with Variations</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">{requestMethod} {requestUrl}</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Request Replay with Variations"
+      subtitle={`${requestMethod} ${requestUrl}`}
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
         </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-          {/* Preset chips */}
-          <div className="flex flex-wrap gap-1.5">
-            {PRESETS.map(p => (
-              <button key={p.label} type="button" onClick={() => setDescription(p.prompt)}
-                className="px-2.5 py-1 text-[10.5px] rounded-full border cursor-pointer"
-                style={{
-                  borderColor: description === p.prompt ? ACCENT : 'var(--color-surface-border)',
-                  color: description === p.prompt ? ACCENT : 'var(--color-text-secondary)',
-                  backgroundColor: description === p.prompt ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'transparent',
-                }}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>What to vary</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
-              className="w-full px-3 py-2 rounded-lg text-[11.5px] resize-none outline-none"
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
-          </div>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && (
-            <div className="flex gap-1 items-center">
-              {[0, 150, 300].map(d => (<span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Generating variations…</span>
-            </div>
-          )}
-
-          {variations.length > 0 && results.length === 0 && (
-            <div className="rounded-lg border p-3" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
-              <p className="text-[11px] font-medium mb-2" style={{ color: ACCENT }}>✦ {variations.length} variations generated</p>
-              <div className="flex flex-wrap gap-1">
-                {variations.slice(0, 12).map((v, i) => (
-                  <span key={i} className="px-2 py-0.5 rounded text-[9.5px] font-mono"
-                    style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}>
-                    {v.length > 25 ? v.slice(0, 22) + '…' : v}
-                  </span>
-                ))}
-                {variations.length > 12 && <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>+{variations.length - 12} more</span>}
-              </div>
-            </div>
-          )}
-
-          {results.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold" style={{ color: 'var(--color-success)' }}>✓ {passCount} passed</span>
-                <span className="text-[11px] font-semibold" style={{ color: 'var(--color-error)' }}>✗ {failCount} failed</span>
-                {running && <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>running…</span>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-1 max-h-[160px] overflow-y-auto [scrollbar-gutter:stable]">
-                {results.map(r => (
-                  <div key={r.index} className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px]"
-                    style={{ backgroundColor: r.passed ? 'color-mix(in srgb, var(--color-success) 8%, transparent)' : 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>
-                    <span style={{ color: r.passed ? 'var(--color-success)' : 'var(--color-error)' }}>{r.passed ? '✓' : '✗'}</span>
-                    <span className="font-mono truncate" style={{ color: 'var(--color-text-primary)' }}>{r.input.length > 20 ? r.input.slice(0, 18) + '…' : r.input}</span>
-                    <span style={{ color: 'var(--color-text-muted)' }}>{r.status}</span>
-                  </div>
-                ))}
-              </div>
-
-              {analysisText && (
-                <div className="rounded-lg border p-3" style={{ borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))` }}>
-                  <MdViewer content={analysisText} />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-          {variations.length > 0 && results.length === 0 && (
-            <button type="button" onClick={runVariations} disabled={running}
-              className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-              style={{ backgroundColor: 'var(--color-success)' }}>
-              ▶ Run All ({variations.length})
+      }
+      footerLeft={
+        variations.length > 0 && results.length === 0 ? (
+          <ButtonView size="md" variant="primary" accentColor="var(--color-success)" disabled={running} onClick={runVariations}>
+            ▶ Run All ({variations.length})
+          </ButtonView>
+        ) : undefined
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Generating…' : 'Generate Variations'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={loading}
+          loading={loading}
+          onClick={generateVariations}
+        />
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {/* Preset chips */}
+        <div className="flex flex-wrap gap-1.5">
+          {PRESETS.map(p => (
+            <button key={p.label} type="button" onClick={() => setDescription(p.prompt)}
+              className="px-2.5 py-1 text-[10.5px] rounded-full border cursor-pointer"
+              style={{
+                borderColor: description === p.prompt ? ACCENT : 'var(--color-surface-border)',
+                color: description === p.prompt ? ACCENT : 'var(--color-text-secondary)',
+                backgroundColor: description === p.prompt ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'transparent',
+              }}>
+              {p.label}
             </button>
-          )}
-          <button type="button" onClick={generateVariations} disabled={loading}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-            style={{ backgroundColor: ACCENT }}>
-            <SparkleIcon size={11} className="inline mr-1" />
-            Generate Variations
-          </button>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
+          ))}
         </div>
-      </div>
-    </div>
-  );
 
-  return createPortal(modal, document.body);
+        <div>
+          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>What to vary</label>
+          <MultilineInputView
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            rows={2}
+            size="md"
+            width="fw"
+          />
+        </div>
+
+        {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
+
+        {loading && (
+          <div className="flex gap-1 items-center">
+            {[0, 150, 300].map(d => (<span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse" style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />))}
+            <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Generating variations…</span>
+          </div>
+        )}
+
+        {variations.length > 0 && results.length === 0 && (
+          <div className="rounded-lg border p-3" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
+            <p className="text-[11px] font-medium mb-2" style={{ color: ACCENT }}>✦ {variations.length} variations generated</p>
+            <div className="flex flex-wrap gap-1">
+              {variations.slice(0, 12).map((v, i) => (
+                <span key={i} className="px-2 py-0.5 rounded text-[9.5px] font-mono"
+                  style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-secondary)' }}>
+                  {v.length > 25 ? v.slice(0, 22) + '…' : v}
+                </span>
+              ))}
+              {variations.length > 12 && <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>+{variations.length - 12} more</span>}
+            </div>
+          </div>
+        )}
+
+        {results.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-semibold" style={{ color: 'var(--color-success)' }}>✓ {passCount} passed</span>
+              <span className="text-[11px] font-semibold" style={{ color: 'var(--color-error)' }}>✗ {failCount} failed</span>
+              {running && <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>running…</span>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-1 max-h-[160px] overflow-y-auto [scrollbar-gutter:stable]">
+              {results.map(r => (
+                <div key={r.index} className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px]"
+                  style={{ backgroundColor: r.passed ? 'color-mix(in srgb, var(--color-success) 8%, transparent)' : 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>
+                  <span style={{ color: r.passed ? 'var(--color-success)' : 'var(--color-error)' }}>{r.passed ? '✓' : '✗'}</span>
+                  <span className="font-mono truncate" style={{ color: 'var(--color-text-primary)' }}>{r.input.length > 20 ? r.input.slice(0, 18) + '…' : r.input}</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>{r.status}</span>
+                </div>
+              ))}
+            </div>
+
+            {analysisText && (
+              <div className="rounded-lg border p-3" style={{ borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))` }}>
+                <MdViewer content={analysisText} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </ModalView>
+  );
 }

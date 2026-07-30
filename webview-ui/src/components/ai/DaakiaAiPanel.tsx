@@ -17,6 +17,7 @@ import { useTabsStore, DAAKIA_ASSISTANT_SYSTEM_PROMPT, type ResponseData } from 
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { GeneralAssistantIcon, SparkleIcon } from '../../icons';
+import { ButtonView } from '@salilvnair/dui';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
 import { AiPendingActions, parseDaakiaActions, type DaakiaAction } from './AiPendingActions';
@@ -294,7 +295,6 @@ function DaakiaAiHero() {
       {/* Right: sparkle accent */}
       <div className="flex items-center gap-1 opacity-40">
         <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)' }} />
-        <SparkleIcon size={8} style={{ color: 'var(--color-protocol-ai)' }} />
       </div>
     </div>
   );
@@ -506,96 +506,71 @@ export function DaakiaAiPanel() {
       {/* Colorful hero banner */}
       <DaakiaAiHero />
 
-      {/* 10.7-10.9: AI Panel action bar */}
-      <div className="flex items-center gap-1.5 px-3 py-1 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 3%, var(--color-panel))' }}>
-        <button type="button" onClick={() => setShowCollectionModal(true)}
-          className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-          style={{ color: 'var(--color-protocol-ai)', borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 30%, transparent)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' }}
+      {/* AI Panel action bar */}
+      <div className="flex items-center gap-1 px-3 py-1 border-b flex-shrink-0 overflow-x-auto [scrollbar-gutter:stable]" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 3%, var(--color-panel))' }}>
+        <ButtonView
+          variant="secondary"
+          size="xs"
+          borderRadius={9999}
+          iconLeft={<SparkleIcon size={8} />}
+          accentColor="var(--color-protocol-ai)"
+          color="var(--color-protocol-ai)"
           title="Convert AI conversation to collection"
+          onClick={() => setShowCollectionModal(true)}
         >
-          <SparkleIcon size={8} />→ Collection
-        </button>
-        <button type="button" onClick={() => setShowExportModal(true)}
-          className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-          style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
+          → Collection
+        </ButtonView>
+        <ButtonView
+          variant="ghost"
+          size="xs"
+          borderRadius={9999}
+          onClick={() => setShowExportModal(true)}
           title="Export session as markdown"
         >
           Export ✦
-        </button>
-        <button type="button" onClick={() => setShowPromptPicker(p => !p)}
-          className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-          style={{ color: showPromptPicker ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)', borderColor: showPromptPicker ? 'color-mix(in srgb, var(--color-protocol-ai) 30%, transparent)' : 'var(--color-surface-border)', backgroundColor: showPromptPicker ? 'color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)' : 'transparent' }}
+        </ButtonView>
+        <ButtonView
+          variant={showPromptPicker ? 'secondary' : 'ghost'}
+          size="xs"
+          borderRadius={9999}
+          accentColor={showPromptPicker ? 'var(--color-protocol-ai)' : undefined}
+          color={showPromptPicker ? 'var(--color-protocol-ai)' : undefined}
+          onClick={() => setShowPromptPicker(p => !p)}
           title="@ Prompt Library quick-insert"
         >
           @ Prompts
-        </button>
+        </ButtonView>
         <div className="w-px h-4 mx-0.5 flex-shrink-0" style={{ backgroundColor: 'var(--color-surface-border)' }} />
-        {/* 10.10-10.17: Platform tools */}
+        {/* Platform tools */}
         {aiEnabled('openApiGenerator') && (
-          <button type="button" onClick={() => setShowOpenApiModal(true)}
-            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
-            title="Generate OpenAPI 3.1 spec from collection"
-          >OpenAPI ✦</button>
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowOpenApiModal(true)} title="Generate OpenAPI 3.1 spec from collection">OpenAPI ✦</ButtonView>
         )}
         {aiEnabled('securityAudit') && (
-          <button type="button" onClick={() => setShowSecurityAudit(true)}
-            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
-            title="AI Security Audit all tabs"
-          >Security ✦</button>
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowSecurityAudit(true)} title="AI Security Audit all tabs">Security ✦</ButtonView>
         )}
         {aiEnabled('postmanTranslator') && (
-          <button type="button" onClick={() => setShowPostmanTranslator(true)}
-            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
-            title="Translate Postman pm.* to Daakia dk.*"
-          >pm→dk ✦</button>
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowPostmanTranslator(true)} title="Translate Postman pm.* to Daakia dk.*">pm→dk ✦</ButtonView>
         )}
         {aiEnabled('webhookDebugger') && (
-          <button type="button" onClick={() => setShowWebhookDebugger(true)}
-            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
-            title="AI Webhook Debugger"
-          >Webhook ✦</button>
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowWebhookDebugger(true)} title="AI Webhook Debugger">Webhook ✦</ButtonView>
         )}
         {aiEnabled('requestClustering') && (
-          <button type="button" onClick={() => setShowRequestClustering(true)}
-            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
-            title="AI Request Clustering — auto-organize into collections"
-          >Cluster ✦</button>
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowRequestClustering(true)} title="AI Request Clustering — auto-organize into collections">Cluster ✦</ButtonView>
         )}
         {(aiEnabled('crossProtocolOrchestrator') || aiEnabled('chaosEngineeringPlanner') || aiEnabled('contractNegotiator') || aiEnabled('liveTrafficMirror')) && (
           <div className="w-px h-4 mx-0.5 flex-shrink-0" style={{ backgroundColor: 'var(--color-surface-border)' }} />
         )}
         {aiEnabled('crossProtocolOrchestrator') && (
-          <button type="button" onClick={() => setShowCrossProtocol(true)}
-            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
-            title="Cross-Protocol Orchestrator — multi-protocol journey planner"
-          >Orchestrate ✦</button>
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowCrossProtocol(true)} title="Cross-Protocol Orchestrator">Orchestrate ✦</ButtonView>
         )}
         {aiEnabled('chaosEngineeringPlanner') && (
-          <button type="button" onClick={() => setShowChaosEngineering(true)}
-            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
-            title="Chaos Engineering Planner — failure scenario designer"
-          >Chaos ✦</button>
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowChaosEngineering(true)} title="Chaos Engineering Planner">Chaos ✦</ButtonView>
         )}
         {aiEnabled('contractNegotiator') && (
-          <button type="button" onClick={() => setShowContractNegotiator(true)}
-            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
-            title="Contract Negotiator — resolve API contract conflicts between teams"
-          >Contracts ✦</button>
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowContractNegotiator(true)} title="Contract Negotiator">Contracts ✦</ButtonView>
         )}
         {aiEnabled('liveTrafficMirror') && (
-          <button type="button" onClick={() => setShowLiveTrafficMirror(true)}
-            className="flex items-center gap-1 h-[22px] px-2.5 rounded-full text-[10px] font-medium cursor-pointer transition-all border"
-            style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
-            title="Live Traffic Mirror — proxy & AI analysis across all protocols"
-          >Traffic ✦</button>
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowLiveTrafficMirror(true)} title="Live Traffic Mirror">Traffic ✦</ButtonView>
         )}
       </div>
 
@@ -607,18 +582,20 @@ export function DaakiaAiPanel() {
           </div>
           <div className="flex flex-wrap gap-1.5 px-3 py-1.5">
             {(Object.keys(templates) as AiPromptTemplateKey[]).slice(0, 20).map(key => (
-              <button key={key} type="button"
+              <ButtonView
+                key={key}
+                variant="secondary"
+                size="xs"
+                borderRadius={9999}
                 onClick={() => {
                   const text = templates[key];
                   if (text && navigator.clipboard) navigator.clipboard.writeText(text);
                   setShowPromptPicker(false);
                 }}
-                className="h-[22px] px-2 text-[10px] rounded-full border cursor-pointer transition-all whitespace-nowrap"
-                style={{ color: 'var(--color-text-secondary)', borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-raised)' }}
                 title={AI_PROMPT_TEMPLATE_LABELS[key]?.description || key}
               >
                 {AI_PROMPT_TEMPLATE_LABELS[key]?.label || key}
-              </button>
+              </ButtonView>
             ))}
           </div>
         </div>

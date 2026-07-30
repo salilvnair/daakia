@@ -6,13 +6,13 @@
  * AI generates a structured changelog: Breaking Changes, New Endpoints, Modified, Removed.
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
-import { CopyButton } from '../shared';
 import { type CollectionTreeNode } from '../../services/collections';
+import { ModalView, AIButtonView, ButtonView, EditorView, CopyButtonView } from '@salilvnair/dui';
+import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface Props {
   collectionNode: CollectionTreeNode;
@@ -47,9 +47,25 @@ export function AiChangelogModal({ collectionNode, onClose }: Props) {
 
   const accRef = useRef('');
   const reqIdRef = useRef('');
+  const previousVersionRef = useRef('');
   const resolve = useAiPromptTemplatesStore(s => s.resolve);
+  const cacheGet = useAiCollectionCacheStore(s => s.get);
+  const cacheSet = useAiCollectionCacheStore(s => s.set);
+  const cacheKey = `changelog:${collectionNode.id}`;
 
   const currentSummary = serializeCollection(collectionNode);
+
+  // Cache-first: reopening this action for the same collection shows the last
+  // changelog instead of an empty form — Regenerate is always explicit.
+  useEffect(() => {
+    const cached = cacheGet(cacheKey);
+    if (!cached) return;
+    const p = cached.payload as { previousVersion: string; changelog: string };
+    setPreviousVersion(p.previousVersion);
+    previousVersionRef.current = p.previousVersion;
+    setChangelog(p.changelog);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -67,6 +83,7 @@ export function AiChangelogModal({ collectionNode, onClose }: Props) {
         setChangelog(content);
         setLoading(false);
         setIsStreaming(false);
+        cacheSet(cacheKey, { previousVersion: previousVersionRef.current, changelog: content });
       }
       if (msg.type === 'ai:error') {
         setError((msg.message as string) || 'Changelog generation failed.');
@@ -122,133 +139,115 @@ export function AiChangelogModal({ collectionNode, onClose }: Props) {
     });
   };
 
-  const modal = (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="API Changelog Generator"
+      subtitle={collectionNode.name}
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{
+          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'color-mix(in srgb, var(--color-warning) 18%, transparent)',
+        }}>
+          <SparkleIcon size={13} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={changelog && !loading ? (
+        <CopyButtonView text={changelog} title="Copy changelog" accentColor={ACCENT} />
+      ) : undefined}
+      footerRight={
+        changelog && !loading ? (
+          <ButtonView size="md" onClick={handleGenerate}>Regenerate</ButtonView>
+        ) : (
+          <AIButtonView
+            label={loading ? 'Comparing…' : 'Generate Changelog'}
+            size="md"
+            accentColor={ACCENT}
+            loading={loading}
+            disabled={!previousVersion.trim() || loading}
+            onClick={handleGenerate}
+          />
+        )
+      }
     >
-      <div
-        className="w-[640px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">API Changelog Generator</p>
-            <p className="text-[11px] text-[var(--color-text-muted)] truncate">{collectionNode.name}</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Current version preview */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+              Current version <span style={{ fontWeight: 400, fontStyle: 'italic', color: 'var(--color-text-muted)' }}>(auto-loaded)</span>
+            </label>
+            <span style={{
+              padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 500,
+              background: 'color-mix(in srgb, var(--color-success) 12%, transparent)', color: 'var(--color-success)',
+            }}>
+              live
+            </span>
           </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+          <pre
+            style={{
+              width: '100%', padding: '8px 12px', borderRadius: 8, fontSize: 10.5, fontFamily: 'monospace',
+              maxHeight: 100, overflowY: 'auto', margin: 0, whiteSpace: 'pre-wrap',
+              background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-muted)',
+            }}
+          >
+            {currentSummary.slice(0, 800)}{currentSummary.length > 800 ? '\n...(truncated)' : ''}
+          </pre>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-          {/* Current version preview */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-                Current version <span className="font-normal italic text-[var(--color-text-muted)]">(auto-loaded)</span>
-              </label>
-              <span
-                className="px-1.5 py-0.5 rounded text-[10px] font-medium"
-                style={{ backgroundColor: 'color-mix(in srgb, var(--color-success) 12%, transparent)', color: 'var(--color-success)' }}
-              >
-                live
-              </span>
-            </div>
-            <pre
-              className="w-full px-3 py-2 rounded-lg text-[10.5px] font-mono max-h-[100px] overflow-y-auto resize-none"
-              style={{
-                backgroundColor: 'var(--color-input-bg)',
-                border: '1px solid var(--color-input-border)',
-                color: 'var(--color-text-muted)',
-                whiteSpace: 'pre-wrap',
-              }}
-            >
-              {currentSummary.slice(0, 800)}{currentSummary.length > 800 ? '\n...(truncated)' : ''}
-            </pre>
-          </div>
-
-          {/* Previous version paste */}
-          <div>
-            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-              Previous version <span className="font-normal italic text-[var(--color-text-muted)]">(paste exported JSON, cURL list, or request names)</span>
-            </label>
-            <textarea
-              autoFocus
+        {/* Previous version paste */}
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 4, color: 'var(--color-text-secondary)' }}>
+            Previous version <span style={{ fontWeight: 400, fontStyle: 'italic', color: 'var(--color-text-muted)' }}>(paste exported JSON, cURL list, or request names)</span>
+          </label>
+          <div style={{ height: 150 }}>
+            <EditorView
               value={previousVersion}
-              onChange={e => { setPreviousVersion(e.target.value); setError(''); setChangelog(''); }}
-              rows={7}
-              className="w-full px-3 py-2 rounded-lg text-[11px] font-mono resize-none outline-none"
+              onChange={v => { setPreviousVersion(v); previousVersionRef.current = v; setError(''); setChangelog(''); }}
+              language="json"
+              height="100%"
+              size="md"
               placeholder={`Paste the old version here — any format works:\n• Exported Daakia JSON\n• List of "METHOD /path — Name" lines\n• Postman/Insomnia collection JSON\n• Just a list of endpoint names`}
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
+              bordered
             />
           </div>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {!changelog && !loading && (
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={!previousVersion.trim()}
-              className="h-[30px] px-4 text-[12px] font-medium rounded-md text-white cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-40 self-start flex items-center gap-1.5"
-              style={{ backgroundColor: ACCENT }}
-            >
-              <SparkleIcon size={12} />
-              Generate Changelog
-            </button>
-          )}
-
-          {loading && !changelog && (
-            <div className="flex gap-1 items-center py-2">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Comparing versions…</span>
-            </div>
-          )}
-
-          {changelog && (
-            <div
-              className="rounded-lg border p-4"
-              style={{
-                borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
-                backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))`,
-              }}
-            >
-              <MdViewer content={changelog} />
-              {isStreaming && (
-                <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse align-text-bottom"
-                  style={{ backgroundColor: ACCENT }} />
-              )}
-            </div>
-          )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="flex items-center gap-3">
-            {changelog && !loading && (
-              <button type="button" onClick={handleGenerate}
-                className="text-[11px] underline cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]">
-                Regenerate
-              </button>
-            )}
-            {changelog && !loading && (
-              <CopyButton text={changelog} size={13} title="Copy changelog" className="w-6 h-6" />
+        {error && <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>{error}</p>}
+
+        {loading && !changelog && (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '8px 0' }}>
+            {[0, 150, 300].map(d => (
+              <span key={d} className="animate-pulse" style={{
+                width: 5, height: 5, borderRadius: '50%', background: ACCENT, animationDelay: `${d}ms`,
+              }} />
+            ))}
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>Comparing versions…</span>
+          </div>
+        )}
+
+        {changelog && (
+          <div
+            style={{
+              borderRadius: 8, padding: 16,
+              border: `1px solid color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))`,
+              background: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))`,
+            }}
+          >
+            <MdViewer content={changelog} />
+            {isStreaming && (
+              <span className="animate-pulse" style={{
+                display: 'inline-block', width: 2, height: 12, marginLeft: 2, verticalAlign: 'text-bottom',
+                background: ACCENT,
+              }} />
             )}
           </div>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[12px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">
-            Close
-          </button>
-        </div>
+        )}
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

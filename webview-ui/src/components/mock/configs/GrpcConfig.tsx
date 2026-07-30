@@ -1,16 +1,28 @@
 import { useState, useMemo } from 'react';
-import { CodeEditor, StyledDropdown, ConfirmDialog, DurationInput } from '../../shared';
-import type { DropdownOption } from '../../shared';
+import {
+  SelectInputView, EditorView, ButtonView, IconButtonView, ToggleSwitchView,
+  TextInputView, DurationInputView, TabView, type SelectOption, type TabItem,
+} from '@salilvnair/dui';
+import { ConfirmDialog } from '../../shared';
 import { TrashIcon, DiagonalLinesPattern, ChevronRightIcon, GrpcUnaryIcon, GrpcServerStreamIcon, GrpcClientStreamIcon, GrpcBidiStreamIcon } from '../../../icons';
 import { GRPC_SAMPLES } from '../samples/grpc';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import type { MockServer, GrpcMockMethod, MockRoute } from '../mock-types';
 import { MockAiGenerateButton, type ParsedGenericItem } from '../MockAiGeneratePopover';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import { SequencePanel } from '../wiremock/SequencePanel';
 import { MatchBuilderPanel } from '../wiremock/MatchBuilderPanel';
 import { FaultInjectionPanel } from '../wiremock/FaultInjectionPanel';
+import { StateMachineTriggerSelect } from '../wiremock/StateMachinePanel';
 
 type GrpcMethodTab = 'response' | 'sequence' | 'matching' | 'advanced';
+
+const GRPC_METHOD_TABS: TabItem[] = [
+  { id: 'response', label: 'Response' },
+  { id: 'sequence', label: 'Sequence' },
+  { id: 'matching', label: 'Matching' },
+  { id: 'advanced', label: 'Advanced' },
+];
 
 function methodToRoute(m: GrpcMockMethod): MockRoute {
   return {
@@ -30,7 +42,7 @@ function routeToMethodPatch(patch: Partial<MockRoute>): Partial<GrpcMockMethod> 
 
 const ACCENT = 'var(--color-protocol-grpc)';
 
-const RPC_TYPE_OPTIONS: DropdownOption[] = [
+const RPC_TYPE_OPTIONS: SelectOption[] = [
   { value: 'unary', label: 'Unary' },
   { value: 'server_streaming', label: 'Server Streaming' },
   { value: 'client_streaming', label: 'Client Streaming' },
@@ -44,12 +56,10 @@ const STREAM_TYPE_CONFIG: Record<string, { icon: typeof GrpcUnaryIcon; color: st
   bidi_streaming: { icon: GrpcBidiStreamIcon, color: '#f472b6', label: 'BIDI STREAM' },
 };
 
-const SAMPLE_OPTIONS: DropdownOption[] = [
+const SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
-  { value: '__no_proto_header', label: '── No Proto ──', isHeader: true },
-  ...GRPC_SAMPLES.filter(s => s.category === 'no-proto').map(s => ({ value: s.id, label: s.label })),
-  { value: '__with_proto_header', label: '── With Proto ──', isHeader: true },
-  ...GRPC_SAMPLES.filter(s => s.category === 'with-proto').map(s => ({ value: s.id, label: s.label })),
+  ...GRPC_SAMPLES.filter(s => s.category === 'no-proto').map(s => ({ value: s.id, label: `[No Proto] ${s.label}` })),
+  ...GRPC_SAMPLES.filter(s => s.category === 'with-proto').map(s => ({ value: s.id, label: `[With Proto] ${s.label}` })),
 ];
 
 interface GrpcMethodRow {
@@ -70,6 +80,8 @@ interface GrpcMethodRow {
   priority?: number;
   fault?: import('../mock-types').FaultConfig;
   rateLimit?: import('../mock-types').RateLimitConfig;
+  triggerEvent?: string;
+  connectedWorkflowId?: string;
 }
 
 interface ServiceGroup {
@@ -82,12 +94,7 @@ interface GrpcConfigProps {
   onUpdate: (patch: Partial<MockServer>) => void;
 }
 
-/**
- * GrpcConfig — gRPC mock server configuration panel.
- * Service → Method hierarchy with reordering support.
- */
 export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
-  // Persist expanded state via ui-state-store
   const storedExpanded = useUiStateStore(s => s.getPref(`mock.grpc.expanded.${server.id}`));
   const storedMethodId = useUiStateStore(s => s.getPref(`mock.grpc.expandedMethod.${server.id}`));
   const [expandedServices, setExpandedServices] = useState<Set<string>>(() => {
@@ -108,9 +115,18 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
     delay: m.delay || 0,
     statusCode: m.statusCode ?? 0,
     serviceEnabled: m.serviceEnabled !== false,
+    responses: m.responses,
+    sequenceMode: m.sequenceMode,
+    headerMatchers: m.headerMatchers,
+    bodyMatcher: m.bodyMatcher,
+    compositeLogic: m.compositeLogic,
+    priority: m.priority,
+    fault: m.fault,
+    rateLimit: m.rateLimit,
+    triggerEvent: m.triggerEvent,
+    connectedWorkflowId: m.connectedWorkflowId,
   }));
 
-  // Group methods by service, preserving order of first appearance
   const serviceGroups: ServiceGroup[] = useMemo(() => {
     const map = new Map<string, GrpcMethodRow[]>();
     for (const m of methods) {
@@ -126,44 +142,19 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
   };
 
   const addService = () => {
+    logUiEvent('mock.cfg_add', { type: 'service' });
     const svcName = `mypackage.NewService${serviceGroups.length + 1}`;
-    update([...methods, {
-      id: crypto.randomUUID(),
-      service: svcName,
-      method: 'MyMethod',
-      type: 'unary',
-      response: '{\n  "message": "Hello from gRPC mock"\n}',
-      enabled: true,
-      delay: 0,
-      statusCode: 0,
-      serviceEnabled: true,
-    }]);
+    update([...methods, { id: crypto.randomUUID(), service: svcName, method: 'MyMethod', type: 'unary', response: '{\n  "message": "Hello from gRPC mock"\n}', enabled: true, delay: 0, statusCode: 0, serviceEnabled: true }]);
     setExpandedServices(prev => new Set(prev).add(svcName));
   };
 
   const addMethodToService = (serviceName: string) => {
-    update([...methods, {
-      id: crypto.randomUUID(),
-      service: serviceName,
-      method: 'NewMethod',
-      type: 'unary',
-      response: '{\n  "message": "Hello from gRPC mock"\n}',
-      enabled: true,
-      delay: 0,
-      statusCode: 0,
-      serviceEnabled: true,
-    }]);
+    logUiEvent('mock.cfg_add', { type: 'method', service: serviceName });
+    update([...methods, { id: crypto.randomUUID(), service: serviceName, method: 'NewMethod', type: 'unary', response: '{\n  "message": "Hello from gRPC mock"\n}', enabled: true, delay: 0, statusCode: 0, serviceEnabled: true }]);
   };
 
-  const removeMethod = (id: string) => {
-    update(methods.filter(m => m.id !== id));
-    setDeleteConfirm(null);
-  };
-
-  const removeService = (serviceName: string) => {
-    update(methods.filter(m => m.service !== serviceName));
-    setDeleteConfirm(null);
-  };
+  const removeMethod = (id: string) => { update(methods.filter(m => m.id !== id)); setDeleteConfirm(null); };
+  const removeService = (serviceName: string) => { update(methods.filter(m => m.service !== serviceName)); setDeleteConfirm(null); };
 
   const handleAddGeneratedItems = (items: ParsedGenericItem[]) => {
     const newMethods: GrpcMethodRow[] = [];
@@ -197,8 +188,6 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
     });
   };
 
-
-
   const toggleService = (svc: string) => {
     setExpandedServices(prev => {
       const next = new Set(prev);
@@ -223,21 +212,13 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
   const loadSample = (sampleId: string) => {
     const sample = GRPC_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'grpc' });
     const newMethods: GrpcMethodRow[] = sample.methods.map(m => ({
-      id: crypto.randomUUID(),
-      service: m.service,
-      method: m.method,
-      type: m.type,
-      response: m.response,
-      enabled: true,
-      delay: 0,
-      statusCode: 0,
-      serviceEnabled: true,
+      id: crypto.randomUUID(), service: m.service, method: m.method, type: m.type,
+      response: m.response, enabled: true, delay: 0, statusCode: 0, serviceEnabled: true,
     }));
     onUpdate({ description: sample.description, grpcMethods: newMethods as GrpcMockMethod[] });
-    // Expand all services from sample
-    const svcNames = new Set(newMethods.map(m => m.service));
-    setExpandedServices(svcNames);
+    setExpandedServices(new Set(newMethods.map(m => m.service)));
   };
 
   return (
@@ -246,11 +227,11 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Services ({serviceGroups.length})</span>
         <div className="flex items-center gap-1.5">
-          <StyledDropdown
+          <SelectInputView
+            size="md"
             options={SAMPLE_OPTIONS}
             value=""
             onChange={(v) => { if (v) loadSample(v); }}
-            size="sm"
             accentColor={ACCENT}
           />
           <MockAiGenerateButton
@@ -264,25 +245,11 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
             accentVar={ACCENT}
             onAddGeneratedItems={handleAddGeneratedItems}
           />
-          <button
-            type="button"
-            onClick={addService}
-            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)`, background: 'transparent' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 10%, transparent)`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-          >
+          <ButtonView size="md" variant="accent" accentColor={ACCENT} onClick={addService}>
             + Add Service
-          </button>
+          </ButtonView>
           {serviceGroups.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowDeleteAll(true)}
-              title="Delete All Services"
-              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
-              <TrashIcon size={12} />
-            </button>
+            <IconButtonView size="md" icon={<TrashIcon size={12} />} accentColor="var(--color-error)" onClick={() => setShowDeleteAll(true)} title="Delete All Services" />
           )}
         </div>
       </div>
@@ -303,11 +270,10 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                 key={stableKey}
                 className={`relative rounded-md border overflow-hidden transition-all ${
                   svcEnabled
-                    ? 'border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)]'
+                    ? 'border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]'
                     : 'border-[var(--color-surface-border)] bg-[var(--color-panel)]'
                 }`}
               >
-                {/* Disabled overlay */}
                 {!svcEnabled && (
                   <div className="absolute inset-0 rounded-md z-10 pointer-events-none overflow-hidden">
                     <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md bg-[var(--color-muted-fallback)]" />
@@ -317,20 +283,17 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
 
                 {/* Service header */}
                 <div
-                  className={`flex items-center gap-1.5 px-2.5 py-2 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] relative ${!svcEnabled ? 'opacity-50' : ''}`}
+                  className={`flex items-center gap-1.5 px-2.5 py-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] relative ${!svcEnabled ? 'opacity-50' : ''}`}
                   onClick={() => { if (svcEnabled) toggleService(group.service); }}
                 >
-                  {/* Toggle */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); toggleServiceEnabled(group.service); }}
-                    className="relative z-20 w-[26px] h-[13px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-                    style={{ backgroundColor: svcEnabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-                    title={svcEnabled ? 'Disable service' : 'Enable service'}
-                  >
-                    <span className="absolute top-[2px] w-[9px] h-[9px] rounded-full bg-white transition-all" style={{ left: svcEnabled ? '15px' : '2px' }} />
-                  </button>
-
+                  <div onClick={e => e.stopPropagation()}>
+                    <ToggleSwitchView
+                      checked={svcEnabled}
+                      onChange={() => toggleServiceEnabled(group.service)}
+                      accentColor="var(--color-success)"
+                      size="xs"
+                    />
+                  </div>
                   <span
                     className="transition-transform duration-150"
                     style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', color: ACCENT, visibility: svcEnabled ? 'visible' : 'hidden' }}
@@ -344,54 +307,46 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
                     {group.methods.length} method{group.methods.length !== 1 ? 's' : ''}
                   </span>
                   {svcEnabled && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ type: 'service', id: group.service, label: group.service }); }}
-                    className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors"
-                    title="Remove service"
-                  >
-                    <TrashIcon size={12} />
-                  </button>
+                    <div onClick={e => e.stopPropagation()}>
+                      <IconButtonView
+                        size="sm"
+                        icon={<TrashIcon size={12} />}
+                        accentColor="var(--color-error)"
+                        onClick={() => setDeleteConfirm({ type: 'service', id: group.service, label: group.service })}
+                        title="Remove service"
+                      />
+                    </div>
                   )}
                 </div>
 
                 {/* Expanded service content */}
                 {isExpanded && (
-                  <div className="px-3 pb-3 pt-1 border-t border-[rgba(255,255,255,0.06)] flex flex-col gap-2">
-                    {/* Service name edit */}
+                  <div className="px-3 pb-3 pt-1 border-t border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] flex flex-col gap-2">
                     <div className="flex items-center gap-2">
                       <label className="text-[10px] text-[var(--color-text-muted)] whitespace-nowrap">Service Name</label>
-                      <input
-                        type="text"
+                      <TextInputView
                         value={group.service}
                         onChange={(e) => renameService(group.service, e.target.value)}
-                        className="flex-1 h-[26px] px-2 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]"
+                        size="md"
+                        style={{ flex: 1, fontFamily: 'monospace' }}
                       />
+                      <ButtonView size="sm" variant="accent" accentColor={ACCENT} onClick={() => addMethodToService(group.service)}>
+                        + Add Method
+                      </ButtonView>
                     </div>
 
-                    {/* Method rows */}
-                    {group.methods.map((m, idx) => (
+                    {group.methods.map((m) => (
                       <MethodRow
                         key={m.id}
                         method={m}
                         isExpanded={expandedMethodId === m.id}
+                        server={server}
                         onToggleExpand={() => { const next = expandedMethodId === m.id ? null : m.id; setExpandedMethodId(next); useUiStateStore.getState().setPref(`mock.grpc.expandedMethod.${server.id}`, next || ''); }}
                         onUpdate={(patch) => updateMethod(m.id, patch)}
                         onRemove={() => setDeleteConfirm({ type: 'method', id: m.id, label: m.method })}
                       />
                     ))}
 
-                    {/* Add method button */}
-                    <button
-                      type="button"
-                      onClick={() => addMethodToService(group.service)}
-                      className="h-[26px] px-2 text-[10px] rounded cursor-pointer transition-colors self-start border border-dashed"
-                      style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: 'transparent' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 8%, transparent)`; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      + Add Method
-                    </button>
                   </div>
                 )}
               </div>
@@ -400,7 +355,6 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
       {deleteConfirm && (
         <ConfirmDialog
           title={deleteConfirm.type === 'service' ? 'Delete Service' : 'Delete Method'}
@@ -423,10 +377,7 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
           message={`Are you sure you want to delete all ${serviceGroups.length} service${serviceGroups.length !== 1 ? 's' : ''} and their methods? This cannot be undone.`}
           confirmLabel="Delete All"
           danger
-          onConfirm={() => {
-            update([]);
-            setShowDeleteAll(false);
-          }}
+          onConfirm={() => { logUiEvent('mock.cfg_clear', { count: methods.length, protocol: 'grpc' }); update([]); setShowDeleteAll(false); }}
           onCancel={() => setShowDeleteAll(false)}
         />
       )}
@@ -439,22 +390,23 @@ export function GrpcConfig({ server, onUpdate }: GrpcConfigProps) {
 interface MethodRowProps {
   method: GrpcMethodRow;
   isExpanded: boolean;
+  server: MockServer;
   onToggleExpand: () => void;
   onUpdate: (patch: Partial<GrpcMethodRow>) => void;
   onRemove: () => void;
 }
 
-function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }: MethodRowProps) {
+function MethodRow({ method: m, isExpanded, server, onToggleExpand, onUpdate, onRemove }: MethodRowProps) {
   const [activeTab, setActiveTab] = useState<GrpcMethodTab>('response');
+
   return (
     <div
       className={`relative rounded-md border overflow-hidden transition-all ${
         m.enabled
-          ? 'border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.01)]'
+          ? 'border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] bg-[color-mix(in_srgb,var(--color-text-primary)_1%,transparent)]'
           : 'border-[var(--color-surface-border)] bg-[var(--color-panel)]'
       }`}
     >
-      {/* Disabled overlay */}
       {!m.enabled && (
         <div className="absolute inset-0 rounded-md z-10 pointer-events-none overflow-hidden">
           <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md bg-[var(--color-muted-fallback)]" />
@@ -464,133 +416,125 @@ function MethodRow({ method: m, isExpanded, onToggleExpand, onUpdate, onRemove }
 
       {/* Method header */}
       <div
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] relative ${!m.enabled ? 'opacity-50' : ''}`}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] relative ${!m.enabled ? 'opacity-50' : ''}`}
         onClick={() => { if (m.enabled) onToggleExpand(); }}
       >
-        {/* Toggle */}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onUpdate({ enabled: !m.enabled }); }}
-          className="relative z-20 w-[26px] h-[13px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-          style={{ backgroundColor: m.enabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-          title={m.enabled ? 'Disable' : 'Enable'}
-        >
-          <span className="absolute top-[2px] w-[9px] h-[9px] rounded-full bg-white transition-all" style={{ left: m.enabled ? '15px' : '2px' }} />
-        </button>
+        <div onClick={e => e.stopPropagation()}>
+          <ToggleSwitchView
+            checked={m.enabled}
+            onChange={(v) => onUpdate({ enabled: v })}
+            accentColor="var(--color-success)"
+            size="xs"
+          />
+        </div>
 
-        {/* Stream type icon (colored like client tab) */}
         {(() => {
           const cfg = STREAM_TYPE_CONFIG[m.type] || STREAM_TYPE_CONFIG.unary;
           const Icon = cfg.icon;
           return <Icon size={14} style={{ color: cfg.color, flexShrink: 0 }} />;
         })()}
 
-        {/* Method name */}
-        <span className="flex-1 text-[11px] font-mono text-[var(--color-text-primary)] truncate">
-          {m.method}
-        </span>
+        <span className="flex-1 text-[11px] font-mono text-[var(--color-text-primary)] truncate">{m.method}</span>
 
-        {/* Type badge (right side, colored) */}
         {(() => {
           const cfg = STREAM_TYPE_CONFIG[m.type] || STREAM_TYPE_CONFIG.unary;
           return (
-            <span
-              className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0"
-              style={{ color: cfg.color, backgroundColor: `${cfg.color}18` }}
-            >
+            <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0" style={{ color: cfg.color, backgroundColor: `${cfg.color}18` }}>
               {cfg.label}
             </span>
           );
         })()}
 
-        {/* Delete */}
         {m.enabled && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors"
-          >
-            <TrashIcon size={11} />
-          </button>
+          <div onClick={e => e.stopPropagation()}>
+            <IconButtonView
+              size="sm"
+              icon={<TrashIcon size={11} />}
+              accentColor="var(--color-error)"
+              onClick={onRemove}
+            />
+          </div>
         )}
       </div>
 
       {/* Expanded detail */}
       {m.enabled && isExpanded && (
-        <div className="border-t border-[rgba(255,255,255,0.06)]">
-          {/* Tab bar */}
-          <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.06)] px-2.5">
-            {(['response', 'sequence', 'matching', 'advanced'] as GrpcMethodTab[]).map(tab => (
-              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-                className="h-[28px] px-2.5 text-[10px] font-medium cursor-pointer transition-colors capitalize"
-                style={{
-                  borderBottom: activeTab === tab ? `2px solid ${ACCENT}` : '2px solid transparent',
-                  color: activeTab === tab ? ACCENT : 'var(--color-text-muted)',
-                  marginBottom: '-1px',
-                }}>
-                {tab === 'response' ? 'Response' : tab === 'sequence' ? 'Sequence' : tab === 'matching' ? 'Matching' : 'Advanced'}
-              </button>
-            ))}
+        <div className="border-t border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
+          <div className="px-2.5 pt-1">
+            <TabView
+              tabs={GRPC_METHOD_TABS}
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as GrpcMethodTab)}
+              variant="underline"
+              size="xs"
+              accentColor={ACCENT}
+            />
           </div>
 
           <div className="px-2.5 pb-2.5 pt-2 flex flex-col gap-2">
-            {/* ── Response tab ── */}
-            {activeTab === 'response' && <>
-              <div className="grid grid-cols-2 gap-2">
+            {activeTab === 'response' && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Method Name</label>
+                    <TextInputView
+                      value={m.method}
+                      onChange={(e) => onUpdate({ method: e.target.value })}
+                      size="md"
+                      style={{ width: '100%', fontFamily: 'monospace' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Type</label>
+                    <SelectInputView
+                      size="md"
+                      options={RPC_TYPE_OPTIONS}
+                      value={m.type}
+                      onChange={(v) => onUpdate({ type: v as GrpcMethodRow['type'] })}
+                      accentColor={ACCENT}
+                    />
+                  </div>
+                </div>
+                <StateMachineTriggerSelect
+                  server={server}
+                  connectedWorkflowId={m.connectedWorkflowId}
+                  triggerEvent={m.triggerEvent}
+                  onChange={(patch) => onUpdate(patch)}
+                />
                 <div>
-                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Method Name</label>
-                  <input type="text" value={m.method} onChange={(e) => onUpdate({ method: e.target.value })}
-                    className="w-full h-[26px] px-2.5 rounded text-[11px] font-mono bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)]" />
+                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response (JSON)</label>
+                  <div className="h-[120px] rounded-md overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)]">
+                    <EditorView value={m.response} onChange={(val) => onUpdate({ response: val })} language="json" height="100%" />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Type</label>
-                  <StyledDropdown options={RPC_TYPE_OPTIONS} value={m.type}
-                    onChange={(v) => onUpdate({ type: v as GrpcMethodRow['type'] })} size="sm" accentColor={ACCENT} />
+                <div className="flex items-center gap-4 pt-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[var(--color-text-muted)]">Status</span>
+                    <TextInputView
+                      type="number"
+                      value={String(m.statusCode)}
+                      onChange={(e) => onUpdate({ statusCode: parseInt(e.target.value) || 0 })}
+                      size="md"
+                      style={{ width: 56, fontFamily: 'monospace', textAlign: 'center' }}
+                      title="gRPC status code (0=OK, 1=CANCELLED, 2=UNKNOWN, ...)"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
+                    <DurationInputView value={m.delay} onChange={(ms) => onUpdate({ delay: ms })} size="sm" />
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="text-[10px] text-[var(--color-text-muted)] block mb-0.5">Response (JSON)</label>
-                <div className="h-[120px] rounded-md overflow-hidden border border-[rgba(255,255,255,0.08)]">
-                  <CodeEditor value={m.response} onChange={(val) => onUpdate({ response: val })} language="json" className="h-full" />
-                </div>
-              </div>
-              <div className="flex items-center gap-4 pt-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] text-[var(--color-text-muted)]">Status</span>
-                  <input type="text" inputMode="numeric" value={m.statusCode}
-                    onChange={(e) => onUpdate({ statusCode: parseInt(e.target.value) || 0 })}
-                    className="w-[56px] h-[26px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-mock-server)] text-center"
-                    title="gRPC status code (0=OK, 1=CANCELLED, 2=UNKNOWN, ...)" />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
-                  <DurationInput value={m.delay} onChange={(ms) => onUpdate({ delay: ms })} />
-                </div>
-              </div>
-            </>}
+              </>
+            )}
 
-            {/* ── Sequence tab ── */}
             {activeTab === 'sequence' && (
-              <SequencePanel
-                route={methodToRoute(m as unknown as GrpcMockMethod)}
-                onUpdate={(patch) => onUpdate(routeToMethodPatch(patch) as Partial<GrpcMethodRow>)}
-              />
+              <SequencePanel route={methodToRoute(m as unknown as GrpcMockMethod)} onUpdate={(patch) => onUpdate(routeToMethodPatch(patch) as Partial<GrpcMethodRow>)} />
             )}
-
-            {/* ── Matching tab ── */}
             {activeTab === 'matching' && (
-              <MatchBuilderPanel
-                route={methodToRoute(m as unknown as GrpcMockMethod)}
-                onUpdate={(patch) => onUpdate(routeToMethodPatch(patch) as Partial<GrpcMethodRow>)}
-              />
+              <MatchBuilderPanel route={methodToRoute(m as unknown as GrpcMockMethod)} onUpdate={(patch) => onUpdate(routeToMethodPatch(patch) as Partial<GrpcMethodRow>)} />
             )}
-
-            {/* ── Advanced tab ── */}
             {activeTab === 'advanced' && (
-              <FaultInjectionPanel
-                route={methodToRoute(m as unknown as GrpcMockMethod)}
-                onUpdate={(patch) => onUpdate(routeToMethodPatch(patch) as Partial<GrpcMethodRow>)}
-              />
+              <FaultInjectionPanel route={methodToRoute(m as unknown as GrpcMockMethod)} onUpdate={(patch) => onUpdate(routeToMethodPatch(patch) as Partial<GrpcMethodRow>)} />
             )}
           </div>
         </div>

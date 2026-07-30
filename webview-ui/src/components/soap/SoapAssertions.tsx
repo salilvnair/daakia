@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { SelectInputView, TextInputView, MultilineInputView, ToggleSwitchView, ButtonView, IconButtonView } from '@salilvnair/dui';
 import { useTabsStore } from '../../store/tabs-store';
-import { StyledDropdown, ConfirmDialog } from '../shared';
+import { ConfirmDialog } from '../shared';
 import { PlusIcon, TrashIcon, CloseIcon, CheckCircleIcon, XCircleIcon } from '../../icons';
 import type { SoapAssertion } from '../../store/tabs-store';
 
@@ -94,15 +95,15 @@ export function SoapAssertions() {
             <> · <button type="button" onClick={runAssertions} className="text-[var(--color-protocol-soap)] hover:underline cursor-pointer">Run All</button></>
           )}
         </span>
-        <button
-          type="button"
+        <ButtonView
+          size="xs"
+          accentColor={ACCENT}
           onClick={addAssertion}
-          className="h-[24px] px-2 text-[10px] font-medium rounded cursor-pointer transition-colors flex items-center gap-1"
+          iconLeft={<PlusIcon size={10} />}
           style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-soap) 12%, transparent)', color: ACCENT }}
         >
-          <PlusIcon size={10} />
           Add
-        </button>
+        </ButtonView>
       </div>
 
       {/* Assertion list */}
@@ -160,18 +161,18 @@ function AssertionRow({ assertion, onToggle, onEdit, onDelete }: {
     ? <CheckCircleIcon size={12} className="text-[var(--color-success)]" />
     : assertion.lastResult === 'fail'
       ? <XCircleIcon size={12} className="text-[var(--color-error)]" />
-      : <span className="w-3 h-3 rounded-full border border-[rgba(255,255,255,0.15)]" />;
+      : <span className="w-3 h-3 rounded-full border border-[color-mix(in_srgb,var(--color-text-primary)_15%,transparent)]" />;
 
   return (
-    <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-colors ${assertion.enabled ? 'bg-[rgba(255,255,255,0.02)]' : 'opacity-50'}`}>
+    <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-colors ${assertion.enabled ? 'bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]' : 'opacity-50'}`}>
       {icon}
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`w-6 h-3.5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${assertion.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[rgba(255,255,255,0.12)]'}`}
-      >
-        <span className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all ${assertion.enabled ? 'left-3' : 'left-0.5'}`} />
-      </button>
+      <ToggleSwitchView
+        checked={assertion.enabled}
+        onChange={onToggle}
+        size="xs"
+        accentColor={ACCENT}
+        className="flex-shrink-0"
+      />
       <span className="text-[10px] font-medium text-[var(--color-text-muted)] flex-shrink-0">{typeLabel}</span>
       <span className="text-[11px] text-[var(--color-text-primary)] truncate flex-1 cursor-pointer hover:text-[var(--color-protocol-soap)]" onClick={onEdit}>
         {getAssertionSummary(assertion)}
@@ -179,13 +180,13 @@ function AssertionRow({ assertion, onToggle, onEdit, onDelete }: {
       {assertion.lastResult === 'fail' && assertion.lastActual && (
         <span className="text-[9px] text-[var(--color-error)] truncate max-w-[100px]">got: {assertion.lastActual}</span>
       )}
-      <button
-        type="button"
+      <IconButtonView
+        icon={<TrashIcon size={10} />}
+        size="sm"
+        accentColor="var(--color-error)"
         onClick={onDelete}
-        className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-colors flex-shrink-0"
-      >
-        <TrashIcon size={10} />
-      </button>
+        className="flex-shrink-0"
+      />
     </div>
   );
 }
@@ -219,20 +220,18 @@ function AssertionEditModal({ assertion, onUpdate, onClose }: {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-surface-border)]">
           <h3 className="text-[13px] font-semibold text-[var(--color-text-primary)]">Edit Assertion</h3>
-          <button type="button" onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)] cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+          <IconButtonView icon={<CloseIcon size={12} />} size="sm" accentColor="var(--color-text-muted)" onClick={onClose} />
         </div>
 
         {/* Body */}
         <div className="px-4 py-3 flex flex-col gap-3">
           <div>
             <label className="text-[10px] text-[var(--color-text-muted)] mb-1 block">Type</label>
-            <StyledDropdown
+            <SelectInputView
               options={ASSERTION_TYPE_OPTIONS}
               value={assertion.type}
               onChange={(v) => onUpdate({ type: v as SoapAssertion['type'] })}
-              size="sm"
+              size="md"
               accentColor={ACCENT}
             />
           </div>
@@ -243,12 +242,15 @@ function AssertionEditModal({ assertion, onUpdate, onClose }: {
               <label className="text-[10px] text-[var(--color-text-muted)] mb-1 block">
                 {assertion.type === 'schema' ? 'Expected Body Element (optional)' : assertion.type === 'script' ? 'Script (return true/false)' : assertion.type === 'contains' ? 'Search Text' : 'XPath Expression'}
               </label>
-              <textarea
+              <MultilineInputView
                 value={assertion.expression || ''}
                 onChange={(e) => onUpdate({ expression: e.target.value })}
                 placeholder={assertion.type.startsWith('xpath') ? '//tns:name' : assertion.type === 'script' ? 'return response.includes("success");' : 'expected substring'}
                 rows={assertion.type === 'script' ? 4 : 2}
-                className="w-full px-2.5 py-1.5 text-[12px] font-mono rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)] resize-none"
+                size="md"
+                width="fw"
+                className="font-mono"
+                accentColor={ACCENT}
               />
             </div>
           )}
@@ -259,11 +261,11 @@ function AssertionEditModal({ assertion, onUpdate, onClose }: {
               {assertion.type !== 'response-time' && (
                 <div className="w-[120px]">
                   <label className="text-[10px] text-[var(--color-text-muted)] mb-1 block">Operator</label>
-                  <StyledDropdown
+                  <SelectInputView
                     options={OPERATOR_OPTIONS}
                     value={assertion.operator || '='}
                     onChange={(v) => onUpdate({ operator: v as SoapAssertion['operator'] })}
-                    size="sm"
+                    size="md"
                     accentColor={ACCENT}
                   />
                 </div>
@@ -272,12 +274,13 @@ function AssertionEditModal({ assertion, onUpdate, onClose }: {
                 <label className="text-[10px] text-[var(--color-text-muted)] mb-1 block">
                   {assertion.type === 'response-time' ? 'Max Time (ms)' : 'Expected Value'}
                 </label>
-                <input
-                  type="text"
+                <TextInputView
                   value={assertion.expectedValue || ''}
                   onChange={(e) => onUpdate({ expectedValue: e.target.value })}
                   placeholder={assertion.type === 'response-time' ? '2000' : 'expected value'}
-                  className="w-full h-[28px] px-2 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                  size="md"
+                  width="fw"
+                  accentColor={ACCENT}
                 />
               </div>
             </div>
@@ -286,14 +289,9 @@ function AssertionEditModal({ assertion, onUpdate, onClose }: {
 
         {/* Footer */}
         <div className="flex justify-end px-4 py-3 border-t border-[var(--color-surface-border)]">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-[28px] px-4 text-[11px] font-medium rounded-md text-white cursor-pointer hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: ACCENT }}
-          >
+          <ButtonView size="sm" variant="primary" accentColor={ACCENT} onClick={onClose}>
             Done
-          </button>
+          </ButtonView>
         </div>
       </div>
     </div>,
@@ -334,7 +332,7 @@ function evaluateAssertion(
       case 'xpath-match': {
         const actual = evaluateXPath(responseBody, assertion.expression || '');
         const pass = compareValues(actual, assertion.expectedValue || '', assertion.operator || '=');
-        return { lastResult: pass ? 'pass' : 'fail', lastActual: actual };
+        return { lastResult: pass ? 'pass' : 'fail', lastActual: actual ?? undefined };
       }
 
       case 'xpath-exists': {

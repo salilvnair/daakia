@@ -4,12 +4,13 @@
  * highest error rates, usage patterns, and runs an AI analysis on demand.
  * Gate: intelligenceDashboard feature flag.
  */
-import { useState, useMemo, useCallback } from 'react';
-import { SparkleIcon, GaugeIcon, ChevronRightIcon, RefreshIcon } from '../../../icons';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { SparkleIcon, GaugeIcon } from '../../../icons';
 import { MdViewer } from '../display/MdViewer';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { postMsg } from '../../../vscode';
+import { AIButtonView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
 const PROTOCOLS = ['rest', 'graphql', 'grpc', 'soap', 'websocket', 'sse', 'mqtt', 'socketio'];
@@ -100,9 +101,13 @@ export function AiInsightsTab() {
     ].join('\n');
 
     postMsg({
-      type: 'aiStreamRequest',
-      requestId: analysisId,
-      systemPrompt: `You are an API intelligence analyst. Analyze the request history data and provide:
+      type: 'ai:send',
+      tabId: analysisId,
+      provider: '',
+      model: '',
+      baseUrl: '',
+      stage: 'ai.insights',
+      systemPrompts: [`You are an API intelligence analyst. Analyze the request history data and provide:
 
 ## AI API Intelligence Report
 
@@ -121,27 +126,42 @@ export function AiInsightsTab() {
 ### 📊 Weekly Trend Estimate
 - Based on the patterns, briefly estimate what the trend looks like
 
-Keep the analysis concise and actionable. Use emoji bullets. Format in clear Markdown.`,
+Keep the analysis concise and actionable. Use emoji bullets. Format in clear Markdown.`],
       userPrompt: summary,
+      conversation: [],
+      tools: [],
+      settings: {
+        temperature: 0.3,
+        maxTokens: 2048,
+        stream: true,
+        topP: 1,
+        stopSequences: [],
+        responseFormat: 'text',
+        frequencyPenalty: 0,
+        presencePenalty: 0,
+        seed: null,
+      },
+      mcpServerConfigs: [],
     });
   }, [analysisId, totalRequests, totalErrors, slowest, mostErrors, mostUsed, isEnabled]);
 
   // Listen for AI stream events
-  useState(() => {
+  useEffect(() => {
     const handler = (e: MessageEvent) => {
-      const msg = e.data;
-      if (msg?.type === 'aiStreamChunk' && msg.requestId === analysisId) {
-        setAiResult(prev => prev + (msg.chunk ?? ''));
-      } else if (msg?.type === 'aiStreamDone' && msg.requestId === analysisId) {
+      const msg = e.data as Record<string, unknown>;
+      if (!msg || msg.tabId !== analysisId) return;
+      if (msg.type === 'ai:chunk') {
+        setAiResult(prev => prev + ((msg.delta as string) ?? ''));
+      } else if (msg.type === 'ai:complete') {
         setLoading(false);
-      } else if (msg?.type === 'aiStreamError' && msg.requestId === analysisId) {
+      } else if (msg.type === 'ai:error') {
         setLoading(false);
         setAiResult('> Error running AI analysis. Check your AI provider settings.');
       }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  });
+  }, [analysisId]);
 
   if (stats.length === 0) {
     return (
@@ -194,8 +214,8 @@ Keep the analysis concise and actionable. Use emoji bullets. Format in clear Mar
           {displayList.length === 0 ? (
             <div className="flex items-center justify-center h-full text-[11px] text-[var(--color-text-muted)]">No data for this view</div>
           ) : displayList.map((stat, i) => (
-            <div key={i} className="flex items-center gap-2 px-3 py-1.5 border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.03)]">
-              <span className="text-[9px] font-bold px-1 rounded bg-[rgba(255,255,255,0.08)] text-[var(--color-text-muted)] flex-shrink-0 uppercase">{stat.method}</span>
+            <div key={i} className="flex items-center gap-2 px-3 py-1.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)]">
+              <span className="text-[9px] font-bold px-1 rounded bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-muted)] flex-shrink-0 uppercase">{stat.method}</span>
               <span className="flex-1 min-w-0 text-[10px] text-[var(--color-text-primary)] truncate font-mono">{stat.url}</span>
               {view === 'slow' && (
                 <span className="text-[10px] font-mono tabular-nums flex-shrink-0" style={{ color: speedColor(stat.avgTime) }}>{formatMs(stat.avgTime)}</span>
@@ -217,20 +237,13 @@ Keep the analysis concise and actionable. Use emoji bullets. Format in clear Mar
           <SparkleIcon size={12} style={{ color: ACCENT }} />
           <span className="text-[11px] font-medium" style={{ color: ACCENT }}>AI Analysis</span>
           <div className="flex-1" />
-          <button
-            type="button"
-            onClick={runAnalysis}
+          <AIButtonView
+            label={loading ? 'Analyzing…' : 'Analyze'}
+            size="sm"
+            accentColor={ACCENT}
             disabled={loading}
-            className="flex items-center gap-1 h-[22px] px-2.5 text-[10px] rounded cursor-pointer transition-all disabled:opacity-50 disabled:cursor-default"
-            style={{ background: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, color: ACCENT, border: `1px solid color-mix(in srgb, ${ACCENT} 25%, transparent)` }}
-          >
-            {loading ? (
-              <RefreshIcon size={10} className="animate-spin" />
-            ) : (
-              <ChevronRightIcon size={10} />
-            )}
-            {loading ? 'Analyzing…' : 'Analyze'}
-          </button>
+            onClick={runAnalysis}
+          />
         </div>
         <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-3 py-2">
           {!aiResult && !loading && (

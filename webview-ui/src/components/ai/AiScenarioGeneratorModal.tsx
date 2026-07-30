@@ -6,11 +6,10 @@
  * (browse → cart → checkout → payment → confirm)
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CheckIcon } from '../../icons';
+import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
-import { MdViewer } from '../shared/display/MdViewer';
+import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -130,109 +129,107 @@ export function AiScenarioGeneratorModal({ onClose }: Props) {
 
   const steps = result?.steps as Array<Record<string, unknown>> | undefined;
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[700px] max-h-[92vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">AI Scenario Generator</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">Describe a workflow → AI creates all chained requests</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="AI Scenario Generator"
+      subtitle="Describe a workflow → AI creates all chained requests"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={
+        steps && !loading ? (
+          <ButtonView
+            size="md"
+            variant="primary"
+            accentColor={imported ? 'var(--color-success)' : ACCENT}
+            disabled={imported}
+            onClick={importScenario}
+          >
+            {imported ? <><CheckIcon size={12} style={{ marginRight: 4 }} />Imported!</> : <><SparkleIcon size={11} style={{ marginRight: 4 }} />Import Scenario</>}
+          </ButtonView>
+        ) : undefined
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Generating…' : 'Generate'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={loading || !scenario.trim()}
+          loading={loading}
+          onClick={run}
+        />
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Scenario description</label>
+          <MultilineInputView
+            autoFocus
+            value={scenario}
+            onChange={e => { setScenario(e.target.value); setError(''); }}
+            rows={3}
+            size="md"
+            width="fw"
+            placeholder="Describe the complete API flow you want to test..."
+          />
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-          <div>
-            <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Scenario description</label>
-            <textarea
-              autoFocus
-              value={scenario}
-              onChange={e => { setScenario(e.target.value); setError(''); }}
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg text-[12px] resize-none outline-none"
-              placeholder="Describe the complete API flow you want to test..."
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-            />
-          </div>
+        <div className="flex flex-wrap gap-1.5">
+          {SCENARIOS.map((s, i) => (
+            <button key={i} type="button" onClick={() => setScenario(s)}
+              className="text-left text-[10px] px-2 py-1 rounded-md border cursor-pointer transition-all"
+              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
+              {s.split(':')[0]}
+            </button>
+          ))}
+        </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            {SCENARIOS.map((s, i) => (
-              <button key={i} type="button" onClick={() => setScenario(s)}
-                className="text-left text-[10px] px-2 py-1 rounded-md border cursor-pointer transition-all"
-                style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-                {s.split(':')[0]}
-              </button>
+        {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
+
+        {loading && !rawResult && (
+          <div className="flex gap-1 items-center">
+            {[0, 150, 300].map(d => (
+              <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
+                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
+            ))}
+            <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Generating scenario…</span>
+          </div>
+        )}
+
+        {steps && (
+          <div className="flex flex-col gap-2">
+            <p className="text-[11px] font-semibold" style={{ color: ACCENT }}>✦ {steps.length} steps generated</p>
+            {steps.map((step, i) => (
+              <div key={i} className="flex gap-3 p-2.5 rounded-lg border"
+                style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
+                <div className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                  style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, color: ACCENT }}>
+                  {step.step as number}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded"
+                      style={{ backgroundColor: 'var(--color-info)' }}>{step.method as string}</span>
+                    <span className="text-[10.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{step.name as string}</span>
+                  </div>
+                  <p className="text-[10px] font-mono truncate mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{step.url as string}</p>
+                  {Boolean(step.extractVariable) && (
+                    <p className="text-[9.5px] mt-0.5" style={{ color: 'var(--color-success)' }}>
+                      → saves {step.extractPath as string} as {`{{${step.extractVariable}}}`}
+                    </p>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && !rawResult && (
-            <div className="flex gap-1 items-center">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Generating scenario…</span>
-            </div>
-          )}
-
-          {steps && (
-            <div className="flex flex-col gap-2">
-              <p className="text-[11px] font-semibold" style={{ color: ACCENT }}>✦ {steps.length} steps generated</p>
-              {steps.map((step, i) => (
-                <div key={i} className="flex gap-3 p-2.5 rounded-lg border"
-                  style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
-                  <div className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-                    style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, color: ACCENT }}>
-                    {step.step as number}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded"
-                        style={{ backgroundColor: 'var(--color-info)' }}>{step.method as string}</span>
-                      <span className="text-[10.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{step.name as string}</span>
-                    </div>
-                    <p className="text-[10px] font-mono truncate mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{step.url as string}</p>
-                    {step.extractVariable && (
-                      <p className="text-[9.5px] mt-0.5" style={{ color: 'var(--color-success)' }}>
-                        → saves {step.extractPath as string} as {`{{${step.extractVariable}}}`}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-          {steps && !loading && (
-            <button type="button" onClick={importScenario} disabled={imported}
-              className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-60 flex items-center gap-1.5 text-white"
-              style={{ backgroundColor: imported ? 'var(--color-success)' : ACCENT }}>
-              {imported ? <><CheckIcon size={12} /> Imported!</> : <><SparkleIcon size={11} /> Import Scenario</>}
-            </button>
-          )}
-          <button type="button" onClick={run} disabled={loading || !scenario.trim()}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-            style={{ backgroundColor: ACCENT }}>
-            <SparkleIcon size={11} className="inline mr-1" />
-            Generate
-          </button>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
-        </div>
+        )}
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

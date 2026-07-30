@@ -7,6 +7,7 @@
  *   • "Add Custom Tool" — opens a new draft card; Save/Cancel to commit.
  */
 import { useState, useCallback } from 'react';
+import { ButtonView, IconButtonView, TextInputView, MultilineInputView, ChipView } from '@salilvnair/dui';
 import type { MockServer, McpMockTool } from '../mock-types';
 import { createDefaultMcpTool } from '../mock-types';
 import { PlusIcon, TrashIcon, CloseIcon } from '../../../icons';
@@ -18,7 +19,11 @@ interface Props {
 }
 
 const MCP_COLOR = 'var(--color-protocol-mcp)';
-const CHIP_STYLE = { backgroundColor: 'rgba(99,102,241,0.12)', color: 'var(--color-protocol-mcp)', border: '1px solid rgba(99,102,241,0.22)' };
+const CHIP_STYLE: React.CSSProperties = {
+  background: 'color-mix(in srgb, var(--color-protocol-mcp) 15%, transparent)',
+  color: 'var(--color-protocol-mcp)',
+  border: '1px solid color-mix(in srgb, var(--color-protocol-mcp) 30%, transparent)',
+};
 
 // ─── Compact built-in tool metadata (display only) ────────────────────────────
 // Full responses are served by the extension host's mock-mcp-server.ts.
@@ -65,9 +70,7 @@ function BuiltInToolCard({ meta, onClose }: { meta: BuiltInToolMeta; onClose: ()
         </div>
         <code className="text-[11px] font-semibold flex-1 font-mono" style={{ color: MCP_COLOR }}>{meta.name}</code>
         <span className="text-[9px] text-[var(--color-text-muted)] mr-2">Built-in · read-only</span>
-        <button type="button" onClick={onClose} className="opacity-50 hover:opacity-100 cursor-pointer transition-opacity">
-          <CloseIcon size={11} />
-        </button>
+        <IconButtonView size="sm" icon={<CloseIcon size={11} />} onClick={onClose} />
       </div>
       {/* Fields */}
       <div className="px-3 py-2.5 flex flex-col gap-2.5">
@@ -117,21 +120,20 @@ function CustomToolCard({
     >
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-[rgba(99,102,241,0.15)]">
-        <input
-          type="text"
+        <TextInputView
           value={draft.name}
           onChange={e => setDraft(d => ({ ...d, name: e.target.value.replace(/[^a-z0-9_]/g, '_') }))}
           placeholder="tool_name (snake_case)"
-          className="flex-1 bg-transparent text-[12px] font-semibold font-mono focus:outline-none text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)]"
+          size="md"
+          style={{ flex: 1, fontWeight: 600, fontFamily: 'monospace' }}
         />
-        <button
-          type="button"
+        <IconButtonView
+          size="sm"
+          icon={<TrashIcon size={12} />}
+          accentColor="var(--color-error)"
           onClick={onDelete}
           title="Delete tool"
-          className="p-1 rounded cursor-pointer hover:bg-[rgba(239,68,68,0.12)] transition-colors"
-        >
-          <TrashIcon size={12} className="text-[var(--color-error)]" />
-        </button>
+        />
       </div>
 
       {/* Fields */}
@@ -139,23 +141,24 @@ function CustomToolCard({
         {/* Description */}
         <div>
           <div className="text-[9px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1">Description</div>
-          <input
-            type="text"
+          <TextInputView
             value={draft.description}
             onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
             placeholder="What this tool does..."
-            className="w-full h-[26px] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded px-2 text-[11px] focus:outline-none focus:border-[var(--color-protocol-mcp)] text-[var(--color-text-primary)]"
+            size="md"
+            style={{ width: '100%' }}
           />
         </div>
 
         {/* Delay */}
         <div className="flex items-center gap-2">
           <span className="text-[9px] uppercase tracking-wide text-[var(--color-text-muted)] flex-shrink-0">Delay</span>
-          <input
+          <TextInputView
             type="number"
-            value={draft.delay}
+            value={String(draft.delay)}
             onChange={e => setDraft(d => ({ ...d, delay: Math.max(0, parseInt(e.target.value) || 0) }))}
-            className="w-20 h-[26px] bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded px-2 text-[11px] focus:outline-none text-[var(--color-text-primary)]"
+            size="md"
+            style={{ width: 80 }}
           />
           <span className="text-[9px] text-[var(--color-text-muted)]">ms</span>
         </div>
@@ -163,46 +166,48 @@ function CustomToolCard({
         {/* Input Schema */}
         <div>
           <div className="text-[9px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1">Input Schema (JSON Schema)</div>
-          <textarea
+          <MultilineInputView
             value={draft.inputSchema}
             onChange={e => setDraft(d => ({ ...d, inputSchema: e.target.value }))}
             rows={4}
-            className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] rounded px-2 py-1.5 text-[10px] font-mono focus:outline-none focus:border-[var(--color-protocol-mcp)] text-[var(--color-text-primary)] resize-y"
+            size="md"
             placeholder={'{\n  "type": "object",\n  "properties": {}\n}'}
+            style={{ fontFamily: 'monospace' }}
           />
         </div>
 
         {/* Response */}
         <div>
           <div className="text-[9px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1">Tool response (JSON)</div>
-          <textarea
+          <MultilineInputView
             value={draft.response}
             onChange={e => setDraft(d => ({ ...d, response: e.target.value }))}
             rows={4}
-            className="w-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] rounded px-2 py-1.5 text-[10px] font-mono focus:outline-none focus:border-[var(--color-protocol-mcp)] text-[var(--color-text-primary)] resize-y"
+            size="md"
             placeholder="{ }"
+            style={{ fontFamily: 'monospace' }}
           />
         </div>
 
         {/* Save / Cancel */}
         <div className="flex items-center gap-2 pt-0.5">
-          <button
-            type="button"
+          <ButtonView
+            size="md"
+            variant="ghost"
             onClick={() => onSave(draft)}
             disabled={!draft.name.trim()}
-            className="h-[26px] px-3 text-[11px] rounded font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: 'rgba(99,102,241,0.18)', color: MCP_COLOR, border: '1px solid rgba(99,102,241,0.3)' }}
+            accentColor={MCP_COLOR}
           >
             Save
-          </button>
-          <button
-            type="button"
+          </ButtonView>
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor="var(--color-text-muted)"
             onClick={onCancel}
-            className="h-[26px] px-3 text-[11px] rounded cursor-pointer transition-colors opacity-60 hover:opacity-100"
-            style={{ color: 'var(--color-text-muted)', border: '1px solid rgba(255,255,255,0.08)' }}
           >
             Cancel
-          </button>
+          </ButtonView>
         </div>
       </div>
     </div>
@@ -278,20 +283,15 @@ export function McpMockConfig({ server, onUpdate }: Props) {
         </div>
         <div className="flex flex-wrap gap-1.5">
           {BUILT_IN_TOOL_META.map(meta => (
-            <button
+            <ChipView
               key={meta.name}
-              type="button"
+              label={meta.name}
+              color={MCP_COLOR}
+              size="xs"
+              active={expandedBuiltIn === meta.name}
               onClick={() => toggleBuiltIn(meta.name)}
-              className="text-[9px] px-2 py-0.5 rounded font-mono cursor-pointer transition-all"
-              style={{
-                ...CHIP_STYLE,
-                opacity: expandedBuiltIn === meta.name ? 1 : 0.75,
-                fontWeight: expandedBuiltIn === meta.name ? 600 : 400,
-                boxShadow: expandedBuiltIn === meta.name ? '0 0 0 1px rgba(99,102,241,0.5)' : 'none',
-              }}
-            >
-              {meta.name}
-            </button>
+              className="font-mono"
+            />
           ))}
         </div>
 
@@ -313,23 +313,18 @@ export function McpMockConfig({ server, onUpdate }: Props) {
           {tools.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {tools.map(t => (
-                <button
+                <ChipView
                   key={t.id}
-                  type="button"
+                  label={t.name || 'untitled_tool'}
+                  color={MCP_COLOR}
+                  size="xs"
+                  active={editingId === t.id}
                   onClick={() => {
                     setEditingId(prev => (prev === t.id ? null : t.id));
                     setAddingNew(false);
                   }}
-                  className="text-[9px] px-2 py-0.5 rounded font-mono cursor-pointer transition-all"
-                  style={{
-                    ...CHIP_STYLE,
-                    opacity: editingId === t.id ? 1 : 0.75,
-                    fontWeight: editingId === t.id ? 600 : 400,
-                    boxShadow: editingId === t.id ? '0 0 0 1px rgba(99,102,241,0.5)' : 'none',
-                  }}
-                >
-                  {t.name || 'untitled_tool'}
-                </button>
+                  className="font-mono"
+                />
               ))}
             </div>
           )}
@@ -362,26 +357,23 @@ export function McpMockConfig({ server, onUpdate }: Props) {
       {/* Add button row */}
       {!addingNew && (
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor={MCP_COLOR}
+            iconLeft={<PlusIcon size={12} />}
             onClick={() => { setAddingNew(true); setEditingId(null); }}
-            className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: MCP_COLOR, borderColor: `color-mix(in srgb, ${MCP_COLOR} 30%, transparent)`, background: 'transparent' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${MCP_COLOR} 10%, transparent)`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
-            <PlusIcon size={12} />
             Add Custom Tool
-          </button>
+          </ButtonView>
           {tools.length > 0 && (
-            <button
-              type="button"
+            <IconButtonView
+              size="sm"
+              icon={<TrashIcon size={12} />}
+              accentColor="var(--color-error)"
               onClick={() => setShowDeleteAll(true)}
               title="Delete All Custom Tools"
-              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
-              <TrashIcon size={12} />
-            </button>
+            />
           )}
         </div>
       )}

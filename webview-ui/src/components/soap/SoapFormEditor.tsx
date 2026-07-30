@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { ChevronRightIcon } from '../../icons';
 import type { SoapOperationDef } from '../../store/tabs-store';
-import { SelectInputView } from '../../dui';
+import { SelectInputView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-soap)';
 
@@ -61,8 +61,10 @@ ${bodyXml}
 
   if (!schema || !selectedOp) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[var(--color-text-muted)]">
-        <p className="text-[11px]">Import a WSDL and select an operation to use the form editor</p>
+      <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-6 text-[var(--color-text-muted)]">
+        <span className="text-[28px] opacity-20">⟨/⟩</span>
+        <p className="text-[12px]">Import a WSDL and select an operation to use the form editor</p>
+        <p className="text-[10px] opacity-60">Use the WSDL button to import, then pick an operation above</p>
       </div>
     );
   }
@@ -78,7 +80,7 @@ ${bodyXml}
           <button
             type="button"
             onClick={() => updateTab(activeTab.id, { soapFormData: {}, dirty: true })}
-            className="h-[24px] px-2.5 text-[10px] font-medium rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)]"
+            className="h-[24px] px-2.5 text-[10px] font-medium rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]"
           >
             Clear
           </button>
@@ -125,9 +127,9 @@ function FormField({ field, path, value, formData, onChange }: {
 
   if (field.type === 'complex' && field.children) {
     return (
-      <div className="rounded-md border border-[rgba(255,255,255,0.06)] overflow-hidden">
+      <div className="rounded-md border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] overflow-hidden">
         <div
-          className="flex items-center gap-2 px-2.5 py-1.5 bg-[rgba(255,255,255,0.02)] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+          className="flex items-center gap-2 px-2.5 py-1.5 bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] transition-colors"
           onClick={() => setExpanded(!expanded)}
         >
           <ChevronRightIcon size={10} className={`text-[var(--color-text-muted)] transition-transform ${expanded ? 'rotate-90' : ''}`} />
@@ -136,7 +138,7 @@ function FormField({ field, path, value, formData, onChange }: {
           {field.required && <span className="text-[9px] text-[var(--color-error)]">*</span>}
         </div>
         {expanded && (
-          <div className="px-3 py-2 border-t border-[rgba(255,255,255,0.04)] flex flex-col gap-2">
+          <div className="px-3 py-2 border-t border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] flex flex-col gap-2">
             {field.children.map(child => (
               <FormField
                 key={child.name}
@@ -184,7 +186,7 @@ function FormField({ field, path, value, formData, onChange }: {
           value={(value as string) || ''}
           onChange={(e) => onChange(path, e.target.value)}
           placeholder={`(${field.type})`}
-          className="flex-1 h-[26px] px-2 text-[11px] rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+          className="flex-1 h-[26px] px-2 text-[11px] rounded bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
         />
       )}
       {field.documentation && (

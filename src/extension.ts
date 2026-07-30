@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { initDb, closeDb, getSqliteStatus, getCollectionTree } from './storage/db';
+import * as path from 'path';
+import { initDb, closeDb, getSqliteStatus, getCollectionTree, getDbPath } from './storage/db';
 import { MainPanel } from './panel/main/MainPanel';
 import { initMockServerManager, stopAllMockServers } from './mock/mock-server-manager';
 import { importPostmanCollection } from './services/postman-importer';
@@ -12,6 +13,7 @@ import { importHttpieCollection, isHttpieFile } from './services/httpie-importer
 import { WelcomeViewProvider } from './panel/sidebar/WelcomeViewProvider';
 import { createDaakiaChatHandler } from './panel/chat/chat-handler';
 import { initSecretStore } from './services/secret-store';
+import { exportCollectionsToWorkspace, importCollectionsFromWorkspace, initGitSyncWatcher } from './services/git-sync';
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log('[daakia] Activating...');
@@ -69,6 +71,23 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // ─── Git-native collection sync ───
+  context.subscriptions.push(
+    vscode.commands.registerCommand('daakia.exportCollectionsToWorkspace', () => {
+      const n = exportCollectionsToWorkspace();
+      vscode.window.showInformationMessage(
+        n > 0 ? `Daakia: exported collections to ${n} file(s) — commit them to share with your team.`
+              : 'Daakia: nothing to export (no collections, or no workspace folder open).');
+    }),
+    vscode.commands.registerCommand('daakia.importCollectionsFromWorkspace', () => {
+      const n = importCollectionsFromWorkspace();
+      vscode.window.showInformationMessage(
+        n > 0 ? `Daakia: imported ${n} request(s) from workspace collection files.`
+              : 'Daakia: no .daakia.json collection files found in the sync folder.');
+    }),
+  );
+  initGitSyncWatcher(context);
+
   context.subscriptions.push(
     vscode.commands.registerCommand('daakia.start', () => {
       MainPanel.createOrShow(context.extensionUri);
@@ -112,6 +131,14 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('daakia.focusUrl', () => {
       if (MainPanel.currentPanel) {
         MainPanel.currentPanel.postMessage({ type: 'focusUrl' });
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('daakia.openCommandPalette', () => {
+      if (MainPanel.currentPanel) {
+        MainPanel.currentPanel.postMessage({ type: 'openCommandPalette' });
       }
     })
   );
@@ -201,7 +228,61 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand('daakia.changeDbLocation', async () => {
+      const selection = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        openLabel: 'Use this folder',
+        title: 'Daakia: Change Database Location',
+      });
+      const folder = selection?.[0];
+      if (!folder) return;
+
+      const oldDbPath = getDbPath();
+      const newDbPath = path.join(folder.fsPath, 'daakia.db');
+      if (newDbPath === oldDbPath) return;
+
+      try {
+        fs.mkdirSync(path.dirname(newDbPath), { recursive: true });
+        if (fs.existsSync(oldDbPath)) {
+          fs.copyFileSync(oldDbPath, newDbPath);
+        }
+
+        await vscode.workspace.getConfiguration('daakia').update('dbPath', newDbPath, vscode.ConfigurationTarget.Global);
+
+        closeDb();
+        await initDb(context.extensionPath);
+
+        const dbStatus = getSqliteStatus();
+        if (!dbStatus.ok) {
+          void vscode.window.showErrorMessage(`Daakia database move failed: ${dbStatus.error ?? 'Unknown error'}`);
+        } else {
+          void vscode.window.showInformationMessage(`Daakia database moved to ${newDbPath}`);
+        }
+
+        MainPanel.currentPanel?.refreshInitialState();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        void vscode.window.showErrorMessage(`Daakia database move failed: ${message}`);
+      }
+    })
+  );
+
   console.log('[daakia] Activated successfully.');
+
+  // Test-support API surface (E-wiki-capture-plumbing) — lets @vscode/test-electron
+  // tests/orchestrators reach the REAL, activated extension's MainPanel singleton.
+  // A test file's own `import { MainPanel } from './panel/main/MainPanel'` resolves
+  // to a SEPARATE tsc-compiled module instance from the one running inside this
+  // esbuild-bundled dist/extension.js (same reason storage/db.ts and
+  // mock-server-manager.ts needed their own init calls in earlier e2e tests) — so
+  // `MainPanel.currentPanel` set by the real activation is invisible to a test's
+  // own import. Exporting the real class reference here is the standard VS Code
+  // pattern for this (`vscode.extensions.getExtension(id).exports`). Not used by
+  // any production code path.
+  return { MainPanel };
 }
 
 export function deactivate() {

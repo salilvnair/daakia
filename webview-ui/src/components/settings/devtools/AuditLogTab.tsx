@@ -3,7 +3,7 @@
  * Unified log: AI calls (ce_audit) + UI events (ui_audit).
  * Protocol-correct color coding per module + Module badge column.
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { postMsg } from '../../../vscode';
 import { CodeEditor } from '../../shared';
 import { TrashIcon, RefreshIcon, SearchIcon, CloseIcon, ChevronDownIcon } from '../../../icons';
@@ -59,7 +59,11 @@ const MODULE_MAP: Record<string, ModuleInfo> = {
   'Tools':       { label: 'Tools',       color: '#a78bfa' },
   'Testing':     { label: 'Testing',     color: 'var(--color-success)' },
   'Import':      { label: 'Import',      color: 'var(--color-info)' },
-  'Settings':    { label: 'Settings',    color: 'var(--color-text-muted)' },
+  'Settings':    { label: 'Settings',    color: 'var(--color-settings)' },
+  'DevTools':    { label: 'DevTools',    color: 'var(--color-settings)' },
+  'AI Features': { label: 'AI Features', color: 'var(--color-protocol-ai)' },
+  'Tabs':        { label: 'Tabs',        color: 'var(--color-text-secondary)' },
+  'Environment': { label: 'Environment', color: 'var(--color-success)' },
 };
 
 function moduleFromStage(stage: string): ModuleInfo {
@@ -78,6 +82,12 @@ function moduleFromStage(stage: string): ModuleInfo {
   if (stage.startsWith('import.'))                       return MODULE_MAP['Import']!;
   if (stage.startsWith('test.'))                         return MODULE_MAP['Testing']!;
   if (stage.startsWith('data.') || stage.startsWith('agent.')) return MODULE_MAP['Tools']!;
+  if (stage.startsWith('settings.'))                     return MODULE_MAP['Settings']!;
+  if (stage.startsWith('devtools.'))                     return MODULE_MAP['DevTools']!;
+  if (stage.startsWith('ai.'))                           return MODULE_MAP['AI Features']!;
+  if (stage.startsWith('tab.'))                          return MODULE_MAP['Tabs']!;
+  if (stage.startsWith('env.'))                          return MODULE_MAP['Environment']!;
+  if (stage.startsWith('history.'))                      return MODULE_MAP['History']!;
   return { label: 'System', color: 'var(--color-text-muted)' };
 }
 
@@ -198,7 +208,7 @@ function PayloadBlock({ label, value, color, lang = 'plaintext' }: {
         {label}
       </span>
       <div className="rounded-lg overflow-hidden border relative" style={{ borderColor: `color-mix(in srgb, ${color} 15%, transparent)` }}>
-        <CodeEditor value={display.slice(0, 6000)} language={language} readOnly height={`${height}px`} />
+        <CodeEditor value={display.slice(0, 6000)} language={language as import('../../shared').CodeLanguage} readOnly height={`${height}px`} />
         <div onMouseDown={handleDragStart}
           className="absolute bottom-0 left-0 right-0 h-[7px] flex items-center justify-center select-none z-10"
           style={{ cursor: 'ns-resize', backgroundColor: `color-mix(in srgb, ${color} 8%, var(--color-surface))`, borderTop: `1px solid color-mix(in srgb, ${color} 20%, transparent)` }}
@@ -255,14 +265,15 @@ export function AuditLogTab() {
     return e.event_type.toLowerCase().includes(q) || e.module.toLowerCase().includes(q) || (e.button ?? '').toLowerCase().includes(q);
   });
 
-  const rowKey = (e: AnyAuditEntry) => e.kind === 'ai' ? `ai-${e.audit_id}` : `ui-${e.audit_id}`;
+  // Use index for uniqueness — audit_id can be 0/undefined for UI events which would collide
+  const rowKey = (e: AnyAuditEntry, idx: number) => `${e.kind}-${e.audit_id}-${idx}`;
 
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* ─── Toolbar ─── */}
       <div className="flex items-center border-b shrink-0"
-        style={{ height: 28, borderColor: 'var(--color-surface-border)', backgroundColor: 'rgba(255,255,255,0.025)' }}>
-        <div className="flex items-center gap-1.5 flex-1 h-full px-2.5 border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        style={{ height: 28, borderColor: 'var(--color-surface-border)', backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)' }}>
+        <div className="flex items-center gap-1.5 flex-1 h-full px-2.5 border-r" style={{ borderColor: 'color-mix(in srgb, var(--color-text-primary) 6%, transparent)' }}>
           <SearchIcon size={10} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Filter by module, stage, event…"
@@ -275,14 +286,14 @@ export function AuditLogTab() {
             </button>
           ) : (
             <span className="text-[10px] font-mono tabular-nums px-1 rounded shrink-0 leading-none"
-              style={{ color: 'var(--color-text-muted)', backgroundColor: 'rgba(255,255,255,0.05)' }}>
+              style={{ color: 'var(--color-text-muted)', backgroundColor: 'color-mix(in srgb, var(--color-text-primary) 5%, transparent)' }}>
               {filtered.length}
             </span>
           )}
         </div>
         <div className="flex items-center px-1 shrink-0">
           <button type="button" onClick={load} title="Refresh"
-            className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.06)] transition-colors">
+            className="w-6 h-6 flex items-center justify-center rounded cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] transition-colors">
             <RefreshIcon size={12} />
           </button>
           <button type="button" onClick={handleClear} title="Clear all"
@@ -301,7 +312,7 @@ export function AuditLogTab() {
         ) : (
           <table className="w-full text-[11px]">
             <thead className="sticky top-0 z-10 bg-[var(--color-surface)]">
-              <tr className="border-b border-[rgba(255,255,255,0.06)]">
+              <tr className="border-b border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
                 <th className="text-left px-3 py-2 font-medium text-[var(--color-text-muted)] w-[32px]">#</th>
                 <th className="text-left px-2 py-2 font-medium text-[var(--color-text-muted)] w-[90px]">Module</th>
                 <th className="text-left px-2 py-2 font-medium text-[var(--color-text-muted)]">Stage / Event</th>
@@ -313,9 +324,10 @@ export function AuditLogTab() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(e => {
-                const key = rowKey(e);
+              {filtered.map((e, idx) => {
+                const key = rowKey(e, idx);
                 const isOpen = expanded === key;
+                const rowNum = filtered.length - idx;
                 const modInfo: ModuleInfo = e.kind === 'ai'
                   ? moduleFromStage(e.stage)
                   : (MODULE_MAP[e.module] ?? { label: e.module, color: 'var(--color-text-muted)' });
@@ -331,15 +343,15 @@ export function AuditLogTab() {
                   : (e.event_type);
 
                 return (
-                  <>
-                    <tr key={key}
+                  <Fragment key={key}>
+                    <tr
                       onClick={() => setExpanded(isOpen ? null : key)}
-                      className="border-b border-[rgba(255,255,255,0.025)] cursor-pointer transition-colors"
+                      className="border-b border-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] cursor-pointer transition-colors"
                       style={{ background: isOpen ? `color-mix(in srgb, ${color} 5%, transparent)` : undefined }}
-                      onMouseEnter={ev => { if (!isOpen) (ev.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.025)'; }}
+                      onMouseEnter={ev => { if (!isOpen) (ev.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--color-text-primary) 3%, transparent)'; }}
                       onMouseLeave={ev => { if (!isOpen) (ev.currentTarget as HTMLElement).style.background = ''; }}
                     >
-                      <td className="px-3 py-2 text-[var(--color-text-muted)] font-mono text-[10px]">{e.audit_id}</td>
+                      <td className="px-3 py-2 text-[var(--color-text-muted)] font-mono text-[10px]">{rowNum}</td>
                       <td className="px-2 py-2">
                         <ModuleBadge label={modInfo.label} color={color} />
                       </td>
@@ -365,7 +377,7 @@ export function AuditLogTab() {
                     </tr>
 
                     {isOpen && (
-                      <tr key={`${key}-detail`}>
+                      <tr>
                         <td colSpan={8} className="px-4 pb-4 pt-2" style={{ background: `color-mix(in srgb, ${color} 4%, var(--color-surface))` }}>
                           {e.kind === 'ai' ? (
                             <div className="flex flex-col gap-3">
@@ -411,7 +423,7 @@ export function AuditLogTab() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>

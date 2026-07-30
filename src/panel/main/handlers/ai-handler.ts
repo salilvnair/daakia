@@ -8,7 +8,7 @@ import {
 } from '../../../ai/ai-executor';
 import { executeCopilotRequest } from '../../../ai/copilot-executor';
 import { AI_PROVIDERS } from '../../../ai/ai-providers';
-import type { AiMessage, AiRequestPayload, AiSettings, AiToolDef } from '../../../ai/ai-types';
+import type { AiMessage, AiRequestPayload, AiSettings, AiToolDef, AiStreamChunk, AiResponseComplete } from '../../../ai/ai-types';
 import { DEFAULT_AI_SETTINGS } from '../../../ai/ai-types';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import {
@@ -530,4 +530,156 @@ export function handleAiDeleteConversation(msg: Record<string, unknown>, postMes
 export function handleAiClearConversations(_msg: Record<string, unknown>, postMessage: PostMessage) {
   clearAiConversations();
   postMessage({ type: 'ai:conversationsCleared' });
+}
+
+/**
+ * Legacy streaming contract — handleAiChat / handleAiStream / handleAiStreamRequest.
+ *
+ * 31 AI modals (webview-ui/src/components/ai/*) were built against an `aiChat`/
+ * `aiStream`/`aiStreamRequest` postMsg contract, listening for `aiStream:chunk` /
+ * `aiStream:done` / `aiStream:error` (or, for the single aiStreamRequest caller,
+ * `aiStreamChunk`/`aiStreamDone`/`aiStreamError` correlated by requestId) — but
+ * MainPanel.ts never had a `case` for any of these three message types, so every
+ * one of those features silently hung forever (found via
+ * scripts/audit-ai-message-contracts.mjs). Rather than editing all 31 webview
+ * files onto the `ai:send` contract, this reuses the exact same proven
+ * provider-resolution/execution engine as handleAiSend (autoResolveProvider,
+ * resolveProviderAuth, executeAiRequest/executeCopilotRequest) and re-emits its
+ * output under the event names these components already correctly listen for.
+ */
+async function runLegacyAiStream(
+  systemPrompt: string,
+  userMessage: string,
+  stage: string,
+  postMessage: PostMessage,
+  events: { chunk: string; done: string; error: string },
+  extra: Record<string, unknown> = {},
+) {
+  const tabId = (extra.requestId as string) || crypto.randomUUID();
+  const storedDefaultProvider = getSetting<string>('aiDefaultProvider') ?? 'copilot';
+
+  let providerId = storedDefaultProvider;
+  let effectiveModel = '';
+  let routeToCopilot = providerId === 'copilot';
+  let resolvedBaseUrl = '';
+  try {
+    const resolved = await autoResolveProvider(storedDefaultProvider, '');
+    providerId = resolved.providerId;
+    effectiveModel = resolved.model || '';
+    routeToCopilot = resolved.routeToCopilot;
+    resolvedBaseUrl = resolved.baseUrl || resolveProviderConfig(providerId).baseUrl;
+  } catch (err) {
+    postMessage({ type: events.error, error: err instanceof Error ? err.message : 'No AI provider configured', ...extra });
+    return;
+  }
+
+  const provider = AI_PROVIDERS.find(p => p.id === providerId);
+  const chatEndpoint = provider?.chatEndpoint || '/chat/completions';
+  const resolvedAuth = await resolveProviderAuth(providerId as AiRequestPayload['provider'], resolvedBaseUrl, undefined, {});
+
+  const messages: AiMessage[] = [];
+  if (systemPrompt.trim()) {
+    messages.push({ id: crypto.randomUUID(), role: 'system', content: systemPrompt, timestamp: Date.now() });
+  }
+  messages.push({ id: crypto.randomUUID(), role: 'user', content: userMessage, timestamp: Date.now() });
+
+  const payload: AiRequestPayload = {
+    tabId,
+    provider: providerId as AiRequestPayload['provider'],
+    model: effectiveModel,
+    baseUrl: resolvedBaseUrl,
+    chatEndpoint,
+    messages,
+    settings: DEFAULT_AI_SETTINGS,
+    authType: resolvedAuth.authType,
+    authData: resolvedAuth.authData,
+  };
+
+  const signal = startAiRequest(tabId);
+  const REQUEST_TIMEOUT_MS = 60_000;
+  const timeoutId = setTimeout(() => {
+    if (!signal.aborted) {
+      cancelAiRequest(tabId);
+      cleanupAiRequest(tabId);
+      postMessage({ type: events.error, error: 'Request timed out after 60 seconds. Check your provider URL and API key.', ...extra });
+    }
+  }, REQUEST_TIMEOUT_MS);
+
+  const onChunk = (chunk: AiStreamChunk) => {
+    postMessage({ type: events.chunk, chunk: chunk.delta, ...extra });
+  };
+
+  const onComplete = (result: AiResponseComplete) => {
+    clearTimeout(timeoutId);
+    cleanupAiRequest(tabId);
+    postMessage({ type: events.done, ...extra });
+    try {
+      insertAudit({
+        conversation_id: tabId,
+        stage,
+        model: effectiveModel || 'copilot',
+        request_payload: JSON.stringify({ provider: providerId, model: effectiveModel, messages }),
+        response_payload: JSON.stringify({ message: result.message, tokens: result.tokens, duration: result.duration }),
+        duration_ms: result.duration,
+      });
+    } catch { /* ignore audit errors */ }
+  };
+
+  const onError = (error: { message: string }) => {
+    clearTimeout(timeoutId);
+    cleanupAiRequest(tabId);
+    postMessage({ type: events.error, error: error.message, ...extra });
+    try {
+      insertAudit({
+        conversation_id: tabId,
+        stage,
+        model: effectiveModel || 'copilot',
+        request_payload: JSON.stringify({ provider: providerId, model: effectiveModel, messages }),
+        error: error.message,
+        duration_ms: 0,
+      });
+    } catch { /* ignore audit errors */ }
+  };
+
+  if (routeToCopilot) {
+    executeCopilotRequest({ payload, signal, onChunk, onComplete, onError });
+  } else {
+    executeAiRequest({ payload, signal, onChunk, onComplete, onError });
+  }
+}
+
+const LEGACY_COLON_EVENTS = { chunk: 'aiStream:chunk', done: 'aiStream:done', error: 'aiStream:error' };
+
+/**
+ * Handle aiChat — 17 AI modals (AiGqlQueryBuilderModal, AiSecurityAuditModal, etc.)
+ * msg: { tabId, messages: [{ role: 'user', content }], systemPrompt? }
+ */
+export async function handleAiChat(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const messages = (msg.messages as Array<{ role: string; content: string }>) || [];
+  const userMessage = messages.length ? messages[messages.length - 1].content : '';
+  const systemPrompt = (msg.systemPrompt as string) || '';
+  await runLegacyAiStream(systemPrompt, userMessage, 'aiChat', postMessage, LEGACY_COLON_EVENTS);
+}
+
+/**
+ * Handle aiStream — 13 AI modals (AiSequenceComposerModal, AiChaosEngineeringModal, etc.)
+ * msg: { payload: { systemPrompt, userMessage, templateKey } }
+ */
+export async function handleAiStream(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const payload = (msg.payload as { systemPrompt?: string; userMessage?: string; templateKey?: string }) || {};
+  await runLegacyAiStream(payload.systemPrompt || '', payload.userMessage || '', payload.templateKey || 'aiStream', postMessage, LEGACY_COLON_EVENTS);
+}
+
+/**
+ * Handle aiStreamRequest — 1 AI modal (AiPerfAnomalyModal), correlated by requestId
+ * with its own (no-colon) event names.
+ * msg: { requestId, systemPrompt, userPrompt }
+ */
+export async function handleAiStreamRequest(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const requestId = msg.requestId as string;
+  const systemPrompt = (msg.systemPrompt as string) || '';
+  const userMessage = (msg.userPrompt as string) || '';
+  await runLegacyAiStream(systemPrompt, userMessage, 'aiStreamRequest', postMessage, {
+    chunk: 'aiStreamChunk', done: 'aiStreamDone', error: 'aiStreamError',
+  }, { requestId });
 }

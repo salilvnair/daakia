@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { postMsg } from '../../../vscode';
-import { Checkbox } from '../controls/Checkbox';
 import { METHOD_COLORS } from '../../../colors';
-import { CloseIcon, PlayIcon, SparkleIcon } from '../../../icons';
+import { PlayIcon, StopSquareIcon } from '../../../icons';
+import { ModalView, ButtonView, CodeBlockView, AIButtonView, TextInputView, CheckboxView } from '@salilvnair/dui';
 import { AiPerformanceInsightsModal } from '../../ai/AiPerformanceInsightsModal';
 
 interface RunCollectionModalProps {
@@ -71,14 +70,7 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
     setProgress(null);
     setSummary(null);
     setRunning(true);
-    postMsg({
-      type: 'runCollection',
-      collectionId,
-      delay,
-      stopOnError,
-      persistResponses,
-      keepVariables,
-    });
+    postMsg({ type: 'runCollection', collectionId, delay, stopOnError, persistResponses, keepVariables });
   };
 
   const handleStop = () => {
@@ -88,58 +80,54 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
 
   const cliCommand = `daakia run --collection "${collectionName}" --delay ${delay}${stopOnError ? ' --stop-on-error' : ''}${persistResponses ? ' --persist-responses' : ''}`;
 
-  if (!open) return null;
+  const footerRight = running ? (
+    <ButtonView variant="danger" size="sm" iconLeft={<StopSquareIcon size={12} />} onClick={handleStop}>
+      Stop
+    </ButtonView>
+  ) : (
+    <ButtonView variant="primary" size="sm" iconLeft={<PlayIcon size={12} />} onClick={handleRun} disabled={!collectionId}>
+      Run
+    </ButtonView>
+  );
 
   return (
     <>
-    {createPortal(
-    <div
-      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50"
-    >
-      <div className="w-full max-w-[600px] rounded-xl bg-[var(--color-elevated)] border border-[var(--color-elevated-border)] shadow-2xl animate-[fadeSlideIn_150ms_ease-out] flex flex-col max-h-[80vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[var(--color-surface-border)]">
-          <h2 className="text-[20px] font-semibold text-[var(--color-text-primary)]">Run collection</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={running}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--color-error)] hover:text-[var(--color-status-5xx)] hover:bg-[rgba(239,68,68,0.08)] cursor-pointer transition-colors disabled:opacity-40"
-          >
-            <CloseIcon size={14} />
-          </button>
-        </div>
-
-        {/* Tab bar */}
-        <div className="flex items-center gap-0 px-5 border-b border-[var(--color-surface-border)]">
+      <ModalView
+        open={open}
+        onClose={() => { if (!running) onClose(); }}
+        title="Run collection"
+        size="md"
+        footerRight={footerRight}
+      >
+        {/* Tab bar — negative margin to flush against modal header */}
+        <div style={{ margin: '-18px -18px 16px', borderBottom: '1px solid var(--color-surface-border)', display: 'flex', alignItems: 'center', padding: '0 18px' }}>
           <TabBtn label="Runner" active={activeTab === 'runner'} onClick={() => setActiveTab('runner')} />
           <TabBtn label="CLI" active={activeTab === 'cli'} onClick={() => setActiveTab('cli')} />
         </div>
 
         {/* Content */}
-        <div className="px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
+        <div className="space-y-4">
           {activeTab === 'runner' ? (
             <>
-              {/* Run config */}
               <div className="space-y-3">
                 <h3 className="text-[13px] font-medium text-[var(--color-text-primary)]">Run Configuration</h3>
                 <div className="space-y-1.5">
                   <label className="block text-[12px] text-[var(--color-text-secondary)]">Delay (ms)</label>
-                  <input
+                  <TextInputView
                     type="number"
-                    value={delay}
+                    value={String(delay)}
                     onChange={(e) => setDelay(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full h-[36px] px-3 rounded-lg bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[13px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
+                    size="md"
+                    width="fw"
                   />
                 </div>
 
                 <h3 className="text-[13px] font-medium text-[var(--color-text-primary)] pt-2">Advanced Settings</h3>
-                <CheckboxRow label="Stop run if an error occurs" checked={stopOnError} onChange={setStopOnError} />
-                <CheckboxRow label="Persist responses" checked={persistResponses} onChange={setPersistResponses} />
-                <CheckboxRow label="Keep variable values" checked={keepVariables} onChange={setKeepVariables} />
+                <CheckboxView checked={stopOnError} onChange={setStopOnError} label="Stop run if an error occurs" size="sm" />
+                <CheckboxView checked={persistResponses} onChange={setPersistResponses} label="Persist responses" size="sm" />
+                <CheckboxView checked={keepVariables} onChange={setKeepVariables} label="Keep variable values" size="sm" />
               </div>
 
-              {/* Progress / Results */}
               {(results.length > 0 || running) && (
                 <div className="space-y-2 pt-2 border-t border-[var(--color-surface-border)]">
                   {progress && (
@@ -171,19 +159,14 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
                       <span className="text-[var(--color-error)]">Failed: {summary.failed}</span>
                       <span className="text-[var(--color-text-muted)]">{summary.duration}ms</span>
                       {results.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setShowInsights(true)}
-                          className="ml-auto flex items-center gap-1.5 h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer transition-all"
-                          style={{
-                            backgroundColor: 'color-mix(in srgb, var(--color-warning) 12%, transparent)',
-                            color: 'var(--color-warning)',
-                            border: '1px solid color-mix(in srgb, var(--color-warning) 25%, transparent)',
-                          }}
-                        >
-                          <SparkleIcon size={11} />
-                          AI Insights
-                        </button>
+                        <div className="ml-auto">
+                          <AIButtonView
+                            label="AI Insights"
+                            size="sm"
+                            accentColor="var(--color-warning)"
+                            onClick={() => setShowInsights(true)}
+                          />
+                        </div>
                       )}
                     </div>
                   )}
@@ -193,51 +176,19 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
           ) : (
             <div className="space-y-2">
               <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">Equivalent command</label>
-              <pre className="p-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-input-border)] text-[12px] font-mono text-[var(--color-text-primary)] whitespace-pre-wrap">{cliCommand}</pre>
+              <CodeBlockView code={cliCommand} language="bash" showCopyButton showLineNumbers={false} maxHeight="120px" />
             </div>
           )}
         </div>
+      </ModalView>
 
-        {/* Footer */}
-        <div className="flex items-center gap-3 px-5 py-4 border-t border-[var(--color-surface-border)]">
-          {running ? (
-            <button
-              type="button"
-              onClick={handleStop}
-              className="h-[36px] px-4 text-[12.5px] font-medium rounded-lg bg-[var(--color-error)] text-white cursor-pointer transition-colors"
-            >
-              Stop
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleRun}
-              className="h-[36px] px-4 text-[12.5px] font-medium rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-dark)] cursor-pointer transition-colors flex items-center gap-2"
-            >
-              <PlayIcon size={12} />
-              Run
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={running}
-            className="h-[36px] px-4 text-[12.5px] font-medium rounded-lg text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors disabled:opacity-40"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-    )}
-    {showInsights && (
-      <AiPerformanceInsightsModal
-        collectionName={collectionName}
-        results={results}
-        onClose={() => setShowInsights(false)}
-      />
-    )}
+      {showInsights && (
+        <AiPerformanceInsightsModal
+          collectionName={collectionName}
+          results={results}
+          onClose={() => setShowInsights(false)}
+        />
+      )}
     </>
   );
 }
@@ -252,8 +203,4 @@ function TabBtn({ label, active, onClick }: { label: string; active: boolean; on
       {label}
     </button>
   );
-}
-
-function CheckboxRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return <Checkbox checked={checked} onChange={onChange} label={label} />;
 }

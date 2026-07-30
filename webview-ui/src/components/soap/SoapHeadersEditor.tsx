@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { SelectInputView, TextInputView, CheckboxView, ToggleSwitchView, ButtonView, IconButtonView } from '@salilvnair/dui';
 import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
-import { CodeEditor, StyledDropdown, ConfirmDialog } from '../shared';
+import { CodeEditor, ConfirmDialog } from '../shared';
 import { TrashIcon, PlusIcon } from '../../icons';
 import type { SoapHeaderBlock, WsSecurityConfig } from '../../store/tabs-store';
 
@@ -84,41 +85,43 @@ export function SoapHeadersEditor() {
   return (
     <div className="flex flex-col gap-4 p-3">
       {/* WS-Security Section */}
-      <div className="rounded-lg border border-[rgba(255,255,255,0.06)] overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 bg-[rgba(255,255,255,0.02)]">
+      <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-2 bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
           <span className="text-[12px] font-medium text-[var(--color-text-primary)]">WS-Security</span>
-          <button
-            type="button"
-            onClick={() => updateSecurity({ enabled: !wsSecurity.enabled })}
-            className={`w-8 h-4 rounded-full relative transition-colors cursor-pointer ${wsSecurity.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[rgba(255,255,255,0.12)]'}`}
-          >
-            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${wsSecurity.enabled ? 'left-4' : 'left-0.5'}`} />
-          </button>
+          <ToggleSwitchView
+            checked={wsSecurity.enabled}
+            onChange={(v) => updateSecurity({ enabled: v })}
+            size="sm"
+            accentColor={ACCENT}
+          />
         </div>
 
         {wsSecurity.enabled && (
-          <div className="px-3 py-3 border-t border-[rgba(255,255,255,0.04)] flex flex-col gap-3">
+          <div className="px-3 py-3 border-t border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] flex flex-col gap-3">
             {/* Username Token */}
             <div className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold tracking-wider">Username Token</div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] text-[var(--color-text-muted)] mb-1 block">Username</label>
-                <input
-                  type="text"
+                <TextInputView
                   value={wsSecurity.username || ''}
                   onChange={(e) => updateSecurity({ username: e.target.value })}
                   placeholder="{{soap_user}}"
-                  className="w-full h-[28px] px-2 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                  size="md"
+                  width="fw"
+                  accentColor={ACCENT}
                 />
               </div>
               <div>
                 <label className="text-[10px] text-[var(--color-text-muted)] mb-1 block">Password</label>
-                <input
-                  type="password"
+                <TextInputView
                   value={wsSecurity.password || ''}
                   onChange={(e) => updateSecurity({ password: e.target.value })}
                   placeholder="{{soap_pass}}"
-                  className="w-full h-[28px] px-2 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                  size="md"
+                  width="fw"
+                  masked
+                  accentColor={ACCENT}
                 />
               </div>
             </div>
@@ -126,115 +129,110 @@ export function SoapHeadersEditor() {
             <div className="flex items-end gap-3">
               <div className="w-[180px]">
                 <label className="text-[10px] text-[var(--color-text-muted)] mb-1 block">Password Type</label>
-                <StyledDropdown
+                <SelectInputView
                   options={PASSWORD_TYPE_OPTIONS}
                   value={wsSecurity.passwordType}
                   onChange={(v) => updateSecurity({ passwordType: v as 'PasswordText' | 'PasswordDigest' })}
-                  size="sm"
+                  size="md"
                   accentColor={ACCENT}
                 />
               </div>
-              <label className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] cursor-pointer">
-                <input type="checkbox" checked={wsSecurity.addNonce} onChange={(e) => updateSecurity({ addNonce: e.target.checked })} className="accent-[var(--color-protocol-soap)]" />
-                Nonce
-              </label>
-              <label className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] cursor-pointer">
-                <input type="checkbox" checked={wsSecurity.addCreated} onChange={(e) => updateSecurity({ addCreated: e.target.checked })} className="accent-[var(--color-protocol-soap)]" />
-                Created
-              </label>
+              <CheckboxView checked={wsSecurity.addNonce} onChange={(v) => updateSecurity({ addNonce: v })} label="Nonce" size="md" accentColor={ACCENT} />
+              <CheckboxView checked={wsSecurity.addCreated} onChange={(v) => updateSecurity({ addCreated: v })} label="Created" size="md" accentColor={ACCENT} />
             </div>
 
             {/* Timestamp */}
             <div className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold tracking-wider mt-2">Timestamp</div>
             <div className="flex items-end gap-3">
-              <label className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] cursor-pointer">
-                <input type="checkbox" checked={wsSecurity.addTimestamp} onChange={(e) => updateSecurity({ addTimestamp: e.target.checked })} className="accent-[var(--color-protocol-soap)]" />
-                Include Timestamp
-              </label>
+              <CheckboxView checked={wsSecurity.addTimestamp} onChange={(v) => updateSecurity({ addTimestamp: v })} label="Include Timestamp" size="md" accentColor={ACCENT} />
               {wsSecurity.addTimestamp && (
                 <div className="flex items-center gap-1.5">
                   <label className="text-[10px] text-[var(--color-text-muted)]">TTL (sec):</label>
-                  <input
-                    type="number"
-                    value={wsSecurity.timestampTtl}
+                  <TextInputView
+                    value={String(wsSecurity.timestampTtl)}
                     onChange={(e) => updateSecurity({ timestampTtl: parseInt(e.target.value) || 300 })}
-                    className="w-[60px] h-[24px] px-1.5 text-[11px] rounded bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-protocol-soap)]"
+                    size="sm"
+                    style={{ width: 70 }}
+                    accentColor={ACCENT}
                   />
                 </div>
               )}
             </div>
 
             {/* Preview button */}
-            <button
-              type="button"
+            <ButtonView
+              size="sm"
+              accentColor={ACCENT}
               onClick={handlePreview}
-              className="self-start h-[26px] px-3 text-[10px] font-medium rounded-md cursor-pointer transition-colors mt-1"
+              className="self-start mt-1"
               style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-soap) 12%, transparent)', color: ACCENT }}
             >
               Preview Security Header
-            </button>
+            </ButtonView>
           </div>
         )}
       </div>
 
       {/* Custom SOAP Header Blocks */}
-      <div className="rounded-lg border border-[rgba(255,255,255,0.06)] overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 bg-[rgba(255,255,255,0.02)]">
+      <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)] overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-2 bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
           <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Custom SOAP Headers</span>
-          <button
-            type="button"
+          <IconButtonView
+            icon={<PlusIcon size={12} />}
+            size="sm"
+            accentColor={ACCENT}
             onClick={addHeaderBlock}
-            className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-protocol-soap)] cursor-pointer transition-colors"
-            title="Add header block"
-          >
-            <PlusIcon size={12} />
-          </button>
+            tooltip="Add header block"
+          />
         </div>
 
         {headerBlocks.length === 0 ? (
-          <div className="px-3 py-3 text-[11px] text-[var(--color-text-muted)] border-t border-[rgba(255,255,255,0.04)]">
+          <div className="px-3 py-3 text-[11px] text-[var(--color-text-muted)] border-t border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]">
             No custom SOAP headers. Click + to add one.
           </div>
         ) : (
-          <div className="border-t border-[rgba(255,255,255,0.04)]">
+          <div className="border-t border-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)]">
             {headerBlocks.map(block => (
-              <div key={block.id} className="border-b border-[rgba(255,255,255,0.03)] last:border-b-0">
+              <div key={block.id} className="border-b border-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] last:border-b-0">
                 <div className="flex items-center gap-2 px-3 py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => updateHeaderBlock(block.id, { enabled: !block.enabled })}
-                    className={`w-6 h-3.5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${block.enabled ? 'bg-[var(--color-protocol-soap)]' : 'bg-[rgba(255,255,255,0.12)]'}`}
-                  >
-                    <span className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-all ${block.enabled ? 'left-3' : 'left-0.5'}`} />
-                  </button>
-                  <input
-                    type="text"
+                  <ToggleSwitchView
+                    checked={block.enabled}
+                    onChange={(v) => updateHeaderBlock(block.id, { enabled: v })}
+                    size="xs"
+                    accentColor={ACCENT}
+                    className="flex-shrink-0"
+                  />
+                  <TextInputView
                     value={block.name}
                     onChange={(e) => updateHeaderBlock(block.id, { name: e.target.value })}
-                    className="flex-1 min-w-0 h-[24px] px-1.5 text-[11px] rounded bg-transparent border-none text-[var(--color-text-primary)] focus:outline-none"
                     placeholder="Header Name"
+                    size="sm"
+                    width="fw"
+                    className="flex-1 min-w-0"
+                    accentColor={ACCENT}
                   />
-                  <input
-                    type="text"
+                  <TextInputView
                     value={block.namespace}
                     onChange={(e) => updateHeaderBlock(block.id, { namespace: e.target.value })}
-                    className="flex-1 min-w-0 h-[24px] px-1.5 text-[10px] font-mono rounded bg-transparent border-none text-[var(--color-text-muted)] focus:outline-none"
                     placeholder="xmlns:..."
+                    size="sm"
+                    width="fw"
+                    className="flex-1 min-w-0 font-mono"
+                    accentColor={ACCENT}
                   />
-                  <button
-                    type="button"
+                  <IconButtonView
+                    icon={<TrashIcon size={10} />}
+                    size="sm"
+                    accentColor="var(--color-error)"
                     onClick={() => setDeleteConfirm(block.id)}
-                    className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-colors flex-shrink-0"
-                  >
-                    <TrashIcon size={10} />
-                  </button>
+                    className="flex-shrink-0"
+                  />
                 </div>
-                <div className="h-[80px] mx-3 mb-2 rounded overflow-hidden border border-[rgba(255,255,255,0.06)]">
+                <div className="h-[80px] mx-3 mb-2 rounded overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
                   <CodeEditor
                     value={block.content}
                     onChange={(v) => updateHeaderBlock(block.id, { content: v })}
                     language="xml"
-                    lineNumbers={false}
                   />
                 </div>
               </div>

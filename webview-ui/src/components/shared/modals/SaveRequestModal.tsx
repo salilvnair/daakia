@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { postMsg } from '../../../vscode';
 import { useTabsStore, type RequestTab } from '../../../store/tabs-store';
 import { getDisplayMethod } from '../../../services/request/request-service';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
-import { CloseIcon, SparkleIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, TrashIcon, MoreVerticalIcon, RenameIcon, CopyIcon, ChevronRightIcon, CheckCircleFilledIcon } from '../../../icons';
-import { ContextMenu, ConfirmDialog, type ContextMenuItem } from '../index';
+import { SparkleIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, TrashIcon, MoreVerticalIcon, RenameIcon, CopyIcon, ChevronRightIcon, CheckCircleFilledIcon } from '../../../icons';
+import { ConfirmDialog } from '../index';
+import { ModalView, ButtonView, IconButtonView, TextInputView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 
 const PROTOCOL_ACCENT: Record<string, string> = {
   rest: 'var(--color-primary)',
@@ -49,7 +49,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; hasContents: boolean } | null>(null);
   // Context menu
-  const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: ContextMenuItem[]; targetId: string; targetName: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: DuiContextMenuItem[] } | null>(null);
 
   const [aiNaming, setAiNaming] = useState(false);
   const aiNameReqIdRef = useRef('');
@@ -146,44 +146,46 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
   const openFolderContextMenu = useCallback((e: React.MouseEvent, nodeId: string, nodeName: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const items: ContextMenuItem[] = [
-      { id: 'new-folder', label: 'New Folder', shortcut: 'F', icon: <FolderIcon size={13} />, iconColor: 'var(--color-warning)' },
+    const close = () => setContextMenu(null);
+    const items: DuiContextMenuItem[] = [
+      {
+        id: 'new-folder', label: 'New Folder', shortcut: 'F',
+        icon: <FolderIcon size={13} style={{ color: 'var(--color-warning)' }} />,
+        onClick: () => {
+          setInlineCreateMode(true); setInlineCreateName(''); setInlineCreateParentId(nodeId);
+          setExpandedIds(prev => { const next = new Set(prev); next.add(nodeId); return next; });
+          close();
+        },
+      },
       { id: 'sep1', label: '', separator: true },
-      { id: 'rename', label: 'Rename', shortcut: 'N', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' },
-      { id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' },
+      {
+        id: 'rename', label: 'Rename', shortcut: 'N',
+        icon: <RenameIcon size={13} style={{ color: 'var(--color-ctx-rename)' }} />,
+        onClick: () => { setRenamingId(nodeId); setRenameValue(nodeName); close(); },
+      },
+      {
+        id: 'duplicate', label: 'Duplicate', shortcut: 'D',
+        icon: <CopyIcon size={13} style={{ color: 'var(--color-ctx-duplicate)' }} />,
+        onClick: () => {
+          postMsg({ type: 'duplicateCollection', id: nodeId, protocol: tab?.protocol || 'rest' });
+          setTimeout(() => postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' }), 100);
+          close();
+        },
+      },
       { id: 'sep2', label: '', separator: true },
-      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={13} />, iconColor: 'var(--color-error)' },
+      {
+        id: 'delete', label: 'Delete', danger: true, shortcut: '⌫',
+        icon: <TrashIcon size={13} style={{ color: 'var(--color-error)' }} />,
+        onClick: () => {
+          const node = findNode(tree, nodeId);
+          const hasContents = node ? countContents(node) > 0 : false;
+          setDeleteTarget({ id: nodeId, name: nodeName, hasContents });
+          close();
+        },
+      },
     ];
-    setContextMenu({ position: { x: e.clientX, y: e.clientY }, items, targetId: nodeId, targetName: nodeName });
-  }, []);
-
-  const handleContextMenuSelect = useCallback((actionId: string) => {
-    if (!contextMenu) return;
-    const { targetId, targetName } = contextMenu;
-    switch (actionId) {
-      case 'new-folder':
-        setInlineCreateMode(true);
-        setInlineCreateName('');
-        setInlineCreateParentId(targetId);
-        setExpandedIds(prev => { const next = new Set(prev); next.add(targetId); return next; });
-        break;
-      case 'rename':
-        setRenamingId(targetId);
-        setRenameValue(targetName);
-        break;
-      case 'duplicate':
-        postMsg({ type: 'duplicateCollection', id: targetId, protocol: tab?.protocol || 'rest' });
-        setTimeout(() => postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' }), 100);
-        break;
-      case 'delete': {
-        const node = findNode(tree, targetId);
-        const hasContents = node ? countContents(node) > 0 : false;
-        setDeleteTarget({ id: targetId, name: targetName, hasContents });
-        break;
-      }
-    }
-    setContextMenu(null);
-  }, [contextMenu, tree, tab]);
+    setContextMenu({ position: { x: e.clientX, y: e.clientY }, items });
+  }, [tree, tab]);
 
   const handleRename = () => {
     if (!renamingId || !renameValue.trim()) { setRenamingId(null); return; }
@@ -313,53 +315,56 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
     onClose();
   };
 
-  if (!open || !tab) return null;
+  if (!tab) return null;
 
-  const modal = createPortal(
-    <div
-      className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50"
-
+  return (
+    <>
+    <ModalView
+      open={open}
+      onClose={onClose}
+      title="Save as"
+      size="sm"
+      elevated
+      headerColor={accent}
+      footerRight={
+        <ButtonView
+          size="md"
+          accentColor={accent}
+          onClick={handleSave}
+          disabled={!name.trim() || !selectedId}
+        >
+          Save
+        </ButtonView>
+      }
     >
-      <div className="w-full max-w-[480px] rounded-xl bg-[var(--color-elevated)] border border-[var(--color-elevated-border)] shadow-2xl animate-[fadeSlideIn_150ms_ease-out] flex flex-col max-h-[80vh]" style={{ '--modal-accent': accent } as React.CSSProperties}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-[var(--color-surface-border)]">
-          <h2 className="text-[15px] font-semibold text-[var(--color-text-primary)]">Save as</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--color-error)] hover:opacity-80 hover:bg-[color-mix(in_srgb,var(--color-error)_8%,transparent)] cursor-pointer transition-colors"
-          >
-            <CloseIcon size={14} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="px-4 py-3 space-y-3 flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-3" style={{ '--modal-accent': accent } as React.CSSProperties}>
           {/* Request name + AI generate */}
           <div className="space-y-1.5">
             <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">Request name</label>
             <div className="flex items-center gap-2">
-              <input
+              <TextInputView
                 ref={inputRef}
-                type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-                className="flex-1 h-[32px] px-3 rounded-lg bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[12.5px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--modal-accent)]"
+                size="md"
+                accentColor={accent}
+                style={{ flex: 1 }}
               />
-              <button
-                type="button"
-                title={aiNaming ? 'Generating name…' : 'AI: Suggest a name for this request'}
+              <IconButtonView
+                icon={<SparkleIcon size={15} className={aiNaming ? 'animate-pulse' : ''} />}
+                size="md"
+                tooltip={aiNaming ? 'Generating name…' : 'AI: Suggest a name for this request'}
                 disabled={aiNaming}
+                accentColor={accent}
+                active={aiNaming}
                 onClick={() => {
-                  // Heuristic fallback (immediate while AI loads)
                   const url = tab?.url || '';
                   const parts = url.replace(/https?:\/\//, '').split('/').filter(Boolean);
                   const endpoint = parts.length > 1 ? parts.slice(1).join(' ') : parts[0] || 'request';
                   const heuristic = `${getDisplayMethod(tab!)} ${endpoint}`.slice(0, 60);
                   setName(heuristic);
 
-                  // AI-powered suggestion
                   const pid = `ai-name-${Date.now()}`;
                   aiNameReqIdRef.current = pid;
                   aiNameAccRef.current = '';
@@ -385,16 +390,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
                     mcpServerConfigs: [],
                   });
                 }}
-                className="flex items-center justify-center w-[32px] h-[32px] rounded-lg border border-[var(--color-input-border)] cursor-pointer transition-all disabled:opacity-50"
-                style={{
-                  color: aiNaming ? accent : 'var(--color-text-muted)',
-                  borderColor: aiNaming ? accent : 'var(--color-input-border)',
-                }}
-                onMouseEnter={e => { if (!aiNaming) (e.currentTarget as HTMLElement).style.color = accent; }}
-                onMouseLeave={e => { if (!aiNaming) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'; }}
-              >
-                <SparkleIcon size={16} className={aiNaming ? 'animate-pulse' : ''} />
-              </button>
+              />
             </div>
           </div>
 
@@ -475,57 +471,32 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-t border-[var(--color-surface-border)]">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!name.trim() || !selectedId}
-            className="h-[36px] px-4 text-[12.5px] font-medium rounded-lg text-white hover:opacity-90 cursor-pointer transition-colors disabled:opacity-40 disabled:pointer-events-none"
-            style={{ backgroundColor: accent }}
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-[36px] px-4 text-[12.5px] font-medium rounded-lg bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.25)] text-[#f87171] hover:bg-[rgba(239,68,68,0.15)] cursor-pointer transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
       </div>
-    </div>,
-    document.body
-  );
+    </ModalView>
 
-  return (
-    <>
-      {modal}
-      {/* Folder context menu */}
-      {contextMenu && (
-        <ContextMenu
-          items={contextMenu.items}
-          position={contextMenu.position}
-          onSelect={handleContextMenuSelect}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
-      {/* Delete confirm */}
-      {deleteTarget && (
-        <ConfirmDialog
-          title={`Delete "${deleteTarget.name}"?`}
-          message={deleteTarget.hasContents
-            ? `This folder contains requests. Deleting it will also delete all requests inside. This cannot be undone.`
-            : `Delete this folder? This cannot be undone.`}
-          confirmLabel="Delete"
-          danger
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
+    {/* Folder context menu */}
+    {contextMenu && (
+      <ContextMenuView
+        open={true}
+        anchorEl={null}
+        position={contextMenu.position}
+        onClose={() => setContextMenu(null)}
+        items={contextMenu.items}
+      />
+    )}
+    {/* Delete confirm */}
+    {deleteTarget && (
+      <ConfirmDialog
+        title={`Delete "${deleteTarget.name}"?`}
+        message={deleteTarget.hasContents
+          ? `This folder contains requests. Deleting it will also delete all requests inside. This cannot be undone.`
+          : `Delete this folder? This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    )}
     </>
   );
 }
@@ -542,7 +513,7 @@ function SaveTreeNode({
   expandedIds: Set<string>;
   renamingId: string | null;
   renameValue: string;
-  renameRef: React.RefObject<HTMLInputElement>;
+  renameRef: React.RefObject<HTMLInputElement | null>;
   onSelect: (id: string | null) => void;
   onToggleExpand: (id: string) => void;
   onAddSubfolder: (parentId: string) => void;
@@ -611,24 +582,18 @@ function SaveTreeNode({
         {/* Hover action buttons */}
         {!isRenaming && (
           <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity shrink-0">
-            {/* + Subfolder */}
-            <button
-              type="button"
-              title="New subfolder"
+            <IconButtonView
+              icon={<FolderPlusIcon size={12} style={{ color: 'var(--color-text-muted)' }} />}
+              size="sm"
+              tooltip="New subfolder"
               onClick={(e) => { e.stopPropagation(); onAddSubfolder(node.id); }}
-              className="flex items-center justify-center w-5 h-5 rounded text-[var(--color-text-muted)] hover:text-[var(--modal-accent)] hover:bg-[color-mix(in_srgb,var(--modal-accent)_12%,transparent)] cursor-pointer"
-            >
-              <FolderPlusIcon size={12} />
-            </button>
-            {/* ··· context menu */}
-            <button
-              type="button"
-              title="More options"
+            />
+            <IconButtonView
+              icon={<MoreVerticalIcon size={12} style={{ color: 'var(--color-text-muted)' }} />}
+              size="sm"
+              tooltip="More options"
               onClick={(e) => { e.stopPropagation(); onOpenContextMenu(e, node.id, node.name); }}
-              className="flex items-center justify-center w-5 h-5 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)] cursor-pointer"
-            >
-              <MoreVerticalIcon size={12} />
-            </button>
+            />
           </div>
         )}
       </div>

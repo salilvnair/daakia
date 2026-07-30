@@ -5,6 +5,8 @@ import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, StyledDropdown, ContextMenu, type ContextMenuItem, type ContextMenuSubItem, type DropdownOption } from '../shared';
 import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon } from '../../icons';
+import { IconButtonView, StateMachineIcon } from '@salilvnair/dui';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 interface TabContextMenuState {
   tabId: string;
@@ -151,6 +153,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
   const envOptions: DropdownOption[] = customEnvs.map(e => ({ value: e.id, label: e.name }));
 
   const handleClose = (tabId: string) => {
+    logUiEvent('tab.close', { tabId });
     const tab = tabs.find(t => t.id === tabId);
     // daakia-ai tabs have no save flow — never prompt for unsaved changes
     if (tab?.dirty && tab.type !== 'daakia-ai') {
@@ -263,7 +266,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
 
     switch (actionId) {
       case 'rename': startRename(tabId); setContextMenu(null); break;
-      case 'duplicate': duplicateTab(tabId); setContextMenu(null); break;
+      case 'duplicate': logUiEvent('tab.duplicate', { tabId }); duplicateTab(tabId); setContextMenu(null); break;
       case 'pin': pinTab(tabId); setContextMenu(null); break;
       case 'unpin': unpinTab(tabId); setContextMenu(null); break;
       case 'close': handleClose(tabId); setContextMenu(null); break;
@@ -433,7 +436,9 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           const isSettings = tab.type === 'settings';
           const isMockServer = tab.type === 'mock-server';
           const isDaakiaAi = tab.type === 'daakia-ai';
-          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
+          const isStateMachine = tab.type === 'state-machine';
+          const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
+          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
           const isDragOver = dragOverIdx === idx && dragIdx !== idx;
           return (
             <div
@@ -465,6 +470,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 <SettingsIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-settings)' }} />
               ) : isMockServer ? (
                 <ServerIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-mock-server)' }} />
+              ) : isStateMachine ? (
+                <StateMachineIcon size={13} className="flex-shrink-0" style={{ color: SM_ACCENT }} />
               ) : isDaakiaAi ? (
                 <GeneralAssistantIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-protocol-ai)' }} />
               ) : tab.protocol === 'graphql' ? (
@@ -505,7 +512,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                     className="w-full bg-[var(--color-input-bg)] border border-[var(--color-primary)] rounded px-1 text-[12px] text-[var(--color-text-primary)] outline-none"
                   />
                 ) : (
-                  isSettings ? 'Settings' : isMockServer ? 'Mock Server' : (tab.name || tab.url || 'Untitled')
+                  isSettings ? 'Settings' : isMockServer ? 'Mock Server' : isStateMachine ? 'State Machine' : (tab.name || tab.url || 'Untitled')
                 )}
               </span>
               {!isSettings && !isMockServer && !isDaakiaAi && tab.dirty && !tab.pinned && (
@@ -539,7 +546,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           type="button"
           className="flex items-center justify-center w-9 h-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] cursor-pointer flex-shrink-0 transition-colors"
           style={{ color: requestAccentColor }}
-          onClick={() => addTab()}
+          onClick={() => { logUiEvent('tab.new'); addTab(); }}
           title="New Tab"
         >
           <PlusIcon size={16} />
@@ -561,13 +568,16 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
       {/* Per-tab environment selector — far right */}
       {activeTab && activeTab.type === 'request' && (
         <div className="flex items-center gap-2 h-full px-3 py-1 border-l border-[var(--color-panel-border)] flex-shrink-0 z-10">
-          <button type="button" onClick={() => {
-            const envId = activeTab?.envId || useEnvStore.getState().activeEnvId || GLOBAL_ENV_ID;
-            requestEditEnv(envId);
-            onEnvironmentsClick?.();
-          }} className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity" title="Open Environments">
-            <LayersIcon size={14} style={{ color: 'var(--color-sidebar-environments)' }} />
-          </button>
+          <IconButtonView
+            icon={<LayersIcon size={14} style={{ color: 'var(--color-sidebar-environments)' }} />}
+            size="sm"
+            tooltip="Open Environments"
+            onClick={() => {
+              const envId = activeTab?.envId || useEnvStore.getState().activeEnvId || GLOBAL_ENV_ID;
+              requestEditEnv(envId);
+              onEnvironmentsClick?.();
+            }}
+          />
           {customEnvs.length === 0 ? (
             <span className="text-[12px] text-[var(--color-text-muted)]">No Environment</span>
           ) : (

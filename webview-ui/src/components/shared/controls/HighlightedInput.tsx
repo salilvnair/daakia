@@ -141,7 +141,9 @@ export function HighlightedInput({ value, onChange, onKeyDown, onBlur, placehold
   }, [filteredSuggestions.length, focused]);
 
   // Build highlighted HTML — supports {{var}}, ${var}, and $daakia_{var}_$ escape syntax
+  // HTML-escape user input first so typed/pasted markup can't be injected into the mirror
   const highlighted = value
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/(\$daakia_\{[\w.\-]+\}_\$)/g, '<span class="var-escape-highlight">$1</span>')
     .replace(/(\{\{[\w.\-]+\}\}|\$\{[\w.\-]+\})/g, '<span class="var-highlight">$1</span>');
 

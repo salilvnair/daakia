@@ -3,12 +3,12 @@
  * Feature 4.6.10 — AI API Dependency Graph
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useSidebarDataStore } from '../../store/sidebar-data-store';
 import { MdViewer } from '../shared/display/MdViewer';
-import { StyledDropdown } from '../shared/controls/StyledDropdown';
+import { ModalView, AIButtonView, SelectInputView } from '@salilvnair/dui';
+import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface DependencyNode {
   name: string;
@@ -62,6 +62,20 @@ export function AiApiDependencyGraph({ onClose }: Props) {
   const accRef = useRef('');
   const reqIdRef = useRef('');
   const collections = useSidebarDataStore(s => s.getCollections('rest'));
+  const cacheGet = useAiCollectionCacheStore(s => s.get);
+  const cacheSet = useAiCollectionCacheStore(s => s.set);
+
+  // Cache-first: picking a collection that was already analyzed shows the last
+  // result instead of re-running the AI call — Analyze again is always explicit.
+  useEffect(() => {
+    if (!selectedCollection) return;
+    const cached = cacheGet(`dependency-graph:${selectedCollection}`);
+    if (!cached) { setGraph(null); setExplanation(''); return; }
+    const p = cached.payload as { graph: DependencyNode[] | null; explanation: string };
+    setGraph(p.graph);
+    setExplanation(p.explanation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCollection]);
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -74,8 +88,13 @@ export function AiApiDependencyGraph({ onClose }: Props) {
       if (msg.type === 'ai:complete') {
         const content = accRef.current || '';
         setLoading(false);
-        try { setGraph(JSON.parse(content)); }
-        catch { setExplanation(content); }
+        let parsedGraph: DependencyNode[] | null = null;
+        let parsedExplanation = '';
+        try { parsedGraph = JSON.parse(content); }
+        catch { parsedExplanation = content; }
+        setGraph(parsedGraph);
+        setExplanation(parsedExplanation);
+        cacheSet(`dependency-graph:${selectedCollection}`, { graph: parsedGraph, explanation: parsedExplanation });
       }
       if (msg.type === 'ai:error') {
         setError((msg.message as string) || 'Analysis failed.');
@@ -84,7 +103,8 @@ export function AiApiDependencyGraph({ onClose }: Props) {
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCollection]);
 
   const run = () => {
     const collection = collections.find(c => c.id === selectedCollection);
@@ -109,98 +129,103 @@ export function AiApiDependencyGraph({ onClose }: Props) {
     });
   };
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[720px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">API Dependency Graph</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">Visualize which requests depend on which</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="API Dependency Graph"
+      subtitle="Visualize which requests depend on which"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{
+          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'color-mix(in srgb, var(--color-protocol-ai) 18%, transparent)',
+        }}>
+          <SparkleIcon size={13} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Analyzing…' : 'Analyze Dependencies'}
+          size="md"
+          accentColor={ACCENT}
+          loading={loading}
+          disabled={loading || !selectedCollection}
+          onClick={run}
+        />
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 6, color: 'var(--color-text-secondary)' }}>Collection</label>
+          <SelectInputView
+            value={selectedCollection}
+            options={collections.map(c => ({ value: c.id, label: c.name }))}
+            onChange={setSelectedCollection}
+            placeholder="Select collection…"
+            size="md"
+            accentColor={ACCENT}
+            width="100%"
+          />
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-          <div>
-            <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Collection</label>
-            <StyledDropdown
-              value={selectedCollection}
-              options={collections.map(c => ({ value: c.id, label: c.name }))}
-              onChange={setSelectedCollection}
-              placeholder="Select collection…"
-            />
+        {error && <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>{error}</p>}
+
+        {loading && (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '16px 0' }}>
+            {[0, 150, 300].map(d => (
+              <span key={d} className="animate-pulse" style={{
+                width: 5, height: 5, borderRadius: '50%', background: ACCENT, animationDelay: `${d}ms`,
+              }} />
+            ))}
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>Analyzing dependencies…</span>
           </div>
+        )}
 
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && (
-            <div className="flex gap-1 items-center py-4">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Analyzing dependencies…</span>
-            </div>
-          )}
-
-          {graph && (
-            <div className="flex flex-col gap-3">
-              <p className="text-[11px] font-semibold" style={{ color: ACCENT }}>✦ {graph.length} requests mapped</p>
-              {graph.map((node, i) => (
-                <div key={i} className="rounded-lg border p-3"
-                  style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-info)' }}>
-                      {node.method}
-                    </span>
-                    <span className="text-[11.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{node.name}</span>
-                    <span className="text-[10px] font-mono" style={{ color: 'var(--color-text-muted)' }}>{node.url}</span>
-                  </div>
-                  {node.dependsOn.length > 0 && (
-                    <p className="text-[10px]" style={{ color: 'var(--color-warning)' }}>
-                      ← Depends on: {node.dependsOn.join(', ')}
-                    </p>
-                  )}
-                  {node.provides.length > 0 && (
-                    <p className="text-[10px]" style={{ color: 'var(--color-success)' }}>
-                      → Provides: {node.provides.map(p => `{{${p}}}`).join(', ')}
-                    </p>
-                  )}
-                  {node.note && (
-                    <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{node.note}</p>
-                  )}
+        {graph && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: ACCENT, margin: 0 }}>✦ {graph.length} requests mapped</p>
+            {graph.map((node, i) => (
+              <div key={i} style={{
+                borderRadius: 8, padding: 12,
+                border: '1px solid var(--color-surface-border)', background: 'var(--color-panel)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, color: 'var(--color-btn-primary-text, #fff)', padding: '2px 6px', borderRadius: 4,
+                    background: 'var(--color-info)',
+                  }}>
+                    {node.method}
+                  </span>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--color-text-primary)' }}>{node.name}</span>
+                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--color-text-muted)' }}>{node.url}</span>
                 </div>
-              ))}
-            </div>
-          )}
+                {node.dependsOn.length > 0 && (
+                  <p style={{ fontSize: 10, margin: '0 0 2px', color: 'var(--color-warning)' }}>
+                    ← Depends on: {node.dependsOn.join(', ')}
+                  </p>
+                )}
+                {node.provides.length > 0 && (
+                  <p style={{ fontSize: 10, margin: '0 0 2px', color: 'var(--color-success)' }}>
+                    → Provides: {node.provides.map(p => `{{${p}}}`).join(', ')}
+                  </p>
+                )}
+                {node.note && (
+                  <p style={{ fontSize: 10, margin: '4px 0 0', color: 'var(--color-text-muted)' }}>{node.note}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
-          {explanation && !graph && (
-            <div className="rounded-lg border p-4" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <MdViewer content={explanation} />
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <button type="button" onClick={run} disabled={loading || !selectedCollection}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-            style={{ backgroundColor: ACCENT }}>
-            <SparkleIcon size={11} className="inline mr-1" />
-            Analyze Dependencies
-          </button>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
-        </div>
+        {explanation && !graph && (
+          <div style={{ borderRadius: 8, padding: 16, border: '1px solid var(--color-surface-border)' }}>
+            <MdViewer content={explanation} />
+          </div>
+        )}
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

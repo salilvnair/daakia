@@ -3,10 +3,10 @@
  * Task 10.10 — AI OpenAPI 3.1 Generator · Gate: openApiGenerator
  */
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
-import { CloseIcon, SparkleIcon, CopyIcon, CheckIcon, DownloadIcon } from '../../icons';
+import { SparkleIcon, DownloadIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, CopyButtonView, ButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -21,7 +21,6 @@ export function AiOpenApiGeneratorModal({ onClose }: Props) {
   const [spec, setSpec] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
   const streamRef = useRef('');
 
   useEffect(() => {
@@ -70,13 +69,6 @@ Start the output with ${format === 'yaml' ? 'openapi: "3.1.0"' : '{"openapi": "3
     });
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(spec).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
   const handleDownload = () => {
     const blob = new Blob([spec], { type: format === 'yaml' ? 'text/yaml' : 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -85,74 +77,57 @@ Start the output with ${format === 'yaml' ? 'openapi: "3.1.0"' : '{"openapi": "3
     URL.revokeObjectURL(url);
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }} onMouseDown={e => e.stopPropagation()}>
-      <div className="relative flex flex-col rounded-2xl border shadow-2xl overflow-hidden" style={{ backgroundColor: 'var(--color-panel)', borderColor: `color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`, width: 700, maxHeight: '85vh' }}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <div className="flex items-center gap-2">
-            <SparkleIcon size={14} style={{ color: ACCENT }} />
-            <span className="text-[13px] font-semibold" style={{ color: ACCENT }}>OpenAPI 3.1 Generator ✦</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--color-surface-border)' }}>
-              {(['yaml', 'json'] as const).map(f => (
-                <button key={f} type="button" onClick={() => setFormat(f)}
-                  className="px-2.5 py-1 text-[10.5px] font-medium cursor-pointer transition-all"
-                  style={{ backgroundColor: format === f ? `color-mix(in srgb, ${ACCENT} 15%, transparent)` : 'transparent', color: format === f ? ACCENT : 'var(--color-text-muted)' }}
-                >{f.toUpperCase()}</button>
-              ))}
-            </div>
-            {spec && (
-              <>
-                <button type="button" onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer" style={{ color: copied ? 'var(--color-success)' : ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 10%, transparent)` }}>
-                  {copied ? <CheckIcon size={11} /> : <CopyIcon size={11} />}{copied ? 'Copied!' : 'Copy'}
-                </button>
-                <button type="button" onClick={handleDownload} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer" style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 10%, transparent)` }}>
-                  <DownloadIcon size={11} />Download
-                </button>
-              </>
-            )}
-            <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-[var(--color-hover)] cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>
-              <CloseIcon size={13} />
-            </button>
-          </div>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="OpenAPI 3.1 Generator"
+      size="xl"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
         </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-5 min-h-0">
-          {!spec && !loading && !error && (
-            <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-              <p className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
-                Scan all open REST/GraphQL tabs and generate a complete OpenAPI 3.1 spec with schemas, examples, and auth schemes.
-              </p>
-              <button type="button" onClick={generate}
-                className="flex items-center gap-2 h-[36px] px-5 rounded-xl text-[12px] font-semibold cursor-pointer text-white hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: ACCENT }}
-              >
-                <SparkleIcon size={12} />Generate OpenAPI Spec ✦
-              </button>
-            </div>
-          )}
-          {error && <p className="text-[11px] px-3 py-2 rounded-lg mb-3" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>{error}</p>}
-          {loading && !spec && <p className="text-[11px] animate-pulse text-center py-8" style={{ color: ACCENT }}>Generating OpenAPI spec…</p>}
-          {spec && (
-            <pre className="text-[11.5px] font-mono whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>{spec}</pre>
-          )}
+      }
+      headerRight={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-surface-border)' }}>
+          {(['yaml', 'json'] as const).map(f => (
+            <button key={f} type="button" onClick={() => setFormat(f)}
+              className="px-2.5 py-1 text-[10.5px] font-medium cursor-pointer transition-all"
+              style={{ backgroundColor: format === f ? `color-mix(in srgb, ${ACCENT} 15%, transparent)` : 'transparent', color: format === f ? ACCENT : 'var(--color-text-muted)' }}
+            >{f.toUpperCase()}</button>
+          ))}
         </div>
-
-        {/* Footer */}
-        {spec && (
-          <div className="flex items-center gap-3 px-5 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-            <button type="button" onClick={generate} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] cursor-pointer" style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 8%, transparent)` }}>
-              <SparkleIcon size={10} />Regenerate
-            </button>
-            <div className="flex-1" />
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-[12px] font-medium cursor-pointer hover:bg-[var(--color-hover)]" style={{ color: 'var(--color-text-muted)' }}>Close</button>
+      }
+      footerLeft={
+        spec ? (
+          <AIButtonView label="Regenerate" size="md" accentColor={ACCENT} onClick={generate} />
+        ) : undefined
+      }
+      footerRight={
+        spec ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <CopyButtonView text={spec} title="Copy" size="md" accentColor={ACCENT} />
+            <ButtonView size="md" variant="secondary" onClick={handleDownload}>
+              <DownloadIcon size={12} style={{ marginRight: 4 }} />Download
+            </ButtonView>
           </div>
-        )}
-      </div>
-    </div>,
-    document.body
+        ) : undefined
+      }
+    >
+      {!spec && !loading && !error && (
+        <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
+          <p className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
+            Scan all open REST/GraphQL tabs and generate a complete OpenAPI 3.1 spec with schemas, examples, and auth schemes.
+          </p>
+          <AIButtonView label="Generate OpenAPI Spec" size="md" accentColor={ACCENT} onClick={generate} />
+        </div>
+      )}
+      {error && <p className="text-[11px] px-3 py-2 rounded-lg mb-3" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, transparent)' }}>{error}</p>}
+      {loading && !spec && <p className="text-[11px] animate-pulse text-center py-8" style={{ color: ACCENT }}>Generating OpenAPI spec…</p>}
+      {spec && (
+        <pre className="text-[11.5px] font-mono whitespace-pre-wrap leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>{spec}</pre>
+      )}
+    </ModalView>
   );
 }

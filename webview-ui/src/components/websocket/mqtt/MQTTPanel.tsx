@@ -9,8 +9,17 @@ import {
   ArrowUpIcon, ArrowDownIcon, AutoScrollIcon,
   ChevronDownIcon, SaveIcon, MoreVerticalIcon, SparkleIcon,
 } from '../../../icons';
-import { HighlightedInput, SplitButton, StyledDropdown, CodeEditor, Checkbox } from '../../shared';
-import type { SplitButtonItem, DropdownOption } from '../../shared';
+import {
+  HighlightedInputView,
+  ButtonView,
+  DropDownButtonView,
+  IconButtonView,
+  TextInputView,
+  SelectInputView,
+  EditorView,
+  CheckboxView,
+  type ContextMenuItem,
+} from '@salilvnair/dui';
 import { MqttMessageRow, type MqttMessage, type MqttSubscription } from './MqttMessageRow';
 import { MqttSubscriptionModal, SUB_COLORS } from './MqttSubscriptionModal';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
@@ -22,7 +31,7 @@ import { logUiEvent } from '../../../store/ui-audit-store';
 
 // ---------- Constants ----------
 
-const QOS_OPTIONS: DropdownOption[] = [
+const QOS_OPTIONS = [
   { value: '0', label: 'QoS 0' },
   { value: '1', label: 'QoS 1' },
   { value: '2', label: 'QoS 2' },
@@ -66,7 +75,16 @@ export function MQTTPanel() {
     if (activeTabId) errorCache.set(activeTabId, v);
   }, [activeTabId]);
 
-  // Persisted fields � read from authData, write back on change
+  // Test-only hook for the wiki capture harness — seeds a realistic connected
+  // state + message log without a real MQTT broker connection (see CaptureBridge.tsx).
+  useEffect(() => {
+    (window as any).__mqttCaptureSeed = (msgs: MqttMessage[], state: ConnectionState) => {
+      setMessages(msgs);
+      setConnState(state);
+    };
+  }, [setMessages, setConnState]);
+
+  // Persisted fields — read from authData, write back on change
   const ad = activeTab?.authData || {};
   const [subscriptions, setSubscriptionsLocal] = useState<MqttSubscription[]>(() => {
     try { return ad['mqtt_subscriptions'] ? JSON.parse(ad['mqtt_subscriptions']) : []; } catch { return []; }
@@ -157,7 +175,6 @@ export function MQTTPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const aiOverflowRef = useRef<HTMLDivElement>(null);
-  const aiOverflowBtnRef = useRef<HTMLButtonElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const openDaakiaAiTab = useTabsStore(s => s.openDaakiaAiTab);
 
@@ -323,6 +340,7 @@ export function MQTTPanel() {
 
   const handleSubscribe = useCallback(() => {
     if (!activeTab || !newSubTopic.trim()) return;
+    logUiEvent('mqtt.subscribe', { topic: newSubTopic });
     postMsg({ type: 'mqtt:subscribe', tabId: activeTab.id, topic: newSubTopic, qos: newSubQos });
     setSubscriptions(prev => [...prev, {
       id: crypto.randomUUID(),
@@ -347,6 +365,7 @@ export function MQTTPanel() {
 
   const handlePublish = useCallback(() => {
     if (!activeTab || !pubTopic.trim()) return;
+    logUiEvent('mqtt.publish', { topic: pubTopic });
     postMsg({
       type: 'mqtt:publish',
       tabId: activeTab.id,
@@ -357,7 +376,7 @@ export function MQTTPanel() {
     });
   }, [activeTab, pubTopic, pubPayload, pubQos, pubRetain]);
 
-  const handleClear = useCallback(() => setMessages([]), [setMessages]);
+  const handleClear = useCallback(() => { logUiEvent('mqtt.clear'); setMessages([]); }, [setMessages]);
 
   // Save handlers
   const handleSave = useCallback(() => {
@@ -365,7 +384,7 @@ export function MQTTPanel() {
     saveRequest(activeTab);
   }, [activeTab]);
 
-  const saveItems: SplitButtonItem[] = [
+  const saveItems: ContextMenuItem[] = [
     { id: 'save-as', label: 'Save As...', icon: <SaveIcon size={12} />, iconColor: 'var(--color-ctx-close-saved)', onClick: () => postMsg({ type: 'openSaveAs', tabId: activeTab?.id }) },
   ];
 
@@ -429,81 +448,79 @@ export function MQTTPanel() {
           title={connState}
         />
 
-        <div className="flex-[2] min-w-0">
-          <HighlightedInput
-            value={activeTab.url}
-            onChange={(v) => updateTab(activeTab.id, { url: v })}
-            onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
-            placeholder="wss://test.mosquitto.org:8081"
-            disabled={connState === 'connected'}
-            suggestions={urlSuggestions}
-            mockServers={mockSuggestions}
-            protocolHints={['wss://']}
-          />
-        </div>
+        <HighlightedInputView
+          value={activeTab.url}
+          onChange={(v) => updateTab(activeTab.id, { url: v })}
+          onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
+          placeholder="wss://test.mosquitto.org:8081"
+          disabled={connState === 'connected'}
+          suggestions={urlSuggestions}
+          mockServers={mockSuggestions}
+          size="lg"
+          borderRadius={6}
+        />
 
         {/* Client ID */}
-        <div className="flex items-center gap-1.5 flex-[1] min-w-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap" style={{ color: 'var(--color-protocol-mqtt)', backgroundColor: 'rgba(139,92,246,0.12)' }}>Client ID</span>
-          <input
-            type="text"
+          <TextInputView
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
             disabled={connState === 'connected'}
-            className="h-[36px] flex-1 min-w-[80px] px-2.5 text-[12px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] disabled:opacity-50"
             placeholder="daakia"
+            size="lg"
+            style={{ width: 160 }}
           />
         </div>
 
         {/* Connect / Disconnect */}
         {connState === 'disconnected' ? (
-          <button
-            type="button"
-            onClick={handleConnect}
+          <ButtonView
+            label="Connect"
+            iconLeft={<ConnectIcon size={12} />}
+            size="lg"
+            variant="primary"
+            accentColor="var(--color-protocol-mqtt)"
             disabled={!activeTab.url.trim()}
-            className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[var(--color-protocol-mqtt)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity flex items-center gap-1.5 flex-shrink-0"
-          >
-            <ConnectIcon size={12} />
-            Connect
-          </button>
+            onClick={handleConnect}
+          />
         ) : (
-          <button
-            type="button"
+          <ButtonView
+            label="Disconnect"
+            iconLeft={<DisconnectIcon size={12} />}
+            size="lg"
+            variant="danger"
             onClick={handleDisconnect}
-            className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[rgba(239,68,68,0.12)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.2)] cursor-pointer transition-colors flex items-center gap-1.5 flex-shrink-0"
-          >
-            <DisconnectIcon size={12} />
-            Disconnect
-          </button>
+          />
         )}
 
         {/* Save */}
-        <SplitButton
+        <DropDownButtonView
           label="Save"
+          icon={<SaveIcon size={12} />}
           items={saveItems}
-          onClick={handleSave}
+          size="lg"
           variant="secondary"
-          icon={<SaveIcon size={13} />}
+          accentColor="var(--color-surface-border)"
+          onPrimaryClick={handleSave}
+          align="right"
         />
 
-        {/* 9.23: AI Tools ⋮ menu */}
+        {/* AI Tools ⋮ menu */}
         <div className="flex-shrink-0 relative" ref={aiOverflowRef}>
-          <button ref={aiOverflowBtnRef} type="button"
-            onClick={() => {
-              if (!showAiOverflow && aiOverflowBtnRef.current) {
-                const rect = aiOverflowBtnRef.current.getBoundingClientRect();
+          <IconButtonView
+            icon={<MoreVerticalIcon size={15} />}
+            title="AI tools"
+            size="lg"
+            active={showAiOverflow}
+            onClick={(e) => {
+              if (!showAiOverflow) {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 setAiOverflowDir((window.innerHeight - rect.bottom) < 160 ? 'up' : 'down');
               }
               setShowAiOverflow(p => !p);
             }}
-            title="AI tools"
-            className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
-            style={{ color: showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)', backgroundColor: showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent' }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
-          >
-            <MoreVerticalIcon size={15} />
-          </button>
+          />
           {showAiOverflow && (
             <div className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${aiOverflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
               style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
@@ -542,19 +559,19 @@ export function MQTTPanel() {
           )}
           {showPreflight && activeTab.url.trim() && <AiPreflightPopover tab={activeTab} onClose={() => setShowPreflight(false)} />}
           {showPatternStatus && activeTab.url.trim() && aiEnabled('patternBaseline') && (
-            <PatternBaselinePopup method="MQTT" url={activeTab.url} onClose={() => setShowPatternStatus(false)} dir={aiOverflowDir} />
+            <PatternBaselinePopup method="MQTT" url={activeTab.url} onClose={() => setShowPatternStatus(false)} />
           )}
         </div>
       </div>
 
-      {/* Main content � vertical split */}
+      {/* Main content — vertical split */}
       <div
         ref={containerRef}
         className="flex-1 flex flex-col min-h-0 overflow-hidden relative"
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       >
-        {/* Top section � Connection Config + Publish */}
+        {/* Top section — Connection Config + Publish */}
         <div className="flex flex-col overflow-hidden" style={{ height: `${splitPercent}%` }} onFocus={handleRequestFocus}>
           {/* Connection config toggle */}
           <button
@@ -566,46 +583,46 @@ export function MQTTPanel() {
             Connection Config
             {connState === 'connected' && (
               <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-[rgba(139,92,246,0.12)] text-[var(--color-protocol-mqtt)]">
-                ? Clean Session {cleanSession ? 'ON' : 'OFF'}
+                Clean Session {cleanSession ? 'ON' : 'OFF'}
               </span>
             )}
           </button>
 
           {showConfig && (
             <div className="px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
-              {/* Left column � credentials */}
+              {/* Left column — credentials */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <span className="w-[70px] text-[var(--color-text-muted)]">Username</span>
-                  <input type="text" value={username} onChange={e => setUsername(e.target.value)} disabled={connState === 'connected'} placeholder="Username" className="flex-1 h-[28px] px-2 rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-50" />
+                  <TextInputView value={username} onChange={e => setUsername(e.target.value)} disabled={connState === 'connected'} placeholder="Username" size="md" style={{ flex: 1 }} />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-[70px] text-[var(--color-text-muted)]">Password</span>
-                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} disabled={connState === 'connected'} placeholder="Password" className="flex-1 h-[28px] px-2 rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-50" />
+                  <TextInputView value={password} onChange={e => setPassword(e.target.value)} disabled={connState === 'connected'} placeholder="Password" size="md" masked style={{ flex: 1 }} />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-[70px] text-[var(--color-text-muted)]">Keep Alive</span>
-                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={keepAlive} onChange={e => setKeepAlive(parseInt(e.target.value) || 60)} disabled={connState === 'connected'} className="w-[70px] h-[28px] px-2 rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none disabled:opacity-50" />
+                  <TextInputView value={String(keepAlive)} onChange={e => setKeepAlive(parseInt(e.target.value) || 60)} disabled={connState === 'connected'} size="md" style={{ width: 70 }} />
                   <div className="ml-auto">
-                    <Checkbox checked={cleanSession} onChange={setCleanSession} label="Clean Session" />
+                    <CheckboxView checked={cleanSession} onChange={setCleanSession} label="Clean Session" size="md" />
                   </div>
                 </div>
               </div>
-              {/* Right column � Last Will */}
+              {/* Right column — Last Will */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <span className="w-[90px] text-[var(--color-text-muted)]">Last-Will Topic</span>
-                  <input type="text" value={lastWillTopic} onChange={e => setLastWillTopic(e.target.value)} disabled={connState === 'connected'} placeholder="Last-Will Topic" className="flex-1 h-[28px] px-2 rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-50" />
+                  <TextInputView value={lastWillTopic} onChange={e => setLastWillTopic(e.target.value)} disabled={connState === 'connected'} placeholder="Last-Will Topic" size="md" style={{ flex: 1 }} />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-[90px] text-[var(--color-text-muted)]">Last-Will Msg</span>
-                  <input type="text" value={lastWillMessage} onChange={e => setLastWillMessage(e.target.value)} disabled={connState === 'connected'} placeholder="Last-Will Message" className="flex-1 h-[28px] px-2 rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-50" />
+                  <TextInputView value={lastWillMessage} onChange={e => setLastWillMessage(e.target.value)} disabled={connState === 'connected'} placeholder="Last-Will Message" size="md" style={{ flex: 1 }} />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-[90px] text-[var(--color-text-muted)]">Last-Will QoS</span>
-                  <StyledDropdown size="sm" options={QOS_OPTIONS} value={String(lastWillQos)} onChange={v => setLastWillQos(parseInt(v) as 0 | 1 | 2)} accentColor="var(--color-protocol-mqtt)" />
+                  <SelectInputView size="md" options={QOS_OPTIONS} value={String(lastWillQos)} onChange={v => setLastWillQos(parseInt(v) as 0 | 1 | 2)} accentColor="var(--color-protocol-mqtt)" />
                   <div className="ml-auto">
-                    <Checkbox checked={lastWillRetain} onChange={setLastWillRetain} label="Last-Will Retain" />
+                    <CheckboxView checked={lastWillRetain} onChange={setLastWillRetain} label="Last-Will Retain" size="md" />
                   </div>
                 </div>
               </div>
@@ -615,27 +632,27 @@ export function MQTTPanel() {
           {/* Publish area */}
           <div className="px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 flex flex-col gap-2">
             <div className="flex items-center gap-2">
-              <input
-                type="text"
+              <TextInputView
                 value={pubTopic}
                 onChange={e => setPubTopic(e.target.value)}
                 placeholder="Topic to publish (e.g. test/hello)"
-                className="flex-1 h-[30px] px-2.5 text-[12px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+                size="md"
+                style={{ flex: 1 }}
               />
-              <StyledDropdown size="sm" options={QOS_OPTIONS} value={String(pubQos)} onChange={v => setPubQos(parseInt(v) as 0 | 1 | 2)} accentColor="var(--color-protocol-mqtt)" />
-              <Checkbox checked={pubRetain} onChange={setPubRetain} label="Retain" />
-              <button
-                type="button"
-                onClick={handlePublish}
+              <SelectInputView size="md" options={QOS_OPTIONS} value={String(pubQos)} onChange={v => setPubQos(parseInt(v) as 0 | 1 | 2)} accentColor="var(--color-protocol-mqtt)" />
+              <CheckboxView checked={pubRetain} onChange={setPubRetain} label="Retain" size="md" />
+              <ButtonView
+                label="Publish"
+                iconLeft={<SendIcon size={11} />}
+                size="md"
+                variant="ghost"
+                accentColor="var(--color-protocol-mqtt)"
                 disabled={connState !== 'connected' || !pubTopic.trim()}
-                className="h-[30px] px-4 text-[11px] font-medium rounded-md bg-[var(--color-protocol-mqtt)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity flex items-center gap-1.5"
-              >
-                <SendIcon size={11} />
-                Publish
-              </button>
+                onClick={handlePublish}
+              />
             </div>
             <div className="h-[60px]">
-              <CodeEditor
+              <EditorView
                 value={pubPayload}
                 onChange={setPubPayload}
                 language="json"
@@ -655,7 +672,7 @@ export function MQTTPanel() {
           <div className="w-8 h-[3px] rounded-full bg-[var(--color-text-muted)] opacity-40 group-hover:opacity-80 transition-opacity" />
         </div>
 
-        {/* Bottom section � Subscriptions + Log */}
+        {/* Bottom section — Subscriptions + Log */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden" style={{ height: `${100 - splitPercent}%` }} onFocus={handleLogFocus}>
           {/* Subscription tabs */}
           <div className="flex items-center gap-0 px-3 border-b border-[var(--color-surface-border)] bg-[var(--color-surface)] flex-shrink-0 overflow-x-auto [scrollbar-gutter:stable]">
@@ -691,44 +708,39 @@ export function MQTTPanel() {
                   onClick={(e) => { e.stopPropagation(); handleUnsubscribe(sub); }}
                   title="Unsubscribe"
                 >
-                  �
+                  ×
                 </span>
               </button>
             ))}
 
             {/* New Subscription button */}
-            <button
-              type="button"
-              onClick={() => connState === 'connected' && setShowSubModal(true)}
+            <ButtonView
+              label="New Subscription"
+              iconLeft={<PlusIcon size={10} />}
+              size="xs"
+              variant="ghost"
+              accentColor="var(--color-protocol-mqtt)"
               disabled={connState !== 'connected'}
-              className="ml-auto px-2.5 py-1 text-[10px] font-medium text-[var(--color-protocol-mqtt)] hover:bg-[rgba(139,92,246,0.08)] rounded cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-            >
-              <PlusIcon size={10} />
-              New Subscription
-            </button>
+              onClick={() => connState === 'connected' && setShowSubModal(true)}
+              style={{ marginLeft: 'auto' }}
+            />
           </div>
 
           {/* Log toolbar */}
           <div className="flex items-center gap-2 px-3 py-1 border-b border-[var(--color-surface-border)] flex-shrink-0">
             <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Log</span>
             <div className="flex-1" />
-            <button type="button" onClick={handleClear} className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer" title="Clear log">
-              <TrashIcon size={12} />
-            </button>
-            <button type="button" className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer" title="Scroll to top" onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}>
-              <ArrowUpIcon size={12} />
-            </button>
-            <button type="button" className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer" title="Scroll to bottom" onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }}>
-              <ArrowDownIcon size={12} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setAutoScroll(!autoScroll)}
-              className={`p-1 cursor-pointer transition-colors ${autoScroll ? 'text-[var(--color-protocol-mqtt)]' : 'text-[var(--color-text-muted)]'}`}
+            <IconButtonView icon={<TrashIcon size={12} />} size="xs" title="Clear log" onClick={handleClear} accentColor="var(--color-error)" />
+            <IconButtonView icon={<ArrowUpIcon size={12} />} size="xs" title="Scroll to top" onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })} />
+            <IconButtonView icon={<ArrowDownIcon size={12} />} size="xs" title="Scroll to bottom" onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }} />
+            <IconButtonView
+              icon={<AutoScrollIcon size={12} />}
+              size="xs"
               title={autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
-            >
-              <AutoScrollIcon size={12} />
-            </button>
+              active={autoScroll}
+              accentColor="var(--color-protocol-mqtt)"
+              onClick={() => setAutoScroll(!autoScroll)}
+            />
             {/* 9.17-9.22: AI log actions */}
             <AiRealtimeLogActions
               tabId={activeTab.id}
@@ -737,7 +749,7 @@ export function MQTTPanel() {
               messages={messages.filter(m => m.direction === 'received').map(m => m.payload)}
               hasError={!!error}
               errorMsg={error || ''}
-              accentColor="var(--color-protocol-mqtt)"
+              accentColor="var(--color-protocol-ai)"
               showTopicSuggester={true}
               subscribedTopics={subscriptions.map(s => s.topic)}
             />

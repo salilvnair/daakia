@@ -3,8 +3,12 @@
  * Supports SOAP 1.1 and 1.2, serves WSDL at ?wsdl endpoint.
  */
 import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as crypto from 'crypto';
 import type { MockServerConfig, MockLogEntry, SoapMockOperation } from './mock-types';
+import { matchRules, matchBody, parseCookies } from './mock-matcher';
+import { getStateMachineRuntime, effectiveWorkflowId } from './mock-runtime';
 
 type LogCallback = (entry: MockLogEntry) => void;
 
@@ -133,11 +137,36 @@ export function createSoapServer(
         return;
       }
 
-      // Find matching operation
-      const matched = operations.find(op =>
-        op.soapAction && soapAction &&
-        normalizeSoapAction(op.soapAction) === normalizeSoapAction(soapAction)
-      );
+      // Find matching operation — first by SOAPAction, then (for real
+      // request-content-driven behavior, e.g. an auth flow) by whichever
+      // candidate also satisfies its own headerMatchers/bodyMatcher/
+      // triggerEvent gate. Operations with none of those set (the common
+      // case) match exactly as before — this is purely additive.
+      const reqHeaders = req.headers as Record<string, string>;
+      let matchedStateMachine: ReturnType<typeof getStateMachineRuntime> = null;
+      let sessionKey = '__global__';
+
+      const candidates = operations
+        .filter(op => op.soapAction && soapAction && normalizeSoapAction(op.soapAction) === normalizeSoapAction(soapAction))
+        .sort((a, b) => (a.priority ?? 9999) - (b.priority ?? 9999));
+
+      const matched = candidates.find(op => {
+        const logic = op.compositeLogic === 'OR' ? 'OR' : 'AND';
+        if (op.headerMatchers?.length && !matchRules(op.headerMatchers, reqHeaders, logic)) return false;
+        if (op.bodyMatcher && !matchBody(op.bodyMatcher, reqBody)) return false;
+        if (op.triggerEvent) {
+          // Gating is per-operation: each candidate may reference a
+          // different connected workflow, so the runtime is resolved fresh
+          // per candidate rather than once for the whole request.
+          const sm = getStateMachineRuntime(currentConfig.id, effectiveWorkflowId(op, currentConfig), currentConfig);
+          if (!sm) return false;
+          const sk = sm.resolveSessionKey(reqHeaders, parseCookies(reqHeaders['cookie'] || ''));
+          if (!sm.canFireEvent(sk, op.triggerEvent)) return false;
+          matchedStateMachine = sm;
+          sessionKey = sk;
+        }
+        return true;
+      });
 
       if (!matched) {
         const faultBody = soapFault(
@@ -198,7 +227,31 @@ export function createSoapServer(
         let responseBody: string;
         let statusCode: number;
 
-        if (matched.responseType === 'fault') {
+        if (matched.responseType === 'file' && matched.bodyFile) {
+          // Serve a file as response (binary-safe)
+          const filePath = path.isAbsolute(matched.bodyFile) ? matched.bodyFile : path.join(process.cwd(), matched.bodyFile);
+          if (!fs.existsSync(filePath)) {
+            responseBody = soapFault('Server', `bodyFile not found: ${matched.bodyFile}`);
+            res.writeHead(500, { 'Content-Type': 'text/xml;charset=UTF-8' });
+            res.end(responseBody);
+          } else {
+            const fileBuffer = fs.readFileSync(filePath);
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeType = ext === '.xml' || ext === '.wsdl' ? 'text/xml;charset=UTF-8' : 'application/octet-stream';
+            const filename = path.basename(filePath);
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            res.writeHead(200, { 'Content-Type': mimeType });
+            res.end(fileBuffer);
+          }
+          onLog?.({
+            id: crypto.randomUUID(), timestamp: Date.now(), serverId: config.id,
+            direction: 'incoming', protocol: 'soap', method: 'POST',
+            path: url.pathname, statusCode: 200,
+            body: reqBody.slice(0, 500), responseBody: `[file: ${matched.bodyFile}]`,
+            duration: Date.now() - startTime, event: soapAction,
+          });
+          return;
+        } else if (matched.responseType === 'fault') {
           // Return a SOAP fault
           responseBody = soapFault(
             matched.faultCode || 'Server',
@@ -224,6 +277,11 @@ export function createSoapServer(
 
         res.writeHead(statusCode, { 'Content-Type': 'text/xml;charset=UTF-8' });
         res.end(responseBody);
+
+        if (matched.triggerEvent && matchedStateMachine) {
+          void matchedStateMachine.fireEvent(sessionKey, matched.triggerEvent);
+        }
+
         onLog?.({
           id: crypto.randomUUID(),
           timestamp: Date.now(),

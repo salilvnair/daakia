@@ -6,11 +6,10 @@
  * AI generates a complete collection: folders, requests, variables, auth, chaining.
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CheckIcon } from '../../icons';
+import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
-import { MdViewer } from '../shared/display/MdViewer';
 import { useToastStore } from '../../store/toast-store';
+import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -140,111 +139,91 @@ export function AiConversationToCollectionModal({ onClose }: Props) {
     'Build a blog API: authors, posts (draft/publish), comments, tags, search',
   ];
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[700px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Chat → Collection</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">Describe any API workflow → AI creates the full collection</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Chat → Collection"
+      subtitle="Describe any API workflow → AI creates the full collection"
+      size="xl"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={
+        result && !loading ? (
+          <ButtonView size="md" variant="secondary" onClick={run}>Regenerate</ButtonView>
+        ) : undefined
+      }
+      footerRight={
+        (parsed || (result && !loading)) ? (
+          <ButtonView size="md" variant="primary" accentColor={imported ? 'var(--color-success)' : ACCENT} disabled={imported} onClick={importCollection}>
+            {imported ? <><CheckIcon size={12} style={{ marginRight: 4 }} />Imported!</> : <><SparkleIcon size={11} style={{ marginRight: 4 }} />Import Collection</>}
+          </ButtonView>
+        ) : !result ? (
+          <AIButtonView label="Generate Collection" size="md" accentColor={ACCENT} disabled={loading || !description.trim()} loading={loading} onClick={run} />
+        ) : undefined
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
+            Describe your API workflow
+          </label>
+          <MultilineInputView
+            autoFocus
+            value={description}
+            onChange={e => { setDescription(e.target.value); setError(''); }}
+            rows={5}
+            size="md"
+            width="fw"
+            placeholder="Describe what your API does in plain English. Be as detailed as you like — include endpoints, data models, auth requirements, workflows..."
+          />
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-          <div>
-            <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
-              Describe your API workflow
-            </label>
-            <textarea
-              autoFocus
-              value={description}
-              onChange={e => { setDescription(e.target.value); setError(''); }}
-              rows={5}
-              className="w-full px-3 py-2 rounded-lg text-[12px] resize-none outline-none"
-              placeholder="Describe what your API does in plain English. Be as detailed as you like — include endpoints, data models, auth requirements, workflows..."
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-            />
+        {/* Examples */}
+        <div>
+          <p className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Examples</p>
+          <div className="flex flex-col gap-1">
+            {EXAMPLES.map(ex => (
+              <button key={ex} type="button" onClick={() => setDescription(ex)}
+                className="text-left text-[10.5px] px-2.5 py-1.5 rounded-md cursor-pointer border transition-all"
+                style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'transparent' }}>
+                {ex}
+              </button>
+            ))}
           </div>
-
-          {/* Examples */}
-          <div>
-            <p className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Examples</p>
-            <div className="flex flex-col gap-1">
-              {EXAMPLES.map(ex => (
-                <button key={ex} type="button" onClick={() => setDescription(ex)}
-                  className="text-left text-[10.5px] px-2.5 py-1.5 rounded-md cursor-pointer border transition-all"
-                  style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'transparent' }}>
-                  {ex}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && !result && (
-            <div className="flex gap-1 items-center py-2">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Building collection…</span>
-            </div>
-          )}
-
-          {result && (
-            <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <div className="px-3 py-1.5 border-b text-[10px] font-medium"
-                style={{ backgroundColor: 'var(--color-surface-hover)', borderColor: 'var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
-                Generated Collection (JSON)
-                {parsed && <span className="ml-2 text-[var(--color-success)]">✓ Valid</span>}
-              </div>
-              <pre className="p-3 text-[10.5px] font-mono overflow-auto whitespace-pre-wrap max-h-[200px]"
-                style={{ color: 'var(--color-text-primary)', backgroundColor: 'var(--color-panel)' }}>
-                {result}
-                {loading && <span className="inline-block w-[2px] h-[11px] ml-0.5 animate-pulse" style={{ backgroundColor: ACCENT }} />}
-              </pre>
-            </div>
-          )}
         </div>
 
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-          {result && !loading && (
-            <button type="button" onClick={run}
-              className="h-[30px] px-3 text-[11px] rounded-md cursor-pointer border"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-              Regenerate
-            </button>
-          )}
-          {(parsed || (result && !loading)) && (
-            <button type="button" onClick={importCollection} disabled={imported}
-              className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-60 flex items-center gap-1.5"
-              style={{ backgroundColor: imported ? 'var(--color-success)' : ACCENT, color: 'white' }}>
-              {imported ? <><CheckIcon size={12} /> Imported!</> : <><SparkleIcon size={11} /> Import Collection</>}
-            </button>
-          )}
-          {!result && (
-            <button type="button" onClick={run} disabled={loading || !description.trim()}
-              className="h-[32px] px-4 text-[12px] font-medium rounded-md text-white cursor-pointer hover:opacity-90 disabled:opacity-40"
-              style={{ backgroundColor: ACCENT }}>
-              <SparkleIcon size={11} className="inline mr-1" />
-              Generate Collection
-            </button>
-          )}
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
-        </div>
+        {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
+
+        {loading && !result && (
+          <div className="flex gap-1 items-center py-2">
+            {[0, 150, 300].map(d => (
+              <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
+                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
+            ))}
+            <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Building collection…</span>
+          </div>
+        )}
+
+        {result && (
+          <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-surface-border)' }}>
+            <div className="px-3 py-1.5 border-b text-[10px] font-medium"
+              style={{ backgroundColor: 'var(--color-surface-hover)', borderColor: 'var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
+              Generated Collection (JSON)
+              {parsed && <span className="ml-2 text-[var(--color-success)]">✓ Valid</span>}
+            </div>
+            <pre className="p-3 text-[10.5px] font-mono overflow-auto whitespace-pre-wrap max-h-[200px]"
+              style={{ color: 'var(--color-text-primary)', backgroundColor: 'var(--color-panel)' }}>
+              {result}
+              {loading && <span className="inline-block w-[2px] h-[11px] ml-0.5 animate-pulse" style={{ backgroundColor: ACCENT }} />}
+            </pre>
+          </div>
+        )}
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

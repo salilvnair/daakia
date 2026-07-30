@@ -17,14 +17,21 @@ export type SidebarSection = 'collections' | 'history' | 'environments' | 'debug
 interface AppSidebarProps {
   activeSection: SidebarSection;
   onSectionChange: (section: SidebarSection) => void;
-  sidebarOpen: boolean;
-  sidebarWidth: number;
-  sidebarDragging: boolean;
+  onOpenChange?: (open: boolean) => void;
+  sidebarOpen?: boolean;
+  sidebarWidth?: number;
+  sidebarDragging?: boolean;
 }
 
-export function AppSidebar({ activeSection, onSectionChange, sidebarOpen, sidebarWidth, sidebarDragging }: AppSidebarProps) {
+export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sidebarOpen = true, sidebarWidth = 260, sidebarDragging = false }: AppSidebarProps) {
   const toggle = (section: SidebarSection) => {
-    onSectionChange(activeSection === section ? null : section);
+    if (activeSection === section) {
+      onSectionChange(null);
+    } else {
+      onSectionChange(section);
+      // Ensure panel opens when selecting a section
+      if (!sidebarOpen) onOpenChange?.(true);
+    }
   };
 
   const { tabs, activeTabId, activeProtocol } = useTabsStore();
@@ -46,9 +53,10 @@ export function AppSidebar({ activeSection, onSectionChange, sidebarOpen, sideba
 
   // Protocol-aware sidebar — use store protocol (follows left rail switch)
   const isMockServer = activeTab?.type === 'mock-server';
+  const isStateMachine = activeTab?.type === 'state-machine';
   const isDaakiaAi = activeTab?.type === 'daakia-ai';
-  // Never show protocol icons when settings, mock-server, or daakia-ai tab is active — they have their own full-panel UI
-  const showProtocolIcons = !settingsActive && !isMockServer && !isDaakiaAi;
+  // Never show protocol icons when settings, mock-server, state-machine, or daakia-ai tab is active
+  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi;
   const showRestSidebar = showProtocolIcons && activeProtocol === 'rest';
   const showGraphqlSidebar = showProtocolIcons && activeProtocol === 'graphql';
   const showWebsocketSidebar = showProtocolIcons && activeProtocol === 'websocket';
@@ -70,7 +78,7 @@ export function AppSidebar({ activeSection, onSectionChange, sidebarOpen, sideba
 
   return (
     <div className="flex h-full">
-      {/* Expandable panel — keep mounted, control visibility via width */}
+      {/* Expandable panel — width animates to 0 when collapsed, CSS-controlled */}
       <div
         className="bg-[var(--color-surface)] flex flex-col overflow-hidden"
         style={{
@@ -81,7 +89,7 @@ export function AppSidebar({ activeSection, onSectionChange, sidebarOpen, sideba
         {showPanel && <SidebarPanelContent section={activeSection} />}
       </div>
 
-      {/* Icon rail */}
+      {/* Icon rail — always has left border for clean separation */}
       <div className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-l border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
         {/* REST sidebar icons */}
         {showRestSidebar && (
@@ -388,7 +396,7 @@ function DaakiaAiButton() {
             : undefined,
       }}
       onMouseEnter={e => {
-        if (!isDaakiaAiActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(255,255,255,0.07)';
+        if (!isDaakiaAiActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--color-text-primary) 7%, transparent)';
       }}
       onMouseLeave={e => {
         if (!isDaakiaAiActive) (e.currentTarget as HTMLElement).style.backgroundColor =
@@ -406,9 +414,9 @@ function DaakiaAiButton() {
 // ─── AI Provider Status Popup ─────────────────────────────────────────────────
 
 const BADGE_STYLE = {
-  backgroundColor: 'rgba(59,130,246,0.14)',
-  color: '#60a5fa',
-  border: '1px solid rgba(59,130,246,0.28)',
+  backgroundColor: 'color-mix(in srgb, var(--color-info) 14%, transparent)',
+  color: 'var(--color-info)',
+  border: '1px solid color-mix(in srgb, var(--color-info) 28%, transparent)',
 };
 
 function AiProviderStatusIcon() {
@@ -471,9 +479,9 @@ function AiProviderStatusIcon() {
           onClick={e => e.stopPropagation()}
         >
           {/* Dark card background */}
-          <div style={{ backgroundColor: 'var(--vscode-editor-background, #1e1e1e)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12 }}>
+          <div style={{ backgroundColor: 'var(--vscode-editor-background, #1e1e1e)', border: '1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent)', borderRadius: 12 }}>
             {/* Header */}
-            <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[rgba(255,255,255,0.07)]">
+            <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
               <SparkleIcon size={13} style={{ color: 'var(--color-protocol-ai)' }} />
               <span className="text-[12px] font-semibold text-[var(--color-text-primary)]">Active AI Provider</span>
             </div>
@@ -497,7 +505,7 @@ function AiProviderStatusIcon() {
             </div>
 
             {/* Footer */}
-            <div className="px-3.5 py-2.5 border-t border-[rgba(255,255,255,0.07)]">
+            <div className="px-3.5 py-2.5 border-t border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
               <button
                 type="button"
                 onClick={() => {

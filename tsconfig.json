@@ -6,12 +6,14 @@
 		"sourceMap": true,
 		"rootDir": "src",
 		"strict": true,
-		"types": ["node"]
+		"skipLibCheck": true,
+		"types": ["node", "mocha"]
 	},
 	"exclude": [
 		"node_modules",
 		"webview-ui",
 		"vite.webview.config.ts",
-		"webview"
+		"webview",
+		"local-server"
 	]
 }

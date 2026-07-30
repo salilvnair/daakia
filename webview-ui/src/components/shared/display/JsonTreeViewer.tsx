@@ -90,7 +90,7 @@ function TreeNode({ keyName, value, depth, maxInitialDepth, path, expandedPaths,
   if (!expanded) {
     const preview = getPreview(value);
     return (
-      <div className="flex items-start gap-1 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] rounded" style={{ paddingLeft: `${depth * 14}px` }} onClick={toggle}>
+      <div className="flex items-start gap-1 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] rounded" style={{ paddingLeft: `${depth * 14}px` }} onClick={toggle}>
         <span className="w-3 h-3 flex items-center justify-center flex-shrink-0 mt-[1px] transition-transform">
           <ChevronRightIcon size={10} />
         </span>
@@ -104,7 +104,7 @@ function TreeNode({ keyName, value, depth, maxInitialDepth, path, expandedPaths,
 
   return (
     <div>
-      <div className="flex items-start gap-1 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] rounded" style={{ paddingLeft: `${depth * 14}px` }} onClick={toggle}>
+      <div className="flex items-start gap-1 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] rounded" style={{ paddingLeft: `${depth * 14}px` }} onClick={toggle}>
         <span className="w-3 h-3 flex items-center justify-center flex-shrink-0 mt-[1px] transition-transform rotate-90">
           <ChevronRightIcon size={10} />
         </span>

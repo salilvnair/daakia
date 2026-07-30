@@ -1,23 +1,101 @@
 import { useCallback, useState } from 'react';
 import { useTabsStore, type McpServerConfig } from '../../../store/tabs-store';
 import { TrashIcon, ConnectIcon, DisconnectIcon, CloseIcon } from '../../../icons';
-import { StyledDropdown, type DropdownOption } from '../../shared';
 import { postMsg } from '../../../vscode';
+import {
+  TextInputView,
+  SelectInputView,
+  MultilineInputView,
+  ButtonView,
+  IconButtonView,
+} from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-mcp)';
 
-const TRANSPORT_OPTIONS: DropdownOption[] = [
-  { value: 'stdio', label: 'STDIO' },
-  { value: 'http', label: 'HTTP/SSE' },
+const TRANSPORT_OPTIONS = [
+  { value: 'stdio', label: 'STDIO — spawn subprocess' },
+  { value: 'http', label: 'HTTP — JSON-RPC endpoint' },
 ];
 
-function emptyServer(): McpServerConfig {
-  return { id: crypto.randomUUID(), name: '', transport: 'stdio', command: '', args: [], envVars: {}, enabled: true };
+const CATEGORY_OPTIONS = [
+  { value: 'general', label: '⚙️ General — tool-calling only' },
+  { value: 'database', label: '🗄️ Database — enables Schema Explorer' },
+  { value: 'docs', label: '📚 Docs — documentation retrieval' },
+  { value: 'code', label: '💻 Code — code analysis tools' },
+];
+
+// ─── Form state (text representations of array/object fields) ───
+
+interface ServerForm {
+  id: string;
+  name: string;
+  description: string;
+  transport: 'stdio' | 'http';
+  category: string;
+  command: string;
+  args: string;       // one per line → string[]
+  env: string;        // KEY=value per line → Record<string, string>
+  workingDir: string;
+  url: string;
+  headers: string;    // KEY: value per line → Record<string, string>
+}
+
+function serverToForm(s: McpServerConfig): ServerForm {
+  return {
+    id: s.id,
+    name: s.name || '',
+    description: s.description || '',
+    transport: s.transport || 'stdio',
+    category: s.category || 'general',
+    command: s.command || '',
+    args: (s.args || []).join('\n'),
+    env: Object.entries(s.envVars || {}).map(([k, v]) => `${k}=${v}`).join('\n'),
+    workingDir: s.workingDir || '',
+    url: s.url || '',
+    headers: Object.entries(s.headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n'),
+  };
+}
+
+function formToServer(f: ServerForm): McpServerConfig {
+  const args = f.args.split('\n').map(s => s.trim()).filter(Boolean);
+  const envVars: Record<string, string> = {};
+  for (const line of f.env.split('\n')) {
+    const i = line.indexOf('=');
+    if (i > 0) envVars[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  const headers: Record<string, string> = {};
+  for (const line of f.headers.split('\n')) {
+    const i = line.indexOf(':');
+    if (i > 0) headers[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  const base: McpServerConfig = {
+    id: f.id || crypto.randomUUID(),
+    name: f.name.trim(),
+    transport: f.transport,
+    enabled: true,
+  };
+  if (f.description.trim()) base.description = f.description.trim();
+  if (f.category && f.category !== 'general') base.category = f.category;
+  if (f.transport === 'stdio') {
+    base.command = f.command.trim();
+    base.args = args;
+    if (Object.keys(envVars).length) base.envVars = envVars;
+    if (f.workingDir.trim()) base.workingDir = f.workingDir.trim();
+  } else {
+    base.url = f.url.trim();
+    if (Object.keys(headers).length) base.headers = headers;
+  }
+  return base;
+}
+
+function emptyForm(): ServerForm {
+  return { id: crypto.randomUUID(), name: '', description: '', transport: 'stdio', category: 'general', command: '', args: '', env: '', workingDir: '', url: '', headers: '' };
 }
 
 /**
- * McpServersTab — Multi-server management (6E.18).
- * Shows all configured servers. Each can be independently connected/disconnected.
+ * McpServersTab — Multi-server management.
+ * Each server can be independently connected/disconnected.
+ * Add/edit form matches dmcr layout with full field set and DUI components.
  */
 export function McpServersTab() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
@@ -25,7 +103,9 @@ export function McpServersTab() {
 
   const servers: McpServerConfig[] = activeTab?.mcpServerConfigs || [];
   const serverStates = activeTab?.mcpServerStates || {};
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<ServerForm | null>(null);
+  const [formIsNew, setFormIsNew] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const setServers = useCallback((newServers: McpServerConfig[]) => {
@@ -33,24 +113,51 @@ export function McpServersTab() {
     updateTab(activeTab.id, { mcpServerConfigs: newServers, dirty: true });
   }, [activeTab, updateTab]);
 
-  const handleAdd = useCallback(() => {
-    const s = emptyServer();
-    setServers([...servers, s]);
-    setEditingId(s.id);
-  }, [servers, setServers]);
+  const openAdd = useCallback(() => {
+    setForm(emptyForm());
+    setFormIsNew(true);
+    setFormError(null);
+  }, []);
+
+  const openEdit = useCallback((server: McpServerConfig) => {
+    setForm(serverToForm(server));
+    setFormIsNew(false);
+    setFormError(null);
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    setForm(null);
+    setFormIsNew(false);
+    setFormError(null);
+  }, []);
+
+  const handleSave = useCallback(() => {
+    if (!form) return;
+    if (!form.name.trim()) { setFormError('Name is required.'); return; }
+    if (form.transport === 'stdio' && !form.command.trim()) { setFormError('Command is required for STDIO transport.'); return; }
+    if (form.transport === 'http' && !form.url.trim()) { setFormError('URL is required for HTTP transport.'); return; }
+    setFormError(null);
+    const server = formToServer(form);
+    if (formIsNew) {
+      setServers([...servers, server]);
+    } else {
+      setServers(servers.map(s => s.id === form.id ? server : s));
+    }
+    setForm(null);
+    setFormIsNew(false);
+  }, [form, formIsNew, servers, setServers]);
+
+  const up = useCallback(<K extends keyof ServerForm>(key: K, val: ServerForm[K]) => {
+    setForm(prev => prev ? { ...prev, [key]: val } : prev);
+  }, []);
 
   const handleRemove = useCallback((id: string) => {
-    // Disconnect if connected
     if (activeTab && serverStates[id]?.connected) {
       postMsg({ type: 'mcp:disconnectServer', tabId: activeTab.id, serverId: id });
     }
     setServers(servers.filter(s => s.id !== id));
-    if (editingId === id) setEditingId(null);
-  }, [activeTab, servers, serverStates, setServers, editingId]);
-
-  const updateServer = useCallback((id: string, patch: Partial<McpServerConfig>) => {
-    setServers(servers.map(s => s.id === id ? { ...s, ...patch } : s));
-  }, [servers, setServers]);
+    if (form?.id === id) handleCancel();
+  }, [activeTab, servers, serverStates, setServers, form, handleCancel]);
 
   const handleConnect = useCallback((server: McpServerConfig) => {
     if (!activeTab) return;
@@ -84,43 +191,45 @@ export function McpServersTab() {
         <span className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wide">
           {servers.length} server{servers.length !== 1 ? 's' : ''}
           {connectedCount > 0 && (
-            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded"
-              style={{ backgroundColor: 'color-mix(in srgb, var(--color-success) 15%, transparent)', color: 'var(--color-success)' }}>
+            <span
+              className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-success) 15%, transparent)', color: 'var(--color-success)' }}
+            >
               {connectedCount} connected
             </span>
           )}
         </span>
-        <button
-          type="button"
-          onClick={handleAdd}
-          className="text-[11px] px-2 py-0.5 rounded cursor-pointer transition-colors"
-          style={{ backgroundColor: `color-mix(in srgb, ${ACCENT} 10%, transparent)`, color: ACCENT }}
-        >
-          + Add Server
-        </button>
+        <ButtonView
+          label="+ Add Server"
+          variant="ghost"
+          size="sm"
+          accentColor={ACCENT}
+          onClick={openAdd}
+        />
       </div>
 
       {/* Server list */}
       <div className="flex-1 overflow-auto">
-        {servers.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">
-            <span className="text-[13px] text-[var(--color-text-muted)]">No servers configured</span>
+        {servers.length === 0 && !formIsNew && (
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-6">
+            <span className="text-[28px] opacity-20">⟨/⟩</span>
+            <span className="text-[12px] text-[var(--color-text-muted)]">No servers configured</span>
             <span className="text-[11px] text-[var(--color-text-muted)] opacity-70">
-              Click "+ Add Server" or paste config in the Config tab.
+              Click "+ Add Server" or "Import Config" to get started.
             </span>
           </div>
         )}
 
         {servers.map((server) => {
           const state = serverStates[server.id] || { connected: false, connecting: false, tools: [] };
-          const isEditing = editingId === server.id;
+          const isEditing = form !== null && !formIsNew && form.id === server.id;
 
           return (
             <div key={server.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-              {/* Server row header */}
+              {/* Row header */}
               <div
-                className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-[var(--color-surface-hover)] transition-colors"
-                onClick={() => setEditingId(isEditing ? null : server.id)}
+                className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-[var(--color-surface-hover)] transition-colors"
+                onClick={() => isEditing ? handleCancel() : openEdit(server)}
               >
                 {/* Status dot */}
                 <span
@@ -135,8 +244,10 @@ export function McpServersTab() {
                 <span className="flex-1 text-[12px] font-medium text-[var(--color-text-primary)] truncate">
                   {server.name || <em className="text-[var(--color-text-muted)] font-normal">unnamed</em>}
                 </span>
-                <span className="text-[10px] px-1 py-0.5 rounded shrink-0"
-                  style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-muted)' }}>
+                <span
+                  className="text-[10px] px-1 py-0.5 rounded shrink-0"
+                  style={{ backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text-muted)' }}
+                >
                   {server.transport.toUpperCase()}
                 </span>
                 {state.tools && state.tools.length > 0 && (
@@ -144,53 +255,47 @@ export function McpServersTab() {
                     {state.tools.length} tools
                   </span>
                 )}
-                {/* Connect button */}
+                {/* Connect/Disconnect */}
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleConnect(server); }}
                   className="shrink-0 flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded cursor-pointer transition-colors"
                   style={{
                     backgroundColor: state.connected || state.connecting
-                      ? 'color-mix(in srgb, var(--color-error) 10%, transparent)'
-                      : `color-mix(in srgb, ${ACCENT} 10%, transparent)`,
-                    color: state.connected || state.connecting ? 'var(--color-error)' : ACCENT,
+                      ? 'color-mix(in srgb, var(--color-error) 8%, transparent)'
+                      : `color-mix(in srgb, ${ACCENT} 8%, transparent)`,
+                    color: state.connected || state.connecting
+                      ? 'color-mix(in srgb, var(--color-error) 70%, var(--color-text-secondary))'
+                      : `color-mix(in srgb, ${ACCENT} 70%, var(--color-text-secondary))`,
                   }}
                 >
                   {state.connected || state.connecting ? <DisconnectIcon size={10} /> : <ConnectIcon size={10} />}
                   {state.connecting ? 'Cancel' : state.connected ? 'Disconnect' : 'Connect'}
                 </button>
-                {/* Remove — with inline confirm */}
+                {/* Delete with confirm */}
                 {confirmDeleteId === server.id ? (
-                  <div
-                    className="flex items-center gap-1 shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <span className="text-[10px]" style={{ color: 'var(--color-error)' }}>Delete?</span>
                     <button
                       type="button"
                       onClick={() => { handleRemove(server.id); setConfirmDeleteId(null); }}
-                      className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors font-medium"
+                      className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer font-medium"
                       style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 15%, transparent)', color: 'var(--color-error)' }}
-                    >
-                      Yes
-                    </button>
-                    <button
-                      type="button"
+                    >Yes</button>
+                    <IconButtonView
+                      icon={<CloseIcon size={9} />}
+                      size="sm"
                       onClick={() => setConfirmDeleteId(null)}
-                      className="w-4 h-4 flex items-center justify-center rounded cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
-                    >
-                      <CloseIcon size={9} />
-                    </button>
+                    />
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(server.id); }}
-                    className="shrink-0 p-0.5 cursor-pointer transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
+                  <IconButtonView
+                    icon={<TrashIcon size={12} />}
+                    size="sm"
+                    accentColor="var(--color-error)"
                     title="Remove server"
-                  >
-                    <TrashIcon size={12} />
-                  </button>
+                    onClick={(e) => { (e as React.MouseEvent).stopPropagation(); setConfirmDeleteId(server.id); }}
+                  />
                 )}
               </div>
 
@@ -201,74 +306,214 @@ export function McpServersTab() {
                 </div>
               )}
 
-              {/* Edit form */}
-              {isEditing && (
-                <div className="px-3 pb-3 flex flex-col gap-2" style={{ borderTop: `1px solid color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))` }}>
-                  <div className="flex flex-col gap-1 pt-2">
-                    <label className="text-[11px] text-[var(--color-text-muted)]">Name</label>
-                    <input
-                      type="text"
-                      value={server.name}
-                      onChange={(e) => updateServer(server.id, { name: e.target.value })}
-                      placeholder="e.g. filesystem"
-                      className="h-[26px] px-2 rounded text-[12px] focus:outline-none"
-                      style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[11px] text-[var(--color-text-muted)] w-[60px]">Transport</label>
-                    <StyledDropdown
-                      options={TRANSPORT_OPTIONS}
-                      value={server.transport}
-                      onChange={(val) => updateServer(server.id, { transport: val as 'stdio' | 'http' })}
-                      accentColor={ACCENT}
-                      size="xs"
-                      className="w-[100px]"
-                    />
-                  </div>
-                  {server.transport === 'stdio' ? (
-                    <>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[11px] text-[var(--color-text-muted)]">Command</label>
-                        <input
-                          type="text"
-                          value={server.command || ''}
-                          onChange={(e) => updateServer(server.id, { command: e.target.value })}
-                          placeholder="npx @modelcontextprotocol/server-name"
-                          className="h-[26px] px-2 rounded text-[12px] font-mono focus:outline-none"
-                          style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[11px] text-[var(--color-text-muted)]">Args (space-separated)</label>
-                        <input
-                          type="text"
-                          value={(server.args || []).join(' ')}
-                          onChange={(e) => updateServer(server.id, { args: e.target.value.split(' ').filter(Boolean) })}
-                          placeholder="-y --flag value"
-                          className="h-[26px] px-2 rounded text-[12px] font-mono focus:outline-none"
-                          style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] text-[var(--color-text-muted)]">URL</label>
-                      <input
-                        type="text"
-                        value={server.url || ''}
-                        onChange={(e) => updateServer(server.id, { url: e.target.value })}
-                        placeholder="http://localhost:3000/mcp/sse"
-                        className="h-[26px] px-2 rounded text-[12px] font-mono focus:outline-none"
-                        style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-                      />
-                    </div>
-                  )}
-                </div>
+              {/* Edit form inline */}
+              {isEditing && form && (
+                <ServerEditForm
+                  form={form}
+                  error={formError}
+                  onUpdate={up}
+                  onSave={handleSave}
+                  onCancel={handleCancel}
+                />
               )}
             </div>
           );
         })}
+
+        {/* New server form at bottom */}
+        {formIsNew && form && (
+          <div className="border-t" style={{ borderColor: `color-mix(in srgb, ${ACCENT} 20%, var(--color-surface-border))` }}>
+            <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: ACCENT }}>
+              New Server
+            </div>
+            <ServerEditForm
+              form={form}
+              error={formError}
+              onUpdate={up}
+              onSave={handleSave}
+              onCancel={handleCancel}
+            />
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+}
+
+// ─── OS detection for path placeholders ────────────────────────────────────────
+const IS_WINDOWS = navigator.platform.startsWith('Win') || navigator.userAgent.includes('Windows');
+const CWD_PLACEHOLDER = IS_WINDOWS ? 'C:\\path\\to\\project' : '/path/to/project';
+
+// ─── Edit form sub-component ───────────────────────────────────────────────────
+
+interface ServerEditFormProps {
+  form: ServerForm;
+  error: string | null;
+  onUpdate: <K extends keyof ServerForm>(key: K, val: ServerForm[K]) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}
+
+function ServerEditForm({ form, error, onUpdate, onSave, onCancel }: ServerEditFormProps) {
+  return (
+    <div
+      className="px-4 pb-4 flex flex-col gap-3"
+      style={{
+        borderTop: `1px solid color-mix(in srgb, var(--color-protocol-mcp) 15%, var(--color-surface-border))`,
+        backgroundColor: `color-mix(in srgb, var(--color-protocol-mcp) 3%, var(--color-panel))`,
+      }}
+    >
+      {/* Name */}
+      <div className="flex flex-col gap-1 pt-3">
+        <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+          Name <span style={{ color: 'var(--color-error)' }}>*</span>
+        </label>
+        <TextInputView
+          value={form.name}
+          onChange={(e) => onUpdate('name', e.target.value)}
+          placeholder="e.g. filesystem"
+          size="md"
+        />
+      </div>
+
+      {/* Description */}
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+          Description{' '}
+          <span className="font-normal opacity-60">(optional — used as LLM hint)</span>
+        </label>
+        <TextInputView
+          value={form.description}
+          onChange={(e) => onUpdate('description', e.target.value)}
+          placeholder="PostgreSQL schema introspection and query tools"
+          size="md"
+        />
+      </div>
+
+      {/* Transport + Category row */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>Transport</label>
+          <SelectInputView
+            options={TRANSPORT_OPTIONS}
+            value={form.transport}
+            onChange={(v) => onUpdate('transport', v as 'stdio' | 'http')}
+            size="md"
+            accentColor="var(--color-protocol-mcp)"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+            Category{' '}
+            <span className="font-normal opacity-60">(optional)</span>
+          </label>
+          <SelectInputView
+            options={CATEGORY_OPTIONS}
+            value={form.category}
+            onChange={(v) => onUpdate('category', v)}
+            size="md"
+            accentColor="var(--color-protocol-mcp)"
+          />
+        </div>
+      </div>
+
+      {/* STDIO fields */}
+      {form.transport === 'stdio' && (
+        <>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+              Command <span style={{ color: 'var(--color-error)' }}>*</span>
+            </label>
+            <TextInputView
+              value={form.command}
+              onChange={(e) => onUpdate('command', e.target.value)}
+              placeholder="npx"
+              size="md"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+              Arguments{' '}
+              <span className="font-normal opacity-60">(one per line)</span>
+            </label>
+            <MultilineInputView
+              value={form.args}
+              onChange={(e) => onUpdate('args', e.target.value)}
+              placeholder={'-y\n@modelcontextprotocol/server-filesystem\n/tmp'}
+              size="md"
+              rows={4}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+              Environment{' '}
+              <span className="font-normal opacity-60">(KEY=value per line, optional)</span>
+            </label>
+            <MultilineInputView
+              value={form.env}
+              onChange={(e) => onUpdate('env', e.target.value)}
+              placeholder="GITHUB_TOKEN=ghp_xxx"
+              size="md"
+              rows={3}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+              Working Directory{' '}
+              <span className="font-normal opacity-60">(optional — for finding config files like app_mcp.yml)</span>
+            </label>
+            <TextInputView
+              value={form.workingDir}
+              onChange={(e) => onUpdate('workingDir', e.target.value)}
+              placeholder={CWD_PLACEHOLDER}
+              size="md"
+            />
+          </div>
+        </>
+      )}
+
+      {/* HTTP fields */}
+      {form.transport === 'http' && (
+        <>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+              URL <span style={{ color: 'var(--color-error)' }}>*</span>
+            </label>
+            <TextInputView
+              value={form.url}
+              onChange={(e) => onUpdate('url', e.target.value)}
+              placeholder="https://example.com/mcp"
+              size="md"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+              Headers{' '}
+              <span className="font-normal opacity-60">(KEY: value per line, optional)</span>
+            </label>
+            <MultilineInputView
+              value={form.headers}
+              onChange={(e) => onUpdate('headers', e.target.value)}
+              placeholder="Authorization: Bearer xxx"
+              size="md"
+              rows={3}
+            />
+          </div>
+        </>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="text-[11px] px-2 py-1 rounded" style={{ color: 'var(--color-error)', backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)' }}>
+          {error}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <ButtonView label="Cancel" variant="ghost" size="md" onClick={onCancel} />
+        <ButtonView label="Save" variant="primary" size="md" accentColor={ACCENT} onClick={onSave} />
       </div>
     </div>
   );

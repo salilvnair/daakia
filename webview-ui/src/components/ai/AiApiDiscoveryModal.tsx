@@ -6,11 +6,11 @@
  * Phase 2: AI analyzes results → generates explanation + collection creation prompt
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
-import { SparkleIcon, CloseCircleIcon, PlusIcon } from '../../icons';
+import { SparkleIcon, PlusIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
+import { ModalView, ButtonView, AIButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -196,80 +196,74 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
   const apiCount = results.filter(r => r.isApi).length;
   const reachableCount = results.filter(r => r.status > 0 && r.status < 600).length;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 flex items-center justify-center"
-      style={{ zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.6)' }}
-    >
-      <div
-        className="flex flex-col rounded-xl border overflow-hidden"
-        style={{
-          width: 740,
-          maxHeight: '88vh',
-          backgroundColor: 'var(--color-panel)',
-          borderColor: 'var(--color-surface-border)',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
-        }}
-      >
-        {/* Header */}
-        <div
-          className="flex items-center gap-3 px-5 py-3 border-b flex-shrink-0"
-          style={{
-            borderColor: 'var(--color-surface-border)',
-            background: 'linear-gradient(135deg, color-mix(in srgb, var(--color-protocol-ai) 12%, var(--color-panel)) 0%, var(--color-panel) 100%)',
-          }}
-        >
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{ background: 'var(--color-protocol-ai)' }}
-          >
-            <SparkleIcon size={15} className="text-white" />
-          </div>
-          <div>
-            <h2 className="text-[14px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              AI API Discovery
-            </h2>
-            <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-              Probe common paths to discover available endpoints automatically
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="ml-auto cursor-pointer hover:opacity-70 transition-opacity"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            <CloseCircleIcon size={18} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="AI API Discovery"
+      subtitle="Probe common paths to discover available endpoints automatically"
+      size="lg"
+      headerColor="var(--color-protocol-ai)"
+      headerGradient
+      headerIcon={
+        <div style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-protocol-ai)', flexShrink: 0 }}>
+          <SparkleIcon size={15} style={{ color: 'var(--color-btn-primary-text, #fff)' }} />
         </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] min-h-0 p-5 flex flex-col gap-4">
+      }
+      footerLeft={
+        phase !== 'idle' && phase !== 'probing' ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <AIButtonView
+              label={phase === 'analyzing' ? 'Analyzing…' : 'Analyze with AI'}
+              size="sm"
+              accentColor="var(--color-protocol-ai)"
+              disabled={phase === 'analyzing' || results.length === 0}
+              onClick={handleAnalyze}
+            />
+            <ButtonView
+              variant="secondary"
+              size="sm"
+              iconLeft={<PlusIcon size={11} />}
+              disabled={results.filter(r => r.status > 0 && r.status < 500).length === 0}
+              onClick={handleCreateCollection}
+            >
+              Create Collection
+            </ButtonView>
+          </div>
+        ) : undefined
+      }
+      footerRight={
+        phase !== 'idle' && phase !== 'probing' ? (
+          <ButtonView
+            variant="secondary"
+            size="sm"
+            onClick={() => { setPhase('idle'); setResults([]); setAnalysis(''); setProgress(null); }}
+          >
+            Reset
+          </ButtonView>
+        ) : undefined
+      }
+    >
+        <div className="flex flex-col gap-4">
           {/* URL input row */}
           <div className="flex gap-2 items-center">
-            <input
-              type="text"
+            <TextInputView
               value={baseUrl}
               onChange={e => setBaseUrl(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && phase === 'idle') handleStart(); }}
               placeholder="https://api.example.com"
-              className="flex-1 h-[36px] px-3 text-[13px] rounded-md border font-mono"
-              style={{
-                backgroundColor: 'var(--color-input-bg)',
-                borderColor: 'var(--color-input-border)',
-                color: 'var(--color-text-primary)',
-              }}
+              size="md"
+              width="fw"
               disabled={phase === 'probing'}
             />
-            <button
-              type="button"
-              onClick={handleStart}
+            <ButtonView
+              size="md"
+              accentColor="var(--color-protocol-ai)"
               disabled={!baseUrl.trim() || phase === 'probing'}
-              className="h-[36px] px-5 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-              style={{ backgroundColor: 'var(--color-protocol-ai)', color: '#fff' }}
+              onClick={handleStart}
             >
               {phase === 'probing' ? 'Discovering…' : 'Discover'}
-            </button>
+            </ButtonView>
           </div>
 
           {/* Custom paths */}
@@ -278,17 +272,14 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
               <label className="text-[11px] font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
                 Custom paths (optional, one per line, e.g. /api/v4/users)
               </label>
-              <textarea
+              <MultilineInputView
                 value={customPaths}
                 onChange={e => setCustomPaths(e.target.value)}
                 rows={3}
-                placeholder="/api/v4/users&#10;/internal/metrics&#10;/api/v1/webhooks"
-                className="w-full px-3 py-2 text-[11px] rounded-md border font-mono resize-none"
-                style={{
-                  backgroundColor: 'var(--color-input-bg)',
-                  borderColor: 'var(--color-input-border)',
-                  color: 'var(--color-text-primary)',
-                }}
+                size="md"
+                width="fw"
+                placeholder={`/api/v4/users\n/internal/metrics\n/api/v1/webhooks`}
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}
               />
             </div>
           )}
@@ -409,45 +400,6 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        {phase !== 'idle' && phase !== 'probing' && (
-          <div
-            className="flex items-center gap-2 px-5 py-3 border-t flex-shrink-0"
-            style={{ borderColor: 'var(--color-surface-border)' }}
-          >
-            <button
-              type="button"
-              onClick={handleAnalyze}
-              disabled={phase === 'analyzing' || results.length === 0}
-              className="h-[30px] px-3 text-[11px] font-medium rounded-md border cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-              style={{ borderColor: 'var(--color-protocol-ai)', color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, var(--color-panel))' }}
-            >
-              <SparkleIcon size={11} style={{ display: 'inline', marginRight: 4 }} />
-              Analyze with AI
-            </button>
-            <button
-              type="button"
-              onClick={handleCreateCollection}
-              disabled={results.filter(r => r.status > 0 && r.status < 500).length === 0}
-              className="h-[30px] px-3 text-[11px] font-medium rounded-md border cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity flex items-center gap-1.5"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-panel)' }}
-            >
-              <PlusIcon size={11} />
-              Create Collection
-            </button>
-            <button
-              type="button"
-              onClick={() => { setPhase('idle'); setResults([]); setAnalysis(''); setProgress(null); }}
-              className="h-[30px] px-3 text-[11px] font-medium rounded-md border cursor-pointer hover:opacity-70 transition-opacity ml-auto"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-muted)', backgroundColor: 'var(--color-panel)' }}
-            >
-              Reset
-            </button>
-          </div>
-        )}
-      </div>
-    </div>,
-    document.body,
+    </ModalView>
   );
 }

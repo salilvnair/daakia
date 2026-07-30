@@ -6,11 +6,11 @@
  * AI extracts: method, URL, headers, body, query params → prefills a new tab.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CheckIcon } from '../../icons';
+import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useTabsStore } from '../../store/tabs-store';
 import { useToastStore } from '../../store/toast-store';
+import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
@@ -138,134 +138,133 @@ export function AiRequestFromScreenshotModal({ onClose }: Props) {
     if (!result) return;
     addTab({
       name: (result.name as string) || 'From Screenshot',
-      method: (result.method as string) || 'GET',
+      method: ((result.method as string) || 'GET') as import('../../store/tabs-store').HttpMethod,
       url: (result.url as string) || '',
-      headers: (result.headers as unknown[]) || [],
-      params: (result.queryParams as unknown[]) || [],
+      headers: (result.headers as import('../shared').KeyValueRow[]) || [],
+      params: (result.queryParams as import('../shared').KeyValueRow[]) || [],
       bodyRaw: (result.body as string) || '',
-      bodyType: (result.bodyType as string) || 'json',
+      bodyMode: 'raw' as const,
+      bodyContentType: 'application/json',
     });
     setApplied(true);
     addToast({ type: 'success', message: 'Request created in a new tab!' });
     setTimeout(onClose, 1200);
   };
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[640px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Request from Screenshot</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">Paste API documentation screenshot → AI extracts the request</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Request from Screenshot"
+      subtitle="Paste API documentation screenshot → AI extracts the request"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <SparkleIcon size={14} style={{ color: ACCENT }} />
+        </div>
+      }
+      footerLeft={
+        result && !loading ? (
+          <ButtonView
+            size="md"
+            variant="primary"
+            accentColor={applied ? 'var(--color-success)' : ACCENT}
+            disabled={applied}
+            onClick={applyToNewTab}
+          >
+            {applied ? <><CheckIcon size={12} style={{ marginRight: 4 }} />Applied!</> : 'Open in New Tab'}
+          </ButtonView>
+        ) : undefined
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Extracting…' : 'Extract'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={loading || (!imageDataUrl && !textFallback.trim())}
+          loading={loading}
+          onClick={run}
+        />
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {/* Drop zone */}
+        <div
+          ref={dropRef}
+          onPaste={handlePaste}
+          onDrop={handleDrop}
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          tabIndex={0}
+          className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer outline-none transition-all"
+          style={{
+            borderColor: dragging ? ACCENT : 'var(--color-surface-border)',
+            backgroundColor: dragging ? `color-mix(in srgb, ${ACCENT} 5%, transparent)` : 'var(--color-panel)',
+          }}>
+          {imageDataUrl ? (
+            <div className="flex flex-col items-center gap-2">
+              <img src={imageDataUrl} alt="Screenshot" className="max-h-[120px] max-w-full rounded-lg object-contain" />
+              <button type="button" onClick={() => setImageDataUrl('')}
+                className="text-[10px] cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>Remove</button>
+            </div>
+          ) : (
+            <>
+              <p className="text-[12px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Paste screenshot here</p>
+              <p className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>Ctrl+V / ⌘V — or drag & drop an image</p>
+            </>
+          )}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-          {/* Drop zone */}
-          <div
-            ref={dropRef}
-            onPaste={handlePaste}
-            onDrop={handleDrop}
-            onDragOver={e => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            tabIndex={0}
-            className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer outline-none transition-all"
-            style={{
-              borderColor: dragging ? ACCENT : 'var(--color-surface-border)',
-              backgroundColor: dragging ? `color-mix(in srgb, ${ACCENT} 5%, transparent)` : 'var(--color-panel)',
-            }}>
-            {imageDataUrl ? (
-              <div className="flex flex-col items-center gap-2">
-                <img src={imageDataUrl} alt="Screenshot" className="max-h-[120px] max-w-full rounded-lg object-contain" />
-                <button type="button" onClick={() => setImageDataUrl('')}
-                  className="text-[10px] cursor-pointer" style={{ color: 'var(--color-text-muted)' }}>Remove</button>
-              </div>
-            ) : (
-              <>
-                <p className="text-[12px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>Paste screenshot here</p>
-                <p className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>Ctrl+V / ⌘V — or drag & drop an image</p>
-              </>
+        {/* Text fallback / supplemental */}
+        <div>
+          <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
+            Or paste/type API documentation text
+          </label>
+          <MultilineInputView
+            value={textFallback}
+            onChange={e => { setTextFallback(e.target.value); setError(''); }}
+            rows={4}
+            size="md"
+            width="fw"
+            placeholder="e.g. POST /api/v1/users — Creates a new user. Body: { name, email, role }. Returns 201 with { id, name, email }..."
+          />
+        </div>
+
+        {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
+
+        {loading && (
+          <div className="flex gap-1 items-center">
+            {[0, 150, 300].map(d => (
+              <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
+                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
+            ))}
+            <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Extracting request details…</span>
+          </div>
+        )}
+
+        {result && (
+          <div className="rounded-lg border p-4 flex flex-col gap-2"
+            style={{ borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))` }}>
+            <p className="text-[11px] font-semibold" style={{ color: ACCENT }}>✦ Extracted Request</p>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
+                style={{ backgroundColor: 'var(--color-method-' + (result.method as string || 'get').toLowerCase() + ', var(--color-info))' }}>
+                {result.method as string}
+              </span>
+              <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-primary)' }}>{result.url as string}</span>
+            </div>
+            {typeof result.description === 'string' && result.description !== '' && (
+              <p className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>{result.description as string}</p>
+            )}
+            {(result.headers as unknown[])?.length > 0 && (
+              <p className="text-[10.5px]" style={{ color: 'var(--color-text-secondary)' }}>
+                Headers: {(result.headers as Array<{key: string}>).map(h => h.key).join(', ')}
+              </p>
             )}
           </div>
-
-          {/* Text fallback / supplemental */}
-          <div>
-            <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
-              Or paste/type API documentation text
-            </label>
-            <textarea
-              value={textFallback}
-              onChange={e => { setTextFallback(e.target.value); setError(''); }}
-              rows={4}
-              className="w-full px-3 py-2 rounded-lg text-[11.5px] resize-none outline-none"
-              placeholder="e.g. POST /api/v1/users — Creates a new user. Body: { name, email, role }. Returns 201 with { id, name, email }..."
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-            />
-          </div>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && (
-            <div className="flex gap-1 items-center">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Extracting request details…</span>
-            </div>
-          )}
-
-          {result && (
-            <div className="rounded-lg border p-4 flex flex-col gap-2"
-              style={{ borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))` }}>
-              <p className="text-[11px] font-semibold" style={{ color: ACCENT }}>✦ Extracted Request</p>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
-                  style={{ backgroundColor: 'var(--color-method-' + (result.method as string || 'get').toLowerCase() + ', var(--color-info))' }}>
-                  {result.method as string}
-                </span>
-                <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-primary)' }}>{result.url as string}</span>
-              </div>
-              {result.description && (
-                <p className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>{result.description as string}</p>
-              )}
-              {(result.headers as unknown[])?.length > 0 && (
-                <p className="text-[10.5px]" style={{ color: 'var(--color-text-secondary)' }}>
-                  Headers: {(result.headers as Array<{key: string}>).map(h => h.key).join(', ')}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
-          {result && !loading && (
-            <button type="button" onClick={applyToNewTab} disabled={applied}
-              className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-60 flex items-center gap-1.5 text-white"
-              style={{ backgroundColor: applied ? 'var(--color-success)' : ACCENT }}>
-              {applied ? <><CheckIcon size={12} /> Applied!</> : 'Open in New Tab'}
-            </button>
-          )}
-          <button type="button" onClick={run} disabled={loading || (!imageDataUrl && !textFallback.trim())}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-            style={{ backgroundColor: ACCENT }}>
-            <SparkleIcon size={11} className="inline mr-1" />
-            Extract
-          </button>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
-        </div>
+        )}
       </div>
-    </div>
+    </ModalView>
   );
-
-  return createPortal(modal, document.body);
 }

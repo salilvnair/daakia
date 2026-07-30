@@ -3,8 +3,9 @@ import type { ResponseCookie } from '../../../store/tabs-store';
 export function CookiesView({ cookies }: { cookies: ResponseCookie[] }) {
   if (cookies.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-[13px] text-[var(--color-text-muted)]">No cookies in response</p>
+      <div className="flex-1 flex flex-col items-center justify-center gap-2 text-[var(--color-text-muted)]">
+        <span className="text-[28px] opacity-20">⟨/⟩</span>
+        <p className="text-[12px]">No cookies in response</p>
       </div>
     );
   }
@@ -18,7 +19,7 @@ export function CookiesView({ cookies }: { cookies: ResponseCookie[] }) {
 
       <div className="px-4">
         {cookies.map((cookie, idx) => (
-          <div key={`${cookie.name}-${idx}`} className="py-2.5 border-b border-[rgba(255,255,255,0.06)]">
+          <div key={`${cookie.name}-${idx}`} className="py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
             <div className="flex items-center gap-3 mb-1">
               <span className="text-[13px] font-medium text-[var(--color-text-primary)]">{cookie.name}</span>
               <span className="text-[12px] text-[var(--color-text-secondary)] break-all flex-1">{cookie.value}</span>

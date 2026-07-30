@@ -3,12 +3,12 @@
  * Feature 4.6.19 — AI API Compliance Checker
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useSidebarDataStore } from '../../store/sidebar-data-store';
 import { MdViewer } from '../shared/display/MdViewer';
-import { StyledDropdown } from '../shared/controls/StyledDropdown';
+import { ModalView, AIButtonView, ButtonView, SelectInputView, MultilineInputView } from '@salilvnair/dui';
+import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface Props {
   onClose: () => void;
@@ -55,6 +55,17 @@ export function AiComplianceCheckerModal({ onClose }: Props) {
   const accRef = useRef('');
   const reqIdRef = useRef('');
   const collections = useSidebarDataStore(s => s.getCollections('rest'));
+  const cacheGet = useAiCollectionCacheStore(s => s.get);
+  const cacheSet = useAiCollectionCacheStore(s => s.set);
+
+  // Cache-first: picking a collection that was already audited shows the last
+  // result instead of re-running the AI call — Audit again is always explicit.
+  useEffect(() => {
+    if (!selectedCollection) return;
+    const cached = cacheGet(`compliance:${selectedCollection}`);
+    setResult(cached ? (cached.payload as string) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCollection]);
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -65,8 +76,10 @@ export function AiComplianceCheckerModal({ onClose }: Props) {
         setResult(accRef.current);
       }
       if (msg.type === 'ai:complete') {
-        setResult(accRef.current || '');
+        const content = accRef.current || '';
+        setResult(content);
         setLoading(false);
+        if (selectedCollection) cacheSet(`compliance:${selectedCollection}`, content);
       }
       if (msg.type === 'ai:error') {
         setError((msg.message as string) || 'Analysis failed.');
@@ -75,7 +88,8 @@ export function AiComplianceCheckerModal({ onClose }: Props) {
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCollection]);
 
   const run = () => {
     const collection = collections.find(c => c.id === selectedCollection);
@@ -99,87 +113,89 @@ export function AiComplianceCheckerModal({ onClose }: Props) {
     });
   };
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[660px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">REST Compliance Checker</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">Check if your API follows REST best practices</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="REST Compliance Checker"
+      subtitle="Check if your API follows REST best practices"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{
+          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'color-mix(in srgb, var(--color-info) 18%, transparent)',
+        }}>
+          <SparkleIcon size={13} style={{ color: ACCENT }} />
         </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-          <div>
-            <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Collection</label>
-            <StyledDropdown
-              value={selectedCollection}
-              options={[{ value: '', label: 'None (use custom endpoints below)' }, ...collections.map(c => ({ value: c.id, label: c.name }))]}
-              onChange={setSelectedCollection}
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Or paste endpoint list</label>
-            <textarea
-              value={customEndpoints}
-              onChange={e => { setCustomEndpoints(e.target.value); setError(''); }}
-              rows={6}
-              className="w-full px-3 py-2 rounded-lg text-[11.5px] font-mono resize-none outline-none"
-              placeholder={`GET /users\nPOST /users\nGET /users/{id}\nPUT /users/{id}\nDELETE /users/{id}\nPOST /getUser  ← compliance issue example`}
-              style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-            />
-          </div>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && !result && (
-            <div className="flex gap-1 items-center">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[4px] h-[4px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Auditing API…</span>
-            </div>
-          )}
-
-          {result && (
-            <div className="rounded-lg border p-4"
-              style={{ borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`, backgroundColor: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))` }}>
-              <MdViewer content={result} />
-              {loading && <span className="inline-block w-[2px] h-[12px] ml-0.5 animate-pulse" style={{ backgroundColor: ACCENT }} />}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
+      }
+      footerRight={
+        <>
           {result && !loading && (
-            <button type="button" onClick={run}
-              className="h-[30px] px-3 text-[11px] rounded-md cursor-pointer border"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-              Re-audit
-            </button>
+            <ButtonView size="md" onClick={run}>Re-audit</ButtonView>
           )}
-          <button type="button" onClick={run} disabled={loading}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-            style={{ backgroundColor: ACCENT }}>
-            <SparkleIcon size={11} className="inline mr-1" />
-            Audit API
-          </button>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
+          <AIButtonView
+            label={loading ? 'Auditing…' : 'Audit API'}
+            size="md"
+            accentColor={ACCENT}
+            loading={loading}
+            disabled={loading}
+            onClick={run}
+          />
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 6, color: 'var(--color-text-secondary)' }}>Collection</label>
+          <SelectInputView
+            value={selectedCollection}
+            options={[{ value: '', label: 'None (use custom endpoints below)' }, ...collections.map(c => ({ value: c.id, label: c.name }))]}
+            onChange={setSelectedCollection}
+            size="md"
+            accentColor={ACCENT}
+            width="100%"
+          />
         </div>
-      </div>
-    </div>
-  );
 
-  return createPortal(modal, document.body);
+        <div>
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 6, color: 'var(--color-text-secondary)' }}>Or paste endpoint list</label>
+          <MultilineInputView
+            value={customEndpoints}
+            onChange={e => { setCustomEndpoints(e.target.value); setError(''); }}
+            rows={6}
+            size="md"
+            width="fw"
+            placeholder={`GET /users\nPOST /users\nGET /users/{id}\nPUT /users/{id}\nDELETE /users/{id}\nPOST /getUser  ← compliance issue example`}
+            style={{ fontFamily: 'monospace', fontSize: 11.5 }}
+          />
+        </div>
+
+        {error && <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>{error}</p>}
+
+        {loading && !result && (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {[0, 150, 300].map(d => (
+              <span key={d} className="animate-pulse" style={{
+                width: 4, height: 4, borderRadius: '50%', background: ACCENT, animationDelay: `${d}ms`,
+              }} />
+            ))}
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>Auditing API…</span>
+          </div>
+        )}
+
+        {result && (
+          <div style={{
+            borderRadius: 8, padding: 16,
+            border: `1px solid color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
+            background: `color-mix(in srgb, ${ACCENT} 3%, var(--color-panel))`,
+          }}>
+            <MdViewer content={result} />
+            {loading && <span className="animate-pulse" style={{ display: 'inline-block', width: 2, height: 12, marginLeft: 2, background: ACCENT }} />}
+          </div>
+        )}
+      </div>
+    </ModalView>
+  );
 }

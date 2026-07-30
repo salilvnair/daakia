@@ -5,19 +5,23 @@
 import { useState, useEffect } from 'react';
 import { MOCK_PROTOCOL_COLORS, getMockProtocolBg, getMockProtocolLabel } from '../../colors';
 import { TrashIcon, CopyIcon, CheckIcon, ExternalLinkIcon } from '../../icons';
+import { TabView, TextInputView, MultilineInputView, ButtonView, IconButtonView } from '@salilvnair/dui';
+import type { TabItem } from '@salilvnair/dui';
 import type { MockServer, MockRoute } from './mock-types';
 import { openTryTab } from './mock-try-handler';
 import { RestRoutesConfig, GraphQLConfig, WebSocketConfig, SSEConfig, SocketIOConfig, MQTTConfig, GrpcConfig, SoapConfig, AiMockConfig, McpMockConfig } from './configs';
 import { postMsg } from '../../vscode';
+import { logUiEvent } from '../../store/ui-audit-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { StateMachineEditor } from './wiremock/StateMachinePanel';
-import { MockStateMachineEditor } from './MockStateMachineEditor';
+import { useTabsStore } from '../../store/tabs-store';
 import { TrafficInspectorPanel } from './wiremock/TrafficInspectorPanel';
 import type { MockLogEntry } from './mock-types';
 import { ImportPanel } from './wiremock/ImportPanel';
 import { ExportPanel } from './wiremock/ExportPanel';
 import { ChaosPanel } from './wiremock/ChaosPanel';
 import { MockApiCatalog } from './wiremock/MockApiCatalog';
+import { SmWorkflowDashboard } from './SmWorkflowDashboard';
+import { useSMWorkspaceStore, useSMTabsStore } from '@salilvnair/state-machine';
 type ServerTab = 'routes' | 'state' | 'traffic' | 'import' | 'export' | 'chaos' | 'catalog';
 
 // All protocols that get the full WireMock tab bar.
@@ -30,15 +34,34 @@ function configTabLabel(protocol: string): string {
   if (protocol === 'graphql')   return 'Schema';
   if (protocol === 'grpc')      return 'Services';
   if (protocol === 'soap')      return 'WSDL';
-  return 'Config'; // websocket / sse / socketio / mqtt
+  if (protocol === 'websocket') return 'Handlers';
+  if (protocol === 'sse')       return 'Events';
+  if (protocol === 'socketio')  return 'Handlers';
+  if (protocol === 'mqtt')      return 'Topics';
+  return 'Config';
 }
 
-// All tabbed protocols now get all 7 tabs — Import/Export/Catalog are protocol-aware.
+// State Machine tab label — varies by protocol
+function stateMachineTabLabel(protocol: string): string {
+  if (protocol === 'websocket' || protocol === 'socketio') return 'Flow';
+  if (protocol === 'mqtt')    return 'Flow';
+  if (protocol === 'sse')     return 'Flow';
+  return 'State Machine';
+}
+
+// Traffic tab label — varies by protocol
+function trafficTabLabel(protocol: string): string {
+  if (protocol === 'websocket' || protocol === 'socketio') return 'Messages';
+  if (protocol === 'mqtt')   return 'Topics';
+  if (protocol === 'sse')    return 'Events';
+  return 'Traffic';
+}
+
 function serverTabs(protocol: string): { id: ServerTab; label: string }[] {
   return [
     { id: 'routes',  label: configTabLabel(protocol) },
-    { id: 'state',   label: 'State Machine' },
-    { id: 'traffic', label: 'Traffic' },
+    { id: 'state',   label: stateMachineTabLabel(protocol) },
+    { id: 'traffic', label: trafficTabLabel(protocol) },
     { id: 'chaos',   label: '⚡ Chaos' },
     { id: 'import',  label: 'Import' },
     { id: 'export',  label: 'Export' },
@@ -82,12 +105,13 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
 
   const copyUrl = () => {
     if (!serverUrl) return;
+    logUiEvent('mock.url_copy', { serverId: server.id, protocol: server.protocol });
     navigator.clipboard.writeText(serverUrl);
     setUrlCopied(true);
     setTimeout(() => setUrlCopied(false), 1500);
   };
 
-  const handleTry = () => openTryTab(server, serverUrl);
+  const handleTry = () => { logUiEvent('mock.try', { serverId: server.id, protocol: server.protocol }); openTryTab(server, serverUrl); };
 
   const handleOpenSSO = () => {
     if (!server.running || !server.port) return;
@@ -109,54 +133,51 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
 
       {/* Server header */}
       <div className="flex items-center gap-2 -mt-2">
-        <input
-          type="text"
+        <TextInputView
           value={server.name}
           onChange={(e) => onUpdate({ name: e.target.value })}
           placeholder="Server name"
-          className="min-w-0 flex-1 h-[32px] px-3 text-[14px] font-semibold rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+          size="lg"
+          className="min-w-0 flex-1 font-semibold"
+          accentColor="var(--color-accent)"
         />
-        <button
-          type="button"
+        <ButtonView
+          variant={server.running ? 'danger' : 'primary'}
+          size="lg"
           onClick={onToggleRunning}
-          className={`h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer transition-colors flex-shrink-0 ${
-            server.running
-              ? 'bg-[rgba(239,68,68,0.12)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.2)]'
-              : 'bg-[rgba(34,197,94,0.12)] text-[var(--color-success)] hover:bg-[rgba(34,197,94,0.2)]'
-          }`}
+          accentColor={server.running ? 'var(--color-error)' : MOCK_PROTOCOL_COLORS[server.protocol || 'rest']}
         >
           {server.running ? '⏹ Stop' : '▶ Start'}
-        </button>
-        <button
-          type="button"
-          onClick={handleTry}
+        </ButtonView>
+        <ButtonView
+          variant="secondary"
+          size="lg"
           disabled={!server.running}
-          className="h-[32px] px-3.5 text-[12px] font-medium rounded-md cursor-pointer transition-colors flex-shrink-0 flex items-center gap-1.5 bg-[rgba(99,102,241,0.12)] text-[var(--color-try-button)] hover:bg-[rgba(99,102,241,0.2)] disabled:opacity-40 disabled:cursor-not-allowed"
-          title="Open a new tab to test this mock server"
+          onClick={handleTry}
+          iconLeft={<ExternalLinkIcon size={12} />}
+          accentColor="var(--color-try-button)"
         >
-          <ExternalLinkIcon size={12} />
           Try
-        </button>
+        </ButtonView>
         {hasOAuthRoute && (
-          <button
-            type="button"
-            onClick={handleOpenSSO}
+          <ButtonView
+            variant="secondary"
+            size="lg"
             disabled={!server.running}
-            className="h-[32px] px-3.5 text-[12px] font-medium rounded-md cursor-pointer transition-colors flex-shrink-0 flex items-center gap-1.5 bg-[rgba(251,146,60,0.12)] text-[var(--color-warning)] hover:bg-[rgba(251,146,60,0.2)] disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Open OAuth SSO login page in browser"
+            onClick={handleOpenSSO}
+            iconLeft={<ExternalLinkIcon size={12} />}
+            accentColor="var(--color-warning)"
           >
-            <ExternalLinkIcon size={12} />
             SSO UI
-          </button>
+          </ButtonView>
         )}
-        <button
-          type="button"
+        <IconButtonView
+          icon={<TrashIcon size={14} />}
+          size="lg"
           onClick={onDelete}
-          className="h-[32px] w-[32px] flex items-center justify-center flex-shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-colors rounded-md hover:bg-[rgba(239,68,68,0.08)]"
-          title="Delete server"
-        >
-          <TrashIcon size={14} />
-        </button>
+          tooltip="Delete server"
+          accentColor="var(--color-error)"
+        />
       </div>
 
       {/* URL / Status + Copy */}
@@ -165,14 +186,12 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
           {server.running && server.port ? (
             <>
               <span className="text-[11px] font-mono text-[var(--color-success)]">{serverUrl}</span>
-              <button
-                type="button"
+              <IconButtonView
+                icon={urlCopied ? <CheckIcon size={11} className="text-[var(--color-success)]" /> : <CopyIcon size={11} />}
+                size="default"
                 onClick={copyUrl}
-                className="w-4 h-4 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-                title="Copy URL"
-              >
-                {urlCopied ? <CheckIcon size={11} className="text-[var(--color-success)]" /> : <CopyIcon size={11} />}
-              </button>
+                tooltip="Copy URL"
+              />
             </>
           ) : (
             <span className="text-[11px] font-mono text-[var(--color-text-muted)]">Not running</span>
@@ -181,46 +200,39 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         {server.running && server.port && server.protocol === 'soap' && (
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-mono text-[var(--color-text-muted)]">WSDL: {serverUrl}?wsdl</span>
-            <button
-              type="button"
+            <IconButtonView
+              icon={wsdlCopied ? <CheckIcon size={10} className="text-[var(--color-success)]" /> : <CopyIcon size={10} />}
+              size="default"
               onClick={() => { navigator.clipboard.writeText(`${serverUrl}?wsdl`); setWsdlCopied(true); setTimeout(() => setWsdlCopied(false), 1500); }}
-              className="w-4 h-4 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-              title="Copy WSDL URL"
-            >
-              {wsdlCopied ? <CheckIcon size={10} className="text-[var(--color-success)]" /> : <CopyIcon size={10} />}
-            </button>
+              tooltip="Copy WSDL URL"
+            />
           </div>
         )}
       </div>
 
       {/* Description — multiline textarea so users can paste full context (user stories, JSON structures, etc.) for AI generation */}
-      <textarea
+      <MultilineInputView
         value={server.description}
         onChange={(e) => onUpdate({ description: e.target.value })}
         placeholder="Description (optional) — paste user stories, JSON request/response examples, or any context to guide AI route generation"
         rows={3}
-        className="w-full px-2.5 py-2 text-[12px] rounded-md bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] resize-y leading-relaxed min-h-[60px]"
-        style={{ fontFamily: 'inherit' }}
+        size="md"
       />
 
       {/* ── Tab bar — shown for all tabbed protocols ─────────────────────── */}
       {TABBED_PROTOCOLS.has(server.protocol ?? '') && (
-        <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.07)] -mx-4 px-4 overflow-x-auto">
-          {serverTabs(server.protocol ?? 'rest').map(t => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setServerTab(t.id)}
-              className="h-[30px] px-3 text-[10px] font-medium cursor-pointer transition-colors flex-shrink-0 whitespace-nowrap"
-              style={{
-                borderBottom: serverTab === t.id ? '2px solid var(--color-mock-server)' : '2px solid transparent',
-                color: serverTab === t.id ? 'var(--color-mock-server)' : 'var(--color-text-muted)',
-                marginBottom: '-1px',
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="flex items-center -mx-4 px-4 pt-0 pb-0 border-b border-[var(--color-surface-border)] overflow-x-auto">
+          <TabView
+            tabs={serverTabs(server.protocol ?? 'rest') as TabItem[]}
+            activeTab={serverTab}
+            onChange={(id) => {
+              logUiEvent('mock.tab_switch', { tab: id, serverId: server.id });
+              setServerTab(id as ServerTab);
+            }}
+            variant="underline"
+            size="sm"
+            accentColor="var(--color-mock-server)"
+          />
         </div>
       )}
 
@@ -238,20 +250,44 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         />
       )}
 
-      {/* ── Shared WireMock tabs (all tabbed protocols) ──────────────────── */}
+      {/* ── State Machine workflow dashboard ─────────────────────────────── */}
       {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'state' && (
-        <div className="flex flex-col gap-4 p-3">
-          {/* Sprint 13.34: Visual drag-drop state machine editor */}
-          <MockStateMachineEditor
-            config={server.stateMachine}
-            onUpdate={cfg => onUpdate({ stateMachine: cfg })}
-          />
-          {/* Legacy form editor (still useful for quick text editing) */}
-          <StateMachineEditor
-            config={server.stateMachine}
-            onUpdate={cfg => onUpdate({ stateMachine: cfg })}
-          />
-        </div>
+        <SmWorkflowDashboard
+          server={server}
+          onOpenEditor={(workflowId) => {
+            useTabsStore.getState().openStateMachineTab(server.id)
+            if (workflowId) {
+              const machine = useSMWorkspaceStore.getState().machines.find((m) => m.id === workflowId)
+              if (machine) {
+                useSMTabsStore.getState().openWorkflowTab(machine.id, machine.name, machine.color)
+              }
+            }
+          }}
+          onConnectNew={() => {
+            useTabsStore.getState().openStateMachineTab(server.id)
+            const ws = useSMWorkspaceStore.getState()
+            const machine = ws.createMachine('Untitled Workflow')
+            useSMTabsStore.getState().openWorkflowTab(machine.id, machine.name, machine.color)
+            // Signal the SM workspace to open its right SideNav (Workflows panel)
+            ws.requestSideNavOpen()
+          }}
+          onUnlink={() => onUpdate({ stateMachine: undefined, connectedWorkflowId: undefined, connectedWorkflows: [] })}
+          onUnlinkWorkflow={(workflowId) => {
+            const existing = server.connectedWorkflows ?? []
+            const updated = existing.filter(w => w.workflowId !== workflowId)
+            const wasLegacy = server.connectedWorkflowId === workflowId
+            onUpdate({
+              connectedWorkflows: updated,
+              ...(wasLegacy ? { stateMachine: undefined, connectedWorkflowId: undefined } : {}),
+            })
+            postMsg({
+              type: 'mockServer:patchStateMachine',
+              serverId: server.id,
+              connectedWorkflows: updated,
+              ...(wasLegacy ? { stateMachine: null, connectedWorkflowId: null } : {}),
+            })
+          }}
+        />
       )}
 
       {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'traffic' && (
@@ -265,14 +301,16 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
               id: crypto.randomUUID(),
               method: r.method as MockRoute['method'],
               path: r.path,
-              statusCode: r.responseStatus,
-              headers: r.responseHeaders,
-              body: r.responseBody,
+              statusCode: r.response.status,
+              headers: r.response.headers,
+              body: r.response.body ?? '',
               delay: 0,
               enabled: true,
             }));
             onUpdate({ routes: [...(server.routes ?? []), ...newRoutes] });
           }}
+          onAddRoutes={routes => onUpdate({ routes: [...(server.routes ?? []), ...routes] })}
+          onApplyStateMachine={sm => onUpdate({ stateMachine: sm })}
         />
       )}
 
@@ -293,13 +331,14 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         <ExportPanel
           protocol={server.protocol}
           server={server}
-          onExport={format => postMsg({ type: 'exportMockServer', serverId: server.id, format })}
+          onExport={(format, content, filename) => postMsg({ type: 'exportMockServer', serverId: server.id, format, content, filename })}
+          onExportZip={(mappings, files, filename) => postMsg({ type: 'exportMockServerWiremockZip', serverId: server.id, mappings, files, filename })}
         />
       )}
 
-      {/* Chaos — universal */}
+      {/* Chaos — protocol-aware fault options */}
       {TABBED_PROTOCOLS.has(server.protocol ?? '') && serverTab === 'chaos' && (
-        <ChaosPanel server={server} onUpdate={onUpdate} />
+        <ChaosPanel server={server} onUpdate={onUpdate} protocol={server.protocol ?? 'rest'} />
       )}
 
       {/* Catalog — protocol-aware */}
@@ -307,9 +346,49 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
         <MockApiCatalog
           protocol={server.protocol}
           onAddRoutes={(routes, raw) => {
-            if (routes.length > 0) onUpdate({ routes: [...(server.routes ?? []), ...routes] });
-            if (raw) onUpdate({ description: (server.description ? server.description + '\n\n' : '') + raw });
+            const proto = server.protocol ?? 'rest';
+            if (proto === 'graphql' && raw) {
+              onUpdate({ graphqlSchema: raw });
+            } else if (proto === 'grpc' && raw) {
+              onUpdate({ grpcProtoFile: raw });
+            } else if (proto === 'websocket' && raw) {
+              try {
+                const events: Array<{ event: string; direction: string; payload: Record<string, unknown> }> = JSON.parse(raw);
+                const handlers = events
+                  .filter(e => e.direction === 'server→client')
+                  .map(e => ({ id: crypto.randomUUID(), event: 'message' as const, matchPattern: e.event, response: JSON.stringify(e.payload, null, 2), delay: 0, enabled: true, broadcast: false }));
+                if (handlers.length > 0) onUpdate({ wsHandlers: [...(server.wsHandlers ?? []), ...handlers] });
+              } catch { /* ignore malformed JSON */ }
+            } else if (proto === 'sse' && raw) {
+              try {
+                const events: Array<{ event: string; direction: string; payload: Record<string, unknown> }> = JSON.parse(raw);
+                const sseEvents = events
+                  .filter(e => e.direction === 'server→client')
+                  .map(e => ({ id: crypto.randomUUID(), eventName: e.event, data: JSON.stringify(e.payload, null, 2), intervalMs: 5000, delay: 0, enabled: true, repeat: true }));
+                if (sseEvents.length > 0) onUpdate({ sseEvents: [...(server.sseEvents ?? []), ...sseEvents] });
+              } catch { /* ignore malformed JSON */ }
+            } else if (proto === 'socketio' && raw) {
+              try {
+                const events: Array<{ event: string; direction: string; payload: Record<string, unknown> }> = JSON.parse(raw);
+                const handlers = events
+                  .filter(e => e.direction === 'server→client')
+                  .map(e => ({ id: crypto.randomUUID(), event: 'message' as const, listenEvent: e.event, emitEvent: e.event, response: JSON.stringify(e.payload, null, 2), delay: 0, enabled: true, broadcast: false }));
+                if (handlers.length > 0) onUpdate({ socketioHandlers: [...(server.socketioHandlers ?? []), ...handlers] });
+              } catch { /* ignore malformed JSON */ }
+            } else if (proto === 'mqtt' && raw) {
+              try {
+                const events: Array<{ event: string; direction: string; payload: Record<string, unknown> }> = JSON.parse(raw);
+                const topics = events
+                  .filter(e => e.direction === 'server→client')
+                  .map(e => ({ id: crypto.randomUUID(), topic: e.event, qos: 0 as const, retain: false, payload: JSON.stringify(e.payload, null, 2), intervalMs: 5000, enabled: true }));
+                if (topics.length > 0) onUpdate({ mqttTopics: [...(server.mqttTopics ?? []), ...topics] });
+              } catch { /* ignore malformed JSON */ }
+            } else if (routes.length > 0) {
+              onUpdate({ routes: [...(server.routes ?? []), ...routes] });
+            }
           }}
+          onAddSoapOps={ops => onUpdate({ soapOperations: [...(server.soapOperations ?? []), ...ops] })}
+          onAddGrpcMethods={(methods, raw) => onUpdate({ grpcMethods: [...(server.grpcMethods ?? []), ...methods], ...(raw ? { grpcProtoFile: raw } : {}) })}
         />
       )}
 

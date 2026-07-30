@@ -1,10 +1,14 @@
 /**
  * ImportPanel — protocol-aware import for REST, GraphQL, gRPC, SOAP, and Realtime mocks.
- * Input area uses Monaco CodeEditor (language-aware). Protocol colors follow each protocol's accent.
+ * Input area uses EditorView (language-aware, YAML/JSON/XML/GraphQL coloring). Protocol colors follow each protocol's accent.
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import {
+  EditorView, ButtonView, IconButtonView, ToggleSwitchView, PilledTabView,
+  type EditorLanguage, type PilledTab,
+} from '@salilvnair/dui';
 import { ChevronDownIcon } from '../../../icons';
-import { CodeEditor, type CodeLanguage } from '../../shared';
+import { postMsg } from '../../../vscode';
 import type { MockRoute } from '../mock-types';
 
 // Protocol → accent color
@@ -21,13 +25,13 @@ const PROTOCOL_ACCENT: Record<string, string> = {
 };
 
 // Import format → Monaco language
-const FORMAT_LANGUAGE: Record<string, CodeLanguage> = {
-  openapi:     'plaintext',
-  postman:     'json',
-  wiremock:    'json',
-  sdl:         'graphql',
-  proto:       'plaintext',
-  wsdl:        'xml',
+const FORMAT_LANGUAGE: Record<string, EditorLanguage> = {
+  openapi:       'yaml',
+  postman:       'json',
+  wiremock:      'json',
+  sdl:           'graphql',
+  proto:         'proto',
+  wsdl:          'xml',
   'json-events': 'json',
 };
 
@@ -50,7 +54,7 @@ interface ImportResult {
   warnings: string[];
   errors: string[];
   routeCount: number;
-  raw?: string; // for non-REST protocols (SDL, proto, WSDL get stored as raw config)
+  raw?: string;
 }
 
 interface ContractResult {
@@ -120,7 +124,6 @@ const PROTOCOL_CONFIG: Record<string, ProtocolConfig> = {
   },
 };
 
-// Realtime protocols all share the same JSON-events format
 const REALTIME_PROTOCOLS = new Set(['websocket', 'sse', 'socketio', 'mqtt']);
 const REALTIME_CONFIG: ProtocolConfig = {
   formats: [{ id: 'json-events', label: 'JSON Event Definitions' }],
@@ -141,13 +144,38 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
   const cfg = getProtocolConfig(protocol);
   const ACCENT = getAccent(protocol);
   const [format, setFormat] = useState<ImportFormat>(cfg.formats[0].id);
-  const [content, setContent] = useState('');
+  // Seed with the format's example so the visible placeholder is a real, clickable
+  // one-click demo instead of an inert display-only fallback (Parse & Preview used to
+  // silently no-op because `content` stayed '' while the editor showed placeholder text).
+  const [content, setContent] = useState(() => cfg.placeholder(cfg.formats[0].id));
   const [result, setResult] = useState<ImportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [contractMode, setContractMode] = useState(false);
   const [contractResult, setContractResult] = useState<ContractResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const editorLanguage: CodeLanguage = (FORMAT_LANGUAGE[format] as CodeLanguage) ?? 'plaintext';
+  const pendingRequestId = useRef<string | null>(null);
+  const editorLanguage: EditorLanguage = (FORMAT_LANGUAGE[format] as EditorLanguage) ?? 'plaintext';
+
+  const formatTabs: PilledTab[] = cfg.formats.map(f => ({ id: f.id, label: f.label }));
+
+  // Listen for extension-host import results
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data as Record<string, unknown>;
+      if (msg?.type !== 'mockServer:importResult') return;
+      if (msg.requestId !== pendingRequestId.current) return;
+      pendingRequestId.current = null;
+      setResult({
+        routes: (msg.routes as MockRoute[]) ?? [],
+        warnings: (msg.warnings as string[]) ?? [],
+        errors: (msg.errors as string[]) ?? [],
+        routeCount: (msg.routeCount as number) ?? 0,
+      });
+      setLoading(false);
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -157,15 +185,25 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
     reader.readAsText(file);
   };
 
+  // REST formats (openapi/postman/wiremock) are parsed in the extension host
+  // for full schema resolution; non-REST formats stay client-side
+  const isRestFormat = protocol === 'rest' && ['openapi', 'postman', 'wiremock'].includes(format);
+
   const handleParse = () => {
     if (!content.trim()) return;
     setLoading(true);
     setResult(null);
-    setTimeout(() => {
-      const r = parseContent(protocol, format, content);
-      setResult(r);
-      setLoading(false);
-    }, 100);
+    if (isRestFormat) {
+      const requestId = crypto.randomUUID();
+      pendingRequestId.current = requestId;
+      postMsg({ type: 'mockServer:importSpec', requestId, format, content });
+    } else {
+      setTimeout(() => {
+        const r = parseContent(protocol, format, content);
+        setResult(r);
+        setLoading(false);
+      }, 100);
+    }
   };
 
   const handleValidate = () => {
@@ -173,7 +211,6 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
   };
 
   const currentHint = cfg.hint(format);
-  const currentPlaceholder = cfg.placeholder(format);
 
   return (
     <div className="flex flex-col gap-3">
@@ -181,27 +218,17 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
       {cfg.formats.length > 1 && (
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[var(--color-text-muted)]">Format</span>
-          <div className="flex rounded-md overflow-hidden border border-[rgba(255,255,255,0.1)]">
-            {cfg.formats.map((f, i) => (
-              <button key={f.id} type="button" onClick={() => { setFormat(f.id); setResult(null); setContractResult(null); }}
-                className="h-[26px] px-3 text-[10px] font-medium cursor-pointer transition-colors"
-                style={{
-                  background: format === f.id ? `color-mix(in srgb, ${ACCENT} 15%, transparent)` : 'transparent',
-                  color: format === f.id ? ACCENT : 'var(--color-text-muted)',
-                  borderRight: i < cfg.formats.length - 1 ? '1px solid rgba(255,255,255,0.1)' : undefined,
-                }}>
-                {f.label}
-              </button>
-            ))}
-          </div>
+          <PilledTabView
+            tabs={formatTabs}
+            activeId={format}
+            onChange={id => { setFormat(id as ImportFormat); setContent(cfg.placeholder(id as ImportFormat)); setResult(null); setContractResult(null); }}
+            mode="pill"
+            accentColor={ACCENT}
+          />
           {cfg.hasContractValidation && (
             <div className="flex items-center gap-1.5 ml-auto">
-              <label className="text-[10px] text-[var(--color-text-muted)] cursor-pointer">Contract validation</label>
-              <button type="button" onClick={() => setContractMode(v => !v)}
-                className="relative w-[28px] h-[14px] rounded-full transition-colors cursor-pointer flex-shrink-0"
-                style={{ backgroundColor: contractMode ? ACCENT : 'var(--color-muted-fallback)' }}>
-                <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: contractMode ? '16px' : '2px' }} />
-              </button>
+              <span className="text-[10px] text-[var(--color-text-muted)]">Contract validation</span>
+              <ToggleSwitchView checked={contractMode} onChange={setContractMode} accentColor={ACCENT} size="xs" />
             </div>
           )}
         </div>
@@ -216,19 +243,22 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
           <label className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">
             {cfg.formats.find(f => f.id === format)?.label ?? 'Content'}
           </label>
-          <button type="button" onClick={() => fileRef.current?.click()}
-            className="h-[22px] px-2 text-[10px] rounded cursor-pointer"
-            style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <ButtonView
+            size="sm"
+            variant="ghost"
+            accentColor={ACCENT}
+            onClick={() => fileRef.current?.click()}
+          >
             Upload file
-          </button>
+          </ButtonView>
           <input ref={fileRef} type="file" accept={cfg.accept} className="hidden" onChange={handleFile} />
         </div>
         <div
           className="rounded-lg overflow-hidden border"
           style={{ borderColor: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}
         >
-          <CodeEditor
-            value={content || currentPlaceholder}
+          <EditorView
+            value={content}
             onChange={v => setContent(v ?? '')}
             language={editorLanguage}
             height="220px"
@@ -239,17 +269,25 @@ export function ImportPanel({ protocol = 'rest', onImport }: Props) {
 
       {/* Action buttons */}
       <div className="flex items-center gap-2">
-        <button type="button" onClick={handleParse} disabled={!content.trim() || loading}
-          className="h-[30px] px-4 text-[11px] font-medium rounded cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`, color: ACCENT }}>
+        <ButtonView
+          size="md"
+          variant="ghost"
+          accentColor={ACCENT}
+          disabled={!content.trim() || loading}
+          onClick={handleParse}
+        >
           {loading ? 'Parsing…' : 'Parse & Preview'}
-        </button>
+        </ButtonView>
         {contractMode && cfg.hasContractValidation && (
-          <button type="button" onClick={handleValidate} disabled={!content.trim()}
-            className="h-[30px] px-4 text-[11px] font-medium rounded cursor-pointer disabled:opacity-40"
-            style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.25)', color: 'var(--color-warning)' }}>
+          <ButtonView
+            size="md"
+            variant="ghost"
+            accentColor="var(--color-warning)"
+            disabled={!content.trim()}
+            onClick={handleValidate}
+          >
             Validate Contract
-          </button>
+          </ButtonView>
         )}
       </div>
 
@@ -290,12 +328,14 @@ function ParseResultView({ result, protocol, accent, onImport }: { result: Impor
   const isNonRest = protocol !== 'rest';
 
   return (
-    <div className="rounded-lg border border-[rgba(255,255,255,0.1)] overflow-hidden">
-      <div className="px-3 py-2 flex items-center justify-between bg-[rgba(255,255,255,0.02)]">
+    <div className="rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_10%,transparent)] overflow-hidden">
+      <div className="px-3 py-2 flex items-center justify-between bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setExpanded(v => !v)} className="cursor-pointer text-[var(--color-text-muted)]">
-            <span style={{ display: 'inline-flex', transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}><ChevronDownIcon size={12} /></span>
-          </button>
+          <IconButtonView
+            size="xs"
+            icon={<span style={{ display: 'inline-flex', transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 150ms' }}><ChevronDownIcon size={12} /></span>}
+            onClick={() => setExpanded(v => !v)}
+          />
           <span className="text-[11px] font-medium text-[var(--color-text-primary)]">
             {isNonRest ? 'Parsed successfully' : `${result.routeCount} route${result.routeCount !== 1 ? 's' : ''} found`}
           </span>
@@ -303,15 +343,13 @@ function ParseResultView({ result, protocol, accent, onImport }: { result: Impor
           {result.errors.length > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[rgba(239,68,68,0.12)] text-[var(--color-error)]">{result.errors.length} errors</span>}
         </div>
         {(result.routes.length > 0 || result.raw) && (
-          <button type="button" onClick={onImport}
-            className="h-[26px] px-3 text-[10px] font-medium rounded cursor-pointer"
-            style={{ background: `color-mix(in srgb, ${ACCENT} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`, color: ACCENT }}>
+          <ButtonView size="sm" variant="ghost" accentColor={ACCENT} onClick={onImport}>
             {isNonRest ? 'Apply to Server' : 'Import All Routes'}
-          </button>
+          </ButtonView>
         )}
       </div>
       {expanded && (
-        <div className="max-h-[200px] overflow-y-auto divide-y divide-[rgba(255,255,255,0.05)]">
+        <div className="max-h-[200px] overflow-y-auto divide-y divide-[color-mix(in_srgb,var(--color-text-primary)_5%,transparent)]">
           {result.routes.map((r, i) => (
             <div key={r.id ?? i} className="flex items-center gap-2 px-3 py-1.5">
               <span className="text-[9px] font-mono px-1 py-0.5 rounded font-medium bg-[rgba(14,165,233,0.12)] text-[var(--color-info)]">{r.method}</span>
@@ -321,10 +359,10 @@ function ParseResultView({ result, protocol, accent, onImport }: { result: Impor
           ))}
           {result.raw && isNonRest && (
             <div className="px-3 py-2">
-              <div className="rounded-lg overflow-hidden border border-[rgba(255,255,255,0.06)]">
-                <CodeEditor
+              <div className="rounded-lg overflow-hidden border border-[color-mix(in_srgb,var(--color-text-primary)_6%,transparent)]">
+                <EditorView
                   value={result.raw.slice(0, 1000)}
-                  language={protocol === 'soap' ? 'xml' : protocol === 'graphql' ? 'graphql' : 'plaintext'}
+                  language={protocol === 'soap' ? 'xml' : protocol === 'graphql' ? 'graphql' : protocol === 'grpc' ? 'proto' : 'plaintext'}
                   readOnly
                   height="100px"
                   fontSize={10}
@@ -355,36 +393,14 @@ function parseContent(protocol: string, format: ImportFormat, content: string): 
   }
 }
 
-function parseRest(format: RestFormat, content: string): ImportResult {
-  const routes: MockRoute[] = [];
-  const warnings: string[] = [];
-  if (format === 'openapi') {
-    warnings.push('Preview only — full import runs in extension host for complete schema-based body generation.');
-    const pathMatches = content.match(/^\s{2}\/[\w/{}.-]+:/gm) ?? [];
-    const methods = ['get', 'post', 'put', 'patch', 'delete'];
-    pathMatches.forEach(pathLine => {
-      const path = pathLine.trim().replace(/:$/, '');
-      methods.forEach(m => {
-        if (content.includes(`\n    ${m}:`)) {
-          routes.push({ id: crypto.randomUUID(), method: m.toUpperCase() as MockRoute['method'], path, statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: '{}', delay: 0, enabled: true });
-        }
-      });
-    });
-    if (routes.length === 0) routes.push({ id: crypto.randomUUID(), method: 'GET', path: '/api/resource', statusCode: 200, headers: {}, body: '{}', delay: 0, enabled: true });
-  } else if (format === 'postman') {
-    const parsed = JSON.parse(content) as { item?: unknown[] };
-    (parsed.item ?? []).forEach((_, i) => routes.push({ id: crypto.randomUUID(), method: 'GET', path: `/collection/item/${i}`, statusCode: 200, headers: {}, body: '{}', delay: 0, enabled: true }));
-  } else {
-    const parsed = JSON.parse(content) as { mappings?: Array<{ request?: { method?: string; url?: string }; response?: { status?: number; body?: string } }> };
-    (parsed.mappings ?? []).forEach(m => routes.push({ id: crypto.randomUUID(), method: (m.request?.method ?? 'GET') as MockRoute['method'], path: m.request?.url ?? '/', statusCode: m.response?.status ?? 200, headers: {}, body: m.response?.body ?? '{}', delay: 0, enabled: true }));
-  }
-  return { routes, warnings, errors: [], routeCount: routes.length };
+function parseRest(_format: RestFormat, _content: string): ImportResult {
+  // REST import now runs in extension host via mockServer:importSpec — this path is unused.
+  return { routes: [], warnings: [], errors: [], routeCount: 0 };
 }
 
 function parseGraphQLSDL(content: string): ImportResult {
   const warnings: string[] = [];
   const operations: string[] = [];
-  // Extract type Query / Mutation / Subscription fields
   const typeBlocks = content.match(/type\s+(Query|Mutation|Subscription)\s*\{([^}]+)\}/g) ?? [];
   typeBlocks.forEach(block => {
     const typeMatch = block.match(/type\s+(\w+)/);

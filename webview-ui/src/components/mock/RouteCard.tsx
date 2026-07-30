@@ -1,18 +1,23 @@
 /**
  * RouteCard — expandable route editor for REST mock server routes.
  */
-import { useState, useEffect, useRef } from 'react';
-import { CodeEditor, ConfirmDialog, KeyValueTable, StyledDropdown, ResizablePanel, DurationInput, type DropdownOption, type KeyValueRow } from '../shared';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ConfirmDialog } from '../shared';
+import { SelectInputView, EditorView, KeyValueTableView, DurationInputView, ResizablePanelView, TabView, TextInputView, IconButtonView, PilledTabView, ToggleSwitchView } from '@salilvnair/dui';
+import type { TabItem, KeyValueTableRow, SelectOption, PilledTab } from '@salilvnair/dui';
 import { METHOD_COLORS, methodBg } from '../../colors';
-import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern, ExternalLinkIcon } from '../../icons';
+import { TrashIcon, CopyIcon, CheckIcon, DiagonalLinesPattern, ExternalLinkIcon, FolderOpenIcon } from '../../icons';
 import type { MockRoute, HttpMethod } from './mock-types';
+import { postMsg } from '../../vscode';
+import { logUiEvent } from '../../store/ui-audit-store';
 import { openRouteTryTab } from './mock-try-handler';
 import { MatchBuilderPanel } from './wiremock/MatchBuilderPanel';
 import { TemplateEditorPanel } from './wiremock/TemplateEditorPanel';
 import { FaultInjectionPanel } from './wiremock/FaultInjectionPanel';
 import { SequencePanel } from './wiremock/SequencePanel';
 import { WebhookPanel } from './wiremock/WebhookPanel';
-import { RouteStatePanel } from './wiremock/StateMachinePanel';
+import { StateMachineTriggerSelect } from './wiremock/StateMachinePanel';
+import type { StateMachineConfig, ConnectedWorkflow } from './mock-types';
 
 type RouteTab = 'basic' | 'matching' | 'advanced';
 
@@ -22,7 +27,7 @@ function formatDelay(ms: number): string {
   return `${ms}ms`;
 }
 
-const MOCK_METHOD_OPTIONS: DropdownOption[] = [
+const MOCK_METHOD_OPTIONS: SelectOption[] = [
   { value: 'GET', label: 'GET', color: METHOD_COLORS.GET },
   { value: 'POST', label: 'POST', color: METHOD_COLORS.POST },
   { value: 'PUT', label: 'PUT', color: METHOD_COLORS.PUT },
@@ -36,18 +41,32 @@ interface RouteCardProps {
   route: MockRoute;
   isEditing: boolean;
   serverBaseUrl?: string;
-  availableStates?: string[];
+  /** The server's connected workflows + legacy stateMachine — powers the State Machine / Trigger Event selector. */
+  server: { stateMachine?: StateMachineConfig; connectedWorkflows?: ConnectedWorkflow[] };
   onEdit: () => void;
   onUpdate: (patch: Partial<MockRoute>) => void;
   onDelete: () => void;
 }
 
-export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, onEdit, onUpdate, onDelete }: RouteCardProps) {
+export function RouteCard({ route, isEditing, serverBaseUrl, server, onEdit, onUpdate, onDelete }: RouteCardProps) {
   const [contentType, setContentType] = useState<'application/json' | 'application/xml' | 'text/plain'>('application/json');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [headersExpanded, setHeadersExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<RouteTab>('basic');
+
+  const pickBodyFile = useCallback(() => {
+    const callbackId = `route-${route.id}-${Date.now()}`;
+    const handler = (event: MessageEvent) => {
+      const d = event.data;
+      if (d?.type === 'mockServer:bodyFilePicked' && d.callbackId === callbackId) {
+        window.removeEventListener('message', handler);
+        if (d.filePath) onUpdate({ bodyFile: d.filePath });
+      }
+    };
+    window.addEventListener('message', handler);
+    postMsg({ type: 'mockServer:pickBodyFile', callbackId });
+  }, [route.id, onUpdate]);
 
   const copyFullPath = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -64,14 +83,14 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
     openRouteTryTab(serverBaseUrl, route);
   };
 
-  const getEditorLang = () => {
+  const getEditorLang = (): 'json' | 'xml' | 'plaintext' => {
     if (contentType === 'application/json') return 'json';
     if (contentType === 'application/xml') return 'xml';
-    return 'text';
+    return 'plaintext';
   };
 
   // Local state for header rows — syncs FROM route.headerRows (or route.headers fallback)
-  const toRows = (route: { headers: Record<string, string>; headerRows?: Array<{ key: string; value: string; enabled: boolean }> }): KeyValueRow[] => {
+  const toRows = (route: { headers: Record<string, string>; headerRows?: Array<{ key: string; value: string; enabled: boolean }> }): KeyValueTableRow[] => {
     if (route.headerRows && route.headerRows.length > 0) {
       const rows = route.headerRows.map(r => ({
         id: `${r.key}-${r.enabled}`,
@@ -92,7 +111,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
     return rows;
   };
 
-  const [headerRows, setHeaderRows] = useState<KeyValueRow[]>(() => toRows(route));
+  const [headerRows, setHeaderRows] = useState<KeyValueTableRow[]>(() => toRows(route));
   const prevHeadersRef = useRef(route.headers);
 
   // Sync from parent if route.headers changed externally
@@ -103,7 +122,7 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
     }
   }, [route.headers]);
 
-  const handleHeadersChange = (rows: KeyValueRow[]) => {
+  const handleHeadersChange = (rows: KeyValueTableRow[]) => {
     setHeaderRows(rows);
     // Only enabled rows with keys go into headers (for the backend)
     const headers: Record<string, string> = {};
@@ -126,22 +145,21 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
       {!route.enabled && (
         <div className="absolute inset-0 rounded-lg z-10 pointer-events-none overflow-hidden">
           <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg bg-[var(--color-muted-fallback)]" />
-          <div className="absolute inset-0 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(234,179,8,0.03) 0%, rgba(255,255,255,0.04) 100%)' }} />
+          <div className="absolute inset-0 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(234,179,8,0.03) 0%, color-mix(in srgb, var(--color-text-primary) 4%, transparent) 100%)' }} />
           <DiagonalLinesPattern patternId={`disabled-lines-${route.id}`} />
         </div>
       )}
 
       {/* Route summary row */}
       <div className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer group relative ${!route.enabled ? 'opacity-50' : ''}`} onClick={() => { if (route.enabled) onEdit(); }}>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onUpdate({ enabled: !route.enabled }); }}
-          className="relative z-20 w-[28px] h-[14px] rounded-full transition-colors flex-shrink-0 cursor-pointer"
-          style={{ backgroundColor: route.enabled ? 'var(--color-success)' : 'var(--color-muted-fallback)' }}
-          title={route.enabled ? 'Disable' : 'Enable'}
-        >
-          <span className="absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white transition-all" style={{ left: route.enabled ? '16px' : '2px' }} />
-        </button>
+        <div onClick={(e) => e.stopPropagation()} className="relative z-20 flex-shrink-0">
+          <ToggleSwitchView
+            checked={route.enabled}
+            onChange={(v) => { logUiEvent('mock.route_toggle', { enabled: v, routeId: route.id, method: route.method, path: route.path }); onUpdate({ enabled: v }); }}
+            accentColor="var(--color-success)"
+            size="xs"
+          />
+        </div>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md tracking-wider" style={{ color: METHOD_COLORS[route.method] || 'var(--color-muted-fallback)', backgroundColor: methodBg(route.method) }}>
           {route.method}
         </span>
@@ -151,34 +169,37 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
           <span className="text-[10px] text-[var(--color-text-muted)] font-mono bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] rounded px-1.5 py-0.5">{formatDelay(route.delay)}</span>
         )}
         {serverBaseUrl && (
-          <button
-            type="button"
-            onClick={tryRoute}
-            className="relative z-20 p-1 text-[var(--color-try-button)] hover:text-[var(--color-try-button)] cursor-pointer transition-all opacity-0 group-hover:opacity-100"
-            title="Try this route"
-          >
-            <ExternalLinkIcon size={12} />
-          </button>
+          <span className="relative z-20 opacity-0 group-hover:opacity-100 transition-all">
+            <IconButtonView
+              size="default"
+              icon={<ExternalLinkIcon size={12} />}
+              onClick={tryRoute}
+              tooltip="Try this route"
+              color="var(--color-try-button)"
+            />
+          </span>
         )}
         {serverBaseUrl && (
-          <button
-            type="button"
-            onClick={copyFullPath}
-            className="relative z-20 p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-all opacity-0 group-hover:opacity-100"
-            title="Copy full URL"
-          >
-            {copied ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
-          </button>
+          <span className="relative z-20 opacity-0 group-hover:opacity-100 transition-all">
+            <IconButtonView
+              size="default"
+              icon={copied ? <CheckIcon size={12} className="text-[var(--color-success)]" /> : <CopyIcon size={12} />}
+              onClick={copyFullPath}
+              tooltip="Copy full URL"
+            />
+          </span>
         )}
         {route.enabled && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
-            className="relative z-20 p-1 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-all opacity-0 group-hover:opacity-100"
-            title="Delete route"
-          >
-            <TrashIcon size={12} />
-          </button>
+          <span className="relative z-20 opacity-0 group-hover:opacity-100 transition-all">
+            <IconButtonView
+              size="default"
+              icon={<TrashIcon size={12} />}
+              onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+              tooltip="Delete route"
+              color="var(--color-text-muted)"
+              accentColor="var(--color-error)"
+            />
+          </span>
         )}
       </div>
 
@@ -199,125 +220,165 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
         <div className="border-t border-[var(--color-surface-border)] px-3 py-3 flex flex-col gap-2.5">
 
           {/* Route-level tab bar */}
-          <div className="flex items-center gap-0 border-b border-[rgba(255,255,255,0.07)] -mx-3 px-3">
-            {([
-              { id: 'basic', label: 'Response' },
-              { id: 'matching', label: 'Matching' },
-              { id: 'advanced', label: 'Advanced' },
-            ] as { id: RouteTab; label: string }[]).map(t => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setActiveTab(t.id)}
-                className="h-[28px] px-3 text-[10px] font-medium cursor-pointer transition-colors"
-                style={{
-                  borderBottom: activeTab === t.id ? '2px solid var(--color-mock-server)' : '2px solid transparent',
-                  color: activeTab === t.id ? 'var(--color-mock-server)' : 'var(--color-text-muted)',
-                  marginBottom: '-1px',
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div className="flex items-center -mx-3 px-3 pb-0 pt-0.5 border-b border-[var(--color-surface-border)]">
+            <TabView
+              tabs={([
+                { id: 'basic', label: 'Response' },
+                { id: 'matching', label: 'Matching' },
+                { id: 'advanced', label: 'Advanced' },
+              ] as TabItem[])}
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as RouteTab)}
+              variant="underline"
+              size="xs"
+              accentColor="var(--color-mock-server)"
+            />
           </div>
 
           {/* ═══ BASIC TAB ═══════════════════════════════════════════════════ */}
           {activeTab === 'basic' && <>
             {/* Method + Path */}
             <div className="flex items-center gap-2">
-              <StyledDropdown
+              <SelectInputView
                 options={MOCK_METHOD_OPTIONS}
                 value={route.method}
-                onChange={(v) => onUpdate({ method: v as HttpMethod })}
-                className="mock-method"
+                onChange={(v) => { logUiEvent('mock.route_method', { method: v, routeId: route.id }); onUpdate({ method: v as HttpMethod }); }}
+                size="md"
+                accentColor={METHOD_COLORS[route.method] || 'var(--color-primary)'}
               />
-              <input
-                type="text"
+              <TextInputView
                 value={route.path}
                 onChange={(e) => onUpdate({ path: e.target.value })}
                 placeholder="/api/endpoint"
-                className="flex-1 h-[32px] px-3 text-[13px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+                size="md"
+                className="flex-1 font-mono"
+                accentColor="var(--color-mock-server)"
               />
             </div>
+
+            {/* State machine (6A.11) */}
+            <StateMachineTriggerSelect
+              server={server}
+              connectedWorkflowId={route.connectedWorkflowId}
+              triggerEvent={route.triggerEvent}
+              onChange={(patch) => onUpdate(patch)}
+            />
 
             {/* Status + Delay */}
             <div className="flex items-center gap-4 pt-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] text-[var(--color-text-muted)]">Status</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={route.statusCode}
+                <TextInputView
+                  type="number"
+                  value={String(route.statusCode)}
                   onChange={(e) => onUpdate({ statusCode: parseInt(e.target.value) || 200 })}
-                  className="w-[56px] h-[28px] px-2 text-[11px] font-mono rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)] text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  size="md"
+                  className="font-mono text-center w-[56px]"
+                  accentColor="var(--color-mock-server)"
                 />
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] text-[var(--color-text-muted)]">Delay</span>
-                <DurationInput
+                <DurationInputView
                   value={route.delay}
                   onChange={(ms) => onUpdate({ delay: ms })}
+                  size="md"
+                  width={72}
                 />
               </div>
             </div>
 
             {/* Response Headers — collapsed by default, tight spacing */}
             <div className="pt-0.5">
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => setHeadersExpanded(!headersExpanded)}
                 className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
               >
                 <span className={`transition-transform text-[8px] ${headersExpanded ? 'rotate-90' : ''}`}>▶</span>
                 Response Headers ({Object.keys(route.headers).length})
-              </button>
+              </div>
               {headersExpanded && (
                 <div className="mt-1.5">
-                  <KeyValueTable
+                  <KeyValueTableView
                     rows={headerRows}
                     onChange={handleHeadersChange}
                     placeholder={{ key: 'Header name', value: 'Value' }}
-                    autocompleteKeys
                     label="Header List"
                     accentColor="var(--color-mock-server)"
+                    size="md"
                   />
                 </div>
               )}
             </div>
 
-            {/* Response Body */}
-            <div>
+            {/* Response Body Source toggle */}
+            <div className="flex items-center gap-3">
+              <label className="text-[11px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Body Source</label>
+              <PilledTabView
+                mode="pill"
+                tabs={[{ id: 'inline', label: 'inline' }, { id: 'file', label: 'file' }] as PilledTab[]}
+                activeId={route.bodySource ?? 'inline'}
+                onChange={(id) => onUpdate({ bodySource: id as 'inline' | 'file' })}
+                accentColor="var(--color-mock-server)"
+              />
+            </div>
+
+            {/* File path input when bodySource === 'file' */}
+            {route.bodySource === 'file' && (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5">
+                  <TextInputView
+                    value={route.bodyFile || ''}
+                    onChange={(e) => onUpdate({ bodyFile: e.target.value })}
+                    placeholder="Select a file or type its path…"
+                    size="md"
+                    className="font-mono flex-1"
+                    accentColor="var(--color-mock-server)"
+                  />
+                  <IconButtonView
+                    size="md"
+                    icon={<FolderOpenIcon size={14} />}
+                    onClick={pickBodyFile}
+                    tooltip="Browse file…"
+                    color="var(--color-mock-server)"
+                  />
+                </div>
+                <span className="text-[10px] text-[var(--color-text-muted)]">
+                  Supports any file type (ZIP, PDF, PNG, XML, …). Content-Type and Content-Disposition are auto-set from the file extension unless overridden in Response Headers above.
+                </span>
+              </div>
+            )}
+
+            {/* Response Body editor (only when inline) */}
+            {(route.bodySource ?? 'inline') === 'inline' && <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[11px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Response Body</label>
-                <div className="flex items-center gap-0.5 rounded-md border border-[var(--color-surface-border)] overflow-hidden">
-                  {(['application/json', 'application/xml', 'text/plain'] as const).map(ct => (
-                    <button
-                      key={ct}
-                      type="button"
-                      onClick={() => {
-                        setContentType(ct);
-                        onUpdate({ headers: { ...route.headers, 'Content-Type': ct } });
-                      }}
-                      className={`px-2.5 py-1 text-[10px] cursor-pointer transition-colors ${
-                        contentType === ct
-                          ? 'bg-[rgba(234,179,8,0.15)] text-[var(--color-mock-server)] font-medium'
-                          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]'
-                      }`}
-                    >
-                      {ct.split('/')[1]}
-                    </button>
-                  ))}
-                </div>
+                <PilledTabView
+                  mode="pill"
+                  tabs={[
+                    { id: 'application/json', label: 'json' },
+                    { id: 'application/xml', label: 'xml' },
+                    { id: 'text/plain', label: 'plain' },
+                  ] as PilledTab[]}
+                  activeId={contentType}
+                  onChange={(id) => {
+                    setContentType(id as 'application/json' | 'application/xml' | 'text/plain');
+                    onUpdate({ headers: { ...route.headers, 'Content-Type': id } });
+                  }}
+                  accentColor="var(--color-mock-server)"
+                />
               </div>
-              <ResizablePanel id={`mock.rest.route.${route.id}.body`} defaultHeight={120} minHeight={60} maxHeight={500}>
-                <CodeEditor
+              <ResizablePanelView defaultHeight={120} minHeight={60} maxHeight={500}>
+                <EditorView
                   value={route.body}
                   onChange={(val) => onUpdate({ body: val })}
-                  language={getEditorLang() as any}
+                  language={getEditorLang()}
                   height="100%"
                 />
-              </ResizablePanel>
-            </div>
+              </ResizablePanelView>
+            </div>}
 
             {/* Template Editor (6A.7-6A.9) */}
             <TemplateEditorPanel route={route} onUpdate={onUpdate} />
@@ -331,15 +392,15 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
                 </label>
                 <span className="text-[9px] text-[var(--color-text-muted)] opacity-60">JS • access: req.body, req.headers, req.query, jwt.sign()</span>
               </div>
-              <ResizablePanel id={`mock.rest.route.${route.id}.script`} defaultHeight={100} minHeight={50} maxHeight={400}>
-                <CodeEditor
+              <ResizablePanelView defaultHeight={100} minHeight={50} maxHeight={400}>
+                <EditorView
                   value={route.responseScript || ''}
                   onChange={(val) => onUpdate({ responseScript: val })}
                   language="javascript"
                   placeholder="// Return object/string as response. Example:\n// const token = jwt.sign({ sub: req.body.username }, 'secret', { expiresIn: 3600 });\n// return { access_token: token };"
                   height="100%"
                 />
-              </ResizablePanel>
+              </ResizablePanelView>
             </div>
 
             {/* Sequence responses (6A.22) */}
@@ -354,11 +415,6 @@ export function RouteCard({ route, isEditing, serverBaseUrl, availableStates, on
           {/* ═══ ADVANCED TAB ════════════════════════════════════════════════ */}
           {activeTab === 'advanced' && (
             <div className="flex flex-col gap-3">
-              {/* State machine (6A.11) */}
-              <div>
-                <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-2">State Machine</p>
-                <RouteStatePanel route={route} onUpdate={onUpdate} availableStates={availableStates} />
-              </div>
               {/* Fault injection + rate limit (6A.13-6A.14) */}
               <FaultInjectionPanel route={route} onUpdate={onUpdate} />
               {/* Webhooks (6A.23) */}

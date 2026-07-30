@@ -1007,6 +1007,17 @@ export function ArrowDownIcon(props: IconProps) {
   );
 }
 
+export function SortIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="m3 16 4 4 4-4" />
+      <path d="M7 20V4" />
+      <path d="m21 8-4-4-4 4" />
+      <path d="M17 4v16" />
+    </svg>
+  );
+}
+
 export function ArrowUpRightIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -1389,8 +1400,8 @@ export function MuteBreakpointsIcon(props: IconProps) {
   const { size = 16, ...rest } = props;
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" {...rest}>
-      <circle cx="8" cy="8" r="5.5" stroke="var(--color-error)" strokeWidth="1.4" />
-      <line x1="3.8" y1="12.2" x2="12.2" y2="3.8" stroke="var(--color-error)" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="8" cy="8" r="5.5" fill="var(--color-error)" />
+      <line x1="4.2" y1="11.8" x2="11.8" y2="4.2" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -2179,6 +2190,32 @@ export function PaletteIcon(props: IconProps) {
       <circle cx="8.5"  cy="7.5"  r=".5" fill="currentColor" stroke="none" />
       <circle cx="6.5"  cy="12.5" r=".5" fill="currentColor" stroke="none" />
       <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+    </svg>
+  );
+}
+
+export function CloudIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z" />
+    </svg>
+  );
+}
+
+export function MailIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </svg>
+  );
+}
+
+export function DaakiaLogoIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" opacity="0.6" />
     </svg>
   );
 }

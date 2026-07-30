@@ -1,5 +1,5 @@
 import { transform } from 'sucrase';
-import * as DUI from '../../../../dui';
+import * as DUI from '@salilvnair/dui';
 import * as Icons from '../../../../icons';
 import * as ReactNS from 'react';
 import { STUBS } from './PlaygroundStubs';

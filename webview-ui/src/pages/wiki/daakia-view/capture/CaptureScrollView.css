@@ -1,0 +1,65 @@
+/**
+ * Captured screens use Tailwind's w-screen/h-screen (100vw/100vh) on their root
+ * layout div. Those units resolve against the CURRENT browser viewport — i.e.
+ * whatever window the wiki itself happens to be viewed in — completely
+ * ignoring CaptureCard's fixed 1280x720 "design box" wrapper. On a wiki
+ * viewer whose real window is wider than 1280px, the captured content reflows
+ * wider than intended and anything docked at the far right (e.g. the
+ * Collections side panel) renders outside the visible, clipped capture area
+ * and never appears. Freeze both units to the design box size, scoped to
+ * captured content only — the live app's own w-screen/h-screen usage outside
+ * captures is untouched.
+ */
+.dw-capture-frozen .w-screen {
+  width: 1280px !important;
+}
+.dw-capture-frozen .h-screen {
+  height: 720px !important;
+}
+
+/* The manual 🧢 wiki-capture button (CopyRootHtmlButton) is a dev-only tool
+   baked into every captured screen's outerHTML since it's part of #root —
+   never meant to ship in the docs. Hide it wherever a capture renders.
+   Matches by the new data attribute (future captures) and by its title text
+   (captures taken before that attribute existed). */
+.dw-capture-frozen [data-wiki-capture-tool],
+.dw-capture-frozen button[title*="wiki capture"] {
+  display: none !important;
+}
+
+/* ─── Capture caption (label + explanation below a CaptureCard) ─────────── */
+.dw-capture-caption {
+  padding: 10px 14px 12px;
+  border: 1px solid var(--dw-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--dw-accent) 4%, var(--dw-surface));
+}
+.dw-capture-caption-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--dw-accent);
+  margin-bottom: 5px;
+}
+.dw-capture-caption-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dw-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dw-accent) 20%, transparent);
+}
+.dw-capture-caption-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dw-fg);
+  margin: 0 0 4px 0;
+}
+.dw-capture-caption-desc {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--dw-muted);
+  margin: 0;
+}

@@ -19,6 +19,8 @@ import { createGrpcServer, cleanupGrpcServer } from './mock-grpc-server';
 import { createSoapServer } from './mock-soap-server';
 import { createAiServer } from './mock-ai-server';
 import { createMcpServer } from './mock-mcp-server';
+import { preloadStateMachineEngine } from './mock-state-machine';
+import { disposeStateMachineRuntime } from './mock-runtime';
 
 // Re-export types for external consumers
 export type { MockServerConfig, MockRoute, GraphQLMockOperation, WebSocketMockHandler, SSEMockEvent, SocketIOMockHandler, MQTTMockTopic, MockLogEntry, HttpMethod, MockServerProtocol, AiMockScenario, McpMockTool } from './mock-types';
@@ -41,7 +43,11 @@ let _logCallback: ((entry: MockLogEntry) => void) | undefined;
 // ---------- Init ----------
 
 export function initMockServerManager(extensionPath: string, portMin?: number, portMax?: number) {
-  _storagePath = path.join(os.homedir(), '.salilvnair', 'daakia-vsce', 'mock-servers.json');
+  // DAAKIA_TEST_DB_PATH's directory is reused here so the e2e test harness can isolate
+  // saved mock server configs from the developer's real ones (see storage/db.ts initDb).
+  _storagePath = process.env.DAAKIA_TEST_DB_PATH
+    ? path.join(path.dirname(process.env.DAAKIA_TEST_DB_PATH), 'mock-servers.json')
+    : path.join(os.homedir(), '.salilvnair', 'daakia-vsce', 'mock-servers.json');
   if (portMin !== undefined) _portMin = portMin;
   if (portMax !== undefined) _portMax = portMax;
 
@@ -85,11 +91,49 @@ function isPortFree(port: number): Promise<boolean> {
   });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 // ---------- Start / Stop ----------
+
+/** True for the various "address already in use" shapes Node/net and grpc-js throw. */
+function isAddrInUseError(err: unknown): boolean {
+  const code = (err as { code?: string } | undefined)?.code;
+  const message = err instanceof Error ? err.message : String(err);
+  return code === 'EADDRINUSE' || message.includes('EADDRINUSE');
+}
 
 export async function startMockServer(config: MockServerConfig): Promise<{ port: number }> {
   if (_servers.has(config.id)) {
     await stopMockServer(config.id);
+  }
+
+  // findFreePort()'s check-then-bind is inherently racy against a just-stopped
+  // server whose port the OS hasn't fully released yet (worse for gRPC, which
+  // binds 0.0.0.0 via its own bindAsync rather than Node's http.Server.listen).
+  // Retry the whole "pick a port, bind it" attempt a few times on EADDRINUSE
+  // instead of trying to predict port availability up front.
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await attemptStartMockServer(config);
+    } catch (err) {
+      if (!isAddrInUseError(err) || attempt === maxAttempts) throw err;
+      await sleep(50 * attempt);
+    }
+  }
+  // Unreachable — the loop above always returns or throws.
+  throw new Error('startMockServer: exhausted retry attempts');
+}
+
+async function attemptStartMockServer(config: MockServerConfig): Promise<{ port: number }> {
+  // The state machine runtime wraps @salilvnair/state-machine's engine, an
+  // ESM-only package loaded via dynamic import() — must resolve before the
+  // first (synchronous, per-request) StateMachineRuntime construction in
+  // mock-http-server.ts's getRuntime().
+  if (config.stateMachine?.enabled) {
+    await preloadStateMachineEngine();
   }
 
   const port = await findFreePort();
@@ -190,25 +234,32 @@ export async function stopMockServer(id: string): Promise<void> {
   const running = _servers.get(id);
   if (!running) return;
 
-  return new Promise((resolve) => {
-    if (running.wss) {
-      running.wss.clients.forEach(client => client.close());
-      running.wss.close();
-    }
-    // Cleanup protocol-specific resources
-    if (running.config.protocol === 'sse') cleanupSSEClients(id);
-    if (running.config.protocol === 'socketio') cleanupSocketIOClients(id);
-    if (running.config.protocol === 'mqtt') cleanupMQTTBroker(id);
-    if (running.config.protocol === 'grpc') cleanupGrpcServer(id);
-    running.server.close(() => {
-      _servers.delete(id);
-      // Do NOT call saveState() here — it only saves running servers,
-      // which would delete stopped server configs from disk.
-      // Config persistence is handled by webview via saveConfigs().
-      resolve();
-    });
+  if (running.wss) {
+    running.wss.clients.forEach(client => client.close());
+    running.wss.close();
+  }
+  // Cleanup protocol-specific resources. gRPC's tryShutdown() is awaited here
+  // (with its own force-shutdown timeout, see mock-grpc-server.ts) instead of
+  // being fired-and-forgotten, so its underlying socket is reliably closing
+  // before we move on — startMockServer()'s own retry-on-EADDRINUSE loop is
+  // what actually absorbs any remaining OS-level release delay.
+  if (running.config.protocol === 'sse') cleanupSSEClients(id);
+  if (running.config.protocol === 'socketio') cleanupSocketIOClients(id);
+  if (running.config.protocol === 'mqtt') cleanupMQTTBroker(id);
+  if (running.config.protocol === 'grpc') await cleanupGrpcServer(id);
+  // State machine runtime (sessions, in-memory engine instances) is shared
+  // across all protocols — was previously never disposed on stop, leaking
+  // sessions in memory until process exit. See mock-runtime.ts.
+  disposeStateMachineRuntime(id);
+
+  await new Promise<void>((resolve) => {
+    running.server.close(() => resolve());
     running.server.closeAllConnections?.();
   });
+  _servers.delete(id);
+  // Do NOT call saveState() here — it only saves running servers,
+  // which would delete stopped server configs from disk.
+  // Config persistence is handled by webview via saveConfigs().
 }
 
 export async function stopAllMockServers(): Promise<void> {

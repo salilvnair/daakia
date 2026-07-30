@@ -5,16 +5,16 @@
  * Gate: contractNegotiator feature flag
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, EditorView, ResizablePanelView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-info)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const SYSTEM_PROMPT = `You are an API contract negotiation expert. Given two teams' API contract descriptions (or OpenAPI spec excerpts), identify all incompatibilities and propose resolutions.
 
@@ -74,49 +74,66 @@ export function AiContractNegotiatorModal({ onClose }: Props) {
     }});
   }, [teamASpec, teamBSpec, loading]);
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget) e.preventDefault(); }}>
-      <div className="relative flex flex-col rounded-lg overflow-hidden shadow-2xl"
-        style={{ width: 680, maxHeight: '88vh', background: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>
-        <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="AI Contract Negotiator"
+      size="xl"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
           <SparkleIcon size={14} style={{ color: ACCENT }} />
-          <span className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>AI Contract Negotiator ✦</span>
-          <button type="button" onClick={onClose} className="ml-auto cursor-pointer" style={{ color: 'var(--color-text-muted)' }}><CloseIcon size={14} /></button>
         </div>
-        <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
-          <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-            Paste API contracts from two teams. AI identifies every incompatibility, proposes resolutions, and generates adapter stub mocks so both teams can develop independently.
-          </p>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="text-[10px] font-medium mb-1 block" style={{ color: 'var(--color-text-secondary)' }}>Team A Contract</label>
-              <textarea value={teamASpec} onChange={e => setTeamASpec(e.target.value)}
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Negotiating…' : 'Analyze & Negotiate'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={loading}
+          loading={loading}
+          onClick={handleNegotiate}
+        />
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+          Paste API contracts from two teams. AI identifies every incompatibility, proposes resolutions, and generates adapter stub mocks so both teams can develop independently.
+        </p>
+        <div className="flex gap-3">
+          <div className="flex-1 flex flex-col">
+            <label className="text-[10px] font-medium mb-1 block" style={{ color: 'var(--color-text-secondary)' }}>Team A Contract</label>
+            <ResizablePanelView defaultHeight={160} minHeight={100} maxHeight={480} style={{ width: '100%' }}>
+              <EditorView
+                value={teamASpec}
+                onChange={setTeamASpec}
+                language="yaml"
+                height="100%"
+                size="md"
                 placeholder="Paste OpenAPI spec, endpoint list, or contract description for Team A..."
-                rows={6} className="w-full rounded text-[11px] px-2.5 py-2 resize-none"
-                style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
-            </div>
-            <div className="flex-1">
-              <label className="text-[10px] font-medium mb-1 block" style={{ color: 'var(--color-text-secondary)' }}>Team B Contract</label>
-              <textarea value={teamBSpec} onChange={e => setTeamBSpec(e.target.value)}
+                bordered={false}
+              />
+            </ResizablePanelView>
+          </div>
+          <div className="flex-1 flex flex-col">
+            <label className="text-[10px] font-medium mb-1 block" style={{ color: 'var(--color-text-secondary)' }}>Team B Contract</label>
+            <ResizablePanelView defaultHeight={160} minHeight={100} maxHeight={480} style={{ width: '100%' }}>
+              <EditorView
+                value={teamBSpec}
+                onChange={setTeamBSpec}
+                language="yaml"
+                height="100%"
+                size="md"
                 placeholder="Paste OpenAPI spec, endpoint list, or contract description for Team B..."
-                rows={6} className="w-full rounded text-[11px] px-2.5 py-2 resize-none"
-                style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
-            </div>
+                bordered={false}
+              />
+            </ResizablePanelView>
           </div>
-          <div className="flex justify-end">
-            <button type="button" onClick={handleNegotiate} disabled={loading}
-              className="flex items-center gap-1.5 h-[26px] px-3 rounded text-[11px] font-medium cursor-pointer disabled:opacity-40"
-              style={{ background: ACCENT, color: '#fff' }}>
-              {loading ? <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" /> : <SparkleIcon size={11} />}
-              {loading ? 'Negotiating…' : 'Analyze & Negotiate'}
-            </button>
-          </div>
-          {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
-          {result && <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 360, borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}><MdViewer content={result} /></div>}
         </div>
+        {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
+        {result && <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 360, borderColor: 'var(--color-surface-border)', background: 'var(--color-surface)' }}><MdViewer content={result} /></div>}
       </div>
-    </div>,
-    document.body,
+    </ModalView>
   );
 }

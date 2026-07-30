@@ -63,7 +63,7 @@ export function GraphQLPanel() {
   if (!activeTab) return null;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[var(--color-surface)]">
       {/* URL bar */}
       <GraphQLUrlBar />
 
@@ -77,7 +77,11 @@ export function GraphQLPanel() {
             minHeight: 60,
             transition: isDragging ? 'none' : 'height 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
           }}
-          onFocus={handleRequestFocus}
+          onFocus={e => {
+            const el = e.target as HTMLElement;
+            const tag = el.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || el.isContentEditable) handleRequestFocus();
+          }}
         >
           <GraphQLEditor />
         </div>
@@ -112,7 +116,11 @@ export function GraphQLPanel() {
           style={{
             transition: isDragging ? 'none' : 'all 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
           }}
-          onFocus={handleResponseFocus}
+          onFocus={e => {
+            const el = e.target as HTMLElement;
+            const tag = el.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || el.isContentEditable) handleResponseFocus();
+          }}
         >
           <GraphQLResponse />
         </div>

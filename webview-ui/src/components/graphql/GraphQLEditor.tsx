@@ -1,23 +1,32 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
-import { CodeEditor, KeyValueTable, AuthEditor, ScriptsEditor } from '../shared';
+import { AuthEditor, ScriptsEditor } from '../shared';
 import { postMsg } from '../../vscode';
-import { PlayIcon, CopyIcon, WrapLinesIcon, WandIcon, PlusIcon, SparkleIcon } from '../../icons';
+import { PlayIcon, WandIcon, PlusIcon, SparkleIcon } from '../../icons';
+import {
+  EditorView,
+  KeyValueTableView,
+  TabView,
+  ButtonView,
+  IconButtonView,
+  CopyButtonView,
+  type TabItem,
+} from '@salilvnair/dui';
 import { setGraphQLSchema, setActiveGraphQLTab } from '../../services/graphql-completion';
 import { formatGraphQLQuery } from '../../services/graphql-formatter';
 import { GraphQLSubscription } from './GraphQLSubscription';
 import { GraphQLQueryTabs, initMultiQuery } from './GraphQLQueryTabs';
-import { AiHeaderSuggest } from '../ai/AiHeaderSuggest';
-import { AiBodyGenerate } from '../ai/AiBodyGenerate';
+import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../ai/AiHeaderSuggest';
 import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
-import { AiGqlQueryBuilderModal } from '../ai/AiGqlQueryBuilderModal';
+import { AiGqlQueryBuilderDrawer, type AiGqlQueryBuilderDrawerHandle } from '../ai/AiGqlQueryBuilderDrawer';
 import { AiGqlSchemaExplainerModal } from '../ai/AiGqlSchemaExplainerModal';
 import { logUiEvent } from '../../store/ui-audit-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import type { AiBodyGenerateHandle } from '../ai/AiBodyGenerate';
 
 type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'scripts' | 'subscription';
+
+const ACCENT = 'var(--color-protocol-graphql)';
 
 /**
  * GraphQL Editor — Query (with Run/Save toolbar), Variables, Headers (shared KVT), Authorization (shared AuthEditor).
@@ -29,11 +38,12 @@ export function GraphQLEditor() {
   const storedSubTab = useUiStateStore(s => s.prefs[`gql.subtab.${activeTabId}`]);
   const [activeSubTab, setActiveSubTabLocal] = useState<EditorTab>((storedSubTab as EditorTab) || 'query');
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
-  const bodyGenRef = useRef<AiBodyGenerateHandle>(null);
+  const aiHeaderSuggestRef = useRef<AiHeaderSuggestHandle>(null);
+  const qbRef = useRef<AiGqlQueryBuilderDrawerHandle>(null);
+  const [aiHeaderLoading, setAiHeaderLoading] = useState(false);
 
   // Modal state
   const [showFuzzer, setShowFuzzer] = useState(false);
-  const [showQueryBuilder, setShowQueryBuilder] = useState(false);
   const [showSchemaExplainer, setShowSchemaExplainer] = useState(false);
 
   useEffect(() => {
@@ -78,11 +88,6 @@ export function GraphQLEditor() {
     });
   }, [activeTab, updateTab]);
 
-  const handleCopyQuery = useCallback(() => {
-    if (!activeTab?.bodyRaw) return;
-    navigator.clipboard.writeText(activeTab.bodyRaw);
-  }, [activeTab]);
-
   const handleFormat = useCallback(() => {
     if (!activeTab?.bodyRaw) return;
     const formatted = formatGraphQLQuery(activeTab.bodyRaw);
@@ -101,117 +106,120 @@ export function GraphQLEditor() {
   const headersCount = activeTab.headers.filter(h => h.enabled && h.key).length;
   const hasAuth = activeTab.authType !== 'none';
 
+  const subTabs: TabItem[] = [
+    { id: 'query', label: 'Query', dot: !!query.trim() },
+    { id: 'variables', label: 'Variables', dot: variablesJson !== '{}' },
+    { id: 'headers', label: 'Headers', badge: headersCount || undefined, badgeColor: ACCENT },
+    { id: 'authorization', label: 'Authorization', dot: hasAuth, dotColor: ACCENT },
+    {
+      id: 'scripts', label: 'Scripts',
+      dot: !!(activeTab.preRequestScript?.trim() || activeTab.postResponseScript?.trim()),
+      dotColor: ACCENT,
+    },
+    { id: 'subscription', label: 'Subscription' },
+  ];
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      {/* Sub-tabs */}
-      <div className="flex items-center border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] px-2">
-        {(['query', 'variables', 'headers', 'authorization', 'scripts', 'subscription'] as EditorTab[]).map(tab => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveSubTab(tab)}
-            className={`px-3 py-2 text-[11px] font-medium capitalize cursor-pointer transition-colors border-b-2 ${
-              activeSubTab === tab
-                ? 'text-[var(--color-protocol-graphql)] border-[var(--color-protocol-graphql)]'
-                : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
-            }`}
-          >
-            {tab === 'authorization' ? 'Authorization' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            {tab === 'headers' && headersCount > 0 ? (
-              <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ backgroundColor: 'color-mix(in srgb, #E535AB 15%, transparent)', color: '#E535AB' }}>
-                {headersCount}
-              </span>
-            ) : (tab === 'query' && query.trim()) || (tab === 'variables' && variablesJson !== '{}') || (tab === 'authorization' && hasAuth) || (tab === 'scripts' && (activeTab.preRequestScript?.trim() || activeTab.postResponseScript?.trim())) ? (
-              <span className="ml-1 w-1.5 h-1.5 inline-block rounded-full relative -top-[1px] bg-[var(--color-protocol-graphql)]" />
-            ) : null}
-          </button>
-        ))}
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-[var(--color-surface)]">
+      {/* Sub-tabs — same padding/size as REST request panel tabs */}
+      <div className="flex items-center px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
+        <div className="flex-1">
+          <TabView
+            tabs={subTabs}
+            activeTab={activeSubTab}
+            onChange={(id) => setActiveSubTab(id as EditorTab)}
+            variant="underline"
+            accentColor={ACCENT}
+            size="md"
+          />
+        </div>
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col bg-[var(--color-surface)]">
         {activeSubTab === 'query' && (
           <>
-            {/* Query toolbar — label left, action buttons right */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
-              <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Query</span>
+            {/* Query toolbar — action buttons right only */}
+            <div className="flex items-center justify-end px-3 py-1 border-b border-[var(--color-surface-border)] bg-[var(--color-surface)]">
               <div className="flex items-center gap-1">
-                {/* 8.8: Query Builder ✦ */}
+                {/* 8.8: Query Builder ✦ — inline drawer above editor */}
                 {aiEnabled('gqlQueryBuilder') && (
-                  <button
-                    type="button"
-                    onClick={() => setShowQueryBuilder(true)}
-                    className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                    style={{ color: 'var(--color-protocol-graphql)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-graphql) 8%, transparent)' }}
+                  <ButtonView
+                    size="xs"
+                    variant="ghost"
+                    iconLeft={<SparkleIcon size={10} />}
                     title="AI Query Builder — describe what you want, AI writes the query"
+                    onClick={() => qbRef.current?.open()}
+                    style={{ color: 'var(--color-protocol-ai)' }}
                   >
-                    <SparkleIcon size={10} />
                     Query Builder
-                  </button>
+                  </ButtonView>
                 )}
                 {/* 8.9: Schema Explainer ✦ */}
                 {aiEnabled('gqlSchemaExplainer') && activeTab.authData?.['gql_schema'] && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSchemaExplainer(true)}
-                    className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                    style={{ color: 'var(--color-protocol-graphql)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-graphql) 8%, transparent)' }}
+                  <ButtonView
+                    size="xs"
+                    variant="ghost"
+                    iconLeft={<SparkleIcon size={10} />}
                     title="Schema Explainer — AI explains all types and operations"
+                    onClick={() => setShowSchemaExplainer(true)}
+                    style={{ color: 'var(--color-protocol-ai)' }}
                   >
-                    <SparkleIcon size={10} />
                     Schema Explainer
-                  </button>
+                  </ButtonView>
                 )}
-                {/* Run */}
-                <button
-                  type="button"
-                  onClick={handleRun}
+                {/* Run — same size/ghost style as AI toolbar buttons, GQL protocol color */}
+                <ButtonView
+                  size="xs"
+                  variant="ghost"
+                  iconLeft={<PlayIcon size={10} />}
+                  title="Run query"
                   disabled={activeTab.loading || !activeTab.url.trim() || !query.trim()}
-                  className="h-[26px] px-2.5 text-[11px] font-medium text-[var(--color-success)] hover:bg-[rgba(34,197,94,0.08)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center gap-1.5 rounded-md"
+                  onClick={handleRun}
+                  style={{ color: activeTab.loading ? 'var(--color-text-muted)' : ACCENT }}
                 >
-                  <PlayIcon size={11} />
                   {activeTab.loading ? 'Running...' : 'Run'}
-                </button>
-
+                </ButtonView>
                 {/* Format */}
-                <button
-                  type="button"
-                  onClick={handleFormat}
-                  disabled={!query.trim()}
+                <IconButtonView
+                  icon={<WandIcon size={10} />}
                   title="Prettify query"
-                  className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md"
-                >
-                  <WandIcon size={12} />
-                </button>
-
-                {/* Copy */}
-                <button
-                  type="button"
-                  onClick={handleCopyQuery}
+                  size="xs"
+                  disabled={!query.trim()}
+                  onClick={handleFormat}
+                />
+                {/* Copy query */}
+                <CopyButtonView
+                  text={query}
+                  size="xs"
                   title="Copy query"
-                  className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] cursor-pointer transition-colors flex items-center justify-center rounded-md"
-                >
-                  <CopyIcon size={12} />
-                </button>
-
+                  accentColor="var(--color-success)"
+                />
                 {/* Add query tab */}
                 {!activeTab.authData?.['gql_queries']?.length && (
-                  <button
-                    type="button"
-                    onClick={handleAddQueryTab}
+                  <IconButtonView
+                    icon={<PlusIcon size={10} />}
                     title="Add query tab"
-                    className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-protocol-graphql)] hover:bg-[var(--color-hover)] cursor-pointer transition-colors flex items-center justify-center rounded-md"
-                  >
-                    <PlusIcon size={11} />
-                  </button>
+                    size="xs"
+                    accentColor={ACCENT}
+                    onClick={handleAddQueryTab}
+                  />
                 )}
               </div>
             </div>
             {/* Multi-query tabs (shown when enabled) */}
             <GraphQLQueryTabs />
+            {/* Query Builder inline drawer — shown above editor when active */}
+            {aiEnabled('gqlQueryBuilder') && (
+              <AiGqlQueryBuilderDrawer
+                ref={qbRef}
+                tabId={activeTab.id}
+                onApply={(q) => updateTab(activeTab.id, { bodyRaw: q })}
+              />
+            )}
             {/* Monaco editor */}
             <div className="flex-1 min-h-0">
-              <CodeEditor
+              <EditorView
                 value={query}
                 onChange={(val) => updateTab(activeTab.id, { bodyRaw: val })}
                 language="graphql"
@@ -223,41 +231,24 @@ export function GraphQLEditor() {
         )}
 
         {activeSubTab === 'variables' && (
-          <div className="flex-1 flex flex-col min-h-0">
-            {/* 8.6 & 8.7: Variables toolbar */}
-            {(aiEnabled('bodyGenerator') || aiEnabled('requestFuzzer')) && (
-              <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
-                <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Variables (JSON)</span>
-                <div className="flex items-center gap-1">
-                  {aiEnabled('bodyGenerator') && (
-                    <button
-                      type="button"
-                      onClick={() => bodyGenRef.current?.open()}
-                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                      style={{ color: 'var(--color-protocol-graphql)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-graphql) 8%, transparent)' }}
-                      title="AI Variable Generator"
-                    >
-                      <SparkleIcon size={10} />
-                      Generate ✦
-                    </button>
-                  )}
-                  {aiEnabled('requestFuzzer') && (
-                    <button
-                      type="button"
-                      onClick={() => setShowFuzzer(true)}
-                      className="flex items-center gap-1 h-[26px] px-2 rounded-md text-[10.5px] font-medium cursor-pointer transition-all"
-                      style={{ color: 'var(--color-protocol-graphql)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-graphql) 8%, transparent)' }}
-                      title="AI Variable Fuzzer"
-                    >
-                      <SparkleIcon size={10} />
-                      Fuzz ✦
-                    </button>
-                  )}
-                </div>
+          <div className="flex-1 flex flex-col min-h-0 bg-[var(--color-surface)]">
+            {/* Variables toolbar — Fuzz only */}
+            {aiEnabled('requestFuzzer') && (
+              <div className="flex items-center justify-end px-3 py-[7px] border-b border-[var(--color-surface-border)] bg-[var(--color-surface)]">
+                <ButtonView
+                  size="xs"
+                  variant="ghost"
+                  iconLeft={<SparkleIcon size={10} />}
+                  title="AI Variable Fuzzer"
+                  onClick={() => setShowFuzzer(true)}
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                >
+                  Fuzz ✦
+                </ButtonView>
               </div>
             )}
             <div className="flex-1 min-h-0">
-              <CodeEditor
+              <EditorView
                 value={variablesJson}
                 onChange={(val) => updateTab(activeTab.id, { authData: { ...activeTab.authData, gql_variables: val } })}
                 language="json"
@@ -265,25 +256,40 @@ export function GraphQLEditor() {
                 placeholder='{"key": "value"}'
               />
             </div>
-            {/* 8.6: Body/Variable generator (renders inline as a drawer) */}
-            {aiEnabled('bodyGenerator') && (
-              <AiBodyGenerate
-                ref={bodyGenRef}
-                tabId={activeTab.id}
-                method="GQL"
-                url={activeTab.url || ''}
-                contentType="application/json"
-                onApply={(body) => updateTab(activeTab.id, { authData: { ...activeTab.authData, gql_variables: body } })}
-              />
-            )}
           </div>
         )}
 
         {activeSubTab === 'headers' && (
           <div className="h-full flex flex-col overflow-hidden">
-            {/* 8.5: Header Suggest ✦ */}
+            {/* Headers — ditto same as REST HeadersTab: KVT with toolbarExtra sparkle + headless AiHeaderSuggest */}
+            <KeyValueTableView
+              rows={activeTab.headers}
+              onChange={(rows) => updateTab(activeTab.id, { headers: rows })}
+              placeholder={{ key: 'Header', value: 'Value' }}
+              autocompleteKeys
+              maskSensitive
+              label="Headers"
+              accentColor={ACCENT}
+              toolbarExtra={
+                aiEnabled('headerAutocomplete') ? (
+                  <IconButtonView
+                    icon={<SparkleIcon size={13} />}
+                    size="md"
+                    title="Suggest headers"
+                    accentColor="var(--color-protocol-ai)"
+                    disabled={aiHeaderLoading}
+                    onClick={() => {
+                      setAiHeaderLoading(true);
+                      aiHeaderSuggestRef.current?.trigger();
+                      setTimeout(() => setAiHeaderLoading(false), 300);
+                    }}
+                  />
+                ) : undefined
+              }
+            />
             {aiEnabled('headerAutocomplete') && (
               <AiHeaderSuggest
+                ref={aiHeaderSuggestRef}
                 tabId={activeTab.id}
                 method="GQL"
                 url={activeTab.url || ''}
@@ -302,17 +308,6 @@ export function GraphQLEditor() {
                 }}
               />
             )}
-            <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-3 py-2">
-              <KeyValueTable
-                rows={activeTab.headers}
-                onChange={(rows) => updateTab(activeTab.id, { headers: rows })}
-                placeholder={{ key: 'Header', value: 'Value' }}
-                autocompleteKeys
-                maskSensitive
-                label="Header List"
-                accentColor="var(--color-protocol-graphql)"
-              />
-            </div>
           </div>
         )}
 
@@ -323,19 +318,19 @@ export function GraphQLEditor() {
               authData={activeTab.authData as Record<string, string>}
               onAuthTypeChange={(v) => updateTab(activeTab.id, { authType: v as typeof activeTab.authType })}
               onAuthDataChange={(data) => updateTab(activeTab.id, { authData: data as any })}
-              accentColor="var(--color-protocol-graphql)"
+              accentColor={ACCENT}
             />
           </div>
         )}
 
         {activeSubTab === 'scripts' && (
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 flex flex-col px-3 pt-2">
             <ScriptsEditor
               preRequestScript={activeTab.preRequestScript || ''}
               postResponseScript={activeTab.postResponseScript || ''}
               onPreRequestScriptChange={(val) => updateTab(activeTab.id, { preRequestScript: val, dirty: true })}
               onPostResponseScriptChange={(val) => updateTab(activeTab.id, { postResponseScript: val, dirty: true })}
-              accentColor="var(--color-protocol-graphql)"
+              accentColor={ACCENT}
             />
           </div>
         )}
@@ -347,12 +342,6 @@ export function GraphQLEditor() {
 
       {/* Modals */}
       {showFuzzer && <AiRequestFuzzerModal onClose={() => setShowFuzzer(false)} />}
-      {showQueryBuilder && (
-        <AiGqlQueryBuilderModal
-          onClose={() => setShowQueryBuilder(false)}
-          onApply={(q) => updateTab(activeTab.id, { bodyRaw: q })}
-        />
-      )}
       {showSchemaExplainer && (
         <AiGqlSchemaExplainerModal onClose={() => setShowSchemaExplainer(false)} />
       )}

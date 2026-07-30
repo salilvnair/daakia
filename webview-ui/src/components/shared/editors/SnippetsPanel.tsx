@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { SearchIcon, ChevronLeftIcon, ChevronRightIcon } from '../../../icons';
+import { ChevronLeftIcon, ChevronRightIcon, SearchIcon } from '../../../icons';
+import { TextInputView } from '@salilvnair/dui';
 
 // ────────── Types ──────────
 
@@ -338,14 +339,14 @@ export function SnippetsPanel({ onInsert, accentColor }: SnippetsPanelProps) {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Search */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)]">
-        <SearchIcon size={14} className="text-[var(--color-text-muted)] flex-shrink-0" />
-        <input
-          type="text"
+      <div className="px-2 py-2 border-b border-[var(--color-surface-border)]">
+        <TextInputView
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search snippets..."
-          className="flex-1 h-[26px] bg-transparent text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none"
+          size="sm"
+          width="fw"
+          iconLeft={<SearchIcon size={11} />}
         />
       </div>
 
@@ -358,7 +359,7 @@ export function SnippetsPanel({ onInsert, accentColor }: SnippetsPanelProps) {
             className="absolute left-0 z-10 flex items-center justify-center w-5 h-full cursor-pointer opacity-0 group-hover/pills:opacity-100 transition-opacity"
           >
             <span className="flex items-center justify-center w-4 h-4 rounded shadow-sm" style={{ backgroundColor: accentColor || 'var(--color-primary)' }}>
-              <ChevronLeftIcon size={9} className="text-white" />
+              <ChevronLeftIcon size={9} className="text-[var(--color-btn-primary-text)]" />
             </span>
           </button>
         )}
@@ -375,7 +376,7 @@ export function SnippetsPanel({ onInsert, accentColor }: SnippetsPanelProps) {
               className={`px-2 py-0.5 text-[10px] font-medium rounded-full cursor-pointer transition-colors whitespace-nowrap ${
                 activeCategory === cat
                   ? 'text-[var(--color-text-primary)]'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(255,255,255,0.05)]'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
               }`}
               style={activeCategory === cat ? { backgroundColor: `color-mix(in srgb, ${accentColor || 'var(--color-primary)'} 15%, transparent)`, color: accentColor || 'var(--color-primary)' } : undefined}
             >
@@ -390,7 +391,7 @@ export function SnippetsPanel({ onInsert, accentColor }: SnippetsPanelProps) {
             className="absolute right-0 z-10 flex items-center justify-center w-5 h-full cursor-pointer opacity-0 group-hover/pills:opacity-100 transition-opacity"
           >
             <span className="flex items-center justify-center w-4 h-4 rounded shadow-sm" style={{ backgroundColor: accentColor || 'var(--color-primary)' }}>
-              <ChevronRightIcon size={9} className="text-white" />
+              <ChevronRightIcon size={9} className="text-[var(--color-btn-primary-text)]" />
             </span>
           </button>
         )}
@@ -409,7 +410,7 @@ export function SnippetsPanel({ onInsert, accentColor }: SnippetsPanelProps) {
                 key={snippet.id}
                 type="button"
                 onClick={() => onInsert(snippet.code)}
-                className="flex flex-col gap-0.5 px-2.5 py-2 rounded-md text-left cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.04)] group"
+                className="flex flex-col gap-0.5 px-2.5 py-2 rounded-md text-left cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] group"
               >
                 <div className="flex items-center gap-2">
                   <span

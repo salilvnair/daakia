@@ -4,12 +4,20 @@
  * Shows: matched handler, extracted variables, response payload, and protocol badges.
  */
 import { useState, useRef, useEffect } from 'react';
+import { PilledTabView, TextInputView, IconButtonView, ChipView, CopyButtonView, type PilledTab } from '@salilvnair/dui';
+import { logUiEvent } from '../../store/ui-audit-store';
 import {
   ArrowDownLeftIcon, ArrowUpRightIcon, InfoCircleIcon, TrashIcon,
-  AutoScrollIcon, ChevronDownIcon, CopyIcon, CheckIcon,
+  AutoScrollIcon,
 } from '../../icons';
 import type { MockLogEntry } from './mock-types';
 import { JsonTreeViewer, tryParseJson } from '../shared/display/JsonTreeViewer';
+
+const DIR_TABS: PilledTab[] = [
+  { id: 'all', label: 'All' },
+  { id: 'incoming', label: 'Incoming' },
+  { id: 'outgoing', label: 'Outgoing' },
+];
 
 const NON_REST = new Set(['websocket', 'graphql', 'mqtt', 'sse', 'socketio', 'grpc', 'soap']);
 
@@ -79,61 +87,52 @@ export function ProtocolTrafficInspector({ logs, onClear }: Props) {
 
         {/* Protocol filter chips */}
         <div className="flex items-center gap-1 flex-wrap">
-          <FilterChip label="All" active={filterProto === 'all'} onClick={() => setFilterProto('all')} />
+          <ChipView label="All" active={filterProto === 'all'} color="var(--color-mock-server)" size="xs" onClick={() => { logUiEvent('mock.traffic_filter', { proto: 'all' }); setFilterProto('all'); }} />
           {presentProtocols.map(p => (
-            <FilterChip
+            <ChipView
               key={p}
               label={PROTOCOL_BADGE[p]?.label ?? p.toUpperCase()}
               active={filterProto === p}
-              onClick={() => setFilterProto(filterProto === p ? 'all' : p)}
-              color={PROTOCOL_BADGE[p]?.color}
+              color={PROTOCOL_BADGE[p]?.color ?? 'var(--color-mock-server)'}
+              size="xs"
+              onClick={() => { const next = filterProto === p ? 'all' : p; logUiEvent('mock.traffic_filter', { proto: next }); setFilterProto(next); }}
             />
           ))}
         </div>
 
         {/* Direction filter */}
-        <div className="flex items-center rounded overflow-hidden border border-[var(--color-surface-border)] ml-1">
-          {(['all', 'incoming', 'outgoing'] as FilterDir[]).map(d => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setFilterDir(d)}
-              className={`h-[22px] px-2 text-[10px] cursor-pointer transition-colors capitalize ${
-                filterDir === d
-                  ? 'bg-[var(--color-mock-server)] text-[var(--color-bg)] font-medium'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
+        <PilledTabView
+          tabs={DIR_TABS}
+          activeId={filterDir}
+          onChange={(id) => { logUiEvent('mock.traffic_filter', { dir: id }); setFilterDir(id as FilterDir); }}
+          accentColor="var(--color-mock-server)"
+          mode="rounded"
+        />
 
         {/* Search */}
-        <input
+        <TextInputView
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Filter…"
-          className="h-[22px] px-2 rounded text-[11px] bg-[var(--color-input-bg)] border border-[var(--color-surface-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none flex-1 min-w-0"
+          size="md"
+          style={{ flex: 1, minWidth: 0 }}
         />
 
-        <button
-          type="button"
+        <IconButtonView
+          size="default"
+          icon={<AutoScrollIcon size={12} />}
+          accentColor={autoScroll ? 'var(--color-mock-server)' : undefined}
           onClick={() => setAutoScroll(!autoScroll)}
           title="Auto-scroll"
-          className={`w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors ${autoScroll ? 'text-[var(--color-mock-server)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
-        >
-          <AutoScrollIcon size={12} />
-        </button>
-        <button
-          type="button"
-          onClick={onClear}
+        />
+        <IconButtonView
+          size="default"
+          icon={<TrashIcon size={12} />}
+          accentColor="var(--color-error)"
+          onClick={() => { logUiEvent('mock.traffic_clear'); onClear(); }}
+          title="Clear traffic"
           disabled={protocolLogs.length === 0}
-          title="Clear"
-          className="w-5 h-5 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-colors disabled:opacity-40 disabled:pointer-events-none"
-        >
-          <TrashIcon size={12} />
-        </button>
+        />
       </div>
 
       {/* Split pane */}
@@ -305,22 +304,6 @@ function TrafficDetail({ entry }: { entry: MockLogEntry }) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function FilterChip({ label, active, onClick, color }: { label: string; active: boolean; onClick: () => void; color?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="h-[20px] px-2 rounded-full text-[10px] font-medium cursor-pointer transition-colors border"
-      style={{
-        borderColor: active ? (color ?? 'var(--color-mock-server)') : 'var(--color-surface-border)',
-        color: active ? (color ?? 'var(--color-mock-server)') : 'var(--color-text-muted)',
-        backgroundColor: active ? `color-mix(in srgb, ${color ?? 'var(--color-mock-server)'} 12%, transparent)` : 'transparent',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
 
 function InfoSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -337,44 +320,22 @@ function InfoSection({ label, children }: { label: string; children: React.React
 
 function PayloadViewer({ text }: { text: string }) {
   const [mode, setMode] = useState<'json' | 'raw'>('json');
-  const [copied, setCopied] = useState(false);
   const parsed = tryParseJson(text);
   const isJson = parsed !== null;
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
 
   return (
     <div>
       <div className="flex items-center gap-1 mb-1.5">
         {isJson && (
-          <div className="flex items-center rounded overflow-hidden border border-[var(--color-surface-border)]">
-            {(['json', 'raw'] as const).map(m => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
-                className={`h-[18px] px-1.5 text-[9px] cursor-pointer transition-colors ${
-                  mode === m
-                    ? 'bg-[rgba(234,179,8,0.15)] text-[var(--color-mock-server)] font-medium'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
-                }`}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
+          <PilledTabView
+            mode="rounded"
+            tabs={[{ id: 'json', label: 'json' }, { id: 'raw', label: 'raw' }] as PilledTab[]}
+            activeId={mode}
+            onChange={(id) => setMode(id as 'json' | 'raw')}
+            accentColor="var(--color-mock-server)"
+          />
         )}
-        <button
-          type="button"
-          onClick={handleCopy}
-          className={`ml-auto w-5 h-5 flex items-center justify-center rounded cursor-pointer transition-colors ${copied ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'}`}
-        >
-          {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
-        </button>
+        <CopyButtonView text={text} size="sm" accentColor="var(--color-mock-server)" className="ml-auto" />
       </div>
       <div className="rounded bg-[var(--color-input-bg)] p-2 max-h-[200px] overflow-y-auto">
         {isJson && mode === 'json'

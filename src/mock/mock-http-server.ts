@@ -11,6 +11,8 @@
  * - Record & playback (6A.16)
  */
 import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vm from 'vm';
 import * as crypto from 'crypto';
 import type {
@@ -20,14 +22,14 @@ import type {
 import { resolveAll } from '../services/variables';
 import { routeMatchesRequest, sortRoutesByPriority, extractPathParams, parseCookies } from './mock-matcher';
 import { renderTemplate, type TemplateRequestContext } from './mock-template-engine';
-import { StateMachineRuntime } from './mock-state-machine';
+import type { StateMachineRuntime } from './mock-state-machine';
+import { getStateMachineRuntime, disposeStateMachineRuntime, effectiveWorkflowId } from './mock-runtime';
 import { RateLimiter, SequenceTracker } from './mock-rate-limiter';
 
 export type LogCallback = (entry: MockLogEntry) => void;
 export type RecordCallback = (entry: RecordedRequest) => void;
 
 interface ServerRuntimeState {
-  stateMachine: StateMachineRuntime | null;
   rateLimiter: RateLimiter;
   sequenceTracker: SequenceTracker;
   globalRateLimiter: RateLimiter;
@@ -35,29 +37,20 @@ interface ServerRuntimeState {
 
 const runtimeStates = new Map<string, ServerRuntimeState>();
 
-function getRuntime(serverId: string, config: MockServerConfig): ServerRuntimeState {
+function getRuntime(serverId: string): ServerRuntimeState {
   if (!runtimeStates.has(serverId)) {
     runtimeStates.set(serverId, {
-      stateMachine: config.stateMachine?.enabled
-        ? new StateMachineRuntime(config.stateMachine)
-        : null,
       rateLimiter: new RateLimiter(),
       sequenceTracker: new SequenceTracker(),
       globalRateLimiter: new RateLimiter(),
     });
   }
-  const rt = runtimeStates.get(serverId)!;
-  // Update state machine config if it changed
-  if (config.stateMachine?.enabled && !rt.stateMachine) {
-    rt.stateMachine = new StateMachineRuntime(config.stateMachine);
-  } else if (config.stateMachine && rt.stateMachine) {
-    rt.stateMachine.updateConfig(config.stateMachine);
-  }
-  return rt;
+  return runtimeStates.get(serverId)!;
 }
 
 export function disposeRuntime(serverId: string) {
   runtimeStates.delete(serverId);
+  disposeStateMachineRuntime(serverId);
 }
 
 export function createHttpServer(
@@ -82,7 +75,7 @@ export function createHttpServer(
     req.on('data', chunk => { reqBody += chunk; });
     req.on('end', async () => {
       const currentConfig = getConfig();
-      const runtime = getRuntime(currentConfig.id, currentConfig);
+      const runtime = getRuntime(currentConfig.id);
 
       // ─── Global rate limiting ──────────────────────────────────────────────
       if (currentConfig.globalRateLimit?.enabled) {
@@ -129,14 +122,36 @@ export function createHttpServer(
       const sortedRoutes = sortRoutesByPriority(currentConfig.routes);
       let matchedRoute: MockRoute | undefined;
       let matchedParams: Record<string, string> = {};
+      let matchedStateMachine: StateMachineRuntime | null = null;
+      // First route whose method/path/headers/body matchers all passed but
+      // was rejected purely by Trigger Event gating — a "near miss". If the
+      // whole loop ends without a real match, this is almost always the
+      // caller's actual intent (e.g. POST /api/auth/logout on a session
+      // that was never logged in) and deserves a specific, meaningful
+      // response instead of the generic "no route matches at all" 404,
+      // which wrongly implies the endpoint doesn't exist.
+      let gatedNearMiss: { route: MockRoute; currentState: string; sm: StateMachineRuntime; sk: string } | undefined;
 
       for (const r of sortedRoutes) {
         const result = routeMatchesRequest(r, reqCtx);
         if (result.matched) {
-          // State machine: check if route allowed in current state
-          if (runtime.stateMachine && r.requiredState) {
-            const sessionKey = runtime.stateMachine.resolveSessionKey(req.headers as Record<string, string>, cookies);
-            if (!runtime.stateMachine.routeAllowedInState(r.requiredState, sessionKey)) continue;
+          if (r.triggerEvent) {
+            // Event-driven gating: does this event have a valid transition
+            // from the session's current state on the connected workflow
+            // this route references?
+            const sm = getStateMachineRuntime(currentConfig.id, effectiveWorkflowId(r, currentConfig), currentConfig);
+            if (!sm) continue; // triggerEvent set but no matching connected/enabled workflow
+            const sk = sm.resolveSessionKey(req.headers as Record<string, string>, cookies);
+            if (!sm.canFireEvent(sk, r.triggerEvent)) {
+              if (!gatedNearMiss) gatedNearMiss = { route: r, currentState: sm.getCurrentState(sk), sm, sk };
+              continue;
+            }
+            matchedStateMachine = sm;
+          } else {
+            // No triggerEvent — still resolve a runtime if this route's
+            // workflow is unambiguous, so session-scoped state vars / state
+            // mock-response overrides still apply even without gating.
+            matchedStateMachine = getStateMachineRuntime(currentConfig.id, effectiveWorkflowId(r, currentConfig), currentConfig);
           }
           matchedRoute = r;
           matchedParams = result.params;
@@ -150,11 +165,66 @@ export function createHttpServer(
         return;
       }
 
+      if (!matchedRoute && gatedNearMiss) {
+        // The request genuinely matched a real, configured route — it's
+        // rejected purely because the session hasn't reached the state this
+        // route's Trigger Event requires (e.g. calling /logout before ever
+        // logging in). Returning the generic "no route matches at all" 404
+        // here would be actively misleading — the endpoint exists; the
+        // caller's sequence of calls is what's wrong. 409 Conflict + a
+        // message naming the exact event and current state gives a caller
+        // (human or AI) enough to fix their own test sequence immediately,
+        // instead of a route-listing dump.
+        const { route: r, currentState, sm, sk } = gatedNearMiss;
+        const availableEvents = sm.getAvailableEvents(sk);
+        const requiredEventPath = sm.findEventPathTo(sk, r.triggerEvent!);
+        let hint: string;
+        if (requiredEventPath && requiredEventPath.length > 0) {
+          hint = `Fire ${requiredEventPath.map((e) => `"${e}"`).join(' then ')} first — that will make "${r.triggerEvent}" reachable.`;
+        } else if (availableEvents.length > 0) {
+          hint = `From the current state, you can fire: ${availableEvents.map((e) => `"${e.event}" (→ "${e.toState}")`).join(', ')}.`;
+        } else {
+          hint = `No events can currently fire from state "${currentState}" — this session is a dead end.`;
+        }
+        const responseBody = JSON.stringify({
+          error: 'Conflict',
+          message: `${method} ${pathname} exists, but its Trigger Event "${r.triggerEvent}" cannot fire from the current session state ("${currentState}"). ${hint}`,
+          requiredEvent: r.triggerEvent,
+          currentState,
+          availableEvents: availableEvents.map((e) => e.event),
+          requiredEventPath: requiredEventPath ?? undefined,
+        });
+        res.writeHead(409, { 'Content-Type': 'application/json' });
+        res.end(responseBody);
+        logRequest(onLog, config, method, pathname, 409, req.headers as Record<string, string>, queryParams, reqBody, responseBody, Date.now() - startTime);
+        return;
+      }
+
       if (!matchedRoute) {
+        // Annotate routes that structurally match this method/path but were
+        // skipped purely because of Trigger Event gating (line ~137 above) —
+        // otherwise a gated route (e.g. GET /api/profile requiring a prior
+        // login) appears in this list looking like a normal, callable route,
+        // when calling it exactly as shown will 404 again until the session
+        // reaches the required state.
+        const availableRoutes = currentConfig.routes.filter(r => r.enabled).map(r => {
+          const label = `${r.method} ${r.path}`;
+          if (!r.triggerEvent) return label;
+          const sm = getStateMachineRuntime(currentConfig.id, effectiveWorkflowId(r, currentConfig), currentConfig);
+          // Distinct from "gated but currently unreachable" (below) — this
+          // route can NEVER match, on any request, until its connected
+          // workflow's config is actually attached (most commonly: a server
+          // saved before RestRoutesConfig's applySample() upserted
+          // connectedWorkflows[].stateMachine — re-run Load Sample to fix).
+          if (!sm) return `${label} (misconfigured — connected workflow for event "${r.triggerEvent}" has no stateMachine config; re-run Load Sample on this server)`;
+          const sk = sm.resolveSessionKey(req.headers as Record<string, string>, cookies);
+          if (sm.canFireEvent(sk, r.triggerEvent)) return label;
+          return `${label} (requires event "${r.triggerEvent}" — not reachable from the current session state)`;
+        });
         const responseBody = JSON.stringify({
           error: 'Not Found',
           message: `No mock route matches ${method} ${pathname}`,
-          availableRoutes: currentConfig.routes.filter(r => r.enabled).map(r => `${r.method} ${r.path}`),
+          availableRoutes,
         });
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(responseBody);
@@ -176,7 +246,7 @@ export function createHttpServer(
       }
 
       // ─── Session key for state machine ─────────────────────────────────────
-      const sessionKey = runtime.stateMachine?.resolveSessionKey(req.headers as Record<string, string>, cookies) ?? '__global__';
+      const sessionKey = matchedStateMachine?.resolveSessionKey(req.headers as Record<string, string>, cookies) ?? '__global__';
 
       // ─── Global fault injection (6A.15) ───────────────────────────────────
       const globalFault = currentConfig.globalFault;
@@ -209,7 +279,7 @@ export function createHttpServer(
 
       const host = req.headers['host']?.split(':')[0] ?? 'localhost';
       const port = parseInt(req.headers['host']?.split(':')[1] ?? '80') || 80;
-      const stateVars = runtime.stateMachine?.getVariables(sessionKey) ?? {};
+      const stateVars = matchedStateMachine?.getVariables(sessionKey) ?? {};
 
       const templateCtx: TemplateRequestContext = {
         url: req.url ?? pathname,
@@ -234,6 +304,36 @@ export function createHttpServer(
         let responseBody: string;
         let statusCode = route.statusCode;
         let responseHeaders = { ...route.headers };
+
+        // ── File response (bodySource === 'file') ────────────────────────────
+        if (route.bodySource === 'file' && route.bodyFile) {
+          const filePath = path.isAbsolute(route.bodyFile) ? route.bodyFile : path.join(process.cwd(), route.bodyFile);
+          if (!fs.existsSync(filePath)) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'File Not Found', message: `bodyFile not found: ${route.bodyFile}` }));
+            logRequest(onLog, config, method, pathname, 500, req.headers as Record<string, string>, queryParams, reqBody, 'bodyFile not found', Date.now() - startTime);
+            return;
+          }
+          const fileBuffer = fs.readFileSync(filePath);
+          // Always derive MIME from the actual file extension — never let a leftover inline
+          // Content-Type header (e.g. application/json) override a binary file type.
+          const mimeType = guessMimeFromExt(filePath);
+          const filename = path.basename(filePath);
+          res.setHeader('Content-Type', mimeType);
+          if (!responseHeaders['Content-Disposition'] && !responseHeaders['content-disposition']) {
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          }
+          // Apply remaining custom headers, skipping Content-Type (already set from file)
+          for (const [k, v] of Object.entries(responseHeaders)) {
+            if (k.toLowerCase() !== 'content-type') {
+              res.setHeader(k, resolveAll(v));
+            }
+          }
+          res.writeHead(statusCode);
+          res.end(fileBuffer);
+          logRequest(onLog, config, method, pathname, statusCode, req.headers as Record<string, string>, queryParams, reqBody, `[binary file: ${filename}]`, Date.now() - startTime, responseHeaders);
+          return;
+        }
 
         // Response sequences (6A.22)
         if (route.responses && route.responses.length > 0) {
@@ -261,6 +361,17 @@ export function createHttpServer(
           responseBody = resolveAll(route.body);
         }
 
+        // State node mock response override — applies when current session state has a
+        // matching method+path response defined on the canvas. Takes precedence over
+        // the route's default body.
+        if (matchedStateMachine) {
+          const stateMockResp = matchedStateMachine.getStateResponseForRoute(method, pathname, sessionKey);
+          if (stateMockResp) {
+            responseBody = stateMockResp.body;
+            statusCode = stateMockResp.status;
+          }
+        }
+
         // Set response headers
         for (const [k, v] of Object.entries(responseHeaders)) {
           res.setHeader(k, resolveAll(v));
@@ -269,8 +380,10 @@ export function createHttpServer(
         res.end(responseBody);
 
         // ─── State machine transition (6A.11) ──────────────────────────────
-        if (runtime.stateMachine) {
-          runtime.stateMachine.applyTransition(route.id, sessionKey, route.stateVariableUpdates);
+        // Fire the canvas's own event — target state and validity both come
+        // from the graph, nothing route-local.
+        if (matchedStateMachine && route.triggerEvent) {
+          void matchedStateMachine.fireEvent(sessionKey, route.triggerEvent);
         }
 
         // ─── Webhooks (6A.23) ──────────────────────────────────────────────
@@ -487,6 +600,46 @@ function executeRouteScript(script: string, reqContext: {
   if (typeof result === 'string') return result;
   if (result === undefined || result === null) return '';
   return JSON.stringify(result);
+}
+
+// ─── MIME type helper ─────────────────────────────────────────────────────────
+
+function guessMimeFromExt(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const MIME_MAP: Record<string, string> = {
+    '.json': 'application/json',
+    '.xml': 'application/xml',
+    '.html': 'text/html',
+    '.htm': 'text/html',
+    '.txt': 'text/plain',
+    '.csv': 'text/csv',
+    '.js': 'application/javascript',
+    '.pdf': 'application/pdf',
+    '.zip': 'application/zip',
+    '.gz': 'application/gzip',
+    '.tar': 'application/x-tar',
+    '.7z': 'application/x-7z-compressed',
+    '.rar': 'application/x-rar-compressed',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.mp4': 'video/mp4',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.proto': 'text/plain',
+    '.wasm': 'application/wasm',
+  };
+  return MIME_MAP[ext] || 'application/octet-stream';
 }
 
 // ─── Logging helper ───────────────────────────────────────────────────────────

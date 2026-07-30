@@ -2,8 +2,8 @@
  * MockApiCatalog — protocol-aware pre-built template library (6A.26 + extensions).
  */
 import { useState } from 'react';
-import { PlusIcon } from '../../../icons';
-import type { MockRoute } from '../mock-types';
+import { TextInputView, ChipView, ButtonView } from '@salilvnair/dui';
+import type { MockRoute, SoapMockOperation, GrpcMockMethod } from '../mock-types';
 
 const MOCK_ACCENT = 'var(--color-mock-server)';
 
@@ -18,11 +18,19 @@ export interface CatalogEntry {
   /** For non-REST protocols, raw config (SDL / .proto / WSDL / event JSON) instead of routes */
   raw?: string;
   rawLabel?: string; // e.g. "SDL", ".proto", "WSDL", "Events"
+  /** SOAP-specific: pre-built mock operations to add directly to soapOperations */
+  soapOperations?: SoapMockOperation[];
+  /** gRPC-specific: pre-built mock methods to add directly to grpcMethods (grpcProtoFile only controls registration mode, not the handlers) */
+  grpcMethods?: Array<Omit<GrpcMockMethod, 'id' | 'enabled'>>;
 }
 
 export interface Props {
   protocol?: string;
   onAddRoutes: (routes: MockRoute[], raw?: string) => void;
+  /** Called with SOAP operations when a SOAP catalog entry is added */
+  onAddSoapOps?: (ops: SoapMockOperation[]) => void;
+  /** Called with gRPC methods when a gRPC catalog entry is added */
+  onAddGrpcMethods?: (methods: GrpcMockMethod[], raw?: string) => void;
 }
 
 // ─── Template helpers ─────────────────────────────────────────────────────────
@@ -248,6 +256,20 @@ const GRPC_CATALOG: CatalogEntry[] = [
     description: 'User management gRPC service with CRUD operations and streaming.',
     routes: [],
     rawLabel: '.proto',
+    grpcMethods: [
+      { service: 'users.v1.UserService', method: 'GetUser', type: 'unary', response: j({ id: 'usr_001', name: 'Alice Johnson', email: 'alice@example.com', role: 'admin', created_at: 1716800000 }) },
+      { service: 'users.v1.UserService', method: 'ListUsers', type: 'unary', response: j({ users: [{ id: 'usr_001', name: 'Alice Johnson', email: 'alice@example.com', role: 'admin' }, { id: 'usr_002', name: 'Bob Smith', email: 'bob@example.com', role: 'user' }], total: 2, has_next: false }) },
+      { service: 'users.v1.UserService', method: 'CreateUser', type: 'unary', response: j({ id: 'usr_003', name: 'New User', email: 'new@example.com', role: 'user', created_at: 1716900000 }) },
+      { service: 'users.v1.UserService', method: 'UpdateUser', type: 'unary', response: j({ id: 'usr_001', name: 'Alice Johnson Updated', email: 'alice@example.com', role: 'admin', created_at: 1716800000 }) },
+      { service: 'users.v1.UserService', method: 'DeleteUser', type: 'unary', response: j({ success: true }) },
+      {
+        service: 'users.v1.UserService', method: 'WatchUser', type: 'server_streaming', response: j({ type: 'updated', user: { id: 'usr_001', name: 'Alice Johnson' }, ts: 1716900000 }),
+        streamResponses: [
+          { data: j({ type: 'updated', user: { id: 'usr_001', name: 'Alice Johnson' }, ts: 1716900000 }), delayMs: 0 },
+          { data: j({ type: 'updated', user: { id: 'usr_001', role: 'editor' }, ts: 1716900500 }), delayMs: 2000 },
+        ],
+      },
+    ],
     raw: `syntax = "proto3";
 package users.v1;
 option go_package = "users/v1;usersv1";
@@ -285,6 +307,20 @@ message UserEvent { string type = 1; User user = 2; int64 ts = 3; }`,
     description: 'Product catalog gRPC service with inventory and pricing.',
     routes: [],
     rawLabel: '.proto',
+    grpcMethods: [
+      { service: 'products.v1.ProductService', method: 'GetProduct', type: 'unary', response: j({ id: 'prod_1', name: 'MacBook Pro 16"', price: 2499.00, currency: 'USD', in_stock: true, category: 'electronics', quantity: 12 }) },
+      { service: 'products.v1.ProductService', method: 'ListProducts', type: 'unary', response: j({ products: [{ id: 'prod_1', name: 'MacBook Pro 16"', price: 2499.00, currency: 'USD', in_stock: true }, { id: 'prod_2', name: 'AirPods Pro', price: 249.00, currency: 'USD', in_stock: false }], total: 2 }) },
+      { service: 'products.v1.ProductService', method: 'CreateProduct', type: 'unary', response: j({ id: 'prod_3', name: 'New Product', price: 99.00, currency: 'USD', in_stock: true, category: 'electronics', quantity: 50 }) },
+      { service: 'products.v1.ProductService', method: 'UpdateProduct', type: 'unary', response: j({ id: 'prod_1', name: 'MacBook Pro 16"', price: 2299.00, in_stock: true, quantity: 10 }) },
+      { service: 'products.v1.ProductService', method: 'CheckInventory', type: 'unary', response: j({ stock: { prod_1: 12, prod_2: 0 } }) },
+      {
+        service: 'products.v1.ProductService', method: 'PriceStream', type: 'bidi_streaming', response: j({ product_id: 'prod_1', price: 2499.00, ts: 1716900000 }),
+        streamResponses: [
+          { data: j({ product_id: 'prod_1', price: 2499.00, ts: 1716900000 }), delayMs: 0 },
+          { data: j({ product_id: 'prod_1', price: 2399.00, ts: 1716900500 }), delayMs: 2000 },
+        ],
+      },
+    ],
     raw: `syntax = "proto3";
 package products.v1;
 
@@ -323,6 +359,13 @@ message PriceUpdate          { string product_id = 1; double price = 2; int64 ts
     description: 'Authentication and authorization gRPC service.',
     routes: [],
     rawLabel: '.proto',
+    grpcMethods: [
+      { service: 'auth.v1.AuthService', method: 'Login', type: 'unary', response: j({ access_token: 'eyJhbGciOiJIUzI1NiJ9.mock', refresh_token: 'refresh_abc123', expires_in: 3600, token_type: 'Bearer' }) },
+      { service: 'auth.v1.AuthService', method: 'Logout', type: 'unary', response: j({ success: true }) },
+      { service: 'auth.v1.AuthService', method: 'RefreshToken', type: 'unary', response: j({ access_token: 'eyJhbGciOiJIUzI1NiJ9.refreshed', expires_in: 3600 }) },
+      { service: 'auth.v1.AuthService', method: 'ValidateToken', type: 'unary', response: j({ valid: true, user_id: 'usr_001', role: 'admin', expires_at: 1716990000 }) },
+      { service: 'auth.v1.AuthService', method: 'GetPermissions', type: 'unary', response: j({ permissions: ['read', 'write', 'delete'], role: 'admin' }) },
+    ],
     raw: `syntax = "proto3";
 package auth.v1;
 
@@ -351,10 +394,14 @@ message GetPermissionsResponse { repeated string permissions = 1; string role = 
 
 const SOAP_CATALOG: CatalogEntry[] = [
   {
-    id: 'wsdl-weather', name: 'Weather Service', category: 'Services', tags: ['weather', 'forecast', 'xml'], routeCount: 0,
+    id: 'wsdl-weather', name: 'Weather Service', category: 'Services', tags: ['weather', 'forecast', 'xml'], routeCount: 2,
     description: 'Classic weather WSDL — GetWeather and GetForecast operations.',
     routes: [],
     rawLabel: 'WSDL',
+    soapOperations: [
+      { id: crypto.randomUUID(), service: 'WeatherService', operation: 'GetWeather', soapAction: 'http://mock.daakia.io/weather/GetWeather', responseType: 'static', response: `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://mock.daakia.io/weather">\n  <soap:Body>\n    <tns:GetWeatherResponse>\n      <tns:city>New York</tns:city>\n      <tns:temperature>22.5</tns:temperature>\n      <tns:unit>Celsius</tns:unit>\n      <tns:description>Partly cloudy</tns:description>\n      <tns:humidity>65</tns:humidity>\n    </tns:GetWeatherResponse>\n  </soap:Body>\n</soap:Envelope>`, delay: 0, enabled: true },
+      { id: crypto.randomUUID(), service: 'WeatherService', operation: 'GetForecast', soapAction: 'http://mock.daakia.io/weather/GetForecast', responseType: 'static', response: `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://mock.daakia.io/weather">\n  <soap:Body>\n    <tns:GetForecastResponse>\n      <tns:city>New York</tns:city>\n      <tns:days>7</tns:days>\n      <tns:forecast>Sunny with occasional clouds</tns:forecast>\n    </tns:GetForecastResponse>\n  </soap:Body>\n</soap:Envelope>`, delay: 0, enabled: true },
+    ],
     raw: `<?xml version="1.0" encoding="UTF-8"?>
 <definitions name="WeatherService"
   targetNamespace="http://mock.daakia.io/weather"
@@ -410,10 +457,13 @@ const SOAP_CATALOG: CatalogEntry[] = [
 </definitions>`,
   },
   {
-    id: 'wsdl-currency', name: 'Currency Converter', category: 'Finance', tags: ['currency', 'forex', 'finance'], routeCount: 0,
+    id: 'wsdl-currency', name: 'Currency Converter', category: 'Finance', tags: ['currency', 'forex', 'finance'], routeCount: 1,
     description: 'Currency conversion WSDL — ConvertCurrency and GetRates operations.',
     routes: [],
     rawLabel: 'WSDL',
+    soapOperations: [
+      { id: crypto.randomUUID(), service: 'CurrencyService', operation: 'ConvertCurrency', soapAction: 'ConvertCurrency', responseType: 'static', response: `<?xml version="1.0" encoding="UTF-8"?>\n<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://mock.daakia.io/currency">\n  <soap:Body>\n    <tns:ConvertResponse>\n      <tns:convertedAmount>85.42</tns:convertedAmount>\n      <tns:rate>0.854200</tns:rate>\n      <tns:timestamp>2024-01-15T12:00:00Z</tns:timestamp>\n    </tns:ConvertResponse>\n  </soap:Body>\n</soap:Envelope>`, delay: 0, enabled: true },
+    ],
     raw: `<?xml version="1.0" encoding="UTF-8"?>
 <definitions name="CurrencyService"
   targetNamespace="http://mock.daakia.io/currency"
@@ -560,7 +610,7 @@ function getCatalog(protocol: string): CatalogEntry[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MockApiCatalog({ protocol = 'rest', onAddRoutes }: Props) {
+export function MockApiCatalog({ protocol = 'rest', onAddRoutes, onAddSoapOps, onAddGrpcMethods }: Props) {
   const catalog = getCatalog(protocol);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -574,8 +624,14 @@ export function MockApiCatalog({ protocol = 'rest', onAddRoutes }: Props) {
   });
 
   const add = (entry: CatalogEntry) => {
-    const routes = entry.routes.map(r => ({ ...r, id: crypto.randomUUID() }));
-    onAddRoutes(routes, entry.raw);
+    if (entry.soapOperations && entry.soapOperations.length > 0 && onAddSoapOps) {
+      onAddSoapOps(entry.soapOperations.map(op => ({ ...op, id: crypto.randomUUID() })));
+    } else if (entry.grpcMethods && entry.grpcMethods.length > 0 && onAddGrpcMethods) {
+      onAddGrpcMethods(entry.grpcMethods.map(m => ({ ...m, id: crypto.randomUUID(), enabled: true })), entry.raw);
+    } else {
+      const routes = entry.routes.map(r => ({ ...r, id: crypto.randomUUID() }));
+      onAddRoutes(routes, entry.raw);
+    }
     setAdded(prev => new Set([...prev, entry.id]));
   };
 
@@ -583,20 +639,19 @@ export function MockApiCatalog({ protocol = 'rest', onAddRoutes }: Props) {
     <div className="flex flex-col gap-3">
       {/* Search + filter */}
       <div className="flex items-center gap-2">
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates…"
-          className="flex-1 h-[30px] px-3 text-[11px] rounded bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none" />
+        <TextInputView value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates…" size="md" style={{ flex: 1 }} />
       </div>
       <div className="flex items-center gap-1 flex-wrap">
         {categories.map(cat => (
-          <button key={cat} type="button" onClick={() => setCategory(cat)}
-            className="h-[22px] px-2.5 text-[10px] rounded-full cursor-pointer capitalize transition-colors"
-            style={{
-              background: category === cat ? `color-mix(in srgb, ${MOCK_ACCENT} 15%, transparent)` : 'rgba(255,255,255,0.04)',
-              border: `1px solid ${category === cat ? `color-mix(in srgb, ${MOCK_ACCENT} 30%, transparent)` : 'rgba(255,255,255,0.08)'}`,
-              color: category === cat ? MOCK_ACCENT : 'var(--color-text-muted)',
-            }}>
-            {cat}
-          </button>
+          <ChipView
+            key={cat}
+            label={cat}
+            color="var(--color-primary)"
+            size="xs"
+            active={category === cat}
+            onClick={() => setCategory(cat)}
+            className="capitalize cursor-pointer"
+          />
         ))}
       </div>
 
@@ -619,26 +674,27 @@ function CatalogCard({ entry, added, onAdd }: { entry: CatalogEntry; added: bool
     : `${entry.routeCount} route${entry.routeCount !== 1 ? 's' : ''}`;
 
   return (
-    <div className="flex flex-col gap-2 p-3 rounded-lg border border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)] transition-colors bg-[rgba(255,255,255,0.02)]">
+    <div className="flex flex-col gap-2 p-3 rounded-lg border border-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)] hover:border-[color-mix(in_srgb,var(--color-text-primary)_15%,transparent)] transition-colors bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)]">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-[12px] font-medium text-[var(--color-text-primary)]">{entry.name}</p>
           <p className="text-[9px] text-[var(--color-text-muted)] mt-0.5">{itemLabel} · {entry.category}</p>
         </div>
-        <button type="button" onClick={onAdd} disabled={added}
-          className="flex items-center gap-1 h-[22px] px-2 text-[10px] rounded cursor-pointer disabled:opacity-50 flex-shrink-0"
-          style={{
-            background: added ? 'rgba(34,197,94,0.12)' : `color-mix(in srgb, ${MOCK_ACCENT} 12%, transparent)`,
-            border: `1px solid ${added ? 'rgba(34,197,94,0.25)' : `color-mix(in srgb, ${MOCK_ACCENT} 25%, transparent)`}`,
-            color: added ? 'var(--color-success)' : MOCK_ACCENT,
-          }}>
-          {added ? '✓ Added' : <><PlusIcon size={9} /> Add</>}
-        </button>
+        <ButtonView
+          size="xs"
+          variant="ghost"
+          accentColor={added ? 'var(--color-success)' : MOCK_ACCENT}
+          disabled={added}
+          onClick={onAdd}
+          className="flex-shrink-0"
+        >
+          {added ? '✓ Added' : '+ Add'}
+        </ButtonView>
       </div>
       <p className="text-[10px] text-[var(--color-text-muted)] opacity-70 leading-relaxed">{entry.description}</p>
       <div className="flex flex-wrap gap-1">
         {entry.tags.map(t => (
-          <span key={t} className="text-[8px] px-1.5 py-0.5 rounded-full bg-[rgba(255,255,255,0.05)] text-[var(--color-text-muted)]">{t}</span>
+          <span key={t} className="text-[8px] px-1.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--color-text-primary)_5%,transparent)] text-[var(--color-text-muted)]">{t}</span>
         ))}
       </div>
     </div>

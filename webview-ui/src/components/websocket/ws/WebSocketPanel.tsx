@@ -1,11 +1,24 @@
-﻿import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { postMsg } from '../../../vscode';
-import { ConnectIcon, DisconnectIcon, SendIcon, TrashIcon, CheckCircleFilledIcon, ArrowUpIcon, ArrowDownIcon, AutoScrollIcon, SaveIcon, MoreVerticalIcon, SparkleIcon } from '../../../icons';
-import { CodeEditor, StyledDropdown, SplitButton, HighlightedInput } from '../../shared';
-import type { DropdownOption, SplitButtonItem } from '../../shared';
+import { ConnectIcon, DisconnectIcon, SendIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, AutoScrollIcon, SaveIcon, MoreVerticalIcon, SparkleIcon } from '../../../icons';
+import {
+  HighlightedInputView,
+  DropDownButtonView,
+  ButtonView,
+  IconButtonView,
+  AIButtonView,
+  SelectInputView,
+  CheckboxView,
+  EditorView,
+  TabView,
+  ContextMenuView,
+  type ContextMenuItem,
+  type TabItem,
+  type SelectOption,
+} from '@salilvnair/dui';
 import { saveRequest } from '../../../services/request';
 import { RealtimeProtocolSelector, type RealtimeProtocol } from '../RealtimeProtocolSelector';
 import { SSEPanel } from '../sse/SSEPanel';
@@ -28,6 +41,8 @@ import { useAiFeaturesStore } from '../../../store/ai-features-store';
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 type SubTab = 'communication' | 'protocols' | 'templates';
 type MessageFormat = 'json' | 'raw';
+
+const ACCENT = 'var(--color-protocol-websocket)';
 
 // ────────── Per-tab state cache (survives tab switches) ──────────
 const wsMessagesCache = new Map<string, WsMessage[]>();
@@ -58,6 +73,15 @@ export function WebSocketPanel() {
       return next;
     });
   }, [activeTabId]);
+
+  // Test-only hook for the wiki capture harness — seeds a realistic connected
+  // state + message log without a real socket connection (see CaptureBridge.tsx).
+  useEffect(() => {
+    (window as any).__wsCaptureSeed = (msgs: WsMessage[], state: ConnectionState) => {
+      setMessages(msgs);
+      setConnState(state);
+    };
+  }, [setMessages, setConnState]);
 
   // Restore per-tab state on tab change
   useEffect(() => {
@@ -106,7 +130,7 @@ export function WebSocketPanel() {
   const [focusedPanel, setFocusedPanel] = useState<'request' | 'log' | null>(null);
   const [showSplitterTip, setShowSplitterTip] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [showAiOverflow, setShowAiOverflow] = useState(false);
+  const [showAiMenu, setShowAiMenu] = useState(false);
   const [aiOverflowDir, setAiOverflowDir] = useState<'down' | 'up'>('down');
   const [showPreflight, setShowPreflight] = useState(false);
   const [showPatternStatus, setShowPatternStatus] = useState(false);
@@ -114,8 +138,7 @@ export function WebSocketPanel() {
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
-  const aiOverflowRef = useRef<HTMLDivElement>(null);
-  const aiOverflowBtnRef = useRef<HTMLButtonElement>(null);
+  const aiMenuBtnRef = useRef<HTMLDivElement>(null);
   const bodyGenRef = useRef<AiBodyGenerateHandle>(null);
   const reconnectAttemptRef = useRef(0);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
@@ -127,15 +150,6 @@ export function WebSocketPanel() {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
   }, [messages, autoScroll]);
-
-  // Close AI overflow on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (aiOverflowRef.current && !aiOverflowRef.current.contains(e.target as Node)) setShowAiOverflow(false);
-    };
-    if (showAiOverflow) document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showAiOverflow]);
 
   // Listen for WebSocket events from extension
   useEffect(() => {
@@ -239,6 +253,7 @@ export function WebSocketPanel() {
 
   const handleSend = useCallback(() => {
     if (!activeTab || connState !== 'connected' || !inputMsg.trim()) return;
+    logUiEvent('ws.send', { url: activeTab.url });
     postMsg({
       type: 'ws:send',
       tabId: activeTab.id,
@@ -255,6 +270,7 @@ export function WebSocketPanel() {
   }, [activeTab, connState, inputMsg, clearOnSend]);
 
   const handleClearMessages = useCallback(() => {
+    logUiEvent('ws.clear');
     setMessages([]);
   }, [setMessages]);
 
@@ -331,6 +347,53 @@ export function WebSocketPanel() {
     : connState === 'connecting' ? 'var(--color-warning)'
     : 'var(--color-text-muted)';
 
+  // Protocols count for badge
+  const protocolsCount = (() => {
+    try {
+      const e = JSON.parse(activeTab.authData?.['ws_protocol_entries'] || '[]');
+      return e.filter((p: { enabled: boolean; value: string }) => p.enabled && p.value?.trim()).length;
+    } catch { return 0; }
+  })();
+
+  // Sub-tabs for TabView
+  const subTabItems: TabItem[] = [
+    {
+      id: 'communication',
+      label: 'Communication',
+      dot: messages.length > 0,
+      dotColor: ACCENT,
+    },
+    {
+      id: 'protocols',
+      label: 'Protocols',
+      badge: protocolsCount > 0 ? protocolsCount : undefined,
+      badgeColor: ACCENT,
+    },
+    { id: 'templates', label: 'Templates' },
+  ];
+
+  // AI overflow context menu items
+  const aiMenuItems: ContextMenuItem[] = [
+    ...(activeTab.url.trim() && aiEnabled('preflightCheck') ? [{
+      id: 'preflight',
+      label: 'Pre-flight Check',
+      icon: <SparkleIcon size={12} style={{ color: 'var(--color-warning)' }} />,
+      onClick: () => { setShowPreflight(true); setShowAiMenu(false); },
+    }] : []),
+    ...(aiEnabled('daakiaAiChat') ? [{
+      id: 'ask-ai',
+      label: 'Ask AI',
+      icon: <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)' }} />,
+      onClick: () => { openDaakiaAiTab(); setShowAiMenu(false); },
+    }] : []),
+    ...(activeTab.url.trim() && aiEnabled('patternBaseline') ? [{
+      id: 'pattern-baseline',
+      label: 'Pattern Baseline',
+      icon: <SparkleIcon size={12} style={{ color: 'var(--color-info)' }} />,
+      onClick: () => { setShowPatternStatus(p => !p); setShowAiMenu(false); },
+    }] : []),
+  ];
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Realtime protocol selector */}
@@ -351,7 +414,7 @@ export function WebSocketPanel() {
         />
 
         {/* URL input */}
-        <HighlightedInput
+        <HighlightedInputView
           value={activeTab.url}
           onChange={(v) => updateTab(activeTab.id, { url: v })}
           onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
@@ -359,101 +422,74 @@ export function WebSocketPanel() {
           disabled={connState === 'connected'}
           suggestions={urlSuggestions}
           mockServers={mockSuggestions}
-          protocolHints={['wss://']}
-          accentColor="var(--color-protocol-websocket)"
+          accentColor={ACCENT}
+          size="lg"
+          borderRadius={6}
         />
 
         {/* Connect/Disconnect button */}
         {connState === 'disconnected' ? (
-          <button
-            type="button"
-            onClick={handleConnect}
+          <ButtonView
+            label="Connect"
+            iconLeft={<ConnectIcon size={12} />}
+            variant="primary"
+            size="lg"
+            accentColor={ACCENT}
             disabled={!activeTab.url.trim()}
-            className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[var(--color-protocol-websocket)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity flex items-center gap-1.5 flex-shrink-0"
-          >
-            <ConnectIcon size={12} />
-            Connect
-          </button>
+            onClick={handleConnect}
+          />
         ) : (
-          <button
-            type="button"
+          <ButtonView
+            label="Disconnect"
+            iconLeft={<DisconnectIcon size={12} />}
+            variant="primary"
+            size="lg"
+            accentColor="var(--color-error)"
             onClick={handleDisconnect}
-            className="h-[36px] px-5 text-[12px] font-medium rounded-md bg-[rgba(239,68,68,0.12)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.2)] cursor-pointer transition-colors flex items-center gap-1.5 flex-shrink-0"
-          >
-            <DisconnectIcon size={12} />
-            Disconnect
-          </button>
+          />
         )}
 
-        {/* Save SplitButton */}
-        <SplitButton
+        {/* Save DropDownButton */}
+        <DropDownButtonView
           label="Save"
+          icon={<SaveIcon size={12} />}
           variant="secondary"
-          onClick={() => {
+          size="lg"
+          onPrimaryClick={() => {
             const saved = saveRequest(activeTab);
             if (saved) updateTab(activeTab.id, { dirty: false });
           }}
-          icon={<SaveIcon />}
           items={wsSaveItems}
+          align="right"
+          accentColor="var(--color-surface-border)"
         />
 
-        {/* 9.8: AI Tools ⋮ menu */}
-        <div className="flex-shrink-0 relative" ref={aiOverflowRef}>
-          <button ref={aiOverflowBtnRef} type="button"
+        {/* AI Tools ⋮ menu */}
+        <div ref={aiMenuBtnRef} className="flex-shrink-0 relative">
+          <IconButtonView
+            icon={<MoreVerticalIcon size={13} />}
+            title="AI tools"
+            size="lg"
+            active={showAiMenu}
             onClick={() => {
-              if (!showAiOverflow && aiOverflowBtnRef.current) {
-                const rect = aiOverflowBtnRef.current.getBoundingClientRect();
+              if (!showAiMenu && aiMenuBtnRef.current) {
+                const rect = aiMenuBtnRef.current.getBoundingClientRect();
                 setAiOverflowDir((window.innerHeight - rect.bottom) < 160 ? 'up' : 'down');
               }
-              setShowAiOverflow(p => !p);
+              setShowAiMenu(p => !p);
             }}
-            title="AI tools"
-            className="flex items-center justify-center w-[36px] h-[36px] rounded-md cursor-pointer transition-colors"
-            style={{ color: showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)', backgroundColor: showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent' }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = showAiOverflow ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = showAiOverflow ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
-          >
-            <MoreVerticalIcon size={15} />
-          </button>
-          {showAiOverflow && (
-            <div className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${aiOverflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
-              style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
-            >
-              <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
-                <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>AI Tools</p>
-              </div>
-              {activeTab.url.trim() && aiEnabled('preflightCheck') && (
-                <button type="button" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left" style={{ color: 'var(--color-protocol-ai)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
-                  onClick={() => { setShowPreflight(true); setShowAiOverflow(false); }}
-                >
-                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />Pre-flight Check
-                </button>
-              )}
-              {aiEnabled('daakiaAiChat') && (
-                <button type="button" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left" style={{ color: 'var(--color-protocol-ai)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
-                  onClick={() => { openDaakiaAiTab(); setShowAiOverflow(false); }}
-                >
-                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />Ask AI
-                </button>
-              )}
-              {activeTab.url.trim() && aiEnabled('patternBaseline') && (
-                <button type="button" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[11.5px] cursor-pointer transition-all text-left" style={{ color: 'var(--color-protocol-ai)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, var(--color-protocol-ai) 8%, transparent)`; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
-                  onClick={() => { setShowPatternStatus(p => !p); setShowAiOverflow(false); }}
-                >
-                  <SparkleIcon size={12} style={{ color: 'var(--color-protocol-ai)', flexShrink: 0 }} />Pattern Baseline
-                </button>
-              )}
-            </div>
-          )}
+          />
+          <ContextMenuView
+            items={aiMenuItems}
+            anchorEl={aiMenuBtnRef.current}
+            open={showAiMenu}
+            onClose={() => setShowAiMenu(false)}
+            width="md"
+            align="right"
+          />
           {showPreflight && activeTab.url.trim() && <AiPreflightPopover tab={activeTab} onClose={() => setShowPreflight(false)} />}
           {showPatternStatus && activeTab.url.trim() && aiEnabled('patternBaseline') && (
-            <PatternBaselinePopup method="WS" url={activeTab.url} onClose={() => setShowPatternStatus(false)} dir={aiOverflowDir} />
+            <PatternBaselinePopup method="WS" url={activeTab.url} onClose={() => setShowPatternStatus(false)} />
           )}
         </div>
       </div>
@@ -471,35 +507,16 @@ export function WebSocketPanel() {
           onFocus={handleRequestFocus}
         >
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* Sub-tabs: Communication | Protocols */}
-          <div className="flex items-center border-b border-[var(--color-surface-border)] bg-[var(--color-panel)] px-2">
-            {(['communication', 'protocols', 'templates'] as SubTab[]).map(tab => {
-              const protocolsCount = tab === 'protocols'
-                ? (() => { try { const e = JSON.parse(activeTab.authData?.['ws_protocol_entries'] || '[]'); return e.filter((p: any) => p.enabled && p.value?.trim()).length; } catch { return 0; } })()
-                : 0;
-              return (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveSubTab(tab)}
-                className={`px-3 py-2 text-[11px] font-medium capitalize cursor-pointer transition-colors border-b-2 ${
-                  activeSubTab === tab
-                    ? 'text-[var(--color-protocol-websocket)] border-[var(--color-protocol-websocket)]'
-                    : 'text-[var(--color-text-muted)] border-transparent hover:text-[var(--color-text-primary)]'
-                }`}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                {tab === 'protocols' && protocolsCount > 0 && (
-                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ backgroundColor: 'color-mix(in srgb, #4caf50 15%, transparent)', color: '#4caf50' }}>
-                    {protocolsCount}
-                  </span>
-                )}
-                {tab === 'communication' && messages.length > 0 && (
-                  <span className="ml-1 w-1.5 h-1.5 inline-block rounded-full relative -top-[1px] bg-[var(--color-protocol-websocket)]" />
-                )}
-              </button>
-              );
-            })}
+          {/* Sub-tabs: Communication | Protocols | Templates */}
+          <div className="flex items-center px-3 pt-1.5 pb-0 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
+            <TabView
+              tabs={subTabItems}
+              activeTab={activeSubTab}
+              onChange={(id) => setActiveSubTab(id as SubTab)}
+              variant="underline"
+              size="md"
+              accentColor={ACCENT}
+            />
           </div>
 
           {/* Sub-tab content */}
@@ -511,58 +528,44 @@ export function WebSocketPanel() {
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Message</span>
                     {/* JSON/Raw format selector */}
-                    <StyledDropdown
+                    <SelectInputView
                       options={formatOptions}
                       value={messageFormat}
                       onChange={(v) => setMessageFormat(v as MessageFormat)}
-                      size="xs"
-                      accentColor="var(--color-protocol-websocket)"
+                      size="md"
+                      accentColor={ACCENT}
                     />
                   </div>
                   <div className="flex items-center gap-1">
                     {/* 9.6: Generate ✦ */}
-                    {aiEnabled('bodyGenerate') && (
-                      <button type="button"
+                    {aiEnabled('bodyGenerator') && (
+                      <AIButtonView
+                        size="xs"
+                        label="Generate ✦"
                         onClick={() => bodyGenRef.current?.open()}
-                        className="h-[26px] px-2 text-[10.5px] font-medium flex items-center gap-1 rounded-md cursor-pointer transition-all"
-                        style={{ color: 'var(--color-protocol-websocket)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-websocket) 8%, transparent)' }}
-                        title="AI: Generate message"
-                      >
-                        <SparkleIcon size={9} />Generate ✦
-                      </button>
+                        accentColor="var(--color-protocol-ai)"
+                      />
                     )}
                     {/* Send */}
-                    <button
-                      type="button"
+                    <ButtonView
+                      size="xs"
+                      variant="ghost"
+                      iconLeft={<SendIcon size={11} />}
+                      label="Send"
                       onClick={handleSend}
                       disabled={connState !== 'connected' || !inputMsg.trim()}
-                      className="h-[26px] px-2.5 text-[11px] font-medium text-[var(--color-protocol-websocket)] hover:bg-[rgba(76,175,80,0.08)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center gap-1.5 rounded-md"
-                    >
-                      <SendIcon size={11} />
-                      Send
-                    </button>
+                      accentColor={ACCENT}
+                    />
                     {/* Clear input checkbox */}
-                    <button
-                      type="button"
-                      onClick={() => setClearOnSend(!clearOnSend)}
-                      className="h-[26px] px-2 text-[11px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] cursor-pointer transition-colors flex items-center gap-1.5 rounded-md"
-                    >
-                      <CheckCircleFilledIcon size={13} checked={clearOnSend} />
-                      Clear input
-                    </button>
+                    <CheckboxView
+                      size="xs"
+                      checked={clearOnSend}
+                      onChange={(v) => setClearOnSend(v)}
+                      label="Clear input"
+                    />
                   </div>
                 </div>
-                {/* Code editor */}
-                <div className="flex-1 min-h-0">
-                  <CodeEditor
-                    value={inputMsg}
-                    onChange={setInputMsg}
-                    language={messageFormat === 'json' ? 'json' : 'plaintext'}
-                    height="100%"
-                    placeholder="Type a message to send..."
-                  />
-                </div>
-                {/* 9.6: AiBodyGenerate drawer */}
+                {/* 9.6: AiBodyGenerate drawer — above editor so it pushes content down */}
                 <AiBodyGenerate
                   ref={bodyGenRef}
                   tabId={activeTab.id}
@@ -571,6 +574,16 @@ export function WebSocketPanel() {
                   contentType="application/json"
                   onApply={(body) => setInputMsg(body)}
                 />
+                {/* Code editor */}
+                <div className="flex-1 min-h-0">
+                  <EditorView
+                    value={inputMsg}
+                    onChange={setInputMsg}
+                    language={messageFormat === 'json' ? 'json' : 'plaintext'}
+                    height="100%"
+                    placeholder="Type a message to send..."
+                  />
+                </div>
               </>
             )}
 
@@ -610,7 +623,7 @@ export function WebSocketPanel() {
           )}
         </div>
 
-        {/* Bottom: Log panel — TESTING: header only, no messages */}
+        {/* Bottom: Log panel */}
         <div
           className="flex-1 min-h-[60px] flex flex-col overflow-hidden"
           style={{ transition: isDragging ? 'none' : 'all 180ms cubic-bezier(0.2, 0.8, 0.2, 1)' }}
@@ -620,58 +633,45 @@ export function WebSocketPanel() {
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--color-surface-border)] bg-[var(--color-panel)]">
             <span className="text-[11px] font-medium text-[var(--color-text-muted)]">Log</span>
             <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={handleClearMessages}
-                disabled={messages.length === 0}
-                className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md"
+              <IconButtonView
+                size="xs"
+                icon={<TrashIcon size={12} />}
                 title="Clear log"
-              >
-                <TrashIcon size={12} />
-              </button>
-              <button
-                type="button"
-                onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
                 disabled={messages.length === 0}
-                className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md"
+                accentColor="var(--color-error)"
+                onClick={handleClearMessages}
+              />
+              <IconButtonView
+                size="xs"
+                icon={<ArrowUpIcon size={13} />}
                 title="Scroll to top"
-              >
-                <ArrowUpIcon size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }}
                 disabled={messages.length === 0}
-                className="h-[26px] w-[26px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center rounded-md"
+                onClick={() => logContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              />
+              <IconButtonView
+                size="xs"
+                icon={<ArrowDownIcon size={13} />}
                 title="Scroll to bottom"
-              >
-                <ArrowDownIcon size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setAutoScroll(!autoScroll)}
-                className={`h-[26px] w-[26px] flex items-center justify-center cursor-pointer transition-colors rounded-md ${
-                  autoScroll
-                    ? 'text-[var(--color-success)] hover:bg-[rgba(34,197,94,0.08)]'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[rgba(197, 34, 34, 0.08)]'
-                }`}
+                disabled={messages.length === 0}
+                onClick={() => { if (logContainerRef.current) logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight; }}
+              />
+              <IconButtonView
+                size="xs"
+                icon={<AutoScrollIcon size={14} />}
                 title={autoScroll ? 'Autoscroll: Turn off' : 'Autoscroll: Turn on'}
-              >
-                <AutoScrollIcon size={14} />
-              </button>
+                active={autoScroll}
+                accentColor={ACCENT}
+                onClick={() => setAutoScroll(!autoScroll)}
+              />
               {/* Auto-reconnect toggle (5.3.12) */}
-              <button
-                type="button"
-                onClick={() => { if (activeTab) updateTab(activeTab.id, { wsAutoReconnect: !activeTab.wsAutoReconnect }); }}
-                className={`h-[26px] px-1.5 text-[9.5px] flex items-center gap-0.5 cursor-pointer transition-colors rounded-md font-medium ${
-                  activeTab?.wsAutoReconnect
-                    ? 'text-[var(--color-warning)] hover:bg-[rgba(234,179,8,0.08)]'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-hover)]'
-                }`}
+              <ButtonView
+                size="xs"
+                variant="ghost"
+                label="⟳ Auto"
+                accentColor={activeTab?.wsAutoReconnect ? 'var(--color-warning)' : 'var(--color-text-muted)'}
                 title={activeTab?.wsAutoReconnect ? 'Auto-reconnect: On (click to disable)' : 'Auto-reconnect: Off (click to enable)'}
-              >
-                ⟳ Auto
-              </button>
+                onClick={() => { if (activeTab) updateTab(activeTab.id, { wsAutoReconnect: !activeTab.wsAutoReconnect }); }}
+              />
               {/* 9.1-9.5, 9.7, 9.9: AI log actions */}
               <AiRealtimeLogActions
                 tabId={activeTab.id}
@@ -680,7 +680,7 @@ export function WebSocketPanel() {
                 messages={messages.filter(m => m.direction === 'received').map(m => m.data)}
                 hasError={!!lastError}
                 errorMsg={lastError || ''}
-                accentColor="var(--color-protocol-websocket)"
+                accentColor="var(--color-protocol-ai)"
                 trafficAnalyzerFlag="wsTrafficAnalyzer"
               />
             </div>
@@ -711,18 +711,17 @@ export function WebSocketPanel() {
 
 // ────────── Constants ──────────
 
-const formatOptions: DropdownOption[] = [
+const formatOptions: SelectOption[] = [
   { value: 'json', label: 'JSON' },
   { value: 'raw', label: 'RAW' },
 ];
 
-const wsSaveItems: SplitButtonItem[] = [
+const wsSaveItems: ContextMenuItem[] = [
   {
     id: 'save-as',
     label: 'Save as',
-    icon: <SaveIcon />,
+    icon: <SaveIcon size={12} />,
     iconColor: 'var(--color-ctx-close-saved)',
     onClick: () => postMsg({ type: 'openSaveAs', tabId: useTabsStore.getState().activeTabId! }),
   },
 ];
-

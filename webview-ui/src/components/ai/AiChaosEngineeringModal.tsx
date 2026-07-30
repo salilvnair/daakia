@@ -5,16 +5,16 @@
  * Gate: chaosEngineeringPlanner feature flag
  */
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { CloseIcon, SparkleIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
+import { ModalView, AIButtonView, MultilineInputView } from '@salilvnair/dui';
 
 interface Props {
   onClose: () => void;
 }
 
-const ACCENT = 'var(--color-warning)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 const SYSTEM_PROMPT = `You are a chaos engineering expert (Chaos Monkey principles). Design a complete chaos test plan for an API system.
 
@@ -82,46 +82,59 @@ export function AiChaosEngineeringModal({ onClose }: Props) {
     { id: 'grpc', label: 'gRPC' }, { id: 'mixed', label: 'All Protocols' },
   ];
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget) e.preventDefault(); }}>
-      <div className="relative flex flex-col rounded-lg overflow-hidden shadow-2xl"
-        style={{ width: 620, maxHeight: '86vh', background: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>
-        <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="Chaos Engineering Planner"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
           <SparkleIcon size={14} style={{ color: ACCENT }} />
-          <span className="text-[13px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>Chaos Engineering Planner ✦</span>
-          <button type="button" onClick={onClose} className="ml-auto cursor-pointer" style={{ color: 'var(--color-text-muted)' }}><CloseIcon size={14} /></button>
         </div>
-        <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
-          <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-            Describe your system and AI designs a complete chaos test plan: fault scenarios, probabilities, risk matrix, and recovery checklist.
-          </p>
-          <textarea value={systemDesc} onChange={e => setSystemDesc(e.target.value)}
-            onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handlePlan(); if (e.key === 'Escape') onClose(); }}
-            placeholder="e.g. E-commerce platform: REST product catalog, WebSocket real-time inventory, gRPC payment service, MQTT order notifications"
-            rows={3} className="w-full rounded text-[11px] px-2.5 py-2 resize-none"
-            style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }} />
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>Target:</span>
-            {TARGETS.map(t => (
-              <button key={t.id} type="button" onClick={() => setTarget(t.id)}
-                className="h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer"
-                style={{ background: target === t.id ? ACCENT : 'var(--color-bg-surface)', color: target === t.id ? '#fff' : 'var(--color-text-muted)', border: `1px solid ${target === t.id ? ACCENT : 'var(--color-border)'}` }}>
-                {t.label}
-              </button>
-            ))}
-            <button type="button" onClick={handlePlan} disabled={!systemDesc.trim() || loading}
-              className="ml-auto flex items-center gap-1.5 h-[26px] px-3 rounded text-[11px] font-medium cursor-pointer disabled:opacity-40"
-              style={{ background: ACCENT, color: '#fff' }}>
-              {loading ? <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" /> : <SparkleIcon size={11} />}
-              {loading ? 'Planning…' : 'Generate Chaos Plan'}
+      }
+      footerRight={
+        <AIButtonView
+          label={loading ? 'Planning…' : 'Generate Chaos Plan'}
+          size="md"
+          accentColor={ACCENT}
+          disabled={!systemDesc.trim() || loading}
+          loading={loading}
+          onClick={handlePlan}
+        />
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+          Describe your system and AI designs a complete chaos test plan: fault scenarios, probabilities, risk matrix, and recovery checklist.
+        </p>
+        <MultilineInputView
+          value={systemDesc}
+          onChange={e => setSystemDesc(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handlePlan(); }}
+          placeholder="e.g. E-commerce platform: REST product catalog, WebSocket real-time inventory, gRPC payment service, MQTT order notifications"
+          rows={3}
+          size="md"
+          width="fw"
+        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>Target:</span>
+          {TARGETS.map(t => (
+            <button key={t.id} type="button" onClick={() => setTarget(t.id)}
+              className="h-[26px] px-2.5 rounded text-[11px] font-medium cursor-pointer"
+              style={{
+                background: target === t.id ? `color-mix(in srgb, ${ACCENT} 15%, transparent)` : 'transparent',
+                color: target === t.id ? ACCENT : 'var(--color-text-muted)',
+                border: `1px solid ${target === t.id ? `color-mix(in srgb, ${ACCENT} 35%, transparent)` : 'var(--color-surface-border)'}`,
+              }}>
+              {t.label}
             </button>
-          </div>
-          {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
-          {result && <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 380, borderColor: 'var(--color-border)', background: 'var(--color-bg-surface)' }}><MdViewer content={result} /></div>}
+          ))}
         </div>
+        {error && <p className="text-[11px] px-2.5 py-1.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)' }}>{error}</p>}
+        {result && <div className="rounded border p-3 overflow-y-auto" style={{ maxHeight: 380, borderColor: 'var(--color-surface-border)', background: 'var(--color-surface)' }}><MdViewer content={result} /></div>}
       </div>
-    </div>,
-    document.body,
+    </ModalView>
   );
 }

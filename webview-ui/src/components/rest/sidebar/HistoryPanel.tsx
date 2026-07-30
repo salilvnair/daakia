@@ -2,12 +2,17 @@ import { useState, useEffect, useMemo } from 'react';
 import { postMsg } from '../../../vscode';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
+import { useTabsStore } from '../../../store/tabs-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
-import { ConfirmDialog, ContextMenu, type ContextMenuItem } from '../../shared';
-import { buildGroups, formatFullTimestamp, exportHistoryItem, type TopGroup } from '../../../services/history';
+import { ConfirmDialog } from '../../shared';
+import { SearchInputView, IconButtonView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { buildGroups, formatFullTimestamp, exportHistoryItem, type TopGroup, type SubGroup } from '../../../services/history';
 import { replayHistoryItem } from '../../../services/collections';
+import type { CollectionTreeNode } from '../../../services/collections/tree-helpers';
+import { AiDocGeneratorModal } from '../../ai/AiDocGeneratorModal';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
-import { MoreVerticalIcon, ClockIcon, ChevronRightIcon, ExternalLinkIcon, PlusSquareIcon, DownloadIcon, TrashIcon, SaveIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../../icons';
+import { MoreVerticalIcon, ClockIcon, ChevronRightIcon, ExternalLinkIcon, PlusSquareIcon, DownloadIcon, TrashIcon, SaveIcon, ExpandAllIcon, CollapseAllIcon, DocumentIcon, ServerIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../../icons';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
 function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
   const size = 20;
@@ -57,8 +62,9 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [collapsedSubGroups, setCollapsedSubGroups] = useState<Set<string>>(new Set());
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: HistoryItem } | null>(null);
-  const [headerMenu, setHeaderMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: DuiContextMenuItem[] } | null>(null);
+  const [headerMenu, setHeaderMenu] = useState<{ position: { x: number; y: number }; items: DuiContextMenuItem[] } | null>(null);
+  const [docGeneratorNode, setDocGeneratorNode] = useState<CollectionTreeNode | null>(null);
 
   // Scroll position persistence
   const scrollRef = useScrollRestore(`history.${protocol}`);
@@ -90,6 +96,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
   }, [cachedHistory]);
 
   const handleClearAll = () => {
+    logUiEvent('history.clear', { protocol });
     postMsg({ type: 'clearHistory', protocol });
     setShowClearConfirm(false);
   };
@@ -100,16 +107,56 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
   };
 
   const confirmDelete = (id: number) => {
+    logUiEvent('history.delete', { id, protocol });
     postMsg({ type: 'deleteHistoryEntry', id, protocol });
     setDeleteConfirmId(null);
   };
 
   const handleReplay = (item: HistoryItem, forceNewTab = false) => {
+    logUiEvent('history.open', { method: item.method, url: item.url, protocol });
     replayHistoryItem(item, forceNewTab, protocol);
   };
 
   const handleExport = (item: HistoryItem) => {
     exportHistoryItem(item);
+  };
+
+  const openHistoryContextMenu = (e: React.MouseEvent, item: HistoryItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const close = () => setContextMenu(null);
+    const items: DuiContextMenuItem[] = [
+      { id: 'open', label: 'Open', shortcut: 'O', icon: <ExternalLinkIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { handleReplay(item); close(); } },
+      { id: 'open-new-tab', label: 'Open in New Tab', shortcut: 'T', icon: <PlusSquareIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { handleReplay(item, true); close(); } },
+      { id: 'sep1', label: '', separator: true },
+      { id: 'save', label: 'Save to Collection', shortcut: 'S', icon: <SaveIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { handleReplay(item); setTimeout(() => window.postMessage({ type: 'openSaveAs', tabId: `h_${item.id}` }, '*'), 50); close(); } },
+      { id: 'export', label: 'Export as JSON', shortcut: 'E', icon: <DownloadIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { exportHistoryItem(item); close(); } },
+      { id: 'sep1b', label: '', separator: true },
+      { id: 'document-request', label: 'Document Request', shortcut: 'M', icon: <DocumentIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => {
+        const req = { id: String(item.id), collection_id: '', name: item.url, method: item.method, url: item.url, data: item.request_data };
+        setDocGeneratorNode({ id: req.id, name: req.name, parent_id: null, sort_order: 0, children: [], requests: [req] });
+        close();
+      } },
+      { id: 'mock-request', label: 'Mock Request', shortcut: 'K', icon: <ServerIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => {
+        useTabsStore.getState().openMockServerTab();
+        setTimeout(() => window.postMessage({ type: 'mockRequestFromSidebar', name: item.url, method: item.method, url: item.url }, '*'), 250);
+        close();
+      } },
+      { id: 'sep2', label: '', separator: true },
+      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫', icon: <TrashIcon size={14} style={{ color: 'var(--color-error)' }} />, onClick: () => { setDeleteConfirmId(item.id); close(); } },
+    ];
+    setContextMenu({ position: { x: e.clientX, y: e.clientY }, items });
+  };
+
+  const openHeaderMenu = (e: React.MouseEvent) => {
+    const close = () => setHeaderMenu(null);
+    const items: DuiContextMenuItem[] = [
+      { id: 'expand-all', label: 'Expand all', icon: <ExpandAllIcon size={14} className="text-[var(--color-info)]" />, onClick: () => { expandAllGroups(); close(); } },
+      { id: 'collapse-all', label: 'Collapse all', icon: <CollapseAllIcon size={14} className="text-[var(--color-warning)]" />, onClick: () => { collapseAllGroups(); close(); } },
+      { id: 'sep-expand', label: '', separator: true },
+      { id: 'clear-all', label: 'Delete all history', danger: true, shortcut: 'D', icon: <TrashIcon size={14} style={{ color: 'var(--color-error)' }} />, onClick: () => { setShowClearConfirm(true); close(); } },
+    ];
+    setHeaderMenu({ position: { x: e.clientX, y: e.clientY }, items });
   };
 
   const toggleGroup = (label: string) => {
@@ -128,6 +175,61 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
       else next.add(key);
       return next;
     });
+  };
+
+  // Every sub-group key nested under a given sub-group (itself + descendants) —
+  // covers both the 2-level leaf case (just subKey) and the 3-level year→month→date case.
+  const collectSubGroupKeys = (sg: SubGroup, subKey: string): string[] => {
+    const keys = [subKey];
+    if (sg.subGroups) {
+      for (const inner of sg.subGroups) keys.push(...collectSubGroupKeys(inner, `${subKey}::${inner.label}`));
+    }
+    return keys;
+  };
+
+  // All sub-group keys under a top-level group (used by both the global
+  // Expand/Collapse All action and the per-group inline icons).
+  const collectGroupSubKeys = (group: TopGroup): string[] => {
+    const keys: string[] = [];
+    for (const sg of group.subGroups) {
+      if (!sg.label) continue; // flat items with no sub-group wrapper
+      keys.push(...collectSubGroupKeys(sg, `${group.label}::${sg.label}`));
+    }
+    return keys;
+  };
+
+  // Expand/collapse one top-level group plus every descendant sub-group.
+  const expandGroupTree = (group: TopGroup) => {
+    setCollapsedGroups((prev) => { const next = new Set(prev); next.delete(group.label); return next; });
+    const descendantKeys = collectGroupSubKeys(group);
+    setCollapsedSubGroups((prev) => { const next = new Set(prev); descendantKeys.forEach(k => next.delete(k)); return next; });
+  };
+  const collapseGroupTree = (group: TopGroup) => {
+    setCollapsedGroups((prev) => new Set(prev).add(group.label));
+    const descendantKeys = collectGroupSubKeys(group);
+    setCollapsedSubGroups((prev) => { const next = new Set(prev); descendantKeys.forEach(k => next.add(k)); return next; });
+  };
+
+  // Expand/collapse one sub-group plus every descendant (for the 3-level case).
+  const expandSubGroupTree = (sg: SubGroup, subKey: string) => {
+    const keys = collectSubGroupKeys(sg, subKey);
+    setCollapsedSubGroups((prev) => { const next = new Set(prev); keys.forEach(k => next.delete(k)); return next; });
+  };
+  const collapseSubGroupTree = (sg: SubGroup, subKey: string) => {
+    const keys = collectSubGroupKeys(sg, subKey);
+    setCollapsedSubGroups((prev) => { const next = new Set(prev); keys.forEach(k => next.add(k)); return next; });
+  };
+
+  // Global Expand All / Collapse All — every group and sub-group in the tree.
+  const expandAllGroups = () => {
+    setCollapsedGroups(new Set());
+    setCollapsedSubGroups(new Set());
+  };
+  const collapseAllGroups = () => {
+    setCollapsedGroups(new Set(groups.map(g => g.label)));
+    const allSubKeys: string[] = [];
+    for (const g of groups) allSubKeys.push(...collectGroupSubKeys(g));
+    setCollapsedSubGroups(new Set(allSubKeys));
   };
 
   const filtered = useMemo(() =>
@@ -166,13 +268,9 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
       <div
         key={item.id}
         onClick={() => handleReplay(item)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setContextMenu({ x: e.clientX, y: e.clientY, item });
-        }}
+        onContextMenu={(e) => openHistoryContextMenu(e, item)}
         data-context-menu="history"
-        className="px-2.5 py-1.5 mx-0.5 my-0.5 rounded-md hover:bg-[rgba(255,255,255,0.04)] cursor-pointer group relative"
+        className="px-2.5 py-1.5 mx-0.5 my-0.5 rounded-md hover:bg-[color-mix(in_srgb,var(--color-text-primary)_4%,transparent)] cursor-pointer group relative"
         title={timestamp}
       >
         {/* Row: Method | URL | Trash */}
@@ -191,17 +289,13 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
             {item.url}
           </span>
 
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setContextMenu({ x: e.clientX, y: e.clientY, item });
-            }}
-            className="opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-opacity cursor-pointer p-0.5 rounded hover:bg-[var(--color-icon-hover-bg)] shrink-0"
-            title="More Options"
-          >
-            <MoreVerticalIcon size={12} stroke="none" fill="currentColor" />
-          </button>
+          <IconButtonView
+            icon={<MoreVerticalIcon size={12} style={{ color: 'var(--color-text-muted)' }} />}
+            size="sm"
+            tooltip="More Options"
+            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+            onClick={(e) => { e.stopPropagation(); openHistoryContextMenu(e, item); }}
+          />
         </div>
 
         {/* Sub row: Status | Time */}
@@ -214,8 +308,8 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
             ) : (protocol === 'grpc' ? item.status >= 0 : item.status > 0) ? (
               <span className={`text-[10px] font-medium ${
                 protocol === 'grpc'
-                  ? (item.status === 0 ? 'text-[#22c55e]' : 'text-[var(--color-error)]')
-                  : (item.status < 400 ? 'text-[#22c55e]' : 'text-[var(--color-error)]')
+                  ? (item.status === 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]')
+                  : (item.status < 400 ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]')
               }`}>
                 {item.status}
               </span>
@@ -253,26 +347,23 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
 
       {/* Search */}
       <div className="px-3 py-2 border-b border-[var(--color-surface-border)]">
-        <input
-          type="text"
-          placeholder="Search"
+        <SearchInputView
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full h-[32px] px-3 text-[12px] rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+          onChange={setSearch}
+          placeholder="Search"
+          height={30}
         />
       </div>
 
       {/* Actions row */}
       {history.length > 0 && (
-        <div className="flex items-center justify-end px-3 py-2 border-b border-[var(--color-surface-border)]">
-          <button
-            type="button"
-            onClick={(e) => setHeaderMenu({ x: e.clientX, y: e.clientY })}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-icon-hover-bg)] cursor-pointer transition-colors"
-            title="More Options"
-          >
-            <MoreVerticalIcon size={14} />
-          </button>
+        <div className="flex items-center justify-end px-3 py-1.5 border-b border-[var(--color-surface-border)]">
+          <IconButtonView
+            icon={<MoreVerticalIcon size={14} style={{ color: 'var(--color-text-muted)' }} />}
+            size="sm"
+            tooltip="More Options"
+            onClick={openHeaderMenu}
+          />
         </div>
       )}
 
@@ -293,19 +384,32 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
             return (
               <div key={group.label} className="mb-0.5">
                 {/* Top-level group header */}
-                <button
-                  type="button"
+                <div
                   onClick={() => toggleGroup(group.label)}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+                  className="w-full flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_3%,transparent)] transition-colors"
                 >
                   <ChevronRightIcon size={10} strokeWidth={2.5} className={`text-[var(--color-text-muted)] shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
                   <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">
                     {group.label}
                   </span>
-                  <span className="text-[10px] text-[var(--color-text-muted)] opacity-50 ml-auto">
-                    {count}
+                  <span className="flex items-center gap-0.5 ml-auto">
+                    <IconButtonView
+                      icon={<ExpandAllIcon size={10} className="text-[var(--color-info)]" />}
+                      size="xs"
+                      tooltip="Expand all"
+                      onClick={(e) => { e.stopPropagation(); expandGroupTree(group); }}
+                    />
+                    <IconButtonView
+                      icon={<CollapseAllIcon size={10} className="text-[var(--color-warning)]" />}
+                      size="xs"
+                      tooltip="Collapse all"
+                      onClick={(e) => { e.stopPropagation(); collapseGroupTree(group); }}
+                    />
+                    <span className="text-[10px] text-[var(--color-text-muted)] opacity-50">
+                      {count}
+                    </span>
                   </span>
-                </button>
+                </div>
 
                 {/* Group content */}
                 <div className={`collapse-wrapper ${!isCollapsed ? 'expanded' : ''}`}>
@@ -329,19 +433,32 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                         if (sg.subGroups && sg.subGroups.length > 0) {
                           return (
                             <div key={sg.label}>
-                              <button
-                                type="button"
+                              <div
                                 onClick={() => toggleSubGroup(subKey)}
-                                className="w-full flex items-center gap-1.5 pl-6 pr-3 py-1 cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                                className="w-full flex items-center gap-1.5 pl-6 pr-3 py-1 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] transition-colors"
                               >
                                 <ChevronRightIcon size={8} strokeWidth={2.5} className={`text-[var(--color-text-muted)] opacity-60 shrink-0 transition-transform ${isSubCollapsed ? '' : 'rotate-90'}`} />
                                 <span className="text-[10px] font-medium text-[var(--color-text-muted)] opacity-80">
                                   {sg.label}
                                 </span>
-                                <span className="text-[9px] text-[var(--color-text-muted)] opacity-40 ml-auto">
-                                  {sg.subGroups.reduce((s, inner) => s + inner.items.length, 0)}
+                                <span className="flex items-center gap-0.5 ml-auto">
+                                  <IconButtonView
+                                    icon={<ExpandAllIcon size={9} className="text-[var(--color-info)]" />}
+                                    size="xs"
+                                    tooltip="Expand all"
+                                    onClick={(e) => { e.stopPropagation(); expandSubGroupTree(sg, subKey); }}
+                                  />
+                                  <IconButtonView
+                                    icon={<CollapseAllIcon size={9} className="text-[var(--color-warning)]" />}
+                                    size="xs"
+                                    tooltip="Collapse all"
+                                    onClick={(e) => { e.stopPropagation(); collapseSubGroupTree(sg, subKey); }}
+                                  />
+                                  <span className="text-[9px] text-[var(--color-text-muted)] opacity-40">
+                                    {sg.subGroups.reduce((s, inner) => s + inner.items.length, 0)}
+                                  </span>
                                 </span>
-                              </button>
+                              </div>
                               <div className={`collapse-wrapper ${!isSubCollapsed ? 'expanded' : ''}`}>
                                 <div className="collapse-inner">
                                   <div>
@@ -350,19 +467,32 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                                       const isInnerCollapsed = collapsedSubGroups.has(innerKey);
                                       return (
                                         <div key={inner.label}>
-                                          <button
-                                            type="button"
+                                          <div
                                             onClick={() => toggleSubGroup(innerKey)}
-                                            className="w-full flex items-center gap-1.5 pl-10 pr-3 py-0.5 cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                                            className="w-full flex items-center gap-1.5 pl-10 pr-3 py-0.5 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] transition-colors"
                                           >
                                             <ChevronRightIcon size={7} strokeWidth={2} className={`text-[var(--color-text-muted)] opacity-50 shrink-0 transition-transform ${isInnerCollapsed ? '' : 'rotate-90'}`} />
                                             <span className="text-[9px] text-[var(--color-text-muted)] opacity-70">
                                               {inner.label}
                                             </span>
-                                            <span className="text-[8px] text-[var(--color-text-muted)] opacity-35 ml-auto">
-                                              {inner.items.length}
+                                            <span className="flex items-center gap-0.5 ml-auto">
+                                              <IconButtonView
+                                                icon={<ExpandAllIcon size={8} className="text-[var(--color-info)]" />}
+                                                size="xs"
+                                                tooltip="Expand all"
+                                                onClick={(e) => { e.stopPropagation(); expandSubGroupTree(inner, innerKey); }}
+                                              />
+                                              <IconButtonView
+                                                icon={<CollapseAllIcon size={8} className="text-[var(--color-warning)]" />}
+                                                size="xs"
+                                                tooltip="Collapse all"
+                                                onClick={(e) => { e.stopPropagation(); collapseSubGroupTree(inner, innerKey); }}
+                                              />
+                                              <span className="text-[8px] text-[var(--color-text-muted)] opacity-35">
+                                                {inner.items.length}
+                                              </span>
                                             </span>
-                                          </button>
+                                          </div>
                                           <div className={`collapse-wrapper ${!isInnerCollapsed ? 'expanded' : ''}`}>
                                             <div className="collapse-inner">
                                               <div className="pl-14">
@@ -383,19 +513,32 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                         // 2-level: normal sub-group (e.g., "May 31" under "May", or hour intervals under "Today")
                         return (
                           <div key={sg.label}>
-                            <button
-                              type="button"
+                            <div
                               onClick={() => toggleSubGroup(subKey)}
-                              className="w-full flex items-center gap-1.5 pl-6 pr-3 py-1 cursor-pointer hover:bg-[rgba(255,255,255,0.02)] transition-colors"
+                              className="w-full flex items-center gap-1.5 pl-6 pr-3 py-1 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text-primary)_2%,transparent)] transition-colors"
                             >
                               <ChevronRightIcon size={8} strokeWidth={2.5} className={`text-[var(--color-text-muted)] opacity-60 shrink-0 transition-transform ${isSubCollapsed ? '' : 'rotate-90'}`} />
                               <span className="text-[10px] font-medium text-[var(--color-text-muted)] opacity-80">
                                 {sg.label}
                               </span>
-                              <span className="text-[9px] text-[var(--color-text-muted)] opacity-40 ml-auto">
-                                {sg.items.length}
+                              <span className="flex items-center gap-0.5 ml-auto">
+                                <IconButtonView
+                                  icon={<ExpandAllIcon size={9} className="text-[var(--color-info)]" />}
+                                  size="xs"
+                                  tooltip="Expand all"
+                                  onClick={(e) => { e.stopPropagation(); expandSubGroupTree(sg, subKey); }}
+                                />
+                                <IconButtonView
+                                  icon={<CollapseAllIcon size={9} className="text-[var(--color-warning)]" />}
+                                  size="xs"
+                                  tooltip="Collapse all"
+                                  onClick={(e) => { e.stopPropagation(); collapseSubGroupTree(sg, subKey); }}
+                                />
+                                <span className="text-[9px] text-[var(--color-text-muted)] opacity-40">
+                                  {sg.items.length}
+                                </span>
                               </span>
-                            </button>
+                            </div>
                             <div className={`collapse-wrapper ${!isSubCollapsed ? 'expanded' : ''}`}>
                               <div className="collapse-inner">
                                 <div className="pl-4">
@@ -417,39 +560,31 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
 
       {/* History item context menu */}
       {contextMenu && (
-        <ContextMenu
-          position={{ x: contextMenu.x, y: contextMenu.y }}
-          items={[
-            { id: 'open',        label: 'Open',               shortcut: 'O',   icon: <ExternalLinkIcon size={14} />, iconColor: 'var(--color-info)' },
-            { id: 'open-new-tab',label: 'Open in New Tab',    shortcut: 'T',   icon: <PlusSquareIcon size={14} />,   iconColor: 'var(--color-success)' },
-            { id: 'sep1', label: '', separator: true },
-            { id: 'save',   label: 'Save to Collection', shortcut: 'S',   icon: <SaveIcon size={14} />,      iconColor: 'var(--color-primary)' },
-            { id: 'export', label: 'Export as JSON',     shortcut: 'E',   icon: <DownloadIcon size={14} />,  iconColor: 'var(--color-warning)' },
-            { id: 'sep2', label: '', separator: true },
-            { id: 'delete', label: 'Delete',             danger: true, shortcut: 'Del', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)' },
-          ]}
-          onSelect={(id) => {
-            const item = contextMenu.item;
-            switch (id) {
-              case 'open': handleReplay(item); break;
-              case 'open-new-tab': handleReplay(item, true); break;
-              case 'save': handleReplay(item); setTimeout(() => window.postMessage({ type: 'openSaveAs', tabId: `h_${item.id}` }, '*'), 50); break;
-              case 'export': exportHistoryItem(item); break;
-              case 'delete': setDeleteConfirmId(item.id); break;
-            }
-            setContextMenu(null);
-          }}
+        <ContextMenuView
+          open={true}
+          anchorEl={null}
+          position={contextMenu.position}
           onClose={() => setContextMenu(null)}
+          items={contextMenu.items}
         />
       )}
 
       {/* Header more menu */}
       {headerMenu && (
-        <ContextMenu
-          items={[{ id: 'clear-all', label: 'Delete all history', danger: true, shortcut: 'D', icon: <TrashIcon size={14} />, iconColor: 'var(--color-error)' }]}
-          position={headerMenu}
-          onSelect={() => { setShowClearConfirm(true); setHeaderMenu(null); }}
+        <ContextMenuView
+          open={true}
+          anchorEl={null}
+          position={headerMenu.position}
           onClose={() => setHeaderMenu(null)}
+          items={headerMenu.items}
+        />
+      )}
+
+      {/* Document Request modal */}
+      {docGeneratorNode && (
+        <AiDocGeneratorModal
+          collectionNode={docGeneratorNode}
+          onClose={() => setDocGeneratorNode(null)}
         />
       )}
 

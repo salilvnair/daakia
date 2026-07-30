@@ -217,8 +217,34 @@ export function createAiServer(config: MockServerConfig, onLog?: LogCallback): h
 
         const scenario = matchScenario(scenarios, lastUserMsg);
         const delay = scenario.delay ?? 300;
+        const wantsStream = parsed.stream === true;
 
         setTimeout(() => {
+          if (wantsStream) {
+            // AI_PROVIDERS declares daakia-mock as supportsStreaming: true — honor it with
+            // real OpenAI-compatible SSE deltas (executeAiRequest's processSSELine expects
+            // `data: {"choices":[{"delta":{"content":...}}]}` lines, not a single JSON blob).
+            res.writeHead(200, {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              Connection: 'keep-alive',
+            });
+            const words = scenario.response.split(/(?<= )/); // keep spaces attached, stream word-by-word
+            for (const word of words) {
+              res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: word } }] })}\n\n`);
+            }
+            res.write(`data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { prompt_tokens: 50, completion_tokens: Math.floor(scenario.response.length / 4), total_tokens: Math.floor(scenario.response.length / 4) + 50 } })}\n\n`);
+            res.write('data: [DONE]\n\n');
+            res.end();
+            onLog?.({
+              id: crypto.randomUUID(), timestamp: Date.now(), serverId: config.id,
+              direction: 'incoming', protocol: 'ai', method: 'POST', path: pathname,
+              statusCode: 200, body: reqBody.slice(0, 500),
+              responseBody: scenario.response.slice(0, 1000), duration: Date.now() - startTime + delay,
+            });
+            return;
+          }
+
           const responseObj = buildChatResponse(modelId, scenario.response);
           const responseBody = JSON.stringify(responseObj);
           res.writeHead(200, { 'Content-Type': 'application/json' });

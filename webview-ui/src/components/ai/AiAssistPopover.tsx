@@ -1,5 +1,5 @@
 /**
- * AiAssistPopover — lightweight inline AI assist panel for response-context actions.
+ * AiAssistPopover — AI assist panel for response-context actions.
  *
  * Tasks: 4.3.1 (Error Diagnosis), 4.3.2 (Response Explainer), 4.3.3 (Request from Response)
  *
@@ -9,12 +9,15 @@
  * - "Open AI Chat" opens a new AI tab with the Q&A pre-loaded as initial conversation
  * - Responses are rendered by MdViewer (marked + highlight.js) instead of raw text
  */
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useTabsStore, type ResponseData } from '../../store/tabs-store';
-import { SparkleIcon, CloseIcon, RefreshIcon } from '../../icons';
+import { SparkleIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared';
+import type { DuiSize } from '@salilvnair/dui';
+import { useButtonBase, ModalView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -78,6 +81,7 @@ interface AiAssistPopoverProps {
   requestUrl: string;
   requestBody?: string;
   onClose: () => void;
+  anchorEl?: HTMLElement | null;
 }
 
 export function AiAssistPopover({
@@ -87,10 +91,33 @@ export function AiAssistPopover({
   requestUrl,
   requestBody,
   onClose,
+  anchorEl,
 }: AiAssistPopoverProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const popoverId = useRef(`ai-assist-${Date.now()}`).current;
   const accumulatedRef = useRef('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; visible: boolean }>({
+    top: -9999, left: -9999, visible: false,
+  });
+
+  useLayoutEffect(() => {
+    if (!anchorEl || !popRef.current) return;
+    const id = requestAnimationFrame(() => {
+      if (!popRef.current) return;
+      const btn = anchorEl.getBoundingClientRect();
+      const pop = popRef.current.getBoundingClientRect();
+      const W = 380;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let left = btn.right - W;
+      let top = btn.bottom + 6;
+      left = Math.max(8, Math.min(left, vw - W - 8));
+      if (top + pop.height > vh - 8) top = btn.top - pop.height - 6;
+      setPos({ top: Math.max(8, top), left, visible: true });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [anchorEl]);
 
   const providers = useAiProvidersStore(s => s.providers);
   const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
@@ -132,6 +159,9 @@ export function AiAssistPopover({
       ? 'Explaining response…'
       : 'Suggesting follow-up requests…';
 
+  const modeIcon = mode === 'error-diagnosis' ? '🚨' : mode === 'explain' ? '🔍' : '🔄';
+  const modeTitle = mode === 'error-diagnosis' ? 'AI Error Diagnosis' : mode === 'explain' ? 'Response Explainer' : 'Follow-up Requests';
+
   // ── AI request effect ──────────────────────────────────────────────────────
   useEffect(() => {
     // Cache hit on first render — skip request
@@ -172,7 +202,6 @@ export function AiAssistPopover({
 
     window.addEventListener('message', handler);
 
-    // baseUrl intentionally empty — extension resolves from provider registry + user settings
     postMsg({
       type: 'ai:send',
       tabId: popoverId,
@@ -218,145 +247,119 @@ export function AiAssistPopover({
     setFetchKey(k => k + 1);
   }, [fingerprint]);
 
-  // ── Open AI Chat — opens AI tab and replicates Q&A as initial conversation ─
+  // ── Open AI Chat ──────────────────────────────────────────────────────────
   const handleOpenAiChat = useCallback(() => {
     const { addTab } = useTabsStore.getState();
     addTab({ protocol: 'ai', aiProvider: provider, aiModel: model });
     onClose();
   }, [provider, model, onClose]);
 
-  const modeIcon = mode === 'error-diagnosis' ? '🚨' : mode === 'explain' ? '🔍' : '🔄';
-  const modeTitle = mode === 'error-diagnosis' ? 'AI Error Diagnosis' : mode === 'explain' ? 'Response Explainer' : 'Follow-up Requests';
+  const streamingDots = streaming && !error ? (
+    <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+      {[0, 100, 200].map(d => (
+        <span
+          key={d}
+          className="w-[3px] h-[3px] rounded-full animate-pulse"
+          style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }}
+        />
+      ))}
+    </div>
+  ) : undefined;
 
-  return (
-    <div
-      className="flex flex-col rounded-xl border shadow-xl overflow-hidden"
-      style={{
-        backgroundColor: 'var(--color-surface)',
-        borderColor: `color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
-        boxShadow: `0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px color-mix(in srgb, ${ACCENT} 15%, transparent)`,
-        minHeight: 100,
-        maxHeight: 360,
-      }}
+  const footerLeft = !streaming && !error && text ? (
+    <button
+      type="button"
+      onClick={handleRegenerate}
+      className="flex items-center gap-1 text-[10px] cursor-pointer transition-opacity opacity-50 hover:opacity-100"
+      style={{ color: 'var(--color-text-muted)' }}
     >
-      {/* Header */}
+      <RefreshIcon size={9} />
+      Regenerate
+    </button>
+  ) : undefined;
+
+  const footerRight = error ? (
+    <button
+      type="button"
+      onClick={handleRegenerate}
+      className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer border"
+      style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)` }}
+    >
+      <RefreshIcon size={9} /> Retry
+    </button>
+  ) : (text ? (
+    <button
+      type="button"
+      onClick={handleOpenAiChat}
+      className="text-[10px] font-medium cursor-pointer transition-colors hover:opacity-80"
+      style={{ color: ACCENT }}
+    >
+      Open AI Chat →
+    </button>
+  ) : undefined);
+
+  return createPortal(
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
       <div
-        className="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
+        ref={popRef}
         style={{
-          borderColor: `color-mix(in srgb, ${ACCENT} 15%, var(--color-surface-border))`,
-          backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 6%, var(--color-surface))',
+          position: 'fixed',
+          top: pos.top,
+          left: pos.left,
+          width: 532,
+          zIndex: 9999,
+          visibility: pos.visible ? 'visible' : 'hidden',
         }}
       >
-        <SparkleIcon size={12} style={{ color: ACCENT }} />
-        <span className="text-[11px] font-medium flex-1" style={{ color: ACCENT }}>
-          {modeIcon} {modeTitle}
-        </span>
-
-        {/* Streaming dots */}
-        {streaming && !error && (
-          <div className="flex gap-0.5">
-            {[0, 100, 200].map(d => (
-              <span
-                key={d}
-                className="w-[4px] h-[4px] rounded-full animate-pulse"
-                style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }}
-              />
-            ))}
+        <ModalView
+          mode="inline"
+          open
+          onClose={onClose}
+          title={`${modeIcon} ${modeTitle}`}
+          headerColor={ACCENT}
+          headerIcon={
+            <div style={{
+              width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: `color-mix(in srgb, ${ACCENT} 22%, transparent)`,
+            }}>
+              <SparkleIcon size={10} style={{ color: ACCENT }} />
+            </div>
+          }
+          headerRight={streamingDots}
+          footerLeft={footerLeft}
+          footerRight={footerRight}
+        >
+          <div ref={scrollRef} style={{ maxHeight: 420, overflowY: 'auto' }}>
+            {streaming && !text && !error && (
+              <p style={{ fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic', margin: 0 }}>
+                {modeLabel}
+              </p>
+            )}
+            {error && (
+              <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>⚠️ {error}</p>
+            )}
+            {text && (
+              <div style={{ fontSize: 11 }}>
+                <MdViewer content={text} />
+                {streaming && (
+                  <span
+                    className="inline-block w-[2px] h-[13px] ml-0.5 animate-pulse align-text-bottom"
+                    style={{ backgroundColor: ACCENT }}
+                  />
+                )}
+              </div>
+            )}
           </div>
-        )}
-
-        {/* Regenerate button — only when we have content */}
-        {!streaming && !error && text && (
-          <button
-            type="button"
-            onClick={handleRegenerate}
-            title="Regenerate — send a fresh request"
-            className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors opacity-50 hover:opacity-100"
-            style={{ color: ACCENT }}
-          >
-            <RefreshIcon size={10} />
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-[20px] h-[20px] flex items-center justify-center rounded cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
-        >
-          <CloseIcon size={11} />
-        </button>
+        </ModalView>
       </div>
-
-      {/* Streaming placeholder */}
-      {streaming && !text && !error && (
-        <div className="px-3 py-2 text-[11px] text-[var(--color-text-muted)] italic flex-shrink-0">
-          {modeLabel}
-        </div>
-      )}
-
-      {/* Error state */}
-      {error && (
-        <div className="px-3 py-2 flex items-start gap-2 flex-shrink-0">
-          <span className="text-[11px] text-[var(--color-error)] flex-1">⚠️ {error}</span>
-          <button
-            type="button"
-            onClick={handleRegenerate}
-            className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer border flex-shrink-0"
-            style={{ color: ACCENT, borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)` }}
-          >
-            <RefreshIcon size={9} /> Retry
-          </button>
-        </div>
-      )}
-
-      {/* Response — rendered as rich Markdown */}
-      {text && (
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-auto px-3 py-2"
-          style={{ minHeight: 60 }}
-        >
-          <MdViewer content={text} />
-          {streaming && (
-            <span
-              className="inline-block w-[2px] h-[13px] ml-0.5 animate-pulse align-text-bottom"
-              style={{ backgroundColor: ACCENT }}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Footer */}
-      {!streaming && !error && text && (
-        <div
-          className="flex items-center gap-2 px-3 py-1.5 border-t flex-shrink-0"
-          style={{ borderColor: 'var(--color-surface-border)' }}
-        >
-          <button
-            type="button"
-            onClick={handleRegenerate}
-            className="flex items-center gap-1 text-[10px] cursor-pointer transition-opacity opacity-50 hover:opacity-100"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            <RefreshIcon size={9} />
-            Regenerate
-          </button>
-          <div className="flex-1" />
-          <button
-            type="button"
-            onClick={handleOpenAiChat}
-            className="text-[10px] cursor-pointer transition-colors font-medium"
-            style={{ color: ACCENT }}
-          >
-            Open AI Chat →
-          </button>
-        </div>
-      )}
-    </div>
+    </>,
+    document.body,
   );
 }
 
-// ─── Trigger Button + Popover Shell ──────────────────────────────────────────
+// ─── Trigger Button + Modal Shell ─────────────────────────────────────────────
 
 interface AiActionButtonProps {
   mode: AssistMode;
@@ -369,8 +372,10 @@ interface AiActionButtonProps {
   onOpen: () => void;
   /** Override the accent color for this specific button */
   accentColor?: string;
-  /** compact=true → small rectangular style for response panel toolbar */
+  /** compact=true → xs size (20px) for response panel toolbars */
   compact?: boolean;
+  /** Explicit DUI size — overrides the compact default. */
+  size?: DuiSize;
 }
 
 export function AiActionButton({
@@ -384,18 +389,31 @@ export function AiActionButton({
   onOpen,
   accentColor,
   compact,
+  size,
 }: AiActionButtonProps) {
   const btnAccent = accentColor ?? ACCENT;
+  const resolvedSize: DuiSize = size ?? (compact ? 'xs' : 'sm');
+  const base = useButtonBase(resolvedSize);
+  const borderRadius = compact ? '4px' : '6px';
+  const btnRef = useRef<HTMLButtonElement>(null);
+
   return (
-    <div className="relative">
+    <>
       <button
+        ref={btnRef}
         type="button"
         onClick={onOpen}
-        className={compact
-          ? 'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] cursor-pointer transition-all border'
-          : 'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-medium cursor-pointer transition-all border'
-        }
+        className="flex items-center flex-shrink-0 whitespace-nowrap cursor-pointer transition-all border"
         style={{
+          height: base.height,
+          paddingLeft: base.paddingX,
+          paddingRight: base.paddingX,
+          gap: base.gap,
+          fontSize: base.fontSize,
+          fontWeight: compact ? 400 : 500,
+          borderRadius,
+          wordBreak: 'keep-all',
+          overflowWrap: 'normal',
           color: btnAccent,
           borderColor: open
             ? `color-mix(in srgb, ${btnAccent} 45%, var(--color-surface-border))`
@@ -416,22 +434,21 @@ export function AiActionButton({
         }}
         title={label}
       >
-        <SparkleIcon size={compact ? 8 : 10} style={{ color: btnAccent }} />
+        <SparkleIcon size={base.iconSize} style={{ color: btnAccent }} />
         {label}
       </button>
 
       {open && (
-        <div className="absolute z-50 right-0 mt-1 w-[440px]">
-          <AiAssistPopover
-            mode={mode}
-            response={response}
-            requestMethod={requestMethod}
-            requestUrl={requestUrl}
-            requestBody={requestBody}
-            onClose={onOpen}
-          />
-        </div>
+        <AiAssistPopover
+          mode={mode}
+          response={response}
+          requestMethod={requestMethod}
+          requestUrl={requestUrl}
+          requestBody={requestBody}
+          onClose={onOpen}
+          anchorEl={btnRef.current}
+        />
       )}
-    </div>
+    </>
   );
 }

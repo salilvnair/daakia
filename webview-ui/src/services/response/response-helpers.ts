@@ -1,4 +1,4 @@
-import type { CodeLanguage } from '../../components/shared/CodeEditor';
+import type { CodeLanguage } from '../../components/shared';
 
 /** Format response body based on content type */
 export function formatBody(body: string, contentType: string): string {

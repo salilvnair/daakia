@@ -5,7 +5,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getSqliteStatus, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
+import { getSqliteStatus, getDbPath, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
 // Handler imports
@@ -41,7 +41,8 @@ import {
   handleStartMockServer, handleStopMockServer, handleUpdateMockRoutes,
   handleSaveMockConfigs, handleGetMockServerState, handleSetMockPortRange,
   handleUpdateMockGraphQLSchema, handleUpdateMockGraphQLOps, handleUpdateMockWsHandlers,
-  handleUpdateMockSoapOps, handleUpdateMockGrpcMethods,
+  handleUpdateMockSoapOps, handleUpdateMockGrpcMethods, handlePatchStateMachine,
+  handleImportMockSpec,
   initMockLogForwarding,
 } from './handlers/mock-handler';
 import { handleExecuteGraphQL, handleGraphQLConnect, handleGraphQLSubscribe, handleGraphQLUnsubscribe, cleanupAllSubscriptions } from './handlers/graphql-handler';
@@ -55,6 +56,7 @@ import {
   handleAiSend, handleAiCancel,
   handleAiSaveConversation, handleAiLoadConversations, handleAiLoadConversation,
   handleAiDeleteConversation, handleAiClearConversations,
+  handleAiChat, handleAiStream, handleAiStreamRequest,
 } from './handlers/ai-handler';
 import { handleAiDiscovery } from './handlers/ai-discovery-handler';
 import { handleAiFuzz } from './handlers/ai-fuzz-handler';
@@ -62,10 +64,29 @@ import { handleMcpConnect, handleMcpDisconnect, handleMcpCallTool, handleMcpGetP
 import { handleAiMcpConnect, handleAiMcpDisconnect, cleanupAiMcpClients } from './handlers/ai-mcp-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from './handlers/ui-state-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
+import { scheduleAutoExport, COLLECTION_MUTATION_TYPES } from '../../services/git-sync';
+import {
+  initSmWorkflowStorage,
+  handleSmWorkflowGetAll,
+  handleSmWorkflowSave,
+  handleSmWorkflowDelete,
+  handleSmWorkflowSaveFolder,
+  handleSmWorkflowDeleteFolder,
+  handleSmWorkflowSaveTodos,
+} from './handlers/sm-workflow-handler';
 
 export class MainPanel {
   public static currentPanel: MainPanel | undefined;
   private static readonly _viewType = 'daakia.mainPanel';
+
+  /**
+   * Wiki capture automation hook (E-wiki-capture-plumbing) — set by the capture
+   * orchestration script/test to receive `wiki:capture:result`/`wiki:capture:error`
+   * replies from CaptureBridge.tsx. Stays undefined in normal use; the matching
+   * `case` in _handleMessage no-ops when it's unset, so this has zero effect on
+   * real users.
+   */
+  public static onCaptureMessage: ((msg: { type: string; id: string; html?: string; error?: string }) => void) | undefined;
 
   private readonly _panel: vscode.WebviewPanel;
   private readonly _extensionUri: vscode.Uri;
@@ -120,9 +141,10 @@ export class MainPanel {
 
   public refreshInitialState() {
     const status = getSqliteStatus();
-    this.postMessage({ type: 'init', sqliteOk: status.ok, sqliteError: status.error });
+    this.postMessage({ type: 'init', sqliteOk: status.ok, sqliteError: status.error, dbPath: getDbPath() });
 
     initMockLogForwarding(this._post);
+    initSmWorkflowStorage();
     handleGetMockServerState(this._post);
 
     handleGetEnvironments(this._post);
@@ -161,6 +183,11 @@ export class MainPanel {
     if (msg.type.startsWith('scriptDebug:')) {
       handleDebugMessage(msg, this._post);
       return;
+    }
+
+    // ── Git-native sync: write collections through to workspace files (debounced) ──
+    if (COLLECTION_MUTATION_TYPES.has(msg.type)) {
+      queueMicrotask(() => scheduleAutoExport());
     }
 
     switch (msg.type) {
@@ -333,6 +360,17 @@ export class MainPanel {
       case 'ai:discovery:start':
         handleAiDiscovery(msg, this._post);
         break;
+      // Legacy streaming contract used by 31 AI modals — see ai-handler.ts's
+      // runLegacyAiStream doc comment (E-ai-dead-message-contracts-fix).
+      case 'aiChat':
+        handleAiChat(msg, this._post);
+        break;
+      case 'aiStream':
+        handleAiStream(msg, this._post);
+        break;
+      case 'aiStreamRequest':
+        handleAiStreamRequest(msg, this._post);
+        break;
       case 'fuzz:run':
         handleAiFuzz(msg, this._post);
         break;
@@ -396,6 +434,87 @@ export class MainPanel {
         break;
       case 'mockServer:getAll':
         handleGetMockServerState(this._post);
+        break;
+      case 'mockServer:patchStateMachine':
+        handlePatchStateMachine(msg);
+        break;
+      case 'mockServer:importSpec':
+        handleImportMockSpec(msg, this._post);
+        break;
+      case 'mockServer:pickBodyFile': {
+        const callbackId = msg.callbackId as string;
+        vscode.window.showOpenDialog({
+          canSelectMany: false,
+          canSelectFolders: false,
+          openLabel: 'Select file',
+          title: 'Select response body file',
+        }).then(uris => {
+          if (uris && uris.length > 0) {
+            this._post({ type: 'mockServer:bodyFilePicked', callbackId, filePath: uris[0].fsPath });
+          }
+        });
+        break;
+      }
+
+      case 'exportMockServer': {
+        const content = msg.content as string ?? '';
+        const filename = msg.filename as string ?? 'mock-server.js';
+        vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(filename),
+          filters: { 'All Files': ['*'] },
+          saveLabel: 'Save',
+          title: 'Save Mock Server File',
+        }).then(uri => {
+          if (uri) {
+            fs.writeFileSync(uri.fsPath, content, 'utf-8');
+          }
+        });
+        break;
+      }
+
+      // Real WireMock project export — mappings/*.json + __files/*, zipped so it
+      // can be unzipped straight into a WireMock --root-dir.
+      case 'exportMockServerWiremockZip': {
+        const mappings = (msg.mappings as { filename: string; content: string }[]) ?? [];
+        const files = (msg.files as { filename: string; content: string }[]) ?? [];
+        const filename = (msg.filename as string) ?? 'wiremock-export.zip';
+        vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(filename),
+          filters: { 'Zip Archive': ['zip'] },
+          saveLabel: 'Save',
+          title: 'Save WireMock Export',
+        }).then(uri => {
+          if (!uri) return;
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { ZipArchive } = require('archiver');
+          const output = fs.createWriteStream(uri.fsPath);
+          const archive = new ZipArchive({ zlib: { level: 9 } });
+          archive.pipe(output);
+          for (const m of mappings) archive.append(m.content, { name: `mappings/${m.filename}` });
+          for (const f of files) archive.append(f.content, { name: `__files/${f.filename}` });
+          archive.finalize();
+        });
+        break;
+      }
+
+      // ── State Machine Workflows ──
+      case 'smWorkflow:getAll':
+        handleSmWorkflowGetAll(this._post);
+        break;
+      case 'smWorkflow:save':
+        handleSmWorkflowSave(msg);
+        break;
+      case 'smWorkflow:delete':
+        handleSmWorkflowDelete(msg);
+        break;
+      case 'smWorkflow:saveFolder':
+        handleSmWorkflowSaveFolder(msg);
+        break;
+      case 'smWorkflow:deleteFolder':
+        handleSmWorkflowDeleteFolder(msg);
+        break;
+      case 'smWorkflow:saveTodos':
+        handleSmWorkflowSaveTodos(msg);
         break;
       case 'mockServer:setPortRange':
         handleSetMockPortRange(msg, this._post);
@@ -625,7 +744,7 @@ export class MainPanel {
 
       // ── AI Keys (OS keychain via SecretStorage) ──
       case 'aiKeys:save': {
-        const { providerId, token } = msg as { providerId: string; token: string };
+        const { providerId, token } = msg as unknown as { providerId: string; token: string };
         if (providerId && token) {
           storeApiKey(providerId, token).then(() => {
             this._refreshKeyStatus();
@@ -636,7 +755,7 @@ export class MainPanel {
         break;
       }
       case 'aiKeys:delete': {
-        const { providerId } = msg as { providerId: string };
+        const { providerId } = msg as unknown as { providerId: string };
         if (providerId) {
           deleteApiKey(providerId).then(() => {
             this._refreshKeyStatus();
@@ -660,12 +779,12 @@ export class MainPanel {
         this._post({ type: 'aiHistory:data', sessions: loadAiChatSessions() });
         break;
       case 'aiHistory:delete': {
-        const { id } = msg as { id: string };
+        const { id } = msg as unknown as { id: string };
         if (id) deleteAiChatSession(id);
         break;
       }
       case 'aiHistory:search': {
-        const { query } = msg as { query: string };
+        const { query } = msg as unknown as { query: string };
         this._post({ type: 'aiHistory:results', sessions: searchAiChatSessions(query || '') });
         break;
       }
@@ -675,7 +794,7 @@ export class MainPanel {
         this._post({ type: 'aiConversation:data', messages: loadAiConversation() });
         break;
       case 'aiConversation:save': {
-        const { messages } = msg as { messages: AiConversationMessage[] };
+        const { messages } = msg as unknown as { messages: AiConversationMessage[] };
         if (Array.isArray(messages)) {
           // Trim to maxAiChatMessages from general settings (default 200)
           const general = getSetting<Record<string, unknown>>('general') ?? {};
@@ -691,17 +810,17 @@ export class MainPanel {
 
       // ── AI Audit ──
       case 'aiAudit:load': {
-        const limit = (msg as { limit?: number }).limit ?? 100;
+        const limit = (msg as unknown as { limit?: number }).limit ?? 100;
         this._post({ type: 'aiAudit:data', entries: getAuditEntries(limit) });
         break;
       }
       case 'aiAudit:delete': {
-        const { auditId } = msg as { auditId: number };
+        const { auditId } = msg as unknown as { auditId: number };
         if (auditId != null) deleteAuditEntry(auditId);
         break;
       }
       case 'aiAudit:deleteMany': {
-        const { auditIds } = msg as { auditIds: number[] };
+        const { auditIds } = msg as unknown as { auditIds: number[] };
         if (Array.isArray(auditIds) && auditIds.length > 0) deleteAuditEntries(auditIds);
         break;
       }
@@ -711,14 +830,14 @@ export class MainPanel {
 
       // ── UI Audit ──
       case 'uiAudit:log': {
-        const { event_type, module, button, action, metadata } = msg as { event_type: string; module: string; button?: string; action?: string; metadata?: Record<string, unknown> };
+        const { event_type, module, button, action, metadata } = msg as unknown as { event_type: string; module: string; button?: string; action?: string; metadata?: Record<string, unknown> };
         if (event_type && module) {
           insertUiAudit({ event_type, module, button, action, metadata: metadata ? JSON.stringify(metadata) : undefined });
         }
         break;
       }
       case 'uiAudit:load': {
-        const limit = (msg as { limit?: number }).limit ?? 200;
+        const limit = (msg as unknown as { limit?: number }).limit ?? 200;
         this._post({ type: 'uiAudit:data', entries: getUiAuditEntries(limit) });
         break;
       }
@@ -731,12 +850,12 @@ export class MainPanel {
         this._post({ type: 'dbExplorer:tables', tables: getDbTables() });
         break;
       case 'dbExplorer:getRows': {
-        const { tableName, limit, offset } = msg as { tableName: string; limit?: number; offset?: number };
+        const { tableName, limit, offset } = msg as unknown as { tableName: string; limit?: number; offset?: number };
         this._post({ type: 'dbExplorer:rows', tableName, rows: getDbTableRows(tableName, limit ?? 100, offset ?? 0) });
         break;
       }
       case 'dbExplorer:deleteRow': {
-        const { tableName, pkCol, pkVal } = msg as { tableName: string; pkCol: string; pkVal: unknown };
+        const { tableName, pkCol, pkVal } = msg as unknown as { tableName: string; pkCol: string; pkVal: unknown };
         deleteDbRow(tableName, pkCol, pkVal);
         this._post({ type: 'dbExplorer:rowDeleted', tableName, pkVal });
         break;
@@ -747,7 +866,7 @@ export class MainPanel {
         this._post({ type: 'aiFeatures:data', features: getAiFeatures() });
         break;
       case 'aiFeatures:save': {
-        const { features } = msg as { features: Parameters<typeof setAiFeatures>[0] };
+        const { features } = msg as unknown as { features: Parameters<typeof setAiFeatures>[0] };
         if (features) setAiFeatures(features);
         break;
       }
@@ -757,13 +876,13 @@ export class MainPanel {
         this._post({ type: 'promptLibrary:data', prompts: getAllPrompts() });
         break;
       case 'promptLibrary:save': {
-        const { scenario, prompt } = msg as { scenario: string; prompt: Parameters<typeof upsertPrompt>[1] };
+        const { scenario, prompt } = msg as unknown as { scenario: string; prompt: Parameters<typeof upsertPrompt>[1] };
         if (scenario && prompt) upsertPrompt(scenario, prompt);
         this._post({ type: 'promptLibrary:data', prompts: getAllPrompts() });
         break;
       }
       case 'promptLibrary:reset': {
-        const { scenario } = msg as { scenario: string };
+        const { scenario } = msg as unknown as { scenario: string };
         if (scenario) resetPrompt(scenario);
         this._post({ type: 'promptLibrary:data', prompts: getAllPrompts() });
         break;
@@ -774,7 +893,7 @@ export class MainPanel {
         this._post({ type: 'aiPromptTemplates:data', templates: getAiPromptTemplates() });
         break;
       case 'aiPromptTemplates:save': {
-        const { templates: tpls } = msg as { templates: Record<string, string> };
+        const { templates: tpls } = msg as unknown as { templates: Record<string, string> };
         if (tpls && typeof tpls === 'object') setAiPromptTemplates(tpls);
         break;
       }
@@ -798,10 +917,19 @@ export class MainPanel {
         break;
 
       case 'fetchUrl': {
-        const { reqId, url: fetchUrlTarget } = message as { reqId: string; url: string };
+        const { reqId, url: fetchUrlTarget } = msg as unknown as { reqId: string; url: string };
         this._fetchExternalUrl(reqId, fetchUrlTarget);
         break;
       }
+
+      // ── Wiki capture automation (E-wiki-capture-plumbing, test/orchestrator only) ──
+      case 'wiki:capture:ack':
+        console.log('[wiki:capture] webview acked', (msg as unknown as { id: string }).id);
+        break;
+      case 'wiki:capture:result':
+      case 'wiki:capture:error':
+        MainPanel.onCaptureMessage?.(msg as unknown as { type: string; id: string; html?: string; error?: string });
+        break;
 
       default:
         break;

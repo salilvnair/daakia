@@ -39,8 +39,8 @@ export function SearchInput({
         height,
         paddingLeft: 8,
         paddingRight: suffix ? 4 : 8,
-        background: 'rgba(255,255,255,0.04)',
-        borderColor: 'rgba(255,255,255,0.08)',
+        background: 'color-mix(in srgb, var(--color-text-primary) 4%, transparent)',
+        borderColor: 'color-mix(in srgb, var(--color-text-primary) 8%, transparent)',
       }}
     >
       {prefix && (

@@ -5,6 +5,7 @@ import { AiMessageBubble } from './AiMessageBubble';
 import { AiHistoryPanel } from './AiHistoryPanel';
 import { TrashIcon, McpToolIcon, SendIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { MultilineInputView } from '@salilvnair/dui';
 
 /**
  * AiConversationPanel — Shows the conversation history for an AI *request* tab (protocol='ai').
@@ -433,7 +434,7 @@ function ToolResultInputPanel({ toolCalls, onSubmit }: ToolResultInputPanelProps
       </div>
 
       {/* Tool call forms */}
-      <div className="flex flex-col gap-0 divide-y" style={{ divideColor: 'var(--color-surface-border)' }}>
+      <div className="flex flex-col gap-0 divide-y divide-[var(--color-surface-border)]">
         {toolCalls.map((tc, idx) => {
           let parsedArgs: unknown = null;
           try { parsedArgs = JSON.parse(tc.function.arguments || '{}'); } catch { /* */ }
@@ -452,7 +453,7 @@ function ToolResultInputPanel({ toolCalls, onSubmit }: ToolResultInputPanelProps
                   <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>
                     {tc.function.name}
                   </p>
-                  {parsedArgs && Object.keys(parsedArgs as object).length > 0 && (
+                  {parsedArgs !== null && typeof parsedArgs === 'object' && Object.keys(parsedArgs).length > 0 && (
                     <p className="text-[10px] font-mono mt-0.5 truncate" style={{ color: 'var(--color-text-muted)' }}>
                       {tc.function.arguments.length > 100
                         ? tc.function.arguments.slice(0, 100) + '…'
@@ -467,17 +468,14 @@ function ToolResultInputPanel({ toolCalls, onSubmit }: ToolResultInputPanelProps
                 <label className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
                   Result (JSON or plain text):
                 </label>
-                <textarea
+                <MultilineInputView
                   value={results[tc.id] || ''}
                   onChange={(e) => setResults(prev => ({ ...prev, [tc.id]: e.target.value }))}
                   placeholder={`Enter the result for ${tc.function.name}...`}
                   rows={3}
-                  className="w-full rounded-md p-2 text-[12px] font-mono resize-none outline-none focus:ring-1 focus:ring-[var(--color-protocol-ai)]"
-                  style={{
-                    backgroundColor: 'var(--color-panel)',
-                    border: '1px solid var(--color-surface-border)',
-                    color: 'var(--color-text-primary)',
-                  }}
+                  size="md"
+                  width="fw"
+                  style={{ fontFamily: 'var(--font-mono)' }}
                 />
               </div>
             </div>

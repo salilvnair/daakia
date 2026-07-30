@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import MonacoEditor, { type OnMount } from '@monaco-editor/react';
+import { EditorView } from '@salilvnair/dui';
 import { CodeIcon, RefreshIcon, PaletteIcon } from '../../../../icons';
-import { LiveColorCustomizer, ResizablePanelView } from '../../../../dui';
-import type { LiveColorVar } from '../../../../dui';
+import { LiveColorCustomizer, ResizablePanelView } from '@salilvnair/dui';
+import type { LiveColorVar } from '@salilvnair/dui';
 import { ErrorBoundary } from './ErrorBoundary';
 import { buildAndEval } from './buildAndEval';
 import * as ReactNS from 'react';
@@ -34,7 +34,7 @@ export function LivePlayground({ code: initialCode, content, themeMode, vars }: 
   // Scoped color overrides — applied ONLY to the preview pane, not the whole page
   const [colorOverrides, setColorOverrides] = useState<Record<string, string>>({});
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const prevErrorRef = useRef(false);
 
   const handleVarChange = useCallback((cssVar: string, value: string | null) => {
@@ -81,7 +81,7 @@ export function LivePlayground({ code: initialCode, content, themeMode, vars }: 
   const hasVars = (vars?.length ?? 0) > 0;
   const anyOpen = editorOpen || colorsOpen;
 
-  const handleMount: OnMount = (_editor, monaco) => {
+  const handleMount = (_editor: any, monaco: any) => {
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       jsx: monaco.languages.typescript.JsxEmit.React,
       jsxFactory: 'React.createElement',
@@ -231,29 +231,24 @@ export function LivePlayground({ code: initialCode, content, themeMode, vars }: 
             }}>
               JSX
             </div>
-            <MonacoEditor
+            <EditorView
               height={calcEditorHeight(code)}
               language="typescript"
               value={code}
               onChange={v => setCode(v ?? '')}
-              theme={isDark ? 'vs-dark' : 'light'}
-              onMount={handleMount}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 12,
+              fontSize={12}
+              wordWrap
+              onEditorMount={handleMount}
+              editorOptions={{
                 lineHeight: 19,
-                scrollBeyondLastLine: false,
-                wordWrap: 'on',
                 lineNumbers: 'on',
                 folding: false,
                 renderLineHighlight: 'line',
                 padding: { top: 12, bottom: 12 },
-                automaticLayout: true,
                 tabSize: 2,
                 scrollbar: { vertical: 'auto', horizontal: 'hidden' },
                 suggest: { showKeywords: false },
                 quickSuggestions: false,
-                overviewRulerLanes: 0,
               }}
             />
           </div>

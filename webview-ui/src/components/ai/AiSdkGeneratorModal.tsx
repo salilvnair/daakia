@@ -5,11 +5,11 @@
  * From collection → generate full reusable client class in TS/Python/Go/Java/C#
  */
 import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { SparkleIcon, CloseIcon, CopyIcon } from '../../icons';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useSidebarDataStore } from '../../store/sidebar-data-store';
-import { StyledDropdown } from '../shared/controls/StyledDropdown';
+import { ModalView, AIButtonView, ButtonView, SelectInputView, CodeBlockView } from '@salilvnair/dui';
+import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
 interface Props {
   onClose: () => void;
@@ -44,12 +44,23 @@ export function AiSdkGeneratorModal({ onClose }: Props) {
   const [language, setLanguage] = useState('typescript');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
   const accRef = useRef('');
   const reqIdRef = useRef('');
   const collections = useSidebarDataStore(s => s.getCollections('rest'));
+  const cacheGet = useAiCollectionCacheStore(s => s.get);
+  const cacheSet = useAiCollectionCacheStore(s => s.set);
+  const cacheKey = `sdk-gen:${selectedCollection}:${language}`;
+
+  // Cache-first: picking a collection+language combo already generated shows the
+  // last SDK instead of re-running the AI call — Regenerate is always explicit.
+  useEffect(() => {
+    if (!selectedCollection) return;
+    const cached = cacheGet(cacheKey);
+    setResult(cached ? (cached.payload as string) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -60,8 +71,10 @@ export function AiSdkGeneratorModal({ onClose }: Props) {
         setResult(accRef.current);
       }
       if (msg.type === 'ai:complete') {
-        setResult(accRef.current || '');
+        const content = accRef.current || '';
+        setResult(content);
         setLoading(false);
+        if (selectedCollection) cacheSet(cacheKey, content);
       }
       if (msg.type === 'ai:error') {
         setError((msg.message as string) || 'SDK generation failed.');
@@ -70,7 +83,8 @@ export function AiSdkGeneratorModal({ onClose }: Props) {
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
 
   const run = () => {
     const collection = collections.find(c => c.id === selectedCollection);
@@ -95,102 +109,91 @@ export function AiSdkGeneratorModal({ onClose }: Props) {
     });
   };
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(result);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
+  const langLabel = LANGUAGES.find(l => l.value === language)?.label;
+  const HLJS_LANG: Record<string, string> = { typescript: 'typescript', python: 'python', go: 'go', java: 'java', csharp: 'csharp', rust: 'rust' };
 
-  const modal = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-[740px] max-h-[90vh] flex flex-col rounded-xl border shadow-2xl"
-        style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}>
-
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
-          <SparkleIcon size={15} style={{ color: ACCENT }} />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">AI SDK Generator</p>
-            <p className="text-[11px] text-[var(--color-text-muted)]">Collection → full client SDK in any language</p>
-          </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer">
-            <CloseIcon size={12} />
-          </button>
+  return (
+    <ModalView
+      open
+      onClose={onClose}
+      title="AI SDK Generator"
+      subtitle="Collection → full client SDK in any language"
+      size="lg"
+      headerColor={ACCENT}
+      headerIcon={
+        <div style={{
+          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'color-mix(in srgb, var(--color-protocol-ai) 18%, transparent)',
+        }}>
+          <SparkleIcon size={13} style={{ color: ACCENT }} />
         </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Collection</label>
-              <StyledDropdown
-                value={selectedCollection}
-                options={collections.map(c => ({ value: c.id, label: c.name }))}
-                onChange={setSelectedCollection}
-                placeholder="Select collection…"
-              />
-            </div>
-            <div className="w-40">
-              <label className="block text-[11px] font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Language</label>
-              <StyledDropdown value={language} options={LANGUAGES} onChange={setLanguage} />
-            </div>
-          </div>
-
-          {error && <p className="text-[11px]" style={{ color: 'var(--color-error)' }}>{error}</p>}
-
-          {loading && !result && (
-            <div className="flex gap-1 items-center py-4">
-              {[0, 150, 300].map(d => (
-                <span key={d} className="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style={{ backgroundColor: ACCENT, animationDelay: `${d}ms` }} />
-              ))}
-              <span className="text-[11px] text-[var(--color-text-muted)] ml-1.5">Generating {LANGUAGES.find(l => l.value === language)?.label} SDK…</span>
-            </div>
-          )}
-
-          {result && (
-            <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <div className="flex items-center justify-between px-3 py-1.5 border-b"
-                style={{ backgroundColor: 'var(--color-surface-hover)', borderColor: 'var(--color-surface-border)' }}>
-                <span className="text-[10px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
-                  {LANGUAGES.find(l => l.value === language)?.label} SDK
-                </span>
-                <button type="button" onClick={copy}
-                  className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded cursor-pointer"
-                  style={{ color: copied ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                  <CopyIcon size={11} />
-                  {copied ? 'Copied!' : 'Copy all'}
-                </button>
-              </div>
-              <pre className="p-4 text-[11px] font-mono overflow-auto whitespace-pre-wrap max-h-[400px]"
-                style={{ color: 'var(--color-text-primary)', backgroundColor: 'var(--color-panel)' }}>
-                {result}
-                {loading && <span className="inline-block w-[2px] h-[11px] ml-0.5 animate-pulse" style={{ backgroundColor: ACCENT }} />}
-              </pre>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end px-5 py-3 border-t flex-shrink-0 gap-2" style={{ borderColor: 'var(--color-surface-border)' }}>
+      }
+      footerRight={
+        <>
           {result && !loading && (
-            <button type="button" onClick={run}
-              className="h-[30px] px-3 text-[11px] rounded-md cursor-pointer border"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-              Regenerate
-            </button>
+            <ButtonView size="md" onClick={run}>Regenerate</ButtonView>
           )}
-          <button type="button" onClick={run} disabled={loading || !selectedCollection}
-            className="h-[32px] px-4 text-[12px] font-medium rounded-md cursor-pointer hover:opacity-90 disabled:opacity-40 text-white"
-            style={{ backgroundColor: ACCENT }}>
-            <SparkleIcon size={11} className="inline mr-1" />
-            Generate SDK
-          </button>
-          <button type="button" onClick={onClose}
-            className="h-[30px] px-4 text-[11px] font-medium rounded-md cursor-pointer bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]">
-            Close
-          </button>
+          <AIButtonView
+            label={loading ? 'Generating…' : 'Generate SDK'}
+            size="md"
+            accentColor={ACCENT}
+            loading={loading}
+            disabled={loading || !selectedCollection}
+            onClick={run}
+          />
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 6, color: 'var(--color-text-secondary)' }}>Collection</label>
+            <SelectInputView
+              value={selectedCollection}
+              options={collections.map(c => ({ value: c.id, label: c.name }))}
+              onChange={setSelectedCollection}
+              placeholder="Select collection…"
+              size="md"
+              accentColor={ACCENT}
+              width="100%"
+            />
+          </div>
+          <div style={{ width: 160 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 6, color: 'var(--color-text-secondary)' }}>Language</label>
+            <SelectInputView
+              value={language}
+              options={LANGUAGES}
+              onChange={setLanguage}
+              size="md"
+              accentColor={ACCENT}
+              width="100%"
+            />
+          </div>
         </div>
-      </div>
-    </div>
-  );
 
-  return createPortal(modal, document.body);
+        {error && <p style={{ fontSize: 11, color: 'var(--color-error)', margin: 0 }}>{error}</p>}
+
+        {loading && !result && (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '16px 0' }}>
+            {[0, 150, 300].map(d => (
+              <span key={d} className="animate-pulse" style={{
+                width: 5, height: 5, borderRadius: '50%', background: ACCENT, animationDelay: `${d}ms`,
+              }} />
+            ))}
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>Generating {langLabel} SDK…</span>
+          </div>
+        )}
+
+        {result && (
+          <CodeBlockView
+            code={result}
+            language={HLJS_LANG[language]}
+            maxHeight="400px"
+            accentColor={ACCENT}
+          />
+        )}
+      </div>
+    </ModalView>
+  );
 }

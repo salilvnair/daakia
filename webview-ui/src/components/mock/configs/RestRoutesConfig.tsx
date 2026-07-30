@@ -2,14 +2,18 @@
  * RestRoutesConfig — REST route management for mock server.
  */
 import { useState } from 'react';
-import { StyledDropdown, ConfirmDialog, type DropdownOption } from '../../shared';
+import { ButtonView, IconButtonView, SelectInputView, type SelectOption } from '@salilvnair/dui';
+import { ConfirmDialog } from '../../shared';
 import { TrashIcon } from '../../../icons';
 import { RouteCard } from '../RouteCard';
 import { REST_SAMPLES } from '../samples';
-import type { MockServer, MockRoute } from '../mock-types';
+import { installSMRestWorkflow } from '../samples/sm-rest-workflows';
+import type { MockServer, MockRoute, ConnectedWorkflow } from '../mock-types';
 import { MockAiGenerateButton } from '../MockAiGeneratePopover';
+import { postMsg } from '../../../vscode';
+import { logUiEvent } from '../../../store/ui-audit-store';
 
-const REST_SAMPLE_OPTIONS: DropdownOption[] = [
+const REST_SAMPLE_OPTIONS: SelectOption[] = [
   { value: '', label: 'Load Sample...' },
   ...REST_SAMPLES.map(s => ({ value: s.id, label: s.label })),
 ];
@@ -35,15 +39,66 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
     if (!sampleId) return;
     const sample = REST_SAMPLES.find(s => s.id === sampleId);
     if (!sample) return;
+    logUiEvent('mock.sample_load', { sampleId, protocol: 'rest' });
     setSelectedSample(sampleId);
     const routes: MockRoute[] = sample.routes.map(r => ({
       id: crypto.randomUUID(),
       ...r,
     }));
-    onUpdate({ routes, description: sample.description });
+
+    // Install matching SM workflow (idempotent — safe to call every time)
+    const workflow = installSMRestWorkflow(sampleId);
+
+    if (workflow) {
+      // Use sample's pre-configured stateMachine if provided, else preserve existing
+      const smConfig = sample.stateMachine ?? server.stateMachine ?? undefined;
+      const existing: ConnectedWorkflow[] = server.connectedWorkflows ?? [];
+      const already = existing.find(w => w.workflowId === workflow.id);
+      // Heal the matching entry's stateMachine if it's missing, even when
+      // `already` is set — a server saved before this sample's stateMachine
+      // config was correctly attached to connectedWorkflows would otherwise
+      // keep a permanently-empty `.stateMachine` forever: getStateMachineRuntime()
+      // returns null for every triggerEvent-gated route on that workflow, so
+      // every route silently 404s with "no route matches" instead of ever
+      // reaching gating/matcher logic — and clicking Load Sample again on
+      // that same server never self-healed it, since the old code reused the
+      // stale entry verbatim whenever `already` was set. Only touches
+      // `stateMachine`, not `name`, so a user's custom workflow rename isn't
+      // clobbered by re-loading the sample.
+      let connectedWorkflows: ConnectedWorkflow[] = already
+        ? (already.stateMachine ? existing : existing.map(w => w.workflowId === workflow.id ? { ...w, stateMachine: smConfig } : w))
+        : [...existing, { workflowId: workflow.id, name: workflow.name, stateMachine: smConfig }];
+
+      // Install + connect any additional workflows this sample ships with
+      // (e.g. a second, independent auth flow reached only by a header-gated
+      // route) — each carries its own stateMachine directly on the
+      // ConnectedWorkflow entry, since only ONE workflow can use the
+      // server-level `stateMachine` fallback slot. Same upsert reasoning as
+      // above applies here too.
+      for (const [lookupKey, extraStateMachine] of Object.entries(sample.additionalWorkflows ?? {})) {
+        const extraWorkflow = installSMRestWorkflow(lookupKey);
+        if (!extraWorkflow) continue;
+        const alreadyExtra = connectedWorkflows.find(w => w.workflowId === extraWorkflow.id);
+        connectedWorkflows = alreadyExtra
+          ? (alreadyExtra.stateMachine ? connectedWorkflows : connectedWorkflows.map(w => w.workflowId === extraWorkflow.id ? { ...w, stateMachine: extraStateMachine } : w))
+          : [...connectedWorkflows, { workflowId: extraWorkflow.id, name: extraWorkflow.name, stateMachine: extraStateMachine }];
+      }
+
+      onUpdate({ routes, description: sample.description, connectedWorkflows, connectedWorkflowId: workflow.id, stateMachine: smConfig });
+
+      // Persist to extension host immediately (MockServerPanel debounced save may lag)
+      postMsg({
+        type: 'mockServer:patchStateMachine',
+        serverId: server.id,
+        connectedWorkflows,
+        connectedWorkflowId: workflow.id,
+        stateMachine: smConfig ?? null,
+      });
+    } else {
+      onUpdate({ routes, description: sample.description });
+    }
   };
 
-  // Build AI context: description (user's full text context) + existing routes
   const buildAiContext = () => {
     const parts: string[] = [];
     if (server.description?.trim()) {
@@ -60,8 +115,8 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[var(--color-text-primary)]">Routes ({server.routes.length})</span>
         <div className="flex items-center gap-1.5">
-          <StyledDropdown
-            size="sm"
+          <SelectInputView
+            size="md"
             options={REST_SAMPLE_OPTIONS}
             value={selectedSample}
             onChange={applySample}
@@ -75,25 +130,22 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
             accentVar={REST_COLOR}
             onAddGeneratedRoutes={onAddGeneratedRoutes}
           />
-          <button
-            type="button"
-            onClick={onAddRoute}
-            className="h-[26px] px-2.5 text-[11px] rounded cursor-pointer transition-colors border"
-            style={{ color: REST_COLOR, borderColor: `color-mix(in srgb, ${REST_COLOR} 30%, transparent)` }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = `color-mix(in srgb, ${REST_COLOR} 10%, transparent)`; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          <ButtonView
+            size="md"
+            variant="accent"
+            accentColor={REST_COLOR}
+            onClick={() => { logUiEvent('mock.cfg_add', { protocol: 'rest' }); onAddRoute(); }}
           >
             + Add Route
-          </button>
+          </ButtonView>
           {server.routes.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowDeleteAll(true)}
+            <IconButtonView
+              size="md"
+              icon={<TrashIcon size={12} />}
               title="Delete All Routes"
-              className="h-[26px] w-[26px] flex items-center justify-center rounded cursor-pointer transition-colors border border-[rgba(239,68,68,0.3)] text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]"
-            >
-              <TrashIcon size={12} />
-            </button>
+              accentColor="var(--color-error)"
+              onClick={() => setShowDeleteAll(true)}
+            />
           )}
         </div>
       </div>
@@ -104,6 +156,7 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
             route={route}
             isEditing={editingRoute === route.id}
             serverBaseUrl={server.running && server.port ? `http://localhost:${server.port}` : undefined}
+            server={server}
             onEdit={() => onEditRoute(editingRoute === route.id ? null : route.id)}
             onUpdate={(patch) => onUpdateRoute(route.id, patch)}
             onDelete={() => onDeleteRoute(route.id)}
@@ -118,6 +171,7 @@ export function RestRoutesConfig({ server, onUpdate, onAddRoute, onAddGeneratedR
           confirmLabel="Delete All"
           danger
           onConfirm={() => {
+            logUiEvent('mock.cfg_clear', { count: server.routes.length, protocol: 'rest' });
             onUpdate({ routes: [] });
             setShowDeleteAll(false);
           }}

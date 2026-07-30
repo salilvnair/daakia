@@ -1,13 +1,29 @@
 /**
  * MqttSubscriptionModal — Modal for adding a new MQTT subscription.
  */
+import { ModalView, ButtonView, TextInputView, SelectInputView } from '@salilvnair/dui';
 import { PlusIcon } from '../../../icons';
 
-const SUB_COLORS = [
+export const SUB_COLORS = [
   'var(--color-protocol-mqtt)',
-  '#22c55e', '#f59e0b', '#ef4444', '#3b82f6',
+  'var(--color-success)', 'var(--color-warning)', 'var(--color-error)', 'var(--color-info)',
   '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
 ];
+
+const QOS_OPTIONS = [
+  { value: '0', label: 'QoS 0' },
+  { value: '1', label: 'QoS 1' },
+  { value: '2', label: 'QoS 2' },
+];
+
+// Hex fallback values for SUB_COLORS (for the color picker input which needs a real hex)
+const COLOR_HEX_FALLBACKS: Record<string, string> = {
+  'var(--color-protocol-mqtt)': '#8b5cf6',
+  'var(--color-success)': '#22c55e',
+  'var(--color-warning)': '#f59e0b',
+  'var(--color-error)': '#ef4444',
+  'var(--color-info)': '#3b82f6',
+};
 
 interface MqttSubscriptionModalProps {
   topic: string;
@@ -22,113 +38,97 @@ interface MqttSubscriptionModalProps {
   onCancel: () => void;
 }
 
-export { SUB_COLORS };
-
 export function MqttSubscriptionModal({ topic, setTopic, qos, setQos, label, setLabel, color, setColor, onSubscribe, onCancel }: MqttSubscriptionModalProps) {
+  const isCustomColor = !SUB_COLORS.slice(0, 6).includes(color);
+  const colorHexForPicker = isCustomColor && color.startsWith('#') ? color : COLOR_HEX_FALLBACKS[color] || '#8b5cf6';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.5)]">
-      <div className="w-[420px] bg-[var(--color-panel)] rounded-lg border border-[var(--color-surface-border)] shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-surface-border)]">
-          <span className="text-[14px] font-semibold text-[var(--color-text-primary)]">New Subscription</span>
-          <button type="button" onClick={onCancel} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer text-[18px]">×</button>
+    <ModalView
+      open={true}
+      onClose={onCancel}
+      title="New Subscription"
+      subtitle="Subscribe to an MQTT topic filter"
+      headerIcon={<PlusIcon size={16} />}
+      headerColor="var(--color-protocol-mqtt)"
+      size="sm"
+      footerRight={
+        <ButtonView
+          label="Subscribe"
+          variant="primary"
+          size="md"
+          accentColor="var(--color-protocol-mqtt)"
+          disabled={!topic.trim()}
+          onClick={onSubscribe}
+        />
+      }
+    >
+      <div className="flex flex-col gap-3 px-1">
+        {/* Topic filter */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[11px] text-[var(--color-text-muted)]">Topic Filter</span>
+          <TextInputView
+            value={topic}
+            onChange={e => setTopic(e.target.value)}
+            placeholder="e.g. sensors/+/temperature or home/#"
+            size="md"
+            autoFocus
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && topic.trim()) onSubscribe(); }}
+          />
         </div>
 
-        {/* Content */}
-        <div className="px-5 py-4 flex flex-col gap-3">
-          {/* Topic filter */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[11px] text-[var(--color-text-muted)]">Topic Filter</span>
-            <input
-              type="text"
-              value={topic}
-              onChange={e => setTopic(e.target.value)}
-              placeholder="e.g. sensors/+/temperature or home/#"
-              className="h-[34px] px-3 text-[12px] font-mono rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
-              autoFocus
-              onKeyDown={e => { if (e.key === 'Enter' && topic.trim()) onSubscribe(); }}
+        {/* QoS */}
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-[var(--color-text-muted)]">QoS</span>
+          <SelectInputView
+            options={QOS_OPTIONS}
+            value={String(qos)}
+            onChange={(v) => setQos(parseInt(v) as 0 | 1 | 2)}
+            size="md"
+            accentColor="var(--color-protocol-mqtt)"
+          />
+        </div>
+
+        {/* Label + Color */}
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-1 flex-1">
+            <span className="text-[11px] text-[var(--color-text-muted)]">Label</span>
+            <TextInputView
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+              placeholder="Label (optional)"
+              size="md"
             />
           </div>
-
-          {/* QoS radio */}
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] text-[var(--color-text-muted)]">QoS</span>
-            {([0, 1, 2] as const).map(q => (
-              <label key={q} className="flex items-center gap-1.5 cursor-pointer text-[12px]">
-                <input
-                  type="radio"
-                  name="sub-qos"
-                  checked={qos === q}
-                  onChange={() => setQos(q)}
-                  className="accent-[var(--color-protocol-mqtt)]"
+          {/* Color swatches */}
+          <div className="flex flex-col gap-1">
+            <span className="text-[11px] text-[var(--color-text-muted)]">Color</span>
+            <div className="flex items-center gap-1">
+              {SUB_COLORS.slice(0, 6).map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  className={`w-5 h-5 rounded-full cursor-pointer transition-all ${color === c ? 'ring-2 ring-offset-1 ring-offset-[var(--color-panel)]' : 'opacity-60 hover:opacity-100'}`}
+                  style={{ backgroundColor: c }}
                 />
-                <span className="text-[var(--color-text-primary)]">{q}</span>
+              ))}
+              {/* Custom color picker */}
+              <label
+                className={`w-5 h-5 rounded-full cursor-pointer transition-all relative overflow-hidden ${isCustomColor ? 'ring-2 ring-offset-1 ring-offset-[var(--color-panel)]' : 'opacity-60 hover:opacity-100'}`}
+                style={{ background: isCustomColor ? color : 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }}
+                title="Custom color"
+              >
+                <input
+                  type="color"
+                  value={colorHexForPicker}
+                  onChange={e => setColor(e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
               </label>
-            ))}
-          </div>
-
-          {/* Label + Color */}
-          <div className="flex items-center gap-2">
-            <div className="flex flex-col gap-1 flex-1">
-              <span className="text-[11px] text-[var(--color-text-muted)]">Label</span>
-              <input
-                type="text"
-                value={label}
-                onChange={e => setLabel(e.target.value)}
-                placeholder="Label (optional)"
-                className="h-[34px] px-3 text-[12px] rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
-              />
-            </div>
-            {/* Color swatches */}
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-[var(--color-text-muted)]">Color</span>
-              <div className="flex items-center gap-1">
-                {SUB_COLORS.slice(0, 6).map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    className={`w-5 h-5 rounded-full cursor-pointer transition-all ${color === c ? 'ring-2 ring-offset-1 ring-offset-[var(--color-panel)]' : 'opacity-60 hover:opacity-100'}`}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-                {/* Custom color picker */}
-                <label
-                  className={`w-5 h-5 rounded-full cursor-pointer transition-all relative overflow-hidden ${!SUB_COLORS.slice(0, 6).includes(color) ? 'ring-2 ring-offset-1 ring-offset-[var(--color-panel)]' : 'opacity-60 hover:opacity-100'}`}
-                  style={{ background: !SUB_COLORS.slice(0, 6).includes(color) ? color : 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }}
-                  title="Custom color"
-                >
-                  <input
-                    type="color"
-                    value={color.startsWith('#') ? color : '#8b5cf6'}
-                    onChange={e => setColor(e.target.value)}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                </label>
-              </div>
             </div>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-2 px-5 py-3 border-t border-[var(--color-surface-border)]">
-          <button
-            type="button"
-            onClick={onSubscribe}
-            disabled={!topic.trim()}
-            className="h-[34px] px-5 text-[12px] font-medium rounded-md bg-[var(--color-protocol-mqtt)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-opacity"
-          >
-            Subscribe
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="h-[34px] px-5 text-[12px] font-medium rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] cursor-pointer transition-colors border border-[var(--color-surface-border)]"
-          >
-            Cancel
-          </button>
         </div>
       </div>
-    </div>
+    </ModalView>
   );
 }

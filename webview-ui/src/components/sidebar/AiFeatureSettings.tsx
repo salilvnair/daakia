@@ -5,14 +5,17 @@
  */
 import { useEffect, useState } from 'react';
 import { useAiFeaturesStore, AI_FEATURE_LABELS, FEATURE_TO_TEMPLATE_KEY, type AiFeatureFlags } from '../../store/ai-features-store';
-import { SparkleIcon, ChevronRightIcon, BookOpenIcon } from '../../icons';
+import { SparkleIcon, ChevronRightIcon, BookOpenIcon, SearchIcon } from '../../icons';
+import { TextInputView } from '@salilvnair/dui';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 
 const ACCENT = 'var(--color-protocol-ai)';
 
 // Group display order (matches AI_FEATURE_LABELS group names in ai-features-store.ts)
 const GROUP_ORDER = [
+  'Chat',
   'Response & Diagnostics',
   'REST Toolkit',
   'Schema & Contracts',
@@ -27,7 +30,8 @@ const GROUP_ORDER = [
 ];
 
 const GROUP_COLORS: Record<string, string> = {
-  'Response & Diagnostics': 'var(--color-protocol-ai)',
+  'Chat':                    'var(--color-protocol-ai)',
+  'Response & Diagnostics':  'var(--color-protocol-ai)',
   'REST Toolkit':            'var(--color-protocol-rest)',
   'Schema & Contracts':      'var(--color-success)',
   'Collections & Workflow':  'var(--color-primary)',
@@ -50,7 +54,7 @@ function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: keyo
   const templateKey = FEATURE_TO_TEMPLATE_KEY[featureKey];
 
   return (
-    <div className="flex items-start gap-4 py-2.5 border-b border-[rgba(255,255,255,0.05)] last:border-b-0">
+    <div className="flex items-start gap-4 py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_5%,transparent)] last:border-b-0">
       <div className="flex-1 min-w-0 pt-0.5">
         {/* Label row */}
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -87,7 +91,7 @@ function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: keyo
         <button
           type="button"
           onClick={() => onNavigateToPrompt(templateKey)}
-          className="w-[26px] h-[26px] flex items-center justify-center rounded cursor-pointer flex-shrink-0 mt-0.5 transition-all hover:bg-[rgba(255,255,255,0.08)]"
+          className="w-[26px] h-[26px] flex items-center justify-center rounded cursor-pointer flex-shrink-0 mt-0.5 transition-all hover:bg-[color-mix(in_srgb,var(--color-text-primary)_8%,transparent)]"
           title="Edit prompt template in Prompt Library"
           style={{ color: `color-mix(in srgb, ${color} 50%, var(--color-text-muted))` }}
         >
@@ -97,9 +101,9 @@ function FeatureToggleRow({ featureKey, onNavigateToPrompt }: { featureKey: keyo
       {/* Toggle */}
       <button
         type="button"
-        onClick={() => toggleFeature(featureKey)}
+        onClick={() => { logUiEvent('ai.toggle_feature', { feature: featureKey, enabled: !enabled }); toggleFeature(featureKey); }}
         className="w-[38px] h-[21px] rounded-full cursor-pointer transition-all flex-shrink-0 relative mt-1"
-        style={{ backgroundColor: enabled ? color : 'rgba(255,255,255,0.12)' }}
+        style={{ backgroundColor: enabled ? color : 'color-mix(in srgb, var(--color-text-primary) 12%, transparent)' }}
         title={enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
       >
         <span
@@ -117,6 +121,7 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
   const { loadFeatures, features, setGroupEnabled, setAllEnabled } = useAiFeaturesStore();
   // Empty set = all groups expanded by default
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => { loadFeatures(); }, [loadFeatures]);
 
@@ -132,10 +137,23 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
   const enabledCount = featureKeys.filter(k => features[k]).length;
   const allEnabled = enabledCount === featureKeys.length;
 
+  const q = searchQuery.trim().toLowerCase();
+
+  const matchesSearch = (key: keyof AiFeatureFlags) => {
+    if (!q) return true;
+    const meta = AI_FEATURE_LABELS[key];
+    return (
+      meta.label.toLowerCase().includes(q) ||
+      meta.group.toLowerCase().includes(q) ||
+      meta.description.toLowerCase().includes(q) ||
+      (meta.gates ?? '').toLowerCase().includes(q)
+    );
+  };
+
   const grouped = GROUP_ORDER.map(g => ({
     group: g,
     color: GROUP_COLORS[g] ?? ACCENT,
-    keys: featureKeys.filter(k => AI_FEATURE_LABELS[k].group === g),
+    keys: featureKeys.filter(k => AI_FEATURE_LABELS[k].group === g && matchesSearch(k)),
   })).filter(g => g.keys.length > 0);
 
   return (
@@ -149,7 +167,20 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-5 py-4">
+      {/* Search */}
+      <div className="px-2 py-3 border-b border-[var(--color-surface-border)] shrink-0">
+        <TextInputView
+          size="md"
+          placeholder="Filter by category, name, description…"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          iconLeft={<SearchIcon size={13} style={{ color: 'var(--color-text-muted)' }} />}
+          accentColor={ACCENT}
+          style={{ width: '100%' }}
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-2 py-4">
         <div className="flex flex-col gap-5">
 
           {/* Summary */}
@@ -169,9 +200,9 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                   </span>
                   <button
                     type="button"
-                    onClick={() => setAllEnabled(!allEnabled)}
+                    onClick={() => { logUiEvent('ai.toggle_all', { enabled: !allEnabled }); setAllEnabled(!allEnabled); }}
                     className="w-[38px] h-[21px] rounded-full cursor-pointer transition-all flex-shrink-0 relative"
-                    style={{ backgroundColor: allEnabled ? ACCENT : 'rgba(255,255,255,0.12)' }}
+                    style={{ backgroundColor: allEnabled ? ACCENT : 'color-mix(in srgb, var(--color-text-primary) 12%, transparent)' }}
                     title={allEnabled ? 'Disable all AI features' : 'Enable all AI features'}
                   >
                     <span
@@ -231,7 +262,7 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setGroupEnabled(keys, !allGroupEnabled); }}
                     className="w-[32px] h-[18px] rounded-full cursor-pointer transition-all flex-shrink-0 relative"
-                    style={{ backgroundColor: allGroupEnabled ? color : 'rgba(255,255,255,0.1)' }}
+                    style={{ backgroundColor: allGroupEnabled ? color : 'color-mix(in srgb, var(--color-text-primary) 10%, transparent)' }}
                     title={allGroupEnabled ? `Disable all ${group}` : `Enable all ${group}`}
                   >
                     <span
@@ -240,8 +271,8 @@ export function AiFeatureSettings({ onNavigateToPrompt }: { onNavigateToPrompt?:
                     />
                   </button>
                 </div>
-                {/* Collapsible content */}
-                {!isCollapsed && (
+                {/* Collapsible content — force-expand when search is active */}
+                {(!isCollapsed || !!q) && (
                   <div
                     className="rounded-xl border overflow-hidden px-3 py-1"
                     style={{

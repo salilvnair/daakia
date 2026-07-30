@@ -102,6 +102,13 @@ export interface WebhookConfig {
 
 // ─── State Machine (6A.11-6A.12) ────────────────────────────────────────────
 
+export interface StateMockResponse {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  path: string;
+  status: number;
+  body: string;
+}
+
 export interface StateNode {
   id: string;
   name: string;
@@ -109,6 +116,7 @@ export interface StateNode {
   y: number;
   isInitial?: boolean;
   color?: string;
+  mockResponses?: StateMockResponse[];
 }
 
 export interface StateTransition {
@@ -126,6 +134,14 @@ export interface StateMachineConfig {
   sessionMode: 'cookie' | 'header' | 'global';
   sessionKey?: string;
   defaultState: string;
+}
+
+export interface ConnectedWorkflow {
+  workflowId: string;
+  name: string;
+  routePattern?: string;
+  event?: string;
+  stateMachine?: StateMachineConfig;
 }
 
 // ─── Record & Playback (6A.16-6A.18) ────────────────────────────────────────
@@ -184,9 +200,25 @@ export interface MockRoute {
   proxyTarget?: string;
 
   // State machine (6A.11)
-  requiredState?: string;
-  newState?: string;
-  stateVariableUpdates?: Record<string, string>;
+  /**
+   * The real state-machine event this route triggers (e.g. "PAY"), matching
+   * one of the connected canvas workflow's edge event names
+   * (StateMachineConfig.transitions[].label). When set, this route's gating
+   * AND its transition both come entirely from the canvas's own transition
+   * graph — the graph already encodes which states this event is valid from
+   * and where it leads.
+   */
+  triggerEvent?: string;
+  /**
+   * Which connected workflow (MockServerConfig.connectedWorkflows[].workflowId)
+   * `triggerEvent` refers to. Omit when the server has at most one connected
+   * workflow — resolved automatically (falls back to the single entry, or to
+   * the legacy singular `stateMachine` field for hand-authored samples that
+   * never populated `connectedWorkflows`). Required once 2+ workflows are
+   * connected to the same server, since event names aren't guaranteed unique
+   * across workflows.
+   */
+  connectedWorkflowId?: string;
 
   // Fault injection (6A.13)
   fault?: FaultConfig;
@@ -237,6 +269,10 @@ export interface GraphQLMockOperation {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this operation triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface WebSocketMockHandler {
@@ -333,6 +369,10 @@ export interface GrpcMockMethod {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this method triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 export interface SoapMockOperation {
@@ -340,7 +380,7 @@ export interface SoapMockOperation {
   service: string;
   operation: string;
   soapAction: string;
-  responseType: 'static' | 'script' | 'fault';
+  responseType: 'static' | 'script' | 'fault' | 'file';
   response: string; // XML response body
   responseScript?: string; // dynamic response
   faultCode?: string;
@@ -348,6 +388,8 @@ export interface SoapMockOperation {
   delay: number;
   enabled: boolean;
   serviceEnabled?: boolean;
+  /** Absolute or relative path to a file to serve as response body */
+  bodyFile?: string;
   // Sprint 13 (SOAP parity): sequences + matching + fault
   responses?: ResponseSequenceItem[];
   sequenceMode?: SequenceMode;
@@ -357,6 +399,10 @@ export interface SoapMockOperation {
   priority?: number;
   fault?: FaultConfig;
   rateLimit?: RateLimitConfig;
+  /** Real state-machine event this operation triggers — see MockRoute.triggerEvent. */
+  triggerEvent?: string;
+  /** See MockRoute.connectedWorkflowId. */
+  connectedWorkflowId?: string;
 }
 
 /** Sprint 13.32: per-server webhook callback fired when any protocol handler matches */
@@ -399,6 +445,8 @@ export interface MockServerConfig {
 
   // State machine (6A.11-6A.12)
   stateMachine?: StateMachineConfig;
+  connectedWorkflowId?: string; // UUID of the @salilvnair/state-machine workflow linked to this server
+  connectedWorkflows?: ConnectedWorkflow[];
 
   // Global fault injection / chaos (6A.15)
   globalFault?: FaultConfig;
