@@ -9,12 +9,12 @@ import type { AiBodyGenerateHandle } from '../ai/AiBodyGenerate';
 import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
 import { AiGrpcProtoExplainerModal } from '../ai/AiGrpcProtoExplainerModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { WandIcon } from '../../icons';
+import { WandIcon, SparkleIcon } from '../../icons';
 import {
   TabView,
   EditorView,
   KeyValueTableView,
-  AIButtonView,
+  ButtonView,
   IconButtonView,
   type TabItem,
 } from '@salilvnair/dui';
@@ -92,32 +92,30 @@ export function GrpcRequestConfig() {
                   }}
                 />
                 {aiEnabled('bodyGenerator') && (
-                  <AIButtonView
-                    action="generate"
-                    label="Generate ✦"
+                  <ButtonView
                     size="xs"
-                    accentColor="var(--color-protocol-ai)"
+                    variant="ghost"
+                    iconLeft={<SparkleIcon size={10} />}
+                    title="AI Message Generator"
                     onClick={() => bodyGenRef.current?.open()}
-                  />
+                    style={{ color: 'var(--color-protocol-ai)' }}
+                  >
+                    Generate
+                  </ButtonView>
                 )}
                 {aiEnabled('requestFuzzer') && (
-                  <AIButtonView
-                    action="fuzz"
-                    label="Fuzz ✦"
+                  <ButtonView
                     size="xs"
-                    accentColor="var(--color-protocol-ai)"
+                    variant="ghost"
+                    iconLeft={<SparkleIcon size={10} />}
+                    title="AI Message Fuzzer"
                     onClick={() => setShowFuzzer(true)}
-                  />
+                    style={{ color: 'var(--color-protocol-ai)' }}
+                  >
+                    Fuzz
+                  </ButtonView>
                 )}
               </div>
-            </div>
-            <div className="flex-1 min-h-0">
-              <EditorView
-                value={activeTab.grpcMessage || '{\n  \n}'}
-                onChange={(val) => updateTab(activeTab.id, { grpcMessage: val, dirty: true })}
-                language="json"
-                className="h-full"
-              />
             </div>
             {aiEnabled('bodyGenerator') && (
               <AiBodyGenerate
@@ -129,6 +127,14 @@ export function GrpcRequestConfig() {
                 onApply={(body) => updateTab(activeTab.id, { grpcMessage: body, dirty: true })}
               />
             )}
+            <div className="flex-1 min-h-0">
+              <EditorView
+                value={activeTab.grpcMessage || '{\n  \n}'}
+                onChange={(val) => updateTab(activeTab.id, { grpcMessage: val, dirty: true })}
+                language="json"
+                className="h-full"
+              />
+            </div>
           </div>
         )}
 
@@ -170,13 +176,16 @@ export function GrpcRequestConfig() {
           <div className="h-full flex flex-col min-h-0">
             {aiEnabled('grpcProtoExplainer') && (activeTab.grpcServices?.length || activeTab.grpcProtoFile) && (
               <div className="flex items-center justify-end px-3 py-1.5 border-b border-[var(--color-surface-border)] flex-shrink-0">
-                <AIButtonView
-                  action="explain"
-                  label="Proto Explainer ✦"
-                  size="sm"
-                  accentColor={ACCENT}
+                <ButtonView
+                  size="xs"
+                  variant="ghost"
+                  iconLeft={<SparkleIcon size={10} />}
+                  title="AI Proto Explainer — plain-English explanation of all services"
                   onClick={() => setShowProtoExplainer(true)}
-                />
+                  style={{ color: 'var(--color-protocol-ai)' }}
+                >
+                  Proto Explainer
+                </ButtonView>
               </div>
             )}
             <div className="flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable]">

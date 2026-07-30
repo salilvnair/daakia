@@ -9,7 +9,6 @@ import {
   DropDownButtonView,
   ButtonView,
   IconButtonView,
-  AIButtonView,
   SelectInputView,
   CheckboxView,
   EditorView,
@@ -537,14 +536,18 @@ export function WebSocketPanel() {
                     />
                   </div>
                   <div className="flex items-center gap-1">
-                    {/* 9.6: Generate ✦ */}
+                    {/* 9.6: Generate — ghost button, matches SOAP/REST AI toolbar style */}
                     {aiEnabled('bodyGenerator') && (
-                      <AIButtonView
+                      <ButtonView
                         size="xs"
-                        label="Generate ✦"
+                        variant="ghost"
+                        iconLeft={<SparkleIcon size={10} />}
+                        title="AI Message Generator"
                         onClick={() => bodyGenRef.current?.open()}
-                        accentColor="var(--color-protocol-ai)"
-                      />
+                        style={{ color: 'var(--color-protocol-ai)' }}
+                      >
+                        Generate
+                      </ButtonView>
                     )}
                     {/* Send */}
                     <ButtonView

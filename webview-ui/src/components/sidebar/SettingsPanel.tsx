@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ButtonView, TextInputView, ToggleSwitchView, TabView, SideNavView, SplitPanelView, CopyButtonView, type SideNavItem } from '@salilvnair/dui';
 import { useDbStatusStore } from '../../store/db-status-store';
+import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon } from '../../icons';
@@ -201,34 +202,8 @@ function GeneralSettings() {
 
 function GeneralGeneralContent() {
   const dbPath = useDbStatusStore((s) => s.dbPath);
-  const [followRedirects, setFollowRedirects] = useState(true);
-  const [sslVerification, setSslVerification] = useState(true);
-  const [timeout, setTimeout_] = useState(0);
-  const [saveResponseInHistory, setSaveResponseInHistory] = useState(true);
-  const [maxHistoryEntries, setMaxHistoryEntries] = useState(500);
-  const [maxAiChatMessages, setMaxAiChatMessages] = useState(200);
-
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      const msg = event.data;
-      if (msg.type === 'settingsData' && msg.settings) {
-        if (msg.settings.followRedirects !== undefined) setFollowRedirects(msg.settings.followRedirects);
-        if (msg.settings.sslVerification !== undefined) setSslVerification(msg.settings.sslVerification);
-        if (msg.settings.timeout !== undefined) setTimeout_(msg.settings.timeout);
-        if (msg.settings.saveResponseInHistory !== undefined) setSaveResponseInHistory(msg.settings.saveResponseInHistory);
-        if (msg.settings.maxHistoryEntries !== undefined) setMaxHistoryEntries(msg.settings.maxHistoryEntries);
-        if (msg.settings.maxAiChatMessages !== undefined) setMaxAiChatMessages(msg.settings.maxAiChatMessages);
-      }
-    };
-    window.addEventListener('message', handler);
-    postMsg({ type: 'getSettings' });
-    return () => window.removeEventListener('message', handler);
-  }, []);
-
-  const save = (patch: Record<string, unknown>) => {
-    const settings = { followRedirects, sslVerification, timeout, saveResponseInHistory, maxHistoryEntries, maxAiChatMessages, ...patch };
-    postMsg({ type: 'saveSettings', settings });
-  };
+  const settings = useAppSettingsStore((s) => s.settings);
+  const save = useAppSettingsStore((s) => s.save);
 
   return (
     <div className="flex flex-col gap-6">
@@ -236,24 +211,24 @@ function GeneralGeneralContent() {
       <SettingToggle
         title="Follow Redirects"
         description="Automatically follow HTTP 3xx redirects"
-        value={followRedirects}
-        onChange={(v) => { setFollowRedirects(v); save({ followRedirects: v }); }}
+        value={settings.followRedirects}
+        onChange={(v) => save({ followRedirects: v })}
       />
 
       {/* SSL Verification */}
       <SettingToggle
         title="SSL Certificate Verification"
         description="Verify SSL certificates when making requests"
-        value={sslVerification}
-        onChange={(v) => { setSslVerification(v); save({ sslVerification: v }); }}
+        value={settings.sslVerification}
+        onChange={(v) => save({ sslVerification: v })}
       />
 
       {/* Save Response in History */}
       <SettingToggle
         title="Save Response in History"
         description="Store response body and headers in history entries (increases DB size)"
-        value={saveResponseInHistory}
-        onChange={(v) => { setSaveResponseInHistory(v); save({ saveResponseInHistory: v }); }}
+        value={settings.saveResponseInHistory}
+        onChange={(v) => save({ saveResponseInHistory: v })}
       />
 
       {/* Request Timeout */}
@@ -262,8 +237,8 @@ function GeneralGeneralContent() {
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">Maximum time to wait for a response (ms)</p>
         <TextInputView
           type="number"
-          value={String(timeout)}
-          onChange={(e) => { const v = parseInt(e.target.value) || 0; setTimeout_(v); save({ timeout: v }); }}
+          value={String(settings.timeout)}
+          onChange={(e) => save({ timeout: parseInt(e.target.value) || 0 })}
           size="md"
           accentColor="var(--color-settings)"
           style={{ width: 120 }}
@@ -276,8 +251,8 @@ function GeneralGeneralContent() {
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">Older entries are automatically deleted when this limit is exceeded</p>
         <TextInputView
           type="number"
-          value={String(maxHistoryEntries)}
-          onChange={(e) => { const v = Math.max(10, parseInt(e.target.value) || 500); setMaxHistoryEntries(v); save({ maxHistoryEntries: v }); }}
+          value={String(settings.maxHistoryEntries)}
+          onChange={(e) => save({ maxHistoryEntries: Math.max(10, parseInt(e.target.value) || 500) })}
           size="md"
           accentColor="var(--color-settings)"
           style={{ width: 120 }}
@@ -290,8 +265,8 @@ function GeneralGeneralContent() {
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">Max messages retained in the Daakia AI conversation (oldest trimmed automatically)</p>
         <TextInputView
           type="number"
-          value={String(maxAiChatMessages)}
-          onChange={(e) => { const v = Math.max(10, parseInt(e.target.value) || 200); setMaxAiChatMessages(v); save({ maxAiChatMessages: v }); }}
+          value={String(settings.maxAiChatMessages)}
+          onChange={(e) => save({ maxAiChatMessages: Math.max(10, parseInt(e.target.value) || 200) })}
           size="md"
           accentColor="var(--color-settings)"
           style={{ width: 120 }}
@@ -320,23 +295,11 @@ function GeneralGeneralContent() {
 // ────────── General > Encoding ──────────
 
 function EncodingContent() {
-  const [encoding, setEncoding] = useState<'enable' | 'disable' | 'auto'>('enable');
-
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      const msg = event.data;
-      if (msg.type === 'settingsData' && msg.settings?.encoding) {
-        setEncoding(msg.settings.encoding);
-      }
-    };
-    window.addEventListener('message', handler);
-    postMsg({ type: 'getSettings' });
-    return () => window.removeEventListener('message', handler);
-  }, []);
+  const encoding = useAppSettingsStore((s) => s.settings.encoding);
+  const save = useAppSettingsStore((s) => s.save);
 
   const handleChange = (value: 'enable' | 'disable' | 'auto') => {
-    setEncoding(value);
-    postMsg({ type: 'saveSettings', settings: { encoding: value } });
+    save({ encoding: value });
   };
 
   return (
@@ -383,30 +346,17 @@ function EncodingContent() {
 type ProxyMode = 'none' | 'system' | 'manual';
 
 function ProxyContent() {
-  const [mode, setMode] = useState<ProxyMode>('none');
-  const [host, setHost] = useState('');
-  const [port, setPort] = useState('8080');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [bypass, setBypass] = useState('');
+  // Seeded from the shared settings store (already loaded at app boot — see
+  // app-settings-store.ts), never a hardcoded default, so there's nothing to flicker to.
+  const storedProxy = useAppSettingsStore.getState().settings.proxy;
+  const saveSettings = useAppSettingsStore((s) => s.save);
 
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      const msg = event.data;
-      if (msg.type === 'settingsData' && msg.settings?.proxy) {
-        const p = msg.settings.proxy;
-        if (p.mode) setMode(p.mode);
-        if (p.host) setHost(p.host);
-        if (p.port) setPort(String(p.port));
-        if (p.username) setUsername(p.username);
-        if (p.password) setPassword(p.password);
-        if (p.bypass) setBypass((p.bypass as string[]).join(', '));
-      }
-    };
-    window.addEventListener('message', handler);
-    postMsg({ type: 'getSettings' });
-    return () => window.removeEventListener('message', handler);
-  }, []);
+  const [mode, setMode] = useState<ProxyMode>(storedProxy.mode);
+  const [host, setHost] = useState(storedProxy.host ?? '');
+  const [port, setPort] = useState(String(storedProxy.port ?? 8080));
+  const [username, setUsername] = useState(storedProxy.username ?? '');
+  const [password, setPassword] = useState(storedProxy.password ?? '');
+  const [bypass, setBypass] = useState((storedProxy.bypass ?? []).join(', '));
 
   const save = (patch?: Partial<{ mode: ProxyMode; host: string; port: string; username: string; password: string; bypass: string }>) => {
     const m = patch?.mode ?? mode;
@@ -423,7 +373,7 @@ function ProxyContent() {
       password: pw,
       bypass: b.split(',').map(s => s.trim()).filter(Boolean),
     };
-    postMsg({ type: 'saveSettings', settings: { proxy: proxySettings } });
+    saveSettings({ proxy: proxySettings });
   };
 
   return (

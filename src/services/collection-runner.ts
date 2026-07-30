@@ -252,6 +252,15 @@ export async function runCollection(
   // Build preamble once (for dk.runner and dk.runRequest)
   const preamble = buildPreamble(flatRequests);
 
+  // Execution settings — same General settings (SSL verification, follow redirects, proxy,
+  // trusted hosts) applied to a single ad-hoc request also apply to every request in a run.
+  const generalSettings = getSetting<Record<string, unknown>>('general') ?? {};
+  const trustedHosts = getSetting<string[]>('trustedHosts') ?? [];
+  const runFollowRedirects = (generalSettings.followRedirects as boolean | undefined) ?? true;
+  const runSslVerification = (generalSettings.sslVerification as boolean | undefined) ?? true;
+  const runTimeout = (generalSettings.timeout as number | undefined) || 30000;
+  const runProxy = generalSettings.proxy as ExecuteRequestParams['proxy'] | undefined;
+
   let nextRequestTarget: string | null | undefined = undefined;
   let i = 0;
 
@@ -358,9 +367,11 @@ export async function runCollection(
         bodyUrlEncoded: ((reqData.bodyUrlEncoded as { key: string; value: string; enabled?: boolean }[]) || []).filter((u: { key: string; enabled?: boolean }) => u.key && u.enabled !== false),
         authType: (reqData.authType as string) || 'none',
         authData: (reqData.authData as Record<string, string>) || {},
-        timeout: 30000,
-        followRedirects: true,
-        sslVerification: true,
+        timeout: runTimeout,
+        followRedirects: runFollowRedirects,
+        sslVerification: runSslVerification,
+        trustedHosts,
+        proxy: runProxy,
       };
       execResult = await executeRequest(params);
     } catch (err: unknown) {

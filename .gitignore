@@ -109,7 +109,10 @@ scripts/benchmark_kimi*.py
 
 # Graphify knowledge graph outputs
 graphify-out/
-.code-review-graph/   
+.code-review-graph/
+
+# Demo-video generator output (regenerate with npm run demo-video)
+scripts/demo-video/.output/
 
 skills
 CLAUDE.md

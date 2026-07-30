@@ -80,6 +80,63 @@ const env = {
   },
 };
 
+// ─── Language Model API (vscode.lm) ────────────────────────────────────────────
+// There's no real VS Code process here, so there's no real Copilot connection —
+// always report zero available models. src/ai/copilot-executor.ts already treats
+// an empty selectChatModels() result as "not signed into Copilot," which is the
+// accurate statement for local-server, not a hack.
+const lm = {
+  async selectChatModels(_filter?: unknown) {
+    return [] as unknown[];
+  },
+};
+
+class LanguageModelChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  constructor(role: 'user' | 'assistant', content: string) {
+    this.role = role;
+    this.content = content;
+  }
+  static Assistant(content: string) { return new LanguageModelChatMessage('assistant', content); }
+  static User(content: string) { return new LanguageModelChatMessage('user', content); }
+}
+
+class LanguageModelError extends Error {
+  code: string;
+  constructor(message: string, code = '500') {
+    super(message);
+    this.code = code;
+  }
+}
+
+class CancellationTokenSource {
+  token: { isCancellationRequested: boolean; onCancellationRequested: (listener: () => void) => { dispose(): void } };
+  private _cancelled = false;
+  private _listeners: Array<() => void> = [];
+
+  constructor() {
+    const self = this;
+    this.token = {
+      get isCancellationRequested() { return self._cancelled; },
+      onCancellationRequested(listener: () => void) {
+        self._listeners.push(listener);
+        return { dispose() { /* no-op */ } };
+      },
+    };
+  }
+
+  cancel() {
+    if (this._cancelled) return;
+    this._cancelled = true;
+    this._listeners.forEach((l) => l());
+  }
+
+  dispose() {
+    this._listeners = [];
+  }
+}
+
 // ─── ExtensionContext-adjacent (unused today, present for future handlers) ────
 export const window = {
   showSaveDialog,
@@ -94,9 +151,9 @@ export const workspace = {
   getConfiguration,
 };
 
-export { Uri, env };
+export { Uri, env, lm, LanguageModelChatMessage, LanguageModelError, CancellationTokenSource };
 
 // Default export too — some call sites may do `import * as vscode from 'vscode'`
 // (named-namespace import), which esbuild resolves against these named exports
 // directly, not this default. Kept for completeness/defensive compatibility.
-export default { window, workspace, Uri, env };
+export default { window, workspace, Uri, env, lm, LanguageModelChatMessage, LanguageModelError, CancellationTokenSource };

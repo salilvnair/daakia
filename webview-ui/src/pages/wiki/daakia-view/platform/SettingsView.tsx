@@ -9,11 +9,17 @@ import { PLATFORM_CAPTURES } from './captures';
 // WikiTable right above already lists all 10 section names, so showing that
 // same list again inside every single screenshot is pure redundant clutter
 // (and reads as "two different left-nav-shaped panels stacked next to each
-// other"). Cropping to start past both (48 + 282 ≈ 330) — the content pane
-// itself, where the section's actual real controls live — is the part with
-// unique value. (Previously x:220 under-cropped by ~110px, leaving a sliver
-// of the sidenav's badge counts visible on the left edge of every card.)
-const SETTINGS_CONTENT_CROP = { x: 330, width: 950 };
+// other"). Cropping to start past both — the content pane itself, where the
+// section's actual real controls live — is the part with unique value.
+// (Previously x:220 under-cropped by ~110px, leaving a sliver of the
+// sidenav's badge counts visible on the left edge of every card; x:330 was
+// the fix at the time but measured live against all 32 real captures, real
+// content consistently starts as early as local x≈309 — a few px inside
+// that boundary — clipping the first glyph of left-aligned labels like
+// "Follow Redirects" on nearly every card. x:305 clears every capture's
+// measured content start with margin, and width grows to match so the
+// right edge still lands exactly on the 1280 design width, same as before.)
+const SETTINGS_CONTENT_CROP = { x: 305, width: 975 };
 
 const TOC_ITEMS: TocItem[] = [
   { id: 'st-general', emoji: '⚙️', label: 'General & Theme' },
@@ -65,12 +71,16 @@ export function SettingsView() {
           extension's settings store the way every other General field does, so it won't show up if you're inspecting
           settings via the DB Explorer.
         </Callout>
+      </div>
 
-        {byId['settings-general'] && <CaptureCard entry={byId['settings-general']} crop={SETTINGS_CONTENT_CROP} />}
-        {cap('settings-general-encoding')}
-        {cap('settings-general-proxy')}
-        {byId['settings-theme'] && <CaptureCard entry={byId['settings-theme']} crop={SETTINGS_CONTENT_CROP} />}
+      {byId['settings-general'] && <CaptureCard entry={byId['settings-general']} crop={SETTINGS_CONTENT_CROP} />}
+      {cap('settings-general-encoding')}
+      {cap('settings-general-proxy')}
+      {byId['settings-theme'] && <CaptureCard entry={byId['settings-theme']} crop={SETTINGS_CONTENT_CROP} />}
 
+      <Divider />
+
+      <div>
         <SectionTitle id="st-server" emoji="🎭">Server</SectionTitle>
         <WikiTable
           headers={['Field', 'Default', 'Notes']}
@@ -84,9 +94,13 @@ export function SettingsView() {
           <Code>~/.salilvnair/daakia-vsce/</Code>) and confirms every running server stops automatically when the
           extension deactivates — there's no separate "auto-start on VS Code launch" toggle.
         </p>
+      </div>
 
-        {byId['settings-mock-server'] && <CaptureCard entry={byId['settings-mock-server']} crop={SETTINGS_CONTENT_CROP} />}
+      {byId['settings-mock-server'] && <CaptureCard entry={byId['settings-mock-server']} crop={SETTINGS_CONTENT_CROP} />}
 
+      <Divider />
+
+      <div>
         <SectionTitle id="st-ai" emoji="🤖">AI</SectionTitle>
         <WikiTable
           headers={['Section', 'What it really is']}
@@ -97,23 +111,35 @@ export function SettingsView() {
             ['AI Audit', 'Full call log — system prompt, user prompt, request/response payload, headers, model, duration, errors — for every AI call made anywhere in the app'],
           ]}
         />
-        {byId['settings-llm-provider'] && <CaptureCard entry={byId['settings-llm-provider']} crop={SETTINGS_CONTENT_CROP} />}
-        {cap('settings-llmprovider-custom-modal')}
-        {byId['settings-ai-features'] && <CaptureCard entry={byId['settings-ai-features']} crop={SETTINGS_CONTENT_CROP} />}
-        {byId['settings-prompt-library'] && <CaptureCard entry={byId['settings-prompt-library']} crop={SETTINGS_CONTENT_CROP} />}
-        {cap('settings-promptlibrary-system')}
-        {cap('settings-promptlibrary-user')}
-        {byId['settings-ai-audit'] && <CaptureCard entry={byId['settings-ai-audit']} crop={SETTINGS_CONTENT_CROP} />}
-        <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          Click any audit entry to drill into 5 detail tabs — Request, Response, System Prompt, User Prompt, and a
-          combined Full Audit view:
-        </p>
-        {cap('settings-aiaudit-detail-request')}
-        {cap('settings-aiaudit-detail-response')}
-        {cap('settings-aiaudit-detail-systemprompt')}
-        {cap('settings-aiaudit-detail-userprompt')}
-        {cap('settings-aiaudit-detail-fullaudit')}
+      </div>
 
+      <SubTitle>LLM Provider</SubTitle>
+      {byId['settings-llm-provider'] && <CaptureCard entry={byId['settings-llm-provider']} crop={SETTINGS_CONTENT_CROP} />}
+      {cap('settings-llmprovider-custom-modal')}
+
+      <SubTitle>AI Features</SubTitle>
+      {byId['settings-ai-features'] && <CaptureCard entry={byId['settings-ai-features']} crop={SETTINGS_CONTENT_CROP} />}
+
+      <SubTitle>Prompt Library</SubTitle>
+      {byId['settings-prompt-library'] && <CaptureCard entry={byId['settings-prompt-library']} crop={SETTINGS_CONTENT_CROP} />}
+      {cap('settings-promptlibrary-system')}
+      {cap('settings-promptlibrary-user')}
+
+      <SubTitle>AI Audit</SubTitle>
+      {byId['settings-ai-audit'] && <CaptureCard entry={byId['settings-ai-audit']} crop={SETTINGS_CONTENT_CROP} />}
+      <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+        Click any audit entry to drill into 5 detail tabs — Request, Response, System Prompt, User Prompt, and a
+        combined Full Audit view:
+      </p>
+      {cap('settings-aiaudit-detail-request')}
+      {cap('settings-aiaudit-detail-response')}
+      {cap('settings-aiaudit-detail-systemprompt')}
+      {cap('settings-aiaudit-detail-userprompt')}
+      {cap('settings-aiaudit-detail-fullaudit')}
+
+      <Divider />
+
+      <div>
         <SectionTitle id="st-advanced" emoji="🛠️">Advanced</SectionTitle>
         <WikiTable
           headers={['Section', 'Real sub-tabs / contents']}
@@ -122,21 +148,31 @@ export function SettingsView() {
             ['Power Features', '8 launchable tools, each its own modal: Cookie Manager, Proxy Settings, Client Certificates, API Monitor, Request Interceptor, Response Diff, Bulk URL Tester, Load Tester'],
           ]}
         />
-        {byId['settings-developer-tools'] && <CaptureCard entry={byId['settings-developer-tools']} crop={SETTINGS_CONTENT_CROP} />}
-        {cap('settings-devtools-auditlog')}
-        {cap('settings-devtools-auditconfig')}
-        {cap('settings-devtools-debugsnapshot')}
-        {cap('settings-devtools-dbexplorer')}
-        {byId['settings-wiki'] && <CaptureCard entry={byId['settings-wiki']} crop={SETTINGS_CONTENT_CROP} />}
-        {byId['settings-power-features'] && <CaptureCard entry={byId['settings-power-features']} crop={SETTINGS_CONTENT_CROP} />}
-        {cap('power-bulk-url-tester')}
-        {cap('power-api-monitor')}
-        {cap('power-proxy-settings')}
-        {cap('power-client-certificates')}
-        {cap('power-response-diff')}
-        {cap('power-load-tester')}
-        {cap('power-request-interceptor')}
+      </div>
 
+      <SubTitle>Developer Tools</SubTitle>
+      {byId['settings-developer-tools'] && <CaptureCard entry={byId['settings-developer-tools']} crop={SETTINGS_CONTENT_CROP} />}
+      {cap('settings-devtools-auditlog')}
+      {cap('settings-devtools-auditconfig')}
+      {cap('settings-devtools-debugsnapshot')}
+      {cap('settings-devtools-dbexplorer')}
+
+      <SubTitle>Wiki</SubTitle>
+      {byId['settings-wiki'] && <CaptureCard entry={byId['settings-wiki']} crop={SETTINGS_CONTENT_CROP} />}
+
+      <SubTitle>Power Features</SubTitle>
+      {byId['settings-power-features'] && <CaptureCard entry={byId['settings-power-features']} crop={SETTINGS_CONTENT_CROP} />}
+      {cap('power-bulk-url-tester')}
+      {cap('power-api-monitor')}
+      {cap('power-proxy-settings')}
+      {cap('power-client-certificates')}
+      {cap('power-response-diff')}
+      {cap('power-load-tester')}
+      {cap('power-request-interceptor')}
+
+      <Divider />
+
+      <div>
         <SectionTitle id="st-storage" emoji="💾">Storage</SectionTitle>
         <WikiCard title="Where Daakia stores your data" icon="💾">
           <WikiTable
