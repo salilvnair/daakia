@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { postMsg } from '../../../vscode';
-import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
+import { useUrlSuggestionsStore, type SuggestionProtocol } from '../../../store/url-suggestions-store';
+
+const SUGGESTION_PROTOCOLS = new Set<string>(['rest', 'graphql', 'grpc', 'websocket', 'sse', 'socketio', 'mqtt', 'soap', 'mcp', 'ai']);
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
@@ -78,8 +80,8 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
         setStoreHistory(protocol, entries);
         // Feed URLs into suggestions store
         const urls = entries.map((e: HistoryItem) => e.url).filter(Boolean);
-        const sugProtocol = protocol === 'grpc' ? 'grpc' : protocol === 'graphql' ? 'graphql' : protocol === 'websocket' ? 'websocket' : 'rest';
-        useUrlSuggestionsStore.getState().addUrls(urls, sugProtocol as any);
+        const sugProtocol = SUGGESTION_PROTOCOLS.has(protocol) ? (protocol as SuggestionProtocol) : 'rest';
+        useUrlSuggestionsStore.getState().addUrls(urls, sugProtocol);
       }
     };
     window.addEventListener('message', handler);

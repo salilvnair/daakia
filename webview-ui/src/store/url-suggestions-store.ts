@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type SuggestionProtocol = 'rest' | 'graphql' | 'grpc' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'soap';
+export type SuggestionProtocol = 'rest' | 'graphql' | 'grpc' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'soap' | 'mcp' | 'ai';
 
 interface UrlEntry {
   url: string;
@@ -25,7 +25,7 @@ interface UrlSuggestionsState {
 }
 
 function buildProtocolMap(entries: UrlEntry[]): ProtocolUrlMap {
-  const map: ProtocolUrlMap = { rest: [], graphql: [], grpc: [], websocket: [], sse: [], socketio: [], mqtt: [], soap: [] };
+  const map: ProtocolUrlMap = { rest: [], graphql: [], grpc: [], websocket: [], sse: [], socketio: [], mqtt: [], soap: [], mcp: [], ai: [] };
   for (const e of entries) {
     map[e.protocol].push(e.url);
   }
@@ -35,7 +35,7 @@ function buildProtocolMap(entries: UrlEntry[]): ProtocolUrlMap {
 export const useUrlSuggestionsStore = create<UrlSuggestionsState>((set, get) => ({
   entries: [],
   urls: [],
-  byProtocol: { rest: [], graphql: [], grpc: [], websocket: [], sse: [], socketio: [], mqtt: [], soap: [] },
+  byProtocol: { rest: [], graphql: [], grpc: [], websocket: [], sse: [], socketio: [], mqtt: [], soap: [], mcp: [], ai: [] },
 
   addUrls: (newUrls, protocol = 'rest') => {
     set((s) => {

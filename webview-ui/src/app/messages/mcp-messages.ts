@@ -1,6 +1,7 @@
 /** MCP protocol + multi-server event messages. Extracted verbatim from the App message handler. */
 import { useTabsStore } from '../../store/tabs-store';
 import { useDevToolsStore } from '../../store/devtools-store';
+import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function handleMcpMessages(msg: any): boolean {
@@ -8,6 +9,7 @@ export function handleMcpMessages(msg: any): boolean {
         // ─── MCP Protocol Messages ────────────────────────────────────────
         case 'mcp:connected': {
           const { tabId, capabilities, serverInfo } = msg;
+          const mcpTab = useTabsStore.getState().tabs.find(t => t.id === tabId);
           useTabsStore.getState().updateTab(tabId, {
             mcpConnected: true,
             mcpCapabilities: capabilities,
@@ -18,6 +20,9 @@ export function handleMcpMessages(msg: any): boolean {
             timestamp: Date.now(), level: 'info',
             args: [`[MCP] Connected to ${(serverInfo as { name?: string })?.name || 'server'}`, capabilities],
           });
+          // URL suggestions
+          const mcpAddr = mcpTab?.mcpTransport === 'stdio' ? mcpTab?.mcpCommand : mcpTab?.url;
+          if (mcpAddr) useUrlSuggestionsStore.getState().addUrls([mcpAddr], 'mcp');
           break;
         }
         case 'mcp:disconnected': {

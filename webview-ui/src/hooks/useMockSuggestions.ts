@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 import { useMockStore } from '../store/mock-store';
 import type { MockServerSuggestion } from '../components/shared/controls/HighlightedInput';
 
-type Protocol = 'rest' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc' | 'soap';
+type Protocol = 'rest' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc' | 'soap' | 'mcp' | 'ai';
 
 /** URL path appended for certain protocols */
 const PROTOCOL_PATHS: Partial<Record<Protocol, string>> = {

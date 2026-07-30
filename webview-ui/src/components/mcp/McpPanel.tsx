@@ -72,7 +72,7 @@ export function McpPanel() {
         <div
           className="overflow-hidden"
           style={{ height: `${effectiveSplit}%`, transition: isDragging ? 'none' : 'height 200ms ease' }}
-          onClick={() => handleFocus('request')}
+          onFocus={() => handleFocus('request')}
         >
           <McpRequestTabs />
         </div>
@@ -102,7 +102,7 @@ export function McpPanel() {
         <div
           className="overflow-hidden"
           style={{ height: `${100 - effectiveSplit}%`, transition: isDragging ? 'none' : 'height 200ms ease' }}
-          onClick={() => handleFocus('response')}
+          onFocus={() => handleFocus('response')}
         >
           <McpResponsePanel />
         </div>

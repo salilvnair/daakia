@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { lazy, Suspense } from 'react';
 import './index.css';
 import 'highlight.js/styles/github-dark.css';
+import '@salilvnair/dui/style.css';
 import '@salilvnair/dui/monaco-setup';
 
 const isDuiShowcase = import.meta.env.DEV && window.location.hash === '#dui';

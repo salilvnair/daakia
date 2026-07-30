@@ -20,6 +20,7 @@ import type { DuiSize } from '@salilvnair/dui';
 import { useButtonBase, ModalView } from '@salilvnair/dui';
 
 const ACCENT = 'var(--color-protocol-ai)';
+const POPOVER_WIDTH = 532;
 
 // ─── Module-level response cache ─────────────────────────────────────────────
 // Keyed by fingerprint (mode + method + url + status + body-prefix).
@@ -97,26 +98,54 @@ export function AiAssistPopover({
   const accumulatedRef = useRef('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; visible: boolean }>({
-    top: -9999, left: -9999, visible: false,
+  const [pos, setPos] = useState<{ top: number; left: number; visible: boolean; centered: boolean }>({
+    top: -9999, left: -9999, visible: false, centered: false,
   });
 
+  // Viewport-aware placement: anchor near the trigger button when there's
+  // room either below or above it ("inline"); when neither direction has
+  // enough space, fall back to centering on screen with a dim backdrop
+  // ("popup") instead of letting the content overflow the viewport edge.
   useLayoutEffect(() => {
     if (!anchorEl || !popRef.current) return;
-    const id = requestAnimationFrame(() => {
-      if (!popRef.current) return;
+    const place = () => {
+      if (!popRef.current || !anchorEl) return;
       const btn = anchorEl.getBoundingClientRect();
       const pop = popRef.current.getBoundingClientRect();
-      const W = 380;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      let left = btn.right - W;
-      let top = btn.bottom + 6;
-      left = Math.max(8, Math.min(left, vw - W - 8));
-      if (top + pop.height > vh - 8) top = btn.top - pop.height - 6;
-      setPos({ top: Math.max(8, top), left, visible: true });
-    });
-    return () => cancelAnimationFrame(id);
+      const width = pop.width || POPOVER_WIDTH;
+      const height = pop.height;
+      const GAP = 6;
+      const EDGE = 8;
+
+      const fitsBelow = btn.bottom + GAP + height <= vh - EDGE;
+      const fitsAbove = btn.top - GAP - height >= EDGE;
+
+      if (!fitsBelow && !fitsAbove) {
+        setPos({
+          top: Math.max(EDGE, (vh - height) / 2),
+          left: Math.max(EDGE, (vw - width) / 2),
+          visible: true,
+          centered: true,
+        });
+        return;
+      }
+
+      let left = btn.right - width;
+      let top = fitsBelow ? btn.bottom + GAP : btn.top - height - GAP;
+      left = Math.max(EDGE, Math.min(left, vw - width - EDGE));
+      top = Math.max(EDGE, Math.min(top, vh - height - EDGE));
+      setPos({ top, left, visible: true, centered: false });
+    };
+    const id = requestAnimationFrame(place);
+    window.addEventListener('scroll', place, { passive: true, capture: true });
+    window.addEventListener('resize', place);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('scroll', place, { capture: true });
+      window.removeEventListener('resize', place);
+    };
   }, [anchorEl]);
 
   const providers = useAiProvidersStore(s => s.providers);
@@ -300,14 +329,20 @@ export function AiAssistPopover({
 
   return createPortal(
     <>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={onClose} />
+      <div
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9998,
+          background: pos.centered ? 'rgba(0,0,0,0.45)' : 'transparent',
+        }}
+        onClick={onClose}
+      />
       <div
         ref={popRef}
         style={{
           position: 'fixed',
           top: pos.top,
           left: pos.left,
-          width: 532,
+          width: POPOVER_WIDTH,
           zIndex: 9999,
           visibility: pos.visible ? 'visible' : 'hidden',
         }}

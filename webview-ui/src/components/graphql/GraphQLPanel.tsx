@@ -77,11 +77,7 @@ export function GraphQLPanel() {
             minHeight: 60,
             transition: isDragging ? 'none' : 'height 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
           }}
-          onFocus={e => {
-            const el = e.target as HTMLElement;
-            const tag = el.tagName.toLowerCase();
-            if (tag === 'input' || tag === 'textarea' || el.isContentEditable) handleRequestFocus();
-          }}
+          onFocus={handleRequestFocus}
         >
           <GraphQLEditor />
         </div>
@@ -116,11 +112,7 @@ export function GraphQLPanel() {
           style={{
             transition: isDragging ? 'none' : 'all 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
           }}
-          onFocus={e => {
-            const el = e.target as HTMLElement;
-            const tag = el.tagName.toLowerCase();
-            if (tag === 'input' || tag === 'textarea' || el.isContentEditable) handleResponseFocus();
-          }}
+          onFocus={handleResponseFocus}
         >
           <GraphQLResponse />
         </div>

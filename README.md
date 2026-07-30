@@ -1,8 +1,6 @@
 # Daakia — API Development Platform for VS Code
 
-<p align="center">
-  <img src="images/daakia-icon.png" alt="Daakia" width="128" height="128" />
-</p>
+![Daakia](images/daakia-icon.png)
 
 > **Daakia** (*डाकिया*, "The Messenger") — A multi-protocol API client built as a
 > first-class VS Code extension. Think **Postman + Insomnia + Bruno**, but living inside your
@@ -14,9 +12,7 @@
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-showcase.gif" alt="Daakia demo — REST, GraphQL, gRPC, SOAP, WebSocket, MCP, Mock Server, Collections, History, Environments, DevTools, and Settings" width="100%" />
-</p>
+![Daakia demo — REST, GraphQL, gRPC, SOAP, WebSocket, MCP, Mock Server, Collections, History, Environments, DevTools, and Settings](https://raw.githubusercontent.com/salilvnair/daakia/main/media/daakia-showcase.gif)
 
 ---
 
@@ -27,7 +23,6 @@
 - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [Getting Started](#getting-started)
-- [Build Commands](#build-commands)
 - [Protocol Details](#protocol-details)
   - [REST API](#rest-api)
   - [GraphQL](#graphql)
@@ -47,6 +42,7 @@
 - [Collection Sync (git-native)](#collection-sync-git-native)
 - [Tech Stack](#tech-stack)
 - [Design Principles](#design-principles)
+- [Contributing / Local Development](#contributing--local-development)
 - [License](#license)
 
 ---
@@ -207,47 +203,9 @@ platform. If the DB fails to load, the UI offers a one-click Rebuild.
 
 ## Getting Started
 
-### Prerequisites
-- **VS Code** `^1.99.0`
-- **Node.js** 20+ (use `nvm use 22`)
-
-### Install from VSIX (Manual)
-
-```bash
-npm run build:all
-npm run vscode:package
-code --install-extension daakia-*.vsix
-```
-
-### Development
-
-```bash
-nvm use 22
-npm install
-npm run build:all
-
-npm run watch          # watch mode, extension host
-npm run dev:webview    # Vite dev server, hot reload for the UI
-
-# Press F5 in VS Code → Extension Development Host window opens
-```
-
----
-
-## Build Commands
-
-| Command | Description |
-|---------|-------------|
-| `npm run build:all` | Typecheck + build extension (esbuild) + build webview (Vite) |
-| `npm run build:ext` | Build extension only |
-| `npm run build:webview` | Build webview only |
-| `npm run watch` | Watch mode for the extension |
-| `npm run dev:webview` | Vite dev server for the webview (hot reload) |
-| `npm run local-server` | Standalone dev backend (real SQLite + mock servers) for browser-only UI testing |
-| `npm run vscode:package` | Package into a `.vsix` file |
-| `npm run vscode:publish` | Publish to the VS Code Marketplace (current `package.json` version) |
-| `npm run vscode:publish:patch` / `:minor` / `:major` | Bump semver and publish in one step |
-| `npm run lint` | ESLint on `src/` |
+Install **Daakia** directly from the VS Code Marketplace — search for "Daakia" in the
+Extensions view (`Cmd/Ctrl+Shift+X`) and click Install, or click the Install button at
+the top of this page. Requires **VS Code `^1.99.0`**.
 
 ---
 
@@ -560,6 +518,51 @@ stays entirely in your own hands via VS Code's Source Control panel.
 8. **Stable scrollbars** — every scrollable area reserves gutter space so content never shifts
 9. **Help icons** — always the shared `InfoPopup` (title + description + code badges + wiki link), never a bare toast or direct link
 10. **postMessage bridge** — all extension ↔ webview communication goes through typed message handlers
+
+---
+
+## Contributing / Local Development
+
+> This section is for people building Daakia from source — not needed to use the extension,
+> which installs in one click from the Marketplace above.
+
+**Prerequisites:** Node.js 20+ (`nvm use 22`).
+
+```bash
+git clone https://github.com/salilvnair/daakia.git
+cd daakia
+nvm use 22
+npm install
+npm run build:all
+
+npm run watch          # watch mode, extension host
+npm run dev:webview    # Vite dev server, hot reload for the UI
+
+# Press F5 in VS Code → Extension Development Host window opens
+```
+
+### Build Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run build:all` | Typecheck + build extension (esbuild) + build webview (Vite) |
+| `npm run build:ext` | Build extension only |
+| `npm run build:webview` | Build webview only |
+| `npm run watch` | Watch mode for the extension |
+| `npm run dev:webview` | Vite dev server for the webview (hot reload) |
+| `npm run local-server` | Standalone dev backend (real SQLite + mock servers) for browser-only UI testing |
+| `npm run vscode:package` | Package into a `.vsix` file (for manual/offline installs) |
+| `npm run vscode:publish` | Publish to the VS Code Marketplace (current `package.json` version) |
+| `npm run vscode:publish:patch` / `:minor` / `:major` | Bump semver and publish in one step |
+| `npm run lint` | ESLint on `src/` |
+
+### Installing a locally-built VSIX
+
+```bash
+npm run build:all
+npm run vscode:package
+code --install-extension daakia-*.vsix
+```
 
 ---
 

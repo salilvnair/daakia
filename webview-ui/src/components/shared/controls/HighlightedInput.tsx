@@ -56,18 +56,18 @@ export function HighlightedInput({ value, onChange, onKeyDown, onBlur, placehold
       .filter(ms => !lower || ms.url.toLowerCase().includes(lower) || ms.name.toLowerCase().includes(lower))
       .map(ms => ({ url: ms.url, isMock: true, name: ms.name }));
 
-    if (!lower) return mocks.slice(0, 8);
-
+    // Protocol suggestions only make sense once the user has started typing
+    // (e.g. "h", "ht", "w" → "http://", "https://", "ws://")
     const hints = protocolHints || DEFAULT_PROTOCOL_HINTS;
+    const protocols: SuggestionItem[] = lower
+      ? hints.filter(p => p.startsWith(lower) && p !== lower).map(p => ({ url: p, isMock: false }))
+      : [];
 
-    // Protocol suggestions (when typing "h", "ht", "htt", "w", "ws", etc.)
-    const protocols: SuggestionItem[] = hints
-      .filter(p => p.startsWith(lower) && p !== lower)
-      .map(p => ({ url: p, isMock: false }));
-
-    // URL suggestions from history/collections
+    // URL suggestions from history/collections — show the most recent ones
+    // on empty focus too, same as REST/SOAP's SelectTextInputView.
     const urls: SuggestionItem[] = suggestions
       .filter(url => {
+        if (!lower) return true;
         const urlLower = url.toLowerCase();
         return urlLower.includes(lower) && urlLower !== lower;
       })
@@ -83,7 +83,7 @@ export function HighlightedInput({ value, onChange, onKeyDown, onBlur, placehold
       }
     }
     return combined.slice(0, 8);
-  }, [value, focused, suggestions, mockServers]);
+  }, [value, focused, suggestions, mockServers, protocolHints]);
 
   // Legacy: flat URL array for key handling
   const filteredSuggestions = useMemo(() => filteredItems.map(i => i.url), [filteredItems]);

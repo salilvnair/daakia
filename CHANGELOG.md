@@ -4,6 +4,52 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [2.0.1] — 2026-07-30
+
+Bug-fix release — no new features, all fixes from real-world post-2.0.0 testing.
+
+### Fixed
+- **Request/response panel auto-resize** — clicking a request-config tab, sub-tab, or
+  input no longer fails to snap the split panel on REST, GraphQL, and MCP (was working
+  correctly on gRPC/SOAP/WebSocket/SSE/Socket.IO/MQTT already); REST/GraphQL were
+  filtering the focus handler to only `input`/`textarea` elements and silently ignoring
+  button clicks, MCP was using `onClick` instead of `onFocus` (broken by inner
+  `stopPropagation()` calls)
+- **URL suggestion dropdowns** — REST and SOAP were the only protocols showing history/
+  mock-server suggestions on an empty, freshly-focused URL field; gRPC, WebSocket, SSE,
+  Socket.IO, and MQTT (all via `@salilvnair/dui`'s `HighlightedInputView`) and GraphQL
+  (a local duplicate component) had the same empty-focus suppression bug, fixed at the
+  shared component level. MCP and AI never had suggestions wired up at all — added
+  history + mock-server suggestion support to both, matching every other protocol
+- **AI popups cut off at the bottom of the viewport** — Response Explainer, Follow-up
+  Requests, and Error Diagnosis (one shared `AiAssistPopover` component used across all
+  7 protocols) now clamp to stay fully on-screen in both directions, track window
+  resize/scroll instead of positioning once on mount, and fall back to a centered popup
+  with a dim backdrop when there's no room to anchor near the trigger button
+- **Mock Server state machine canvas rendering blank white node cards, "Blocks 0"** —
+  `@salilvnair/state-machine`'s `package.json` had a `sideEffects: ["**/*.css"]` array
+  that caused its own library build to tree-shake out the block-registration module
+  entirely; published a fixed `1.0.1` and daakia now depends on it via the real npm
+  registry
+- **`.vsix` package bloat** — `.vscodeignore` was missing `.claude/`, `.history/`,
+  `graphify-out/`, `skills/`, `cli/`, stale `out/` (an old e2e test-compile artifact),
+  `tsconfig.test.json`, `CLAUDE.md`, and the (16 MB) demo GIF in `media/` — none of
+  which belong in the shipped extension; package dropped from thousands of stray files
+  down to 117 real files, 12 MB
+- **Marketplace README** — the demo GIF and header icon were invisible on the
+  Marketplace listing page (raw HTML `<img width=...>` tags rendered at 0×0 there,
+  despite working fine on GitHub); switched to plain Markdown image syntax. Also moved
+  the "Install from VSIX (Manual)" / build-from-source instructions out of "Getting
+  Started" (confusing next to the Marketplace's own Install button) into a separate
+  "Contributing / Local Development" section
+
+### Changed
+- `@salilvnair/dui` and `@salilvnair/state-machine` are now installed from the public
+  npm registry in every remaining place that still had a local `file:` link, matching
+  how any other consumer would install them
+
+---
+
 ## [2.0.0] — 2026-07-30
 
 A full UI redesign plus three major new systems: stateful mocking, an in-app

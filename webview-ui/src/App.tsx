@@ -644,11 +644,7 @@ export default function App() {
               first={
                 <div
                   className="flex flex-col h-full overflow-hidden"
-                  onFocus={e => {
-                    const el = e.target as HTMLElement;
-                    const tag = el.tagName.toLowerCase();
-                    if (tag === 'input' || tag === 'textarea' || el.isContentEditable) handleRequestFocus();
-                  }}
+                  onFocus={handleRequestFocus}
                 >
                   <RequestPanel />
                 </div>
@@ -656,11 +652,7 @@ export default function App() {
               second={
                 <div
                   className="flex flex-col h-full overflow-hidden"
-                  onFocus={e => {
-                    const el = e.target as HTMLElement;
-                    const tag = el.tagName.toLowerCase();
-                    if (tag === 'input' || tag === 'textarea' || el.isContentEditable) handleResponseFocus();
-                  }}
+                  onFocus={handleResponseFocus}
                 >
                   <ResponsePanel />
                 </div>

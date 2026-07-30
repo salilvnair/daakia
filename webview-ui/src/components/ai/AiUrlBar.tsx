@@ -8,10 +8,13 @@ import { saveRequest } from '../../services/request';
 import {
   SelectInputView,
   TextInputView,
+  HighlightedInputView,
   ButtonView,
   DropDownButtonView,
   type ContextMenuItem,
 } from '@salilvnair/dui';
+import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
+import { useMockSuggestions } from '../../hooks/useMockSuggestions';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -39,6 +42,8 @@ export function AiUrlBar() {
   const model = activeTab?.aiModel || (activeTab?.aiProvider ? '' : defaultModelId);
   const url = activeTab?.url || '';
   const loading = activeTab?.aiStreaming || activeTab?.loading || false;
+  const urlSuggestions = useUrlSuggestionsStore(s => s.byProtocol.ai);
+  const mockSuggestions = useMockSuggestions('ai');
 
   // Sync provider/model from store defaults.
   // Only skips update when the user has manually chosen a provider via the dropdown
@@ -101,15 +106,18 @@ export function AiUrlBar() {
     updateTab(activeTab.id, { aiModel: val, dirty: true });
   }, [activeTab, updateTab]);
 
-  const handleUrlChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUrlChange = useCallback((val: string) => {
     if (!activeTab) return;
-    updateTab(activeTab.id, { url: e.target.value, dirty: true });
+    updateTab(activeTab.id, { url: val, dirty: true });
   }, [activeTab, updateTab]);
 
   const handleSend = useCallback(() => {
     if (!activeTab || loading) return;
     const userPrompt = activeTab.aiUserPrompt?.trim();
     if (!userPrompt && (!activeTab.aiConversation || activeTab.aiConversation.length === 0)) return;
+
+    // URL suggestions
+    if (url.trim()) useUrlSuggestionsStore.getState().addUrls([url.trim()], 'ai');
 
     const aiPayload = {
       type: 'ai:send',
@@ -207,13 +215,17 @@ export function AiUrlBar() {
 
       {/* URL input — non-copilot providers only */}
       {provider !== 'copilot' && (
-        <TextInputView
-          value={url}
-          onChange={handleUrlChange}
-          placeholder="API base URL"
-          size="lg"
-          className="flex-1"
-        />
+        <div className="flex-1 min-w-0">
+          <HighlightedInputView
+            value={url}
+            onChange={handleUrlChange}
+            placeholder="API base URL"
+            suggestions={urlSuggestions}
+            mockServers={mockSuggestions}
+            size="lg"
+            accentColor={ACCENT}
+          />
+        </div>
       )}
 
       {/* Send button */}

@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
-import { SelectInputView, DropDownButtonView, ButtonView, TextInputView, IconButtonView } from '@salilvnair/dui';
+import { SelectInputView, DropDownButtonView, ButtonView, HighlightedInputView, IconButtonView } from '@salilvnair/dui';
 import type { SelectOption, ContextMenuItem } from '@salilvnair/dui';
 import { ProtocolMcpBadge, ConnectIcon, DisconnectIcon, SaveIcon, SparkleIcon, CloseIcon, MoreVerticalIcon } from '../../icons';
 import { postMsg } from '../../vscode';
@@ -8,6 +8,8 @@ import { saveRequest } from '../../services/request';
 import { AiMcpPromptBuilderModal } from '../ai/AiMcpPromptBuilderModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { logUiEvent } from '../../store/ui-audit-store';
+import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
+import { useMockSuggestions } from '../../hooks/useMockSuggestions';
 
 const ACCENT = 'var(--color-protocol-mcp)';
 
@@ -31,6 +33,8 @@ export function McpUrlBar() {
   const [overflowDir, setOverflowDir] = useState<'down' | 'up'>('down');
   const overflowRef = useRef<HTMLDivElement>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
+  const urlSuggestions = useUrlSuggestionsStore(s => s.byProtocol.mcp);
+  const mockSuggestions = useMockSuggestions('mcp');
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -54,14 +58,14 @@ export function McpUrlBar() {
     updateTab(activeTab.id, { mcpTransport: val as 'stdio' | 'http', dirty: true });
   }, [activeTab, updateTab]);
 
-  const handleCommandChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCommandChange = useCallback((val: string) => {
     if (!activeTab) return;
-    updateTab(activeTab.id, { mcpCommand: e.target.value, dirty: true });
+    updateTab(activeTab.id, { mcpCommand: val, dirty: true });
   }, [activeTab, updateTab]);
 
-  const handleUrlChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUrlChange = useCallback((val: string) => {
     if (!activeTab) return;
-    updateTab(activeTab.id, { url: e.target.value, dirty: true });
+    updateTab(activeTab.id, { url: val, dirty: true });
   }, [activeTab, updateTab]);
 
   const handleConnect = useCallback(() => {
@@ -134,26 +138,32 @@ export function McpUrlBar() {
 
         {/* STDIO: command input */}
         {transport === 'stdio' && (
-          <TextInputView
-            value={command}
-            onChange={handleCommandChange}
-            placeholder="npx @modelcontextprotocol/server-name"
-            size="lg"
-            className="flex-1"
-            accentColor={ACCENT}
-          />
+          <div className="flex-1 min-w-0">
+            <HighlightedInputView
+              value={command}
+              onChange={handleCommandChange}
+              placeholder="npx @modelcontextprotocol/server-name"
+              suggestions={urlSuggestions}
+              mockServers={mockSuggestions}
+              size="lg"
+              accentColor={ACCENT}
+            />
+          </div>
         )}
 
         {/* HTTP/SSE: URL input */}
         {transport === 'http' && (
-          <TextInputView
-            value={url}
-            onChange={handleUrlChange}
-            placeholder="http://localhost:3000/mcp/sse"
-            size="lg"
-            className="flex-1"
-            accentColor={ACCENT}
-          />
+          <div className="flex-1 min-w-0">
+            <HighlightedInputView
+              value={url}
+              onChange={handleUrlChange}
+              placeholder="http://localhost:3000/mcp/sse"
+              suggestions={urlSuggestions}
+              mockServers={mockSuggestions}
+              size="lg"
+              accentColor={ACCENT}
+            />
+          </div>
         )}
 
         {/* Connect/Disconnect button */}
