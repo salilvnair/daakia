@@ -14,6 +14,8 @@ import { WelcomeViewProvider } from './panel/sidebar/WelcomeViewProvider';
 import { createDaakiaChatHandler } from './panel/chat/chat-handler';
 import { initSecretStore } from './services/secret-store';
 import { exportCollectionsToWorkspace, importCollectionsFromWorkspace, initGitSyncWatcher } from './services/git-sync';
+import { tryAutoUnlockFromKeychain } from './services/vault';
+import { purgeExpiredTrash } from './services/bin';
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log('[daakia] Activating...');
@@ -30,6 +32,11 @@ export async function activate(context: vscode.ExtensionContext) {
     } else {
       console.log('[daakia] SQLite ready.');
     }
+    // Silently unlock the vault if a passphrase is already in the OS keychain — no prompt needed.
+    void tryAutoUnlockFromKeychain();
+    // Purge bin entries past their 30-day retention — no background timer, so activation is the
+    // one reliable point to sweep (also covers long-idle installs that weren't opened in a while).
+    purgeExpiredTrash();
     // Auto-open the main panel on startup
     MainPanel.createOrShow(context.extensionUri);
   });
@@ -186,7 +193,8 @@ export async function activate(context: vscode.ExtensionContext) {
         canSelectMany: false,
         canSelectFiles: false,
         canSelectFolders: true,
-        title: 'Import Bruno Collection (select folder)',
+        title: 'Import Bruno Collection — Select Source Folder',
+        openLabel: 'Import From Here',
       });
       if (uri?.[0]) {
         try {

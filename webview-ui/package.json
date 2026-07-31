@@ -12,9 +12,10 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@salilvnair/convengine-chat": "^1.0.7",
-    "@salilvnair/dui": "^1.0.2",
+    "@salilvnair/dui": "^1.0.4",
     "@salilvnair/state-machine": "^1.0.1",
     "@xyflow/react": "^12.6.4",
+    "graphql": "^17.0.2",
     "highlight.js": "^11.10.0",
     "monaco-editor": "^0.55.1",
     "react": "^19.0.0",

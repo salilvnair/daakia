@@ -156,6 +156,7 @@ Simple Node.js/Express webhook handler for this specific event type.`,
                 value={secret}
                 onChange={e => setSecret(e.target.value)}
                 size="md"
+                accentColor={ACCENT}
                 width="fw"
                 placeholder="whsec_…"
               />
@@ -166,6 +167,7 @@ Simple Node.js/Express webhook handler for this specific event type.`,
                 value={signature}
                 onChange={e => setSignature(e.target.value)}
                 size="md"
+                accentColor={ACCENT}
                 width="fw"
                 placeholder="t=1701732000,v1=abc…"
               />

@@ -2,15 +2,18 @@ import { CopyRootHtmlButton } from '../../pages/wiki/daakia-view/CopyRootHtmlBut
 import { CollectionsPanel } from '../rest/sidebar/CollectionsPanel';
 import { HistoryPanel } from '../rest/sidebar/HistoryPanel';
 import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
-import { GraphQLDocumentationPanel, GraphQLSchemaPanel } from '../graphql';
+import { GraphQLDocumentationPanel, GraphQLSchemaExplorer } from '../graphql';
 import { RunAndDebugPanel } from '../shared/debugger';
-import { CollectionsFolderIcon, ClockIcon, LayersIcon, SettingsIcon, DocumentIcon, CodeIcon, BugIcon, GrpcIcon, SoapIcon, SparkleIcon, GeneralAssistantIcon } from '../../icons';
+import { CollectionsFolderIcon, ClockIcon, LayersIcon, SettingsIcon, DocumentIcon, CodeIcon, BugIcon, GrpcIcon, SoapIcon, SparkleIcon, GeneralAssistantIcon, BookOpenIcon, GitHubIcon, RefreshIcon } from '../../icons';
 import { useTabsStore } from '../../store/tabs-store';
 import { useDebugStore } from '../../store/debug-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { postMsg } from '../../vscode';
+import { useUiStateStore } from '../../store/ui-state-store';
+import { ButtonView } from '@salilvnair/dui';
 
 export type SidebarSection = 'collections' | 'history' | 'environments' | 'debug' | 'gql-docs' | 'gql-schema' | 'gql-collections' | 'gql-history' | 'ws-collections' | 'ws-history' | 'grpc-collections' | 'grpc-history' | 'soap-collections' | 'soap-history' | 'ai-collections' | 'ai-history' | 'mcp-collections' | 'mcp-history' | null;
 
@@ -38,6 +41,10 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
   const activeTab = tabs.find(t => t.id === activeTabId);
   const settingsOpen = tabs.some(t => t.type === 'settings');
   const settingsActive = activeTab?.type === 'settings';
+  // Realtime tab bundles 4 sub-protocols (WS/SSE/Socket.IO/MQTT) behind one 'ws-*' sidebar
+  // section — Collections/History must follow whichever sub-protocol is actually active,
+  // not always show WebSocket-tagged data.
+  const rtProtocol = (activeTab?.authData?.['rt_protocol'] as string) || 'websocket';
 
   const hasAnyBreakpoints = useDebugStore(s =>
     Object.values(s.breakpoints).some(lines => lines.length > 0)
@@ -55,8 +62,9 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
   const isMockServer = activeTab?.type === 'mock-server';
   const isStateMachine = activeTab?.type === 'state-machine';
   const isDaakiaAi = activeTab?.type === 'daakia-ai';
-  // Never show protocol icons when settings, mock-server, state-machine, or daakia-ai tab is active
-  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi;
+  const isWiki = activeTab?.type === 'wiki';
+  // Never show protocol icons when settings, mock-server, state-machine, daakia-ai, or wiki tab is active
+  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi && !isWiki;
   const showRestSidebar = showProtocolIcons && activeProtocol === 'rest';
   const showGraphqlSidebar = showProtocolIcons && activeProtocol === 'graphql';
   const showWebsocketSidebar = showProtocolIcons && activeProtocol === 'websocket';
@@ -86,7 +94,7 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
           transition: sidebarDragging ? 'none' : 'width 180ms cubic-bezier(0.2, 0.8, 0.2, 1)',
         }}
       >
-        {showPanel && <SidebarPanelContent section={activeSection} />}
+        {showPanel && <SidebarPanelContent section={activeSection} rtProtocol={rtProtocol} />}
       </div>
 
       {/* Icon rail — always has left border for clean separation */}
@@ -356,6 +364,12 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
         {/* AI Provider Status — above settings */}
         <AiProviderStatusIcon />
 
+        {/* Daakia Wiki — above settings */}
+        <DaakiaWikiButton />
+
+        {/* Git Sync — above settings */}
+        <GitSyncButton />
+
         {/* Settings — always visible */}
         <SidebarIcon
           active={settingsActive}
@@ -408,6 +422,183 @@ function DaakiaAiButton() {
         style={{ color: isDaakiaAiActive || isDaakiaAiOpen ? 'var(--color-protocol-ai)' : 'var(--color-text-muted)' }}
       />
     </button>
+  );
+}
+
+// ─── Daakia Wiki Button ───────────────────────────────────────────────────────
+
+function DaakiaWikiButton() {
+  const tabs = useTabsStore(s => s.tabs);
+  const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
+  const isWikiOpen = tabs.some(t => t.type === 'wiki');
+  const isWikiActive = activeTab?.type === 'wiki';
+
+  return (
+    <button
+      type="button"
+      onClick={() => useTabsStore.getState().openDaakiaWikiTab()}
+      title="Daakia Wiki"
+      className="w-9 h-9 flex items-center justify-center rounded-lg cursor-pointer transition-colors"
+      style={{
+        backgroundColor: isWikiActive
+          ? 'color-mix(in srgb, var(--color-wiki) 18%, transparent)'
+          : isWikiOpen
+            ? 'color-mix(in srgb, var(--color-wiki) 10%, transparent)'
+            : undefined,
+      }}
+      onMouseEnter={e => {
+        if (!isWikiActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'color-mix(in srgb, var(--color-text-primary) 7%, transparent)';
+      }}
+      onMouseLeave={e => {
+        if (!isWikiActive) (e.currentTarget as HTMLElement).style.backgroundColor =
+          isWikiOpen ? 'color-mix(in srgb, var(--color-wiki) 10%, transparent)' : '';
+      }}
+    >
+      <BookOpenIcon
+        size={16}
+        style={{ color: isWikiActive || isWikiOpen ? 'var(--color-wiki)' : 'var(--color-text-muted)' }}
+      />
+    </button>
+  );
+}
+
+// ─── Git Sync Button ────────────────────────────────────────────────────────────
+
+function formatSyncRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const sec = Math.round(diffMs / 1000);
+  if (sec < 5) return 'just now';
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.round(hr / 24)}d ago`;
+}
+
+function GitSyncButton() {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data;
+      if (msg.type === 'gitSync:syncResult') {
+        setSyncing(false);
+        setLastMessage(msg.result.message);
+        if (msg.result.ok) setLastSyncedAt(new Date().toISOString());
+      } else if (msg.type === 'gitSync:autoSyncTick') {
+        setLastMessage(msg.result?.message ?? null);
+        if (msg.result?.ok) setLastSyncedAt(msg.at);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const handleOpen = () => {
+    if (!btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    const popupW = 240;
+    const popupH = 140;
+    const MARGIN = 8;
+    const rawTop = rect.top;
+    const clampedTop = Math.min(rawTop, window.innerHeight - popupH - MARGIN);
+    setPos({ top: Math.max(MARGIN, clampedTop), left: rect.left - popupW - MARGIN });
+    setOpen(v => !v);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node) &&
+          btnRef.current && !btnRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const handleSyncNow = () => {
+    setSyncing(true);
+    postMsg({ type: 'gitSync:syncNow' });
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={handleOpen}
+        title="Git Sync"
+        className={`w-9 h-9 flex items-center justify-center rounded-lg cursor-pointer transition-colors ${open ? '' : 'hover:opacity-80'}`}
+        style={{ backgroundColor: open ? 'color-mix(in srgb, var(--color-settings) 15%, transparent)' : undefined }}
+      >
+        <GitHubIcon size={16} style={{ color: open ? 'var(--color-settings)' : 'var(--color-text-muted)' }} />
+      </button>
+
+      {open && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={popupRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, width: 240 }}
+          className="rounded-xl shadow-2xl overflow-hidden"
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ backgroundColor: 'var(--vscode-editor-background, #1e1e1e)', border: '1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent)', borderRadius: 12 }}>
+            <div className="flex items-center gap-2 px-3.5 py-2.5 border-b border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
+              <GitHubIcon size={13} style={{ color: 'var(--color-settings)' }} />
+              <span className="text-[12px] font-semibold text-[var(--color-text-primary)]">Git Sync</span>
+            </div>
+
+            <div className="px-3.5 py-3 flex flex-col gap-2.5">
+              <ButtonView
+                size="sm"
+                variant="primary"
+                accentColor="var(--color-settings)"
+                iconLeft={<RefreshIcon size={12} />}
+                onClick={handleSyncNow}
+                disabled={syncing}
+                style={{ width: '100%' }}
+              >
+                {syncing ? 'Syncing…' : 'Sync Now'}
+              </ButtonView>
+
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-muted)]">Last Synced</span>
+                <span className="text-[11px] text-[var(--color-text-secondary)]">
+                  {lastSyncedAt ? formatSyncRelativeTime(lastSyncedAt) : 'Never'}
+                </span>
+                {lastMessage && (
+                  <span className="text-[10px] text-[var(--color-text-muted)] leading-snug mt-0.5">{lastMessage}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="px-3.5 py-2.5 border-t border-[color-mix(in_srgb,var(--color-text-primary)_7%,transparent)]">
+              <button
+                type="button"
+                onClick={() => {
+                  useUiStateStore.getState().setPref('settings.section', 'git-sync');
+                  useTabsStore.getState().openSettingsTab();
+                  setOpen(false);
+                }}
+                className="text-[11px] cursor-pointer hover:underline"
+                style={{ color: 'var(--color-settings)' }}
+              >
+                Open Git Sync Settings →
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -560,7 +751,7 @@ function SidebarIcon({
   );
 }
 
-function SidebarPanelContent({ section }: { section: SidebarSection }) {
+function SidebarPanelContent({ section, rtProtocol }: { section: SidebarSection; rtProtocol: string }) {
   switch (section) {
     case 'collections':
       return <CollectionsPanel protocol="rest" />;
@@ -573,15 +764,15 @@ function SidebarPanelContent({ section }: { section: SidebarSection }) {
     case 'gql-docs':
       return <GraphQLDocumentationPanel />;
     case 'gql-schema':
-      return <GraphQLSchemaPanel />;
+      return <GraphQLSchemaExplorer />;
     case 'gql-collections':
       return <CollectionsPanel protocol="graphql" />;
     case 'gql-history':
       return <HistoryPanel protocol="graphql" />;
     case 'ws-collections':
-      return <CollectionsPanel protocol="websocket" />;
+      return <CollectionsPanel protocol={rtProtocol} />;
     case 'ws-history':
-      return <HistoryPanel protocol="websocket" />;
+      return <HistoryPanel protocol={rtProtocol} />;
     case 'grpc-collections':
       return <CollectionsPanel protocol="grpc" />;
     case 'grpc-history':

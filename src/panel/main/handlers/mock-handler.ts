@@ -18,6 +18,8 @@ import {
   setLogCallback,
 } from '../../../mock/mock-server-manager';
 import { importOpenApi, importPostman, importWireMock } from '../../../mock/mock-importer';
+import { archiveDroppedMockServers } from '../../../services/bin';
+import type { MockServerConfig } from '../../../mock/mock-types';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -91,7 +93,8 @@ export function handleUpdateMockRoutes(msg: Record<string, unknown>) {
 }
 
 export function handleSaveMockConfigs(msg: Record<string, unknown>) {
-  const configs = msg.configs as any[];
+  const configs = msg.configs as MockServerConfig[];
+  archiveDroppedMockServers(configs);
   saveConfigs(configs);
 }
 

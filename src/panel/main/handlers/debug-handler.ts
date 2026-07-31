@@ -23,6 +23,7 @@ import type { ScriptContext } from '../../../services/script-runtime';
 import {
   getAllEnvironments, getCollectionData, getSetting,
 } from '../../../storage/db';
+import { decryptIfNeeded } from '../../../services/vault';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -157,7 +158,7 @@ function buildScriptContext(msg: Record<string, unknown>): ScriptContext {
   if (globalRow) {
     const gVars = JSON.parse(globalRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string }[];
     for (const v of gVars) {
-      if (v.key) envVars[v.key] = v.currentValue ?? v.initialValue ?? '';
+      if (v.key) envVars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
     }
   }
   if (envId) {
@@ -165,7 +166,7 @@ function buildScriptContext(msg: Record<string, unknown>): ScriptContext {
     if (envRow) {
       const eVars = JSON.parse(envRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string }[];
       for (const v of eVars) {
-        if (v.key) envVars[v.key] = v.currentValue ?? v.initialValue ?? '';
+        if (v.key) envVars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
       }
     }
   }

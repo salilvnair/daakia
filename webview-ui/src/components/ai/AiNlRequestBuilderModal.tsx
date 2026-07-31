@@ -185,6 +185,7 @@ export function AiNlRequestBuilderModal({ protocol, currentUrl, onApply, onClose
           onKeyDown={e => { if (e.key === 'Enter') handleBuild(); if (e.key === 'Escape') onClose(); }}
           placeholder='e.g. "Get all admin users created after Jan 1st, paginated by 20"'
           size="md"
+          accentColor={ACCENT}
           width="fw"
           autoFocus
         />

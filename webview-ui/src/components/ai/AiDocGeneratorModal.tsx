@@ -161,6 +161,7 @@ export function AiDocGeneratorModal({ collectionNode, onClose }: Props) {
           onChange={e => setNotes(e.target.value)}
           placeholder="Optional notes (e.g. 'include authentication flow section, target audience: frontend devs')"
           size="md"
+          accentColor={ACCENT}
           width="fw"
         />
 

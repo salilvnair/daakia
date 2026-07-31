@@ -226,6 +226,7 @@ export function AiRequestFromScreenshotModal({ onClose }: Props) {
             onChange={e => { setTextFallback(e.target.value); setError(''); }}
             rows={4}
             size="md"
+            accentColor={ACCENT}
             width="fw"
             placeholder="e.g. POST /api/v1/users — Creates a new user. Body: { name, email, role }. Returns 201 with { id, name, email }..."
           />

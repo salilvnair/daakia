@@ -164,6 +164,7 @@ export function AiResponseTransformer({ tabId, responseBody, contentType, method
             onChange={e => handleInstructionChange(e.target.value)}
             rows={3}
             size="md"
+            accentColor={ACCENT}
             width="fw"
             placeholder='"Convert this JSON to CSV" or "Extract all email addresses"'
           />

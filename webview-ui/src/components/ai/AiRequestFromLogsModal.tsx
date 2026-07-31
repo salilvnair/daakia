@@ -170,6 +170,7 @@ export function AiRequestFromLogsModal({ onClose }: Props) {
             onChange={e => { setLogs(e.target.value); setError(''); }}
             rows={10}
             size="md"
+            accentColor={ACCENT}
             width="fw"
             placeholder="Paste Apache/nginx access logs, Express server output, curl verbose output, or any HTTP traffic..."
           />

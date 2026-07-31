@@ -3,6 +3,7 @@
  * Resolves {{var}}, ${var}, and $daakia_{var}_$ escape patterns.
  */
 import { getAllEnvironments, getSetting } from '../../../storage/db';
+import { decryptIfNeeded } from '../../../services/vault';
 
 /**
  * Load merged environment variables (dk_globals + global env + active env).
@@ -25,7 +26,7 @@ export function loadEnvVars(envId: string | undefined): Record<string, string> {
   if (globalRow) {
     const globalVars = JSON.parse(globalRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string }[];
     for (const v of globalVars) {
-      if (v.key) vars[v.key] = v.currentValue ?? v.initialValue ?? '';
+      if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
     }
   }
 
@@ -37,7 +38,7 @@ export function loadEnvVars(envId: string | undefined): Record<string, string> {
   if (activeRow && activeRow !== globalRow) {
     const activeVars = JSON.parse(activeRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string }[];
     for (const v of activeVars) {
-      if (v.key) vars[v.key] = v.currentValue ?? v.initialValue ?? '';
+      if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
     }
   }
 

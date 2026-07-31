@@ -48,7 +48,7 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki';
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -446,6 +446,7 @@ interface TabsState {
   openSettingsTab: () => void;
   openMockServerTab: () => void;
   openDaakiaAiTab: () => void;
+  openDaakiaWikiTab: () => void;
   openStateMachineTab: (serverId?: string) => void;
   switchProtocol: (protocol: Protocol) => void;
   closeTab: (id: string) => void;
@@ -528,6 +529,21 @@ export const useTabsStore = create<TabsState>((set, get) => {
       }
     },
 
+    openDaakiaWikiTab: () => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'wiki');
+      if (existing) {
+        set({ activeTabId: existing.id, previousTabId: activeTabId });
+      } else {
+        const tab = createDefaultTab({ type: 'wiki', name: 'Daakia Wiki' });
+        set(s => ({
+          tabs: [...s.tabs, tab],
+          activeTabId: tab.id,
+          previousTabId: activeTabId,
+        }));
+      }
+    },
+
     openStateMachineTab: (serverId) => {
       const { tabs, activeTabId } = get();
       // Reuse an existing SM tab linked to the same server if one already exists
@@ -576,7 +592,7 @@ export const useTabsStore = create<TabsState>((set, get) => {
       let nextProtocol = activeProtocol;
       if (activeTabId === id) {
         // If closing a settings/mock-server/daakia-ai tab and we have a previousTabId, return to it
-        if (closedTab && (closedTab.type === 'settings' || closedTab.type === 'mock-server' || closedTab.type === 'daakia-ai' || closedTab.type === 'state-machine') && previousTabId && nextTabs.some(t => t.id === previousTabId)) {
+        if (closedTab && (closedTab.type === 'settings' || closedTab.type === 'mock-server' || closedTab.type === 'daakia-ai' || closedTab.type === 'state-machine' || closedTab.type === 'wiki') && previousTabId && nextTabs.some(t => t.id === previousTabId)) {
           nextActive = previousTabId;
           const prevTab = nextTabs.find(t => t.id === previousTabId);
           if (prevTab?.type === 'request' && prevTab.protocol) nextProtocol = prevTab.protocol;

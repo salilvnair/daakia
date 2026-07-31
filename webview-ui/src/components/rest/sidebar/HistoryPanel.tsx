@@ -6,15 +6,28 @@ const SUGGESTION_PROTOCOLS = new Set<string>(['rest', 'graphql', 'grpc', 'websoc
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
-import { ConfirmDialog } from '../../shared';
+import { ConfirmDialog, SaveRequestModal } from '../../shared';
 import { SearchInputView, IconButtonView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
-import { buildGroups, formatFullTimestamp, exportHistoryItem, type TopGroup, type SubGroup } from '../../../services/history';
+import { buildGroups, formatFullTimestamp, exportHistoryItem, exportHistoryItems, type TopGroup, type SubGroup } from '../../../services/history';
 import { replayHistoryItem } from '../../../services/collections';
 import type { CollectionTreeNode } from '../../../services/collections/tree-helpers';
 import { AiDocGeneratorModal } from '../../ai/AiDocGeneratorModal';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
-import { MoreVerticalIcon, ClockIcon, ChevronRightIcon, ExternalLinkIcon, PlusSquareIcon, DownloadIcon, TrashIcon, SaveIcon, ExpandAllIcon, CollapseAllIcon, DocumentIcon, ServerIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../../icons';
+import { MoreVerticalIcon, ClockIcon, ChevronRightIcon, ExternalLinkIcon, PlusSquareIcon, DownloadIcon, TrashIcon, SaveIcon, ExpandAllIcon, CollapseAllIcon, DocumentIcon, ServerIcon, SearchIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge } from '../../../icons';
 import { logUiEvent } from '../../../store/ui-audit-store';
+
+/** Long provider/endpoint URLs (e.g. AI base URLs) read poorly at full length in a narrow sidebar row. */
+function trimUrl(url: string, max = 42): string {
+  return url.length > max ? `${url.slice(0, max)}..` : url;
+}
+
+/** Response-time → threshold color, matching the (previously unused) --color-time-* tokens. */
+function getTimeColor(ms: number): string {
+  if (ms < 300) return 'var(--color-protocol-ai)';
+  if (ms < 1000) return 'var(--color-time-moderate)';
+  if (ms < 3000) return 'var(--color-time-slow)';
+  return 'var(--color-time-critical)';
+}
 
 function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
   const size = 20;
@@ -67,6 +80,8 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: DuiContextMenuItem[] } | null>(null);
   const [headerMenu, setHeaderMenu] = useState<{ position: { x: number; y: number }; items: DuiContextMenuItem[] } | null>(null);
   const [docGeneratorNode, setDocGeneratorNode] = useState<CollectionTreeNode | null>(null);
+  const [bulkSaveItems, setBulkSaveItems] = useState<HistoryItem[] | null>(null);
+  const [groupMenu, setGroupMenu] = useState<{ position: { x: number; y: number }; items: DuiContextMenuItem[] } | null>(null);
 
   // Scroll position persistence
   const scrollRef = useScrollRestore(`history.${protocol}`);
@@ -155,10 +170,37 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
     const items: DuiContextMenuItem[] = [
       { id: 'expand-all', label: 'Expand all', icon: <ExpandAllIcon size={14} className="text-[var(--color-info)]" />, onClick: () => { expandAllGroups(); close(); } },
       { id: 'collapse-all', label: 'Collapse all', icon: <CollapseAllIcon size={14} className="text-[var(--color-warning)]" />, onClick: () => { collapseAllGroups(); close(); } },
+      { id: 'sep-export', label: '', separator: true },
+      // Whole-history scope — export only, no "Save to Collection" (dumping every request ever
+      // made into one collection isn't a meaningful action the way a single day/month's worth is).
+      { id: 'export-all', label: 'Export as JSON', shortcut: 'E', icon: <DownloadIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { exportHistoryItems(history, 'all'); close(); } },
       { id: 'sep-expand', label: '', separator: true },
       { id: 'clear-all', label: 'Delete all history', danger: true, shortcut: 'D', icon: <TrashIcon size={14} style={{ color: 'var(--color-error)' }} />, onClick: () => { setShowClearConfirm(true); close(); } },
     ];
     setHeaderMenu({ position: { x: e.clientX, y: e.clientY }, items });
+  };
+
+  // Every HistoryItem nested under a top-level group (Today / June / 2025 / ...), flattened.
+  const flattenGroupItems = (group: TopGroup): HistoryItem[] => {
+    const items: HistoryItem[] = [];
+    for (const sg of group.subGroups) {
+      if (sg.subGroups) {
+        for (const inner of sg.subGroups) items.push(...inner.items);
+      } else {
+        items.push(...sg.items);
+      }
+    }
+    return items;
+  };
+
+  const openGroupMenu = (e: React.MouseEvent, group: TopGroup) => {
+    e.stopPropagation();
+    const close = () => setGroupMenu(null);
+    const items: DuiContextMenuItem[] = [
+      { id: 'save', label: 'Save to Collection', shortcut: 'S', icon: <SaveIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { setBulkSaveItems(flattenGroupItems(group)); close(); } },
+      { id: 'export', label: 'Export as JSON', shortcut: 'E', icon: <DownloadIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { exportHistoryItems(flattenGroupItems(group), group.label); close(); } },
+    ];
+    setGroupMenu({ position: { x: e.clientX, y: e.clientY }, items });
   };
 
   const toggleGroup = (label: string) => {
@@ -278,17 +320,23 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
         {/* Row: Method | URL | Trash */}
         <div className="flex items-center gap-2">
           <span
-            className="text-[10px] font-bold uppercase shrink-0 min-w-[38px] w-fit px-1.5 text-center py-0.5 rounded-sm"
+            className="text-[10px] font-bold uppercase shrink-0 w-fit px-1.5 text-center py-0.5 rounded-sm"
             style={{
-              color: METHOD_COLORS[item.method] || 'var(--color-muted-fallback)',
-              backgroundColor: `${METHOD_COLORS[item.method] || 'var(--color-muted-fallback)'}15`,
+              // AI history stores the provider id lowercase (e.g. "openai"); METHOD_COLORS keys
+              // are uppercase for every protocol, so the lookup must normalize case here.
+              color: METHOD_COLORS[item.method?.toUpperCase()] || 'var(--color-muted-fallback)',
+              backgroundColor: `${METHOD_COLORS[item.method?.toUpperCase()] || 'var(--color-muted-fallback)'}15`,
+              // Provider names vary widely in length (GOOGLE vs AZURE-OPENAI) — give AI a wider
+              // fixed floor so every chip lines up; other protocols' method labels are short and
+              // uniform enough for the default floor.
+              minWidth: protocol === 'ai' ? 84 : 38,
             }}
           >
             {item.method}
           </span>
 
-          <span className="text-[12px] text-[var(--color-text-primary)] truncate flex-1 min-w-0">
-            {item.url}
+          <span className="text-[12px] text-[var(--color-text-primary)] truncate flex-1 min-w-0" title={item.url}>
+            {trimUrl(item.url)}
           </span>
 
           <IconButtonView
@@ -317,7 +365,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
               </span>
             ) : null}
             {item.response_time != null && item.response_time > 0 && (
-              <span className="text-[10px] text-[var(--color-text-muted)]">{item.response_time}ms</span>
+              <span className="text-[10px] font-medium" style={{ color: getTimeColor(item.response_time) }}>{item.response_time}ms</span>
             )}
           </div>
         )}
@@ -354,6 +402,21 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
           onChange={setSearch}
           placeholder="Search"
           height={30}
+          prefix={<SearchIcon size={13} />}
+          suffix={search.trim() ? (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              title="Clear search"
+              style={{ border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: 4, background: 'transparent', color: 'var(--color-text-muted)' }}
+            >
+              <span style={{ fontSize: 12, lineHeight: 1, fontWeight: 500 }}>✕</span>
+            </button>
+          ) : (
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '1px 6px', borderRadius: 4, background: 'color-mix(in srgb, var(--color-text-primary) 7%, transparent)' }}>
+              {history.length}
+            </span>
+          )}
         />
       </div>
 
@@ -406,6 +469,12 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
                       size="xs"
                       tooltip="Collapse all"
                       onClick={(e) => { e.stopPropagation(); collapseGroupTree(group); }}
+                    />
+                    <IconButtonView
+                      icon={<MoreVerticalIcon size={10} style={{ color: 'var(--color-text-muted)' }} />}
+                      size="xs"
+                      tooltip="More Options"
+                      onClick={(e) => openGroupMenu(e, group)}
                     />
                     <span className="text-[10px] text-[var(--color-text-muted)] opacity-50">
                       {count}
@@ -581,6 +650,26 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
           items={headerMenu.items}
         />
       )}
+
+      {/* Per-group (Today / June / 2025 / ...) more menu */}
+      {groupMenu && (
+        <ContextMenuView
+          open={true}
+          anchorEl={null}
+          position={groupMenu.position}
+          onClose={() => setGroupMenu(null)}
+          items={groupMenu.items}
+        />
+      )}
+
+      {/* Bulk "Save to Collection" — save every request in a date group to one destination */}
+      <SaveRequestModal
+        open={!!bulkSaveItems}
+        tab={null}
+        bulkItems={bulkSaveItems ?? undefined}
+        bulkProtocol={protocol}
+        onClose={() => setBulkSaveItems(null)}
+      />
 
       {/* Document Request modal */}
       {docGeneratorNode && (

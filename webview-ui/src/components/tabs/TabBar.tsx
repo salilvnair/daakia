@@ -4,7 +4,7 @@ import type { Protocol } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, StyledDropdown, ContextMenu, type ContextMenuItem, type ContextMenuSubItem, type DropdownOption } from '../shared';
-import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon } from '../../icons';
+import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon } from '../../icons';
 import { IconButtonView, StateMachineIcon } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 
@@ -437,8 +437,9 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           const isMockServer = tab.type === 'mock-server';
           const isDaakiaAi = tab.type === 'daakia-ai';
           const isStateMachine = tab.type === 'state-machine';
+          const isWiki = tab.type === 'wiki';
           const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
-          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
+          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
           const isDragOver = dragOverIdx === idx && dragIdx !== idx;
           return (
             <div
@@ -474,6 +475,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 <StateMachineIcon size={13} className="flex-shrink-0" style={{ color: SM_ACCENT }} />
               ) : isDaakiaAi ? (
                 <GeneralAssistantIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-protocol-ai)' }} />
+              ) : isWiki ? (
+                <BookOpenIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-wiki)' }} />
               ) : tab.protocol === 'graphql' ? (
                 <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-graphql)] flex-shrink-0">GQL</span>
               ) : tab.protocol === 'websocket' ? (

@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { postMsg } from '../../../vscode';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
-import { useToastStore } from '../../../store/toast-store';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
@@ -116,7 +115,6 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   // Request row context menu — DUI ContextMenuView
   const [reqContextMenu, setReqContextMenu] = useState<{ position: { x: number; y: number }; req: CollectionRequest } | null>(null);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
-  const addToast = useToastStore((s) => s.addToast);
 
   // Sidebar-view-only sort mode (Postman-style "Folders first, Default / A to Z") —
   // doesn't touch sort_order in storage, just how this tree renders.
@@ -798,7 +796,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
               ...(aiEnabled('generateScenario')     ? [{ id: 'ai-scenario',        label: 'Generate Scenario (AI)',      shortcut: 'G', icon: <SparkleIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { setShowScenarioGenerator(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
               ...(aiEnabled('reverseEngineer')      ? [{ id: 'ai-reverse-engineer',label: 'Reverse Engineer (AI)',       shortcut: 'R', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowReverseEngineer(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
               { id: 'sep1', label: '', separator: true },
-              { id: 'export-json', label: 'Export as JSON', shortcut: 'E', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { addToast({ type: 'info', message: 'Collection export as JSON is not implemented yet.' }); setHeaderMenu(null); } },
+              { id: 'export-json', label: 'Export as JSON', shortcut: 'E', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { postMsg({ type: 'exportCollectionDaakia' }); setHeaderMenu(null); } },
             ] as DuiContextMenuItem[]}
           />
           <ContextMenuView

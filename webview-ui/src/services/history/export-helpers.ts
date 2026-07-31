@@ -43,3 +43,30 @@ export function exportHistoryItem(item: HistoryItem) {
 
   downloadBlob(JSON.stringify(exportData, null, 2), filename, 'application/json');
 }
+
+/** Export a batch of history items (e.g. everything under one date group, or the whole list) as a single JSON file. */
+export function exportHistoryItems(items: HistoryItem[], label: string) {
+  const exportData = items.map(item => {
+    let requestConfig: Record<string, unknown> = {};
+    if (item.request_data) {
+      try { requestConfig = JSON.parse(item.request_data); } catch { /* ignore */ }
+    }
+    return {
+      method: item.method,
+      url: item.url,
+      headers: requestConfig.headers || [],
+      params: requestConfig.params || [],
+      body: requestConfig.body || requestConfig.bodyRaw || '',
+      bodyMode: requestConfig.bodyMode || 'none',
+      bodyContentType: requestConfig.bodyContentType || '',
+      authType: requestConfig.authType || 'none',
+      authData: requestConfig.authData || {},
+      status: item.status,
+      responseTime: item.response_time,
+      createdAt: item.created_at,
+    };
+  });
+
+  const safeLabel = label.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'history';
+  downloadBlob(JSON.stringify(exportData, null, 2), `history_${safeLabel}.json`, 'application/json');
+}

@@ -4,6 +4,101 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [2.0.2] — 2026-07-31
+
+Git-native sync grows up into a real sync engine with encrypted secrets and a
+recovery bin, GraphQL gets an interactive schema explorer, and a round of
+export/UI bug fixes.
+
+### Added — Git Sync: fixed clone, encrypted secrets, more scope
+- **Fixed local clone** — the sync working copy now always lives at
+  `~/.salilvnair/daakia-vsce/daakia-vsce-git` (via `git clone`/`remote set-url`
+  against `daakia.gitSync.remoteUrl`), independent of whatever workspace
+  happens to be open, replacing the old workspace-relative `gitSync.folder`
+  setting
+- **Serialized sync cycles** — a sync in progress now blocks any new sync
+  attempt outright instead of running two git processes against the same
+  folder concurrently; the auto-sync timer silently skips an overlapping tick
+- **Auto Sync interval** — `daakia.gitSync.autoSyncSeconds` (0/1/5/10/30) runs
+  a full export → commit → pull → push → import cycle on a timer
+- **Environments and AI Config as new sync categories**
+  (`daakia.gitSync.syncEnvironments`, `daakia.gitSync.syncAiConfig`) — the
+  prompt library, AI feature flags, and provider config (never API keys, which
+  stay in your OS keychain) can now round-trip through git alongside
+  collections, history, and mock servers
+- **Colorful, state-aware Git Sync status card** — checking / syncing /
+  no-git / not-cloned / pending / clean, each with branch, remote,
+  ahead/behind, and working-tree detail chips; hidden entirely until a remote
+  URL is configured
+
+### Added — Vault: encrypted secret environment values
+- **Settings → Vault** — set a passphrase (masked field, eye-icon reveal) to
+  encrypt every environment variable flagged as secret with AES-256-GCM. The
+  passphrase itself is stored in your OS keychain (via VS Code's
+  `SecretStorage`) for silent auto-unlock on next launch; only a
+  non-reversible verifier hash is kept in the local database, so the
+  passphrase is never persisted anywhere in plaintext
+- Secret values are now decrypted/encrypted correctly across **every**
+  protocol's request and script execution — GraphQL, gRPC, SOAP, WebSocket,
+  SSE, MQTT, Socket.IO, MCP, and the Collection Runner all resolve
+  `{{secretVar}}` through the vault the same way REST already did
+- **Every environment export path redacts secrets** — JSON, Postman, Bruno,
+  Insomnia, HTTPie, and Gist exports all replace a secret variable's value
+  with a redaction marker, keeping only its key
+
+### Added — Bin (soft delete + 30-day recovery)
+- Deleting a **History** entry, **Collection** (or a single request inside
+  one), **Mock Server** config, or **Environment** now archives it instead of
+  destroying it immediately. **Settings → Bin** lists everything by category
+  with a relative "deleted Xd ago, Yd left" timestamp, one-click restore
+  (collections reattach to their original parent folder if it still exists),
+  and permanent delete. Entries past 30 days are purged automatically on
+  extension activation. Scope intentionally matches Git Sync — audit logs,
+  cookies, and AI conversation history are not covered
+
+### Added — GraphQL Schema Explorer
+- The read-only Schema tab is now an interactive **GraphiQL Explorer-style
+  checkbox tree**, ported from the real `graphiql-explorer` implementation
+  rather than approximated: check a field to add it to the query, check an
+  object field to auto-select its own leaf sub-fields, uncheck to remove —
+  every ancestor field needed to keep the query structurally valid is
+  created automatically
+- **Arguments render as their own checkbox rows** beneath a selected field —
+  required arguments are checked by default and marked `*`. Scalars get a
+  minimal underline-style input matching GraphiQL's own (no box, no
+  placeholder, auto-sized to content, literal quote characters around
+  strings); enums and booleans get a dropdown; INPUT_OBJECT arguments expand
+  into their own nested, recursively-checkable field group
+- **`$` variablize** — hovering a checked argument reveals a small `$`
+  button that extracts its literal into a proper GraphQL variable
+  (`query MyQuery($id: ID = "") { token(id: $id) }`), de-duplicating names
+  and round-tripping cleanly when the query is re-parsed; click again to put
+  the literal back
+- Schema / Query / Mutation / Subscription tabs, with the original raw-SDL
+  viewer (now auto-formatted rather than shown as whatever single-line shape
+  the server returned it in) folded in as the "Schema" tab
+
+### Changed
+- Response times under 300ms in the History panel now use the AI accent
+  color instead of green, and the search bar shows a total-record count
+  badge matching the Settings search bar
+- `@salilvnair/dui` and `@salilvnair/state-machine` version bumps
+
+### Fixed
+- **Collections "Export as JSON"** was a non-functional stub showing a "not
+  implemented" toast; now wired to the working export handler
+- **Collections "Export to Bruno"** used the same unlabeled folder-picker
+  dialog as Import, making the two indistinguishable — export and import now
+  have distinct titles/labels
+- **AI popup focus rings** across every AI tool (34 input fields in 25
+  files) defaulted to the generic blue accent instead of the AI accent color
+  when no explicit color was set
+- **SOAP WS-Security layout** — the Password Type dropdown and Nonce/Created
+  checkboxes were crammed into one visually mismatched row; now an aligned
+  two-column grid matching the Username/Password row above it
+
+---
+
 ## [2.0.1] — 2026-07-30
 
 Bug-fix release — no new features, all fixes from real-world post-2.0.0 testing.

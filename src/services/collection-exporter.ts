@@ -266,7 +266,8 @@ export async function handleExportCollectionBruno(
     canSelectFiles: false,
     canSelectFolders: true,
     canSelectMany: false,
-    title: 'Select destination folder for Bruno collection',
+    title: 'Export Bruno Collection — Select Destination Folder',
+    openLabel: 'Export Here',
   });
   if (!folderUri?.[0]) return;
 

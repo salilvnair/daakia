@@ -474,6 +474,7 @@ function ToolResultInputPanel({ toolCalls, onSubmit }: ToolResultInputPanelProps
                   placeholder={`Enter the result for ${tc.function.name}...`}
                   rows={3}
                   size="md"
+                  accentColor="var(--color-protocol-ai)"
                   width="fw"
                   style={{ fontFamily: 'var(--font-mono)' }}
                 />

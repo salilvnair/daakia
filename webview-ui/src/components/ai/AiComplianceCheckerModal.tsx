@@ -166,6 +166,7 @@ export function AiComplianceCheckerModal({ onClose }: Props) {
             onChange={e => { setCustomEndpoints(e.target.value); setError(''); }}
             rows={6}
             size="md"
+            accentColor={ACCENT}
             width="fw"
             placeholder={`GET /users\nPOST /users\nGET /users/{id}\nPUT /users/{id}\nDELETE /users/{id}\nPOST /getUser  ← compliance issue example`}
             style={{ fontFamily: 'monospace', fontSize: 11.5 }}

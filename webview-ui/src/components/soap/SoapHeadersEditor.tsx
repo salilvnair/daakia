@@ -126,8 +126,8 @@ export function SoapHeadersEditor() {
               </div>
             </div>
 
-            <div className="flex items-end gap-3">
-              <div className="w-[180px]">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
                 <label className="text-[10px] text-[var(--color-text-muted)] mb-1 block">Password Type</label>
                 <SelectInputView
                   options={PASSWORD_TYPE_OPTIONS}
@@ -137,26 +137,33 @@ export function SoapHeadersEditor() {
                   accentColor={ACCENT}
                 />
               </div>
-              <CheckboxView checked={wsSecurity.addNonce} onChange={(v) => updateSecurity({ addNonce: v })} label="Nonce" size="md" accentColor={ACCENT} />
-              <CheckboxView checked={wsSecurity.addCreated} onChange={(v) => updateSecurity({ addCreated: v })} label="Created" size="md" accentColor={ACCENT} />
+              <div>
+                <label className="text-[10px] text-[var(--color-text-muted)] mb-1 block">Security Flags</label>
+                <div className="h-[34px] flex items-center gap-4">
+                  <CheckboxView checked={wsSecurity.addNonce} onChange={(v) => updateSecurity({ addNonce: v })} label="Nonce" size="md" accentColor={ACCENT} />
+                  <CheckboxView checked={wsSecurity.addCreated} onChange={(v) => updateSecurity({ addCreated: v })} label="Created" size="md" accentColor={ACCENT} />
+                </div>
+              </div>
             </div>
 
             {/* Timestamp */}
-            <div className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold tracking-wider mt-2">Timestamp</div>
-            <div className="flex items-end gap-3">
-              <CheckboxView checked={wsSecurity.addTimestamp} onChange={(v) => updateSecurity({ addTimestamp: v })} label="Include Timestamp" size="md" accentColor={ACCENT} />
-              {wsSecurity.addTimestamp && (
-                <div className="flex items-center gap-1.5">
-                  <label className="text-[10px] text-[var(--color-text-muted)]">TTL (sec):</label>
-                  <TextInputView
-                    value={String(wsSecurity.timestampTtl)}
-                    onChange={(e) => updateSecurity({ timestampTtl: parseInt(e.target.value) || 300 })}
-                    size="sm"
-                    style={{ width: 70 }}
-                    accentColor={ACCENT}
-                  />
-                </div>
-              )}
+            <div>
+              <div className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold tracking-wider mb-1.5">Timestamp</div>
+              <div className="flex items-center gap-3">
+                <CheckboxView checked={wsSecurity.addTimestamp} onChange={(v) => updateSecurity({ addTimestamp: v })} label="Include Timestamp" size="md" accentColor={ACCENT} />
+                {wsSecurity.addTimestamp && (
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-[10px] text-[var(--color-text-muted)]">TTL (sec):</label>
+                    <TextInputView
+                      value={String(wsSecurity.timestampTtl)}
+                      onChange={(e) => updateSecurity({ timestampTtl: parseInt(e.target.value) || 300 })}
+                      size="sm"
+                      style={{ width: 70 }}
+                      accentColor={ACCENT}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Preview button */}
@@ -164,7 +171,7 @@ export function SoapHeadersEditor() {
               size="sm"
               accentColor={ACCENT}
               onClick={handlePreview}
-              className="self-start mt-1"
+              className="self-start"
               style={{ backgroundColor: 'color-mix(in srgb, var(--color-protocol-soap) 12%, transparent)', color: ACCENT }}
             >
               Preview Security Header

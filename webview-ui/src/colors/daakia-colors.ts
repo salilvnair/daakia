@@ -182,6 +182,8 @@ export const METHOD_COLORS: Record<string, string> = {
   DEEPSEEK: '#0ea5e9',     // DeepSeek sky blue
   'AZURE-OPENAI': '#0078d4', // Azure blue
   CUSTOM: '#a855f7',       // Custom purple
+  COPILOT: '#8957e5',      // GitHub Copilot purple
+  'DAAKIA-MOCK': '#eab308', // Daakia mock provider — matches mock-server yellow
 };
 
 // ─── gRPC Stream Type Colors ──────────────────────────────────────────────────

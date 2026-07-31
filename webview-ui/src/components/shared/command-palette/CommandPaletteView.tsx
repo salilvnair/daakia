@@ -12,7 +12,7 @@ import {
   FolderIcon, ClockIcon, LayersIcon, SettingsIcon, ServerIcon, SparkleIcon,
   SunIcon, CpuIcon, AgentIcon, CodeBracketsIcon, FolderImportIcon,
   ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge,
-  ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge,
+  ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, BookOpenIcon,
 } from '../../../icons';
 import './CommandPaletteView.css';
 
@@ -198,7 +198,8 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
         { id: 'nav-environments', icon: <LayersIcon size={15} />, label: 'Environments', keywords: ['env', 'variables'], run: openSection('collections') },
         { id: 'nav-mock-server', icon: <ServerIcon size={15} />, label: 'Mock Server', keywords: ['mock', 'routes'], run: () => useTabsStore.getState().openMockServerTab() },
         { id: 'nav-daakia-ai', icon: <SparkleIcon size={15} />, label: 'Daakia AI Assistant', keywords: ['ai', 'chat', 'tools'], run: () => useTabsStore.getState().openDaakiaAiTab() },
-        { id: 'nav-settings', icon: <SettingsIcon size={15} />, label: 'Settings', keywords: ['preferences', 'theme', 'llm', 'wiki'], run: () => useTabsStore.getState().openSettingsTab() },
+        { id: 'nav-settings', icon: <SettingsIcon size={15} />, label: 'Settings', keywords: ['preferences', 'theme', 'llm'], run: () => useTabsStore.getState().openSettingsTab() },
+        { id: 'nav-wiki', icon: <BookOpenIcon size={15} />, label: 'Daakia Wiki', keywords: ['docs', 'documentation', 'help', 'guide'], run: () => useTabsStore.getState().openDaakiaWikiTab() },
         { id: 'nav-ai-actions', icon: <SparkleIcon size={15} />, label: 'AI Actions…', keywords: ['inline', 'features', 'sparkle', 'ai tools'], to: 'ai-actions' },
       ],
     },

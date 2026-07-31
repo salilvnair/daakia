@@ -15,6 +15,7 @@ import {
   getCollectionTree, getCollectionData,
   getAllEnvironments, getSetting, type CollectionTreeNode, type CollectionRequestRow,
 } from '../storage/db';
+import { decryptIfNeeded } from './vault';
 
 // ────────── Types ──────────
 
@@ -123,7 +124,7 @@ function loadEnvironmentVars(envId: string | undefined): Record<string, string> 
   try {
     const vars = JSON.parse(env.variables) as { key: string; currentValue: string }[];
     const result: Record<string, string> = {};
-    for (const v of vars) { if (v.key) result[v.key] = v.currentValue || ''; }
+    for (const v of vars) { if (v.key) result[v.key] = decryptIfNeeded(v.currentValue || ''); }
     return result;
   } catch { return {}; }
 }

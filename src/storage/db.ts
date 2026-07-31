@@ -347,6 +347,23 @@ function _createSchema(db: SqlJsDatabase): void {
       enabled INTEGER NOT NULL DEFAULT 1
     )
   `);
+
+  // trash_bin — soft-deleted items (history/collections/mock servers/environments only —
+  // matches git-sync's scope), auto-purged 30 days after deletion.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS trash_bin (
+      id          TEXT PRIMARY KEY,
+      category    TEXT NOT NULL,
+      original_id TEXT NOT NULL,
+      group_id    TEXT,
+      label       TEXT NOT NULL,
+      data        TEXT NOT NULL,
+      deleted_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      expires_at  TEXT NOT NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_trash_expires  ON trash_bin(expires_at)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_trash_category ON trash_bin(category)`);
 }
 
 // ────────────────────── Migrations ──────────────────────
@@ -492,6 +509,38 @@ export function insertHistory(entry: HistoryRow): void {
   _scheduleSave();
 }
 
+/** Insert a history row only if no row with the same request_id + created_at already exists —
+ * used by git-sync import so re-syncing the same history.daakia.json never duplicates entries.
+ * created_at is required for the dedup check; rows without it (shouldn't happen — the column
+ * defaults on insert) are skipped rather than risk duplicate-free import silently importing dupes. */
+export function insertHistoryIfNew(entry: HistoryRow): boolean {
+  if (!_db || !entry.created_at) return false;
+  const stmt = _db.prepare('SELECT id FROM request_history WHERE request_id IS ? AND created_at = ? LIMIT 1');
+  stmt.bind([entry.request_id ?? null, entry.created_at]);
+  const exists = stmt.step();
+  stmt.free();
+  if (exists) return false;
+
+  _db.run(`
+    INSERT INTO request_history (request_id, method, url, status, status_text, response_time, response_size, request_data, response_data, protocol, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    entry.request_id ?? null,
+    entry.method,
+    entry.url,
+    entry.status ?? null,
+    entry.status_text ?? null,
+    entry.response_time ?? null,
+    entry.response_size ?? null,
+    entry.request_data ?? null,
+    entry.response_data ?? null,
+    entry.protocol ?? 'rest',
+    entry.created_at,
+  ]);
+  _scheduleSave();
+  return true;
+}
+
 export function getHistory(limit = 100, offset = 0, protocol?: string): HistoryRow[] {
   if (!_db) { return []; }
   const sql = protocol
@@ -505,6 +554,16 @@ export function getHistory(limit = 100, offset = 0, protocol?: string): HistoryR
   }
   stmt.free();
   return results;
+}
+
+export function getHistoryById(id: number): HistoryRow | undefined {
+  if (!_db) { return undefined; }
+  const stmt = _db.prepare('SELECT * FROM request_history WHERE id = ?');
+  stmt.bind([id]);
+  let result: HistoryRow | undefined;
+  if (stmt.step()) { result = stmt.getAsObject() as unknown as HistoryRow; }
+  stmt.free();
+  return result;
 }
 
 export function clearHistory(protocol?: string): void {
@@ -1007,6 +1066,33 @@ export function duplicateCollectionRequest(requestId: string): string | null {
   return newId;
 }
 
+/** Get one collection node plus its full descendant tree (children + requests), including
+ * `protocol` per node — used to snapshot a collection into the trash bin before deleting it. */
+export function getCollectionSubtree(id: string): (CollectionTreeNode & { protocol?: string }) | undefined {
+  if (!_db) { return undefined; }
+  const colStmt = _db.prepare('SELECT id, name, parent_id, sort_order, protocol FROM collections');
+  const flatMap = new Map<string, CollectionTreeNode & { protocol?: string }>();
+  while (colStmt.step()) {
+    const row = colStmt.getAsObject() as { id: string; name: string; parent_id: string | null; sort_order: number; protocol?: string };
+    flatMap.set(row.id, { ...row, children: [], requests: [] });
+  }
+  colStmt.free();
+
+  const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order FROM collection_requests ORDER BY sort_order');
+  while (reqStmt.step()) {
+    const req = reqStmt.getAsObject() as unknown as CollectionRequestRow;
+    flatMap.get(req.collection_id)?.requests.push(req);
+  }
+  reqStmt.free();
+
+  for (const node of flatMap.values()) {
+    if (node.parent_id && flatMap.has(node.parent_id)) {
+      flatMap.get(node.parent_id)!.children.push(node);
+    }
+  }
+  return flatMap.get(id);
+}
+
 /** Delete a collection and all its children (cascade) + requests */
 export function deleteCollection(id: string): void {
   if (!_db) { return; }
@@ -1044,6 +1130,16 @@ export function upsertCollectionRequest(req: CollectionRequestRow): void {
     [req.id, req.collection_id, req.name, req.method, req.url, req.data ?? '{}']
   );
   _scheduleSave();
+}
+
+export function getCollectionRequestById(id: string): CollectionRequestRow | undefined {
+  if (!_db) { return undefined; }
+  const stmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order FROM collection_requests WHERE id = ?');
+  stmt.bind([id]);
+  let result: CollectionRequestRow | undefined;
+  if (stmt.step()) { result = stmt.getAsObject() as unknown as CollectionRequestRow; }
+  stmt.free();
+  return result;
 }
 
 export function deleteCollectionRequest(id: string): void {
@@ -1125,6 +1221,12 @@ export function setSetting<T>(key: string, value: T): void {
     'INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
     [key, JSON.stringify(value)]
   );
+  _scheduleSave();
+}
+
+export function deleteSetting(key: string): void {
+  if (!_db) { return; }
+  _db.run('DELETE FROM app_settings WHERE key = ?', [key]);
   _scheduleSave();
 }
 
@@ -1748,4 +1850,122 @@ export function deleteDbRow(tableName: string, pkCol: string, pkVal: unknown): v
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName) || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(pkCol)) { return; }
   _db.run(`DELETE FROM ${tableName} WHERE ${pkCol} = ?`, [pkVal as string | number]);
   _scheduleSave();
+}
+
+// ────────────────────── Trash Bin (soft delete) ──────────────────────
+//
+// Scope is deliberately limited to the same 4 categories git-sync covers —
+// history, collections (+ their requests), mock servers, environments. Audit
+// logs, cookies, AI conversations, and script console logs are never routed
+// through here; they stay hard-deleted, same as before.
+
+export type TrashCategory = 'history' | 'collection' | 'collection_request' | 'mock_server' | 'environment';
+
+export interface TrashEntry {
+  id: string;
+  category: TrashCategory;
+  original_id: string;
+  group_id: string | null;
+  label: string;
+  data: string;
+  deleted_at: string;
+  expires_at: string;
+}
+
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Archives one item into the bin. `groupId` links entries deleted together (a cascading
+ * collection delete, a "clear history" sweep) so they can be listed/restored as one unit. */
+export function insertTrashEntry(category: TrashCategory, originalId: string, label: string, data: unknown, groupId?: string): void {
+  if (!_db) { return; }
+  const now = new Date();
+  const deletedAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + TRASH_RETENTION_MS).toISOString();
+  _db.run(
+    'INSERT INTO trash_bin (id, category, original_id, group_id, label, data, deleted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [crypto.randomUUID(), category, originalId, groupId ?? null, label, JSON.stringify(data), deletedAt, expiresAt]
+  );
+  _scheduleSave();
+}
+
+export function getTrashEntries(category?: TrashCategory): TrashEntry[] {
+  if (!_db) { return []; }
+  const stmt = category
+    ? _db.prepare('SELECT * FROM trash_bin WHERE category = ? ORDER BY deleted_at DESC')
+    : _db.prepare('SELECT * FROM trash_bin ORDER BY deleted_at DESC');
+  if (category) stmt.bind([category]);
+  const results: TrashEntry[] = [];
+  while (stmt.step()) {
+    results.push(stmt.getAsObject() as unknown as TrashEntry);
+  }
+  stmt.free();
+  return results;
+}
+
+export function getTrashEntry(id: string): TrashEntry | undefined {
+  if (!_db) { return undefined; }
+  const stmt = _db.prepare('SELECT * FROM trash_bin WHERE id = ?');
+  stmt.bind([id]);
+  let result: TrashEntry | undefined;
+  if (stmt.step()) { result = stmt.getAsObject() as unknown as TrashEntry; }
+  stmt.free();
+  return result;
+}
+
+export function getTrashGroup(groupId: string): TrashEntry[] {
+  if (!_db) { return []; }
+  const stmt = _db.prepare('SELECT * FROM trash_bin WHERE group_id = ? ORDER BY deleted_at ASC');
+  stmt.bind([groupId]);
+  const results: TrashEntry[] = [];
+  while (stmt.step()) { results.push(stmt.getAsObject() as unknown as TrashEntry); }
+  stmt.free();
+  return results;
+}
+
+export function getTrashCounts(): Record<string, number> {
+  if (!_db) { return {}; }
+  const stmt = _db.prepare('SELECT category, COUNT(*) as cnt FROM trash_bin GROUP BY category');
+  const counts: Record<string, number> = {};
+  while (stmt.step()) {
+    const row = stmt.getAsObject() as { category: string; cnt: number };
+    counts[row.category] = row.cnt;
+  }
+  stmt.free();
+  return counts;
+}
+
+export function deleteTrashEntry(id: string): void {
+  if (!_db) { return; }
+  _db.run('DELETE FROM trash_bin WHERE id = ?', [id]);
+  _scheduleSave();
+}
+
+export function deleteTrashGroup(groupId: string): void {
+  if (!_db) { return; }
+  _db.run('DELETE FROM trash_bin WHERE group_id = ?', [groupId]);
+  _scheduleSave();
+}
+
+export function emptyTrash(category?: TrashCategory): void {
+  if (!_db) { return; }
+  if (category) { _db.run('DELETE FROM trash_bin WHERE category = ?', [category]); }
+  else { _db.run('DELETE FROM trash_bin'); }
+  _scheduleSave();
+}
+
+/** Deletes every entry past its 30-day expiry. Call on activation (and periodically for
+ * long-running sessions) — there's no background timer independent of the extension host. */
+export function purgeExpiredTrash(): number {
+  if (!_db) { return 0; }
+  const now = new Date().toISOString();
+  const countStmt = _db.prepare('SELECT COUNT(*) as cnt FROM trash_bin WHERE expires_at < ?');
+  countStmt.bind([now]);
+  countStmt.step();
+  const { cnt } = countStmt.getAsObject() as { cnt: number };
+  countStmt.free();
+  if (cnt > 0) {
+    _db.run('DELETE FROM trash_bin WHERE expires_at < ?', [now]);
+    _scheduleSave();
+  }
+  return cnt;
 }

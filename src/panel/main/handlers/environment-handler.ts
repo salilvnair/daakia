@@ -8,36 +8,62 @@ import {
   getAllEnvironments, upsertEnvironment, deleteEnvironment as dbDeleteEnvironment,
   setActiveEnvironment as dbSetActiveEnv,
 } from '../../../storage/db';
+import { encryptIfUnlocked, decryptIfNeeded } from '../../../services/vault';
+import { archiveEnvironment } from '../../../services/bin';
 
 type PostMessage = (msg: unknown) => void;
+
+interface EnvVariableLike {
+  key: string;
+  initialValue: string;
+  currentValue: string;
+  isSecret?: boolean;
+  [k: string]: unknown;
+}
+
+/** Replaces every `isSecret` variable's value with `REDACTED` — used on every export path
+ * (JSON/Postman/Bruno/Insomnia/HTTPie/Gist and git-sync) so a real secret, encrypted or not,
+ * never leaves the machine. Only the variable key survives, so teammates know it exists. */
+function redactSecrets<T extends { variables: EnvVariableLike[] }>(environments: T[]): T[] {
+  return environments.map(env => ({
+    ...env,
+    variables: env.variables.map(v => v.isSecret ? { ...v, initialValue: 'REDACTED', currentValue: 'REDACTED' } : v),
+  }));
+}
 
 export function handleGetEnvironments(postMessage: PostMessage) {
   const rows = getAllEnvironments();
   const environments = rows.map(r => ({
     id: r.id,
     name: r.name,
-    variables: JSON.parse(r.variables || '[]'),
+    variables: (JSON.parse(r.variables || '[]') as EnvVariableLike[]).map(v => v.isSecret
+      ? { ...v, initialValue: decryptIfNeeded(v.initialValue), currentValue: decryptIfNeeded(v.currentValue) }
+      : v),
   }));
   const activeRow = rows.find(r => r.is_active === 1);
   postMessage({ type: 'environmentsData', environments, activeEnvId: activeRow?.id ?? null });
 }
 
 export function handleSaveEnvironments(msg: Record<string, unknown>) {
-  const environments = msg.environments as { id: string; name: string; variables: unknown[] }[];
+  const environments = msg.environments as { id: string; name: string; variables: EnvVariableLike[] }[];
   const activeEnvId = msg.activeEnvId as string | null;
 
   const existingRows = getAllEnvironments();
   const incomingIds = new Set(environments.map(e => e.id));
   for (const row of existingRows) {
     if (!incomingIds.has(row.id)) {
+      archiveEnvironment(row);
       dbDeleteEnvironment(row.id);
     }
   }
   for (const env of environments) {
+    const variables = env.variables.map(v => v.isSecret
+      ? { ...v, initialValue: encryptIfUnlocked(v.initialValue), currentValue: encryptIfUnlocked(v.currentValue) }
+      : v);
     upsertEnvironment({
       id: env.id,
       name: env.name,
-      variables: JSON.stringify(env.variables),
+      variables: JSON.stringify(variables),
       is_active: env.id === activeEnvId ? 1 : 0,
     });
   }
@@ -49,7 +75,7 @@ export function handleSaveEnvironments(msg: Record<string, unknown>) {
 }
 
 export async function handleExportEnvironmentsJson(msg: Record<string, unknown>, postMessage: PostMessage) {
-  const environments = msg.environments as unknown[];
+  const environments = redactSecrets(msg.environments as { id: string; name: string; variables: EnvVariableLike[] }[]);
   const activeEnvId = msg.activeEnvId as string | null;
   const uri = await vscode.window.showSaveDialog({
     saveLabel: 'Export environments',
@@ -271,7 +297,7 @@ export async function handleImportEnvironmentsDotEnv(postMessage: PostMessage) {
  * Format: { id, name, values: [{key, value, enabled, type}], _postman_variable_scope }
  */
 export async function handleExportEnvironmentsPostman(msg: Record<string, unknown>, postMessage: PostMessage) {
-  const environments = msg.environments as { id: string; name: string; variables: { key: string; initialValue: string; isSecret?: boolean }[] }[];
+  const environments = redactSecrets(msg.environments as { id: string; name: string; variables: EnvVariableLike[] }[]);
   if (!environments?.length) return;
 
   const isSingle = environments.length === 1;
@@ -313,7 +339,7 @@ export async function handleExportEnvironmentsPostman(msg: Record<string, unknow
  * Variables marked as secret get a # secret annotation.
  */
 export async function handleExportEnvironmentsBruno(msg: Record<string, unknown>, postMessage: PostMessage) {
-  const environments = msg.environments as { id: string; name: string; variables: { key: string; initialValue: string; isSecret?: boolean }[] }[];
+  const environments = redactSecrets(msg.environments as { id: string; name: string; variables: EnvVariableLike[] }[]);
   if (!environments?.length) return;
 
   const isSingle = environments.length === 1;
@@ -346,7 +372,7 @@ export async function handleExportEnvironmentsBruno(msg: Record<string, unknown>
  * 5.4.15 — Export environment(s) as Insomnia environment JSON sub-documents.
  */
 export async function handleExportEnvironmentsInsomnia(msg: Record<string, unknown>, postMessage: PostMessage) {
-  const environments = msg.environments as { id: string; name: string; variables: { key: string; initialValue: string; isSecret?: boolean }[] }[];
+  const environments = redactSecrets(msg.environments as { id: string; name: string; variables: EnvVariableLike[] }[]);
   if (!environments?.length) return;
 
   const uri = await vscode.window.showSaveDialog({
@@ -387,7 +413,7 @@ export async function handleExportEnvironmentsInsomnia(msg: Record<string, unkno
  * Variables map to custom headers (X-Env-*) and meta.
  */
 export async function handleExportEnvironmentsHttpie(msg: Record<string, unknown>, postMessage: PostMessage) {
-  const environments = msg.environments as { id: string; name: string; variables: { key: string; initialValue: string; isSecret?: boolean }[] }[];
+  const environments = redactSecrets(msg.environments as { id: string; name: string; variables: EnvVariableLike[] }[]);
   if (!environments?.length) return;
 
   const isSingle = environments.length === 1;
@@ -424,7 +450,7 @@ export async function handleExportEnvironmentsHttpie(msg: Record<string, unknown
 // ─── Gist (existing) ──────────────────────────────────────────────────────────
 
 export async function handleExportEnvironmentsGist(msg: Record<string, unknown>, postMessage: PostMessage) {
-  const environments = msg.environments as unknown[];
+  const environments = redactSecrets(msg.environments as { id: string; name: string; variables: EnvVariableLike[] }[]);
   const activeEnvId = msg.activeEnvId as string | null;
   const isSecret = msg.isSecret as boolean ?? true;
 

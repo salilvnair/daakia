@@ -4,7 +4,7 @@
  */
 import { useMemo } from 'react';
 import { useMockStore } from '../store/mock-store';
-import type { MockServerSuggestion } from '../components/shared/controls/HighlightedInput';
+import type { MockServerSuggestion } from '@salilvnair/dui';
 
 type Protocol = 'rest' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc' | 'soap' | 'mcp' | 'ai';
 

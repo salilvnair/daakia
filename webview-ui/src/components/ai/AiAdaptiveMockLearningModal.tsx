@@ -141,6 +141,7 @@ export function AiAdaptiveMockLearningModal({ onClose, onApply }: Props) {
               placeholder="https://api.example.com"
               disabled={status === 'recording'}
               size="md"
+              accentColor={ACCENT}
               width="fw"
             />
           </div>
@@ -151,6 +152,7 @@ export function AiAdaptiveMockLearningModal({ onClose, onApply }: Props) {
               onChange={e => setDuration(e.target.value)}
               disabled={status === 'recording'}
               size="md"
+              accentColor={ACCENT}
               style={{ width: 70 }}
             />
           </div>
@@ -186,6 +188,7 @@ export function AiAdaptiveMockLearningModal({ onClose, onApply }: Props) {
               placeholder={"GET /api/users 200 45ms\nPOST /api/orders 201 120ms\nGET /api/users/123 200 30ms"}
               rows={3}
               size="md"
+              accentColor={ACCENT}
               width="fw"
               style={{ fontFamily: 'var(--font-mono)' }}
             />

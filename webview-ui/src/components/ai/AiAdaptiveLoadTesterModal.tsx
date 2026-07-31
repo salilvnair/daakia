@@ -150,6 +150,7 @@ export function AiAdaptiveLoadTesterModal({ onClose }: Props) {
             value={maxUsers}
             onChange={e => setMaxUsers(e.target.value)}
             size="md"
+            accentColor={ACCENT}
             style={{ width: 80 }}
           />
         </div>

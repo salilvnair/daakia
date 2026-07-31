@@ -2,8 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
 import { postMsg } from '../../vscode';
-import { HighlightedInput } from '../shared';
-import { ButtonView, IconButtonView, DropDownButtonView, type ContextMenuItem } from '@salilvnair/dui';
+import { ButtonView, IconButtonView, DropDownButtonView, HighlightedInputView, type ContextMenuItem } from '@salilvnair/dui';
 import { saveRequest } from '../../services/request';
 import { ConnectIcon, DisconnectIcon, SaveIcon, MoreVerticalIcon, SparkleIcon } from '../../icons';
 import { useMockSuggestions } from '../../hooks/useMockSuggestions';
@@ -97,17 +96,19 @@ export function GraphQLUrlBar() {
       </span>
 
       {/* Endpoint input */}
-      <HighlightedInput
-        value={activeTab.url}
-        onChange={(v) => updateTab(activeTab.id, { url: v })}
-        onKeyDown={(e) => { if (e.key === 'Enter') isConnected ? handleDisconnect() : handleConnect(); }}
-        placeholder="https://api.example.com/graphql"
-        disabled={isConnected}
-        suggestions={urlSuggestions}
-        mockServers={mockSuggestions}
-        protocolHints={['http://', 'https://']}
-        accentColor={ACCENT}
-      />
+      <div className="flex-1 min-w-0">
+        <HighlightedInputView
+          value={activeTab.url}
+          onChange={(v) => updateTab(activeTab.id, { url: v })}
+          onKeyDown={(e) => { if (e.key === 'Enter') isConnected ? handleDisconnect() : handleConnect(); }}
+          placeholder="https://api.example.com/graphql"
+          disabled={isConnected}
+          suggestions={urlSuggestions}
+          mockServers={mockSuggestions}
+          accentColor={ACCENT}
+          size="lg"
+        />
+      </div>
 
       {/* Connect/Disconnect button — size="lg" matching REST UrlBar */}
       {!isConnected ? (

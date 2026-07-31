@@ -12,6 +12,7 @@
 import * as vscode from 'vscode';
 
 const KEY_PREFIX = 'daakia.llm';
+const VAULT_KEY = 'daakia.vault.passphrase';
 
 let _secrets: vscode.SecretStorage | undefined;
 
@@ -49,4 +50,25 @@ export async function getAllKeyStatus(providerIds: string[]): Promise<Record<str
     }),
   );
   return results;
+}
+
+// ─── Vault passphrase (Environments secret encryption) ─────────────────────────
+//
+// The passphrase itself — never the derived encryption key — lives in the OS
+// keychain so the vault auto-unlocks on extension activation without asking
+// the user every session, same UX as any OS-integrated password manager.
+
+export async function storeVaultPassphrase(passphrase: string): Promise<void> {
+  if (!_secrets) throw new Error('SecretStore not initialized — call initSecretStore first');
+  await _secrets.store(VAULT_KEY, passphrase);
+}
+
+export async function retrieveVaultPassphrase(): Promise<string | undefined> {
+  if (!_secrets) return undefined;
+  return _secrets.get(VAULT_KEY);
+}
+
+export async function deleteVaultPassphrase(): Promise<void> {
+  if (!_secrets) return;
+  await _secrets.delete(VAULT_KEY);
 }

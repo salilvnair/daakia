@@ -140,6 +140,7 @@ export function AiLiveTrafficMirrorModal({ onClose }: Props) {
                 value={proxyPort}
                 onChange={e => setProxyPort(e.target.value)}
                 size="md"
+                accentColor={ACCENT}
                 width="fw"
                 placeholder="8888"
               />
@@ -151,6 +152,7 @@ export function AiLiveTrafficMirrorModal({ onClose }: Props) {
                 onChange={e => setTargetUrl(e.target.value)}
                 placeholder="https://api.example.com"
                 size="md"
+                accentColor={ACCENT}
                 width="fw"
               />
             </div>
@@ -177,6 +179,7 @@ export function AiLiveTrafficMirrorModal({ onClose }: Props) {
             placeholder="Paste traffic log entries here... (format: METHOD URL STATUS LATENCY)"
             rows={4}
             size="md"
+            accentColor={ACCENT}
             width="fw"
           />
         </div>

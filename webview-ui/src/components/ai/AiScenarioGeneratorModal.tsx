@@ -176,6 +176,7 @@ export function AiScenarioGeneratorModal({ onClose }: Props) {
             rows={3}
             size="md"
             width="fw"
+            accentColor={ACCENT}
             placeholder="Describe the complete API flow you want to test..."
           />
         </div>
@@ -183,8 +184,12 @@ export function AiScenarioGeneratorModal({ onClose }: Props) {
         <div className="flex flex-wrap gap-1.5">
           {SCENARIOS.map((s, i) => (
             <button key={i} type="button" onClick={() => setScenario(s)}
-              className="text-left text-[10px] px-2 py-1 rounded-md border cursor-pointer transition-all"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
+              className="text-left text-[10px] px-2 py-1 rounded-md border cursor-pointer transition-all hover:brightness-110"
+              style={{
+                borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)`,
+                color: ACCENT,
+                backgroundColor: `color-mix(in srgb, ${ACCENT} 9%, transparent)`,
+              }}>
               {s.split(':')[0]}
             </button>
           ))}

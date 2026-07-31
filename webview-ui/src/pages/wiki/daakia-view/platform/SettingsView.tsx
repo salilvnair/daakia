@@ -38,7 +38,7 @@ export function SettingsView() {
         <WikiHero
           emoji="⚙️"
           title="Settings"
-          subtitle="Five real groups — General, Server, AI, Advanced, Wiki — searchable, each item badged like Prompt Library."
+          subtitle="Four real groups — General, Server, AI, Advanced — searchable, each item badged like Prompt Library."
           chips={chips(['General', 'Theme', 'LLM Provider', 'AI Features', 'Storage'])}
         />
       }
@@ -156,9 +156,6 @@ export function SettingsView() {
       {cap('settings-devtools-auditconfig')}
       {cap('settings-devtools-debugsnapshot')}
       {cap('settings-devtools-dbexplorer')}
-
-      <SubTitle>Wiki</SubTitle>
-      {byId['settings-wiki'] && <CaptureCard entry={byId['settings-wiki']} crop={SETTINGS_CONTENT_CROP} />}
 
       <SubTitle>Power Features</SubTitle>
       {byId['settings-power-features'] && <CaptureCard entry={byId['settings-power-features']} crop={SETTINGS_CONTENT_CROP} />}

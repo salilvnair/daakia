@@ -209,6 +209,7 @@ export function AiUrlBar() {
           onChange={(e) => activeTab && updateTab(activeTab.id, { aiModel: e.target.value, dirty: true })}
           placeholder="Model name"
           size="lg"
+          accentColor={ACCENT}
           className="w-[140px]"
         />
       )}

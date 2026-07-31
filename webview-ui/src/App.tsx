@@ -53,6 +53,7 @@ import { DebugHud } from './components/shared/debugger';
 import { useExtensionMessages } from './app/use-extension-messages';
 import { ProtocolIcon, ProtocolPlaceholder, EmptyState } from './app/app-shell';
 import { CaptureBridge } from './pages/wiki/daakia-view/capture/CaptureBridge';
+import { DaakiaViewPage } from './pages/wiki/daakia-view/DaakiaViewPage';
 
 type FocusedPanel = 'request' | 'response' | null;
 
@@ -178,6 +179,7 @@ export default function App() {
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
       : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
+      : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
       : activeTab?.type === 'daakia-ai' ? 'var(--color-protocol-ai)'
       : map[tabProtocol] || map.rest;
     document.documentElement.style.setProperty('--color-accent', accent);
@@ -431,6 +433,7 @@ export default function App() {
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
     : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
+    : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
     : activeTab?.type === 'daakia-ai' ? 'var(--color-protocol-ai)'
     : tabProtocol === 'graphql' ? 'var(--color-protocol-graphql)'
     : tabProtocol === 'websocket' ? 'var(--color-protocol-websocket)'
@@ -617,10 +620,22 @@ export default function App() {
           </div>
         ))}
 
+        {/* DaakiaViewPage (Wiki) — always mounted when a wiki tab exists so the
+            selected wiki page/scroll position survives Daakia tab switches. */}
+        {tabs.some(t => t.type === 'wiki') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'wiki' ? 'flex' : 'none' }}
+          >
+            <DaakiaViewPage />
+          </div>
+        )}
+
         {activeTab?.type === 'settings' ? (
           <SettingsPanel />
         ) : activeTab?.type === 'mock-server' ? null
         : activeTab?.type === 'state-machine' ? null
+        : activeTab?.type === 'wiki' ? null
         : activeTab?.type === 'daakia-ai' ? null
         : (activeTab?.protocol || activeProtocol) === 'rest' ? (
           !activeTab ? (

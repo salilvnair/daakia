@@ -254,6 +254,7 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
               placeholder="https://api.example.com"
               size="md"
               width="fw"
+              accentColor="var(--color-protocol-ai)"
               disabled={phase === 'probing'}
             />
             <ButtonView
@@ -278,6 +279,7 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
                 rows={3}
                 size="md"
                 width="fw"
+                accentColor="var(--color-protocol-ai)"
                 placeholder={`/api/v4/users\n/internal/metrics\n/api/v1/webhooks`}
                 style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}
               />

@@ -90,6 +90,7 @@ export function AiCrossProtocolOrchestratorModal({ onClose }: Props) {
           placeholder="e.g. REST auth login, subscribe to WebSocket notifications channel, trigger a gRPC order creation, verify SSE event fires within 5s, confirm order via REST GET"
           rows={4}
           size="md"
+          accentColor={ACCENT}
           width="fw"
           autoFocus
         />

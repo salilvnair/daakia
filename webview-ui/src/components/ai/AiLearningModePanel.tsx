@@ -203,6 +203,7 @@ export function AiLearningModePanel({ onClose }: Props) {
                 onChange={e => setWorkflowName(e.target.value)}
                 placeholder="Give this workflow a name…"
                 size="md"
+                accentColor={ACCENT}
                 width="fw"
               />
             </div>

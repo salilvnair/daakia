@@ -152,6 +152,7 @@ export function AiSmartTestSuiteModal({ collectionNode, onClose }: Props) {
           placeholder='e.g. "Test the user CRUD endpoints: successful create with all fields, validation errors for missing email, duplicate username, unauthorized access, and pagination limits"'
           rows={4}
           size="md"
+          accentColor={ACCENT}
           width="fw"
         />
         <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>⌘↵ to generate</span>

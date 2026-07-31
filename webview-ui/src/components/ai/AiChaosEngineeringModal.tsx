@@ -116,6 +116,7 @@ export function AiChaosEngineeringModal({ onClose }: Props) {
           placeholder="e.g. E-commerce platform: REST product catalog, WebSocket real-time inventory, gRPC payment service, MQTT order notifications"
           rows={3}
           size="md"
+          accentColor={ACCENT}
           width="fw"
         />
         <div className="flex items-center gap-2 flex-wrap">

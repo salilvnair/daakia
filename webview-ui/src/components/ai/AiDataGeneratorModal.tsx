@@ -264,6 +264,7 @@ export function AiDataGeneratorModal({ tabId, onApply, onClose }: Props) {
             onChange={e => setCustomDesc(e.target.value)}
             rows={2}
             size="md"
+            accentColor={ACCENT}
             width="fw"
             placeholder="Describe the data shape… e.g. 'IoT sensor readings with device ID, temperature, humidity, and timestamp'"
           />

@@ -179,6 +179,7 @@ export function AiConversationToCollectionModal({ onClose }: Props) {
             rows={5}
             size="md"
             width="fw"
+            accentColor={ACCENT}
             placeholder="Describe what your API does in plain English. Be as detailed as you like — include endpoints, data models, auth requirements, workflows..."
           />
         </div>
@@ -189,8 +190,12 @@ export function AiConversationToCollectionModal({ onClose }: Props) {
           <div className="flex flex-col gap-1">
             {EXAMPLES.map(ex => (
               <button key={ex} type="button" onClick={() => setDescription(ex)}
-                className="text-left text-[10.5px] px-2.5 py-1.5 rounded-md cursor-pointer border transition-all"
-                style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'transparent' }}>
+                className="text-left text-[10.5px] px-2.5 py-1.5 rounded-md cursor-pointer border transition-all hover:brightness-110"
+                style={{
+                  borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)`,
+                  color: ACCENT,
+                  backgroundColor: `color-mix(in srgb, ${ACCENT} 9%, transparent)`,
+                }}>
                 {ex}
               </button>
             ))}

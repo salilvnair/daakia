@@ -5,7 +5,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getSqliteStatus, getDbPath, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
+import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
+import { archiveHistoryEntry, archiveHistoryBatch } from '../../services/bin';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
 // Handler imports
@@ -63,8 +64,19 @@ import { handleAiFuzz } from './handlers/ai-fuzz-handler';
 import { handleMcpConnect, handleMcpDisconnect, handleMcpCallTool, handleMcpGetPrompt, handleMcpReadResource, cleanupAllMcpClients, handleMcpConnectServer, handleMcpDisconnectServer, handleMcpCallToolOnServer } from './handlers/mcp-handler';
 import { handleAiMcpConnect, handleAiMcpDisconnect, cleanupAiMcpClients } from './handlers/ai-mcp-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from './handlers/ui-state-handler';
+import {
+  handleGitSyncGetSettings, handleGitSyncSaveSettings, handleGitSyncGetStatus,
+  handleGitSyncInit, handleGitSyncNow, handleGitSyncExportOnly, handleGitSyncImportOnly,
+} from './handlers/git-sync-handler';
+import {
+  handleVaultGetStatus, handleVaultSetPassphrase, handleVaultUnlock, handleVaultLock, handleVaultClear,
+} from './handlers/vault-handler';
+import {
+  handleBinGetEntries, handleBinRestore, handleBinRestoreGroup,
+  handleBinPermanentlyDelete, handleBinPermanentlyDeleteGroup, handleBinEmpty,
+} from './handlers/bin-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
-import { scheduleAutoExport, COLLECTION_MUTATION_TYPES } from '../../services/git-sync';
+import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
   initSmWorkflowStorage,
   handleSmWorkflowGetAll,
@@ -155,10 +167,12 @@ export class MainPanel {
     this._refreshKeyStatus();
     this._post({ type: 'aiFeatures:data', features: getAiFeatures() });
     this._sendAiProviders();
+    this._restartAutoSyncTimer();
   }
 
   public dispose() {
     MainPanel.currentPanel = undefined;
+    stopAutoSyncTimer();
     cleanupAllWsConnections();
     cleanupAllSseConnections();
     cleanupAllSocketIOConnections();
@@ -175,6 +189,26 @@ export class MainPanel {
 
   // Bound postMessage shorthand for passing to handlers
   private _post = (msg: unknown) => this.postMessage(msg);
+
+  // ────────────────── Git Sync — auto-sync timer + post-sync UI refresh ──────
+
+  private _restartAutoSyncTimer() {
+    startAutoSyncTimer((result) => {
+      this._post({ type: 'gitSync:autoSyncTick', at: new Date().toISOString(), result });
+      if (result.ok) this._broadcastSyncedData();
+    });
+  }
+
+  /** Re-sends collections/history/mock-servers/state-machine data for every protocol so any
+   * currently-open panel reflects what a sync just pulled in, without the user reloading. */
+  private _broadcastSyncedData() {
+    const COLLECTION_PROTOCOLS = ['rest', 'graphql', 'websocket', 'grpc', 'soap', 'ai', 'mcp'];
+    const HISTORY_PROTOCOLS = ['rest', 'graphql', 'websocket', 'sse', 'socketio', 'mqtt', 'grpc', 'soap', 'ai', 'mcp'];
+    for (const p of COLLECTION_PROTOCOLS) handleGetCollections(this._post, p);
+    for (const p of HISTORY_PROTOCOLS) this._sendHistory(p);
+    handleGetMockServerState(this._post);
+    handleSmWorkflowGetAll(this._post);
+  }
 
   // ────────────────── Message Router ──────────────────
 
@@ -585,11 +619,11 @@ export class MainPanel {
         this._sendHistory(msg.protocol as string | undefined);
         break;
       case 'clearHistory':
-        clearHistory(msg.protocol as string | undefined);
+        archiveHistoryBatch(msg.protocol as string | undefined);
         this._sendHistory(msg.protocol as string | undefined);
         break;
       case 'deleteHistoryEntry':
-        deleteHistoryById(msg.id as number);
+        archiveHistoryEntry(msg.id as number);
         this._sendHistory(msg.protocol as string | undefined);
         break;
 
@@ -910,6 +944,80 @@ export class MainPanel {
         break;
       case 'getWorkspaceSnapshot':
         handleGetWorkspaceSnapshot(this._post);
+        break;
+
+      // ── Git Sync ──
+      case 'gitSync:getSettings':
+        handleGitSyncGetSettings(this._post);
+        break;
+      case 'gitSync:saveSettings':
+        handleGitSyncSaveSettings(msg as unknown as {
+          settings: {
+            autoSyncSeconds?: number; remoteUrl?: string; branch?: string;
+            syncHistory?: boolean; syncCollections?: boolean; syncMockServers?: boolean;
+            syncEnvironments?: boolean; syncAiConfig?: boolean;
+          };
+        }, this._post)
+          .then(() => this._restartAutoSyncTimer());
+        break;
+      case 'gitSync:getStatus':
+        handleGitSyncGetStatus(this._post);
+        break;
+      case 'gitSync:init':
+        handleGitSyncInit(this._post);
+        break;
+      case 'gitSync:syncNow':
+        handleGitSyncNow(this._post).then(() => this._broadcastSyncedData());
+        break;
+      case 'gitSync:exportOnly':
+        handleGitSyncExportOnly(this._post);
+        break;
+      case 'gitSync:importOnly':
+        handleGitSyncImportOnly(this._post);
+        this._broadcastSyncedData();
+        break;
+
+      // ── Vault (Environments secret encryption) ──
+      case 'vault:getStatus':
+        handleVaultGetStatus(this._post);
+        break;
+      case 'vault:setPassphrase':
+        handleVaultSetPassphrase(msg as unknown as { passphrase: string }, this._post)
+          .then(() => handleGetEnvironments(this._post));
+        break;
+      case 'vault:unlock':
+        handleVaultUnlock(msg as unknown as { passphrase: string }, this._post)
+          .then(() => handleGetEnvironments(this._post));
+        break;
+      case 'vault:lock':
+        handleVaultLock(this._post);
+        break;
+      case 'vault:clear':
+        handleVaultClear(this._post);
+        break;
+
+      // ── Bin (soft delete / restore) ──
+      case 'bin:getEntries':
+        handleBinGetEntries(msg as unknown as { category?: 'history' | 'collection' | 'collection_request' | 'mock_server' | 'environment' }, this._post);
+        break;
+      case 'bin:restore':
+        handleBinRestore(msg as unknown as { id: string }, this._post);
+        this._broadcastSyncedData();
+        handleGetEnvironments(this._post);
+        break;
+      case 'bin:restoreGroup':
+        handleBinRestoreGroup(msg as unknown as { groupId: string }, this._post);
+        this._broadcastSyncedData();
+        handleGetEnvironments(this._post);
+        break;
+      case 'bin:permanentlyDelete':
+        handleBinPermanentlyDelete(msg as unknown as { id: string }, this._post);
+        break;
+      case 'bin:permanentlyDeleteGroup':
+        handleBinPermanentlyDeleteGroup(msg as unknown as { groupId: string }, this._post);
+        break;
+      case 'bin:empty':
+        handleBinEmpty(msg as unknown as { category?: 'history' | 'collection' | 'collection_request' | 'mock_server' | 'environment' }, this._post);
         break;
 
       case 'getPerformanceData':

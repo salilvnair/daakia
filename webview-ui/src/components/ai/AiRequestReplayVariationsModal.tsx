@@ -201,6 +201,7 @@ export function AiRequestReplayVariationsModal({ requestMethod, requestUrl, requ
             onChange={e => setDescription(e.target.value)}
             rows={2}
             size="md"
+            accentColor={ACCENT}
             width="fw"
           />
         </div>

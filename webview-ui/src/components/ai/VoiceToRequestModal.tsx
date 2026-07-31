@@ -246,6 +246,7 @@ export function VoiceToRequestModal({ onClose }: Props) {
           onChange={e => { setTranscript(e.target.value); setError(''); setResult(null); }}
           rows={3}
           size="md"
+          accentColor={ACCENT}
           width="fw"
           placeholder="Or type: 'Send a POST to /api/users with name John and email john@example.com'"
         />

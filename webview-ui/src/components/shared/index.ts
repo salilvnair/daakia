@@ -8,8 +8,6 @@ export type { KeyValueRow } from './controls/KeyValueTable';
 export { FormDataTable } from './controls/FormDataTable';
 export { SplitButton } from './controls/SplitButton';
 export type { SplitButtonItem } from './controls/SplitButton';
-export { HighlightedInput } from './controls/HighlightedInput';
-export type { MockServerSuggestion } from './controls/HighlightedInput';
 export { Checkbox } from './controls/Checkbox';
 export { ResizablePanel } from './controls/ResizablePanel';
 export { DurationInput } from './controls/DurationInput';

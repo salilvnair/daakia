@@ -3,12 +3,13 @@
  */
 import {
   getCollectionTree, getCollectionChildren, getCollectionBreadcrumb,
-  upsertCollection, deleteCollection as dbDeleteCollection, moveCollection,
+  upsertCollection, moveCollection,
   getCollectionData, updateCollectionData, duplicateCollection, duplicateCollectionRequest,
   reorderCollections, moveRequest, reorderRequests,
-  upsertCollectionRequest, deleteCollectionRequest, renameCollectionRequest,
+  upsertCollectionRequest, renameCollectionRequest,
 } from '../../../storage/db';
 import { runCollection as runCollectionService, type RunConfig } from '../../../services/collection-runner';
+import { archiveCollection, archiveCollectionRequest } from '../../../services/bin';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -73,7 +74,7 @@ export function handleRenameRequest(msg: Record<string, unknown>, postMessage: P
 export function handleDeleteCollection(msg: Record<string, unknown>, postMessage: PostMessage) {
   const id = msg.id as string;
   const protocol = msg.protocol as string | undefined;
-  dbDeleteCollection(id);
+  archiveCollection(id);
   handleGetCollections(postMessage, protocol);
 }
 
@@ -106,7 +107,7 @@ export function handleSaveRequestToCollection(msg: Record<string, unknown>, post
 export function handleDeleteRequestFromCollection(msg: Record<string, unknown>, postMessage: PostMessage) {
   const requestId = msg.requestId as string;
   const protocol = msg.protocol as string | undefined;
-  deleteCollectionRequest(requestId);
+  archiveCollectionRequest(requestId);
   handleGetCollections(postMessage, protocol);
 }
 
@@ -126,7 +127,7 @@ export function handleClearCollections(postMessage: PostMessage, protocol?: stri
   // Get only root-level collections for the specified protocol
   const tree = getCollectionTree(protocol);
   for (const collection of tree) {
-    dbDeleteCollection(collection.id);
+    archiveCollection(collection.id);
   }
   handleGetCollections(postMessage, protocol);
 }

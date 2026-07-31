@@ -14,6 +14,7 @@ import {
   getCollectionData, updateCollectionData,
   getSetting, setSetting, getCookies, upsertCookie,
 } from '../../../storage/db';
+import { decryptIfNeeded, encryptEnvVariables } from '../../../services/vault';
 
 type PostMessage = (msg: unknown) => void;
 type RefreshFn = () => void;
@@ -550,7 +551,7 @@ function loadEnvironmentVarsForScript(envId: string | undefined): Record<string,
   if (globalRow) {
     const globalVars = JSON.parse(globalRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string; isSecret?: boolean }[];
     for (const v of globalVars) {
-      if (v.key) vars[v.key] = v.currentValue ?? v.initialValue ?? '';
+      if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
     }
   }
 
@@ -562,7 +563,7 @@ function loadEnvironmentVarsForScript(envId: string | undefined): Record<string,
   if (activeRow && activeRow !== globalRow) {
     const activeVars = JSON.parse(activeRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string; isSecret?: boolean }[];
     for (const v of activeVars) {
-      if (v.key) vars[v.key] = v.currentValue ?? v.initialValue ?? '';
+      if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
     }
   }
 
@@ -615,7 +616,7 @@ function persistScriptVarUpdates(
           existingVars.push({ id: crypto.randomUUID(), key, initialValue: '', currentValue: value, isSecret: false });
         }
       }
-      upsertEnvironment({ id: activeRow.id, name: activeRow.name, variables: JSON.stringify(existingVars), is_active: activeRow.is_active });
+      upsertEnvironment({ id: activeRow.id, name: activeRow.name, variables: JSON.stringify(encryptEnvVariables(existingVars)), is_active: activeRow.is_active });
       refreshEnvironments();
     }
   }
@@ -657,7 +658,7 @@ function persistScriptVarUpdates(
           existingVars.push({ id: crypto.randomUUID(), key, initialValue: '', currentValue: value, isSecret: false });
         }
       }
-      upsertEnvironment({ id: globalRow.id, name: globalRow.name, variables: JSON.stringify(existingVars), is_active: globalRow.is_active });
+      upsertEnvironment({ id: globalRow.id, name: globalRow.name, variables: JSON.stringify(encryptEnvVariables(existingVars)), is_active: globalRow.is_active });
       refreshEnvironments();
     }
   }

@@ -4,13 +4,15 @@ import { useDbStatusStore } from '../../store/db-status-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon } from '../../icons';
+import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon } from '../../icons';
 import { LlmProviderSettings } from './LlmProviderSettings';
+import { GitSyncSettings } from './GitSyncSettings';
+import { VaultSettings } from './VaultSettings';
+import { BinSettings } from './BinSettings';
 import { PromptLibraryPanel } from './PromptLibraryPanel';
 import { AiFeatureSettings } from './AiFeatureSettings';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
 import { AiAuditPanel } from './AiAuditPanel';
-import { DaakiaViewPage, WIKI_TABS, type TabId as WikiTabId } from '../../pages/wiki/daakia-view/DaakiaViewPage';
 import { useMockStore } from '../../store/mock-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { CookieManager } from '../power/CookieManager';
@@ -27,17 +29,19 @@ import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 
-type SettingsSection = 'general' | 'theme' | 'mock-server' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features';
+type SettingsSection = 'general' | 'theme' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load';
 
-/** A settings-section id, or a wiki tab id prefixed `wiki:` — the wiki's own tabs are nested as this nav's "Wiki" group instead of DaakiaViewPage rendering a second, independent SideNavView. */
-type ActiveNavId = SettingsSection | `wiki:${WikiTabId}`;
+type ActiveNavId = SettingsSection;
 
 const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: React.ReactNode }> = {
   'general':         { label: 'General',        icon: <SettingsIcon size={14} /> },
   'theme':           { label: 'Theme',           icon: <SunIcon size={14} /> },
   'mock-server':     { label: 'Mock Server',     icon: <ServerIcon size={14} /> },
+  'git-sync':        { label: 'Git Sync',        icon: <GitHubIcon size={14} /> },
+  'vault':           { label: 'Vault',           icon: <LockIcon size={14} /> },
+  'bin':             { label: 'Bin',              icon: <TrashIcon size={14} /> },
   'llm':             { label: 'LLM Provider',    icon: <CpuIcon size={14} /> },
   'ai-features':     { label: 'AI Features',     icon: <SparkleIcon size={14} /> },
   'prompt-library':  { label: 'Prompt Library',  icon: <AgentIcon size={14} /> },
@@ -53,6 +57,9 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
   ] },
   { id: 'g-server', label: 'Server', isGroup: true, children: [
     { id: 'mock-server', label: SETTINGS_SECTION_META['mock-server'].label, icon: SETTINGS_SECTION_META['mock-server'].icon },
+    { id: 'git-sync', label: SETTINGS_SECTION_META['git-sync'].label, icon: SETTINGS_SECTION_META['git-sync'].icon },
+    { id: 'vault', label: SETTINGS_SECTION_META.vault.label, icon: SETTINGS_SECTION_META.vault.icon },
+    { id: 'bin', label: SETTINGS_SECTION_META.bin.label, icon: SETTINGS_SECTION_META.bin.icon },
   ] },
   { id: 'g-ai', label: 'AI', isGroup: true, children: [
     { id: 'llm', label: SETTINGS_SECTION_META.llm.label, icon: SETTINGS_SECTION_META.llm.icon },
@@ -64,7 +71,6 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
     { id: 'devtools', label: SETTINGS_SECTION_META.devtools.label, icon: SETTINGS_SECTION_META.devtools.icon },
     { id: 'power-features', label: SETTINGS_SECTION_META['power-features'].label, icon: SETTINGS_SECTION_META['power-features'].icon },
   ] },
-  { id: 'g-wiki', label: 'Wiki', isGroup: true, children: WIKI_TABS.map(t => ({ id: `wiki:${t.id}`, label: t.label, icon: t.icon })) },
 ];
 
 const ALL_SECTION_IDS = new Set<string>(SETTINGS_NAV_ITEMS.flatMap(g => (g.children ?? []).map(c => c.id)));
@@ -95,9 +101,6 @@ export function SettingsPanel() {
     setActiveSection('prompt-library');
   };
 
-  const isWiki = activeSection.startsWith('wiki:');
-  const wikiTabId = isWiki ? (activeSection.slice(5) as WikiTabId) : null;
-
   return (
     <div className="flex flex-1 h-full overflow-hidden">
       <SplitPanelView
@@ -115,7 +118,7 @@ export function SettingsPanel() {
             items={SETTINGS_NAV_ITEMS}
             activeId={activeSection}
             onSelect={(id) => setActiveSection(id as ActiveNavId)}
-            defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-advanced', 'g-wiki']}
+            defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-advanced']}
             fillContainer
             collapsible={false}
             accentColor="var(--color-settings)"
@@ -126,14 +129,17 @@ export function SettingsPanel() {
           />
         }
         second={
-          <div
-            className={`h-full flex-1 overflow-y-auto${isWiki ? ' overflow-hidden' : ''}`}
-            style={isWiki ? { display: 'flex', flexDirection: 'column' } : undefined}
-          >
+          <div className="h-full flex-1 overflow-y-auto">
             {activeSection === 'general' ? (
               <GeneralSettings />
             ) : activeSection === 'mock-server' ? (
               <MockServerSettings />
+            ) : activeSection === 'git-sync' ? (
+              <GitSyncSettings />
+            ) : activeSection === 'vault' ? (
+              <VaultSettings />
+            ) : activeSection === 'bin' ? (
+              <BinSettings />
             ) : activeSection === 'llm' ? (
               <LlmProviderSettings />
             ) : activeSection === 'ai-features' ? (
@@ -142,12 +148,6 @@ export function SettingsPanel() {
               <PromptLibraryPanel externalTarget={promptTarget} onTargetConsumed={() => setPromptTarget(null)} />
             ) : activeSection === 'ai-audit' ? (
               <AiAuditPanel />
-            ) : isWiki ? (
-              <DaakiaViewPage
-                hideNav
-                activeId={wikiTabId!}
-                onSelect={(id) => setActiveSection(`wiki:${id}`)}
-              />
             ) : activeSection === 'power-features' ? (
               <PowerFeaturesPanel />
             ) : activeSection === 'devtools' ? (

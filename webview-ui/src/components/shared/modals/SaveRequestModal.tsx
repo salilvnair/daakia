@@ -26,15 +26,78 @@ interface CollectionTreeNode {
   requests: { id: string; collection_id: string; name: string; method: string; url: string; data?: string }[];
 }
 
+/** Minimal shape needed from a history row to bulk-save it — matches HistoryPanel's HistoryItem. */
+interface BulkSaveItem {
+  id: number;
+  method: string;
+  url: string;
+  request_data?: string;
+}
+
 interface SaveRequestModalProps {
   open: boolean;
   tab: RequestTab | null;
   onClose: () => void;
+  /** Bulk mode: save several history rows to one chosen destination in one go — `tab` is ignored when set. */
+  bulkItems?: BulkSaveItem[];
+  bulkProtocol?: string;
 }
 
-export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) {
+/** Normalizes a history row's stored `request_data` JSON into the same shape SaveRequestModal's
+ * single-tab save path sends — field names differ slightly per protocol handler (e.g. SOAP stores
+ * `envelope`/`wsSecurity`/`assertions`, the save payload expects `soapEnvelope`/`soapWsSecurity`/`soapAssertions`). */
+function buildSaveDataFromHistoryItem(item: BulkSaveItem, protocol: string): Record<string, unknown> {
+  let parsed: Record<string, unknown> = {};
+  try { parsed = item.request_data ? JSON.parse(item.request_data) : {}; } catch { /* ignore */ }
+  const base: Record<string, unknown> = {
+    headers: parsed.headers ?? [],
+    params: parsed.params ?? [],
+    bodyMode: parsed.bodyMode ?? 'none',
+    bodyRaw: parsed.bodyRaw ?? parsed.body ?? '',
+    bodyContentType: parsed.bodyContentType ?? '',
+    bodyFormData: parsed.bodyFormData ?? [],
+    bodyUrlEncoded: parsed.bodyUrlEncoded ?? [],
+    authType: parsed.authType ?? 'none',
+    authData: parsed.authData ?? {},
+    variables: parsed.variables ?? {},
+    preRequestScript: parsed.preRequestScript ?? '',
+    postResponseScript: parsed.postResponseScript ?? '',
+  };
+  if (protocol === 'graphql') {
+    return { ...base, gql_variables: parsed.gql_variables };
+  }
+  if (protocol === 'soap') {
+    return { ...base, soapVersion: parsed.soapVersion, soapAction: parsed.soapAction, soapOperation: parsed.soapOperation, soapService: parsed.soapService, soapEnvelope: parsed.envelope, soapWsSecurity: parsed.wsSecurity, soapAssertions: parsed.assertions, soapAttachments: parsed.attachments };
+  }
+  if (protocol === 'grpc') {
+    return { ...base, grpcMethod: parsed.grpcMethod, grpcMessage: parsed.grpcMessage, grpcMetadata: parsed.grpcMetadata, grpcTls: parsed.grpcTls, grpcProtoFile: parsed.grpcProtoFile };
+  }
+  if (protocol === 'mcp') {
+    return { ...base, mcpTransport: parsed.mcpTransport, mcpCommand: parsed.mcpCommand, mcpArgs: parsed.mcpArgs, mcpEnvVars: parsed.mcpEnvVars, mcpSettings: parsed.mcpSettings };
+  }
+  if (protocol === 'ai') {
+    return { ...base, aiProvider: parsed.provider, aiModel: parsed.model };
+  }
+  return base;
+}
+
+/** Short "METHOD path" label derived from a URL — same heuristic as the single-save AI-name button. */
+function nameFromUrl(method: string, url: string): string {
+  try {
+    const clean = url.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
+    const parts = clean.split('/').filter(Boolean);
+    const label = parts.length > 1 ? parts.slice(1).join(' ') : parts[0] || url;
+    return `${method} ${label}`.slice(0, 60);
+  } catch {
+    return `${method} request`;
+  }
+}
+
+export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }: SaveRequestModalProps) {
   const updateTab = useTabsStore(s => s.updateTab);
-  const accent = PROTOCOL_ACCENT[tab?.protocol ?? 'rest'] || PROTOCOL_ACCENT.rest;
+  const isBulk = !!bulkItems && bulkItems.length > 0;
+  const protocol = isBulk ? (bulkProtocol || 'rest') : (tab?.protocol ?? 'rest');
+  const accent = PROTOCOL_ACCENT[protocol] || PROTOCOL_ACCENT.rest;
   const [tree, setTree] = useState<CollectionTreeNode[]>([]);
   const [name, setName] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -62,22 +125,21 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
 
   useEffect(() => {
     if (!open) return;
-    setName(tab?.name || 'Untitled Request');
-    setSelectedId(tab?.collectionId || null);
+    setName(isBulk ? '' : (tab?.name || 'Untitled Request'));
+    setSelectedId(isBulk ? null : (tab?.collectionId || null));
     setExpandedIds(new Set());
     setSearchQuery('');
     setInlineCreateMode(false);
     setRenamingId(null);
     setDeleteTarget(null);
     setContextMenu(null);
-    postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' });
+    postMsg({ type: 'getCollections', protocol });
 
     const handler = (event: MessageEvent) => {
       const msg = event.data;
       if (msg.type === 'collectionsData') {
-        // Only process responses matching this tab's protocol
-        const expectedProtocol = tab?.protocol || 'rest';
-        if (msg.protocol && msg.protocol !== expectedProtocol) return;
+        // Only process responses matching this protocol
+        if (msg.protocol && msg.protocol !== protocol) return;
         setTree(msg.collections ?? []);
       }
     };
@@ -88,7 +150,8 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
       clearTimeout(timer);
       window.removeEventListener('message', handler);
     };
-  }, [open, tab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, tab, isBulk, protocol]);
 
   useEffect(() => {
     if (inlineCreateMode) {
@@ -167,8 +230,8 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
         id: 'duplicate', label: 'Duplicate', shortcut: 'D',
         icon: <CopyIcon size={13} style={{ color: 'var(--color-ctx-duplicate)' }} />,
         onClick: () => {
-          postMsg({ type: 'duplicateCollection', id: nodeId, protocol: tab?.protocol || 'rest' });
-          setTimeout(() => postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' }), 100);
+          postMsg({ type: 'duplicateCollection', id: nodeId, protocol });
+          setTimeout(() => postMsg({ type: 'getCollections', protocol }), 100);
           close();
         },
       },
@@ -189,17 +252,17 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
 
   const handleRename = () => {
     if (!renamingId || !renameValue.trim()) { setRenamingId(null); return; }
-    postMsg({ type: 'renameCollection', id: renamingId, name: renameValue.trim(), protocol: tab?.protocol || 'rest' });
+    postMsg({ type: 'renameCollection', id: renamingId, name: renameValue.trim(), protocol });
     setRenamingId(null);
-    setTimeout(() => postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' }), 100);
+    setTimeout(() => postMsg({ type: 'getCollections', protocol }), 100);
   };
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
-    postMsg({ type: 'deleteCollection', id: deleteTarget.id, protocol: tab?.protocol || 'rest' });
+    postMsg({ type: 'deleteCollection', id: deleteTarget.id, protocol });
     if (selectedId === deleteTarget.id) setSelectedId(null);
     setDeleteTarget(null);
-    setTimeout(() => postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' }), 100);
+    setTimeout(() => postMsg({ type: 'getCollections', protocol }), 100);
   };
 
   const toggleExpand = (id: string) => {
@@ -247,7 +310,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
       id: newId,
       name: inlineCreateName.trim(),
       parentId: inlineCreateParentId, // null = root level
-      protocol: tab?.protocol || 'rest',
+      protocol,
     });
     // Auto-expand parent so the new subfolder is visible
     if (inlineCreateParentId) {
@@ -257,11 +320,32 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
     setInlineCreateName('');
     setSelectedId(newId);
     // Re-fetch collections to show the new folder
-    postMsg({ type: 'getCollections', protocol: tab?.protocol || 'rest' });
+    postMsg({ type: 'getCollections', protocol });
   };
 
   const handleSave = () => {
-    if (!tab || !name.trim() || !selectedId) return;
+    if (!selectedId) return;
+
+    if (isBulk) {
+      for (const item of bulkItems!) {
+        postMsg({
+          type: 'saveRequestToCollection',
+          collectionId: selectedId,
+          protocol,
+          request: {
+            id: crypto.randomUUID(),
+            name: nameFromUrl(item.method, item.url),
+            method: item.method,
+            url: item.url,
+            data: JSON.stringify(buildSaveDataFromHistoryItem(item, protocol)),
+          },
+        });
+      }
+      onClose();
+      return;
+    }
+
+    if (!tab || !name.trim()) return;
 
     const requestId = crypto.randomUUID();
 
@@ -315,14 +399,14 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
     onClose();
   };
 
-  if (!tab) return null;
+  if (!tab && !isBulk) return null;
 
   return (
     <>
     <ModalView
       open={open}
       onClose={onClose}
-      title="Save as"
+      title={isBulk ? `Save ${bulkItems!.length} requests` : 'Save as'}
       size="sm"
       elevated
       headerColor={accent}
@@ -331,14 +415,19 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
           size="md"
           accentColor={accent}
           onClick={handleSave}
-          disabled={!name.trim() || !selectedId}
+          disabled={isBulk ? !selectedId : (!name.trim() || !selectedId)}
         >
           Save
         </ButtonView>
       }
     >
       <div className="space-y-3" style={{ '--modal-accent': accent } as React.CSSProperties}>
-          {/* Request name + AI generate */}
+          {isBulk ? (
+            <p className="text-[12px] text-[var(--color-text-secondary)]">
+              Saving <strong>{bulkItems!.length}</strong> request{bulkItems!.length === 1 ? '' : 's'} — each keeps its own name, pick one destination folder below.
+            </p>
+          ) : (
+          /* Request name + AI generate */
           <div className="space-y-1.5">
             <label className="block text-[12px] font-medium text-[var(--color-text-secondary)]">Request name</label>
             <div className="flex items-center gap-2">
@@ -393,6 +482,7 @@ export function SaveRequestModal({ open, tab, onClose }: SaveRequestModalProps) 
               />
             </div>
           </div>
+          )}
 
           {/* Location picker - tree view */}
           <div className="space-y-2">

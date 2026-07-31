@@ -302,7 +302,7 @@ export async function handleAiSend(
         insertHistory({
           request_id: tabId,
           method: providerId,                           // "openai", "anthropic", etc.
-          url: effectiveModel,                          // "gpt-4o", "claude-3-opus", etc.
+          url: resolvedBaseUrl || effectiveModel,       // API base URL — falls back to model name for providers with no URL (e.g. Copilot)
           status: 200,
           status_text: `${result.tokens?.total ?? 0} tokens`,
           response_time: result.duration,

@@ -221,6 +221,7 @@ export const AiBodyGenerate = forwardRef<AiBodyGenerateHandle, Props>(
             disabled={loading}
             rows={2}
             size="md"
+            accentColor={ACCENT}
             width="fw"
             placeholder={`Describe the payload… e.g. "user registration with name, email, password and address"`}
           />

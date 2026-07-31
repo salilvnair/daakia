@@ -2,7 +2,7 @@
   "name": "daakia",
   "displayName": "Daakia — API Client",
   "description": "A modern API testing extension for VS Code with AI assistant, collections, environments, and mock servers.",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "license": "MIT",
   "publisher": "salilvnair",
   "repository": {
@@ -252,15 +252,46 @@
           "default": true,
           "description": "Store response body in history entries."
         },
-        "daakia.gitSync.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Git-native collections: automatically write collections to .daakia.json files in the workspace after every change, and import external edits (e.g. after git pull)."
+        "daakia.gitSync.autoSyncSeconds": {
+          "type": "number",
+          "enum": [0, 1, 5, 10, 30],
+          "default": 0,
+          "description": "Auto sync interval in seconds (0 = off). When on, runs a full export → commit → pull → push → import cycle of collections, history, mock servers, and state machine workflows on this interval."
         },
-        "daakia.gitSync.folder": {
+        "daakia.gitSync.remoteUrl": {
           "type": "string",
-          "default": "daakia/collections",
-          "description": "Workspace-relative folder for git-synced collection files."
+          "default": "",
+          "description": "SSH remote URL for the git-sync folder, e.g. git@github.com:org/repo.git. Auth is handled entirely by your system git/ssh-agent — Daakia never touches SSH keys itself."
+        },
+        "daakia.gitSync.branch": {
+          "type": "string",
+          "default": "main",
+          "description": "Branch to push/pull for git sync."
+        },
+        "daakia.gitSync.syncHistory": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include request history in git sync."
+        },
+        "daakia.gitSync.syncCollections": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include collections in git sync."
+        },
+        "daakia.gitSync.syncMockServers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include mock server configs and their state machine workflows in git sync."
+        },
+        "daakia.gitSync.syncEnvironments": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include environments in git sync. Variables flagged as secret are never written to disk — only the variable key is synced, the value is redacted."
+        },
+        "daakia.gitSync.syncAiConfig": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the prompt library, AI feature flags, and AI provider config (not API keys — those stay in your OS keychain) in git sync."
         }
       }
     },

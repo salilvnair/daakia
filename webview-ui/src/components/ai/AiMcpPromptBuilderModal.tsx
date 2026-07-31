@@ -93,6 +93,7 @@ Format your response with:
           placeholder="e.g. Search GitHub for issues about memory leaks, then summarize each issue and create a JIRA ticket for the top 3"
           rows={3}
           size="md"
+          accentColor={ACCENT}
           width="fw"
           onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGenerate(); }}
         />

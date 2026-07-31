@@ -79,6 +79,9 @@
   /* Settings */
   --color-settings: #2a9d8f;
 
+  /* Wiki */
+  --color-wiki: #d97706;
+
   /* Response time thresholds */
   --color-time-fast: #22c55e;
   --color-time-moderate: #eab308;
@@ -326,6 +329,7 @@
   --color-try-button: #4338ca;
 
   --color-settings: #1f7a6e;
+  --color-wiki: #b45309;
 
   --color-time-fast: #1a7f37;
   --color-time-moderate: #b55e00;

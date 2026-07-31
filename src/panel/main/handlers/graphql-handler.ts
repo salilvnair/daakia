@@ -6,6 +6,7 @@ import WebSocket from 'ws';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory, getSetting, getAllEnvironments, upsertEnvironment, getCollectionData, updateCollectionData, setSetting } from '../../../storage/db';
 import { runScript, type ScriptContext } from '../../../services/script-runtime';
+import { decryptIfNeeded, decryptEnvVariables, encryptEnvVariables } from '../../../services/vault';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -439,12 +440,12 @@ function gqlLoadEnvVars(envId: string | undefined): Record<string, string> {
   const globalRow = rows.find(r => r.name === 'Global' || r.id === 'global');
   if (globalRow) {
     const gVars = JSON.parse(globalRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string }[];
-    for (const v of gVars) if (v.key) vars[v.key] = v.currentValue ?? v.initialValue ?? '';
+    for (const v of gVars) if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
   }
   const activeRow = envId ? rows.find(r => r.id === envId) : rows.find(r => r.is_active === 1);
   if (activeRow && activeRow !== globalRow) {
     const aVars = JSON.parse(activeRow.variables || '[]') as { key: string; currentValue?: string; initialValue?: string }[];
-    for (const v of aVars) if (v.key) vars[v.key] = v.currentValue ?? v.initialValue ?? '';
+    for (const v of aVars) if (v.key) vars[v.key] = decryptIfNeeded(v.currentValue ?? v.initialValue ?? '');
   }
   return vars;
 }
@@ -483,8 +484,8 @@ function gqlPersistVarUpdates(
         if (found) found.currentValue = value;
         else existing.push({ id: crypto.randomUUID(), key, initialValue: '', currentValue: value, isSecret: false });
       }
-      upsertEnvironment({ id: activeRow.id, name: activeRow.name, variables: JSON.stringify(existing), is_active: activeRow.is_active });
-      postMessage({ type: 'environmentsData', environments: getAllEnvironments() });
+      upsertEnvironment({ id: activeRow.id, name: activeRow.name, variables: JSON.stringify(encryptEnvVariables(existing)), is_active: activeRow.is_active });
+      postMessage({ type: 'environmentsData', environments: getDecryptedEnvironments() });
     }
   }
   if (JSON.stringify(updatedCol) !== JSON.stringify(originalCol) && collectionId) {
@@ -511,10 +512,22 @@ function gqlPersistVarUpdates(
         if (found) found.currentValue = value;
         else existing.push({ id: crypto.randomUUID(), key, initialValue: '', currentValue: value, isSecret: false });
       }
-      upsertEnvironment({ id: globalRow.id, name: globalRow.name, variables: JSON.stringify(existing), is_active: globalRow.is_active });
-      postMessage({ type: 'environmentsData', environments: getAllEnvironments() });
+      upsertEnvironment({ id: globalRow.id, name: globalRow.name, variables: JSON.stringify(encryptEnvVariables(existing)), is_active: globalRow.is_active });
+      postMessage({ type: 'environmentsData', environments: getDecryptedEnvironments() });
     }
   }
+}
+
+/** Same shape `handleGetEnvironments` sends the webview — decrypts every `isSecret` variable
+ * before the array leaves the extension host. Used by the raw `environmentsData` re-broadcasts
+ * in `gqlPersistVarUpdates`, which write straight to the DB and can't just call
+ * `handleGetEnvironments` (different module, would create a circular import). */
+function getDecryptedEnvironments() {
+  return getAllEnvironments().map(r => ({
+    id: r.id,
+    name: r.name,
+    variables: decryptEnvVariables(JSON.parse(r.variables || '[]') as { initialValue?: string; currentValue?: string }[]),
+  }));
 }
 
 // ─── GraphQL Subscriptions (graphql-ws protocol) ───────────────────────────────
