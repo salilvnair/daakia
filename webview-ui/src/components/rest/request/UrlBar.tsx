@@ -16,6 +16,7 @@ import { AiNlRequestBuilderModal } from '../../ai/AiNlRequestBuilderModal';
 import { AiAdaptiveLoadTesterModal } from '../../ai/AiAdaptiveLoadTesterModal';
 import { AiSchemaDriftModal } from '../../ai/AiSchemaDriftModal';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { isValidProtocolUrl, urlValidationHint } from '../../../services/url-validation';
 
 const METHOD_OPTIONS = [
   { value: 'GET', label: 'GET', color: METHOD_COLORS.GET },
@@ -129,8 +130,9 @@ export function UrlBar() {
 
   return (
     <div className="url-bar">
-      {/* Method + URL — unified DUI component */}
-      <div className="flex-[2] min-w-0">
+      {/* Method + URL — unified DUI component. Shrinks down to minWidth; past that the
+          bar scrolls horizontally rather than squeezing this illegibly small. */}
+      <div className="flex-[2] min-w-0" style={{ minWidth: 160 }}>
         <SelectTextInputView
           selectOptions={METHOD_OPTIONS}
           selectValue={tab.method}
@@ -149,17 +151,18 @@ export function UrlBar() {
 
       {/* Send / Cancel */}
       {tab.loading ? (
-        <ButtonView variant="danger" size="lg" onClick={handleSend} iconLeft={<StopSquareIcon size={14} />}>
+        <ButtonView className="flex-shrink-0" variant="danger" size="lg" onClick={handleSend} iconLeft={<StopSquareIcon size={14} />}>
           Cancel
         </ButtonView>
       ) : (
         <DropDownButtonView
+          className="flex-shrink-0"
           label="Send"
           icon={<SendIcon size={13} />}
           variant="primary"
           size="lg"
           onPrimaryClick={handleSend}
-          disabled={!tab.url.trim()}
+          disabled={!isValidProtocolUrl(tab.url, 'rest')}
           items={sendItems}
           align="right"
         />
@@ -167,6 +170,7 @@ export function UrlBar() {
 
       {/* Save */}
       <DropDownButtonView
+        className="flex-shrink-0"
         label="Save"
         icon={<SaveIcon size={13} />}
         variant="secondary"

@@ -128,6 +128,28 @@ export default function App() {
   const [showSplitterTip, setShowSplitterTip] = useState(false);
   const sidebarDragRef = useRef({ startX: 0, startWidth: 0, moved: false });
 
+  // sidebarWidth is a persisted, user-set preference (e.g. dragged to its 480px max on a
+  // wide window) that otherwise never shrinks back down — reopening on a narrower VS Code
+  // panel left the sidebar pinned at its old width, overflowing past the viewport instead
+  // of adapting. Track available width and clamp what's actually rendered; the raw
+  // preference in state is untouched so it snaps back once there's room again.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width) setContainerWidth(width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const RAIL_WIDTH = 48;
+  const MIN_MAIN_CONTENT_WIDTH = 160;
+  const maxSidebarWidth = Math.max(0, containerWidth - RAIL_WIDTH - MIN_MAIN_CONTENT_WIDTH);
+  const effectiveSidebarWidth = Math.min(sidebarWidth, maxSidebarWidth);
+
   // Resizable split: percentage of height for request panel (10-90)
   const storedSplit = useUiStateStore(s => s.panelHeights['split.rest.main']);
   const [splitPercent, setSplitPercent] = useState(storedSplit ?? 50);
@@ -282,9 +304,9 @@ export default function App() {
     if (!sidebarDragging) return;
     sidebarDragRef.current.moved = true;
     const delta = sidebarDragRef.current.startX - e.clientX;
-    const newWidth = Math.min(480, Math.max(180, sidebarDragRef.current.startWidth + delta));
+    const newWidth = Math.min(480, maxSidebarWidth, Math.max(180, sidebarDragRef.current.startWidth + delta));
     setSidebarWidth(newWidth);
-  }, [sidebarDragging]);
+  }, [sidebarDragging, maxSidebarWidth]);
 
   const handleSidebarPointerUp = useCallback((e: React.PointerEvent) => {
     setSidebarDragging(false);
@@ -444,7 +466,7 @@ export default function App() {
     : 'var(--color-protocol-rest)';
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-panel)]" style={{ '--color-accent': accentVar } as React.CSSProperties}>
+    <div ref={rootRef} className="flex h-screen w-screen overflow-hidden bg-[var(--color-panel)]" style={{ '--color-accent': accentVar } as React.CSSProperties}>
       {/* Debug HUD — floating toolbar shown during debug sessions */}
       <DebugHud />
       {/* Headless wiki capture automation driver — passive until wiki:capture:run is received */}
@@ -748,7 +770,7 @@ export default function App() {
         )}
 
         {/* Right sidebar — always visible; icon rail only for mock-server/SM/settings */}
-        <AppSidebar activeSection={sidebarSection} onSectionChange={setSidebarSection} onOpenChange={setSidebarOpen} sidebarOpen={sidebarOpen} sidebarWidth={sidebarWidth} sidebarDragging={sidebarDragging} />
+        <AppSidebar activeSection={sidebarSection} onSectionChange={setSidebarSection} onOpenChange={setSidebarOpen} sidebarOpen={sidebarOpen} sidebarWidth={effectiveSidebarWidth} sidebarDragging={sidebarDragging} />
 
       </div>
 

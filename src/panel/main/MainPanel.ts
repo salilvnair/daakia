@@ -603,6 +603,9 @@ export class MainPanel {
       case 'importBrunoRequest':
         vscode.commands.executeCommand('daakia.importBrunoCollection');
         break;
+      case 'importCollectionDaakia':
+        vscode.commands.executeCommand('daakia.importDaakiaCollection');
+        break;
       case 'openSaveAs':
         this.postMessage({ type: 'openSaveAs', tabId: msg.tabId });
         break;

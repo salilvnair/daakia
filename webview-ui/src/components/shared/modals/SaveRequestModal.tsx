@@ -32,6 +32,11 @@ interface BulkSaveItem {
   method: string;
   url: string;
   request_data?: string;
+  status?: number;
+  status_text?: string;
+  response_time?: number;
+  response_size?: number;
+  response_data?: string;
 }
 
 interface SaveRequestModalProps {
@@ -138,8 +143,8 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
     const handler = (event: MessageEvent) => {
       const msg = event.data;
       if (msg.type === 'collectionsData') {
-        // Only process responses matching this protocol
-        if (msg.protocol && msg.protocol !== protocol) return;
+        // Only process responses matching this protocol — fail closed on a missing tag too.
+        if (msg.protocol !== protocol) return;
         setTree(msg.collections ?? []);
       }
     };
@@ -338,6 +343,13 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
             method: item.method,
             url: item.url,
             data: JSON.stringify(buildSaveDataFromHistoryItem(item, protocol)),
+            // History already captured a response for this request — carry it over
+            // instead of silently dropping it, matching what History itself shows.
+            status: item.status,
+            statusText: item.status_text,
+            responseTime: item.response_time,
+            responseSize: item.response_size,
+            responseData: item.response_data,
           },
         });
       }
@@ -387,6 +399,14 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
         method: getDisplayMethod(tab),
         url: tab.url,
         data: JSON.stringify(data),
+        // Carry over the tab's last response, same as History already does.
+        status: tab.response?.status,
+        statusText: tab.response?.statusText,
+        responseTime: tab.response?.time,
+        responseSize: tab.response?.size,
+        responseData: tab.response
+          ? JSON.stringify({ headers: tab.response.headers, body: tab.response.body.slice(0, 50000), contentType: tab.response.contentType })
+          : undefined,
       },
     });
 

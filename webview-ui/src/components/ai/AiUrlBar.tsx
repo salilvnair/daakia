@@ -181,28 +181,32 @@ export function AiUrlBar() {
   if (!activeTab) return null;
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-panel)]">
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-panel)] overflow-x-auto overflow-y-hidden">
       {/* Protocol badge */}
-      <ProtocolAiBadge size={28} />
+      <div className="flex-shrink-0"><ProtocolAiBadge size={28} /></div>
 
       {/* Provider selector */}
-      <SelectInputView
-        options={providerOptions}
-        value={provider}
-        onChange={handleProviderChange}
-        size="lg"
-        accentColor={ACCENT}
-      />
-
-      {/* Model selector or free-text input */}
-      {modelOptions.length > 0 ? (
+      <div className="flex-shrink-0">
         <SelectInputView
-          options={modelOptions}
-          value={model}
-          onChange={handleModelChange}
+          options={providerOptions}
+          value={provider}
+          onChange={handleProviderChange}
           size="lg"
           accentColor={ACCENT}
         />
+      </div>
+
+      {/* Model selector or free-text input */}
+      {modelOptions.length > 0 ? (
+        <div className="flex-shrink-0">
+          <SelectInputView
+            options={modelOptions}
+            value={model}
+            onChange={handleModelChange}
+            size="lg"
+            accentColor={ACCENT}
+          />
+        </div>
       ) : (
         <TextInputView
           value={model}
@@ -210,13 +214,14 @@ export function AiUrlBar() {
           placeholder="Model name"
           size="lg"
           accentColor={ACCENT}
-          className="w-[140px]"
+          className="w-[140px] flex-shrink-0"
         />
       )}
 
-      {/* URL input — non-copilot providers only */}
+      {/* URL input — non-copilot providers only. Shrinks down to minWidth; past that the
+          bar scrolls horizontally instead of squeezing/overlapping. */}
       {provider !== 'copilot' && (
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
           <HighlightedInputView
             value={url}
             onChange={handleUrlChange}
@@ -231,6 +236,7 @@ export function AiUrlBar() {
 
       {/* Send button */}
       <ButtonView
+        className="flex-shrink-0"
         label={loading ? 'Sending...' : 'Send'}
         variant="primary"
         size="lg"
@@ -242,6 +248,7 @@ export function AiUrlBar() {
 
       {/* Save split button */}
       <DropDownButtonView
+        className="flex-shrink-0"
         label="Save"
         variant="secondary"
         size="lg"

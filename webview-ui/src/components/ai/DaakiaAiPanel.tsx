@@ -62,12 +62,25 @@ const SUGGESTION_CHIPS = [
  * ConvEngineChat's tryParseJsonObject sets payload = { type, rawText }.
  * We read payload.rawText here, mirroring the DMCR Copilot renderer pattern.
  */
+/** The bridge normally wraps AI text as `{ type: "text", rawText }`, but now that this
+ *  renderer matches EVERY message it also has to cope with whatever else arrives —
+ *  a bare string, or a structured payload from an error/verbose path. */
+function payloadToText(payload: unknown): string {
+  if (typeof payload === 'string') return payload;
+  if (payload && typeof payload === 'object') {
+    const p = payload as Record<string, unknown>;
+    if (typeof p.rawText === 'string') return p.rawText;
+    if (typeof p.text === 'string') return p.text;
+    if (typeof p.message === 'string') return p.message;
+    return '```json\n' + JSON.stringify(payload, null, 2) + '\n```';
+  }
+  return payload == null ? '' : String(payload);
+}
+
 function DaakiaMdRendererComponent({ payload }: { payload: unknown }) {
-  const text = (payload as { rawText?: string } | null)?.rawText ?? '';
-  // Wrap in compact class to reduce paragraph/heading spacing in chat bubble context
   return (
     <div className="daakia-chat-md">
-      <MdViewer content={text} />
+      <MdViewer content={payloadToText(payload)} />
     </div>
   );
 }
@@ -75,11 +88,15 @@ function DaakiaMdRendererComponent({ payload }: { payload: unknown }) {
 const DAAKIA_RENDERER_PROVIDERS = [
   {
     key: 'daakia-md',
-    priority: 150,          // beats the built-in DefaultRenderer (priority 0)
-    // Only match our { type: "text", rawText } envelope — let DefaultRenderer
-    // handle any other structured payloads (e.g. errors, verbose blocks).
-    match: ({ effectiveType, payload }: { effectiveType: string; payload: unknown }) =>
-      effectiveType === 'text' && typeof (payload as { rawText?: string } | null)?.rawText === 'string',
+    priority: 200,          // built-in renderers are priority 100
+    // Catch EVERY assistant message so all text goes through MdViewer and never
+    // reaches the library's built-in <pre>-style default, which renders raw text
+    // with white-space:pre-wrap and turns each blank line into a visible gap.
+    // The previous narrow match (effectiveType === 'text' && payload.rawText)
+    // let errors, verbose stages and messages restored from a persisted
+    // conversation fall through to that default. Matching everything is what
+    // both ns9 and storybook do, for exactly this reason.
+    match: () => true,
     Component: DaakiaMdRendererComponent,
     hideBubble: false,
   },

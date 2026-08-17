@@ -47,4 +47,5 @@ export { RunCollectionModal } from './modals/RunCollectionModal';
 export { CollectionPropertiesModal } from './modals/CollectionPropertiesModal';
 export type { CollectionProperties } from './modals/CollectionPropertiesModal';
 export { SaveRequestModal } from './modals/SaveRequestModal';
+export { ExportResponseOptionModal } from './modals/ExportResponseOptionModal';
 export { EnvironmentModal } from './modals/EnvironmentModal';

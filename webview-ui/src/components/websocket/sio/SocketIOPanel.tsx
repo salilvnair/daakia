@@ -10,6 +10,7 @@ import {
   CopyIcon, CheckIcon, InfoCircleIcon, WarningTriangleIcon, DownloadIcon, WrapLinesIcon,
   CheckCircleFilledIcon, SSEIcon, MoreVerticalIcon, SparkleIcon,
 } from '../../../icons';
+import { ConnectPayloadModal } from '../shared/ConnectPayloadModal';
 import {
   HighlightedInputView,
   ButtonView,
@@ -29,6 +30,7 @@ import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { logUiEvent } from '../../../store/ui-audit-store';
+import { isValidProtocolUrl, urlValidationHint } from '../../../services/url-validation';
 
 // ────────── Types ──────────
 
@@ -82,6 +84,7 @@ export function SocketIOPanel() {
   const [events, setEventsLocal] = useState<SocketIOEvent[]>(eventsCache.get(activeTabId!) || []);
   const [socketId, setSocketIdLocal] = useState<string | null>(socketIdCache.get(activeTabId!) ?? null);
   const [error, setErrorLocal] = useState<string | null>(errorCache.get(activeTabId!) ?? null);
+  const [showConnectPayload, setShowConnectPayload] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
 
   // Wrap setters to also update cache
@@ -225,15 +228,40 @@ export function SocketIOPanel() {
     setSocketIdLocal(socketIdCache.get(activeTabId!) ?? null);
   }, [activeTabId]);
 
-  const handleConnect = useCallback(() => {
+  const handleConnect = useCallback((withPayload = false) => {
     if (!activeTab) return;
     const url = activeTab.url.trim();
     if (!url) return;
-    logUiEvent('sio.connect', { url });
+    logUiEvent('sio.connect', { url, withPayload });
     setConnState('connecting');
     setError(null);
-    postMsg({ type: 'socketio:connect', tabId: activeTab.id, url, namespace, headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [], authType: activeTab.authType, authData: activeTab.authData, envId: activeTab.envId });
+    postMsg({
+      type: 'socketio:connect', tabId: activeTab.id, url, namespace,
+      headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [],
+      authType: activeTab.authType, authData: activeTab.authData, envId: activeTab.envId,
+      ...(withPayload ? { initBody: activeTab.authData?.['sio_init_body'] || '' } : {}),
+    });
   }, [activeTab, namespace]);
+
+  const handleSendAndConnect = useCallback(() => {
+    setShowConnectPayload(false);
+    handleConnect(true);
+  }, [handleConnect]);
+
+  const setInitField = useCallback((key: string, v: string) => {
+    if (activeTab) updateTab(activeTab.id, { authData: { ...activeTab.authData, [key]: v } });
+  }, [activeTab, updateTab]);
+
+  // In-component (unlike the module-level sioSaveItems) because it closes over modal state.
+  const sioConnectItems: ContextMenuItem[] = [
+    {
+      id: 'send-and-connect',
+      label: 'Send and Connect',
+      icon: <SendIcon size={13} />,
+      iconColor: 'var(--color-success)',
+      onClick: () => setShowConnectPayload(true),
+    },
+  ];
 
   const handleDisconnect = useCallback(() => {
     if (!activeTab) return;
@@ -291,22 +319,26 @@ export function SocketIOPanel() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* URL bar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-socketio)] bg-[rgba(167,139,250,0.12)]">SIO</span>
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 overflow-x-auto overflow-y-hidden">
+        <span className="flex-shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-socketio)] bg-[rgba(167,139,250,0.12)]">SIO</span>
         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-colors" style={{ backgroundColor: statusColor }} title={connState} />
 
-        <HighlightedInputView
-          value={activeTab.url}
-          onChange={(v) => updateTab(activeTab.id, { url: v })}
-          onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
-          placeholder="wss://echo.websocket.org"
-          disabled={connState === 'connected'}
-          suggestions={urlSuggestions}
-          mockServers={mockSuggestions}
-          accentColor="var(--color-protocol-websocket)"
-          size="lg"
-          borderRadius={6}
-        />
+        {/* URL input — shrinks down to minWidth; past that the bar scrolls horizontally
+            instead of squeezing/overlapping. */}
+        <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
+          <HighlightedInputView
+            value={activeTab.url}
+            onChange={(v) => updateTab(activeTab.id, { url: v })}
+            onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
+            placeholder="wss://echo.websocket.org"
+            disabled={connState === 'connected'}
+            suggestions={urlSuggestions}
+            mockServers={mockSuggestions}
+            accentColor="var(--color-protocol-socketio)"
+            size="lg"
+            borderRadius={6}
+          />
+        </div>
 
         {/* Namespace / path */}
         <TextInputView
@@ -316,21 +348,26 @@ export function SocketIOPanel() {
           title="Namespace / Path"
           placeholder="/socket.io"
           size="lg"
+          className="flex-shrink-0"
           style={{ width: 200 }}
         />
 
         {connState === 'disconnected' ? (
-          <ButtonView
+          <DropDownButtonView
+            className="flex-shrink-0"
             label="Connect"
-            iconLeft={<ConnectIcon size={12} />}
+            icon={<ConnectIcon size={12} />}
             size="lg"
             variant="primary"
             accentColor="var(--color-protocol-socketio)"
-            disabled={!activeTab.url.trim()}
-            onClick={handleConnect}
+            disabled={!isValidProtocolUrl(activeTab.url, 'socketio')}
+            onPrimaryClick={() => handleConnect(false)}
+            items={sioConnectItems}
+            align="right"
           />
         ) : (
           <ButtonView
+            className="flex-shrink-0"
             label="Disconnect"
             iconLeft={<DisconnectIcon size={12} />}
             size="lg"
@@ -341,6 +378,7 @@ export function SocketIOPanel() {
 
         {/* Save SplitButton */}
         <DropDownButtonView
+          className="flex-shrink-0"
           label="Save"
           icon={<SaveIcon size={12} />}
           items={sioSaveItems}
@@ -579,6 +617,19 @@ export function SocketIOPanel() {
           </div>
         </div>
       </div>
+
+      {showConnectPayload && (
+        <ConnectPayloadModal
+          protocol="socketio"
+          accentColor="var(--color-protocol-socketio)"
+          contentType={activeTab.authData?.['sio_init_format'] || 'json'}
+          body={activeTab.authData?.['sio_init_body'] || ''}
+          onContentTypeChange={(v) => setInitField('sio_init_format', v)}
+          onBodyChange={(v) => setInitField('sio_init_body', v)}
+          onSendAndConnect={handleSendAndConnect}
+          onClose={() => setShowConnectPayload(false)}
+        />
+      )}
     </div>
   );
 }

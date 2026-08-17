@@ -20,6 +20,7 @@ import {
   IconButtonView,
   type ContextMenuItem,
 } from '@salilvnair/dui';
+import { isValidProtocolUrl, urlValidationHint } from '../../services/url-validation';
 
 const ACCENT = 'var(--color-protocol-soap)';
 
@@ -155,9 +156,10 @@ export function SoapUrlBar() {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 bg-[var(--color-panel)]">
+      <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 bg-[var(--color-panel)] overflow-x-auto overflow-y-hidden">
         {/* Import WSDL button */}
         <ButtonView
+          className="flex-shrink-0"
           label="WSDL"
           iconLeft={<UploadIcon size={11} />}
           variant="secondary"
@@ -166,8 +168,9 @@ export function SoapUrlBar() {
           title="Import WSDL"
         />
 
-        {/* Version (1.1 / 1.2) + Endpoint URL — unified DUI component */}
-        <div className="flex-[2] min-w-0">
+        {/* Version (1.1 / 1.2) + Endpoint URL — unified DUI component. Shrinks down to
+            minWidth; past that the bar scrolls horizontally instead of squeezing/overlapping. */}
+        <div className="flex-[2] min-w-0" style={{ minWidth: 140 }}>
           <SelectTextInputView
             selectOptions={SOAP_VERSION_OPTIONS}
             selectValue={soapVersion}
@@ -191,6 +194,7 @@ export function SoapUrlBar() {
         {/* Invoke / Cancel */}
         {activeTab.loading ? (
           <ButtonView
+            className="flex-shrink-0"
             label="Cancel"
             iconLeft={<StopSquareIcon size={12} />}
             variant="danger"
@@ -199,18 +203,21 @@ export function SoapUrlBar() {
           />
         ) : (
           <ButtonView
+            className="flex-shrink-0"
             label="Invoke"
             iconLeft={<PlayIcon size={12} />}
             variant="primary"
             size="lg"
             accentColor={ACCENT}
-            disabled={!activeTab.url.trim()}
+            disabled={!isValidProtocolUrl(activeTab.url, 'soap')}
+          title={urlValidationHint(activeTab.url, 'soap') ?? undefined}
             onClick={handleInvoke}
           />
         )}
 
         {/* Save */}
         <DropDownButtonView
+          className="flex-shrink-0"
           label="Save"
           icon={<SaveIcon size={13} />}
           variant="secondary"

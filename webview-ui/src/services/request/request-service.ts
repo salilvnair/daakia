@@ -230,6 +230,14 @@ export function saveRequest(tab: RequestTab) {
         method: getDisplayMethod(tab),
         url: tab.url,
         data: JSON.stringify(data),
+        // Carry over the tab's last response, same as History already does.
+        status: tab.response?.status,
+        statusText: tab.response?.statusText,
+        responseTime: tab.response?.time,
+        responseSize: tab.response?.size,
+        responseData: tab.response
+          ? JSON.stringify({ headers: tab.response.headers, body: tab.response.body.slice(0, 50000), contentType: tab.response.contentType })
+          : undefined,
       },
     });
 

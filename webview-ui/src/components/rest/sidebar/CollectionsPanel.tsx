@@ -6,7 +6,7 @@ import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
-import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ImportExportIcon, type CollectionProperties } from '../../shared';
+import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ExportResponseOptionModal, ImportExportIcon, type CollectionProperties } from '../../shared';
 import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
 import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon } from '../../../icons';
@@ -146,6 +146,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [showScreenshotImport, setShowScreenshotImport] = useState(false);
   const [showLogsImport, setShowLogsImport] = useState(false);
   const [showInsomniaImport, setShowInsomniaImport] = useState(false);
+  const [pendingExport, setPendingExport] = useState<{ type: string; collectionId?: string; formatLabel: string } | null>(null);
   // Sprint 11 state
   const [showSequenceComposer, setShowSequenceComposer] = useState(false);
   const [knowledgeGraphNode, setKnowledgeGraphNode] = useState<CollectionTreeNode | null>(null);
@@ -164,8 +165,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
     const handler = (event: MessageEvent) => {
       const msg = event.data;
       if (msg.type === 'collectionsData') {
-        // Only process responses matching this panel's protocol
-        if (msg.protocol && msg.protocol !== protocol) return;
+        // Only process responses matching this panel's protocol. Fail closed on a
+        // missing tag too — an untagged broadcast is never safe to apply to whichever
+        // panel happens to be mounted right now (was the root cause of imports randomly
+        // showing up under the wrong protocol tab).
+        if (msg.protocol !== protocol) return;
         const data = msg.collections ?? [];
         setTree(data);
         setStoreCollections(protocol, data);
@@ -583,8 +587,8 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       {
         id: 'export', label: 'Export', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />,
         children: [
-          { id: 'export-daakia',  label: 'Daakia JSON',         shortcut: 'J', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportCollectionDaakia',  collectionId: targetId }); close(); } },
-          { id: 'export-postman', label: 'Postman',             shortcut: 'M', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportCollectionPostman',  collectionId: targetId }); close(); } },
+          { id: 'export-daakia',  label: 'Daakia JSON',         shortcut: 'J', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionDaakia', collectionId: targetId, formatLabel: 'Daakia JSON' }); close(); } },
+          { id: 'export-postman', label: 'Postman',             shortcut: 'M', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionPostman', collectionId: targetId, formatLabel: 'Postman' }); close(); } },
           { id: 'export-insomnia',label: 'Insomnia',            shortcut: 'I', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionInsomnia', collectionId: targetId }); close(); } },
           { id: 'export-bruno',   label: 'Bruno (.bru)',        shortcut: 'B', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportCollectionBruno',    collectionId: targetId }); close(); } },
           { id: 'export-httpie',  label: 'HTTPie',              shortcut: 'H', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionHttpie',   collectionId: targetId }); close(); } },
@@ -785,6 +789,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
             position={headerMenu?.kind === 'importExport' ? { x: headerMenu.x, y: headerMenu.y } : undefined}
             onClose={() => setHeaderMenu(null)}
             items={[
+              { id: 'import-daakia', label: 'Import from Daakia JSON', shortcut: 'D', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-accent)' }} />, onClick: () => { postMsg({ type: 'importCollectionDaakia' }); setHeaderMenu(null); } },
               { id: 'import-postman', label: 'Import from Postman', shortcut: 'P', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-method-post)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
               { id: 'import-openapi', label: 'Import from OpenAPI', shortcut: 'O', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
               { id: 'import-bruno', label: 'Import from Bruno', shortcut: 'B', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'importBrunoRequest' }); setHeaderMenu(null); } },
@@ -796,7 +801,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
               ...(aiEnabled('generateScenario')     ? [{ id: 'ai-scenario',        label: 'Generate Scenario (AI)',      shortcut: 'G', icon: <SparkleIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { setShowScenarioGenerator(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
               ...(aiEnabled('reverseEngineer')      ? [{ id: 'ai-reverse-engineer',label: 'Reverse Engineer (AI)',       shortcut: 'R', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowReverseEngineer(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
               { id: 'sep1', label: '', separator: true },
-              { id: 'export-json', label: 'Export as JSON', shortcut: 'E', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { postMsg({ type: 'exportCollectionDaakia' }); setHeaderMenu(null); } },
+              { id: 'export-json', label: 'Export as JSON', shortcut: 'E', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionDaakia', formatLabel: 'Daakia JSON' }); setHeaderMenu(null); } },
             ] as DuiContextMenuItem[]}
           />
           <ContextMenuView
@@ -998,6 +1003,19 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           danger
           onConfirm={handleDeleteAllCollections}
           onCancel={() => setShowDeleteAllConfirm(false)}
+        />
+      )}
+
+      {pendingExport && (
+        <ExportResponseOptionModal
+          open
+          formatLabel={pendingExport.formatLabel}
+          accentColor="var(--color-warning)"
+          onConfirm={(includeResponse) => {
+            postMsg({ type: pendingExport.type, collectionId: pendingExport.collectionId, includeResponse });
+            setPendingExport(null);
+          }}
+          onCancel={() => setPendingExport(null)}
         />
       )}
 

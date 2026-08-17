@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCollectionTree, type CollectionTreeNode, type CollectionRequestRow } from '../storage/db';
+import { getCollectionTree, getCollectionSubtree, getAllCollectionTrees, type CollectionTreeNode, type CollectionRequestRow } from '../storage/db';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -39,6 +39,18 @@ function collectRequests(node: CollectionTreeNode): CollectionRequestRow[] {
   return reqs;
 }
 
+type DaakiaExportNode = CollectionTreeNode & { protocol?: string };
+
+/** DB reads always fetch response columns (cheap, and needed for trash-restore) —
+ * strip them back out unless the user opted into bundling responses in this export. */
+function stripResponseFields(nodes: DaakiaExportNode[]): DaakiaExportNode[] {
+  return nodes.map(node => ({
+    ...node,
+    requests: node.requests.map(({ status, status_text, response_time, response_size, response_data, ...rest }) => rest),
+    children: stripResponseFields(node.children as DaakiaExportNode[]),
+  }));
+}
+
 // ─── 5.4.5 — Daakia JSON ──────────────────────────────────────────────────────
 
 export async function handleExportCollectionDaakia(
@@ -46,9 +58,13 @@ export async function handleExportCollectionDaakia(
   postMessage: PostMessage,
 ) {
   const collectionId = msg.collectionId as string;
-  const tree = getCollectionTree();
-  const node = collectionId ? findNode(tree, collectionId) : null;
-  const toExport = node ? [node] : tree;
+  const includeResponse = msg.includeResponse === true;
+  // Every node carries its own `protocol` so a re-import can restore it to the right
+  // sidebar tab instead of defaulting everything to REST — this is the native format,
+  // it must round-trip losslessly.
+  const node = collectionId ? getCollectionSubtree(collectionId) : null;
+  let toExport: DaakiaExportNode[] = node ? [node] : getAllCollectionTrees();
+  if (!includeResponse) { toExport = stripResponseFields(toExport); }
 
   const defaultName = node ? `${node.name}.daakia.json` : 'collections.daakia.json';
   const uri = await vscode.window.showSaveDialog({
@@ -64,11 +80,11 @@ export async function handleExportCollectionDaakia(
 
 // ─── 5.4.6 — Postman v2.1 ────────────────────────────────────────────────────
 
-function toPostmanItem(node: CollectionTreeNode): unknown {
+function toPostmanItem(node: CollectionTreeNode, includeResponse: boolean): unknown {
   const items: unknown[] = [];
 
   for (const child of node.children) {
-    items.push(toPostmanItem(child));
+    items.push(toPostmanItem(child, includeResponse));
   }
 
   for (const req of node.requests) {
@@ -94,12 +110,31 @@ function toPostmanItem(node: CollectionTreeNode): unknown {
           query: params,
         },
       },
-      response: [],
+      response: includeResponse ? buildPostmanResponse(req) : [],
       event: buildPostmanScripts(d),
     });
   }
 
   return { name: node.name, item: items };
+}
+
+/** Postman's `item[].response[]` array — one saved example built from our last
+ * captured response, in the shape Postman itself writes when you "Save Response". */
+function buildPostmanResponse(req: CollectionRequestRow): unknown[] {
+  if (!req.response_data) return [];
+  let parsed: { headers?: Record<string, string>; body?: string; contentType?: string } = {};
+  try { parsed = JSON.parse(req.response_data); } catch { return []; }
+  const headerEntries = Object.entries(parsed.headers || {});
+  return [{
+    name: 'Saved Response',
+    originalRequest: { method: req.method, url: { raw: req.url } },
+    status: req.status_text || '',
+    code: req.status || 0,
+    _postman_previewlanguage: (parsed.contentType || '').includes('json') ? 'json' : 'text',
+    header: headerEntries.map(([key, value]) => ({ key, value })),
+    body: parsed.body || '',
+    responseTime: req.response_time ?? null,
+  }];
 }
 
 function buildPostmanAuth(d: Record<string, unknown>): unknown {
@@ -148,14 +183,14 @@ export async function handleExportCollectionPostman(
   postMessage: PostMessage,
 ) {
   const collectionId = msg.collectionId as string;
-  const tree = getCollectionTree();
-  const node = collectionId ? findNode(tree, collectionId) : null;
+  const includeResponse = msg.includeResponse === true;
+  const node = collectionId ? getCollectionSubtree(collectionId) : null;
   if (!node && !collectionId) {
     postMessage({ type: 'toast', toastType: 'error', message: 'No collection selected for export.' });
     return;
   }
 
-  const toExport = node || { id: 'root', name: 'Daakia Export', parent_id: null, sort_order: 0, children: tree, requests: [] };
+  const toExport = node || { id: 'root', name: 'Daakia Export', parent_id: null, sort_order: 0, children: getAllCollectionTrees(), requests: [] };
   const defaultName = `${toExport.name}.postman_collection.json`;
 
   const uri = await vscode.window.showSaveDialog({
@@ -172,12 +207,12 @@ export async function handleExportCollectionPostman(
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
       _exporter_id: 'daakia',
     },
-    item: [...toExport.children.map(toPostmanItem), ...toExport.requests.map(req => {
+    item: [...toExport.children.map(c => toPostmanItem(c, includeResponse)), ...toExport.requests.map(req => {
       const d = parseRequestData(req);
       return {
         name: req.name,
         request: { method: req.method, header: (d.headers as { key: string; value: string }[] || []).map(h => ({ key: h.key, value: h.value })), url: { raw: req.url }, auth: buildPostmanAuth(d), body: buildPostmanBody(d) },
-        response: [],
+        response: includeResponse ? buildPostmanResponse(req) : [],
         event: buildPostmanScripts(d),
       };
     })],

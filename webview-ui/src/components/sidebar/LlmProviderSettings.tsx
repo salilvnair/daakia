@@ -211,6 +211,7 @@ type ViewMode = 'pills' | 'list';
 
 function ProviderCard({ provider }: { provider: AiProviderConfig }) {
   const { updateProvider, toggleProvider, removeProvider, toggleModel, addModel, removeModel, setDefaultProvider } = useAiProvidersStore();
+  const { hasKey } = useAiKeysStore();
   const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
   const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
   const [expanded, setExpanded] = useState(false);
@@ -259,10 +260,22 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
             <BrandIcon size={18} />
           </div>
         )}
-        <TextInputView value={provider.name} onChange={e => updateProvider(provider.id, { name: e.target.value })} placeholder="Provider name" size="sm" accentColor={accent} style={{ width: 120 }} />
-        <TextInputView value={provider.id} onChange={e => updateProvider(provider.id, { id: e.target.value })} placeholder="provider-id" size="sm" accentColor={accent} style={{ width: 100, fontFamily: 'monospace', fontSize: 11 }} />
-        <TextInputView value={provider.baseUrl} onChange={e => updateProvider(provider.id, { baseUrl: e.target.value })} placeholder="https://api.example.com/v1" size="sm" accentColor={accent} style={{ flex: 1, fontFamily: 'monospace', fontSize: 11 }} />
+        {/* Editable fields live inside the row that toggles expansion, so their clicks must not
+            bubble — otherwise clicking into the URL to edit it collapses the card underneath you. */}
+        <div className="flex items-center gap-2 flex-1 min-w-0" onClick={e => e.stopPropagation()}>
+          <TextInputView value={provider.name} onChange={e => updateProvider(provider.id, { name: e.target.value })} placeholder="Provider name" size="sm" accentColor={accent} style={{ width: 120 }} />
+          <TextInputView value={provider.id} onChange={e => updateProvider(provider.id, { id: e.target.value })} placeholder="provider-id" size="sm" accentColor={accent} style={{ width: 100, fontFamily: 'monospace', fontSize: 11 }} />
+          <TextInputView value={provider.baseUrl} onChange={e => updateProvider(provider.id, { baseUrl: e.target.value })} placeholder="https://api.example.com/v1" size="sm" accentColor={accent} style={{ flex: 1, fontFamily: 'monospace', fontSize: 11 }} />
+        </div>
         <span className="text-[10px] text-[var(--color-text-muted)] flex-shrink-0 ml-1">{provider.models.length} model{provider.models.length !== 1 ? 's' : ''}</span>
+        {/* Key-status dot — the API key manager itself only exists in the expanded body now,
+            so the collapsed row still needs to answer "is this one configured?" at a glance. */}
+        <span className="flex-shrink-0 flex items-center" title={hasKey(provider.id) ? 'API key stored' : 'No API key stored — expand to add one'}>
+          <KeyIcon
+            size={12}
+            style={{ color: hasKey(provider.id) ? accent : 'var(--color-text-muted)', opacity: hasKey(provider.id) ? 1 : 0.35 }}
+          />
+        </span>
         {/* Default provider selector — always visible when default, shown on hover otherwise */}
         <button
           type="button"
@@ -276,22 +289,17 @@ function ProviderCard({ provider }: { provider: AiProviderConfig }) {
         <IconButtonView size="sm" icon={<TrashIcon size={12} />} accentColor="var(--color-error)" className="opacity-60 hover:opacity-100" onClick={e => { e.stopPropagation(); setDeleteTarget({ type: 'provider' }); }} />
       </div>
 
-      {/* Model pills — collapsed: click a pill to set it as the default model */}
-      {!expanded && provider.models.some(m => m.enabled) && (
-        <div className="px-6 pb-2">
-          <ModelPills
-            models={provider.models.filter(m => m.enabled)}
-            accent={accent}
-            selectedModelId={isDefault ? defaultModelId : undefined}
-            onPillClick={(modelId) => setDefaultProvider(provider.id, modelId)}
-          />
+      {/* Collapsed = the header row and nothing else: name, id, URL, model count, key status,
+          default radio. Model pills and the API key manager used to render underneath even when
+          collapsed, which made a "collapsed" card taller than the screen for providers with a
+          large model list (Copilot ships well over a hundred). Both now live in the body. */}
+
+      {/* API Key manager */}
+      {expanded && (
+        <div className="px-6 pb-2 pt-1">
+          <ApiKeyManager providerId={provider.id} />
         </div>
       )}
-
-      {/* API Key manager (always visible) */}
-      <div className="px-6 pb-2">
-        <ApiKeyManager providerId={provider.id} />
-      </div>
 
       {/* Expanded model list */}
       {expanded && (
@@ -440,6 +448,7 @@ function DaakiaMockProviderCard({ provider }: { provider: AiProviderConfig }) {
   const { providers, addProvider, toggleProvider, setDefaultProvider, updateProvider } = useAiProvidersStore();
   const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
   const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
+  const [expanded, setExpanded] = useState(false);
 
   const isDefault = defaultProviderId === 'daakia-mock';
 
@@ -468,14 +477,24 @@ function DaakiaMockProviderCard({ provider }: { provider: AiProviderConfig }) {
 
   return (
     <div className="rounded-lg overflow-hidden group/card" style={{ border: `1.5px solid color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 40%, transparent)`, backgroundColor: 'transparent' }}>
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <DaakiaMockProviderIcon size={20} />
-        <div onClick={e => e.stopPropagation()}>
+      {/* Header — this card had no expand/collapse at all, so its URL row and model pill were
+          permanently on screen. It now matches the other two: one row collapsed, detail inside. */}
+      <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        {expanded
+          ? <ChevronDownIcon size={12} style={{ color: DAAKIA_MOCK_ACCENT }} className="flex-shrink-0" />
+          : <ChevronRightIcon size={12} style={{ color: DAAKIA_MOCK_ACCENT }} className="flex-shrink-0" />
+        }
+        <div onClick={e => e.stopPropagation()} className="flex items-center">
           <ToggleSwitchView checked={provider.enabled} onChange={handleToggle} accentColor={DAAKIA_MOCK_ACCENT} size="xs" />
         </div>
-        <span className="text-[13px] font-semibold flex-1" style={{ color: DAAKIA_MOCK_ACCENT }}>DaakiaAI (Mock)</span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: `color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 15%, transparent)`, color: DAAKIA_MOCK_ACCENT }}>
+        <DaakiaMockProviderIcon size={20} />
+        <span className="text-[13px] font-semibold flex-shrink-0" style={{ color: DAAKIA_MOCK_ACCENT }}>DaakiaAI (Mock)</span>
+        {/* baseUrl ships empty — the user points it at their own mock server — so say so rather
+            than leaving a blank gap where every other card shows a URL. */}
+        <span className="text-[11px] font-mono flex-1 truncate" style={{ color: 'var(--color-text-muted)', opacity: provider.baseUrl ? 1 : 0.55 }}>
+          {provider.baseUrl || 'no server URL set — expand to configure'}
+        </span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0" style={{ backgroundColor: `color-mix(in srgb, ${DAAKIA_MOCK_ACCENT} 15%, transparent)`, color: DAAKIA_MOCK_ACCENT }}>
           No API key needed
         </span>
         {/* Default provider selector */}
@@ -490,7 +509,8 @@ function DaakiaMockProviderCard({ provider }: { provider: AiProviderConfig }) {
         </button>
       </div>
 
-      {/* Description + BaseUrl config */}
+      {/* Description + BaseUrl config — expanded only */}
+      {expanded && (
       <div className="px-4 pb-3 flex flex-col gap-2">
         <p className="text-[11px] text-[var(--color-text-muted)]">
           Routes AI requests to your locally running Daakia AI mock server (OpenAI-compatible).
@@ -534,6 +554,7 @@ function DaakiaMockProviderCard({ provider }: { provider: AiProviderConfig }) {
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -549,7 +570,9 @@ function CopilotProviderCard({ provider }: { provider: AiProviderConfig }) {
   const defaultModelId = useAiProvidersStore(s => s.defaultModelId);
   const [liveModels, setLiveModels] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingModels, setLoadingModels] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  // Collapsed by default like every other provider card — Copilot's model list is the longest
+  // of them all, so starting it open was what buried the rest of the panel.
+  const [expanded, setExpanded] = useState(false);
 
   const isDefault = defaultProviderId === 'copilot';
 
@@ -611,8 +634,12 @@ function CopilotProviderCard({ provider }: { provider: AiProviderConfig }) {
           <ToggleSwitchView checked={provider.enabled} onChange={handleToggle} accentColor={COPILOT_ACCENT} size="xs" />
         </div>
         <CopilotBrandIcon size={20} />
-        <span className="text-[13px] font-semibold flex-1" style={{ color: COPILOT_ACCENT }}>GitHub Copilot</span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: `color-mix(in srgb, ${COPILOT_ACCENT} 15%, transparent)`, color: COPILOT_ACCENT }}>
+        <span className="text-[13px] font-semibold flex-shrink-0" style={{ color: COPILOT_ACCENT }}>GitHub Copilot</span>
+        <span className="text-[11px] font-mono flex-1 truncate text-[var(--color-text-muted)]">{provider.baseUrl}</span>
+        <span className="text-[10px] text-[var(--color-text-muted)] flex-shrink-0">
+          {loadingModels ? 'loading…' : `${displayModels.length} model${displayModels.length !== 1 ? 's' : ''}`}
+        </span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0" style={{ backgroundColor: `color-mix(in srgb, ${COPILOT_ACCENT} 15%, transparent)`, color: COPILOT_ACCENT }}>
           No API key needed
         </span>
         {/* Default provider selector */}
@@ -627,25 +654,17 @@ function CopilotProviderCard({ provider }: { provider: AiProviderConfig }) {
         </button>
       </div>
 
-      {/* Always-visible info */}
-      <div className="px-4 pb-2 text-[11px] text-[var(--color-text-muted)]">
-        Uses your active GitHub Copilot subscription via VS Code's Language Model API.
-        {isDefault && (
-          <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: `color-mix(in srgb, ${COPILOT_ACCENT} 12%, transparent)`, color: COPILOT_ACCENT }}>
-            ● Default
-          </span>
-        )}
-      </div>
-
-      {/* Model pills — collapsed: click a pill to set it as the default Copilot model */}
-      {!expanded && displayModels.some(m => m.enabled) && (
-        <div className="px-4 pb-2">
-          <ModelPills
-            models={displayModels.filter(m => m.enabled)}
-            accent={COPILOT_ACCENT}
-            selectedModelId={isDefault ? defaultModelId : undefined}
-            onPillClick={(modelId) => setDefaultProvider('copilot', modelId)}
-          />
+      {/* Body — expanded only. Copilot exposes well over a hundred models via the VS Code LM
+          API, and rendering that pill wall under a *collapsed* card pushed every other provider
+          off the bottom of the panel. Collapsed is now strictly the one header row above. */}
+      {expanded && (
+        <div className="px-4 pb-2 text-[11px] text-[var(--color-text-muted)]">
+          Uses your active GitHub Copilot subscription via VS Code's Language Model API.
+          {isDefault && (
+            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: `color-mix(in srgb, ${COPILOT_ACCENT} 12%, transparent)`, color: COPILOT_ACCENT }}>
+              ● Default
+            </span>
+          )}
         </div>
       )}
 

@@ -211,6 +211,11 @@ function _createSchema(db: SqlJsDatabase): void {
       url           TEXT NOT NULL DEFAULT '',
       data          TEXT NOT NULL DEFAULT '{}',
       sort_order    INTEGER NOT NULL DEFAULT 0,
+      status         INTEGER,
+      status_text    TEXT,
+      response_time  INTEGER,
+      response_size  INTEGER,
+      response_data  TEXT,
       created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE
     )
@@ -396,6 +401,24 @@ function _runMigrations(db: SqlJsDatabase): void {
       if (!cols.includes('protocol')) {
         db.run("ALTER TABLE request_history ADD COLUMN protocol TEXT NOT NULL DEFAULT 'rest'");
         db.run('CREATE INDEX IF NOT EXISTS idx_history_protocol ON request_history(protocol)');
+      }
+    }
+  } catch {
+    // table doesn't exist yet — schema will handle it
+  }
+
+  // Migration 4: Add response columns to collection_requests (History already captured
+  // a response for every request; saving to a Collection silently dropped it).
+  try {
+    const info = db.exec("PRAGMA table_info(collection_requests)");
+    if (info.length > 0) {
+      const cols = info[0].values.map(row => row[1]);
+      if (!cols.includes('response_data')) {
+        db.run('ALTER TABLE collection_requests ADD COLUMN status INTEGER');
+        db.run('ALTER TABLE collection_requests ADD COLUMN status_text TEXT');
+        db.run('ALTER TABLE collection_requests ADD COLUMN response_time INTEGER');
+        db.run('ALTER TABLE collection_requests ADD COLUMN response_size INTEGER');
+        db.run('ALTER TABLE collection_requests ADD COLUMN response_data TEXT');
       }
     }
   } catch {
@@ -770,6 +793,13 @@ export interface CollectionRequestRow {
   url: string;
   data?: string;
   sort_order?: number;
+  // Last captured response — mirrors request_history's response columns, populated
+  // when the request is saved from a tab/history item that already has a response.
+  status?: number;
+  status_text?: string;
+  response_time?: number;
+  response_size?: number;
+  response_data?: string;
 }
 
 export interface CollectionTreeNode {
@@ -1078,7 +1108,7 @@ export function getCollectionSubtree(id: string): (CollectionTreeNode & { protoc
   }
   colStmt.free();
 
-  const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order FROM collection_requests ORDER BY sort_order');
+  const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data FROM collection_requests ORDER BY sort_order');
   while (reqStmt.step()) {
     const req = reqStmt.getAsObject() as unknown as CollectionRequestRow;
     flatMap.get(req.collection_id)?.requests.push(req);
@@ -1091,6 +1121,37 @@ export function getCollectionSubtree(id: string): (CollectionTreeNode & { protoc
     }
   }
   return flatMap.get(id);
+}
+
+/** Get every root collection across all protocols, each node tagged with its own
+ * `protocol` — used for a full lossless Daakia JSON export ("Export as JSON" with
+ * no specific collection selected). Mirrors {@link getCollectionSubtree}. */
+export function getAllCollectionTrees(): (CollectionTreeNode & { protocol?: string })[] {
+  if (!_db) { return []; }
+  const colStmt = _db.prepare('SELECT id, name, parent_id, sort_order, protocol FROM collections ORDER BY sort_order, name');
+  const flatMap = new Map<string, CollectionTreeNode & { protocol?: string }>();
+  while (colStmt.step()) {
+    const row = colStmt.getAsObject() as { id: string; name: string; parent_id: string | null; sort_order: number; protocol?: string };
+    flatMap.set(row.id, { ...row, children: [], requests: [] });
+  }
+  colStmt.free();
+
+  const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data FROM collection_requests ORDER BY sort_order');
+  while (reqStmt.step()) {
+    const req = reqStmt.getAsObject() as unknown as CollectionRequestRow;
+    flatMap.get(req.collection_id)?.requests.push(req);
+  }
+  reqStmt.free();
+
+  const roots: (CollectionTreeNode & { protocol?: string })[] = [];
+  for (const node of flatMap.values()) {
+    if (node.parent_id && flatMap.has(node.parent_id)) {
+      flatMap.get(node.parent_id)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
 }
 
 /** Delete a collection and all its children (cascade) + requests */
@@ -1123,18 +1184,35 @@ export function deleteCollection(id: string): void {
 
 export function upsertCollectionRequest(req: CollectionRequestRow): void {
   if (!_db) { return; }
+  // Response fields are optional — a plain request-definition save (e.g. importers,
+  // rename, reorder) must not blow away a previously-captured response, so on conflict
+  // an omitted value falls back to whatever is already stored via COALESCE.
   _db.run(
-    `INSERT INTO collection_requests (id, collection_id, name, method, url, data)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET name = excluded.name, method = excluded.method, url = excluded.url, data = excluded.data`,
-    [req.id, req.collection_id, req.name, req.method, req.url, req.data ?? '{}']
+    // sort_order is COALESCEd like the response fields: importers pass an explicit
+    // ordering (it was previously missing from the column list entirely, so imported
+    // collections came back in arbitrary order), while a plain save that omits it must
+    // not reset a request's position back to the column default.
+    `INSERT INTO collection_requests (id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name, method = excluded.method, url = excluded.url, data = excluded.data,
+       sort_order = COALESCE(excluded.sort_order, sort_order),
+       status = COALESCE(excluded.status, status),
+       status_text = COALESCE(excluded.status_text, status_text),
+       response_time = COALESCE(excluded.response_time, response_time),
+       response_size = COALESCE(excluded.response_size, response_size),
+       response_data = COALESCE(excluded.response_data, response_data)`,
+    [
+      req.id, req.collection_id, req.name, req.method, req.url, req.data ?? '{}', req.sort_order ?? null,
+      req.status ?? null, req.status_text ?? null, req.response_time ?? null, req.response_size ?? null, req.response_data ?? null,
+    ]
   );
   _scheduleSave();
 }
 
 export function getCollectionRequestById(id: string): CollectionRequestRow | undefined {
   if (!_db) { return undefined; }
-  const stmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order FROM collection_requests WHERE id = ?');
+  const stmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data FROM collection_requests WHERE id = ?');
   stmt.bind([id]);
   let result: CollectionRequestRow | undefined;
   if (stmt.step()) { result = stmt.getAsObject() as unknown as CollectionRequestRow; }

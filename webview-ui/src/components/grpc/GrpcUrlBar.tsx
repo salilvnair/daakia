@@ -18,6 +18,7 @@ import {
   HighlightedInputView,
   type ContextMenuItem,
 } from '@salilvnair/dui';
+import { isValidProtocolUrl, urlValidationHint } from '../../services/url-validation';
 
 const ACCENT = 'var(--color-protocol-grpc)';
 
@@ -159,9 +160,10 @@ export function GrpcUrlBar() {
   ];
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-panel)]">
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-panel)] overflow-x-auto overflow-y-hidden">
       {/* TLS toggle */}
       <IconButtonView
+        className="flex-shrink-0"
         icon={<LockIcon size={14} />}
         size="lg"
         active={activeTab.grpcTls}
@@ -170,8 +172,9 @@ export function GrpcUrlBar() {
         onClick={toggleTls}
       />
 
-      {/* Endpoint input */}
-      <div className="flex-[2] min-w-0">
+      {/* Endpoint input — shrinks down to minWidth; past that the bar scrolls horizontally
+          instead of squeezing/overlapping. */}
+      <div className="flex-[2] min-w-0" style={{ minWidth: 140 }}>
         <HighlightedInputView
           value={activeTab.url}
           onChange={(val) => {
@@ -196,6 +199,7 @@ export function GrpcUrlBar() {
       {/* Invoke / Cancel button */}
       {activeTab.loading ? (
         <ButtonView
+          className="flex-shrink-0"
           label="Cancel"
           iconLeft={<StopSquareIcon size={12} />}
           variant="danger"
@@ -204,18 +208,21 @@ export function GrpcUrlBar() {
         />
       ) : (
         <ButtonView
+          className="flex-shrink-0"
           label="Invoke"
           iconLeft={<PlayIcon size={12} />}
           variant="primary"
           size="lg"
           accentColor={ACCENT}
-          disabled={!activeTab.url.trim()}
+          disabled={!isValidProtocolUrl(activeTab.url, 'grpc')}
+          title={urlValidationHint(activeTab.url, 'grpc') ?? undefined}
           onClick={handleInvoke}
         />
       )}
 
       {/* Save DropDownButton */}
       <DropDownButtonView
+        className="flex-shrink-0"
         label="Save"
         icon={<SaveIcon size={13} />}
         variant="secondary"

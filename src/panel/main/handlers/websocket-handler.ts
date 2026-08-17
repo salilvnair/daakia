@@ -47,6 +47,21 @@ export function handleWsConnect(
     ws.on('open', () => {
       postMessage({ type: 'ws:connected', tabId });
 
+      // Connect-time payload ("Send & Connect"). The WS handshake is semantically a GET and
+      // cannot carry a body, so the only correct place for it is the first frame after open —
+      // which is exactly the auth/subscribe handshake most WS servers expect anyway.
+      const initBody = typeof msg.initBody === 'string' ? resolveEnvString(msg.initBody, vars) : '';
+      if (initBody) {
+        try {
+          ws.send(initBody);
+          // Distinct type: 'ws:message' is unconditionally rendered as an inbound frame by the
+          // panel, so reusing it here would mislabel our own payload as something the server sent.
+          postMessage({ type: 'ws:initSent', tabId, data: initBody });
+        } catch (err: any) {
+          postMessage({ type: 'ws:error', tabId, error: `Failed to send connect payload: ${err.message}` });
+        }
+      }
+
       // Record in history
       try {
         insertHistory({

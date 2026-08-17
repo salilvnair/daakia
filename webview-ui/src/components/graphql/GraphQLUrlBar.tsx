@@ -11,6 +11,7 @@ import { PatternBaselinePopup } from '../ai/AiRequestPatternStatus';
 import { AiGqlFederationModal } from '../ai/AiGqlFederationModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { logUiEvent } from '../../store/ui-audit-store';
+import { isValidProtocolUrl, urlValidationHint } from '../../services/url-validation';
 
 const ACCENT = 'var(--color-protocol-graphql)';
 
@@ -89,14 +90,15 @@ export function GraphQLUrlBar() {
   ];
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 bg-[var(--color-panel)]">
+    <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 bg-[var(--color-panel)] overflow-x-auto overflow-y-hidden">
       {/* Protocol badge */}
-      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-graphql)] bg-[color-mix(in_srgb,var(--color-protocol-graphql)_10%,transparent)]">
+      <span className="flex-shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-graphql)] bg-[color-mix(in_srgb,var(--color-protocol-graphql)_10%,transparent)]">
         GQL
       </span>
 
-      {/* Endpoint input */}
-      <div className="flex-1 min-w-0">
+      {/* Endpoint input — shrinks down to minWidth; past that the bar scrolls horizontally
+          instead of squeezing/overlapping. */}
+      <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
         <HighlightedInputView
           value={activeTab.url}
           onChange={(v) => updateTab(activeTab.id, { url: v })}
@@ -113,16 +115,19 @@ export function GraphQLUrlBar() {
       {/* Connect/Disconnect button — size="lg" matching REST UrlBar */}
       {!isConnected ? (
         <ButtonView
+          className="flex-shrink-0"
           label={isConnecting ? 'Connecting...' : 'Connect'}
           variant="primary"
           size="lg"
           iconLeft={<ConnectIcon size={12} />}
           accentColor={ACCENT}
-          disabled={!activeTab.url.trim() || isConnecting}
+          disabled={!isValidProtocolUrl(activeTab.url, 'graphql') || isConnecting}
+          title={urlValidationHint(activeTab.url, 'graphql') ?? undefined}
           onClick={handleConnect}
         />
       ) : (
         <ButtonView
+          className="flex-shrink-0"
           label="Disconnect"
           variant="primary"
           size="lg"
@@ -134,6 +139,7 @@ export function GraphQLUrlBar() {
 
       {/* Save DropDownButton — size="lg" matching REST UrlBar */}
       <DropDownButtonView
+        className="flex-shrink-0"
         label="Save"
         icon={<SaveIcon size={13} />}
         variant="secondary"

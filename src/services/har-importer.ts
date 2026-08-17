@@ -201,7 +201,8 @@ export function importHarFile(jsonContent: string): ImportResult {
     const creatorName = parsed.log.creator?.name ?? 'Browser';
     const collectionName = `HAR Import (${creatorName})`;
     const collectionId = randomUUID();
-    upsertCollection(collectionId, collectionName, null);
+    // HAR files capture browser HTTP traffic — always REST-shaped.
+    upsertCollection(collectionId, collectionName, null, 'rest');
 
     // Group entries by domain
     const domainMap = new Map<string, HarEntry[]>();

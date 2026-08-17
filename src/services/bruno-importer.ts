@@ -340,9 +340,9 @@ export function importBrunoCollection(folderPath: string): ImportResult {
       } catch { /* use folder name */ }
     }
 
-    // Create root collection
+    // Create root collection — Bruno collections are always REST-shaped.
     const collectionId = randomUUID();
-    upsertCollection(collectionId, collectionName, null);
+    upsertCollection(collectionId, collectionName, null, 'rest');
 
     // Walk the folder structure
     const requestCount = importBruFolder(folderPath, collectionId, 0);

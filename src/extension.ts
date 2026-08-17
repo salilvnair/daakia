@@ -8,6 +8,7 @@ import { importPostmanCollection } from './services/postman-importer';
 import { importOpenAPISpec, isOpenAPISpec } from './services/openapi-importer';
 import { importHarFile, isHarFile } from './services/har-importer';
 import { importBrunoCollection } from './services/bruno-importer';
+import { importDaakiaCollection } from './services/daakia-importer';
 import { importThunderClientCollection, isThunderClientCollection } from './services/thunder-importer';
 import { importHttpieCollection, isHttpieFile } from './services/httpie-importer';
 import { WelcomeViewProvider } from './panel/sidebar/WelcomeViewProvider';
@@ -174,7 +175,11 @@ export async function activate(context: vscode.ExtensionContext) {
                   : importPostmanCollection(content);
           MainPanel.createOrShow(context.extensionUri);
           if (result.success) {
-            MainPanel.currentPanel?.postMessage({ type: 'collectionsData', collections: getCollectionTree() });
+            // Postman/OpenAPI/HAR/Thunder/HTTPie collections are always REST-shaped —
+            // tag the broadcast so only the REST sidebar panel (matching what actually
+            // changed in the DB) absorbs it, instead of whichever protocol tab happens
+            // to be active right now.
+            MainPanel.currentPanel?.postMessage({ type: 'collectionsData', protocol: 'rest', collections: getCollectionTree('rest') });
             MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'success', message: `Imported "${result.collectionName}" (${result.requestCount} requests)` });
           } else {
             MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'error', message: `Import failed: ${result.error}` });
@@ -201,7 +206,9 @@ export async function activate(context: vscode.ExtensionContext) {
           const result = importBrunoCollection(uri[0].fsPath);
           MainPanel.createOrShow(context.extensionUri);
           if (result.success) {
-            MainPanel.currentPanel?.postMessage({ type: 'collectionsData', collections: getCollectionTree() });
+            // Bruno collections are always REST-shaped — same reasoning as the
+            // Postman/OpenAPI/HAR/Thunder/HTTPie import above.
+            MainPanel.currentPanel?.postMessage({ type: 'collectionsData', protocol: 'rest', collections: getCollectionTree('rest') });
             MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'success', message: `Imported "${result.collectionName}" (${result.requestCount} requests)` });
           } else {
             MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'error', message: `Bruno import failed: ${result.error}` });
@@ -209,6 +216,36 @@ export async function activate(context: vscode.ExtensionContext) {
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Failed to read Bruno folder';
           void vscode.window.showErrorMessage(`Bruno import failed: ${msg}`);
+        }
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('daakia.importDaakiaCollection', async () => {
+      const uri = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        filters: { 'Daakia JSON': ['json'] },
+        title: 'Import Collection (Daakia JSON)',
+      });
+      if (uri?.[0]) {
+        try {
+          const content = fs.readFileSync(uri[0].fsPath, 'utf-8');
+          const result = importDaakiaCollection(content);
+          MainPanel.createOrShow(context.extensionUri);
+          if (result.success) {
+            // A single Daakia JSON file can carry roots from several protocols at
+            // once — refresh only the ones actually touched by this import.
+            for (const protocol of result.protocols) {
+              MainPanel.currentPanel?.postMessage({ type: 'collectionsData', protocol, collections: getCollectionTree(protocol) });
+            }
+            MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'success', message: `Imported "${result.collectionName}" (${result.requestCount} requests)` });
+          } else {
+            MainPanel.currentPanel?.postMessage({ type: 'toast', toastType: 'error', message: `Import failed: ${result.error}` });
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to read file';
+          void vscode.window.showErrorMessage(`Import failed: ${msg}`);
         }
       }
     })

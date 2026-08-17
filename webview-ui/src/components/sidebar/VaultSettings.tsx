@@ -36,6 +36,18 @@ export function VaultSettings() {
       const msg = event.data;
       if (msg.type === 'vault:statusData') {
         setStatus(msg.status);
+        // Every vault handler in the extension ends by posting fresh status, so this is
+        // the one signal guaranteed to arrive after ANY vault operation. Releasing `busy`
+        // here makes the panel self-healing: "Clear Vault" set busy='clear' and the
+        // extension replied with status only — no clearResult — so nothing ever released
+        // it and every button (including Create Vault on the form that reappears) stayed
+        // permanently disabled until the panel was remounted.
+        setBusy(null);
+      } else if (msg.type === 'vault:clearResult') {
+        setBusy(null);
+        setPassphrase('');
+        setChanging(false);
+        addToast({ type: msg.result.ok ? 'success' : 'error', message: msg.result.message });
       } else if (msg.type === 'vault:setResult') {
         setBusy(null);
         if (msg.result.ok) {
@@ -87,12 +99,50 @@ export function VaultSettings() {
 
   return (
     <div className="px-5 py-4 flex flex-col gap-6">
+      {/* Copy rules learned the hard way:
+          - never the phrase "at rest" — beside REST/GraphQL/gRPC tabs it reads as the protocol
+          - lead with what it protects you from, not with the cipher name. "AES-256-GCM" answers
+            a question nobody asked; "anyone with your laptop can read your token" is the reason
+            the feature exists. */}
       <div>
         <p className="text-[14px] font-semibold text-[var(--color-text-primary)]">Vault</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">
-          Set a passphrase to encrypt variables flagged "Secret" in Environments at rest (AES-256-GCM). Everything else is stored exactly as it is today.
+          Password-protects the values on an Environment's <strong className="font-semibold text-[var(--color-text-secondary)]">Secrets</strong> tab.
+          Without a vault those sit in Daakia's database as readable text, so anyone with your
+          laptop, a backup or a disk image can read your production tokens.
         </p>
       </div>
+
+      {/* The walkthrough earns its space only while the user is still deciding. Once a vault
+          exists the status card below says everything that still matters. */}
+      {!status.configured && (
+        <div className="rounded-lg border px-3.5 py-3" style={{ borderColor: 'var(--color-surface-border)', background: 'var(--color-overlay-subtle)' }}>
+          <p className="text-[11px] font-semibold mb-2" style={{ color: ACCENT }}>How it works</p>
+          <ol className="text-[11px] flex flex-col gap-2" style={{ color: 'var(--color-text-secondary)' }}>
+            <li>
+              <span className="font-semibold">1.</span> Put the value under <strong className="font-semibold">Environment → Secrets</strong> —
+              say <code className="font-mono">apiToken</code> = <code className="font-mono">sk_live_9f2a…</code> — and keep using
+              it as <code className="font-mono">{'{{apiToken}}'}</code>, exactly as you do now.
+            </li>
+            <li>
+              <span className="font-semibold">2.</span> Set a passphrase below. Secrets you already saved are re-encrypted straight away:
+              on disk <code className="font-mono">sk_live_9f2a…</code> becomes <code className="font-mono">enc:v1:…</code> (AES-256-GCM).
+              The key is derived from your passphrase and never written to disk.
+            </li>
+            <li>
+              <span className="font-semibold">3.</span> Nothing about your workflow changes. Requests still resolve <code className="font-mono">{'{{apiToken}}'}</code> to
+              the real value, and the passphrase lives in your OS keychain so the vault unlocks on launch — no retyping.
+            </li>
+          </ol>
+          <p className="text-[11px] mt-2.5 pt-2.5 border-t" style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)' }}>
+            Exports and Git Sync already replace secret values with <code className="font-mono">REDACTED</code>, so an environment
+            stays shareable. Ordinary variables, collections and history are stored exactly as they are today.
+          </p>
+          <p className="text-[11px] mt-1.5" style={{ color: 'var(--color-text-muted)' }}>
+            Only worth turning on if a real credential lives in an Environment — for localhost and mock servers it buys you nothing.
+          </p>
+        </div>
+      )}
 
       {/* Status */}
       <div className="rounded-lg overflow-hidden border" style={{
@@ -157,6 +207,23 @@ export function VaultSettings() {
               </ButtonView>
             )}
           </div>
+
+          {/* Escape hatch. Clear Vault used to live ONLY in the unlocked actions row below, so a
+              user who could not remember the passphrase had no way off this screen at all — no
+              reset, no start-over, nothing. Forgetting the passphrase is exactly when you most
+              need the reset, so it belongs here too. */}
+          {status.configured && !status.unlocked && !changing && (
+            <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--color-surface-border)' }}>
+              <p className="text-[11px] text-[var(--color-text-muted)] mb-2">
+                Can't remember it? Start over with a new passphrase. Values already encrypted stay
+                encrypted and unreadable — but they are not deleted, so if the old passphrase ever
+                comes back to you, set that same one again and they become readable.
+              </p>
+              <ButtonView size="md" variant="secondary" accentColor="var(--color-error)" onClick={() => setConfirmClear(true)} disabled={busy !== null}>
+                Reset Vault
+              </ButtonView>
+            </div>
+          )}
         </div>
       )}
 
@@ -169,11 +236,15 @@ export function VaultSettings() {
         </div>
       )}
 
+      {/* The consequence is completely different depending on whether we can still read the
+          secrets, so the dialog must not describe both with one scary sentence. */}
       {confirmClear && (
         <ConfirmDialog
-          title="Clear Vault"
-          message="This permanently forgets the passphrase (from the OS keychain and Daakia's stored verifier). Any secret environment values already encrypted become unrecoverable — you'll need to re-enter them. This cannot be undone."
-          confirmLabel="Clear Vault"
+          title={status.unlocked ? 'Clear Vault' : 'Reset Vault'}
+          message={status.unlocked
+            ? "This forgets the passphrase (from the OS keychain and Daakia's stored verifier) and turns encryption off. Because the vault is unlocked, your secret values are decrypted back to plain values first — nothing is lost, they simply stop being encrypted."
+            : "The vault is locked, so Daakia cannot read your encrypted secrets and cannot decrypt them. This forgets the passphrase so you can set a new one and carry on. Values already encrypted stay encrypted and unreadable — they are NOT deleted, so if you later remember the old passphrase, setting that same one again makes them readable. Any secret you need before then must be re-entered by hand."}
+          confirmLabel={status.unlocked ? 'Clear Vault' : 'Reset Vault'}
           danger
           onConfirm={handleClear}
           onCancel={() => setConfirmClear(false)}

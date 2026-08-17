@@ -5,6 +5,14 @@ import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
 import type { CollectionRequest } from './tree-helpers';
 
+/** Backfill a stable id on any form-data/url-encoded row missing one (older
+ *  imports/saves never assigned one) — file-row selection is keyed by id, so
+ *  two rows sharing `id: undefined` clobber each other's file picker. */
+function withRowIds(rows: unknown): any[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row: any) => (row?.id ? row : { ...row, id: crypto.randomUUID() }));
+}
+
 /** Derive bodyContentType from bodyMode for legacy saved data missing the field */
 function deriveContentType(bodyMode: string): string {
   switch (bodyMode) {
@@ -41,6 +49,16 @@ interface HistoryItem {
 export function openCollectionRequest(req: CollectionRequest, forceNewTab = false, protocol?: string) {
   const { tabs, addTab, setActiveTab } = useTabsStore.getState();
 
+  // Fire this FIRST, before the dedup early-return and before the tab exists. Collection
+  // properties carry the collection's variables ({{baseUrl}} and friends), inherited
+  // headers and inherited auth; request-service reads them out of propertiesCache and
+  // silently skips all three on a cache miss. It used to be the last line of this
+  // function, which meant (a) focusing an already-open tab never requested them at all,
+  // and (b) even on a fresh tab the fetch raced the user's first Send — so the first
+  // send after opening an imported request could go out with unresolved {{vars}} and no
+  // inherited Content-Type, and "open in a new tab" then appeared to fix it.
+  postMsg({ type: 'getCollectionProperties', id: req.collection_id });
+
   if (!forceNewTab) {
     const existing = tabs.find(t => t.id === `c_${req.id}` || t.requestId === req.id);
     if (existing) {
@@ -49,7 +67,12 @@ export function openCollectionRequest(req: CollectionRequest, forceNewTab = fals
     }
   }
 
-  const config = req.data ? JSON.parse(req.data) : {};
+  // Never let one malformed stored request stop the tab from opening — an unguarded
+  // parse here threw and nothing happened at all when clicked.
+  let config: Record<string, any> = {};
+  if (req.data) {
+    try { config = JSON.parse(req.data); } catch { config = {}; }
+  }
   addTab({
     id: forceNewTab ? undefined : `c_${req.id}`,
     protocol: protocol || 'rest',
@@ -63,8 +86,8 @@ export function openCollectionRequest(req: CollectionRequest, forceNewTab = fals
     bodyMode: typeof config.bodyMode === 'string' ? config.bodyMode : 'none',
     bodyRaw: typeof config.bodyRaw === 'string' ? config.bodyRaw : '',
     bodyContentType: typeof config.bodyContentType === 'string' ? config.bodyContentType : deriveContentType(config.bodyMode || 'none'),
-    bodyFormData: Array.isArray(config.bodyFormData) ? config.bodyFormData : [],
-    bodyUrlEncoded: Array.isArray(config.bodyUrlEncoded) ? config.bodyUrlEncoded : [],
+    bodyFormData: withRowIds(config.bodyFormData),
+    bodyUrlEncoded: withRowIds(config.bodyUrlEncoded),
     authType: typeof config.authType === 'string' ? config.authType : 'none',
     authData: config.authData && typeof config.authData === 'object' ? config.authData : {},
     preRequestScript: typeof config.preRequestScript === 'string' ? config.preRequestScript : '',
@@ -113,9 +136,6 @@ export function openCollectionRequest(req: CollectionRequest, forceNewTab = fals
       mcpSettings: (config.mcpSettings as any) || undefined,
     } : {}),
   } as any);
-
-  // Pre-load collection properties for variable resolution
-  postMsg({ type: 'getCollectionProperties', id: req.collection_id });
 }
 
 /** Replay a history item in a tab (deduplicated unless forced) */
@@ -134,6 +154,9 @@ export function replayHistoryItem(item: HistoryItem, forceNewTab = false, protoc
   if (item.request_data) {
     try { requestConfig = JSON.parse(item.request_data); } catch { /* ignore */ }
   }
+
+  const bodyFormData = withRowIds(requestConfig.bodyFormData);
+  const bodyUrlEncoded = withRowIds(requestConfig.bodyUrlEncoded);
 
   let response = null;
   if (item.response_data) {
@@ -163,8 +186,8 @@ export function replayHistoryItem(item: HistoryItem, forceNewTab = false, protoc
     params: (requestConfig.params as any) || [],
     authType: (requestConfig.authType as any) || 'none',
     authData: (requestConfig.authData as any) || {},
-    bodyFormData: (requestConfig.bodyFormData as any) || [],
-    bodyUrlEncoded: (requestConfig.bodyUrlEncoded as any) || [],
+    bodyFormData,
+    bodyUrlEncoded,
     variables: (requestConfig.variables as any) || [],
     preRequestScript: (requestConfig.preRequestScript as string) || '',
     postResponseScript: (requestConfig.postResponseScript as string) || '',
@@ -219,7 +242,7 @@ export function replayHistoryItem(item: HistoryItem, forceNewTab = false, protoc
   } as any);
 
   // Verify file paths for form-data file uploads (history doesn't store file content)
-  verifyFormDataFilePaths(forceNewTab ? undefined : `h_${item.id}`, requestConfig.bodyFormData as any[]);
+  verifyFormDataFilePaths(forceNewTab ? undefined : `h_${item.id}`, bodyFormData);
 }
 
 /** Ask extension to verify file paths exist for form-data file rows */

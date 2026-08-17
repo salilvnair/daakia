@@ -4,6 +4,7 @@ import { useUiStateStore } from '../../../store/ui-state-store';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { postMsg } from '../../../vscode';
 import { ConnectIcon, DisconnectIcon, SendIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon, AutoScrollIcon, SaveIcon, MoreVerticalIcon, SparkleIcon } from '../../../icons';
+import { ConnectPayloadModal } from '../shared/ConnectPayloadModal';
 import {
   HighlightedInputView,
   DropDownButtonView,
@@ -34,6 +35,7 @@ import type { AiBodyGenerateHandle } from '../../ai/AiBodyGenerate';
 import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { isValidProtocolUrl, urlValidationHint } from '../../../services/url-validation';
 
 // ────────── State Types ──────────
 
@@ -134,6 +136,7 @@ export function WebSocketPanel() {
   const [showPreflight, setShowPreflight] = useState(false);
   const [showPatternStatus, setShowPatternStatus] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [showConnectPayload, setShowConnectPayload] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
@@ -209,6 +212,18 @@ export function WebSocketPanel() {
             }]);
           }
           break;
+        // Connect-time payload the host sent for us the moment the socket opened — logged as
+        // outbound so the transcript reads in the true order it went over the wire.
+        case 'ws:initSent':
+          if (msg.tabId === activeTab.id) {
+            setMessages(prev => [...prev, {
+              id: crypto.randomUUID(),
+              direction: 'sent',
+              data: msg.data,
+              timestamp: Date.now(),
+            }]);
+          }
+          break;
         case 'ws:error':
           if (msg.tabId === activeTab.id) {
             setConnState('disconnected');
@@ -227,12 +242,12 @@ export function WebSocketPanel() {
     return () => window.removeEventListener('message', handler);
   }, [activeTab?.id]);
 
-  const handleConnect = useCallback(() => {
+  const handleConnect = useCallback((withPayload = false) => {
     if (!activeTab) return;
     const url = activeTab.url.trim();
     if (!url) return;
 
-    logUiEvent('ws.connect', { url });
+    logUiEvent('ws.connect', { url, withPayload });
     setConnState('connecting');
     postMsg({
       type: 'ws:connect',
@@ -240,8 +255,29 @@ export function WebSocketPanel() {
       url,
       protocols: activeTab.authData?.['ws_protocols'] || '',
       envId: activeTab.envId,
+      ...(withPayload ? { initBody: activeTab.authData?.['ws_init_body'] || '' } : {}),
     });
   }, [activeTab]);
+
+  const handleSendAndConnect = useCallback(() => {
+    setShowConnectPayload(false);
+    handleConnect(true);
+  }, [handleConnect]);
+
+  const setInitField = useCallback((key: string, v: string) => {
+    if (activeTab) updateTab(activeTab.id, { authData: { ...activeTab.authData, [key]: v } });
+  }, [activeTab, updateTab]);
+
+  // In-component (unlike the module-level wsSaveItems) because it closes over modal state.
+  const wsConnectItems: ContextMenuItem[] = [
+    {
+      id: 'send-and-connect',
+      label: 'Send and Connect',
+      icon: <SendIcon size={13} />,
+      iconColor: 'var(--color-success)',
+      onClick: () => setShowConnectPayload(true),
+    },
+  ];
 
   const handleDisconnect = useCallback(() => {
     if (!activeTab) return;
@@ -399,9 +435,9 @@ export function WebSocketPanel() {
       <RealtimeProtocolSelector />
 
       {/* URL bar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 overflow-x-auto overflow-y-hidden">
         {/* Protocol badge */}
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-websocket)] bg-[rgba(76,175,80,0.12)]">
+        <span className="flex-shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-websocket)] bg-[rgba(76,175,80,0.12)]">
           WS
         </span>
 
@@ -412,33 +448,40 @@ export function WebSocketPanel() {
           title={connState}
         />
 
-        {/* URL input */}
-        <HighlightedInputView
-          value={activeTab.url}
-          onChange={(v) => updateTab(activeTab.id, { url: v })}
-          onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
-          placeholder="wss://echo.websocket.org"
-          disabled={connState === 'connected'}
-          suggestions={urlSuggestions}
-          mockServers={mockSuggestions}
-          accentColor={ACCENT}
-          size="lg"
-          borderRadius={6}
-        />
+        {/* URL input — shrinks down to minWidth; past that the bar scrolls horizontally
+            instead of squeezing/overlapping. */}
+        <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
+          <HighlightedInputView
+            value={activeTab.url}
+            onChange={(v) => updateTab(activeTab.id, { url: v })}
+            onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
+            placeholder="wss://echo.websocket.org"
+            disabled={connState === 'connected'}
+            suggestions={urlSuggestions}
+            mockServers={mockSuggestions}
+            accentColor={ACCENT}
+            size="lg"
+            borderRadius={6}
+          />
+        </div>
 
         {/* Connect/Disconnect button */}
         {connState === 'disconnected' ? (
-          <ButtonView
+          <DropDownButtonView
+            className="flex-shrink-0"
             label="Connect"
-            iconLeft={<ConnectIcon size={12} />}
+            icon={<ConnectIcon size={12} />}
             variant="primary"
             size="lg"
             accentColor={ACCENT}
-            disabled={!activeTab.url.trim()}
-            onClick={handleConnect}
+            disabled={!isValidProtocolUrl(activeTab.url, 'websocket')}
+            onPrimaryClick={() => handleConnect(false)}
+            items={wsConnectItems}
+            align="right"
           />
         ) : (
           <ButtonView
+            className="flex-shrink-0"
             label="Disconnect"
             iconLeft={<DisconnectIcon size={12} />}
             variant="primary"
@@ -450,6 +493,7 @@ export function WebSocketPanel() {
 
         {/* Save DropDownButton */}
         <DropDownButtonView
+          className="flex-shrink-0"
           label="Save"
           icon={<SaveIcon size={12} />}
           variant="secondary"
@@ -708,6 +752,19 @@ export function WebSocketPanel() {
           </div>
         </div>
       </div>
+
+      {showConnectPayload && (
+        <ConnectPayloadModal
+          protocol="websocket"
+          accentColor={ACCENT}
+          contentType={activeTab.authData?.['ws_init_format'] || 'json'}
+          body={activeTab.authData?.['ws_init_body'] || ''}
+          onContentTypeChange={(v) => setInitField('ws_init_format', v)}
+          onBodyChange={(v) => setInitField('ws_init_body', v)}
+          onSendAndConnect={handleSendAndConnect}
+          onClose={() => setShowConnectPayload(false)}
+        />
+      )}
     </div>
   );
 }

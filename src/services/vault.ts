@@ -172,7 +172,7 @@ export async function setVaultPassphrase(passphrase: string): Promise<{ ok: bool
   await storeVaultPassphrase(passphrase);
   _cachedKey = key;
   const migratedCount = migrateExistingSecrets(key);
-  return { ok: true, message: 'Vault configured — secret environment values are now encrypted at rest.', migratedCount };
+  return { ok: true, message: 'Vault configured — secret environment values are now encrypted on disk.', migratedCount };
 }
 
 /** Unlocks the vault with an existing passphrase (e.g. after a fresh clone / cleared keychain). */
@@ -203,8 +203,66 @@ export function lockVault(): void {
 
 /** Permanently forgets the passphrase (DB verifier + OS keychain copy). Existing encrypted
  * values become unrecoverable — callers must confirm with the user before calling this. */
-export async function clearVault(): Promise<void> {
+/** Decrypts every `enc:v1:` secret value back to plaintext with the current key — the inverse of
+ * `migrateExistingSecrets`. Used when clearing an UNLOCKED vault: at that moment we can still
+ * read everything, so turning the feature off has no business destroying data. */
+function revertSecretsToPlaintext(key: Buffer): number {
+  let reverted = 0;
+  for (const row of getAllEnvironments()) {
+    let variables: Array<Record<string, unknown>>;
+    try { variables = JSON.parse(row.variables || '[]'); } catch { continue; }
+    let changed = false;
+    for (const v of variables) {
+      for (const field of ['initialValue', 'currentValue'] as const) {
+        const val = v[field];
+        if (typeof val === 'string' && isEncryptedValue(val)) {
+          try {
+            v[field] = decryptValue(val, key);
+            changed = true;
+          } catch { /* wrong key for this value — leave the ciphertext rather than lose it */ }
+        }
+      }
+    }
+    if (changed) {
+      upsertEnvironment({ id: row.id, name: row.name, variables: JSON.stringify(variables), is_active: row.is_active });
+      reverted++;
+    }
+  }
+  return reverted;
+}
+
+/** How many secret values are currently stored as ciphertext — lets the UI tell the user
+ * exactly what is at stake before they confirm a destructive clear. */
+export function countEncryptedSecrets(): number {
+  let count = 0;
+  for (const row of getAllEnvironments()) {
+    let variables: Array<Record<string, unknown>>;
+    try { variables = JSON.parse(row.variables || '[]'); } catch { continue; }
+    for (const v of variables) {
+      for (const field of ['initialValue', 'currentValue'] as const) {
+        if (isEncryptedValue(v[field] as string)) { count++; break; }
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * Forgets the passphrase (keychain + verifier).
+ *
+ * Two very different outcomes depending on state, which is why the result says which happened:
+ *  - UNLOCKED — every encrypted value is decrypted back to plaintext first. Nothing is lost;
+ *    this is simply turning the feature off. Previously the key was dropped while the values
+ *    stayed as ciphertext, destroying data we could still read at that exact moment.
+ *  - LOCKED — we cannot read them, so the ciphertext is left exactly as-is. It is deliberately
+ *    NOT wiped: the salt survives a clear, so if the user later remembers the passphrase and
+ *    sets that same one again, the derived key is identical and those values become readable
+ *    again. Wiping them would throw away that last recovery path.
+ */
+export async function clearVault(): Promise<{ revertedCount: number; strandedCount: number }> {
+  const revertedCount = _cachedKey ? revertSecretsToPlaintext(_cachedKey) : 0;
   _cachedKey = null;
   deleteSetting(SETTING_VERIFIER);
   await deleteVaultPassphrase();
+  return { revertedCount, strandedCount: countEncryptedSecrets() };
 }

@@ -121,9 +121,9 @@ export function McpUrlBar() {
           />
         </div>
       )}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-panel)]">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 bg-[var(--color-panel)] overflow-x-auto overflow-y-hidden">
         {/* Protocol badge */}
-        <ProtocolMcpBadge size={28} />
+        <div className="flex-shrink-0"><ProtocolMcpBadge size={28} /></div>
 
         {/* Transport selector */}
         <div className="shrink-0">
@@ -136,9 +136,10 @@ export function McpUrlBar() {
           />
         </div>
 
-        {/* STDIO: command input */}
+        {/* STDIO: command input — shrinks down to minWidth; past that the bar scrolls
+            horizontally instead of squeezing/overlapping. */}
         {transport === 'stdio' && (
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
             <HighlightedInputView
               value={command}
               onChange={handleCommandChange}
@@ -151,9 +152,10 @@ export function McpUrlBar() {
           </div>
         )}
 
-        {/* HTTP/SSE: URL input */}
+        {/* HTTP/SSE: URL input — shrinks down to minWidth; past that the bar scrolls
+            horizontally instead of squeezing/overlapping. */}
         {transport === 'http' && (
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
             <HighlightedInputView
               value={url}
               onChange={handleUrlChange}
@@ -168,6 +170,7 @@ export function McpUrlBar() {
 
         {/* Connect/Disconnect button */}
         <ButtonView
+          className="flex-shrink-0"
           variant="primary"
           size="lg"
           onClick={handleConnect}
@@ -180,6 +183,7 @@ export function McpUrlBar() {
 
         {/* Save */}
         <DropDownButtonView
+          className="flex-shrink-0"
           label="Save"
           icon={<SaveIcon size={13} />}
           variant="secondary"

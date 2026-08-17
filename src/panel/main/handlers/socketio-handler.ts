@@ -37,6 +37,26 @@ export function handleSocketIOConnect(
     }
   }
 
+  // Connect-time payload ("Send & Connect") — Socket.IO carries this natively in the handshake
+  // as `auth`, which the server reads off socket.handshake.auth. It must be an object, so a
+  // non-object or unparseable body is reported rather than silently dropped.
+  let authPayload: Record<string, unknown> | undefined;
+  const rawAuth = typeof msg.initBody === 'string' ? msg.initBody.trim() : '';
+  if (rawAuth) {
+    try {
+      const parsed = JSON.parse(resolveEnvString(rawAuth, vars));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        authPayload = parsed as Record<string, unknown>;
+      } else {
+        postMessage({ type: 'socketio:error', tabId, error: 'Auth payload must be a JSON object' });
+        return;
+      }
+    } catch (err: any) {
+      postMessage({ type: 'socketio:error', tabId, error: `Invalid auth payload JSON: ${err.message}` });
+      return;
+    }
+  }
+
   try {
     const fullUrl = resolvedNamespace !== '/'
       ? `${url.replace(/\/$/, '')}${resolvedNamespace}`
@@ -45,6 +65,7 @@ export function handleSocketIOConnect(
     const socket = io(fullUrl, {
       transports: ['websocket'],
       extraHeaders,
+      ...(authPayload ? { auth: authPayload } : {}),
       reconnection: false, // We handle reconnection manually if needed
       timeout: 15000,
     });

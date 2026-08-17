@@ -28,6 +28,7 @@ import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { logUiEvent } from '../../../store/ui-audit-store';
+import { isValidProtocolUrl, urlValidationHint } from '../../../services/url-validation';
 
 // ---------- Constants ----------
 
@@ -437,8 +438,8 @@ export function MQTTPanel() {
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* URL bar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-mqtt)] bg-[rgba(139,92,246,0.12)]">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 overflow-x-auto overflow-y-hidden">
+        <span className="flex-shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-mqtt)] bg-[rgba(139,92,246,0.12)]">
           MQTT
         </span>
 
@@ -448,17 +449,22 @@ export function MQTTPanel() {
           title={connState}
         />
 
-        <HighlightedInputView
-          value={activeTab.url}
-          onChange={(v) => updateTab(activeTab.id, { url: v })}
-          onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
-          placeholder="wss://test.mosquitto.org:8081"
-          disabled={connState === 'connected'}
-          suggestions={urlSuggestions}
-          mockServers={mockSuggestions}
-          size="lg"
-          borderRadius={6}
-        />
+        {/* URL input — shrinks down to minWidth; past that the bar scrolls horizontally
+            instead of squeezing/overlapping. */}
+        <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
+          <HighlightedInputView
+            value={activeTab.url}
+            onChange={(v) => updateTab(activeTab.id, { url: v })}
+            onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
+            placeholder="wss://test.mosquitto.org:8081"
+            disabled={connState === 'connected'}
+            suggestions={urlSuggestions}
+            mockServers={mockSuggestions}
+            accentColor="var(--color-protocol-mqtt)"
+            size="lg"
+            borderRadius={6}
+          />
+        </div>
 
         {/* Client ID */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -476,16 +482,19 @@ export function MQTTPanel() {
         {/* Connect / Disconnect */}
         {connState === 'disconnected' ? (
           <ButtonView
+            className="flex-shrink-0"
             label="Connect"
             iconLeft={<ConnectIcon size={12} />}
             size="lg"
             variant="primary"
             accentColor="var(--color-protocol-mqtt)"
-            disabled={!activeTab.url.trim()}
+            disabled={!isValidProtocolUrl(activeTab.url, 'mqtt')}
+          title={urlValidationHint(activeTab.url, 'mqtt') ?? undefined}
             onClick={handleConnect}
           />
         ) : (
           <ButtonView
+            className="flex-shrink-0"
             label="Disconnect"
             iconLeft={<DisconnectIcon size={12} />}
             size="lg"
@@ -496,6 +505,7 @@ export function MQTTPanel() {
 
         {/* Save */}
         <DropDownButtonView
+          className="flex-shrink-0"
           label="Save"
           icon={<SaveIcon size={12} />}
           items={saveItems}
@@ -589,7 +599,11 @@ export function MQTTPanel() {
           </button>
 
           {showConfig && (
-            <div className="px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
+            // Two side-by-side columns overlapped at narrow panel widths instead of shrinking —
+            // each row's fixed-width label + flex-1 input + trailing checkbox had no room to
+            // breathe in a ~150px grid cell. Stack both groups in one column instead; the extra
+            // height when the panel is wide is a fair trade for never overlapping when narrow.
+            <div className="px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 flex flex-col gap-2 text-[11px]">
               {/* Left column — credentials */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">

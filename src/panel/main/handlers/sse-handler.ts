@@ -39,13 +39,29 @@ export function handleSseConnect(
     }
   }
 
+  // Optional connect-time payload ("Send & Connect"). Native EventSource can only ever issue
+  // a bodyless GET; because we drive the stream over Node's http directly we can do what the
+  // fetch-event-source pattern does — a real POST/PUT/PATCH whose response is still consumed
+  // as text/event-stream. Absent initMethod this stays byte-for-byte the old GET behaviour.
+  const initMethod = (msg.initMethod as string | undefined)?.toUpperCase();
+  const initBody = typeof msg.initBody === 'string' ? resolveEnvString(msg.initBody, vars) : '';
+  const initContentType = msg.initContentType as string | undefined;
+  const hasInitPayload = !!initMethod && initMethod !== 'GET';
+
+  if (hasInitPayload) {
+    if (initContentType) reqHeaders['Content-Type'] = resolveEnvString(initContentType, vars);
+    // Explicit length keeps servers that reject chunked bodies happy.
+    reqHeaders['Content-Length'] = String(Buffer.byteLength(initBody));
+  }
+
   try {
     const parsedUrl = new URL(url);
     const isHttps = parsedUrl.protocol === 'https:';
     const transport = isHttps ? https : http;
 
-    const req = transport.get(
+    const req = transport.request(
       {
+        method: hasInitPayload ? initMethod : 'GET',
         hostname: parsedUrl.hostname,
         port: parsedUrl.port || (isHttps ? 443 : 80),
         path: parsedUrl.pathname + parsedUrl.search,
@@ -70,6 +86,11 @@ export function handleSseConnect(
               authData: {
                 rt_protocol: 'sse',
                 sse_eventType: (msg.eventType as string) || '',
+                ...(hasInitPayload ? {
+                  sse_init_method: initMethod,
+                  sse_init_contentType: initContentType || '',
+                  sse_init_body: (msg.initBody as string) || '',
+                } : {}),
               },
               headers: headers || [],
             }),
@@ -168,6 +189,10 @@ export function handleSseConnect(
         postMessage({ type: 'sse:error', tabId, error: err.message });
       }
     });
+
+    // transport.request() (unlike transport.get()) never finalises the request itself.
+    if (hasInitPayload && initBody) req.write(initBody);
+    req.end();
 
     connections.set(tabId, req);
   } catch (err: any) {

@@ -19,7 +19,11 @@ const TYPE_OPTIONS = [
 
 export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  // Keyed by row index, not row.id — imported rows can arrive without an id
+  // (or, in principle, with duplicate ids), and an id-keyed Map would let two
+  // rows' hidden <input> refs collide into the same Map slot, silently
+  // routing every file pick to whichever row mounted last.
+  const fileInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
 
   const updateRow = (idx: number, patch: Partial<KeyValueRow>) => {
     const updated = [...rows];
@@ -126,7 +130,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
       {/* Rows */}
       <div className="flex flex-col gap-0">
         {rows.map((row, idx) => (
-          <div key={row.id}>
+          <div key={row.id ?? idx}>
             <div
               className={`grid grid-cols-[32px_1fr_100px_1fr_32px] gap-2 px-1 py-1 group ${!row.enabled ? 'opacity-50' : ''}`}
             >
@@ -176,7 +180,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
               <div className="flex items-center gap-2 h-[28px]">
                 <button
                   type="button"
-                  onClick={() => fileInputRefs.current.get(row.id)?.click()}
+                  onClick={() => fileInputRefs.current.get(idx)?.click()}
                   className="h-[28px] px-2.5 text-[11px] rounded-md bg-[rgba(99,102,241,0.1)] border border-[rgba(99,102,241,0.3)] text-[var(--color-primary)] hover:bg-[rgba(99,102,241,0.18)] cursor-pointer transition-colors whitespace-nowrap"
                 >
                   Choose File
@@ -203,7 +207,7 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
                   <span className="text-[12px] text-[var(--color-text-muted)] truncate flex-1">No file chosen</span>
                 )}
                 <input
-                  ref={(el) => { if (el) fileInputRefs.current.set(row.id, el); }}
+                  ref={(el) => { if (el) fileInputRefs.current.set(idx, el); }}
                   type="file"
                   multiple
                   className="hidden"

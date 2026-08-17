@@ -2,7 +2,7 @@
   "name": "daakia",
   "displayName": "Daakia — API Client",
   "description": "A modern API testing extension for VS Code with AI assistant, collections, environments, and mock servers.",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "license": "MIT",
   "publisher": "salilvnair",
   "repository": {
@@ -137,6 +137,11 @@
         "command": "daakia.importBrunoCollection",
         "title": "Daakia: Import Bruno Collection",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "daakia.importDaakiaCollection",
+        "title": "Daakia: Import Collection (Daakia JSON)",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "daakia.openSettings",

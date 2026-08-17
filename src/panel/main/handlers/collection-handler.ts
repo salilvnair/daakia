@@ -98,9 +98,15 @@ export function handleSaveCollection(msg: Record<string, unknown>, postMessage: 
 
 export function handleSaveRequestToCollection(msg: Record<string, unknown>, postMessage: PostMessage) {
   const collectionId = msg.collectionId as string;
-  const request = msg.request as { id: string; name: string; method: string; url: string; data?: string };
+  const request = msg.request as {
+    id: string; name: string; method: string; url: string; data?: string;
+    status?: number; statusText?: string; responseTime?: number; responseSize?: number; responseData?: string;
+  };
   const protocol = msg.protocol as string | undefined;
-  upsertCollectionRequest({ id: request.id, collection_id: collectionId, name: request.name, method: request.method, url: request.url, data: request.data });
+  upsertCollectionRequest({
+    id: request.id, collection_id: collectionId, name: request.name, method: request.method, url: request.url, data: request.data,
+    status: request.status, status_text: request.statusText, response_time: request.responseTime, response_size: request.responseSize, response_data: request.responseData,
+  });
   handleGetCollections(postMessage, protocol);
 }
 

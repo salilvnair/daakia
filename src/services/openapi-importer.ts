@@ -311,8 +311,8 @@ export function importOpenAPISpec(content: string): ImportResult {
     const collectionName = spec.info?.title ?? 'Imported API';
     const collectionId = randomUUID();
 
-    // Create root collection
-    upsertCollection(collectionId, collectionName, null);
+    // Create root collection — OpenAPI/Swagger specs are always REST-shaped.
+    upsertCollection(collectionId, collectionName, null, 'rest');
 
     // Import all operations
     const requestCount = importOperations(spec, collectionId);

@@ -540,9 +540,18 @@ input[type="number"] {
   align-items: center;
   gap: 10px;
   margin: 6px 12px;
-  overflow: visible;
+  /* Buttons keep their natural size (flex-shrink-0 in JSX); only the URL input shrinks,
+     down to its own min-width — past that the bar scrolls horizontally instead of the
+     buttons compressing into overlapping mush at narrow VS Code panel widths. */
+  overflow-x: auto;
+  overflow-y: hidden;
   position: relative;
-  height: 34px;
+  /* Sized to content, NOT a fixed 34px: the URL pill is 36px tall, and a 34px row
+     with overflow-y:hidden clipped exactly the pill's 1px top and bottom borders —
+     the accent focus ring showed only on the left/right edges. SOAP/GraphQL rows
+     are content-sized, which is why they never had this. */
+  height: auto;
+  min-height: 36px;
   flex-shrink: 0;
 }
 
@@ -1236,25 +1245,38 @@ input[type="number"] {
 .mdv-root p:first-child { margin-top: 0; }
 .mdv-root p:last-child  { margin-bottom: 0; }
 
-/* ── ConvEngine chat — tighter spacing inside chat bubbles ─────────── */
-/* Root: reduce line-height from 1.7 → 1.5 — this is the main cause of
-   large gaps, each block element gets (1.7-1)/2 * 12.5px = 4.4px of
-   half-leading above AND below, adding ~9px of invisible whitespace
-   between every adjacent block pair even before any margins apply.     */
-.daakia-chat-md .mdv-root { line-height: 1.5; }
-.daakia-chat-md .mdv-root p { margin: 0.1em 0; }
-.daakia-chat-md .mdv-root p:first-child { margin-top: 0; }
-.daakia-chat-md .mdv-root p:last-child  { margin-bottom: 0; }
+/* ── ConvEngine chat — markdown inside the assistant bubble ──────────────────
+   THE load-bearing rule is `white-space: normal`.
+
+   convengine-chat's .ce-bubble sets `white-space: pre-wrap` (still true in
+   1.6.4), and white-space INHERITS. Our marked-generated HTML renders inside
+   that bubble, and marked emits a real "\n" between every block element
+   (</p>\n<h2>...). Under pre-wrap each of those newlines paints as an actual
+   blank line — roughly one extra empty line at every block boundary. That was
+   the huge gaps in the chat output, and it is completely immune to margin
+   tuning, which is why previous attempts kept shrinking margins to 0.1em with
+   no visible effect. Resetting white-space is what ns9 and storybook both do
+   (ns9 via hideBubble:true removing the wrapper, storybook via this exact
+   declaration). Everything below is ordinary spacing polish on top.        */
+.daakia-chat-md .mdv-root { white-space: normal; line-height: 1.55; }
+.daakia-chat-md .mdv-root p { margin: 0 0 6px; }
+.daakia-chat-md .mdv-root > :first-child { margin-top: 0; }
+.daakia-chat-md .mdv-root > :last-child  { margin-bottom: 0; }
+.daakia-chat-md .mdv-root p:empty { display: none; }
 .daakia-chat-md .mdv-root ul,
-.daakia-chat-md .mdv-root ol { margin: 0.15em 0; }
-.daakia-chat-md .mdv-root li { margin: 0.06em 0; }
+.daakia-chat-md .mdv-root ol { margin: 6px 0; padding-left: 20px; }
+.daakia-chat-md .mdv-root li { margin: 2px 0; }
+.daakia-chat-md .mdv-root li > p { margin: 0; }
 .daakia-chat-md .mdv-root h1,
 .daakia-chat-md .mdv-root h2,
 .daakia-chat-md .mdv-root h3,
 .daakia-chat-md .mdv-root h4,
-.daakia-chat-md .mdv-root h5 { margin: 0.4em 0 0.15em; }
-.daakia-chat-md .mdv-root hr { margin: 0.4em 0; }
-.daakia-chat-md .mdv-root .mdv-code-block { margin: 0.3em 0; }
+.daakia-chat-md .mdv-root h5 { margin: 12px 0 5px; line-height: 1.25; }
+.daakia-chat-md .mdv-root hr { margin: 10px 0; }
+/* Code blocks keep pre-wrap deliberately — that is the one place where the
+   source whitespace IS the content. */
+.daakia-chat-md .mdv-root pre,
+.daakia-chat-md .mdv-root .mdv-code-block { margin: 8px 0; white-space: pre-wrap; }
 
 /* ── Inline code ────────────────────────────────────────────────────── */
 .mdv-root .mdv-inline-code,
@@ -1287,6 +1309,14 @@ input[type="number"] {
 .mdv-root hr { border: none; border-top: 1px solid rgba(255,255,255,0.09); margin: 0.9em 0; }
 
 /* ── Lists ──────────────────────────────────────────────────────────── */
+/* list-style must be restated: Tailwind's preflight sets `ul, ol { list-style: none }`
+   globally, so markdown lists rendered with no bullets or numbers at all — indented
+   text and nothing else. The ::marker colour rules below had never been able to show,
+   which is what gave it away. */
+.mdv-root ul { list-style: disc outside; }
+.mdv-root ol { list-style: decimal outside; }
+.mdv-root ul ul { list-style: circle outside; }
+.mdv-root ul ul ul { list-style: square outside; }
 .mdv-root ul, .mdv-root ol {
   padding-left: 1.35em;
   margin: 0.35em 0;
@@ -1455,17 +1485,10 @@ input[type="number"] {
 .mdv-root .hljs-template-tag                        { color: #c678dd; }
 .mdv-root .hljs-symbol                              { color: #98c379; }
 
-/* ── Compact MdViewer in Daakia AI chat bubbles ──────────────────────────────── */
-.daakia-chat-md .mdv-root { line-height: 1.5; }
-.daakia-chat-md .mdv-root p { margin: 0.15em 0; }
-.daakia-chat-md .mdv-root p:empty { display: none; }
-.daakia-chat-md .mdv-root h1,
-.daakia-chat-md .mdv-root h2,
-.daakia-chat-md .mdv-root h3 { margin: 0.4em 0 0.2em; }
-.daakia-chat-md .mdv-root li { margin: 0.1em 0; }
-.daakia-chat-md .mdv-root ul,
-.daakia-chat-md .mdv-root ol { margin: 0.2em 0; padding-left: 1.4em; }
-.daakia-chat-md .mdv-root pre { margin: 0.3em 0; }
+/* (The second, duplicate `.daakia-chat-md .mdv-root` block that used to live
+   here has been removed — it silently overrode the block above with slightly
+   different margins and neither of them addressed the real cause. All chat
+   markdown spacing now lives in the single block above.) */
 
 /* ── Fix ConvEngineChat token popup — force solid background ─────────────────── */
 /* The token usage popup (shown when clicking the tok chip) uses a portal

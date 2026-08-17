@@ -139,7 +139,7 @@ export function GrpcMethodSelector() {
   const DisplayIcon = displayConfig.icon;
 
   return (
-    <div ref={containerRef} className="flex items-center gap-1.5 flex-[2] min-w-0 relative">
+    <div ref={containerRef} className="flex items-center gap-1.5 flex-[2] min-w-0 relative" style={{ minWidth: 120 }}>
       {/* Method selector — styled like a dropdown trigger */}
       <div
         className="flex-1 min-w-0 relative cursor-pointer"

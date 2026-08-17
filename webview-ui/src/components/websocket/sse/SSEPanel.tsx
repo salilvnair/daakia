@@ -8,8 +8,9 @@ import {
   ConnectIcon, DisconnectIcon, SaveIcon, TrashIcon, ArrowUpIcon, ArrowDownIcon,
   ArrowDownLeftIcon, AutoScrollIcon, ChevronDownIcon,
   InfoCircleIcon, WarningTriangleIcon, CheckCircleFilledIcon, DownloadIcon, WrapLinesIcon, RadioIcon,
-  MoreVerticalIcon, SparkleIcon,
+  MoreVerticalIcon, SparkleIcon, SendIcon,
 } from '../../../icons';
+import { ConnectPayloadModal } from '../shared/ConnectPayloadModal';
 import {
   HighlightedInputView,
   ButtonView,
@@ -26,6 +27,7 @@ import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
 import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
+import { isValidProtocolUrl, urlValidationHint } from '../../../services/url-validation';
 
 // ────────── Types ──────────
 
@@ -91,6 +93,13 @@ export function SSEPanel() {
   const setEventType = useCallback((v: string) => {
     setEventTypeLocal(v);
     if (activeTab) updateTab(activeTab.id, { authData: { ...activeTab.authData, sse_eventType: v } });
+  }, [activeTab, updateTab]);
+
+  // Connect-time payload (Send & Connect popup) — persisted on the tab like every other
+  // realtime field so it survives tab switches, saves and reloads.
+  const [showConnectPayload, setShowConnectPayload] = useState(false);
+  const setInitField = useCallback((key: string, v: string) => {
+    if (activeTab) updateTab(activeTab.id, { authData: { ...activeTab.authData, [key]: v } });
   }, [activeTab, updateTab]);
 
   // Sync when tab changes
@@ -192,15 +201,35 @@ export function SSEPanel() {
     setErrorLocal(errorCache.get(activeTabId!) ?? null);
   }, [activeTabId]);
 
-  const handleConnect = useCallback(() => {
+  // `withPayload` turns the stream open into a real POST/PUT/PATCH carrying the body composed
+  // in the Send & Connect popup; the plain path stays a bodyless GET exactly as before.
+  const handleConnect = useCallback((withPayload = false) => {
     if (!activeTab) return;
     const url = activeTab.url.trim();
     if (!url) return;
-    logUiEvent('sse.connect', { url });
+    logUiEvent('sse.connect', { url, withPayload });
     setConnState('connecting');
     setError(null);
-    postMsg({ type: 'sse:connect', tabId: activeTab.id, url, eventType, headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [], envId: activeTab.envId });
+    const ad = (activeTab.authData || {}) as Record<string, string>;
+    postMsg({
+      type: 'sse:connect',
+      tabId: activeTab.id,
+      url,
+      eventType,
+      headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [],
+      envId: activeTab.envId,
+      ...(withPayload ? {
+        initMethod: ad['sse_init_method'] || 'POST',
+        initContentType: ad['sse_init_contentType'] || 'application/json',
+        initBody: ad['sse_init_body'] || '',
+      } : {}),
+    });
   }, [activeTab, eventType]);
+
+  const handleSendAndConnect = useCallback(() => {
+    setShowConnectPayload(false);
+    handleConnect(true);
+  }, [handleConnect]);
 
   const handleDisconnect = useCallback(() => {
     if (!activeTab) return;
@@ -262,12 +291,22 @@ export function SSEPanel() {
     },
   ];
 
+  const connectItems: ContextMenuItem[] = [
+    {
+      id: 'send-and-connect',
+      label: 'Send and Connect',
+      icon: <SendIcon size={13} />,
+      iconColor: 'var(--color-success)',
+      onClick: () => setShowConnectPayload(true),
+    },
+  ];
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* URL bar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--color-surface-border)] flex-shrink-0 overflow-x-auto overflow-y-hidden">
         {/* Protocol badge */}
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-sse)] bg-[rgba(245,158,11,0.12)]">
+        <span className="flex-shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-md tracking-wider text-[var(--color-protocol-sse)] bg-[rgba(245,158,11,0.12)]">
           SSE
         </span>
 
@@ -278,19 +317,22 @@ export function SSEPanel() {
           title={connState}
         />
 
-        {/* URL input */}
-        <HighlightedInputView
-          value={activeTab.url}
-          onChange={(v) => updateTab(activeTab.id, { url: v })}
-          onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
-          placeholder="https://api.example.com/events"
-          disabled={connState === 'connected'}
-          suggestions={urlSuggestions}
-          mockServers={mockSuggestions}
-          accentColor="var(--color-protocol-websocket)"
-          size="lg"
-          borderRadius={6}
-        />
+        {/* URL input — shrinks down to minWidth; past that the bar scrolls horizontally
+            instead of squeezing/overlapping. */}
+        <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
+          <HighlightedInputView
+            value={activeTab.url}
+            onChange={(v) => updateTab(activeTab.id, { url: v })}
+            onKeyDown={(e) => { if (e.key === 'Enter') connState === 'disconnected' ? handleConnect() : handleDisconnect(); }}
+            placeholder="https://api.example.com/events"
+            disabled={connState === 'connected'}
+            suggestions={urlSuggestions}
+            mockServers={mockSuggestions}
+            accentColor="var(--color-protocol-sse)"
+            size="lg"
+            borderRadius={6}
+          />
+        </div>
 
         {/* Event type input */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -305,19 +347,24 @@ export function SSEPanel() {
           />
         </div>
 
-        {/* Start/Stop button */}
+        {/* Start/Stop button — plain Start stays the default action; the chevron opens the
+            connect-time payload composer, mirroring REST's Send split button. */}
         {connState === 'disconnected' ? (
-          <ButtonView
+          <DropDownButtonView
+            className="flex-shrink-0"
             label="Start"
-            iconLeft={<ConnectIcon size={12} />}
+            icon={<ConnectIcon size={12} />}
             size="lg"
             variant="primary"
             accentColor="var(--color-protocol-sse)"
-            disabled={!activeTab.url.trim()}
-            onClick={handleConnect}
+            disabled={!isValidProtocolUrl(activeTab.url, 'sse')}
+            onPrimaryClick={() => handleConnect(false)}
+            items={connectItems}
+            align="right"
           />
         ) : (
           <ButtonView
+            className="flex-shrink-0"
             label="Stop"
             iconLeft={<DisconnectIcon size={12} />}
             size="lg"
@@ -328,6 +375,7 @@ export function SSEPanel() {
 
         {/* Save DropDownButton */}
         <DropDownButtonView
+          className="flex-shrink-0"
           label="Save"
           icon={<SaveIcon size={12} />}
           items={sseSaveItems}
@@ -537,6 +585,19 @@ export function SSEPanel() {
           </div>
         </div>
       </div>
+
+      {showConnectPayload && (
+        <ConnectPayloadModal
+          protocol="sse"
+          accentColor="var(--color-protocol-sse)"
+          contentType={ad['sse_init_contentType'] || 'application/json'}
+          body={ad['sse_init_body'] || ''}
+          onContentTypeChange={(v) => setInitField('sse_init_contentType', v)}
+          onBodyChange={(v) => setInitField('sse_init_body', v)}
+          onSendAndConnect={handleSendAndConnect}
+          onClose={() => setShowConnectPayload(false)}
+        />
+      )}
     </div>
   );
 }
