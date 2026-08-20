@@ -81,6 +81,10 @@ export function AiUrlBar() {
 
   const providerInfo = useMemo(() => providers.find(p => p.id === provider), [providers, provider]);
 
+  // Copilot needs no base URL, so its toolbar renders no URL input — see the layout
+  // note on the model field for why that matters to the row's sizing.
+  const hasUrlField = provider !== 'copilot';
+
   const modelOptions = useMemo(() => {
     if (!providerInfo) return [];
     return providerInfo.models.filter(m => m.enabled).map(m => ({ value: m.id, label: m.name }));
@@ -196,31 +200,39 @@ export function AiUrlBar() {
         />
       </div>
 
-      {/* Model selector or free-text input */}
+      {/* Model selector or free-text input.
+          Every other protocol's toolbar has one element that grows to fill the row (the URL
+          bar). Here the URL input only renders for non-Copilot providers — so with Copilot,
+          which is the DEFAULT, nothing flexed and the whole row bunched up on the left with
+          dead space to its right. The model field takes over the growing role whenever the
+          URL input is absent, so the toolbar spans the full width like the others. */}
       {modelOptions.length > 0 ? (
-        <div className="flex-shrink-0">
+        <div className={hasUrlField ? 'flex-shrink-0' : 'flex-1 min-w-0'} style={hasUrlField ? undefined : { minWidth: 160 }}>
           <SelectInputView
             options={modelOptions}
             value={model}
             onChange={handleModelChange}
             size="lg"
             accentColor={ACCENT}
+            style={hasUrlField ? undefined : { width: '100%' }}
           />
         </div>
       ) : (
-        <TextInputView
-          value={model}
-          onChange={(e) => activeTab && updateTab(activeTab.id, { aiModel: e.target.value, dirty: true })}
-          placeholder="Model name"
-          size="lg"
-          accentColor={ACCENT}
-          className="w-[140px] flex-shrink-0"
-        />
+        <div className={hasUrlField ? 'flex-shrink-0' : 'flex-1 min-w-0'} style={hasUrlField ? undefined : { minWidth: 160 }}>
+          <TextInputView
+            value={model}
+            onChange={(e) => activeTab && updateTab(activeTab.id, { aiModel: e.target.value, dirty: true })}
+            placeholder="Model name"
+            size="lg"
+            accentColor={ACCENT}
+            style={hasUrlField ? { width: 140 } : { width: '100%' }}
+          />
+        </div>
       )}
 
       {/* URL input — non-copilot providers only. Shrinks down to minWidth; past that the
           bar scrolls horizontally instead of squeezing/overlapping. */}
-      {provider !== 'copilot' && (
+      {hasUrlField && (
         <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
           <HighlightedInputView
             value={url}
@@ -242,7 +254,7 @@ export function AiUrlBar() {
         size="lg"
         accentColor={ACCENT}
         iconLeft={<SendIcon size={13} />}
-        disabled={loading || (provider !== 'copilot' && !url.trim())}
+        disabled={loading || (hasUrlField && !url.trim())}
         onClick={handleSend}
       />
 
@@ -250,6 +262,7 @@ export function AiUrlBar() {
       <DropDownButtonView
         className="flex-shrink-0"
         label="Save"
+        icon={<SaveIcon size={13} />}
         variant="secondary"
         size="lg"
         items={saveItems}

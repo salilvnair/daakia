@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTabsStore, type HttpMethod } from '../../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { useDebugStore } from '../../../store/debug-store';
-import { GenerateCodeModal, ImportCurlModal } from '../../shared';
+import { GenerateCodeModal, ImportCurlModal, AnchoredMenu } from '../../shared';
 import { SelectTextInputView, DropDownButtonView, ButtonView, IconButtonView, type ContextMenuItem } from '@salilvnair/dui';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 import { postMsg } from '../../../vscode';
@@ -47,16 +47,13 @@ export function UrlBar() {
 
   const preflightCounts = useMemo(() => tab ? countPreflightIssues(tab) : { errors: 0, warnings: 0 }, [tab]);
 
-  // Close overflow menu on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-        setShowOverflow(false);
-      }
-    };
-    if (showOverflow) document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showOverflow]);
+  // NOTE: the old "close overflow menu on outside click" effect that lived here has been
+  // removed. It tested `overflowRef.contains(target)`, which worked only while the menu was a
+  // DOM child of that ref. AnchoredMenu portals the menu to <body>, so a click on a menu ITEM
+  // no longer counted as "inside" — the effect fired on mousedown and unmounted the menu
+  // before mouseup, meaning no click event ever reached the item and its action silently never
+  // ran. AnchoredMenu owns outside-click and Escape itself, and correctly treats both its own
+  // content and the anchor as inside.
 
   if (!tab) return null;
 
@@ -104,11 +101,17 @@ export function UrlBar() {
     if (savedInPlace) updateTab(tab.id, { dirty: false });
   };
 
+  // The menu items do NOT share one precondition, so they can't share one gate:
+  //   • Send and Download / Show code both need a real URL — they either fire the request or
+  //     generate code for it, so with an invalid URL they'd fail or emit nonsense.
+  //   • Import cURL and Clear all are exactly how you GET out of an invalid state, so gating
+  //     them on a valid URL would be the trap this whole fix exists to remove.
+  const urlUsable = isValidProtocolUrl(tab.url, 'rest');
   const sendItems: ContextMenuItem[] = [
-    { id: 'send-download', label: 'Send and Download', icon: <DownloadIcon size={13} style={{ color: 'var(--color-info)' }} />, onClick: handleSendAndDownload },
+    { id: 'send-download', label: 'Send and Download', icon: <DownloadIcon size={13} style={{ color: 'var(--color-info)' }} />, disabled: !urlUsable, onClick: handleSendAndDownload },
     { id: 'sep-1', label: '', separator: true },
     { id: 'import-curl', label: 'Import cURL', icon: <CopyIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { logUiEvent('rest.import_curl'); setShowImportCurl(true); } },
-    { id: 'show-code', label: 'Show code', icon: <CodeIcon size={13} style={{ color: 'var(--color-primary)' }} />, onClick: () => { logUiEvent('rest.show_code'); setShowGenerateCode(true); } },
+    { id: 'show-code', label: 'Show code', icon: <CodeIcon size={13} style={{ color: 'var(--color-primary)' }} />, disabled: !urlUsable, onClick: () => { logUiEvent('rest.show_code'); setShowGenerateCode(true); } },
     { id: 'sep-2', label: '', separator: true },
     { id: 'clear-all', label: 'Clear all', icon: <RefreshIcon size={13} style={{ color: 'var(--color-ctx-close-batch)' }} />, onClick: handleClearAll },
   ];
@@ -162,7 +165,7 @@ export function UrlBar() {
           variant="primary"
           size="lg"
           onPrimaryClick={handleSend}
-          disabled={!isValidProtocolUrl(tab.url, 'rest')}
+          primaryDisabled={!urlUsable}
           items={sendItems}
           align="right"
         />
@@ -197,9 +200,13 @@ export function UrlBar() {
         />
 
         {showOverflow && (
-          <div
-            className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${overflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
-            style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
+          <AnchoredMenu
+            anchorRef={overflowRef}
+            open={showOverflow}
+            onClose={() => setShowOverflow(false)}
+            side="bottom"
+            align="end"
+            minWidth={200}
           >
             <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
               <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>AI Tools</p>
@@ -288,7 +295,7 @@ export function UrlBar() {
                 Schema Drift Monitor
               </button>
             )}
-          </div>
+          </AnchoredMenu>
         )}
 
         {/* Pre-flight popup — same parent as overflow, positions identically */}

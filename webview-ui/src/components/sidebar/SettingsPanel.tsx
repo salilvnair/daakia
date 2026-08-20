@@ -4,11 +4,12 @@ import { useDbStatusStore } from '../../store/db-status-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon } from '../../icons';
+import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon } from '../../icons';
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { GitSyncSettings } from './GitSyncSettings';
 import { VaultSettings } from './VaultSettings';
 import { BinSettings } from './BinSettings';
+import { KeymapSettings } from './KeymapSettings';
 import { PromptLibraryPanel } from './PromptLibraryPanel';
 import { AiFeatureSettings } from './AiFeatureSettings';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
@@ -29,7 +30,7 @@ import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 
-type SettingsSection = 'general' | 'theme' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load';
 
@@ -38,6 +39,7 @@ type ActiveNavId = SettingsSection;
 const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: React.ReactNode }> = {
   'general':         { label: 'General',        icon: <SettingsIcon size={14} /> },
   'theme':           { label: 'Theme',           icon: <SunIcon size={14} /> },
+  'keymap':          { label: 'Keymap',          icon: <KeyboardIcon size={14} /> },
   'mock-server':     { label: 'Mock Server',     icon: <ServerIcon size={14} /> },
   'git-sync':        { label: 'Git Sync',        icon: <GitHubIcon size={14} /> },
   'vault':           { label: 'Vault',           icon: <LockIcon size={14} /> },
@@ -54,6 +56,7 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
   { id: 'g-general', label: 'General', isGroup: true, children: [
     { id: 'general', label: SETTINGS_SECTION_META.general.label, icon: SETTINGS_SECTION_META.general.icon },
     { id: 'theme', label: SETTINGS_SECTION_META.theme.label, icon: SETTINGS_SECTION_META.theme.icon },
+    { id: 'keymap', label: SETTINGS_SECTION_META.keymap.label, icon: SETTINGS_SECTION_META.keymap.icon },
   ] },
   { id: 'g-server', label: 'Server', isGroup: true, children: [
     { id: 'mock-server', label: SETTINGS_SECTION_META['mock-server'].label, icon: SETTINGS_SECTION_META['mock-server'].icon },
@@ -132,6 +135,8 @@ export function SettingsPanel() {
           <div className="h-full flex-1 overflow-y-auto">
             {activeSection === 'general' ? (
               <GeneralSettings />
+            ) : activeSection === 'keymap' ? (
+              <KeymapSettings />
             ) : activeSection === 'mock-server' ? (
               <MockServerSettings />
             ) : activeSection === 'git-sync' ? (

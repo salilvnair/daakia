@@ -10,9 +10,13 @@ import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
+import { normalizeCollectionProtocol } from '../../services/collections';
 
 interface Props {
   onClose: () => void;
+  /** Protocol of the tab this was launched from — collections are stored per protocol,
+   *  so filing under a hardcoded 'rest' hides the result from every other protocol's list. */
+  contextProtocol?: string;
 }
 
 const ACCENT = 'var(--color-protocol-ai)';
@@ -58,7 +62,7 @@ Rules:
 - 6–15 steps is ideal
 - Return ONLY valid JSON`;
 
-export function AiScenarioGeneratorModal({ onClose }: Props) {
+export function AiScenarioGeneratorModal({ onClose, contextProtocol }: Props) {
   const [scenario, setScenario] = useState('');
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [rawResult, setRawResult] = useState('');
@@ -118,7 +122,7 @@ export function AiScenarioGeneratorModal({ onClose }: Props) {
     if (!result) return;
     try {
       const collId = `scenario-${Date.now()}`;
-      postMsg({ type: 'createCollection', id: collId, name: (result.scenarioName as string) || 'AI Scenario', protocol: 'rest' });
+      postMsg({ type: 'createCollection', id: collId, name: (result.scenarioName as string) || 'AI Scenario', protocol: normalizeCollectionProtocol(contextProtocol) });
       setImported(true);
       addToast({ type: 'success', message: `Scenario "${result.scenarioName}" imported!` });
       setTimeout(onClose, 1500);

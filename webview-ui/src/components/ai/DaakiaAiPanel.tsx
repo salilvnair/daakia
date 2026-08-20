@@ -34,6 +34,8 @@ import { AiContractNegotiatorModal } from './AiContractNegotiatorModal';
 import { AiLiveTrafficMirrorModal } from './AiLiveTrafficMirrorModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_LABELS, type AiPromptTemplateKey } from '../../store/prompt-template';
+import { insertIntoComposer } from './composer-insert';
+import { useToastStore } from '../../store/toast-store';
 
 // ─── Suggestion chips ─────────────────────────────────────────────────────────
 
@@ -328,6 +330,7 @@ function DaakiaAiHero() {
  * If the tab somehow lost its prompts (e.g. persisted state), we re-inject here.
  */
 export function DaakiaAiPanel() {
+  const addToast = useToastStore(s => s.addToast);
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
   const updateTab = useTabsStore(s => s.updateTab);
   const defaultProviderId = useAiProvidersStore(s => s.defaultProviderId);
@@ -605,8 +608,16 @@ export function DaakiaAiPanel() {
                 size="xs"
                 borderRadius={9999}
                 onClick={() => {
+                  // Said "click to insert" but only ever copied to the clipboard and closed —
+                  // so clicking a prompt looked like it did nothing at all. Now it really
+                  // inserts, appending so a half-typed question isn't clobbered, and falls
+                  // back to the clipboard only if the composer isn't mounted yet.
                   const text = templates[key];
-                  if (text && navigator.clipboard) navigator.clipboard.writeText(text);
+                  if (!text) return;
+                  if (!insertIntoComposer(text, 'append')) {
+                    navigator.clipboard?.writeText(text);
+                    addToast({ type: 'info', message: 'Prompt copied — paste it into the chat box.' });
+                  }
                   setShowPromptPicker(false);
                 }}
                 title={AI_PROMPT_TEMPLATE_LABELS[key]?.description || key}
@@ -701,7 +712,14 @@ export function DaakiaAiPanel() {
       </div>
 
       {/* 10.7: Save conversation to collection */}
-      {showCollectionModal && <AiConversationToCollectionModal onClose={() => setShowCollectionModal(false)} />}
+      {showCollectionModal && (
+        <AiConversationToCollectionModal
+          // The chat is about contextTab — so its protocol decides which collection list
+          // the export lands in. Without this a GraphQL export filed itself under REST.
+          contextProtocol={contextTab?.protocol}
+          onClose={() => setShowCollectionModal(false)}
+        />
+      )}
       {/* 10.8: Export session as markdown */}
       {showExportModal && <AiSessionExportModal onClose={() => setShowExportModal(false)} />}
       {/* 10.10-10.17: Platform tools */}

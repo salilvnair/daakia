@@ -9,8 +9,11 @@ import { useTabsStore } from '../../store/tabs-store';
 import { useDebugStore } from '../../store/debug-store';
 import { useAiProvidersStore } from '../../store/ai-providers-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
+
+/** Gap kept between a rail popup and both its trigger and the viewport edge. */
+const POPUP_MARGIN = 8;
 import { postMsg } from '../../vscode';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { ButtonView } from '@salilvnair/dui';
@@ -504,14 +507,31 @@ function GitSyncButton() {
   const handleOpen = () => {
     if (!btnRef.current) return;
     const rect = btnRef.current.getBoundingClientRect();
-    const popupW = 240;
-    const popupH = 140;
-    const MARGIN = 8;
-    const rawTop = rect.top;
-    const clampedTop = Math.min(rawTop, window.innerHeight - popupH - MARGIN);
-    setPos({ top: Math.max(MARGIN, clampedTop), left: rect.left - popupW - MARGIN });
+    // Provisional only — the measured placement happens in the layout effect below.
+    setPos({ top: rect.top, left: rect.left - 240 - POPUP_MARGIN });
     setOpen(v => !v);
   };
+
+  // Position from the popup's REAL height, before paint. These rail buttons sit at the very
+  // foot of the window, and the previous code clamped against a HARD-CODED height guess —
+  // whenever the real content was taller than the guess the popup ran off the bottom of the
+  // screen and got cut off. Measuring means it flips/clamps correctly whatever it contains.
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current || !popupRef.current) return;
+    const place = () => {
+      const anchor = btnRef.current!.getBoundingClientRect();
+      const box = popupRef.current!.getBoundingClientRect();
+      setPos({
+        top: Math.max(POPUP_MARGIN, Math.min(anchor.top, window.innerHeight - box.height - POPUP_MARGIN)),
+        left: Math.max(POPUP_MARGIN, anchor.left - box.width - POPUP_MARGIN),
+      });
+    };
+    place();
+    const ro = new ResizeObserver(place);   // content grows once async status arrives
+    ro.observe(popupRef.current);
+    window.addEventListener('resize', place);
+    return () => { ro.disconnect(); window.removeEventListener('resize', place); };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -626,15 +646,31 @@ function AiProviderStatusIcon() {
   const handleOpen = () => {
     if (!btnRef.current) return;
     const rect = btnRef.current.getBoundingClientRect();
-    const popupW = 252;
-    const popupH = 175; // estimated popup height
-    const MARGIN = 8;
-    // Clamp top so popup stays in viewport — align to button top, but shift up if it would overflow
-    const rawTop = rect.top;
-    const clampedTop = Math.min(rawTop, window.innerHeight - popupH - MARGIN);
-    setPos({ top: Math.max(MARGIN, clampedTop), left: rect.left - popupW - MARGIN });
+    // Provisional only — the measured placement happens in the layout effect below.
+    setPos({ top: rect.top, left: rect.left - 252 - POPUP_MARGIN });
     setOpen(v => !v);
   };
+
+  // Position from the popup's REAL height, before paint. These rail buttons sit at the very
+  // foot of the window, and the previous code clamped against a HARD-CODED height guess —
+  // whenever the real content was taller than the guess the popup ran off the bottom of the
+  // screen and got cut off. Measuring means it flips/clamps correctly whatever it contains.
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current || !popupRef.current) return;
+    const place = () => {
+      const anchor = btnRef.current!.getBoundingClientRect();
+      const box = popupRef.current!.getBoundingClientRect();
+      setPos({
+        top: Math.max(POPUP_MARGIN, Math.min(anchor.top, window.innerHeight - box.height - POPUP_MARGIN)),
+        left: Math.max(POPUP_MARGIN, anchor.left - box.width - POPUP_MARGIN),
+      });
+    };
+    place();
+    const ro = new ResizeObserver(place);   // content grows once async status arrives
+    ro.observe(popupRef.current);
+    window.addEventListener('resize', place);
+    return () => { ro.disconnect(); window.removeEventListener('resize', place); };
+  }, [open]);
 
   // Close on outside click
   useEffect(() => {

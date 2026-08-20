@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { setKeymapOverrides } from '../services/keyboard';
 
 export interface ProxySettings {
   mode: 'none' | 'system' | 'manual';
@@ -10,6 +11,11 @@ export interface ProxySettings {
   bypass?: string[];
 }
 
+/** id → combo, or null when the user deliberately cleared the binding. */
+export type KeymapOverrides = Record<string, {
+  key: string; altKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; metaKey?: boolean;
+} | null>;
+
 export interface GeneralAppSettings {
   followRedirects: boolean;
   sslVerification: boolean;
@@ -19,6 +25,8 @@ export interface GeneralAppSettings {
   maxAiChatMessages: number;
   encoding: 'enable' | 'disable' | 'auto';
   proxy: ProxySettings;
+  /** User keyboard-shortcut rebinds, applied over each feature's registered default. */
+  keymap: KeymapOverrides;
 }
 
 const DEFAULTS: GeneralAppSettings = {
@@ -30,6 +38,7 @@ const DEFAULTS: GeneralAppSettings = {
   maxAiChatMessages: 200,
   encoding: 'enable',
   proxy: { mode: 'none' },
+  keymap: {},
 };
 
 interface AppSettingsState {
@@ -53,10 +62,17 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   settings: DEFAULTS,
   loaded: false,
   load: () => { postMsg({ type: 'getSettings' }); },
-  setSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch }, loaded: true })),
+  setSettings: (patch) => set((s) => {
+    const settings = { ...s.settings, ...patch };
+    // Push rebinds into the keyboard layer as soon as persisted settings arrive, so a
+    // custom shortcut works from app start rather than only after visiting Settings.
+    setKeymapOverrides(settings.keymap ?? {});
+    return { settings, loaded: true };
+  }),
   save: (patch) => {
     const settings = { ...get().settings, ...patch };
     set({ settings });
+    if (patch.keymap) setKeymapOverrides(settings.keymap ?? {});
     postMsg({ type: 'saveSettings', settings });
   },
 }));

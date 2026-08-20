@@ -87,19 +87,27 @@ export function AiApiFlowBuilderModal({ protocol = 'rest', onClose }: Props) {
       const headerRows = step.headers?.length > 0
         ? [...step.headers.map(h => ({ ...h, id: crypto.randomUUID() })), { id: crypto.randomUUID(), key: '', value: '', enabled: true }]
         : [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }];
+      // Was 'createRequest' — a message type NO handler in the extension listens for, so
+      // every request this built was silently dropped and the flow produced an empty
+      // collection. The real one is 'saveRequestToCollection', whose request is flat with
+      // the rest packed into a `data` JSON string.
       postMsg({
-        type: 'createRequest', collectionId,
+        type: 'saveRequestToCollection', collectionId, protocol,
         request: {
           id: requestId, name: `${i + 1}. ${step.name}`, method: (step.method || 'GET').toUpperCase(),
-          url: step.url || '', headers: headerRows,
-          params: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
-          bodyMode: step.bodyMode || 'none', bodyRaw: step.bodyRaw || '',
-          bodyFormData: [{ id: crypto.randomUUID(), key: '', value: '', type: 'text', enabled: true }],
-          bodyUrlEncoded: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
-          preRequestScript: '',
-          postResponseScript: step.variableExtractions?.length > 0
-            ? step.variableExtractions.map(v => `// Extract: ${v.description}\n// dk.env.set('${v.variable}', dk.response.json()${v.path.replace(/^\$/, '')});`).join('\n\n')
-            : '',
+          url: step.url || '',
+          data: JSON.stringify({
+            headers: headerRows,
+            params: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
+            bodyMode: step.bodyMode || 'none', bodyRaw: step.bodyRaw || '',
+            bodyFormData: [{ id: crypto.randomUUID(), key: '', value: '', type: 'text', enabled: true }],
+            bodyUrlEncoded: [{ id: crypto.randomUUID(), key: '', value: '', enabled: true }],
+            authType: 'none', authData: {},
+            preRequestScript: '',
+            postResponseScript: step.variableExtractions?.length > 0
+              ? step.variableExtractions.map(v => `// Extract: ${v.description}\n// dk.env.set('${v.variable}', dk.response.json()${v.path.replace(/^\$/, '')});`).join('\n\n')
+              : '',
+          }),
         },
       });
       await new Promise(r => setTimeout(r, 60));

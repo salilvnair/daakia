@@ -332,6 +332,38 @@ export const DK_TYPE_DEFS = `
 declare var dk: any;
 `;
 
+// ─── Postman `pm` declarations ────────────────────────────────────────────────
+//
+// Daakia does not execute `pm.*` — importers translate it to `dk.*` (see
+// script-resolver). But Daakia DISPLAYS Postman scripts: the Postman → Daakia
+// translator, and imported-script previews. Without a declaration Monaco marks
+// every `pm` red with "Cannot find name 'pm'", which reads as "your script is
+// broken" when it is simply the input you were asked to paste.
+//
+// `any` for the same reason as dk: an over-constrained interface would produce
+// false errors on perfectly valid Postman patterns.
+export const PM_TYPE_DEFS = `
+/** Postman scripting API — recognised so pasted Postman scripts display cleanly.
+ *  Not executable in Daakia: importers translate pm.* into the dk.* equivalents. */
+declare var pm: any;
+`;
+
+let pmLanguageSupportRegistered = false;
+
+/**
+ * Declare `pm` to Monaco's shared JavaScript service.
+ *
+ * Deliberately NOT folded into registerDkLanguageSupport: that one runs for the
+ * Pre-request/Post-response script editors, where `pm` is genuinely unavailable at
+ * runtime and offering it would invite scripts that silently fail. Call this only
+ * where Postman source is being shown.
+ */
+export function registerPmLanguageSupport(monaco: any): void {
+  if (pmLanguageSupportRegistered) return;
+  pmLanguageSupportRegistered = true;
+  monaco.languages.typescript.javascriptDefaults.addExtraLib(PM_TYPE_DEFS, 'ts:daakia-pm.d.ts');
+}
+
 // ─── Monaco Autocomplete Definitions ─────────────────────────────────────────
 
 // ─── Shared Monaco registration (dk completions + type defs) ─────────────────

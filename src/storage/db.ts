@@ -1187,26 +1187,43 @@ export function upsertCollectionRequest(req: CollectionRequestRow): void {
   // Response fields are optional — a plain request-definition save (e.g. importers,
   // rename, reorder) must not blow away a previously-captured response, so on conflict
   // an omitted value falls back to whatever is already stored via COALESCE.
-  _db.run(
-    // sort_order is COALESCEd like the response fields: importers pass an explicit
-    // ordering (it was previously missing from the column list entirely, so imported
-    // collections came back in arbitrary order), while a plain save that omits it must
-    // not reset a request's position back to the column default.
-    `INSERT INTO collection_requests (id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       name = excluded.name, method = excluded.method, url = excluded.url, data = excluded.data,
-       sort_order = COALESCE(excluded.sort_order, sort_order),
-       status = COALESCE(excluded.status, status),
-       status_text = COALESCE(excluded.status_text, status_text),
-       response_time = COALESCE(excluded.response_time, response_time),
-       response_size = COALESCE(excluded.response_size, response_size),
-       response_data = COALESCE(excluded.response_data, response_data)`,
-    [
-      req.id, req.collection_id, req.name, req.method, req.url, req.data ?? '{}', req.sort_order ?? null,
-      req.status ?? null, req.status_text ?? null, req.response_time ?? null, req.response_size ?? null, req.response_data ?? null,
-    ]
-  );
+  // sort_order is included ONLY when the caller supplies one.
+    //
+    // The column is `INTEGER NOT NULL DEFAULT 0`, and a DEFAULT applies only when the column
+    // is OMITTED — binding an explicit NULL violates the NOT NULL constraint and throws. An
+    // earlier version listed the column unconditionally with `?? null`, which made EVERY
+    // save-to-collection fail (the normal Save button included, not just importers): the
+    // request never landed and the user saw an empty collection with no error surfaced.
+    // Omitting it also preserves an existing row's position on a plain re-save, which is
+    // what a rename or a response update should do.
+    const withOrder = req.sort_order !== undefined && req.sort_order !== null;
+    _db.run(
+      withOrder
+        ? `INSERT INTO collection_requests (id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name, method = excluded.method, url = excluded.url, data = excluded.data,
+             sort_order = excluded.sort_order,
+             status = COALESCE(excluded.status, status),
+             status_text = COALESCE(excluded.status_text, status_text),
+             response_time = COALESCE(excluded.response_time, response_time),
+             response_size = COALESCE(excluded.response_size, response_size),
+             response_data = COALESCE(excluded.response_data, response_data)`
+        : `INSERT INTO collection_requests (id, collection_id, name, method, url, data, status, status_text, response_time, response_size, response_data)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name, method = excluded.method, url = excluded.url, data = excluded.data,
+             status = COALESCE(excluded.status, status),
+             status_text = COALESCE(excluded.status_text, status_text),
+             response_time = COALESCE(excluded.response_time, response_time),
+             response_size = COALESCE(excluded.response_size, response_size),
+             response_data = COALESCE(excluded.response_data, response_data)`,
+      withOrder
+        ? [req.id, req.collection_id, req.name, req.method, req.url, req.data ?? '{}', req.sort_order as number,
+           req.status ?? null, req.status_text ?? null, req.response_time ?? null, req.response_size ?? null, req.response_data ?? null]
+        : [req.id, req.collection_id, req.name, req.method, req.url, req.data ?? '{}',
+           req.status ?? null, req.status_text ?? null, req.response_time ?? null, req.response_size ?? null, req.response_data ?? null]
+    );
   _scheduleSave();
 }
 

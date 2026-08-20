@@ -11,6 +11,8 @@ type KeyCombo = {
   metaKey?: boolean;
 };
 
+import { resolveCombo } from './keymap';
+
 type ShortcutHandler = (e: KeyboardEvent) => void;
 
 interface RegisteredShortcut {
@@ -61,7 +63,8 @@ export function unregisterShortcut(id: string): void {
   if (idx >= 0) registry.splice(idx, 1);
 }
 
-/** Get all registered shortcuts (for a future shortcut viewer/help panel) */
+/** Every registered shortcut with the DEFAULT combo it registered under — the Keymap
+ *  settings section lists these and layers user overrides on top. */
 export function getRegisteredShortcuts(): ReadonlyArray<{ id: string; combo: KeyCombo; description?: string }> {
   return registry.map(({ id, combo, description }) => ({ id, combo, description }));
 }
@@ -69,7 +72,10 @@ export function getRegisteredShortcuts(): ReadonlyArray<{ id: string; combo: Key
 /** The global keydown listener — must be installed once at app start */
 function globalKeydownHandler(e: KeyboardEvent) {
   for (const shortcut of registry) {
-    if (matchesCombo(e, shortcut.combo)) {
+    // `combo` is the DEFAULT the feature registered with; the user may have rebound it.
+    // Resolving here means every shortcut is rebindable without its call site knowing.
+    const active = resolveCombo(shortcut.id, shortcut.combo);
+    if (active && matchesCombo(e, active)) {
       shortcut.handler(e);
       return; // first match wins
     }

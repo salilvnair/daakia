@@ -37,6 +37,8 @@ export { ScriptsEditor } from './editors/ScriptsEditor';
 export { ContextMenu } from './menus/ContextMenu';
 export type { ContextMenuItem, ContextMenuSubItem } from './menus/ContextMenu';
 export { RightClickMenu } from './menus/RightClickMenu';
+export { AnchoredMenu } from './menus/AnchoredMenu';
+export type { MenuSide, MenuAlign } from './menus/AnchoredMenu';
 
 // ─── Modals ───
 export { ConfirmDialog } from './modals/ConfirmDialog';

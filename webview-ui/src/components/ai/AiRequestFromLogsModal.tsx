@@ -10,9 +10,13 @@ import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
+import { normalizeCollectionProtocol } from '../../services/collections';
 
 interface Props {
   onClose: () => void;
+  /** Protocol of the tab this was launched from — collections are stored per protocol,
+   *  so filing under a hardcoded 'rest' hides the result from every other protocol's list. */
+  contextProtocol?: string;
 }
 
 const ACCENT = 'var(--color-protocol-ai)';
@@ -44,7 +48,7 @@ Rules:
 - Generate descriptive names from the method + path
 - Return ONLY the JSON array, no explanation, no markdown`;
 
-export function AiRequestFromLogsModal({ onClose }: Props) {
+export function AiRequestFromLogsModal({ onClose, contextProtocol }: Props) {
   const [logs, setLogs] = useState('');
   const [result, setResult] = useState<unknown[] | null>(null);
   const [rawResult, setRawResult] = useState('');
@@ -104,7 +108,7 @@ export function AiRequestFromLogsModal({ onClose }: Props) {
     if (!result) return;
     try {
       const collId = `logs-import-${Date.now()}`;
-      postMsg({ type: 'createCollection', id: collId, name: 'Imported from Logs', protocol: 'rest' });
+      postMsg({ type: 'createCollection', id: collId, name: 'Imported from Logs', protocol: normalizeCollectionProtocol(contextProtocol) });
       setImported(true);
       addToast({ type: 'success', message: `${result.length} requests imported as collection!` });
       setTimeout(onClose, 1500);

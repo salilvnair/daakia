@@ -19,6 +19,7 @@ import {
   type ContextMenuItem,
 } from '@salilvnair/dui';
 import { isValidProtocolUrl, urlValidationHint } from '../../services/url-validation';
+import { AnchoredMenu } from '../shared';
 
 const ACCENT = 'var(--color-protocol-grpc)';
 
@@ -41,15 +42,13 @@ export function GrpcUrlBar() {
   const [showProtoExplainer, setShowProtoExplainer] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-        setShowOverflow(false);
-      }
-    };
-    if (showOverflow) document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showOverflow]);
+  // NOTE: the old "close overflow menu on outside click" effect that lived here has been
+  // removed. It tested `overflowRef.contains(target)`, which worked only while the menu was a
+  // DOM child of that ref. AnchoredMenu portals the menu to <body>, so a click on a menu ITEM
+  // no longer counted as "inside" — the effect fired on mousedown and unmounted the menu
+  // before mouseup, meaning no click event ever reached the item and its action silently never
+  // ran. AnchoredMenu owns outside-click and Escape itself, and correctly treats both its own
+  // content and the anchor as inside.
 
   // When user selects a gRPC mock server, auto-trigger reflection
   const handleMockServerSelect = useCallback((url: string) => {
@@ -249,9 +248,13 @@ export function GrpcUrlBar() {
         />
 
         {showOverflow && (
-          <div
-            className={`absolute right-0 z-50 rounded-xl border shadow-2xl overflow-hidden min-w-[200px] ${overflowDir === 'up' ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'}`}
-            style={{ backgroundColor: 'var(--color-panel)', borderColor: 'var(--color-surface-border)' }}
+          <AnchoredMenu
+            anchorRef={overflowRef}
+            open={showOverflow}
+            onClose={() => setShowOverflow(false)}
+            side="bottom"
+            align="end"
+            minWidth={200}
           >
             <div className="px-3 py-1.5 border-b" style={{ borderColor: 'var(--color-surface-border)' }}>
               <p className="text-[9.5px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>AI Tools</p>
@@ -308,7 +311,7 @@ export function GrpcUrlBar() {
                 Proto Explainer
               </button>
             )}
-          </div>
+          </AnchoredMenu>
         )}
 
         {showProtoExplainer && <AiGrpcProtoExplainerModal onClose={() => setShowProtoExplainer(false)} />}

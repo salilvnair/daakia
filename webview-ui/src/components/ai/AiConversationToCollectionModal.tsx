@@ -10,9 +10,18 @@ import { SparkleIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
+import { resolveCollectionProtocol, COLLECTION_PROTOCOL_LABELS } from '../../services/collections';
 
 interface Props {
   onClose: () => void;
+  /**
+   * Protocol of the request tab the chat was started from. Collections are stored PER
+   * PROTOCOL (`collections.protocol`, and the tree is queried with it), so a collection
+   * created here has to be filed under the protocol the user was actually working in —
+   * exporting from a GraphQL tab used to land in the REST collections list, where they
+   * could not find it.
+   */
+  contextProtocol?: string;
 }
 
 const ACCENT = 'var(--color-protocol-ai)';
@@ -23,6 +32,7 @@ Output a JSON object in this exact format:
 {
   "name": "Collection Name",
   "description": "What this collection covers",
+  "protocol": "rest",
   "variables": [
     { "key": "baseUrl", "value": "https://api.example.com", "enabled": true },
     { "key": "token", "value": "", "enabled": true }
@@ -47,6 +57,12 @@ Output a JSON object in this exact format:
 }
 
 Rules:
+- "protocol" MUST be one of: rest | graphql | soap | grpc | websocket | mcp.
+  Use the protocol the user is actually asking about — if they describe a GraphQL API,
+  emit "graphql", not "rest". Every request in the collection shares this protocol.
+- For "graphql": "url" is the GraphQL endpoint, "method" is POST, and "body" is the query
+  document. For "soap": "body" is the SOAP envelope. For "grpc"/"websocket"/"mcp": "url" is
+  the target address and "method" may be omitted.
 - Generate realistic, working request examples with proper bodies and headers
 - Use {{baseUrl}} and {{token}} variables consistently
 - Group related requests into folders
@@ -54,7 +70,53 @@ Rules:
 - Add auth headers where appropriate (Bearer token for protected endpoints)
 - Return ONLY valid JSON — no markdown, no explanation, no code fences`;
 
-export function AiConversationToCollectionModal({ onClose }: Props) {
+// ─── Request mapping ─────────────────────────────────────────────────────────
+
+const emptyRow = () => ({ id: crypto.randomUUID(), key: '', value: '', enabled: true });
+
+/** Flatten the generated folders into the flat request rows the collection store stores. */
+function flattenRequests(collData: Record<string, unknown>): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  const folders = Array.isArray(collData.folders) ? collData.folders : [];
+  // Requests may also sit at the top level, depending on how the model shaped the answer.
+  const loose = Array.isArray(collData.requests) ? collData.requests : [];
+
+  const push = (r: Record<string, unknown>, folderName?: string) => {
+    if (!r || typeof r !== 'object') return;
+    const headers = Array.isArray(r.headers)
+      ? [...(r.headers as Record<string, unknown>[]).map(h => ({ ...h, id: crypto.randomUUID() })), emptyRow()]
+      : [emptyRow()];
+    out.push({
+      id: crypto.randomUUID(),
+      name: folderName ? `${folderName} / ${r.name ?? 'Request'}` : String(r.name ?? 'Request'),
+      method: String(r.method ?? 'GET').toUpperCase(),
+      url: String(r.url ?? ''),
+      // Everything except id/name/method/url is stored inside the request's `data` JSON
+      // string — that is the exact envelope request-opener parses when the row is opened.
+      data: {
+        headers,
+        params: [emptyRow()],
+        bodyMode: String(r.bodyType ?? r.bodyMode ?? (r.body ? 'json' : 'none')),
+        bodyRaw: typeof r.body === 'string' ? r.body : (typeof r.bodyRaw === 'string' ? r.bodyRaw : ''),
+        bodyFormData: [{ id: crypto.randomUUID(), key: '', value: '', type: 'text', enabled: true }],
+        bodyUrlEncoded: [emptyRow()],
+        authType: (r.auth as Record<string, unknown>)?.type ?? 'none',
+        authData: {},
+        preRequestScript: '',
+        postResponseScript: '',
+      },
+    });
+  };
+
+  for (const f of folders as Record<string, unknown>[]) {
+    const reqs = Array.isArray(f?.requests) ? f.requests : [];
+    for (const r of reqs as Record<string, unknown>[]) push(r, String(f?.name ?? ''));
+  }
+  for (const r of loose as Record<string, unknown>[]) push(r);
+  return out;
+}
+
+export function AiConversationToCollectionModal({ onClose, contextProtocol }: Props) {
   const [description, setDescription] = useState('');
   const [result, setResult] = useState('');
   const [parsed, setParsed] = useState<Record<string, unknown> | null>(null);
@@ -114,7 +176,7 @@ export function AiConversationToCollectionModal({ onClose }: Props) {
     });
   };
 
-  const importCollection = () => {
+  const importCollection = async () => {
     let collData = parsed;
     if (!collData && result) {
       try { collData = JSON.parse(result); } catch { setError('Generated JSON is invalid. Try regenerating.'); return; }
@@ -123,10 +185,43 @@ export function AiConversationToCollectionModal({ onClose }: Props) {
 
     try {
       const collId = `col-${Date.now()}`;
-      postMsg({ type: 'createCollection', id: collId, name: (collData.name as string) || 'AI Generated', protocol: 'rest' });
+      const protocol = resolveCollectionProtocol(collData.protocol as string | undefined, contextProtocol);
+      const requests = flattenRequests(collData);
+
+      postMsg({ type: 'createCollection', id: collId, name: (collData.name as string) || 'AI Generated', protocol });
+
+      // The generated folders/requests used to be thrown away here — the old code created
+      // the empty collection shell, toasted "imported!" and stopped, so the user got a
+      // named-but-empty collection and no indication anything was missing.
+      await new Promise(r => setTimeout(r, 120));
+      for (const req of requests) {
+        // 'saveRequestToCollection' — NOT 'createRequest', which no handler in the extension
+        // has ever listened for, so posting it silently dropped every request and left the
+        // collection empty. The shape is flat with everything else packed into a `data` JSON
+        // string, which is exactly how request-opener reads it back.
+        postMsg({
+          type: 'saveRequestToCollection',
+          collectionId: collId,
+          protocol,
+          request: {
+            id: req.id,
+            name: req.name,
+            method: req.method,
+            url: req.url,
+            data: JSON.stringify(req.data),
+          },
+        });
+        await new Promise(r => setTimeout(r, 50));
+      }
+      await new Promise(r => setTimeout(r, 150));
+      postMsg({ type: 'getCollections', protocol });
+
       setImported(true);
-      addToast({ type: 'success', message: `Collection "${collData.name}" imported!` });
-      setTimeout(onClose, 1500);
+      addToast({
+        type: 'success',
+        message: `Collection "${collData.name}" imported into ${COLLECTION_PROTOCOL_LABELS[protocol] ?? protocol} — ${requests.length} request${requests.length === 1 ? '' : 's'}.`,
+      });
+      setTimeout(onClose, 1800);
     } catch {
       setError('Failed to import collection.');
     }

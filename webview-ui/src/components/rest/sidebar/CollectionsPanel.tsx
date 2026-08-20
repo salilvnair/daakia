@@ -1096,6 +1096,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
 
       {showScenarioGenerator && (
         <AiScenarioGeneratorModal
+          contextProtocol={protocol}
           onClose={() => setShowScenarioGenerator(false)}
         />
       )}
@@ -1120,6 +1121,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
 
       {showLogsImport && (
         <AiRequestFromLogsModal
+          contextProtocol={protocol}
           onClose={() => setShowLogsImport(false)}
         />
       )}

@@ -331,7 +331,7 @@ export function AiMockConfig({ server, onUpdate }: Props) {
       </div>
       {showMockIntelligence && <AiMockIntelligenceModal onClose={() => setShowMockIntelligence(false)} />}
       {showAdaptiveLearning && <AiAdaptiveMockLearningModal onClose={() => setShowAdaptiveLearning(false)} />}
-      {showScenarioComposer && <AiScenarioGeneratorModal onClose={() => setShowScenarioComposer(false)} />}
+      {showScenarioComposer && <AiScenarioGeneratorModal contextProtocol="rest" onClose={() => setShowScenarioComposer(false)} />}
 
       {/* ── Built-in scenarios (always visible) ── */}
       <div className="flex flex-col gap-2">
