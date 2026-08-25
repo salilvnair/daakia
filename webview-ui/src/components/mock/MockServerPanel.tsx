@@ -18,6 +18,7 @@ import { ServerDetail } from './ServerDetail';
 import { MockLogPanel } from './MockLogPanel';
 import type { MockServer, MockRoute, MockServerProtocol } from './mock-types';
 import { createDefaultRoute, createDefaultServer, createOAuthSampleServer, createCrudSampleServer } from './mock-types';
+import { appendQuickMocks, createQuickMockServer, quickMockServerName, quickMockStubNoun, resolveMockProtocol, type QuickMockRequest } from './quick-mock';
 
 export { type MockServer, type MockRoute } from './mock-types';
 
@@ -134,34 +135,40 @@ export function MockServerPanel() {
           setServers(prev => prev.map(s => s.id === msg.id ? { ...s, running: false } : s));
           break;
         }
-        // Sidebar "Mock Request" / "Mock" (collection) — build stub route(s) from
-        // real request(s) and drop them into a shared "Quick Mocks" REST server.
+        // Sidebar "Mock Request" / "Mock" (collection) — build stub(s) from real request(s)
+        // and drop them into the shared "Quick Mocks" server for the protocol they belong to.
+        // A GraphQL/SOAP/gRPC/realtime/MCP entry gets that protocol's own stub shape, not a
+        // REST route (which is where every one of them used to land).
         case 'mockRequestFromSidebar': {
-          const toRoute = (method: string, url: string): MockRoute => {
-            let path = url || '/';
-            try {
-              const u = new URL(url, 'http://placeholder');
-              path = u.pathname + u.search;
-            } catch { /* not a full URL — keep raw string as the path */ }
-            if (!path.startsWith('/')) path = '/' + path;
-            return { ...createDefaultRoute(), id: crypto.randomUUID(), method: (method as MockRoute['method']) || 'GET', path, statusCode: 200, body: '{}' };
-          };
-          const reqList: { method: string; url: string }[] = msg.requests ?? [{ method: msg.method, url: msg.url }];
-          const newRoutes = reqList.map(r => toRoute(r.method, r.url));
+          const reqList: QuickMockRequest[] = msg.requests ?? [{ name: msg.name, method: msg.method, url: msg.url }];
 
-          const current = serversRef.current;
-          let target = current.find(s => s.protocol === 'rest' && s.name === 'Quick Mocks');
-          let updated: MockServer[];
-          if (target) {
-            updated = current.map(s => s.id === target!.id ? { ...s, routes: [...s.routes, ...newRoutes] } : s);
-          } else {
-            target = { ...createDefaultServer('Quick Mocks', 'rest'), routes: newRoutes };
-            updated = [...current, target];
+          // A collection can hold a mix (e.g. WS + SSE rows under Realtime) — group first so
+          // each protocol's stubs go to its own server.
+          const byProtocol = new Map<MockServerProtocol, QuickMockRequest[]>();
+          for (const req of reqList) {
+            const proto = resolveMockProtocol(msg.protocol, req.method);
+            const bucket = byProtocol.get(proto);
+            if (bucket) { bucket.push(req); } else { byProtocol.set(proto, [req]); }
           }
+
+          let updated = serversRef.current;
+          let focusId: string | null = null;
+          const summary: string[] = [];
+          for (const [proto, reqs] of byProtocol) {
+            const name = quickMockServerName(proto);
+            const existing = updated.find(s => s.protocol === proto && s.name === name);
+            const merged = appendQuickMocks(existing ?? createQuickMockServer(proto), reqs);
+            updated = existing
+              ? updated.map(s => s.id === merged.id ? merged : s)
+              : [...updated, merged];
+            focusId = merged.id;
+            summary.push(`${reqs.length} ${quickMockStubNoun(proto, reqs.length)} to "${name}"`);
+          }
+
           setServers(updated);
-          setActiveServerId(target.id);
+          if (focusId) setActiveServerId(focusId);
           useTabsStore.getState().openMockServerTab();
-          useToastStore.getState().addToast({ type: 'success', message: `Added ${newRoutes.length} mock route${newRoutes.length > 1 ? 's' : ''} to "Quick Mocks"` });
+          useToastStore.getState().addToast({ type: 'success', message: `Added ${summary.join(', ')}` });
           setTimeout(persistConfigs, 50);
           break;
         }

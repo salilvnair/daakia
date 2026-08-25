@@ -9,7 +9,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { postMsg } from '../../vscode';
-import type { CollectionTreeNode } from '../../services/collections';
+import { describeCollectionRequests, type CollectionTreeNode } from '../../services/collections';
 import { ModalView, AIButtonView, SegmentedControlView, TextInputView, CopyButtonView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
 
@@ -40,7 +40,7 @@ const SYSTEM_PROMPTS: Record<DocFormat, string> = {
 Include for each endpoint:
 - ## Endpoint name (bold method + path)
 - Short description of what it does
-- ### Request section: URL, method, path params table, query params table, request body schema with examples
+- ### Request section: URL, method, request headers table, path params table, query params table, request body schema with examples
 - ### Response section: status codes table, response body schema, example response JSON
 - Auth requirements if applicable
 
@@ -48,10 +48,11 @@ Make it developer-friendly, clear, and production-quality.`,
   openapi: `You are an OpenAPI 3.1 spec writer. Generate a complete OpenAPI 3.1 YAML specification.
 
 Include: openapi version, info (title, version, description), servers, paths with operations, components/schemas.
+Model every supplied request header as a header parameter (and every query param as a query parameter), and derive securitySchemes from the auth scheme given.
 Use proper OpenAPI 3.1 syntax. Make schemas explicit with types and examples.`,
   html: `You are a technical writer. Generate clean, styled HTML API documentation.
 Use semantic HTML, inline CSS for a clean modern look. No external dependencies.
-Include: page title, endpoint cards with method badge, parameter tables, code examples with syntax highlighting using <pre> tags.`,
+Include: page title, endpoint cards with method badge, request header and parameter tables, code examples with syntax highlighting using <pre> tags.`,
 };
 
 export function AiDocGeneratorModal({ collectionNode, onClose }: Props) {
@@ -99,15 +100,18 @@ export function AiDocGeneratorModal({ collectionNode, onClose }: Props) {
     setResult('');
     setError('');
     setLoading(true);
+    // The requests themselves — headers, query params, auth scheme and body — have to travel
+    // with the prompt; on name alone the model just invents the API it thinks you meant.
+    const requests = describeCollectionRequests(collectionNode);
     postMsg({
       type: 'aiStream',
       payload: {
         systemPrompt: SYSTEM_PROMPTS[format],
-        userMessage: `Collection: ${collectionNode.name}\nFormat: ${FORMAT_LABELS[format]}\n${notes.trim() ? `\nAdditional notes: ${notes.trim()}` : ''}`,
+        userMessage: `Collection: ${collectionNode.name}\nFormat: ${FORMAT_LABELS[format]}\n\nRequests (document exactly these — do not invent endpoints, headers or fields):\n${requests}${notes.trim() ? `\n\nAdditional notes: ${notes.trim()}` : ''}`,
         templateKey: 'platform.openapi.generator',
       },
     });
-  }, [format, notes, loading, collectionNode.name]);
+  }, [format, notes, loading, collectionNode]);
 
   return (
     <ModalView

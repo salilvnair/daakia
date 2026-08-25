@@ -602,7 +602,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           const collectAll = (n: CollectionTreeNode): CollectionRequest[] => [...n.requests, ...n.children.flatMap(collectAll)];
           const reqs = collectAll(node).map(r => ({ name: r.name, method: r.method, url: r.url }));
           useTabsStore.getState().openMockServerTab();
-          setTimeout(() => window.postMessage({ type: 'mockRequestFromSidebar', name: targetName, requests: reqs }, '*'), 250);
+          setTimeout(() => window.postMessage({ type: 'mockRequestFromSidebar', protocol, name: targetName, requests: reqs }, '*'), 250);
           close();
         },
       },
@@ -789,19 +789,38 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
             position={headerMenu?.kind === 'importExport' ? { x: headerMenu.x, y: headerMenu.y } : undefined}
             onClose={() => setHeaderMenu(null)}
             items={[
-              { id: 'import-daakia', label: 'Import from Daakia JSON', shortcut: 'D', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-accent)' }} />, onClick: () => { postMsg({ type: 'importCollectionDaakia' }); setHeaderMenu(null); } },
-              { id: 'import-postman', label: 'Import from Postman', shortcut: 'P', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-method-post)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
-              { id: 'import-openapi', label: 'Import from OpenAPI', shortcut: 'O', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
-              { id: 'import-bruno', label: 'Import from Bruno', shortcut: 'B', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'importBrunoRequest' }); setHeaderMenu(null); } },
-              { id: 'import-insomnia', label: 'Import from Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowInsomniaImport(true); setHeaderMenu(null); } },
-              { id: 'import-har', label: 'Import from HAR', shortcut: 'H', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
-              ...(aiEnabled('importFromScreenshot') ? [{ id: 'import-screenshot', label: 'Import from Screenshot (AI)', shortcut: 'S', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowScreenshotImport(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
-              ...(aiEnabled('importFromLogs')       ? [{ id: 'import-logs',        label: 'Import from Server Logs (AI)', shortcut: 'L', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowLogsImport(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
-              ...(aiEnabled('describeWorkflow')     ? [{ id: 'ai-conversation',    label: 'Describe Workflow (AI)',       shortcut: 'W', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowConversationToCollection(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
-              ...(aiEnabled('generateScenario')     ? [{ id: 'ai-scenario',        label: 'Generate Scenario (AI)',      shortcut: 'G', icon: <SparkleIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { setShowScenarioGenerator(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
-              ...(aiEnabled('reverseEngineer')      ? [{ id: 'ai-reverse-engineer',label: 'Reverse Engineer (AI)',       shortcut: 'R', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowReverseEngineer(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
-              { id: 'sep1', label: '', separator: true },
-              { id: 'export-json', label: 'Export as JSON', shortcut: 'E', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionDaakia', formatLabel: 'Daakia JSON' }); setHeaderMenu(null); } },
+              // Two submenus rather than one flat list — the combined set runs well past the
+              // height of the sidebar, and it mirrors the per-collection right-click menu.
+              {
+                id: 'import', label: 'Import', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-accent)' }} />,
+                children: [
+                  { id: 'import-daakia', label: 'Daakia JSON', shortcut: 'D', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-accent)' }} />, onClick: () => { postMsg({ type: 'importCollectionDaakia' }); setHeaderMenu(null); } },
+                  { id: 'import-postman', label: 'Postman', shortcut: 'P', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-method-post)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
+                  { id: 'import-openapi', label: 'OpenAPI', shortcut: 'O', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
+                  { id: 'import-bruno', label: 'Bruno', shortcut: 'B', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'importBrunoRequest' }); setHeaderMenu(null); } },
+                  { id: 'import-insomnia', label: 'Insomnia', shortcut: 'I', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowInsomniaImport(true); setHeaderMenu(null); } },
+                  { id: 'import-har', label: 'HAR', shortcut: 'H', icon: <FolderImportIcon size={14} style={{ color: 'var(--color-primary)' }} />, onClick: () => { postMsg({ type: 'importCollectionRequest' }); setHeaderMenu(null); } },
+                  ...(aiEnabled('importFromScreenshot') ? [{ id: 'import-screenshot', label: 'Screenshot (AI)', shortcut: 'S', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowScreenshotImport(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
+                  ...(aiEnabled('importFromLogs')       ? [{ id: 'import-logs',        label: 'Server Logs (AI)', shortcut: 'L', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowLogsImport(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
+                  ...(aiEnabled('describeWorkflow')     ? [{ id: 'ai-conversation',    label: 'Describe Workflow (AI)',       shortcut: 'W', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowConversationToCollection(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
+                  ...(aiEnabled('generateScenario')     ? [{ id: 'ai-scenario',        label: 'Generate Scenario (AI)',      shortcut: 'G', icon: <SparkleIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { setShowScenarioGenerator(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
+                  ...(aiEnabled('reverseEngineer')      ? [{ id: 'ai-reverse-engineer',label: 'Reverse Engineer (AI)',       shortcut: 'R', icon: <SparkleIcon size={14} style={{ color: 'var(--color-protocol-ai)' }} />, onClick: () => { setShowReverseEngineer(true); setHeaderMenu(null); } } as DuiContextMenuItem] : []),
+                ],
+              },
+              {
+                id: 'export', label: 'Export', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />,
+                // No collectionId — these export every collection, the same set "Export as JSON"
+                // always did (not just the protocol this panel is showing).
+                children: [
+                  { id: 'export-daakia',  label: 'Daakia JSON',         shortcut: 'J', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionDaakia', formatLabel: 'Daakia JSON' }); setHeaderMenu(null); } },
+                  { id: 'export-postman', label: 'Postman',             shortcut: 'M', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { setPendingExport({ type: 'exportCollectionPostman', formatLabel: 'Postman' }); setHeaderMenu(null); } },
+                  { id: 'export-insomnia',label: 'Insomnia',            shortcut: 'I', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionInsomnia' }); setHeaderMenu(null); } },
+                  { id: 'export-bruno',   label: 'Bruno (.bru)',        shortcut: 'B', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => { postMsg({ type: 'exportCollectionBruno' }); setHeaderMenu(null); } },
+                  { id: 'export-httpie',  label: 'HTTPie',              shortcut: 'H', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionHttpie' }); setHeaderMenu(null); } },
+                  { id: 'export-openapi', label: 'OpenAPI 3.0',         shortcut: 'O', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi' }); setHeaderMenu(null); } },
+                  { id: 'export-docs',    label: 'API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocs' }); setHeaderMenu(null); } },
+                ],
+              },
             ] as DuiContextMenuItem[]}
           />
           <ContextMenuView
@@ -972,7 +991,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
             { id: 'mock-request', label: 'Mock Request', shortcut: 'K', icon: <ServerIcon size={13} style={{ color: 'var(--color-warning)' }} />, onClick: () => {
               const req = reqContextMenu.req;
               useTabsStore.getState().openMockServerTab();
-              setTimeout(() => window.postMessage({ type: 'mockRequestFromSidebar', name: req.name, method: req.method, url: req.url }, '*'), 250);
+              setTimeout(() => window.postMessage({ type: 'mockRequestFromSidebar', protocol, name: req.name, method: req.method, url: req.url }, '*'), 250);
               setReqContextMenu(null);
             } },
             { id: 'sep2', label: '', separator: true },

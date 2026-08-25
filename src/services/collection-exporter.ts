@@ -185,11 +185,13 @@ export async function handleExportCollectionPostman(
   const collectionId = msg.collectionId as string;
   const includeResponse = msg.includeResponse === true;
   const node = collectionId ? getCollectionSubtree(collectionId) : null;
-  if (!node && !collectionId) {
-    postMessage({ type: 'toast', toastType: 'error', message: 'No collection selected for export.' });
+  if (collectionId && !node) {
+    postMessage({ type: 'toast', toastType: 'error', message: 'Collection not found for export.' });
     return;
   }
 
+  // No collectionId — export every collection, wrapped in a single Postman collection whose
+  // top-level items are the individual Daakia collections.
   const toExport = node || { id: 'root', name: 'Daakia Export', parent_id: null, sort_order: 0, children: getAllCollectionTrees(), requests: [] };
   const defaultName = `${toExport.name}.postman_collection.json`;
 
@@ -292,8 +294,16 @@ export async function handleExportCollectionBruno(
   const collectionId = msg.collectionId as string;
   const tree = getCollectionTree();
   const node = collectionId ? findNode(tree, collectionId) : null;
-  if (!node) {
-    postMessage({ type: 'toast', toastType: 'error', message: 'Please right-click a collection to export.' });
+  if (collectionId && !node) {
+    postMessage({ type: 'toast', toastType: 'error', message: 'Collection not found for export.' });
+    return;
+  }
+
+  // Bruno has no "many collections in one file" format — with no collection selected each
+  // root becomes its own Bruno collection folder side by side in the chosen destination.
+  const roots = node ? [node] : tree;
+  if (!roots.length) {
+    postMessage({ type: 'toast', toastType: 'error', message: 'There are no collections to export.' });
     return;
   }
 
@@ -306,13 +316,21 @@ export async function handleExportCollectionBruno(
   });
   if (!folderUri?.[0]) return;
 
-  const destPath = path.join(folderUri[0].fsPath, node.name.replace(/[/\\?%*:|"<>]/g, '-'));
-  writeBruFolder(node, destPath);
+  const written: string[] = [];
+  for (const root of roots) {
+    const destPath = path.join(folderUri[0].fsPath, root.name.replace(/[/\\?%*:|"<>]/g, '-'));
+    writeBruFolder(root, destPath);
+    // Write bruno.json
+    fs.writeFileSync(path.join(destPath, 'bruno.json'), JSON.stringify({ version: '1', name: root.name, type: 'collection', ignore: [] }, null, 2), 'utf8');
+    written.push(destPath);
+  }
 
-  // Write bruno.json
-  fs.writeFileSync(path.join(destPath, 'bruno.json'), JSON.stringify({ version: '1', name: node.name, type: 'collection', ignore: [] }, null, 2), 'utf8');
-
-  postMessage({ type: 'toast', toastType: 'success', message: `Bruno collection exported to ${destPath}` });
+  postMessage({
+    type: 'toast', toastType: 'success',
+    message: written.length === 1
+      ? `Bruno collection exported to ${written[0]}`
+      : `${written.length} Bruno collections exported to ${folderUri[0].fsPath}`,
+  });
 }
 
 // ─── 5.4.11 — Insomnia v4 ────────────────────────────────────────────────────

@@ -156,7 +156,7 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
       } },
       { id: 'mock-request', label: 'Mock Request', shortcut: 'K', icon: <ServerIcon size={14} style={{ color: 'var(--color-warning)' }} />, onClick: () => {
         useTabsStore.getState().openMockServerTab();
-        setTimeout(() => window.postMessage({ type: 'mockRequestFromSidebar', name: item.url, method: item.method, url: item.url }, '*'), 250);
+        setTimeout(() => window.postMessage({ type: 'mockRequestFromSidebar', protocol, name: item.url, method: item.method, url: item.url }, '*'), 250);
         close();
       } },
       { id: 'sep2', label: '', separator: true },
