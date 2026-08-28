@@ -76,6 +76,7 @@ import {
   handleBinPermanentlyDelete, handleBinPermanentlyDeleteGroup, handleBinEmpty,
 } from './handlers/bin-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
+import { handleHeapOpen, handleHeapAnalyze, handleHeapCancel } from './handlers/heap-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
   initSmWorkflowStorage,
@@ -466,6 +467,17 @@ export class MainPanel {
       case 'mockServer:saveAll':
         handleSaveMockConfigs(msg);
         break;
+      // ── Doctor / heap ──
+      case 'heap:open':
+        handleHeapOpen(this._post, this._extensionUri.fsPath);
+        break;
+      case 'heap:analyze':
+        handleHeapAnalyze(msg, this._post, this._extensionUri.fsPath);
+        break;
+      case 'heap:cancel':
+        handleHeapCancel(this._post);
+        break;
+
       case 'mockServer:getAll':
         handleGetMockServerState(this._post);
         break;
