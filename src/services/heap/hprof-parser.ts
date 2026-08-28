@@ -173,20 +173,42 @@ function looksTextual(s: string): boolean {
   return printable / s.length > 0.85;
 }
 
-/** Header: a NUL-terminated magic, then identifier size and a 64-bit timestamp. */
-function readHeader(r: Reader): { idSize: number; timestamp: number } {
-  let magic = '';
+/**
+ * Header: a NUL-terminated magic, then identifier size and a 64-bit timestamp.
+ *
+ * The three ways this can fail are distinguished deliberately. "Truncated" and
+ * "not a heap dump" send someone looking in completely different places, and a
+ * short non-HPROF file trips the truncation guard first unless the magic is
+ * checked before anything else is read.
+ */
+const HPROF_MAGIC = 'JAVA PROFILE';
+
+function readHeader(r: Reader, fileSize: number): { idSize: number; timestamp: number } {
+  if (fileSize === 0) throw new Error('the file is empty');
+  if (fileSize < HPROF_MAGIC.length + 13) {
+    throw new Error(`the file is ${fileSize} bytes — too short to be a heap dump`);
+  }
+
+  // Compare the magic before scanning for its terminator, so a text file fails
+  // as "not a heap dump" rather than as a truncation.
+  let prefix = '';
+  for (let i = 0; i < HPROF_MAGIC.length; i++) prefix += String.fromCharCode(r.u1());
+  if (prefix !== HPROF_MAGIC) {
+    throw new Error(`not a heap dump — expected it to start with "${HPROF_MAGIC}", found ${JSON.stringify(prefix)}`);
+  }
+
+  let version = '';
   for (;;) {
     const c = r.u1();
     if (c === 0) break;
-    magic += String.fromCharCode(c);
-    if (magic.length > 64) throw new Error('not an HPROF dump (no header terminator)');
+    version += String.fromCharCode(c);
+    if (version.length > 32) throw new Error('heap dump header is malformed (no terminator after the version)');
   }
-  if (!magic.startsWith('JAVA PROFILE')) {
-    throw new Error(`not an HPROF dump (header was ${JSON.stringify(magic)})`);
-  }
+
   const idSize = r.u4();
-  if (idSize !== 4 && idSize !== 8) throw new Error(`unsupported identifier size ${idSize}`);
+  if (idSize !== 4 && idSize !== 8) {
+    throw new Error(`unsupported identifier size ${idSize} — only 4 and 8 byte identifiers exist`);
+  }
   const hi = r.u4(), lo = r.u4();
   return { idSize, timestamp: hi * 0x100000000 + lo };
 }
@@ -341,7 +363,7 @@ export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
   const fd = openSync(path, 'r');
   try {
     const r = new Reader(fd, size);
-    const { idSize, timestamp } = readHeader(r);
+    const { idSize, timestamp } = readHeader(r, size);
     const bodyStart = r.pos;
 
     // ── Pass A — metadata, and every object id given a row ──────────────────

@@ -13,15 +13,22 @@
 import { readFileSync } from 'fs';
 import { parseHprof, ParseCancelled, type ParseProgress } from './hprof-parser';
 import { displayClassName, KIND_INSTANCE, type HeapIndex } from './heap-index';
+import { scanStrings } from './heap-redaction';
 import {
   analyzeHeap, computeClassStats, computeTreemap, dominatorChildrenOf,
   type HeapVerdict, type Dominators,
 } from './heap-analysis';
 import { buildEvidencePack, buildUserMessage, HEAP_SYSTEM_PROMPT } from './heap-evidence';
+import { runRules, RULE_PACK_VERSION, type RuleFinding } from './heap-rules';
 // Re-exported so the gate can be tested against the shipped bundle rather than
 // against a copy of the sources.
 export { shapeOf, scanStrings, assertNoRawContent } from './heap-redaction';
 export { buildEvidencePack } from './heap-evidence';
+// Exported for the CI gate in cli/daakia-heap-check.mjs, which drives this same
+// bundle so the pipeline and the panel can never disagree about a dump.
+export { parseHprof } from './hprof-parser';
+export { analyzeHeap, computeClassStats } from './heap-analysis';
+export { runRules, RULE_PACK_VERSION } from './heap-rules';
 
 export interface HeapSummary {
   objects: number;
@@ -35,6 +42,8 @@ export interface HeapSummary {
   histogram: { name: string; instances: number; shallowBytes: number }[];
   /** Present once the analysis pass has run. */
   verdict?: HeapVerdict;
+  /** Deterministic rule findings — no model involved. */
+  rules?: { version: string; findings: RuleFinding[] };
 }
 
 export function summarize(index: HeapIndex, topN = 25): HeapSummary {
@@ -195,7 +204,8 @@ type Query =
   | { type: 'treemap' }
   | { type: 'children'; row: number; limit?: number }
   | { type: 'evidence' }
-  | { type: 'growth' };
+  | { type: 'growth' }
+  | { type: 'rules' };
 
 type Incoming =
   | { type: 'parse'; path: string }
@@ -271,6 +281,12 @@ function runQuery(query: Query): unknown {
   }
 
   if (query.type === 'treemap') return computeTreemap(index, dominators);
+
+  if (query.type === 'rules') {
+    if (!residentVerdict) throw new Error('Analysis has not finished yet.');
+    const strings = scanStrings(index.textSamples, 20000, index.textCandidates);
+    return { version: RULE_PACK_VERSION, findings: runRules(index, dominators, residentVerdict, strings) };
+  }
 
   /**
    * Growth attribution — what actually changed between two dumps.
@@ -365,7 +381,9 @@ function run(path: string) {
     const { dominators, verdict } = analyzeHeap(index);
     resident = { index, dominators };
     residentVerdict = verdict;
-    send({ type: 'done', summary: { ...summarize(index), verdict } });
+    const strings = scanStrings(index.textSamples, 20000, index.textCandidates);
+    const rules = { version: RULE_PACK_VERSION, findings: runRules(index, dominators, verdict, strings) };
+    send({ type: 'done', summary: { ...summarize(index), verdict, rules } });
   } catch (err) {
     if (err instanceof ParseCancelled) send({ type: 'cancelled' });
     else send({ type: 'error', message: err instanceof Error ? err.message : String(err) });
@@ -416,7 +434,15 @@ if (process.send) {
       process.stderr.write(`pass ${p.pass}…\n`);
     },
   });
-  const summary = summarize(index);
+  // The CLI runs the same analysis the fork does, so `--json` and the panel
+  // never disagree about what the dump contains.
+  const cliAnalysis = analyzeHeap(index);
+  const cliStrings = scanStrings(index.textSamples, 20000, index.textCandidates);
+  const summary: HeapSummary = {
+    ...summarize(index),
+    verdict: cliAnalysis.verdict,
+    rules: { version: RULE_PACK_VERSION, findings: runRules(index, cliAnalysis.dominators, cliAnalysis.verdict, cliStrings) },
+  };
   const elapsed = Date.now() - started;
 
   if (truthPath) {

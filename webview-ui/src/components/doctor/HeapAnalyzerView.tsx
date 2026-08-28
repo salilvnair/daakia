@@ -40,6 +40,15 @@ interface Verdict {
   topRetainedClasses: { className: string; retainedBytes: number; instances: number }[];
 }
 
+interface RuleFinding {
+  ruleId: string;
+  title: string;
+  severity: 'critical' | 'warning' | 'info';
+  category: string;
+  detail: string;
+  remediation: string;
+}
+
 interface Summary {
   objects: number;
   classes: number;
@@ -48,6 +57,7 @@ interface Summary {
   references: number;
   histogram: { name: string; instances: number; shallowBytes: number }[];
   verdict?: Verdict;
+  rules?: { version: string; findings: RuleFinding[] };
 }
 
 type Phase =
@@ -296,6 +306,35 @@ export function HeapAnalyzerView() {
           </div>
         ))}
       </div>
+
+      {/* Rule findings — deterministic, no model involved */}
+      {summary.rules && summary.rules.findings.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+            Diagnosis · rule pack {summary.rules.version}
+          </span>
+          {summary.rules.findings.map(f => {
+            const color = f.severity === 'critical' ? 'var(--color-error)'
+              : f.severity === 'warning' ? 'var(--color-warning)' : ACCENT;
+            return (
+              <div key={f.ruleId} className="rounded-lg p-3.5 flex flex-col gap-1.5"
+                   style={{ border: '1px solid var(--color-surface-border)',
+                            borderLeft: `3px solid ${color}`, background: 'var(--color-surface)' }}>
+                <div className="flex items-baseline gap-2.5 flex-wrap">
+                  <span className="text-[9.5px] font-mono font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                        style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}>
+                    {f.severity}
+                  </span>
+                  <span className="text-[13px] font-medium text-[var(--color-text-primary)]">{f.title}</span>
+                  <span className="text-[10.5px] font-mono text-[var(--color-text-muted)]">{f.ruleId}</span>
+                </div>
+                <span className="text-[12px] text-[var(--color-text-secondary)]">{f.detail}</span>
+                <span className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">{f.remediation}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Retained by class */}
       {v && v.topRetainedClasses.length > 0 && (
