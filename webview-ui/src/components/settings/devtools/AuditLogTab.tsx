@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { postMsg } from '../../../vscode';
 import { CodeEditor } from '../../shared';
 import { TrashIcon, RefreshIcon, SearchIcon, CloseIcon, ChevronDownIcon } from '../../../icons';
+import { RequestAuditDetail, parseRequestAudit } from './RequestAuditDetail';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -417,7 +418,15 @@ export function AuditLogTab() {
                                   </div>
                                 )}
                               </div>
-                              {e.metadata && <PayloadBlock label="Metadata" value={e.metadata} color={color} />}
+                              {/* A full request record gets laid out; anything
+                                  else (including older thin rows) falls back to
+                                  the raw payload block. */}
+                              {(() => {
+                                const record = parseRequestAudit(e.metadata);
+                                return record
+                                  ? <RequestAuditDetail record={record} />
+                                  : e.metadata ? <PayloadBlock label="Metadata" value={e.metadata} color={color} /> : null;
+                              })()}
                             </div>
                           )}
                         </td>

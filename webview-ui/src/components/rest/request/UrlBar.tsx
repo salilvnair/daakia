@@ -68,7 +68,9 @@ export function UrlBar() {
       }
       return;
     }
-    logUiEvent('rest.send', { method: tab.method, url: tab.url });
+    // rest.send is audited by the extension host after the response, where the
+    // headers, timing, routing and status actually exist. Logging it here as
+    // well produced two rows per request, the click-time one nearly empty.
     sendRequest(tab);
     updateTab(tab.id, { loading: true });
   };

@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { executeRequest } from '../../../http/request-executor';
+import { buildRequestAudit } from '../../../services/request-audit';
 import { runScript, type ScriptContext } from '../../../services/script-runtime';
 import { DebugSession } from '../../../services/debugger';
 import { getOAuth2Token, type OAuth2Config } from '../../../services/oauth2';
@@ -388,24 +389,39 @@ export async function handleExecuteRequest(
       scriptSubRequests: scriptSubRequests.length > 0 ? scriptSubRequests : undefined,
     });
 
-    // Audit how the request was routed.
-    // Recorded for every request, proxied or not: "no proxy row" is ambiguous
-    // between "went direct" and "auditing is broken", and the whole point of
-    // this is to be able to tell whether the proxy setting took effect.
-    try {
-      insertUiAudit({
-        event_type: 'network',
-        module: 'proxy',
-        button: result.proxy?.used ? 'proxied' : 'direct',
-        action: `${msg.method} ${msg.url}`,
-        metadata: JSON.stringify({
-          route: result.proxy?.description ?? 'direct (no proxy resolved)',
-          warning: result.proxy?.warning,
-          status: result.response.status,
-          durationMs: result.response.time,
-        }),
-      });
-    } catch { /* auditing must never break a request */ }
+    // Full audit record. Written here rather than on click in the webview,
+    // because on click there is no response, no sent headers, no timing and no
+    // routing decision — which is why the old entry was just a method and a URL.
+    // `auditEnabled` comes from the webview so the per-event on/off config,
+    // which lives there, is still honoured.
+    if (msg.auditEnabled !== false) {
+      try {
+        insertUiAudit({
+          event_type: 'rest.send',
+          module: 'REST',
+          button: 'Send',
+          action: 'click',
+          metadata: JSON.stringify(buildRequestAudit({
+            method: msg.method as string,
+            url: msg.url as string,
+            requestHeaders: sentHeaders,
+            requestBody: requestBodyForDevTools,
+            bodyMode: msg.bodyMode as string | undefined,
+            authType: msg.authType as string | undefined,
+            params: msg.params as { key: string; value: string; enabled?: boolean }[] | undefined,
+            response: result.response,
+            proxy: result.proxy,
+            settings: settings as Record<string, unknown>,
+            scripts: {
+              preRequest: preScripts.length > 0,
+              postResponse: postResponseScripts.length > 0,
+              testsPassed: allTestResults.filter(t => t.passed).length,
+              testsFailed: allTestResults.filter(t => !t.passed).length,
+            },
+          }), null, 2),
+        });
+      } catch { /* auditing must never break a request */ }
+    }
 
     // Cookie jar: store response cookies
     if (result.response.cookies && result.response.cookies.length > 0) {

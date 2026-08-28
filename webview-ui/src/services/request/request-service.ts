@@ -2,6 +2,7 @@ import { useCollectionsStore } from '../../store/collections-store';
 import { useDebugStore } from '../../store/debug-store';
 import type { RequestTab, AuthType } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
+import { isAuditEventEnabled } from '../../store/ui-audit-store';
 import { createResolver, resolveKV, resolveObj } from '../resolve/resolve-service';
 
 /** Resolves auth: inherits from collection if request auth is 'none' */
@@ -72,6 +73,10 @@ function buildPayload(tab: RequestTab, opts?: { downloadResponse?: boolean }) {
   return {
     type: 'executeRequest' as const,
     tabId: tab.id,
+    // The per-event on/off config lives in the webview, but the audit record is
+    // written by the host after the response — so the decision travels with the
+    // request rather than the host guessing.
+    auditEnabled: isAuditEventEnabled('rest.send'),
     envId: tab.envId,
     protocol: tab.protocol || 'rest',
     method: tab.method,
