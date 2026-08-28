@@ -321,6 +321,8 @@
     "lint": "eslint src/ --ext .ts",
     "backup": "node scripts/zip_daakia_latest.js",
     "audit:ai-handlers": "node scripts/audit-ai-message-contracts.mjs",
+    "heap:parse": "node dist/heap-worker.js",
+    "heap:verify": "node dist/heap-worker.js src/test/fixtures/heap/out/leak.hprof --verify src/test/fixtures/heap/out/leak.truth.json",
     "vscode:package": "vsce package",
     "vscode:publish": "vsce publish",
     "vscode:publish:patch": "vsce publish patch",
