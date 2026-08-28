@@ -132,6 +132,14 @@ export interface HeapIndex {
   idSize: number;
   /** Milliseconds since epoch, from the dump header. */
   timestamp: number;
+  /**
+   * A bounded sample of textual byte[]/char[] contents, for the local secret
+   * scan only. This never crosses the redaction gate — the gate exists
+   * precisely because this is the most sensitive data in the dump.
+   */
+  textSamples: string[];
+  /** How many textual arrays existed, so the sample can report its own coverage. */
+  textCandidates: number;
 }
 
 /** `java/lang/String` → `java.lang.String`. Display only; keys stay internal. */

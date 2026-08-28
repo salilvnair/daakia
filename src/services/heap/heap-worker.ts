@@ -17,6 +17,11 @@ import {
   analyzeHeap, computeClassStats, computeTreemap, dominatorChildrenOf,
   type HeapVerdict, type Dominators,
 } from './heap-analysis';
+import { buildEvidencePack, buildUserMessage, HEAP_SYSTEM_PROMPT } from './heap-evidence';
+// Re-exported so the gate can be tested against the shipped bundle rather than
+// against a copy of the sources.
+export { shapeOf, scanStrings, assertNoRawContent } from './heap-redaction';
+export { buildEvidencePack } from './heap-evidence';
 
 export interface HeapSummary {
   objects: number;
@@ -150,6 +155,25 @@ export function verifyAgainstTruth(index: HeapIndex, truthPath: string): string[
     failures.push(`retained-size accounting is lossy: root retains ${verdict.liveBytes}, live shallow sums to ${liveShallow}`);
   }
 
+  // ── The redaction gate must see the planted duplicate content ──
+  // Sampling is uniform across the dump, so a value repeated DUP_COUNT times
+  // should appear roughly coverage x DUP_COUNT times in the sample.
+  const pack = buildEvidencePack(index, dominators, verdict);
+  const dupLen = String(truth.duplicateStringText).length;
+  const expectedDupSamples = Math.floor(truth.counts.dupHolder * pack.strings.coverage * 0.5);
+  const foundDup = pack.strings.duplicates.find(d => d.length === dupLen && d.count >= expectedDupSamples);
+  if (!foundDup) {
+    failures.push(
+      `duplicate-string detection: expected a ${dupLen}-char value repeated >= ${expectedDupSamples} times ` +
+      `in the sample (coverage ${(pack.strings.coverage * 100).toFixed(1)}%), got ` +
+      `[${pack.strings.duplicates.slice(0, 3).map(d => `len ${d.length} x ${d.count}`).join(', ')}]`,
+    );
+  }
+  // And the gate must never let content through.
+  if (JSON.stringify(pack).includes(truth.duplicateStringText)) {
+    failures.push('REDACTION FAILURE: the evidence pack contains raw string content.');
+  }
+
   // ── Structural invariants ──
   if (index.refOffset[index.count] !== index.refTarget.length) {
     failures.push(`CSR offsets end at ${index.refOffset[index.count]} but refTarget has ${index.refTarget.length}`);
@@ -169,7 +193,8 @@ export function verifyAgainstTruth(index: HeapIndex, truthPath: string): string[
 type Query =
   | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number }
   | { type: 'treemap' }
-  | { type: 'children'; row: number; limit?: number };
+  | { type: 'children'; row: number; limit?: number }
+  | { type: 'evidence' };
 
 type Incoming =
   | { type: 'parse'; path: string }
@@ -188,6 +213,8 @@ let cancelled = false;
 
 /** Held after a successful parse so queries need no re-read. */
 let resident: { index: HeapIndex; dominators: Dominators } | null = null;
+let residentVerdict: HeapVerdict | null = null;
+let residentName = 'heap dump';
 
 function send(msg: Outgoing) { process.send?.(msg); }
 
@@ -210,6 +237,16 @@ function runQuery(query: Query): unknown {
   }
 
   if (query.type === 'treemap') return computeTreemap(index, dominators);
+
+  // The pack is built here, inside the process that holds the dump, so the
+  // redaction gate runs before anything can reach the host — let alone a model.
+  if (query.type === 'evidence') {
+    if (!residentVerdict) throw new Error('Analysis has not finished yet.');
+    const pack = buildEvidencePack(index, dominators, residentVerdict);
+    // The prompt travels with the pack so the view renders exactly what will be
+    // sent, rather than a webview-side copy that could drift from the real one.
+    return { pack, systemPrompt: HEAP_SYSTEM_PROMPT, userMessage: buildUserMessage(pack, residentName) };
+  }
 
   if (query.type === 'children') {
     return {
@@ -236,6 +273,7 @@ function run(path: string) {
     send({ type: 'progress', pass: 'analyze', bytesRead: 0, totalBytes: 0 });
     const { dominators, verdict } = analyzeHeap(index);
     resident = { index, dominators };
+    residentVerdict = verdict;
     send({ type: 'done', summary: { ...summarize(index), verdict } });
   } catch (err) {
     if (err instanceof ParseCancelled) send({ type: 'cancelled' });
@@ -246,7 +284,11 @@ function run(path: string) {
 if (process.send) {
   // Forked by the extension host.
   process.on('message', (msg: Incoming) => {
-    if (msg.type === 'parse') { resident = null; run(msg.path); }
+    if (msg.type === 'parse') {
+      resident = null; residentVerdict = null;
+      residentName = msg.path.split(/[\/]/).pop() || 'heap dump';
+      run(msg.path);
+    }
     else if (msg.type === 'cancel') cancelled = true;
     else if (msg.type === 'query') {
       try {
@@ -256,8 +298,10 @@ if (process.send) {
       }
     }
   });
-} else {
+} else if (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) {
   // Standalone: node dist/heap-worker.js <dump.hprof> [--json]
+  // Guarded on require.main so importing this bundle (the gate tests do) does
+  // not fire the CLI and exit the importing process.
   const path = process.argv[2];
   if (!path) {
     console.error('usage: node heap-worker.js <dump.hprof> [--json]');

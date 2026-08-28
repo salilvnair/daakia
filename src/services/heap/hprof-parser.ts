@@ -70,6 +70,12 @@ export interface ParseProgress {
 }
 
 export interface ParseOptions {
+  /**
+   * How many byte[]/char[] payloads to sample the contents of, for the local
+   * secret scan. Contents never leave this process — the redaction gate needs
+   * to look at them precisely so that it can refuse to send them.
+   */
+  textSampleLimit?: number;
   onProgress?: (p: ParseProgress) => void;
   /** Polled between records; parsing aborts promptly when it returns true. */
   isCancelled?: () => boolean;
@@ -126,7 +132,45 @@ class Reader {
     return v;
   }
 
+  /** Raw bytes without decoding — the caller decides the encoding. */
+  utf8Bytes(len: number): Buffer {
+    if (len <= 0) return Buffer.alloc(0);
+    if (len > this.buf.length) {
+      const tmp = Buffer.alloc(len);
+      readSync(this.fd, tmp, 0, len, this.pos);
+      this.pos += len;
+      return tmp;
+    }
+    this.fill(len);
+    const out = Buffer.from(this.buf.subarray(this.at(), this.at() + len));
+    this.pos += len;
+    return out;
+  }
+
   skip(n: number) { this.pos += n; }
+}
+
+/** UTF-16BE, as char[] is stored in a dump. */
+function decodeUtf16(buf: Buffer): string {
+  let out = '';
+  for (let i = 0; i + 1 < buf.length; i += 2) out += String.fromCharCode(buf.readUInt16BE(i));
+  return out;
+}
+
+/**
+ * Is this array plausibly text rather than binary?
+ *
+ * Deliberately generous: a false positive costs one extra string in a local
+ * scan, while a false negative means a credential slips past the gate unseen.
+ */
+function looksTextual(s: string): boolean {
+  if (s.length < 4) return false;
+  let printable = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 9 || c === 10 || c === 13 || (c >= 32 && c < 127)) printable++;
+  }
+  return printable / s.length > 0.85;
 }
 
 /** Header: a NUL-terminated magic, then identifier size and a 64-bit timestamp. */
@@ -162,7 +206,7 @@ function walk(
     onClassDump?: (c: { classId: number; superId: number; instanceSize: number; fields: { nameId: number; type: number }[]; staticRefs: number[] }) => void;
     onInstance?: (objId: number, classId: number, fieldBytesAt: number, fieldBytesLen: number) => void;
     onObjectArray?: (objId: number, arrayClassId: number, elementsAt: number, n: number) => void;
-    onPrimitiveArray?: (objId: number, type: number, n: number, bytes: number) => void;
+    onPrimitiveArray?: (objId: number, type: number, n: number, bytes: number, at: number) => void;
     onRoot?: (objId: number, tag: number) => void;
   },
   opts: ParseOptions,
@@ -241,8 +285,9 @@ function walk(
           const n = r.u4();
           const t = r.u1();
           const w = typeWidth(t, idSize);
+          const at = r.pos;
           r.skip(n * w);
-          handlers.onPrimitiveArray?.(objId, t, n, n * w);
+          handlers.onPrimitiveArray?.(objId, t, n, n * w, at);
 
         } else {
           const extra = ROOT_EXTRA_U4[sub];
@@ -329,6 +374,12 @@ export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
     const ids = new IdMap(estimate);
     let count = 0;
 
+    // Counted in pass A so pass C can stride evenly across the file rather than
+    // taking the first N. Dump order is not representative — the early records
+    // are dominated by whatever the VM allocated first, so a prefix sample can
+    // miss duplicated values and credentials entirely.
+    let textCandidates = 0;
+
     type Pending = { row: number; classId: number; kind: number; shallow: number };
     const pending: Pending[] = [];
     const rootsRaw: { objId: number; tag: number }[] = [];
@@ -356,9 +407,10 @@ export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
         ids.set(objId, count);
         pending.push({ row: count++, classId: arrayClassId, kind: KIND_OBJECT_ARRAY, shallow: n * idSize });
       },
-      onPrimitiveArray: (objId, t, _n, bytes) => {
+      onPrimitiveArray: (objId, t, n, bytes) => {
         ids.set(objId, count);
         pending.push({ row: count++, classId: primClass(t).classId, kind: KIND_PRIMITIVE_ARRAY, shallow: bytes });
+        if ((t === 8 || t === 5) && n > 0 && n <= 4096) textCandidates++;
       },
       onRoot: (objId, tag) => rootsRaw.push({ objId, tag }),
     }, opts, 'A');
@@ -418,6 +470,16 @@ export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
     refOffset[count] = acc;
 
     // ── Pass C — fill the edge array ────────────────────────────────────────
+    const textSampleLimit = opts.textSampleLimit ?? 20000;
+    const textSamples: string[] = [];
+    const MAX_SAMPLE_CHARS = 220;
+    // Deterministic systematic sample: every stride-th candidate. Uniform across
+    // the whole dump, and repeatable, which a reservoir sample would not be.
+    const textStride = textCandidates > textSampleLimit
+      ? Math.floor(textCandidates / textSampleLimit)
+      : 1;
+    let textSeen = 0;
+
     const refTarget = new Int32Array(acc);
     const cursor = new Uint32Array(count);
     const push = (row: number, targetId: number) => {
@@ -451,11 +513,25 @@ export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
         for (let i = 0; i < n; i++) push(row, r.id(idSize));
         r.seek(at + n * idSize);
       },
+      // Sample byte[] and char[] payloads — these back every String in the heap,
+      // which is where credentials and personal data actually live.
+      onPrimitiveArray: (_objId, type, n, byteLen, at) => {
+        if (type !== 8 && type !== 5) return;          // byte, char
+        if (n === 0 || n > 4096) return;               // huge buffers are rarely text
+        if (textSeen++ % textStride !== 0) return;
+        if (textSamples.length >= textSampleLimit) return;
+        const take = Math.min(byteLen, MAX_SAMPLE_CHARS);
+        r.seek(at);
+        const raw = r.utf8Bytes(take);
+        r.seek(at + byteLen);
+        const text = type === 5 ? decodeUtf16(raw) : raw.toString('latin1');
+        if (looksTextual(text)) textSamples.push(text);
+      },
     }, opts, 'C');
 
     return {
       count, classOf, shallow, kind, flags, refOffset, refTarget,
-      classes, roots, totalBytes, idSize, timestamp,
+      classes, roots, totalBytes, idSize, timestamp, textSamples, textCandidates,
     };
   } finally {
     closeSync(fd);

@@ -16,6 +16,7 @@ import { ButtonView } from '@salilvnair/dui';
 import { HeapHistogramView } from './HeapHistogramView';
 import { HeapTreemapView } from './HeapTreemapView';
 import { HeapGraphView } from './HeapGraphView';
+import { HeapExplainView } from './HeapExplainView';
 
 const ACCENT = 'var(--color-doctor)';
 
@@ -77,13 +78,14 @@ function severityColor(percent: number): string {
   return ACCENT;
 }
 
-type SubView = 'verdict' | 'histogram' | 'treemap' | 'graph';
+type SubView = 'verdict' | 'histogram' | 'treemap' | 'graph' | 'explain';
 
 const SUB_VIEWS: { id: SubView; label: string }[] = [
   { id: 'verdict', label: 'Verdict' },
   { id: 'histogram', label: 'Histogram' },
   { id: 'treemap', label: 'Treemap' },
   { id: 'graph', label: 'Retention' },
+  { id: 'explain', label: 'Explain' },
 ];
 
 export function HeapAnalyzerView() {
@@ -210,6 +212,7 @@ export function HeapAnalyzerView() {
       {view === 'histogram' && <HeapHistogramView liveBytes={liveBytes} />}
       {view === 'treemap' && <HeapTreemapView />}
       {view === 'graph' && <HeapGraphView liveBytes={liveBytes} />}
+      {view === 'explain' && <HeapExplainView />}
       {view === 'verdict' && (
       <div className="flex flex-col gap-4 px-4 py-4 overflow-y-auto flex-1 min-h-0">
 

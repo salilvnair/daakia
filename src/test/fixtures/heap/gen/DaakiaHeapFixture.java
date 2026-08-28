@@ -32,8 +32,9 @@ import java.util.concurrent.CountDownLatch;
  *                   rather than against another tool.
  *
  *   DupHolder       DUP_COUNT instances each holding a String with identical
- *                   content but a distinct identity (built via new String), so
- *                   duplicate-string detection has a known answer.
+ *                   content in distinct backing arrays (copied via char[], since
+ *                   new String(String) shares one), so duplicate-string
+ *                   detection has a known answer.
  *
  *   DeepNode        A CHAIN_DEPTH-long singly-linked chain off a static root.
  *                   Tests path-to-GC-root over a long chain and dominator-tree
@@ -98,9 +99,14 @@ public final class DaakiaHeapFixture {
             CACHE.put("key-" + i, new LeakedEntry(i));
         }
 
-        // ── Plant the duplicate strings (new String defeats interning) ──
+        // ── Plant the duplicate strings ──
+        // new String(String) SHARES the backing array in JDK 9+, so it produces
+        // distinct String objects over one byte[] and tests nothing about
+        // duplicate *content*. Copying through a char[] forces a fresh backing
+        // array per instance, which is the shape a real duplicate-string problem
+        // has and what the analyzer's scanner needs to detect.
         for (int i = 0; i < DUP_COUNT; i++) {
-            DUPS.add(new DupHolder(new String(DUP_TEXT)));
+            DUPS.add(new DupHolder(new String(DUP_TEXT.toCharArray())));
         }
 
         // ── Plant the deep chain ──

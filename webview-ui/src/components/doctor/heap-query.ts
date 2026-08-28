@@ -10,7 +10,8 @@ import { postMsg } from '../../vscode';
 export type HeapQuery =
   | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number }
   | { type: 'treemap' }
-  | { type: 'children'; row: number; limit?: number };
+  | { type: 'children'; row: number; limit?: number }
+  | { type: 'evidence' };
 
 export interface ClassStat {
   classRow: number;
