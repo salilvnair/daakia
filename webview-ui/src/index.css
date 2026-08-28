@@ -76,6 +76,10 @@
   --color-mock-server-muted: #d4a017;
   --color-try-button: #6366f1;
 
+  /* Doctor — diagnostics (heap / thread / log analysis) */
+  --color-doctor: #10b981;
+  --color-doctor-muted: #0d9668;
+
   /* Settings */
   --color-settings: #2a9d8f;
 
@@ -327,6 +331,9 @@
   --color-mock-server: #b55e00;
   --color-mock-server-muted: #92400e;
   --color-try-button: #4338ca;
+
+  --color-doctor: #047857;
+  --color-doctor-muted: #065f46;
 
   --color-settings: #1f7a6e;
   --color-wiki: #b45309;

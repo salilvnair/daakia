@@ -17,6 +17,7 @@ import { sendRequest, saveRequest } from './services/request';
 import { AppSidebar, SidebarSection } from './components/sidebar';
 import { SettingsPanel } from './components/sidebar/SettingsPanel';
 import { MockServerPanel } from './components/mock/MockServerPanel';
+import { DoctorPanel } from './components/doctor/DoctorPanel';
 import { SmStateMachineTabPage } from './components/mock/SmStateMachineTabPage';
 import { GraphQLPanel } from './components/graphql';
 import { WebSocketPanel } from './components/websocket';
@@ -47,7 +48,7 @@ import { getVsCodeApi, postMsg } from './vscode';
 import { useSMWorkspaceStore } from '@salilvnair/state-machine';
 import { DaakiaSMConsumer } from './consumer/DaakiaSMConsumer';
 import { getProtocolAccent } from './colors';
-import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, DevToolsIcon } from './icons';
+import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, DevToolsIcon } from './icons';
 import { DevToolsPanel } from './components/shared/devtools';
 import { DebugHud } from './components/shared/debugger';
 import { useExtensionMessages } from './app/use-extension-messages';
@@ -199,6 +200,7 @@ export default function App() {
     };
     const tabProtocol = activeTab?.protocol || activeProtocol;
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+      : activeTab?.type === 'doctor' ? 'var(--color-doctor)'
       : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
       : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -453,6 +455,7 @@ export default function App() {
 
   const tabProtocol = activeTab?.protocol || activeProtocol;
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+    : activeTab?.type === 'doctor' ? 'var(--color-doctor)'
     : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
     : activeTab?.type === 'wiki' ? 'var(--color-wiki)'
@@ -549,6 +552,17 @@ export default function App() {
         {/* Spacer pushes bottom icons down */}
         <div className="flex-1" />
 
+        {/* Doctor — heap / thread / log diagnostics */}
+        <ProtocolIcon
+          active={activeTab?.type === 'doctor'}
+          open={tabs.some(t => t.type === 'doctor')}
+          accentColor="var(--color-doctor)"
+          onClick={() => useTabsStore.getState().openDoctorTab()}
+          title="Doctor — Diagnostics"
+        >
+          <StethoscopeIcon size={16} strokeWidth={1.8} />
+        </ProtocolIcon>
+
         {/* Mock Server icon — bg stays while tab is open, iOS badge when servers running */}
         <div className="relative">
           <ProtocolIcon
@@ -617,6 +631,17 @@ export default function App() {
           </div>
         )}
 
+        {/* DoctorPanel — kept mounted so a parsed dump and the selected analyzer
+            survive Daakia tab switches instead of being re-parsed on every visit. */}
+        {tabs.some(t => t.type === 'doctor') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'doctor' ? 'flex' : 'none' }}
+          >
+            <DoctorPanel />
+          </div>
+        )}
+
         {/* MockServerPanel — always mounted when any mock-server tab exists.
             Keeps ServerDetail sub-tab selection (State Machine, Traffic, etc.)
             alive across Daakia tab switches. */}
@@ -656,6 +681,7 @@ export default function App() {
         {activeTab?.type === 'settings' ? (
           <SettingsPanel />
         ) : activeTab?.type === 'mock-server' ? null
+        : activeTab?.type === 'doctor' ? null
         : activeTab?.type === 'state-machine' ? null
         : activeTab?.type === 'wiki' ? null
         : activeTab?.type === 'daakia-ai' ? null
@@ -740,7 +766,7 @@ export default function App() {
         </div>
 
         {/* Sidebar splitter — only for protocol tabs that have an expandable panel */}
-        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
+        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'doctor' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
           <div
             className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
             onPointerDown={handleSidebarPointerDown}

@@ -66,8 +66,9 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
   const isStateMachine = activeTab?.type === 'state-machine';
   const isDaakiaAi = activeTab?.type === 'daakia-ai';
   const isWiki = activeTab?.type === 'wiki';
-  // Never show protocol icons when settings, mock-server, state-machine, daakia-ai, or wiki tab is active
-  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi && !isWiki;
+  const isDoctor = activeTab?.type === 'doctor';
+  // Never show protocol icons when settings, mock-server, doctor, state-machine, daakia-ai, or wiki tab is active
+  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi && !isWiki && !isDoctor;
   const showRestSidebar = showProtocolIcons && activeProtocol === 'rest';
   const showGraphqlSidebar = showProtocolIcons && activeProtocol === 'graphql';
   const showWebsocketSidebar = showProtocolIcons && activeProtocol === 'websocket';
