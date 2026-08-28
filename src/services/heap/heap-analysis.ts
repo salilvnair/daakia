@@ -52,8 +52,27 @@ export interface HeapVerdict {
   unreachableObjects: number;
   unreachableBytes: number;
   suspects: LeakSuspect[];
-  /** Largest classes by *retained* size, which is the ranking that matters. */
-  topRetainedClasses: { className: string; retainedBytes: number; instances: number }[];
+  /** Largest classes by live shallow bytes. See ClassStat for why not retained. */
+  topClasses: ClassStat[];
+}
+
+/**
+ * Per-class totals over live instances.
+ *
+ * `shallowBytes` is exact and additive — every live object contributes to
+ * exactly one class, so these sum to the live heap. `retainedBytes` is the sum
+ * of each instance's retained size, which is the cheap approximation and can
+ * exceed the live heap when instances of a class dominate each other (a linked
+ * list is the obvious case). MAT's histogram column is the *union* of those
+ * retained sets, which costs a traversal per class; this is not that, and the
+ * UI labels it as a sum so the two are never confused.
+ */
+export interface ClassStat {
+  classRow: number;
+  className: string;
+  instances: number;
+  shallowBytes: number;
+  retainedSumBytes: number;
 }
 
 const VIRTUAL_ROOT = (index: HeapIndex) => index.count;
@@ -379,6 +398,115 @@ export function findLeakSuspects(
   });
 }
 
+/** Per-class totals across live instances. Used by the verdict and the histogram. */
+export function computeClassStats(index: HeapIndex, dom: Dominators): ClassStat[] {
+  const n = index.classes.length;
+  const instances = new Int32Array(n);
+  const shallowBytes = new Float64Array(n);
+  const retainedSum = new Float64Array(n);
+
+  for (let i = 1; i < dom.order.length; i++) {
+    const row = dom.order[i];
+    const c = index.classOf[row];
+    if (c < 0 || index.kind[row] === KIND_CLASS) continue;
+    instances[c]++;
+    shallowBytes[c] += index.shallow[row];
+    retainedSum[c] += dom.retained[row];
+  }
+
+  const out: ClassStat[] = [];
+  for (let c = 0; c < n; c++) {
+    if (instances[c] === 0) continue;
+    out.push({
+      classRow: c,
+      className: displayClassName(index.classes[c].name),
+      instances: instances[c],
+      shallowBytes: shallowBytes[c],
+      retainedSumBytes: retainedSum[c],
+    });
+  }
+  return out;
+}
+
+/**
+ * Live bytes grouped by package then class, for the treemap.
+ *
+ * Deliberately shallow, not retained: a treemap's areas have to sum to the
+ * whole, and shallow bytes are the only per-object metric that partitions the
+ * heap exactly. Retained sizes overlap by construction, so a retained treemap
+ * would draw rectangles totalling more than the heap.
+ */
+export function computeTreemap(index: HeapIndex, dom: Dominators, maxLeaves = 400): {
+  totalBytes: number;
+  groups: { name: string; bytes: number; children: { name: string; bytes: number; instances: number }[] }[];
+} {
+  const stats = computeClassStats(index, dom);
+  const byPackage = new Map<string, { name: string; bytes: number; children: { name: string; bytes: number; instances: number }[] }>();
+
+  for (const s of stats) {
+    const cls = s.className;
+    const dot = cls.lastIndexOf('.');
+    // Arrays and primitives have no package; group them so they stay visible.
+    const pkg = cls.startsWith('[') ? 'arrays' : dot > 0 ? cls.slice(0, dot) : '(default)';
+    let g = byPackage.get(pkg);
+    if (!g) { g = { name: pkg, bytes: 0, children: [] }; byPackage.set(pkg, g); }
+    g.bytes += s.shallowBytes;
+    g.children.push({ name: dot > 0 && !cls.startsWith('[') ? cls.slice(dot + 1) : cls, bytes: s.shallowBytes, instances: s.instances });
+  }
+
+  const groups = [...byPackage.values()].sort((a, b) => b.bytes - a.bytes);
+  // Cap the leaf count so the renderer stays smooth; the tail is rolled up
+  // rather than dropped, so the areas still sum to the live heap.
+  let budget = maxLeaves;
+  for (const g of groups) {
+    g.children.sort((a, b) => b.bytes - a.bytes);
+    const keep = Math.max(1, Math.min(g.children.length, Math.floor(budget / groups.length) || 1, 40));
+    if (g.children.length > keep) {
+      const rest = g.children.slice(keep);
+      const bytes = rest.reduce((t, c) => t + c.bytes, 0);
+      const instances = rest.reduce((t, c) => t + c.instances, 0);
+      g.children = g.children.slice(0, keep);
+      if (bytes > 0) g.children.push({ name: `… ${rest.length} more`, bytes, instances });
+    }
+    budget -= g.children.length;
+  }
+
+  return { totalBytes: dom.liveBytes, groups };
+}
+
+/**
+ * Children index, built once per analysis and reused.
+ *
+ * The retention graph expands one node at a time, so recomputing children by
+ * scanning every row per click would make the graph unusable on a real dump.
+ */
+const childCache = new WeakMap<Dominators, { childOffset: Uint32Array; childTarget: Int32Array }>();
+function childrenIndex(index: HeapIndex, dom: Dominators) {
+  let c = childCache.get(dom);
+  if (!c) { c = buildDominatorChildren(index, dom); childCache.set(dom, c); }
+  return c;
+}
+
+/** Dominator children of a row, largest first — one level of the retention graph. */
+export function dominatorChildrenOf(
+  index: HeapIndex, dom: Dominators, row: number, limit = 12,
+): { row: number; className: string; retainedBytes: number; shallowBytes: number; childCount: number }[] {
+  const { childOffset, childTarget } = childrenIndex(index, dom);
+  const target = row < 0 ? index.count : row;
+
+  const kids: number[] = [];
+  for (let e = childOffset[target]; e < childOffset[target + 1]; e++) kids.push(childTarget[e]);
+  kids.sort((a, b) => dom.retained[b] - dom.retained[a]);
+
+  return kids.slice(0, limit).map(k => ({
+    row: k,
+    className: classNameOf(index, k),
+    retainedBytes: dom.retained[k],
+    shallowBytes: index.shallow[k],
+    childCount: childOffset[k + 1] - childOffset[k],
+  }));
+}
+
 export function buildVerdict(index: HeapIndex, dom: Dominators): HeapVerdict {
   let unreachableObjects = 0;
   let unreachableBytes = 0;
@@ -389,24 +517,8 @@ export function buildVerdict(index: HeapIndex, dom: Dominators): HeapVerdict {
     }
   }
 
-  // Retained size per class — the ranking that actually points at a leak,
-  // as opposed to shallow size which just finds whatever is numerous.
-  const perClass = new Float64Array(index.classes.length);
-  const perClassCount = new Int32Array(index.classes.length);
-  for (let i = 1; i < dom.order.length; i++) {
-    const row = dom.order[i];
-    const c = index.classOf[row];
-    if (c < 0 || index.kind[row] === KIND_CLASS) continue;
-    perClass[c] += index.shallow[row];
-    perClassCount[c]++;
-  }
-  const topRetainedClasses = Array.from(index.classes, (c, i) => ({
-    className: displayClassName(c.name),
-    retainedBytes: perClass[i],
-    instances: perClassCount[i],
-  }))
-    .filter(c => c.instances > 0)
-    .sort((a, b) => b.retainedBytes - a.retainedBytes)
+  const topClasses = computeClassStats(index, dom)
+    .sort((a, b) => b.shallowBytes - a.shallowBytes)
     .slice(0, 20);
 
   return {
@@ -415,7 +527,7 @@ export function buildVerdict(index: HeapIndex, dom: Dominators): HeapVerdict {
     unreachableObjects,
     unreachableBytes,
     suspects: findLeakSuspects(index, dom),
-    topRetainedClasses,
+    topClasses,
   };
 }
 

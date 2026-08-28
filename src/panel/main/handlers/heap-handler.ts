@@ -59,8 +59,14 @@ export function handleHeapAnalyze(msg: Record<string, unknown>, postMessage: Pos
     if (m.type === 'progress') {
       postMessage({ type: 'heap:progress', pass: m.pass, bytesRead: m.bytesRead, totalBytes: m.totalBytes });
     } else if (m.type === 'done') {
+      // Deliberately NOT killed: the exploration views query the resident index,
+      // and re-parsing per view would cost minutes each time. It is disposed when
+      // another dump is opened, on cancel, or when the panel goes away.
       postMessage({ type: 'heap:done', path: dumpPath, name: path.basename(dumpPath), summary: m.summary });
-      killActive();
+    } else if (m.type === 'queryResult') {
+      postMessage({ type: 'heap:queryResult', requestId: m.requestId, result: m.result });
+    } else if (m.type === 'queryError') {
+      postMessage({ type: 'heap:queryError', requestId: m.requestId, message: m.message });
     } else if (m.type === 'cancelled') {
       postMessage({ type: 'heap:cancelled' });
       killActive();
@@ -88,6 +94,20 @@ export function handleHeapAnalyze(msg: Record<string, unknown>, postMessage: Pos
   child.stderr?.on('data', (d: Buffer) => console.error('[heap-worker]', d.toString().trim()));
 
   child.send({ type: 'parse', path: dumpPath });
+}
+
+/** Relay a view's query to the resident worker. */
+export function handleHeapQuery(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const requestId = msg.requestId as string;
+  if (!active) {
+    postMessage({ type: 'heap:queryError', requestId, message: 'No heap dump is loaded.' });
+    return;
+  }
+  try {
+    active.send({ type: 'query', requestId, query: msg.query });
+  } catch {
+    postMessage({ type: 'heap:queryError', requestId, message: 'The heap worker is no longer running.' });
+  }
 }
 
 export function handleHeapCancel(postMessage: PostMessage) {

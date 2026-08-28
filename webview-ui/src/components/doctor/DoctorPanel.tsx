@@ -16,7 +16,7 @@
 import { useState } from 'react';
 import { StethoscopeIcon, MemoryIcon, LayersIcon, DocumentIcon } from '../../icons';
 import { useUiStateStore } from '../../store/ui-state-store';
-import { HeapVerdictView } from './HeapVerdictView';
+import { HeapAnalyzerView } from './HeapAnalyzerView';
 
 const ACCENT = 'var(--color-doctor)';
 
@@ -93,7 +93,7 @@ export function DoctorPanel() {
 
       {/* Body */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {active.ready ? <HeapVerdictView /> : (
+        {active.ready ? <HeapAnalyzerView /> : (
         <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
           <StethoscopeIcon size={40} strokeWidth={1} style={{ color: ACCENT, opacity: 0.4 }} />
           <p className="text-[13px] text-[var(--color-text-primary)] m-0">{active.label} analyzer</p>

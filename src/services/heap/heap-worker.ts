@@ -13,7 +13,10 @@
 import { readFileSync } from 'fs';
 import { parseHprof, ParseCancelled, type ParseProgress } from './hprof-parser';
 import { displayClassName, KIND_INSTANCE, type HeapIndex } from './heap-index';
-import { analyzeHeap, type HeapVerdict } from './heap-analysis';
+import {
+  analyzeHeap, computeClassStats, computeTreemap, dominatorChildrenOf,
+  type HeapVerdict, type Dominators,
+} from './heap-analysis';
 
 export interface HeapSummary {
   objects: number;
@@ -157,16 +160,66 @@ export function verifyAgainstTruth(index: HeapIndex, truthPath: string): string[
 }
 
 // ── IPC protocol ─────────────────────────────────────────────────────────────
-type Incoming = { type: 'parse'; path: string } | { type: 'cancel' };
+/**
+ * The worker stays alive after parsing and answers queries from the resident
+ * index. Re-parsing per view would cost minutes each time, and shipping the
+ * whole graph to the webview is exactly what the columnar design exists to
+ * avoid — so the views ask for small, pre-aggregated slices instead.
+ */
+type Query =
+  | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number }
+  | { type: 'treemap' }
+  | { type: 'children'; row: number; limit?: number };
+
+type Incoming =
+  | { type: 'parse'; path: string }
+  | { type: 'cancel' }
+  | ({ type: 'query'; requestId: string } & { query: Query });
+
 type Outgoing =
   | { type: 'progress'; pass: string; bytesRead: number; totalBytes: number }
   | { type: 'done'; summary: HeapSummary }
   | { type: 'cancelled' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'queryResult'; requestId: string; result: unknown }
+  | { type: 'queryError'; requestId: string; message: string };
 
 let cancelled = false;
 
+/** Held after a successful parse so queries need no re-read. */
+let resident: { index: HeapIndex; dominators: Dominators } | null = null;
+
 function send(msg: Outgoing) { process.send?.(msg); }
+
+function runQuery(query: Query): unknown {
+  if (!resident) throw new Error('No heap dump is loaded.');
+  const { index, dominators } = resident;
+
+  if (query.type === 'histogram') {
+    const search = (query.search ?? '').trim().toLowerCase();
+    let rows = computeClassStats(index, dominators);
+    if (search) rows = rows.filter(r => r.className.toLowerCase().includes(search));
+    const sort = query.sort ?? 'shallow';
+    rows.sort((a, b) =>
+      sort === 'instances' ? b.instances - a.instances
+      : sort === 'retained' ? b.retainedSumBytes - a.retainedSumBytes
+      : b.shallowBytes - a.shallowBytes);
+    const offset = query.offset ?? 0;
+    const limit = Math.min(query.limit ?? 200, 1000);
+    return { total: rows.length, rows: rows.slice(offset, offset + limit) };
+  }
+
+  if (query.type === 'treemap') return computeTreemap(index, dominators);
+
+  if (query.type === 'children') {
+    return {
+      row: query.row,
+      children: dominatorChildrenOf(index, dominators, query.row, query.limit ?? 12),
+    };
+  }
+
+  throw new Error(`Unknown query`);
+}
 
 function run(path: string) {
   // Progress is chatty by nature; throttle so IPC doesn't dominate the parse.
@@ -181,7 +234,8 @@ function run(path: string) {
   try {
     const index = parseHprof(path, { onProgress, isCancelled: () => cancelled });
     send({ type: 'progress', pass: 'analyze', bytesRead: 0, totalBytes: 0 });
-    const { verdict } = analyzeHeap(index);
+    const { dominators, verdict } = analyzeHeap(index);
+    resident = { index, dominators };
     send({ type: 'done', summary: { ...summarize(index), verdict } });
   } catch (err) {
     if (err instanceof ParseCancelled) send({ type: 'cancelled' });
@@ -192,8 +246,15 @@ function run(path: string) {
 if (process.send) {
   // Forked by the extension host.
   process.on('message', (msg: Incoming) => {
-    if (msg.type === 'parse') run(msg.path);
+    if (msg.type === 'parse') { resident = null; run(msg.path); }
     else if (msg.type === 'cancel') cancelled = true;
+    else if (msg.type === 'query') {
+      try {
+        send({ type: 'queryResult', requestId: msg.requestId, result: runQuery(msg.query) });
+      } catch (err) {
+        send({ type: 'queryError', requestId: msg.requestId, message: err instanceof Error ? err.message : String(err) });
+      }
+    }
   });
 } else {
   // Standalone: node dist/heap-worker.js <dump.hprof> [--json]
@@ -243,9 +304,9 @@ FAIL — ${failures.length} check(s) did not hold:`);
     console.log(`\nlive        ${verdict.liveObjects} objects / ${mb(verdict.liveBytes)}`);
     console.log(`unreachable ${verdict.unreachableObjects} objects / ${mb(verdict.unreachableBytes)}`);
 
-    console.log('\ntop classes by RETAINED size:');
-    for (const c of verdict.topRetainedClasses.slice(0, 6)) {
-      console.log(`  ${mb(c.retainedBytes).padStart(9)}  ${String(c.instances).padStart(7)} objs  ${c.className}`);
+    console.log('\ntop classes by live shallow bytes:');
+    for (const c of verdict.topClasses.slice(0, 6)) {
+      console.log(`  ${mb(c.shallowBytes).padStart(9)}  ${String(c.instances).padStart(7)} objs  ${c.className}`);
     }
 
     console.log('\nleak suspects:');

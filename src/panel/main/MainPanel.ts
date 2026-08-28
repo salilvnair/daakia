@@ -76,7 +76,7 @@ import {
   handleBinPermanentlyDelete, handleBinPermanentlyDeleteGroup, handleBinEmpty,
 } from './handlers/bin-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
-import { handleHeapOpen, handleHeapAnalyze, handleHeapCancel } from './handlers/heap-handler';
+import { handleHeapOpen, handleHeapAnalyze, handleHeapCancel, handleHeapQuery } from './handlers/heap-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
   initSmWorkflowStorage,
@@ -476,6 +476,9 @@ export class MainPanel {
         break;
       case 'heap:cancel':
         handleHeapCancel(this._post);
+        break;
+      case 'heap:query':
+        handleHeapQuery(msg, this._post);
         break;
 
       case 'mockServer:getAll':

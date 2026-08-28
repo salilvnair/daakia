@@ -13,6 +13,9 @@ import { useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { MemoryIcon, StethoscopeIcon, CloseCircleIcon } from '../../icons';
 import { ButtonView } from '@salilvnair/dui';
+import { HeapHistogramView } from './HeapHistogramView';
+import { HeapTreemapView } from './HeapTreemapView';
+import { HeapGraphView } from './HeapGraphView';
 
 const ACCENT = 'var(--color-doctor)';
 
@@ -74,13 +77,24 @@ function severityColor(percent: number): string {
   return ACCENT;
 }
 
-export function HeapVerdictView() {
+type SubView = 'verdict' | 'histogram' | 'treemap' | 'graph';
+
+const SUB_VIEWS: { id: SubView; label: string }[] = [
+  { id: 'verdict', label: 'Verdict' },
+  { id: 'histogram', label: 'Histogram' },
+  { id: 'treemap', label: 'Treemap' },
+  { id: 'graph', label: 'Retention' },
+];
+
+export function HeapAnalyzerView() {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  const [view, setView] = useState<SubView>('verdict');
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msg = e.data;
       if (msg?.type === 'heap:started') {
+        setView('verdict');
         setPhase({ kind: 'running', name: msg.name, pass: 'A', percent: 0 });
       } else if (msg?.type === 'heap:progress') {
         setPhase(p => p.kind === 'running'
@@ -157,26 +171,47 @@ export function HeapVerdictView() {
     );
   }
 
-  // ── Verdict ──
+  // ── Loaded ──
   const { summary, name } = phase;
   const v = summary.verdict;
-  const livePct = summary.totalBytes ? ((v?.liveBytes ?? 0) / summary.totalBytes) * 100 : 0;
+  const liveBytes = v?.liveBytes ?? 0;
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-4 overflow-y-auto h-full">
-      {/* Header line */}
-      <div className="flex items-center gap-2.5 flex-wrap">
+    <div className="flex flex-col h-full min-h-0">
+      {/* Dump header + view switcher */}
+      <div className="flex items-center gap-2.5 px-4 py-2 flex-wrap flex-shrink-0"
+           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <MemoryIcon size={15} style={{ color: ACCENT }} />
         <span className="text-[13px] font-medium text-[var(--color-text-primary)]">{name}</span>
         <span className="text-[11.5px] text-[var(--color-text-muted)] font-mono">
-          {summary.objects.toLocaleString()} objects · {summary.classes.toLocaleString()} classes ·{' '}
-          {summary.references.toLocaleString()} refs · {summary.gcRoots.toLocaleString()} GC roots
+          {summary.objects.toLocaleString()} objects · {summary.references.toLocaleString()} refs
         </span>
+        <div className="flex items-center gap-1 ml-2">
+          {SUB_VIEWS.map(sv => (
+            <button
+              key={sv.id} type="button" onClick={() => setView(sv.id)}
+              className="h-[24px] px-2.5 rounded-md text-[11.5px] cursor-pointer"
+              style={{
+                color: view === sv.id ? ACCENT : 'var(--color-text-secondary)',
+                background: view === sv.id ? 'color-mix(in srgb, var(--color-doctor) 14%, transparent)' : 'transparent',
+                border: `1px solid ${view === sv.id ? 'color-mix(in srgb, var(--color-doctor) 34%, transparent)' : 'transparent'}`,
+              }}
+            >
+              {sv.label}
+            </button>
+          ))}
+        </div>
         <div className="flex-1" />
         <ButtonView variant="secondary" size="sm" onClick={() => postMsg({ type: 'heap:open' })}>
           Open another
         </ButtonView>
       </div>
+
+      {view === 'histogram' && <HeapHistogramView liveBytes={liveBytes} />}
+      {view === 'treemap' && <HeapTreemapView />}
+      {view === 'graph' && <HeapGraphView liveBytes={liveBytes} />}
+      {view === 'verdict' && (
+      <div className="flex flex-col gap-4 px-4 py-4 overflow-y-auto flex-1 min-h-0">
 
       {/* Composition */}
       {v && (
@@ -197,8 +232,8 @@ export function HeapVerdictView() {
             )}
           </div>
           <div style={{ height: 6, borderRadius: 3, background: 'var(--color-surface-hover)', overflow: 'hidden', display: 'flex' }}>
-            <div style={{ width: `${livePct}%`, background: ACCENT }} />
-            <div style={{ width: `${100 - livePct}%`, background: 'var(--color-text-muted)', opacity: 0.35 }} />
+            <div style={{ width: `${summary.totalBytes ? (v.liveBytes / summary.totalBytes) * 100 : 100}%`, background: ACCENT }} />
+            <div style={{ width: `${summary.totalBytes ? 100 - (v.liveBytes / summary.totalBytes) * 100 : 0}%`, background: 'var(--color-text-muted)', opacity: 0.35 }} />
           </div>
         </div>
       )}
@@ -281,6 +316,8 @@ export function HeapVerdictView() {
             })}
           </div>
         </div>
+      )}
+      </div>
       )}
     </div>
   );
