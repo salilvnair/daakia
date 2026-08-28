@@ -29,6 +29,10 @@ export { buildEvidencePack } from './heap-evidence';
 export { parseHprof } from './hprof-parser';
 export { analyzeHeap, computeClassStats } from './heap-analysis';
 export { runRules, RULE_PACK_VERSION } from './heap-rules';
+// Thread analysis rides in the same bundle: it shares the fork, the redaction
+// discipline and the CI gate, and a second worker process would buy nothing.
+export { parseThreadDump } from '../threads/jstack-parser';
+export { analyzeThreadDump, findDeadlocks, findContention, groupThreads } from '../threads/thread-analysis';
 
 export interface HeapSummary {
   objects: number;

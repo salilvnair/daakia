@@ -11,6 +11,7 @@
  */
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { readFileSync } from 'fs';
 import { fork, type ChildProcess } from 'child_process';
 
 type PostMessage = (msg: unknown) => void;
@@ -191,6 +192,57 @@ export function handleHeapQuery(msg: Record<string, unknown>, postMessage: PostM
     active.send({ type: 'query', requestId, query: msg.query });
   } catch {
     postMessage({ type: 'heap:queryError', requestId, message: 'The heap worker is no longer running.' });
+  }
+}
+
+/**
+ * Thread dumps are text and small, so they are parsed in the extension host
+ * rather than forked out. The heap worker exists because a 45M-object graph
+ * needs its own heap ceiling; a 2,000-thread text file does not.
+ */
+export async function handleThreadsOpen(postMessage: PostMessage, extensionRoot: string) {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    title: 'Open thread dump',
+    openLabel: 'Analyze',
+    filters: { 'Thread dumps': ['txt', 'tdump', 'log', 'jstack'], 'All files': ['*'] },
+  });
+  if (!picked?.[0]) return;
+  handleThreadsAnalyze({ path: picked[0].fsPath }, postMessage, extensionRoot);
+}
+
+export function handleThreadsAnalyze(msg: Record<string, unknown>, postMessage: PostMessage, extensionRoot: string) {
+  const dumpPath = msg.path as string;
+  if (!dumpPath) {
+    postMessage({ type: 'threads:error', message: 'No thread dump path was provided.' });
+    return;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const worker = require(path.join(extensionRoot, 'dist', 'heap-worker.js'));
+    const text = readFileSync(dumpPath, 'utf8');
+    const dump = worker.parseThreadDump(text);
+    if (!dump.threads.length) {
+      postMessage({
+        type: 'threads:error',
+        message: 'No threads were found in that file. A thread dump looks like the output of `jstack <pid>` or `jcmd <pid> Thread.print`.',
+      });
+      return;
+    }
+    postMessage({
+      type: 'threads:done',
+      name: path.basename(dumpPath),
+      dump: { timestamp: dump.timestamp, jvm: dump.jvm, unparsedLines: dump.unparsedLines },
+      verdict: worker.analyzeThreadDump(dump),
+      threads: dump.threads.map((t: Record<string, unknown>) => ({
+        name: t.name, state: t.state, daemon: t.daemon, cpuMs: t.cpuMs,
+        status: t.status, stateDetail: t.stateDetail,
+        frames: (t.frames as { raw: string; jdk: boolean }[]).slice(0, 40),
+        waitingToLock: t.waitingToLock, locked: t.locked, parkingOn: t.parkingOn,
+      })),
+    });
+  } catch (err) {
+    postMessage({ type: 'threads:error', message: err instanceof Error ? err.message : String(err) });
   }
 }
 

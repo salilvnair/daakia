@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { StethoscopeIcon, MemoryIcon, LayersIcon, DocumentIcon } from '../../icons';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { HeapAnalyzerView } from './HeapAnalyzerView';
+import { ThreadAnalyzerView } from './ThreadAnalyzerView';
 
 const ACCENT = 'var(--color-doctor)';
 
@@ -32,7 +33,7 @@ interface Analyzer {
 
 const ANALYZERS: Analyzer[] = [
   { id: 'heap', label: 'Heap Dump', icon: <MemoryIcon size={14} />, tagline: 'Retained sizes, dominators and leak suspects from a .hprof', ready: true },
-  { id: 'threads', label: 'Thread Dump', icon: <LayersIcon size={14} />, tagline: 'Deadlocks, lock contention and thread-state distribution', ready: false },
+  { id: 'threads', label: 'Thread Dump', icon: <LayersIcon size={14} />, tagline: 'Deadlocks, lock contention and thread-state distribution', ready: true },
   { id: 'logs', label: 'Logs', icon: <DocumentIcon size={14} />, tagline: 'Pattern extraction, bursts and anomaly detection', ready: false },
 ];
 
@@ -93,7 +94,9 @@ export function DoctorPanel() {
 
       {/* Body */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {active.ready ? <HeapAnalyzerView /> : (
+        {analyzer === 'heap' ? <HeapAnalyzerView />
+         : analyzer === 'threads' ? <ThreadAnalyzerView />
+         : (
         <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
           <StethoscopeIcon size={40} strokeWidth={1} style={{ color: ACCENT, opacity: 0.4 }} />
           <p className="text-[13px] text-[var(--color-text-primary)] m-0">{active.label} analyzer</p>
