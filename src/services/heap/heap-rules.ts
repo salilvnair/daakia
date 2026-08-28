@@ -13,7 +13,7 @@
  *
  * Every rule is deterministic. Nothing here consults a model.
  */
-import { KIND_INSTANCE, type HeapIndex } from './heap-index';
+import { displayClassName, type HeapIndex } from './heap-index';
 import { computeClassStats, type ClassStat, type Dominators, type HeapVerdict } from './heap-analysis';
 import type { StringScan } from './heap-redaction';
 
@@ -55,6 +55,12 @@ interface Rule {
 }
 
 const mb = (b: number) => `${(b / 1048576).toFixed(1)} MB`;
+
+/** Display name of the class an object belongs to. */
+const classNameOf = (index: HeapIndex, row: number): string => {
+  const c = index.classOf[row];
+  return c >= 0 ? displayClassName(index.classes[c].name) : '<unknown>';
+};
 
 // ── Container leaks ──────────────────────────────────────────────────────────
 
@@ -310,40 +316,45 @@ const deepRetentionChain: Rule = {
   id: 'shape.deep-retention-chain',
   category: 'shape',
   run(ctx) {
-    // A long unbranched dominator chain means each object holds the next, so a
-    // single stale reference at the head pins the whole thing.
+    // A long unbranched dominator chain means each object holds exactly one
+    // other, so a single stale reference at the head pins all of them.
+    //
+    // Computed exactly rather than by sampling leaves. The first version walked
+    // up from a bounded sample of leaves, which made the answer depend on which
+    // leaves happened to be sampled — adding unrelated objects to the heap made
+    // it stop finding a chain that was still there. This is one pass over the
+    // dominator tree and cannot miss.
     const { idom, order } = ctx.dom;
-    const childCount = new Int32Array(ctx.index.count + 1);
+    const n = ctx.index.count;
+    const childCount = new Int32Array(n + 1);
+    const onlyChild = new Int32Array(n + 1).fill(-1);
     for (let i = 1; i < order.length; i++) {
-      const d = idom[order[i]];
-      if (d >= 0) childCount[d]++;
+      const node = order[i];
+      const d = idom[node];
+      if (d < 0) continue;
+      childCount[d]++;
+      onlyChild[d] = childCount[d] === 1 ? node : -1;
     }
-    // Bounded so a huge heap cannot make this rule dominate the analysis; the
-    // consequence is that the reported length is a lower bound.
+
+    // Reverse postorder puts a dominator before what it dominates, so walking
+    // it backwards means a node's chain length is known before its parent needs it.
+    const chainLen = new Int32Array(n + 1);
     let longest = 0;
-    let sampled = 0;
-    for (let i = order.length - 1; i >= 1 && sampled < 5000; i--) {
-      const row = order[i];
-      if (childCount[row] !== 0 || ctx.index.kind[row] !== KIND_INSTANCE) continue;
-      sampled++;
-      let depth = 0;
-      let cursor = row;
-      while (depth < 10_000) {
-        const d = idom[cursor];
-        if (d < 0 || d === cursor || childCount[d] !== 1) break;
-        cursor = d; depth++;
-      }
-      if (depth > longest) longest = depth;
+    let longestHead = -1;
+    for (let i = order.length - 1; i >= 1; i--) {
+      const node = order[i];
+      const child = childCount[node] === 1 ? onlyChild[node] : -1;
+      chainLen[node] = child >= 0 ? chainLen[child] + 1 : 1;
+      if (chainLen[node] > longest) { longest = chainLen[node]; longestHead = node; }
     }
+
     if (longest < 500) return null;
     return {
       ruleId: this.id,
       title: 'Deep unbranched retention chain',
       severity: 'info',
       category: this.category,
-      // `longest` comes from a bounded sample of leaves, so it is a floor rather
-      // than the true chain length — say so instead of implying an exact count.
-      detail: `At least ${longest.toLocaleString()} objects form a chain where each holds only the next, so a single reference at the head pins all of them.`,
+      detail: `${longest.toLocaleString()} objects form a chain where each holds only the next, headed by ${classNameOf(ctx.index, longestHead)}, so a single reference at the head pins all of them.`,
       remediation: 'Typically a linked list, a builder chain or a nested wrapper that was never flattened. If it is a queue, check that consumers are draining it.',
     };
   },

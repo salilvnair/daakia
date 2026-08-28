@@ -189,6 +189,32 @@ export function verifyAgainstTruth(index: HeapIndex, truthPath: string): string[
     failures.push('REDACTION FAILURE: the evidence pack contains raw string content.');
   }
 
+  // ── Weak references must not inflate retained size ──
+  // The fixture holds WEAK_COUNT payloads strongly in a list and weakly through
+  // WeakObserver. The payloads are live either way, so the live heap is
+  // unchanged — but the observer must retain only its WeakReference objects.
+  // Treating a referent as an ordinary edge makes this number jump to the full
+  // payload total and blames a cache for memory it merely observes.
+  const stats = computeClassStats(index, dominators);
+  const observer = stats.find(c => c.className === truth.weakObserverClass);
+  if (!observer) {
+    failures.push(`weak-reference fixture class ${truth.weakObserverClass} not found`);
+  } else if (observer.retainedSumBytes >= truth.weakPayloadTotal) {
+    failures.push(
+      `weak referents counted as strong: ${truth.weakObserverClass} retains ${Math.round(observer.retainedSumBytes)} bytes, ` +
+      `which is at least the ${truth.weakPayloadTotal} bytes it only weakly references`);
+  }
+  let weakEdges = 0;
+  for (let i = 0; i < index.refWeak.length; i++) weakEdges += index.refWeak[i];
+  if (weakEdges < truth.weakCount) {
+    failures.push(`only ${weakEdges} weak edges marked, expected at least the ${truth.weakCount} planted`);
+  }
+  // The payloads are strongly held, so they must still be live.
+  const liveBytesFloor = truth.payloadBytesTotal + truth.weakPayloadTotal;
+  if (verdict.liveBytes < liveBytesFloor) {
+    failures.push(`live heap ${Math.round(verdict.liveBytes)} is below the ${liveBytesFloor} bytes planted as strongly held — weak exclusion went too far`);
+  }
+
   // ── Structural invariants ──
   if (index.refOffset[index.count] !== index.refTarget.length) {
     failures.push(`CSR offsets end at ${index.refOffset[index.count]} but refTarget has ${index.refTarget.length}`);

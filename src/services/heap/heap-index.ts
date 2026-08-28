@@ -122,6 +122,13 @@ export interface HeapIndex {
   refOffset: Uint32Array;
   /** CSR targets — row indices. -1 for references that leave the dump. */
   refTarget: Int32Array;
+  /**
+   * Parallel to refTarget: 1 where the edge is the referent of a weak, soft or
+   * phantom Reference. Those edges do not keep their target alive, so they are
+   * excluded from reachability and from the dominator tree. Counting them would
+   * overstate retained size and can blame a cache for holding what it does not.
+   */
+  refWeak: Uint8Array;
 
   classes: HeapClass[];
   roots: GcRoot[];

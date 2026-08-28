@@ -19,7 +19,11 @@
  * obvious optimisation later is to cache record offsets in pass A so B and C
  * seek rather than re-walk, which is why the walk is factored into one function.
  */
-import { openSync, readSync, closeSync, statSync } from 'fs';
+import { openSync, readSync, closeSync, statSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'fs';
+import { gunzipSync } from 'zlib';
+import { readSidecar, writeSidecar } from './heap-cache';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import {
   IdMap, KIND_INSTANCE, KIND_OBJECT_ARRAY, KIND_PRIMITIVE_ARRAY, KIND_CLASS,
   FLAG_GC_ROOT, type HeapClass, type HeapIndex, type GcRoot,
@@ -70,6 +74,11 @@ export interface ParseProgress {
 }
 
 export interface ParseOptions {
+  /**
+   * Reuse and write a `.dkheap` sidecar beside the dump. Default on — the point
+   * of the cache is that nobody has to know it exists.
+   */
+  cache?: boolean;
   /**
    * How many byte[]/char[] payloads to sample the contents of, for the local
    * secret scan. Contents never leave this process — the redaction gate needs
@@ -183,6 +192,41 @@ function looksTextual(s: string): boolean {
  */
 const HPROF_MAGIC = 'JAVA PROFILE';
 
+/**
+ * Android dumps carry an HPROF-looking header but a different record dialect —
+ * extra tags, different class metadata. Parsing one produces confident nonsense
+ * rather than an error, so it is detected and refused by name.
+ */
+const ANDROID_MAGICS = ['JAVA PROFILE 1.0.3'];
+
+/** gzip: 0x1f 0x8b. */
+function isGzip(path: string): boolean {
+  const fd = openSync(path, 'r');
+  try {
+    const head = Buffer.alloc(2);
+    return readSync(fd, head, 0, 2, 0) === 2 && head[0] === 0x1f && head[1] === 0x8b;
+  } finally { closeSync(fd); }
+}
+
+/**
+ * Decompress a .hprof.gz to a temp file and parse that.
+ *
+ * The parser seeks backwards during pass C, so it needs a real file rather than
+ * a stream. Decompressing once up front is simpler and faster than making every
+ * read path handle compression, at the cost of temporary disk — which is the
+ * right trade when the alternative is not supporting compressed dumps at all.
+ */
+function withDecompressed<T>(path: string, run: (p: string) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), 'daakia-heap-'));
+  const out = join(dir, 'dump.hprof');
+  try {
+    writeFileSync(out, gunzipSync(readFileSync(path)));
+    return run(out);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function readHeader(r: Reader, fileSize: number): { idSize: number; timestamp: number } {
   if (fileSize === 0) throw new Error('the file is empty');
   if (fileSize < HPROF_MAGIC.length + 13) {
@@ -203,6 +247,12 @@ function readHeader(r: Reader, fileSize: number): { idSize: number; timestamp: n
     if (c === 0) break;
     version += String.fromCharCode(c);
     if (version.length > 32) throw new Error('heap dump header is malformed (no terminator after the version)');
+  }
+  const full = `${prefix}${version}`;
+  if (ANDROID_MAGICS.includes(full)) {
+    throw new Error(
+      `this is an Android heap dump (${full}). Android uses a different record dialect that this parser ` +
+      'would mis-read rather than reject. Convert it first with hprof-conv from the Android SDK.');
   }
 
   const idSize = r.u4();
@@ -335,21 +385,69 @@ function walk(
  * chain is the classic way to produce plausible-but-wrong output, so the
  * resolved layout is cached per class.
  */
+interface RefSlot {
+  offset: number;
+  /**
+   * True for the `referent` field of a weak, soft or phantom Reference.
+   *
+   * These edges do not keep their target alive, so counting them as normal
+   * references overstates retained size and can put the blame for a leak on a
+   * cache that is doing exactly what it should. Excluded from reachability and
+   * from the dominator tree, which is what MAT does too.
+   */
+  weak: boolean;
+}
+
+/**
+ * Is this class a Reference whose referent does NOT keep its target alive?
+ *
+ * FinalReference is deliberately excluded: an object awaiting finalization is
+ * genuinely still alive and its memory genuinely cannot be reclaimed, so
+ * treating a Finalizer edge as weak would under-report a real problem — and a
+ * finalizer backlog is a problem the rule pack specifically looks for.
+ */
+function isWeakReferenceClass(classId: number, byId: Map<number, HeapClass>): boolean {
+  let cursor = byId.get(classId);
+  let sawReference = false;
+  while (cursor) {
+    if (cursor.name === 'java/lang/ref/FinalReference') return false;
+    if (cursor.name === 'java/lang/ref/Reference') sawReference = true;
+    cursor = cursor.superId ? byId.get(cursor.superId) : undefined;
+  }
+  return sawReference;
+}
+
+/**
+ * Reference-field offsets within an instance's field bytes.
+ *
+ * The layout is the class's own fields, then its superclass's, walking up — so
+ * the referent field declared on java.lang.ref.Reference sits at whatever offset
+ * the subclass's own fields push it to, and has to be located by walking rather
+ * than assumed.
+ */
 function resolveLayout(
   classId: number,
   byId: Map<number, HeapClass>,
-  cache: Map<number, { offset: number }[]>,
+  cache: Map<number, RefSlot[]>,
   idSize: number,
-): { offset: number }[] {
+  fieldName: (nameId: number) => string,
+): RefSlot[] {
   const hit = cache.get(classId);
   if (hit) return hit;
 
-  const refOffsets: { offset: number }[] = [];
+  const weakClass = isWeakReferenceClass(classId, byId);
+  const refOffsets: RefSlot[] = [];
   let offset = 0;
   let cursor: HeapClass | undefined = byId.get(classId);
   while (cursor) {
+    const declaredOnReference = cursor.name === 'java/lang/ref/Reference';
     for (const f of cursor.fields) {
-      if (f.type === 2) refOffsets.push({ offset });
+      if (f.type === 2) {
+        refOffsets.push({
+          offset,
+          weak: weakClass && declaredOnReference && fieldName(f.nameId) === 'referent',
+        });
+      }
       offset += typeWidth(f.type, idSize);
     }
     cursor = cursor.superId ? byId.get(cursor.superId) : undefined;
@@ -359,6 +457,30 @@ function resolveLayout(
 }
 
 export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
+  const useCache = opts.cache !== false;
+
+  if (useCache) {
+    const cached = readSidecar(path);
+    if (cached) {
+      // Report one progress tick so a caller showing a bar completes it rather
+      // than appearing to hang on an instant load.
+      opts.onProgress?.({ pass: 'cache', bytesRead: 1, totalBytes: 1 });
+      return cached;
+    }
+  }
+
+  // Compressed dumps are common, because a 4 GB dump compresses very well and
+  // that is how it gets off the server in the first place.
+  const index = isGzip(path)
+    ? withDecompressed(path, (p) => parseHprofUncompressed(p, opts))
+    : parseHprofUncompressed(path, opts);
+
+  // Keyed on the original path, so a .gz reopens from cache without decompressing.
+  if (useCache) writeSidecar(path, index);
+  return index;
+}
+
+function parseHprofUncompressed(path: string, opts: ParseOptions = {}): HeapIndex {
   const size = statSync(path).size;
   const fd = openSync(path, 'r');
   try {
@@ -476,14 +598,15 @@ export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
 
     // ── Pass B — count outbound references, then prefix-sum to CSR offsets ──
     const refOffset = new Uint32Array(count + 1);
-    const layouts = new Map<number, { offset: number }[]>();
+    const layouts = new Map<number, RefSlot[]>();
+    const fieldName = (nameId: number) => strings.get(nameId) ?? '';
     const counter = new Int32Array(count);
 
     const countRefs = (row: number, n: number) => { if (row >= 0) counter[row] += n; };
 
     walk(r, idSize, bodyStart, {
       onClassDump: (c) => countRefs(ids.get(c.classId), (staticRefsByClass.get(c.classId) ?? []).length),
-      onInstance: (objId, classId) => countRefs(ids.get(objId), resolveLayout(classId, classById, layouts, idSize).length),
+      onInstance: (objId, classId) => countRefs(ids.get(objId), resolveLayout(classId, classById, layouts, idSize, fieldName).length),
       onObjectArray: (objId, _cls, _at, n) => countRefs(ids.get(objId), n),
     }, opts, 'B');
 
@@ -503,10 +626,14 @@ export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
     let textSeen = 0;
 
     const refTarget = new Int32Array(acc);
+    // Parallel to refTarget: 1 where the edge is a weak/soft/phantom referent.
+    const refWeak = new Uint8Array(acc);
     const cursor = new Uint32Array(count);
-    const push = (row: number, targetId: number) => {
+    const push = (row: number, targetId: number, weak = false) => {
       if (row < 0) return;
-      refTarget[refOffset[row] + cursor[row]++] = ids.get(targetId);
+      const at = refOffset[row] + cursor[row]++;
+      refTarget[at] = ids.get(targetId);
+      if (weak) refWeak[at] = 1;
     };
 
     walk(r, idSize, bodyStart, {
@@ -517,14 +644,14 @@ export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
       onInstance: (objId, classId, at, nBytes) => {
         const row = ids.get(objId);
         if (row < 0) return;
-        const refs = resolveLayout(classId, classById, layouts, idSize);
+        const refs = resolveLayout(classId, classById, layouts, idSize, fieldName);
         if (!refs.length) return;
         r.seek(at);
         // Field bytes were already walked past; re-read only the slots that hold refs.
-        for (const { offset } of refs) {
+        for (const { offset, weak } of refs) {
           if (offset + idSize > nBytes) break;   // layout longer than the record: truncate rather than misread
           r.seek(at + offset);
-          push(row, r.id(idSize));
+          push(row, r.id(idSize), weak);
         }
         r.seek(at + nBytes);
       },
@@ -553,7 +680,7 @@ export function parseHprof(path: string, opts: ParseOptions = {}): HeapIndex {
 
     return {
       count, classOf, shallow, kind, flags, refOffset, refTarget,
-      classes, roots, totalBytes, idSize, timestamp, textSamples, textCandidates,
+      classes, roots, totalBytes, idSize, timestamp, textSamples, textCandidates, refWeak,
     };
   } finally {
     closeSync(fd);

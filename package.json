@@ -324,6 +324,7 @@
     "heap:parse": "node dist/heap-worker.js",
     "heap:verify": "node dist/heap-worker.js src/test/fixtures/heap/out/leak.hprof --verify src/test/fixtures/heap/out/leak.truth.json",
     "heap:gate": "node src/test/fixtures/heap/gate.test.mjs",
+    "heap:bench": "node --expose-gc src/test/fixtures/heap/bench.mjs",
     "heap:verify:grown": "node dist/heap-worker.js src/test/fixtures/heap/out/grown.hprof --verify src/test/fixtures/heap/out/grown.truth.json",
     "heap:growth": "node src/test/fixtures/heap/growth.test.mjs",
     "heap:check": "node cli/daakia-heap-check.mjs",

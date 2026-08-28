@@ -110,6 +110,10 @@ function buildOrder(index: HeapIndex, rootTargets: Int32Array): {
 
     if (start + cursor < end) {
       stackEdge[sp - 1]++;
+      // A weak/soft/phantom referent does not keep its target alive, so it is
+      // not an edge for reachability purposes. Following it would make a cache
+      // look like it retains everything it merely observes.
+      if (node !== root && index.refWeak[start + cursor]) continue;
       const next = node === root ? rootTargets[cursor] : index.refTarget[start + cursor];
       if (next >= 0 && !seen[next]) {
         seen[next] = 1;
@@ -142,6 +146,7 @@ function buildPredecessors(index: HeapIndex, rootTargets: Int32Array): {
   for (const t of rootTargets) if (t >= 0) counts[t]++;
   for (let row = 0; row < n; row++) {
     for (let e = index.refOffset[row]; e < index.refOffset[row + 1]; e++) {
+      if (index.refWeak[e]) continue;
       const t = index.refTarget[e];
       if (t >= 0) counts[t]++;
     }
@@ -158,6 +163,7 @@ function buildPredecessors(index: HeapIndex, rootTargets: Int32Array): {
   for (const t of rootTargets) if (t >= 0) predTarget[predOffset[t] + cursor[t]++] = root;
   for (let row = 0; row < n; row++) {
     for (let e = index.refOffset[row]; e < index.refOffset[row + 1]; e++) {
+      if (index.refWeak[e]) continue;
       const t = index.refTarget[e];
       if (t >= 0) predTarget[predOffset[t] + cursor[t]++] = row;
     }

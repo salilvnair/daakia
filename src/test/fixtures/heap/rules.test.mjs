@@ -47,12 +47,14 @@ check('recognises the planted unbounded cache', () => {
 check('recognises the planted retention chain', () => {
   const f = byId('shape.deep-retention-chain');
   assert.ok(f, 'deep chain not detected');
-  // The rule walks a bounded sample of leaves, so the length it reports is a
-  // floor. The fixture plants 5,000 nodes; anything close to that is correct,
-  // and the wording must not claim more precision than the method has.
+  // The rule now computes the longest chain exactly, in one pass over the
+  // dominator tree, rather than sampling leaves — the sampled version stopped
+  // finding this chain the moment unrelated objects were added to the fixture.
+  // 4,999 rather than 5,000 is correct: a couple of the nodes are also held
+  // from thread frames, so the dominator tree has more than one chain endpoint.
   const reported = Number((f.detail.match(/([\d,]+) objects/) ?? [])[1]?.replace(/,/g, ''));
   assert.ok(reported >= 4900 && reported <= 5000, `reported ${reported}, expected ~5000`);
-  assert.match(f.detail, /At least/);
+  assert.match(f.detail, /headed by/);
 });
 
 check('every finding carries evidence and a remediation', () => {

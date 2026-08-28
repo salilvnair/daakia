@@ -58,6 +58,8 @@ public final class DaakiaHeapFixture {
     static final int DUP_COUNT    = 10_000;
     static final int CHAIN_DEPTH  = 5_000;
     static final int THREAD_COUNT = 8;
+    static final int WEAK_COUNT   = 4_000;
+    static final int WEAK_PAYLOAD = 1_024;
     static final String DUP_TEXT  = "daakia-duplicate-string-fixture-value";
 
     /** The leak: a static map nothing ever evicts from. */
@@ -66,6 +68,26 @@ public final class DaakiaHeapFixture {
     static DeepNode chainHead;
     /** Holds the duplicate-string objects alive. */
     static final List<DupHolder> DUPS = new ArrayList<>();
+
+    /**
+     * Weak-reference test: the payloads are held STRONGLY here so they survive
+     * the full GC and appear in the dump, and WEAKLY by WEAK_OBSERVER below.
+     *
+     * That separation is the whole point. If they were only weakly held the GC
+     * would collect them and there would be nothing left to measure. Held both
+     * ways, the observer must retain almost nothing — its WeakReferences do not
+     * keep the payloads alive — while the strong list retains all of them. An
+     * analyzer that treats a referent as an ordinary edge gets this backwards
+     * and blames the observer.
+     */
+    static final List<byte[]> WEAK_PAYLOADS_STRONG = new ArrayList<>();
+    static WeakObserver WEAK_OBSERVER;
+
+    public static final class WeakObserver {
+        final java.lang.ref.WeakReference<byte[]>[] refs;
+        @SuppressWarnings("unchecked")
+        WeakObserver(int n) { this.refs = new java.lang.ref.WeakReference[n]; }
+    }
 
     public static final class LeakedEntry {
         final int id;
@@ -112,6 +134,14 @@ public final class DaakiaHeapFixture {
         // has and what the analyzer's scanner needs to detect.
         for (int i = 0; i < DUP_COUNT; i++) {
             DUPS.add(new DupHolder(new String(DUP_TEXT.toCharArray())));
+        }
+
+        // ── Plant the weak-reference case ──
+        WEAK_OBSERVER = new WeakObserver(WEAK_COUNT);
+        for (int i = 0; i < WEAK_COUNT; i++) {
+            byte[] payload = new byte[WEAK_PAYLOAD];
+            WEAK_PAYLOADS_STRONG.add(payload);                                    // strong
+            WEAK_OBSERVER.refs[i] = new java.lang.ref.WeakReference<>(payload);   // weak
         }
 
         // ── Plant the deep chain ──
@@ -169,7 +199,11 @@ public final class DaakiaHeapFixture {
             w.write("  \"payloadBytesEach\": " + PAYLOAD + ",\n");
             w.write("  \"payloadBytesTotal\": " + ((long) ENTRY_COUNT * PAYLOAD) + ",\n");
             w.write("  \"duplicateStringText\": \"" + DUP_TEXT + "\",\n");
-            w.write("  \"chainDepth\": " + CHAIN_DEPTH + "\n");
+            w.write("  \"chainDepth\": " + CHAIN_DEPTH + ",\n");
+            w.write("  \"weakCount\": " + WEAK_COUNT + ",\n");
+            w.write("  \"weakPayloadEach\": " + WEAK_PAYLOAD + ",\n");
+            w.write("  \"weakPayloadTotal\": " + ((long) WEAK_COUNT * WEAK_PAYLOAD) + ",\n");
+            w.write("  \"weakObserverClass\": \"" + pkg + ".DaakiaHeapFixture$WeakObserver\"\n");
             w.write("}\n");
         }
 
