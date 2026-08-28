@@ -13,6 +13,7 @@
 import { readFileSync } from 'fs';
 import { parseHprof, ParseCancelled, type ParseProgress } from './hprof-parser';
 import { displayClassName, KIND_INSTANCE, type HeapIndex } from './heap-index';
+import { analyzeHeap, type HeapVerdict } from './heap-analysis';
 
 export interface HeapSummary {
   objects: number;
@@ -24,6 +25,8 @@ export interface HeapSummary {
   references: number;
   /** Largest classes by instance count, already display-formatted. */
   histogram: { name: string; instances: number; shallowBytes: number }[];
+  /** Present once the analysis pass has run. */
+  verdict?: HeapVerdict;
 }
 
 export function summarize(index: HeapIndex, topN = 25): HeapSummary {
@@ -120,6 +123,30 @@ export function verifyAgainstTruth(index: HeapIndex, truthPath: string): string[
     }
   }
 
+  // ── Retained size, checked by arithmetic rather than against another tool ──
+  // The fixture's leak is 50,000 entries each holding byte[512], so whatever
+  // dominates them must retain at least that many bytes. This is the one number
+  // a heap analyzer exists to produce, so it gets an independent check.
+  const { dominators, verdict } = analyzeHeap(index);
+  const topRetained = verdict.suspects[0]?.retainedBytes ?? 0;
+  if (topRetained < truth.payloadBytesTotal) {
+    failures.push(`top suspect retains ${topRetained}, expected at least the planted ${truth.payloadBytesTotal}`);
+  }
+  if (verdict.liveBytes <= 0) failures.push('live heap computed as zero bytes');
+  if (verdict.liveObjects <= 0) failures.push('no reachable objects');
+  // Every reachable object except the virtual root must have an immediate dominator.
+  let orphans = 0;
+  for (let i = 1; i < dominators.order.length; i++) {
+    if (dominators.idom[dominators.order[i]] < 0) orphans++;
+  }
+  if (orphans > 0) failures.push(`${orphans} reachable objects have no dominator`);
+  // The virtual root retains exactly the sum of live shallow sizes.
+  let liveShallow = 0;
+  for (let i = 1; i < dominators.order.length; i++) liveShallow += index.shallow[dominators.order[i]];
+  if (Math.abs(liveShallow - verdict.liveBytes) > 0.5) {
+    failures.push(`retained-size accounting is lossy: root retains ${verdict.liveBytes}, live shallow sums to ${liveShallow}`);
+  }
+
   // ── Structural invariants ──
   if (index.refOffset[index.count] !== index.refTarget.length) {
     failures.push(`CSR offsets end at ${index.refOffset[index.count]} but refTarget has ${index.refTarget.length}`);
@@ -153,7 +180,9 @@ function run(path: string) {
 
   try {
     const index = parseHprof(path, { onProgress, isCancelled: () => cancelled });
-    send({ type: 'done', summary: summarize(index) });
+    send({ type: 'progress', pass: 'analyze', bytesRead: 0, totalBytes: 0 });
+    const { verdict } = analyzeHeap(index);
+    send({ type: 'done', summary: { ...summarize(index), verdict } });
   } catch (err) {
     if (err instanceof ParseCancelled) send({ type: 'cancelled' });
     else send({ type: 'error', message: err instanceof Error ? err.message : String(err) });
@@ -205,8 +234,31 @@ FAIL — ${failures.length} check(s) did not hold:`);
     console.log(`objects=${summary.objects}  classes=${summary.classes}  refs=${summary.references}  roots=${summary.gcRoots}`);
     console.log(`totalBytes=${summary.totalBytes}  idSize=${summary.idSize}`);
     console.log('\ntop classes by instance count:');
-    for (const h of summary.histogram.slice(0, 10)) {
+    for (const h of summary.histogram.slice(0, 6)) {
       console.log(`  ${String(h.instances).padStart(8)}  ${String(h.shallowBytes).padStart(11)}B  ${h.name}`);
+    }
+
+    const { verdict } = analyzeHeap(index);
+    const mb = (b: number) => `${(b / 1048576).toFixed(1)} MB`;
+    console.log(`\nlive        ${verdict.liveObjects} objects / ${mb(verdict.liveBytes)}`);
+    console.log(`unreachable ${verdict.unreachableObjects} objects / ${mb(verdict.unreachableBytes)}`);
+
+    console.log('\ntop classes by RETAINED size:');
+    for (const c of verdict.topRetainedClasses.slice(0, 6)) {
+      console.log(`  ${mb(c.retainedBytes).padStart(9)}  ${String(c.instances).padStart(7)} objs  ${c.className}`);
+    }
+
+    console.log('\nleak suspects:');
+    if (!verdict.suspects.length) console.log('  (none above threshold)');
+    for (const s of verdict.suspects) {
+      console.log(`  ${s.retainedPercent.toFixed(1).padStart(5)}%  ${mb(s.retainedBytes).padStart(9)}  ${String(s.retainedObjects).padStart(7)} objs  ${s.className}`);
+      if (s.heldIn) {
+        console.log(`          held in ${s.heldIn.className} (${mb(s.heldIn.retainedBytes)})`);
+      }
+      if (s.accumulates) {
+        console.log(`          accumulating ${s.accumulates.count} x ${s.accumulates.className}`);
+      }
+      console.log(`          via ${s.pathToRoot.map(p => p.className).join(' → ')}`);
     }
   }
 }
