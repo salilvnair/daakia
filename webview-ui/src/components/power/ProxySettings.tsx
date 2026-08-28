@@ -36,27 +36,37 @@ const DEFAULT_CONFIG: ProxyConfig = {
   scope: 'global',
 };
 
-const STORAGE_KEY = 'daakia:proxy-config';
 const ACCENT = 'var(--color-settings)';
 
 export function ProxySettings({ onClose }: Props) {
   const [config, setConfig] = useState<ProxyConfig>(DEFAULT_CONFIG);
   const [saved, setSaved] = useState(false);
+  /** What the extension host says it will actually do with this configuration. */
+  const [summary, setSummary] = useState<{ used: boolean; description: string; warning?: string } | null>(null);
+  const [unproxied, setUnproxied] = useState<Record<string, string>>({});
   const addToast = useToastStore(s => s.addToast);
 
+  // The extension host owns this setting. It used to live in webview
+  // localStorage and never reach the host at all, so the dialog showed a proxy
+  // that nothing was using.
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (stored) setConfig(stored);
-    } catch { /* ignore */ }
+    const handler = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg?.type === 'proxy:state' || msg?.type === 'proxy:configured') {
+        if (msg.config) setConfig(c => ({ ...c, ...msg.config }));
+        if (msg.summary) setSummary(msg.summary);
+        if (msg.unproxied) setUnproxied(msg.unproxied);
+      }
+    };
+    window.addEventListener('message', handler);
+    postMsg({ type: 'proxy:get' });
+    return () => window.removeEventListener('message', handler);
   }, []);
 
   const save = () => {
     logUiEvent('settings.proxy_save', { host: config.host, port: config.port, enabled: config.enabled });
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
     postMsg({ type: 'proxy:configure', config });
     setSaved(true);
-    addToast({ type: 'success', message: config.enabled ? `Proxy configured: ${config.type}://${config.host}:${config.port}` : 'Proxy disabled' });
     setTimeout(() => setSaved(false), 2000);
   };
 
@@ -190,6 +200,36 @@ export function ProxySettings({ onClose }: Props) {
           </div>
 
           {/* Preview */}
+          {summary && (
+            <div className="mb-3 p-2.5 rounded-md"
+                 style={{
+                   background: summary.warning
+                     ? 'color-mix(in srgb, var(--color-warning) 12%, transparent)'
+                     : 'var(--color-surface-hover)',
+                   border: `1px solid ${summary.warning
+                     ? 'color-mix(in srgb, var(--color-warning) 34%, transparent)'
+                     : 'var(--color-surface-border)'}`,
+                 }}>
+              <p className="text-[10px] mb-1" style={{ color: 'var(--color-text-muted)' }}>
+                What requests will actually do
+              </p>
+              <p className="text-[11px] font-mono m-0" style={{ color: 'var(--color-text-primary)' }}>
+                {summary.description}
+              </p>
+              {summary.warning && (
+                <p className="text-[11px] m-0 mt-1" style={{ color: 'var(--color-warning)' }}>
+                  {summary.warning}
+                </p>
+              )}
+              {Object.keys(unproxied).length > 0 && config.enabled && (
+                <p className="text-[10.5px] m-0 mt-1.5" style={{ color: 'var(--color-text-muted)' }}>
+                  Applies to REST, GraphQL and SOAP. Not to {Object.keys(unproxied).join(', ')} — each opens
+                  its own transport rather than going through the HTTP proxy.
+                </p>
+              )}
+            </div>
+          )}
+
           {proxyUrl && (
             <div className="rounded-lg border p-3" style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
               <p className="text-[10px] mb-1" style={{ color: 'var(--color-text-muted)' }}>Proxy URL</p>

@@ -2,6 +2,19 @@
  * GraphQL execution + introspection + subscription handler.
  */
 import axios from 'axios';
+import { resolveProxy, type ProxyConfig } from '../../../services/proxy-config';
+
+/**
+ * GraphQL posts through axios directly rather than through the REST executor,
+ * so it needs the same proxy decision applied explicitly. Before this it
+ * ignored the proxy setting entirely while REST honoured it — the same request
+ * to the same host would take two different routes depending on which tab it
+ * was sent from.
+ */
+function graphqlProxy(url: string) {
+  const stored = (getSetting<Record<string, unknown>>('general') ?? {}).proxy as ProxyConfig | undefined;
+  return resolveProxy(stored, url);
+}
 import WebSocket from 'ws';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory, getSetting, getAllEnvironments, upsertEnvironment, getCollectionData, updateCollectionData, setSetting } from '../../../storage/db';
@@ -90,7 +103,7 @@ export async function handleGraphQLConnect(
     const res = await axios.post(
       endpoint,
       { query: INTROSPECTION_QUERY },
-      { headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0, validateStatus: () => true },
+      { headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0, validateStatus: () => true, proxy: graphqlProxy(endpoint).axiosProxy },
     );
 
     if (res.status >= 400) {
@@ -284,6 +297,7 @@ export async function handleExecuteGraphQL(
   const startTime = Date.now();
   const controller = new AbortController();
   activeGqlControllers.set(tabId, controller);
+  const gqlProxy = graphqlProxy(endpoint);
   try {
     const res = await axios.post(
       endpoint,
@@ -294,6 +308,7 @@ export async function handleExecuteGraphQL(
         validateStatus: () => true,
         transformResponse: [(data) => data], // Keep raw string
         signal: controller.signal,
+        proxy: gqlProxy.axiosProxy,
       },
     );
 

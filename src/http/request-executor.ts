@@ -3,6 +3,7 @@
  * Uses axios for HTTP requests with socket-level timing instrumentation.
  */
 import axios, { AxiosRequestConfig, AxiosError } from 'axios';
+import { resolveProxy, type ProxyConfig, type ResolvedProxy } from '../services/proxy-config';
 import * as fs from 'fs';
 import {
   createTimedHttpAgent, createTimedHttpsAgent,
@@ -51,8 +52,20 @@ export interface ResponseCookie {
   sameSite?: string;
 }
 
+/** Trim the resolver's result down to what a log entry needs. */
+function proxyInfo(r: ResolvedProxy): { used: boolean; description: string; warning?: string } {
+  return { used: r.used, description: r.description, warning: r.warning };
+}
+
 export interface ExecuteResult {
   tabId: string;
+  /**
+   * How this request was routed. Reported on every result so the DevTools
+   * network log and the audit trail can show it — a proxy that is configured
+   * but not applied is invisible otherwise, which is exactly how the bug this
+   * fixes went unnoticed.
+   */
+  proxy?: { used: boolean; description: string; warning?: string };
   /** The actual headers sent in the request (including auto-added Content-Type, Authorization, etc.) */
   requestHeaders?: Record<string, string>;
   response: {
@@ -91,6 +104,11 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
   const startTime = Date.now();
   const controller = new AbortController();
   activeControllers.set(params.tabId, controller);
+
+  // Declared out here so the catch block can report how the request was routed.
+  // A connection failure is exactly when someone needs to know whether it went
+  // through a proxy.
+  let resolvedProxy: ResolvedProxy = { axiosProxy: false, used: false, description: 'direct (not yet resolved)' };
 
   try {
   // Build headers
@@ -198,28 +216,9 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     ? createTimedHttpsAgent(rejectUnauthorized)
     : createTimedHttpAgent();
 
-  // Build proxy config
-  let proxyConfig: AxiosRequestConfig['proxy'] = false; // Default: bypass VS Code proxy agent
-  if (params.proxy && params.proxy.mode === 'manual' && params.proxy.host) {
-    // Check if this host is in the bypass list
-    const bypassList = params.proxy.bypass || [];
-    const shouldBypass = bypassList.some(b => {
-      const pattern = b.trim().toLowerCase();
-      if (!pattern) return false;
-      if (pattern.startsWith('*')) return hostname.endsWith(pattern.slice(1));
-      return hostname === pattern || hostname.endsWith('.' + pattern);
-    });
-    if (!shouldBypass) {
-      proxyConfig = {
-        host: params.proxy.host,
-        port: params.proxy.port || 8080,
-        ...(params.proxy.username ? { auth: { username: params.proxy.username, password: params.proxy.password || '' } } : {}),
-        protocol: isHttps ? 'https' : 'http',
-      };
-    }
-  } else if (params.proxy && params.proxy.mode === 'system') {
-    proxyConfig = undefined; // Let axios use system proxy (env vars HTTP_PROXY, HTTPS_PROXY)
-  }
+  // One resolver for every protocol — see src/services/proxy-config.ts for why
+  // this is not inlined here any more.
+  resolvedProxy = resolveProxy(params.proxy as ProxyConfig | undefined, urlObj.toString());
 
   const config: AxiosRequestConfig = {
     method: params.method.toLowerCase() as AxiosRequestConfig['method'],
@@ -230,7 +229,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     timeout: params.timeout || 0,
     maxRedirects: params.followRedirects === false ? 0 : 10,
     responseType: 'arraybuffer',
-    proxy: proxyConfig as any,
+    proxy: resolvedProxy.axiosProxy as AxiosRequestConfig['proxy'],
     signal: controller.signal,
     ...(isHttps
       ? { httpsAgent: timedAgent.agent }
@@ -290,6 +289,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
 
     return {
       tabId: params.tabId,
+      proxy: proxyInfo(resolvedProxy),
       requestHeaders: headers,
       response: {
         status: res.status,
@@ -313,6 +313,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
       activeControllers.delete(params.tabId);
       return {
         tabId: params.tabId,
+        proxy: proxyInfo(resolvedProxy),
         response: {
           status: 0,
           statusText: 'Request cancelled',
@@ -337,6 +338,7 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
 
     return {
       tabId: params.tabId,
+      proxy: proxyInfo(resolvedProxy),
       response: {
         status: 0,
         statusText: errorCode,

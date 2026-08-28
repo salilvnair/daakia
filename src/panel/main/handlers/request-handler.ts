@@ -13,6 +13,7 @@ import {
   getAllEnvironments, upsertEnvironment,
   getCollectionData, updateCollectionData,
   getSetting, setSetting, getCookies, upsertCookie,
+  insertUiAudit,
 } from '../../../storage/db';
 import { decryptIfNeeded, encryptEnvVariables } from '../../../services/vault';
 
@@ -386,6 +387,25 @@ export async function handleExecuteRequest(
       consoleLogs: consoleLogs.length > 0 ? consoleLogs : undefined,
       scriptSubRequests: scriptSubRequests.length > 0 ? scriptSubRequests : undefined,
     });
+
+    // Audit how the request was routed.
+    // Recorded for every request, proxied or not: "no proxy row" is ambiguous
+    // between "went direct" and "auditing is broken", and the whole point of
+    // this is to be able to tell whether the proxy setting took effect.
+    try {
+      insertUiAudit({
+        event_type: 'network',
+        module: 'proxy',
+        button: result.proxy?.used ? 'proxied' : 'direct',
+        action: `${msg.method} ${msg.url}`,
+        metadata: JSON.stringify({
+          route: result.proxy?.description ?? 'direct (no proxy resolved)',
+          warning: result.proxy?.warning,
+          status: result.response.status,
+          durationMs: result.response.time,
+        }),
+      });
+    } catch { /* auditing must never break a request */ }
 
     // Cookie jar: store response cookies
     if (result.response.cookies && result.response.cookies.length > 0) {

@@ -77,6 +77,11 @@ import {
 } from './handlers/bin-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
 import {
+  normalizeProxyConfig, toUiProxyConfig, resolveProxy,
+  DEFAULT_PROXY, UNPROXIED_PROTOCOLS,
+  type ProxyConfig, type ProxyUiConfig,
+} from '../../services/proxy-config';
+import {
   handleHeapOpen, handleHeapAnalyze, handleHeapCancel, handleHeapQuery,
   handleHeapSetBaseline, handleHeapLocateClass, handleHeapOpenSource,
   handleThreadsOpen, handleThreadsAnalyze, handleLogsOpen, handleLogsAnalyze,
@@ -472,6 +477,37 @@ export class MainPanel {
         handleSaveMockConfigs(msg);
         break;
       // ── Doctor / heap ──
+      // ── Proxy ──
+      // These two cases did not exist. The settings dialog posted
+      // 'proxy:configure' into the void and kept its own copy in webview
+      // localStorage, so the extension host never learned about a proxy at all.
+      case 'proxy:configure': {
+        const normalized = normalizeProxyConfig(msg.config as ProxyUiConfig);
+        const existing = getSetting<Record<string, unknown>>('general') ?? {};
+        setSetting('general', { ...existing, proxy: normalized });
+        const summary = resolveProxy(normalized, 'https://example.invalid/');
+        this._post({ type: 'proxy:configured', config: toUiProxyConfig(normalized), summary });
+        this._post({
+          type: 'toast',
+          toastType: normalized.mode === 'none' ? 'info' : 'success',
+          message: normalized.mode === 'none'
+            ? 'Proxy disabled — requests will go direct.'
+            : `Proxy saved: ${summary.description}`,
+        });
+        break;
+      }
+      case 'proxy:get': {
+        const stored = (getSetting<Record<string, unknown>>('general') ?? {}).proxy as ProxyConfig | undefined;
+        const cfg = stored ?? DEFAULT_PROXY;
+        this._post({
+          type: 'proxy:state',
+          config: toUiProxyConfig(cfg),
+          summary: resolveProxy(cfg, 'https://example.invalid/'),
+          unproxied: UNPROXIED_PROTOCOLS,
+        });
+        break;
+      }
+
       case 'heap:open':
         handleHeapOpen(this._post, this._extensionUri.fsPath);
         break;

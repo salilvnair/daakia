@@ -177,6 +177,7 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
               responseCookies: responseCookiesArr.length > 0 ? responseCookiesArr : undefined,
               duration: response.time || 0,
               size: response.size || 0,
+              proxy: msg.proxy,
               contentType: response.contentType || 'text/plain',
               isBlob: isBlobContent && !!response.body,
               blobMimeType: isBlobContent ? ct : undefined,
