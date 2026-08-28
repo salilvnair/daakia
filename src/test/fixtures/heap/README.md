@@ -17,7 +17,12 @@ there is nothing to check the parser against, so these come before the parser.
 cd src/test/fixtures/heap
 javac -d build gen/DaakiaHeapFixture.java
 java -Xmx512m -cp build com.daakia.fixture.DaakiaHeapFixture out
+java -Xmx768m -cp build com.daakia.fixture.DaakiaHeapFixture out 80000 grown
 ```
+
+The second run makes a comparison pair: identical in every respect except the
+cache size, so the growth between them has an arithmetic answer rather than
+needing a second tool to confirm it.
 
 On Windows the JDK tools may not be on `PATH` even when `java` is; use the full path,
 e.g. `"/c/Program Files/Java/jdk-17/bin/javac.exe"`.
@@ -26,8 +31,10 @@ Produces:
 
 | File | What it is |
 |---|---|
-| `out/leak.hprof` | Heap dump with a deliberate, exactly-countable leak |
+| `out/leak.hprof` | Heap dump with a deliberate, exactly-countable leak (50,000 entries) |
 | `out/leak.truth.json` | The planted counts, written by the generator itself |
+| `out/grown.hprof` | The same program with 80,000 entries — the comparison dump |
+| `out/grown.truth.json` | Its own ground truth |
 
 ## What is planted, and what it exercises
 
@@ -69,6 +76,24 @@ strings=47900  classes=1526  gcRoots=1645
 ```
 
 All three match the planted constants exactly.
+
+## Checks these fixtures back
+
+| Command | Asserts |
+|---|---|
+| `npm run heap:verify` | Parse, reference extraction, retained-size arithmetic, duplicate detection, and that the evidence pack carries no raw content |
+| `npm run heap:verify:grown` | The same, against the larger dump |
+| `npm run heap:growth` | Two-dump attribution, including that per-class deltas account for the whole change |
+| `npm run heap:gate` | The redaction gate, run against the shipped bundle |
+
+## Why source binding uses class names, not allocation sites
+
+A dump taken through `HotSpotDiagnosticMXBean.dumpHeap` gives every instance a
+non-zero stack-trace serial — 240,525 of them here — but records only **16**
+`STACK_TRACE` records, and those are the live thread stacks rather than
+per-object allocation sites. Binding a leak suspect to an allocation site would
+therefore resolve almost nothing while looking like it ought to work, so the
+analyzer resolves the class name to a file in the workspace instead.
 
 ## Notes for the parser
 

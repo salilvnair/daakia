@@ -63,6 +63,8 @@ export function handleHeapAnalyze(msg: Record<string, unknown>, postMessage: Pos
       // and re-parsing per view would cost minutes each time. It is disposed when
       // another dump is opened, on cancel, or when the panel goes away.
       postMessage({ type: 'heap:done', path: dumpPath, name: path.basename(dumpPath), summary: m.summary });
+    } else if (m.type === 'baselineSet') {
+      postMessage({ type: 'heap:baselineSet', name: m.name, hasBaseline: m.hasBaseline });
     } else if (m.type === 'queryResult') {
       postMessage({ type: 'heap:queryResult', requestId: m.requestId, result: m.result });
     } else if (m.type === 'queryError') {
@@ -96,6 +98,88 @@ export function handleHeapAnalyze(msg: Record<string, unknown>, postMessage: Pos
   child.send({ type: 'parse', path: dumpPath });
 }
 
+/**
+ * Resolve a heap class name to a file in the open workspace.
+ *
+ * This is the thing MAT structurally cannot do: it has no workspace, so a leak
+ * suspect is a string in a report rather than somewhere you can go.
+ *
+ * Binding is by class name, not by allocation site. A standard dumpHeap HPROF
+ * assigns every instance a stack-trace serial but records only a handful of
+ * real traces — they are the live thread stacks, not per-object allocation
+ * sites — so allocation-site binding would resolve almost nothing while looking
+ * like it should work.
+ */
+export async function handleHeapLocateClass(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const requestId = msg.requestId as string;
+  const raw = String(msg.className ?? '');
+
+  const reply = (files: { path: string; relative: string }[], note?: string) =>
+    postMessage({ type: 'heap:locateResult', requestId, className: raw, files, note });
+
+  // Arrays, primitives and JDK-internal types are never in the user's workspace.
+  if (!raw || raw.startsWith('[')) return reply([], 'Array types have no source file.');
+  if (/^(java|javax|jdk|sun|com\.sun)\./.test(raw)) return reply([], 'JDK class — not part of this workspace.');
+
+  // Foo$Bar and Foo$1 both live in Foo.java; lambdas carry a generated suffix.
+  const binary = raw.split('$')[0].split('/')[0];
+  const parts = binary.split('.');
+  const simpleName = parts[parts.length - 1];
+  const packagePath = parts.slice(0, -1).join('/');
+  if (!simpleName) return reply([]);
+
+  try {
+    const found = await vscode.workspace.findFiles(
+      `**/${simpleName}.{java,kt,scala,groovy}`,
+      '**/{node_modules,build,out,target,dist,.git}/**',
+      50,
+    );
+    // Prefer a file whose directory matches the package — several modules can
+    // legitimately contain a same-named class.
+    const scored = found
+      .map(uri => {
+        const p = uri.fsPath.split(path.sep).join('/');
+        return { uri, p, exact: packagePath ? p.includes(`/${packagePath}/`) : false };
+      })
+      .sort((a, b) => Number(b.exact) - Number(a.exact));
+
+    reply(
+      scored.map(f => ({
+        path: f.uri.fsPath,
+        relative: vscode.workspace.asRelativePath(f.uri),
+      })),
+      scored.length === 0 ? 'No matching source file in this workspace.' : undefined,
+    );
+  } catch (err) {
+    reply([], err instanceof Error ? err.message : String(err));
+  }
+}
+
+/** Open a located file, focused on the class declaration where we can find it. */
+export async function handleHeapOpenSource(msg: Record<string, unknown>) {
+  const filePath = msg.path as string;
+  const className = String(msg.className ?? '');
+  if (!filePath) return;
+
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+  const simple = className.split('.').pop()?.split('$').pop() ?? '';
+  // Jump to the declaration rather than dumping the user at line 1.
+  let line = 0;
+  if (simple) {
+    const safe = simple.replace(/[^A-Za-z0-9_]/g, '');
+    const re = new RegExp(String.raw`\b(class|interface|enum|record|object)\s+` + safe + String.raw`\b`);
+    for (let i = 0; i < doc.lineCount; i++) {
+      if (re.test(doc.lineAt(i).text)) { line = i; break; }
+    }
+  }
+  const pos = new vscode.Position(line, 0);
+  await vscode.window.showTextDocument(doc, {
+    selection: new vscode.Range(pos, pos),
+    preview: false,
+    viewColumn: vscode.ViewColumn.Beside,
+  });
+}
+
 /** Relay a view's query to the resident worker. */
 export function handleHeapQuery(msg: Record<string, unknown>, postMessage: PostMessage) {
   const requestId = msg.requestId as string;
@@ -108,6 +192,16 @@ export function handleHeapQuery(msg: Record<string, unknown>, postMessage: PostM
   } catch {
     postMessage({ type: 'heap:queryError', requestId, message: 'The heap worker is no longer running.' });
   }
+}
+
+/** Snapshot the loaded dump's per-class totals for a later comparison. */
+export function handleHeapSetBaseline(postMessage: PostMessage) {
+  if (!active) {
+    postMessage({ type: 'heap:error', message: 'No heap dump is loaded.' });
+    return;
+  }
+  try { active.send({ type: 'setBaseline' }); }
+  catch { postMessage({ type: 'heap:error', message: 'The heap worker is no longer running.' }); }
 }
 
 export function handleHeapCancel(postMessage: PostMessage) {

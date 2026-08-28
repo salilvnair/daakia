@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { heapQuery, bytes, hueFor, type ClassStat } from './heap-query';
+import { ClassSourceLink } from './ClassSourceLink';
 
 const ROW_H = 26;
 const OVERSCAN = 8;
@@ -135,7 +136,7 @@ export function HeapHistogramView({ liveBytes }: { liveBytes: number }) {
               <span className="text-right tabular-nums text-[var(--color-text-secondary)]" style={{ width: 70 }}>
                 {r.instances.toLocaleString()}
               </span>
-              <span className="truncate text-[var(--color-text-primary)]" title={r.className}>{r.className}</span>
+              <ClassSourceLink className={r.className} />
             </div>
           );
         })}

@@ -50,7 +50,10 @@ import java.util.concurrent.CountDownLatch;
 public final class DaakiaHeapFixture {
 
     // ── Ground-truth constants. Change these and the assertions change with them. ──
-    static final int ENTRY_COUNT  = 50_000;
+    // ENTRY_COUNT is overridable from the command line so a second, larger dump
+    // can be produced for the two-dump growth comparison. Everything else stays
+    // fixed, so the delta between two dumps is attributable to the cache alone.
+    static int ENTRY_COUNT        = 50_000;
     static final int PAYLOAD      = 512;
     static final int DUP_COUNT    = 10_000;
     static final int CHAIN_DEPTH  = 5_000;
@@ -88,11 +91,13 @@ public final class DaakiaHeapFixture {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("usage: DaakiaHeapFixture <output-dir>");
+            System.err.println("usage: DaakiaHeapFixture <output-dir> [entryCount] [dumpName]");
             System.exit(2);
         }
         Path outDir = Path.of(args[0]);
         Files.createDirectories(outDir);
+        if (args.length > 1) ENTRY_COUNT = Integer.parseInt(args[1]);
+        String dumpName = args.length > 2 ? args[2] : "leak";
 
         // ── Plant the leak ──
         for (int i = 0; i < ENTRY_COUNT; i++) {
@@ -135,7 +140,7 @@ public final class DaakiaHeapFixture {
         ready.await();
 
         // ── Dump ──
-        Path dump = outDir.resolve("leak.hprof");
+        Path dump = outDir.resolve(dumpName + ".hprof");
         Files.deleteIfExists(dump);
         HotSpotDiagnosticMXBean bean = ManagementFactory.newPlatformMXBeanProxy(
                 ManagementFactory.getPlatformMBeanServer(),
@@ -145,9 +150,9 @@ public final class DaakiaHeapFixture {
 
         // ── Emit ground truth beside it ──
         String pkg = DaakiaHeapFixture.class.getPackageName();
-        try (FileWriter w = new FileWriter(outDir.resolve("leak.truth.json").toFile())) {
+        try (FileWriter w = new FileWriter(outDir.resolve(dumpName + ".truth.json").toFile())) {
             w.write("{\n");
-            w.write("  \"dump\": \"leak.hprof\",\n");
+            w.write("  \"dump\": \"" + dumpName + ".hprof\",\n");
             w.write("  \"jvm\": \"" + System.getProperty("java.version") + "\",\n");
             w.write("  \"arch\": \"" + System.getProperty("os.arch") + "\",\n");
             w.write("  \"classes\": {\n");
@@ -172,6 +177,6 @@ public final class DaakiaHeapFixture {
         for (Thread t : threads) t.join(1000);
 
         System.out.println("wrote " + dump.toAbsolutePath() + " (" + Files.size(dump) + " bytes)");
-        System.out.println("wrote " + outDir.resolve("leak.truth.json").toAbsolutePath());
+        System.out.println("wrote " + outDir.resolve(dumpName + ".truth.json").toAbsolutePath());
     }
 }

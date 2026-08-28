@@ -17,6 +17,7 @@ import { HeapHistogramView } from './HeapHistogramView';
 import { HeapTreemapView } from './HeapTreemapView';
 import { HeapGraphView } from './HeapGraphView';
 import { HeapExplainView } from './HeapExplainView';
+import { HeapGrowthView } from './HeapGrowthView';
 
 const ACCENT = 'var(--color-doctor)';
 
@@ -78,19 +79,22 @@ function severityColor(percent: number): string {
   return ACCENT;
 }
 
-type SubView = 'verdict' | 'histogram' | 'treemap' | 'graph' | 'explain';
+type SubView = 'verdict' | 'histogram' | 'treemap' | 'graph' | 'growth' | 'explain';
 
 const SUB_VIEWS: { id: SubView; label: string }[] = [
   { id: 'verdict', label: 'Verdict' },
   { id: 'histogram', label: 'Histogram' },
   { id: 'treemap', label: 'Treemap' },
   { id: 'graph', label: 'Retention' },
+  { id: 'growth', label: 'Growth' },
   { id: 'explain', label: 'Explain' },
 ];
 
 export function HeapAnalyzerView() {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [view, setView] = useState<SubView>('verdict');
+  // Baseline survives loading another dump — comparing is the whole point.
+  const [baseline, setBaseline] = useState<{ name: string | null } | null>(null);
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -106,6 +110,9 @@ export function HeapAnalyzerView() {
         setPhase({ kind: 'done', name: msg.name, summary: msg.summary });
       } else if (msg?.type === 'heap:cancelled') {
         setPhase({ kind: 'idle' });
+      } else if (msg?.type === 'heap:baselineSet') {
+        setBaseline(msg.hasBaseline ? { name: msg.name } : null);
+        setView('growth');
       } else if (msg?.type === 'heap:error') {
         setPhase({ kind: 'error', message: msg.message });
       }
@@ -212,6 +219,7 @@ export function HeapAnalyzerView() {
       {view === 'histogram' && <HeapHistogramView liveBytes={liveBytes} />}
       {view === 'treemap' && <HeapTreemapView />}
       {view === 'graph' && <HeapGraphView liveBytes={liveBytes} />}
+      {view === 'growth' && <HeapGrowthView hasBaseline={!!baseline} baselineName={baseline?.name ?? null} />}
       {view === 'explain' && <HeapExplainView />}
       {view === 'verdict' && (
       <div className="flex flex-col gap-4 px-4 py-4 overflow-y-auto flex-1 min-h-0">

@@ -194,11 +194,13 @@ type Query =
   | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number }
   | { type: 'treemap' }
   | { type: 'children'; row: number; limit?: number }
-  | { type: 'evidence' };
+  | { type: 'evidence' }
+  | { type: 'growth' };
 
 type Incoming =
   | { type: 'parse'; path: string }
   | { type: 'cancel' }
+  | { type: 'setBaseline' }
   | ({ type: 'query'; requestId: string } & { query: Query });
 
 type Outgoing =
@@ -206,6 +208,7 @@ type Outgoing =
   | { type: 'done'; summary: HeapSummary }
   | { type: 'cancelled' }
   | { type: 'error'; message: string }
+  | { type: 'baselineSet'; name: string | null; hasBaseline: boolean }
   | { type: 'queryResult'; requestId: string; result: unknown }
   | { type: 'queryError'; requestId: string; message: string };
 
@@ -215,6 +218,37 @@ let cancelled = false;
 let resident: { index: HeapIndex; dominators: Dominators } | null = null;
 let residentVerdict: HeapVerdict | null = null;
 let residentName = 'heap dump';
+
+/**
+ * The baseline for a two-dump comparison.
+ *
+ * Only per-class totals are kept, never the second index. Holding two full
+ * graphs would double the resident footprint — on a pair of 4 GB dumps that is
+ * well over a gigabyte for a view that only ever shows per-class deltas.
+ * Dominator-level attribution across two dumps would need both graphs, and is
+ * not worth that cost.
+ */
+interface Baseline {
+  name: string;
+  liveBytes: number;
+  liveObjects: number;
+  classes: Map<string, { instances: number; shallowBytes: number }>;
+}
+let baseline: Baseline | null = null;
+
+function snapshotBaseline(): Baseline | null {
+  if (!resident || !residentVerdict) return null;
+  const classes = new Map<string, { instances: number; shallowBytes: number }>();
+  for (const c of computeClassStats(resident.index, resident.dominators)) {
+    classes.set(c.className, { instances: c.instances, shallowBytes: c.shallowBytes });
+  }
+  return {
+    name: residentName,
+    liveBytes: residentVerdict.liveBytes,
+    liveObjects: residentVerdict.liveObjects,
+    classes,
+  };
+}
 
 function send(msg: Outgoing) { process.send?.(msg); }
 
@@ -237,6 +271,63 @@ function runQuery(query: Query): unknown {
   }
 
   if (query.type === 'treemap') return computeTreemap(index, dominators);
+
+  /**
+   * Growth attribution — what actually changed between two dumps.
+   *
+   * This is the workflow leaks are really found by, and the one MAT barely
+   * supports. Classes are matched by name; anything present in only one dump
+   * shows as a pure gain or loss rather than being silently dropped.
+   */
+  if (query.type === 'growth') {
+    if (!baseline) throw new Error('No baseline loaded. Open a dump, set it as the baseline, then open a second one.');
+    if (!residentVerdict) throw new Error('Analysis has not finished yet.');
+
+    const current = computeClassStats(index, dominators);
+    const seen = new Set<string>();
+    const rows: {
+      className: string;
+      beforeBytes: number; afterBytes: number; deltaBytes: number;
+      beforeInstances: number; afterInstances: number; deltaInstances: number;
+    }[] = [];
+
+    for (const c of current) {
+      seen.add(c.className);
+      const b = baseline.classes.get(c.className);
+      rows.push({
+        className: c.className,
+        beforeBytes: Math.round(b?.shallowBytes ?? 0),
+        afterBytes: Math.round(c.shallowBytes),
+        deltaBytes: Math.round(c.shallowBytes - (b?.shallowBytes ?? 0)),
+        beforeInstances: b?.instances ?? 0,
+        afterInstances: c.instances,
+        deltaInstances: c.instances - (b?.instances ?? 0),
+      });
+    }
+    // Classes that vanished entirely still matter — they are the other half of
+    // the story when something was released.
+    for (const [className, b] of baseline.classes) {
+      if (seen.has(className)) continue;
+      rows.push({
+        className,
+        beforeBytes: Math.round(b.shallowBytes), afterBytes: 0,
+        deltaBytes: -Math.round(b.shallowBytes),
+        beforeInstances: b.instances, afterInstances: 0, deltaInstances: -b.instances,
+      });
+    }
+
+    rows.sort((a, b) => Math.abs(b.deltaBytes) - Math.abs(a.deltaBytes));
+    return {
+      baselineName: baseline.name,
+      currentName: residentName,
+      baselineBytes: Math.round(baseline.liveBytes),
+      currentBytes: Math.round(residentVerdict.liveBytes),
+      baselineObjects: baseline.liveObjects,
+      currentObjects: residentVerdict.liveObjects,
+      rows: rows.slice(0, 60),
+      truncatedRows: Math.max(0, rows.length - 60),
+    };
+  }
 
   // The pack is built here, inside the process that holds the dump, so the
   // redaction gate runs before anything can reach the host — let alone a model.
@@ -285,11 +376,17 @@ if (process.send) {
   // Forked by the extension host.
   process.on('message', (msg: Incoming) => {
     if (msg.type === 'parse') {
+      // Deliberately keeps `baseline` — the second dump is parsed precisely so
+      // it can be compared against the first.
       resident = null; residentVerdict = null;
       residentName = msg.path.split(/[\/]/).pop() || 'heap dump';
       run(msg.path);
     }
     else if (msg.type === 'cancel') cancelled = true;
+    else if (msg.type === 'setBaseline') {
+      baseline = snapshotBaseline();
+      send({ type: 'baselineSet', name: baseline?.name ?? null, hasBaseline: !!baseline });
+    }
     else if (msg.type === 'query') {
       try {
         send({ type: 'queryResult', requestId: msg.requestId, result: runQuery(msg.query) });
