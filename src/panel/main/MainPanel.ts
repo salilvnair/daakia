@@ -79,7 +79,7 @@ import { handleDebugMessage } from './handlers/debug-handler';
 import {
   handleHeapOpen, handleHeapAnalyze, handleHeapCancel, handleHeapQuery,
   handleHeapSetBaseline, handleHeapLocateClass, handleHeapOpenSource,
-  handleThreadsOpen, handleThreadsAnalyze,
+  handleThreadsOpen, handleThreadsAnalyze, handleLogsOpen, handleLogsAnalyze,
 } from './handlers/heap-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
@@ -498,6 +498,12 @@ export class MainPanel {
         break;
       case 'threads:analyze':
         handleThreadsAnalyze(msg, this._post, this._extensionUri.fsPath);
+        break;
+      case 'logs:open':
+        handleLogsOpen(this._post, this._extensionUri.fsPath);
+        break;
+      case 'logs:analyze':
+        handleLogsAnalyze(msg, this._post, this._extensionUri.fsPath);
         break;
 
       case 'mockServer:getAll':

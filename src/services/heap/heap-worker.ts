@@ -33,6 +33,8 @@ export { runRules, RULE_PACK_VERSION } from './heap-rules';
 // discipline and the CI gate, and a second worker process would buy nothing.
 export { parseThreadDump } from '../threads/jstack-parser';
 export { analyzeThreadDump, findDeadlocks, findContention, groupThreads } from '../threads/thread-analysis';
+export { parseLog } from '../logs/log-parser';
+export { LogAccumulator, templateOf } from '../logs/log-analysis';
 
 export interface HeapSummary {
   objects: number;

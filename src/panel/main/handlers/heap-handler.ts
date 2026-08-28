@@ -246,6 +246,51 @@ export function handleThreadsAnalyze(msg: Record<string, unknown>, postMessage: 
   }
 }
 
+/**
+ * Logs are read in the extension host and reduced to templates before anything
+ * is sent to the webview.
+ *
+ * Shipping raw lines would defeat the point: a 2 GB log cannot cross that
+ * boundary, and the lines are the part carrying order ids, user names and
+ * tokens. Templates are both the reduction and the redaction.
+ */
+export async function handleLogsOpen(postMessage: PostMessage, extensionRoot: string) {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    title: 'Open log file',
+    openLabel: 'Analyze',
+    filters: { 'Log files': ['log', 'txt', 'out', 'err'], 'All files': ['*'] },
+  });
+  if (!picked?.[0]) return;
+  handleLogsAnalyze({ path: picked[0].fsPath }, postMessage, extensionRoot);
+}
+
+export function handleLogsAnalyze(msg: Record<string, unknown>, postMessage: PostMessage, extensionRoot: string) {
+  const logPath = msg.path as string;
+  if (!logPath) {
+    postMessage({ type: 'logs:error', message: 'No log path was provided.' });
+    return;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const worker = require(path.join(extensionRoot, 'dist', 'heap-worker.js'));
+    const text = readFileSync(logPath, 'utf8');
+    const acc = new worker.LogAccumulator();
+    const stats = worker.parseLog(text, { onEntry: (e: unknown) => acc.add(e) });
+    if (stats.entries === 0) {
+      postMessage({ type: 'logs:error', message: 'No log entries were found in that file.' });
+      return;
+    }
+    postMessage({
+      type: 'logs:done',
+      name: path.basename(logPath),
+      verdict: acc.build(stats.lines, stats.withoutTimestamp),
+    });
+  } catch (err) {
+    postMessage({ type: 'logs:error', message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 /** Snapshot the loaded dump's per-class totals for a later comparison. */
 export function handleHeapSetBaseline(postMessage: PostMessage) {
   if (!active) {
