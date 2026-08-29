@@ -4,8 +4,12 @@
  */
 import http from 'http';
 import https from 'https';
+import net from 'net';
+import tls from 'tls';
 import { URL } from 'url';
 import crypto from 'crypto';
+import type { ResolvedProxy } from '../services/proxy-config';
+import { sniFor } from '../services/tls-policy';
 
 export interface SoapInvokeParams {
   tabId: string;
@@ -16,6 +20,20 @@ export interface SoapInvokeParams {
   headers: { key: string; value: string }[];
   attachments?: SoapAttachmentParam[]; // MTOM file attachments
   timeout?: number; // request timeout in ms (default 300000)
+  /**
+   * Routing decision from the shared proxy resolver.
+   *
+   * SOAP posts through the raw http/https modules rather than axios, so the
+   * proxy has to be applied here by hand. It was not, which meant a configured
+   * proxy silently did nothing for SOAP while it worked for REST.
+   */
+  proxy?: ResolvedProxy;
+  /**
+   * Certificate verification, resolved by the caller from settings.
+   * SOAP used to verify unconditionally, so turning verification off in
+   * settings worked for REST and quietly did nothing here.
+   */
+  rejectUnauthorized?: boolean;
 }
 
 export interface SoapAttachmentParam {
@@ -34,6 +52,8 @@ export interface SoapResponse {
   time: number;
   size: number;
   hasFault: boolean;
+  /** The headers actually put on the wire, including the ones built here. */
+  requestHeaders?: Record<string, string>;
 }
 
 // Track active requests for cancellation
@@ -99,14 +119,68 @@ export function executeSoapRequest(params: SoapInvokeParams): Promise<SoapRespon
 
     reqHeaders['Content-Length'] = String(body.length);
 
-    const options: http.RequestOptions = {
+    const timeout = params.timeout ?? 300000;
+    const targetPort = Number(url.port || (isHttps ? 443 : 80));
+    const viaProxy = params.proxy?.used ? params.proxy.axiosProxy : undefined;
+
+    // Verify unless the caller resolved the settings and said otherwise.
+    const verifyCert = params.rejectUnauthorized ?? true;
+
+    const options: https.RequestOptions = {
       hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
+      port: targetPort,
       path: url.pathname + url.search,
       method: 'POST',
       headers: reqHeaders,
-      timeout: params.timeout ?? 300000,
+      timeout,
+      ...(isHttps ? { rejectUnauthorized: verifyCert, servername: sniFor(url.hostname) } : {}),
     };
+
+    if (viaProxy && typeof viaProxy === 'object') {
+      if (isHttps) {
+        // An HTTPS target cannot be given to the proxy in the clear: the proxy
+        // opens a raw tunnel with CONNECT and TLS is negotiated end-to-end
+        // through it, so the proxy never sees the request.
+        options.createConnection = ((_opts: unknown, cb: (err: Error | null, sock?: net.Socket) => void) => {
+          const connect = http.request({
+            host: viaProxy.host,
+            port: viaProxy.port,
+            method: 'CONNECT',
+            path: `${url.hostname}:${targetPort}`,
+            headers: {
+              host: `${url.hostname}:${targetPort}`,
+              ...(viaProxy.auth
+                ? { 'proxy-authorization': `Basic ${Buffer.from(`${viaProxy.auth.username}:${viaProxy.auth.password}`).toString('base64')}` }
+                : {}),
+            },
+            timeout,
+          });
+          connect.on('connect', (res, socket) => {
+            if (res.statusCode !== 200) {
+              socket.destroy();
+              cb(new Error(`Proxy refused the CONNECT tunnel: ${res.statusCode} ${res.statusMessage ?? ''}`.trim()));
+              return;
+            }
+            cb(null, tls.connect({ socket, servername: sniFor(url.hostname), rejectUnauthorized: verifyCert }));
+          });
+          connect.on('error', (err) => cb(err));
+          connect.on('timeout', () => { connect.destroy(); cb(new Error(`Proxy did not answer CONNECT within ${Math.round(timeout / 1000)}s`)); });
+          connect.end();
+          return undefined as unknown as net.Socket;   // the socket arrives via cb
+        }) as unknown as http.RequestOptions['createConnection'];
+      } else {
+        // Plain HTTP through a proxy is an ordinary request to the proxy with
+        // the absolute URL as the request target.
+        options.hostname = viaProxy.host;
+        options.port = viaProxy.port;
+        options.path = url.toString();
+        (options.headers as Record<string, string>).Host = url.host;
+        if (viaProxy.auth) {
+          (options.headers as Record<string, string>)['Proxy-Authorization'] =
+            `Basic ${Buffer.from(`${viaProxy.auth.username}:${viaProxy.auth.password}`).toString('base64')}`;
+        }
+      }
+    }
 
     const req = transport.request(options, (res) => {
       const chunks: Buffer[] = [];
@@ -142,6 +216,7 @@ export function executeSoapRequest(params: SoapInvokeParams): Promise<SoapRespon
           time: elapsed,
           size,
           hasFault,
+          requestHeaders: reqHeaders,
         });
       });
     });
@@ -154,7 +229,7 @@ export function executeSoapRequest(params: SoapInvokeParams): Promise<SoapRespon
     req.on('timeout', () => {
       req.destroy();
       activeRequests.delete(tabId);
-      const timeoutMs = params.timeout ?? 300000;
+      const timeoutMs = timeout;
       const timeoutSec = Math.round(timeoutMs / 1000);
       reject(new Error(`Request timed out after ${timeoutSec}s`));
     });

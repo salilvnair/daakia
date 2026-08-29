@@ -9,6 +9,13 @@ import { generateWsSecurityHeader, type WsSecurityOptions } from '../../../soap/
 import { parseSoapUiProject } from '../../../soap/soapui-importer';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory, getSetting, upsertCollection, upsertCollectionRequest } from '../../../storage/db';
+import { resolveProxy, type ProxyConfig, type ResolvedProxy } from '../../../services/proxy-config';
+import { resolveTlsPolicy } from '../../../services/tls-policy';
+
+/** The endpoint may not parse yet; the executor reports that properly. */
+function safeHostname(endpoint: string): string {
+  try { return new URL(endpoint).hostname; } catch { return ''; }
+}
 
 type PostMessage = (msg: unknown) => void;
 
@@ -51,6 +58,16 @@ export async function handleSoapInvoke(
     return;
   }
 
+  // SOAP goes out through the raw http module, so the proxy decision is made
+  // here and handed to the executor rather than being picked up by axios.
+  const soapProxy: ResolvedProxy = resolveProxy(
+    (getSetting<Record<string, unknown>>('general') ?? {}).proxy as ProxyConfig | undefined,
+    endpoint,
+  );
+  // SOAP verified certificates unconditionally, so the sslVerification and
+  // trustedHosts settings applied to REST and not here.
+  const soapTls = resolveTlsPolicy(safeHostname(endpoint), getSetting<Record<string, unknown>>('general'));
+
   const params: SoapInvokeParams = {
     tabId,
     endpoint,
@@ -60,6 +77,8 @@ export async function handleSoapInvoke(
     headers,
     attachments: (msg.attachments as { contentId: string; contentType: string; filename: string; base64Data: string }[] | undefined)?.filter(a => a.base64Data),
     timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0,
+    proxy: soapProxy,
+    rejectUnauthorized: soapTls.rejectUnauthorized,
   };
 
   try {
@@ -76,6 +95,13 @@ export async function handleSoapInvoke(
     postMessage({
       type: 'soap:response',
       tabId,
+      requestMethod: 'POST',
+      requestUrl: endpoint,
+      // The executor adds SOAPAction, Content-Type and Content-Length itself,
+      // so its report of what it sent is the truthful one.
+      requestHeaders: result.requestHeaders,
+      requestBody: envelope,
+      proxy: { used: soapProxy.used, description: soapProxy.description, warning: soapProxy.warning },
       response: {
         status: result.status,
         statusText: result.statusText,
@@ -147,6 +173,12 @@ export async function handleSoapInvoke(
     postMessage({
       type: 'soap:response',
       tabId,
+      requestMethod: 'POST',
+      requestUrl: endpoint,
+      requestBody: envelope,
+      // A failure is exactly when the route matters: "connection refused" reads
+      // very differently once you know it was refused by a proxy.
+      proxy: { used: soapProxy.used, description: soapProxy.description, warning: soapProxy.warning },
       response: {
         status: 0,
         statusText: detail || 'Request failed',

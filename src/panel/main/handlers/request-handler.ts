@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { executeRequest } from '../../../http/request-executor';
-import { buildRequestAudit } from '../../../services/request-audit';
 import { runScript, type ScriptContext } from '../../../services/script-runtime';
 import { DebugSession } from '../../../services/debugger';
 import { getOAuth2Token, type OAuth2Config } from '../../../services/oauth2';
@@ -388,40 +387,6 @@ export async function handleExecuteRequest(
       consoleLogs: consoleLogs.length > 0 ? consoleLogs : undefined,
       scriptSubRequests: scriptSubRequests.length > 0 ? scriptSubRequests : undefined,
     });
-
-    // Full audit record. Written here rather than on click in the webview,
-    // because on click there is no response, no sent headers, no timing and no
-    // routing decision — which is why the old entry was just a method and a URL.
-    // `auditEnabled` comes from the webview so the per-event on/off config,
-    // which lives there, is still honoured.
-    if (msg.auditEnabled !== false) {
-      try {
-        insertUiAudit({
-          event_type: 'rest.send',
-          module: 'REST',
-          button: 'Send',
-          action: 'click',
-          metadata: JSON.stringify(buildRequestAudit({
-            method: msg.method as string,
-            url: msg.url as string,
-            requestHeaders: sentHeaders,
-            requestBody: requestBodyForDevTools,
-            bodyMode: msg.bodyMode as string | undefined,
-            authType: msg.authType as string | undefined,
-            params: msg.params as { key: string; value: string; enabled?: boolean }[] | undefined,
-            response: result.response,
-            proxy: result.proxy,
-            settings: settings as Record<string, unknown>,
-            scripts: {
-              preRequest: preScripts.length > 0,
-              postResponse: postResponseScripts.length > 0,
-              testsPassed: allTestResults.filter(t => t.passed).length,
-              testsFailed: allTestResults.filter(t => !t.passed).length,
-            },
-          }), null, 2),
-        });
-      } catch { /* auditing must never break a request */ }
-    }
 
     // Cookie jar: store response cookies
     if (result.response.cookies && result.response.cookies.length > 0) {

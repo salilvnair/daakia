@@ -34,6 +34,10 @@ export interface RequestAuditRecord {
   routing: { proxied: boolean; route: string; warning?: string };
   settings: Record<string, unknown>;
   scripts?: { preRequest: boolean; postResponse: boolean; testsPassed: number; testsFailed: number };
+  /** Which protocol produced this row — REST rows written before this are undefined. */
+  protocol?: string;
+  /** Details with no HTTP equivalent: the SOAP action, the RPC method, the GraphQL operation. */
+  operation?: Record<string, string>;
 }
 
 /** Header names whose value is a credential rather than something to read. */
@@ -114,16 +118,25 @@ function Section({ title, children, accent }: { title: string; children: React.R
   );
 }
 
+/** gRPC has no HTTP verb, so its method column is a label rather than a verb. */
+const methodColor = (m: string) => (m === 'RPC' ? 'var(--color-text-muted)' : 'var(--color-method-get)');
+
 export function RequestAuditDetail({ record }: { record: RequestAuditRecord }) {
   const [reveal, setReveal] = useState(false);
-  const { request: req, response: res, routing, settings, scripts } = record;
+  const { request: req, response: res, routing, settings, scripts, protocol, operation } = record;
 
   return (
     <div className="flex flex-col gap-2">
       {/* Outcome first — what happened, before how */}
       <div className="flex items-center gap-3 flex-wrap">
+        {protocol && protocol !== 'rest' && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider"
+                style={{ color: 'var(--color-text-secondary)', background: 'var(--color-surface-hover)' }}>
+            {protocol}
+          </span>
+        )}
         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded font-mono"
-              style={{ color: 'var(--color-method-get)', background: 'color-mix(in srgb, var(--color-method-get) 12%, transparent)' }}>
+              style={{ color: methodColor(req.method), background: `color-mix(in srgb, ${methodColor(req.method)} 12%, transparent)` }}>
           {req.method}
         </span>
         <span className="text-[11px] font-mono text-[var(--color-text-primary)] break-all flex-1" style={{ minWidth: 200 }}>
@@ -162,6 +175,15 @@ export function RequestAuditDetail({ record }: { record: RequestAuditRecord }) {
           <p className="text-[10.5px] m-0" style={{ color: 'var(--color-warning)' }}>{routing.warning}</p>
         )}
       </Section>
+
+      {/* What the protocol calls the thing being invoked, when it has a name */}
+      {operation && Object.keys(operation).length > 0 && (
+        <Section title="Operation">
+          <div className="flex gap-x-4 gap-y-0.5 flex-wrap">
+            {Object.entries(operation).map(([k, v]) => <Field key={k} label={k} value={v} />)}
+          </div>
+        </Section>
+      )}
 
       <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
         <Section title={`Request · ${req.headerCount} headers`}>

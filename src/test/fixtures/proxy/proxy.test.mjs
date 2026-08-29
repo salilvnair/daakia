@@ -37,6 +37,7 @@ const bundle = join(dir, 'bundle.cjs');
 const abs = (p) => JSON.stringify(resolve(p));
 writeFileSync(entry, [
   `export { executeRequest } from ${abs('src/http/request-executor.ts')};`,
+  `export { executeSoapRequest } from ${abs('src/soap/soap-executor.ts')};`,
   `export * from ${abs('src/services/proxy-config.ts')};`,
 ].join('\n'));
 
@@ -52,7 +53,7 @@ try {
 }
 
 const require = createRequire(import.meta.url);
-const { executeRequest, normalizeProxyConfig, resolveProxy, isBypassed } = require(bundle);
+const { executeRequest, executeSoapRequest, normalizeProxyConfig, resolveProxy, isBypassed } = require(bundle);
 
 let failures = 0;
 const check = (name, fn) => {
@@ -141,6 +142,171 @@ console.log('routing (verified against a real proxy process)');
       assert.ok(r.result.proxy?.description, 'a result had no route description');
     }
   });
+}
+
+// ── SOAP ─────────────────────────────────────────────────────────────────────
+// SOAP posts through the raw http module rather than axios, so it does not
+// inherit REST's proxy handling and needed its own proof. It had none, and
+// silently ignored the proxy setting entirely.
+console.log('\nSOAP (its own transport, so proxied separately)');
+{
+  const soap = async (label, uiConfig) => {
+    proxyHits = 0;
+    const url = `http://127.0.0.1:${originPort}/soap`;
+    const result = await executeSoapRequest({
+      tabId: label, endpoint: url, soapVersion: '1.1', soapAction: 'GetQuote',
+      envelope: '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body/></soap:Envelope>',
+      headers: [], timeout: 5000,
+      proxy: resolveProxy(normalizeProxyConfig(uiConfig), url),
+    });
+    return { result, hits: proxyHits, body: JSON.parse(result.body) };
+  };
+
+  const direct = await soap('soap-direct', { enabled: false, type: 'http', host: '', port: 0 });
+  check('SOAP goes direct when no proxy is set', () => {
+    assert.equal(direct.hits, 0);
+    assert.equal(direct.body.viaProxy, false);
+  });
+
+  const viaProxy = await soap('soap-proxy', manual());
+  check('SOAP actually routes through the proxy', () => {
+    assert.equal(viaProxy.hits, 1, 'SOAP ignored the proxy setting');
+    assert.equal(viaProxy.body.viaProxy, true, 'the origin did not see SOAP arrive via the proxy');
+  });
+
+  const bypass = await soap('soap-bypass', manual({ noProxy: '127.0.0.1' }));
+  check('SOAP honours the bypass list', () => {
+    assert.equal(bypass.hits, 0, 'a bypassed host still went through the proxy');
+  });
+
+  check('SOAP reports the headers it actually sent, not just the typed ones', () => {
+    // The executor builds SOAPAction, Content-Type and Content-Length itself;
+    // an audit log that omits them cannot answer why a server rejected a call.
+    const h = viaProxy.result.requestHeaders ?? {};
+    assert.equal(h.SOAPAction, '"GetQuote"');
+    assert.match(h['Content-Type'] ?? '', /text\/xml/);
+    assert.ok(h['Content-Length'], 'Content-Length was not reported');
+  });
+}
+
+// ── CONNECT tunnelling ───────────────────────────────────────────────────────
+// An HTTPS target cannot be handed to a proxy in the clear — it needs a CONNECT
+// tunnel, which is a different code path from proxied plain HTTP and the one
+// most likely to be wrong. It is exercised here against a real TLS origin.
+//
+// The certificate is self-signed, so this call passes rejectUnauthorized:false
+// explicitly — the same thing the SSL verification setting does.
+console.log('\nHTTPS through the proxy (CONNECT tunnel)');
+{
+  let cert;
+  try {
+    const { execFileSync } = await import('child_process');
+    const keyPath = join(dir, 'k.pem'), certPath = join(dir, 'c.pem');
+    execFileSync('openssl', [
+      'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+      '-keyout', keyPath, '-out', certPath,
+      '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1',
+    ], { stdio: 'ignore' });
+    const { readFileSync } = await import('fs');
+    cert = { key: readFileSync(keyPath), cert: readFileSync(certPath) };
+  } catch (err) {
+    console.log(`  SKIP  no certificate could be generated (${err.message.split('\n')[0]})`);
+  }
+
+  if (cert) {
+    const tls = await import('tls');
+    const net = await import('net');
+
+    const tlsOrigin = tls.createServer(cert, (socket) => {
+      socket.on('data', () => {
+        const body = JSON.stringify({ secure: true });
+        socket.end(`HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${body.length}\r\n\r\n${body}`);
+      });
+    });
+    await new Promise(r => tlsOrigin.listen(0, '127.0.0.1', r));
+    const tlsPort = tlsOrigin.address().port;
+
+    // A CONNECT proxy: it splices two sockets and never sees the plaintext.
+    let connects = 0;
+    let lastTarget = '';
+    const connectProxy = http.createServer();
+    connectProxy.on('connect', (req, clientSocket, head) => {
+      connects++;
+      lastTarget = req.url;
+      const [host, port] = req.url.split(':');
+      const upstream = net.connect(Number(port), host, () => {
+        clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        if (head?.length) upstream.write(head);
+        upstream.pipe(clientSocket);
+        clientSocket.pipe(upstream);
+      });
+      upstream.on('error', () => clientSocket.destroy());
+      clientSocket.on('error', () => upstream.destroy());
+    });
+    await new Promise(r => connectProxy.listen(0, '127.0.0.1', r));
+    const connectPort = connectProxy.address().port;
+
+    let tunnelled, tunnelErr;
+    try {
+      const url = `https://127.0.0.1:${tlsPort}/soap`;
+      tunnelled = await executeSoapRequest({
+        tabId: 'soap-tls', endpoint: url, soapVersion: '1.1', soapAction: 'X',
+        envelope: '<e/>', headers: [], timeout: 5000,
+        rejectUnauthorized: false,
+        proxy: resolveProxy(
+          normalizeProxyConfig({ enabled: true, type: 'http', host: '127.0.0.1', port: connectPort, noProxy: '' }),
+          url,
+        ),
+      });
+    } catch (err) {
+      tunnelErr = err;
+    }
+
+    check('an HTTPS SOAP call opens a CONNECT tunnel through the proxy', () => {
+      assert.ifError(tunnelErr);
+      assert.equal(connects, 1, 'the proxy was never asked to open a tunnel');
+      assert.equal(lastTarget, `127.0.0.1:${tlsPort}`, `the tunnel targeted ${lastTarget}`);
+      assert.equal(tunnelled.status, 200);
+      assert.deepEqual(JSON.parse(tunnelled.body), { secure: true });
+    });
+
+    // Verification is the default, and it has to actually bite: a test that
+    // only ever runs with checking disabled would pass against an executor
+    // that never verifies anything.
+    let rejected;
+    try {
+      const url = `https://127.0.0.1:${tlsPort}/soap`;
+      await executeSoapRequest({
+        tabId: 'soap-tls-verify', endpoint: url, soapVersion: '1.1', soapAction: 'X',
+        envelope: '<e/>', headers: [], timeout: 5000,
+        rejectUnauthorized: true,
+      });
+    } catch (err) {
+      rejected = err;
+    }
+    check('a self-signed certificate is rejected when verification is on', () => {
+      assert.ok(rejected, 'the self-signed certificate was accepted');
+      assert.match(String(rejected.message), /self.signed|SELF_SIGNED|certificate/i);
+    });
+
+    let accepted, acceptErr;
+    try {
+      const url = `https://127.0.0.1:${tlsPort}/soap`;
+      accepted = await executeSoapRequest({
+        tabId: 'soap-tls-off', endpoint: url, soapVersion: '1.1', soapAction: 'X',
+        envelope: '<e/>', headers: [], timeout: 5000,
+        rejectUnauthorized: false,
+      });
+    } catch (err) { acceptErr = err; }
+    check('turning SSL verification off actually reaches the server', () => {
+      // This is the setting that did nothing for SOAP before.
+      assert.ifError(acceptErr);
+      assert.equal(accepted.status, 200);
+    });
+
+    tlsOrigin.close();
+    connectProxy.close();
+  }
 }
 
 console.log('\nconfiguration');

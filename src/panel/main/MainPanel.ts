@@ -76,6 +76,7 @@ import {
   handleBinPermanentlyDelete, handleBinPermanentlyDeleteGroup, handleBinEmpty,
 } from './handlers/bin-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
+import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol-audit';
 import {
   normalizeProxyConfig, toUiProxyConfig, resolveProxy,
   DEFAULT_PROXY, UNPROXIED_PROTOCOLS,
@@ -198,7 +199,15 @@ export class MainPanel {
   }
 
   // Bound postMessage shorthand for passing to handlers
-  private _post = (msg: unknown) => this.postMessage(msg);
+  /**
+   * Every message to the webview passes here, which makes it the one place a
+   * protocol response can be audited regardless of which of a handler's return
+   * paths produced it. See src/services/protocol-audit.ts.
+   */
+  private _post = (msg: unknown) => {
+    auditProtocolResponse(msg as Record<string, unknown>);
+    this.postMessage(msg);
+  };
 
   // ────────────────── Git Sync — auto-sync timer + post-sync UI refresh ──────
 
@@ -233,6 +242,9 @@ export class MainPanel {
     if (COLLECTION_MUTATION_TYPES.has(msg.type)) {
       queueMicrotask(() => scheduleAutoExport());
     }
+
+    // Stash sends so the response hook on _post can pair them into one audit row.
+    noteProtocolSend(msg);
 
     switch (msg.type) {
       case 'ready':

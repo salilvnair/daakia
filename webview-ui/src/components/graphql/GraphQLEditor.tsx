@@ -21,7 +21,7 @@ import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../ai/AiHeaderSugge
 import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
 import { AiGqlQueryBuilderDrawer, type AiGqlQueryBuilderDrawerHandle } from '../ai/AiGqlQueryBuilderDrawer';
 import { AiGqlSchemaExplainerModal } from '../ai/AiGqlSchemaExplainerModal';
-import { logUiEvent } from '../../store/ui-audit-store';
+import { logUiEvent, isAuditEventEnabled } from '../../store/ui-audit-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 
 type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'scripts' | 'subscription';
@@ -70,10 +70,15 @@ export function GraphQLEditor() {
     const endpoint = activeTab.url.trim();
     if (!endpoint) return;
 
-    logUiEvent('graphql.send', { url: endpoint });
+    // Audited by the extension host once the response arrives, where the
+    // headers, status and timing exist. Logging on click as well produced
+    // two rows per request, the click-time one nearly empty.
     updateTab(activeTab.id, { loading: true });
     postMsg({
       type: 'executeGraphQL',
+      // The per-event audit toggle lives in the webview; the host writes the
+      // record, so the decision travels with the request.
+      auditEnabled: isAuditEventEnabled('graphql.send'),
       tabId: activeTab.id,
       endpoint,
       query: activeTab.bodyRaw,

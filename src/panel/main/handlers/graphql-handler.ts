@@ -2,7 +2,9 @@
  * GraphQL execution + introspection + subscription handler.
  */
 import axios from 'axios';
+import https from 'https';
 import { resolveProxy, type ProxyConfig } from '../../../services/proxy-config';
+import { resolveTlsPolicy } from '../../../services/tls-policy';
 
 /**
  * GraphQL posts through axios directly rather than through the REST executor,
@@ -14,6 +16,24 @@ import { resolveProxy, type ProxyConfig } from '../../../services/proxy-config';
 function graphqlProxy(url: string) {
   const stored = (getSetting<Record<string, unknown>>('general') ?? {}).proxy as ProxyConfig | undefined;
   return resolveProxy(stored, url);
+}
+
+/**
+ * Same story for certificate verification: GraphQL verified unconditionally,
+ * so `sslVerification: false` and the trusted-host list applied to REST and
+ * were ignored here.
+ */
+function graphqlAgent(url: string): https.Agent | undefined {
+  let hostname: string;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return undefined;
+    hostname = parsed.hostname;
+  } catch {
+    return undefined;
+  }
+  const policy = resolveTlsPolicy(hostname, getSetting<Record<string, unknown>>('general'));
+  return policy.rejectUnauthorized ? undefined : new https.Agent({ rejectUnauthorized: false });
 }
 import WebSocket from 'ws';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
@@ -103,7 +123,7 @@ export async function handleGraphQLConnect(
     const res = await axios.post(
       endpoint,
       { query: INTROSPECTION_QUERY },
-      { headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0, validateStatus: () => true, proxy: graphqlProxy(endpoint).axiosProxy },
+      { headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0, validateStatus: () => true, proxy: graphqlProxy(endpoint).axiosProxy, httpsAgent: graphqlAgent(endpoint) },
     );
 
     if (res.status >= 400) {
@@ -309,6 +329,7 @@ export async function handleExecuteGraphQL(
         transformResponse: [(data) => data], // Keep raw string
         signal: controller.signal,
         proxy: gqlProxy.axiosProxy,
+        httpsAgent: graphqlAgent(endpoint),
       },
     );
 

@@ -10,7 +10,7 @@ import { AiPreflightPopover } from '../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../ai/AiRequestPatternStatus';
 import { AiGrpcProtoExplainerModal } from '../ai/AiGrpcProtoExplainerModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { logUiEvent } from '../../store/ui-audit-store';
+import { logUiEvent, isAuditEventEnabled } from '../../store/ui-audit-store';
 import {
   ButtonView,
   IconButtonView,
@@ -95,7 +95,9 @@ export function GrpcUrlBar() {
     const endpoint = activeTab.url.trim();
     if (!endpoint) return;
 
-    logUiEvent('grpc.invoke', { url: endpoint, method: activeTab.grpcMethod });
+    // Audited by the extension host once the response arrives, where the
+    // headers, status and timing exist. Logging on click as well produced
+    // two rows per request, the click-time one nearly empty.
 
     let rpcType: string = 'unary';
     const method = activeTab.grpcMethod || '';
@@ -112,6 +114,9 @@ export function GrpcUrlBar() {
     postMsg({
       type: 'grpc:invoke',
       tabId: activeTab.id,
+      // The per-event audit toggle lives in the webview; the host writes the
+      // record, so the decision travels with the request.
+      auditEnabled: isAuditEventEnabled('grpc.invoke'),
       endpoint,
       method,
       message: activeTab.grpcMessage || '{}',
