@@ -430,7 +430,7 @@ export function PodGrid() {
 
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <div ref={searchRef} style={{ maxWidth: 280, flex: 1 }}>
+        <div ref={searchRef} style={{ maxWidth: 560, flex: 1 }}>
           <SearchInputView value={filter} onChange={setFilter} placeholder="Filter pods  ( / )" size="sm" />
         </div>
         <div className="flex-1" />
@@ -473,10 +473,10 @@ export function PodGrid() {
       </div>
 
       {selectMode && (
-        <div className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0"
+        <div className="flex items-center gap-3 mx-4 mt-3 px-4 py-3 rounded-lg flex-shrink-0"
              style={{
-               background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`,
-               borderBottom: `1px solid color-mix(in srgb, ${ACCENT} 25%, transparent)`,
+               background: `color-mix(in srgb, ${ACCENT} 9%, var(--color-surface))`,
+               border: `1px solid color-mix(in srgb, ${ACCENT} 32%, transparent)`,
              }}>
           <span className="text-[11.5px]" style={{ color: ACCENT }}>
             {selected.length
@@ -515,10 +515,10 @@ export function PodGrid() {
       {/* Where the files went. Worth a persistent line rather than a toast —
           the path is the thing you need next, and a toast takes it away. */}
       {exportState?.phase === 'done' && (
-        <div className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0 text-[11.5px]"
+        <div className="flex items-center gap-3 mx-4 mt-3 px-4 py-3 rounded-lg flex-shrink-0 text-[11.5px]"
              style={{
-               background: 'color-mix(in srgb, var(--color-method-get) 9%, transparent)',
-               borderBottom: '1px solid color-mix(in srgb, var(--color-method-get) 25%, transparent)',
+               background: 'color-mix(in srgb, var(--color-method-get) 10%, var(--color-surface))',
+               border: '1px solid color-mix(in srgb, var(--color-method-get) 30%, transparent)',
                color: 'var(--color-method-get)',
              }}>
           <FolderExportIcon size={13} strokeWidth={1.8} />
@@ -543,18 +543,18 @@ export function PodGrid() {
       )}
 
       {capped && (
-        <div className="px-4 py-2.5 flex-shrink-0 text-[11.5px]"
+        <div className="mx-4 mt-3 px-4 py-3 rounded-lg flex-shrink-0 text-[11.5px]"
              style={{
-               background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
+               background: 'color-mix(in srgb, var(--color-warning) 10%, var(--color-surface))',
                color: 'var(--color-warning)',
-               borderBottom: '1px solid color-mix(in srgb, var(--color-warning) 25%, transparent)',
+               border: '1px solid color-mix(in srgb, var(--color-warning) 30%, transparent)',
              }}>
           Watching {capped.watching} of {capped.requested} namespaces &mdash; dk8s holds at most{' '}
           {capped.max} live watches, because each one is a process against the API server.
         </div>
       )}
 
-      <div className="flex-1 overflow-auto px-4 py-3">
+      <div className="flex-1 overflow-auto px-4 pt-3 pb-4">
         {!pods.length ? (
           <div className="flex items-center justify-center h-full">
             <span className="text-[12px] text-[var(--color-text-muted)]">

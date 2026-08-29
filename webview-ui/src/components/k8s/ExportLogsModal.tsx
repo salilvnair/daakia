@@ -8,7 +8,7 @@
  * required.
  */
 import { useState } from 'react';
-import { ModalView, ButtonView, TextInputView } from '@salilvnair/dui';
+import { ModalView, ButtonView, TextInputView, DateTimeInputView } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -129,21 +129,15 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
           />
         </Field>
 
+        {/* dui's picker rather than a native datetime-local input: the native
+            one renders the browser's own calendar, which ignores the theme
+            entirely and looks like a different application. Same
+            `YYYY-MM-DDTHH:mm` value shape, so it is a straight swap. */}
         {range === 'between' && (
           <div className="flex items-center gap-2 flex-wrap">
-            <input
-              type="datetime-local" value={from} onChange={e => setFrom(e.target.value)}
-              className="text-[11.5px] font-mono px-2 py-1.5 rounded"
-              style={{ background: 'var(--color-surface-hover)', color: 'var(--color-text-primary)',
-                       border: '1px solid var(--color-surface-border)' }}
-            />
+            <DateTimeInputView value={from} onChange={setFrom} size="sm" color={ACCENT} />
             <span className="text-[11px] text-[var(--color-text-muted)]">to</span>
-            <input
-              type="datetime-local" value={to} onChange={e => setTo(e.target.value)}
-              className="text-[11.5px] font-mono px-2 py-1.5 rounded"
-              style={{ background: 'var(--color-surface-hover)', color: 'var(--color-text-primary)',
-                       border: '1px solid var(--color-surface-border)' }}
-            />
+            <DateTimeInputView value={to} onChange={setTo} size="sm" color={ACCENT} />
           </div>
         )}
 
