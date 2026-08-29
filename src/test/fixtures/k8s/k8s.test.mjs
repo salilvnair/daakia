@@ -17,7 +17,7 @@
  * Run: node src/test/fixtures/k8s/k8s.test.mjs
  */
 import { strict as assert } from 'assert';
-import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { createRequire } from 'module';
@@ -292,6 +292,69 @@ check('an unrecognised failure is treated as not-running, not as distroless', ()
   // more than saying nothing.
   assert.equal(execFailureKind('error: something nobody has seen before'), 'not-running');
   assert.equal(execFailureKind(''), 'not-running');
+});
+
+// ── No shell, anywhere ──────────────────────────────────────────────────────
+//
+// Every pod name, namespace, container name and label that reaches this code
+// comes from the cluster, not from us. They go into argv arrays, which the OS
+// hands to the process as separate strings — so a pod named `a; rm -rf ~` is an
+// argument, not syntax. One `shell: true` anywhere in this directory undoes
+// that for every call site at once.
+//
+// kubectl.ts claims in its header that a test asserts this. This is that test.
+console.log('\nno shell in the kubectl path');
+
+check('no shell: true in the k8s services or handler', () => {
+  const files = [
+    ...readdirSync('src/services/k8s')
+      .filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+      .map(f => 'src/services/k8s/' + f),
+    'src/panel/main/handlers/k8s-handler.ts',
+  ];
+
+  const offenders = [];
+  for (const file of files) {
+    const lines = readFileSync(file, 'utf8').split('\n');
+    lines.forEach((line, i) => {
+      // Skip comments — the header of kubectl.ts says the words on purpose.
+      const code = line.replace(/\/\/.*$/, '');
+      if (/^\s*\*/.test(line)) return;
+      if (/shell\s*:\s*true/.test(code)) offenders.push(file + ':' + (i + 1));
+    });
+  }
+
+  assert.deepEqual(offenders, [],
+    'shell: true found — cluster-supplied names would be parsed as shell syntax at '
+    + offenders.join(', '));
+});
+
+check('nothing in the k8s path imports a string-command exec', () => {
+  // Checking imports rather than call sites, because `.exec(` is overwhelmingly
+  // RegExp.prototype.exec — the first version of this check flagged an RFC3339
+  // parse and would have trained everyone to ignore it.
+  //
+  // child_process exec() and execSync() take a command STRING and always run it
+  // through a shell. execFile and spawn take an argv array and do not. Only the
+  // first pair can turn a pod name into shell syntax.
+  const files = readdirSync('src/services/k8s')
+    .filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+    .map(f => 'src/services/k8s/' + f);
+
+  const offenders = [];
+  for (const file of files) {
+    const src = readFileSync(file, 'utf8');
+    for (const m of src.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"](?:node:)?child_process['"]/g)) {
+      const named = m[1].split(',').map(x => x.trim().split(/\s+as\s+/)[0].trim());
+      for (const n of named) {
+        if (n === 'exec' || n === 'execSync') offenders.push(file + ' imports ' + n);
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [],
+    'a string-command exec is imported; use execFile or spawn with an argv array:'
+    + offenders.join('; '));
 });
 
 // ── Live cluster ────────────────────────────────────────────────────────────
