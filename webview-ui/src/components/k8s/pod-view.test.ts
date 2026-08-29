@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   severityOf, sortPods, matchesFilter, restartLabel, isRecentRestart,
-  shortAge, formatBytes, formatCpu, pulse,
+  shortAge, formatBytes, formatCpu, pulse, groupPods, namespaceHue,
 } from './pod-view';
 import type { PodSummary } from '../../store/k8s-store';
 
@@ -171,6 +171,43 @@ describe('grouping', () => {
     expect(attention.map(p => p.name)).toEqual(['crash']);
     expect(quiet).toHaveLength(3);
     expect(attention.length + quiet.length).toBe(pods.length);
+  });
+});
+
+describe('namespace grouping', () => {
+  it('keeps namespaces apart and puts the worst group first', () => {
+    const pods = [
+      pod({ name: 'a', namespace: 'quiet-ns', context: 'c1' }),
+      pod({ name: 'b', namespace: 'quiet-ns', context: 'c1' }),
+      pod({ name: 'c', namespace: 'broken-ns', context: 'c1', reason: 'CrashLoopBackOff', healthy: false }),
+    ];
+    const groups = groupPods(pods, NOW);
+    expect(groups.map(g => g.namespace)).toEqual(['broken-ns', 'quiet-ns']);
+    expect(groups[0].pods).toHaveLength(1);
+    expect(groups[1].pods).toHaveLength(2);
+  });
+
+  it('separates identically-named namespaces in different clusters', () => {
+    // Two clusters can both have a `payments`. Merging them would show pods
+    // from one cluster under the other's heading.
+    const pods = [
+      pod({ name: 'x', namespace: 'payments', context: 'prod' }),
+      pod({ name: 'y', namespace: 'payments', context: 'staging' }),
+    ];
+    const groups = groupPods(pods, NOW);
+    expect(groups).toHaveLength(2);
+    expect(new Set(groups.map(g => g.context))).toEqual(new Set(['prod', 'staging']));
+  });
+
+  it('gives a namespace the same tint every time, and avoids the red band', () => {
+    // Stable so a namespace does not change colour between sessions; off-red
+    // so a group tint can never be mistaken for an alert.
+    expect(namespaceHue('payments')).toBe(namespaceHue('payments'));
+    for (const ns of ['payments', 'dk8s-test', 'zp-platform', 'kube-system', 'a', 'default']) {
+      const h = namespaceHue(ns);
+      expect(h).toBeGreaterThanOrEqual(45);
+      expect(h).toBeLessThan(335);
+    }
   });
 });
 

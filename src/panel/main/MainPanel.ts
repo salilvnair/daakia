@@ -83,6 +83,7 @@ import {
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetKubectlPath,
   handleDk8sWatchPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
+  handleDk8sUseContexts, handleDk8sSetTargets,
 } from './handlers/k8s-handler';
 import {
   normalizeProxyConfig, toUiProxyConfig, resolveProxy,
@@ -345,6 +346,12 @@ export class MainPanel {
         break;
       case 'dk8s:useContext':
         handleDk8sUseContext(msg, this._post);
+        break;
+      case 'dk8s:useContexts':
+        handleDk8sUseContexts(msg, this._post);
+        break;
+      case 'dk8s:setTargets':
+        handleDk8sSetTargets(msg, this._post);
         break;
       case 'dk8s:namespaces':
         handleDk8sNamespaces(msg, this._post);

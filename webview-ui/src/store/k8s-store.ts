@@ -33,6 +33,24 @@ export interface Reachability {
 
 export type Sensitivity = 'normal' | 'production';
 
+/** One namespace in one cluster — the unit dk8s watches. */
+export interface WatchTarget {
+  context: string;
+  namespace: string;
+}
+
+export const targetKey = (t: WatchTarget) => `${t.context}/${t.namespace}`;
+
+/** Namespaces offered per cluster, for the multi-select screen. */
+export interface NamespaceOffer {
+  context: string;
+  namespaces: string[];
+  forbidden: boolean;
+  fallback?: string;
+  error?: string;
+  pinned: string[];
+}
+
 export interface ContainerSummary {
   name: string;
   ready: boolean;
@@ -45,6 +63,8 @@ export interface ContainerSummary {
 export interface PodSummary {
   name: string;
   namespace: string;
+  /** Filled in on arrival — the API object does not carry it. */
+  context?: string;
   uid: string;
   phase: string;
   reason?: string;
@@ -103,6 +123,17 @@ interface K8sState {
   /** Namespaces the user pinned for this context, sorted. */
   pinned: string[];
 
+  /** Clusters ticked on the first screen. */
+  selectedContexts: string[];
+  /** Reachability per cluster, so one VPN-gated cluster is named. */
+  contextResults: { context: string; reachable: Reachability }[];
+  /** Namespaces on offer, per cluster. */
+  offers: NamespaceOffer[];
+  /** Everything being watched. */
+  targets: WatchTarget[];
+  /** Set when more namespaces were ticked than dk8s will watch at once. */
+  capped?: { requested: number; watching: number; max: number };
+
   sensitivity: Record<string, Sensitivity>;
   sensitivityGuess: boolean;
 
@@ -121,6 +152,8 @@ interface K8sState {
   probe: () => void;
   useContext: (name: string) => void;
   setNamespace: (ns: string, pin?: boolean) => void;
+  useContexts: (names: string[]) => void;
+  setTargets: (targets: WatchTarget[]) => void;
   pinNamespace: (ns: string) => void;
   unpinNamespace: (ns: string) => void;
   setSensitivity: (level: Sensitivity) => void;
@@ -142,6 +175,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   namespaces: [],
   namespacesForbidden: false,
   pinned: [],
+  selectedContexts: [],
+  contextResults: [],
+  offers: [],
+  targets: [],
   sensitivity: {},
   sensitivityGuess: false,
   busy: false,
@@ -172,6 +209,25 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     postMsg({ type: 'dk8s:setNamespace', namespace: ns, pin: !!pin });
   },
 
+  useContexts: (names) => {
+    if (!names.length) return;
+    set({ busy: true, selectedContexts: names, context: names[0] });
+    postMsg({ type: 'dk8s:useContexts', contexts: names });
+  },
+
+  setTargets: (targets) => {
+    if (!targets.length) return;
+    // Clear immediately: leaving the previous selection's pods on screen while
+    // the new watches spin up shows pods from namespaces the breadcrumb no
+    // longer claims.
+    set({
+      targets, stage: 'ready', pods: [], usage: {}, usageHistory: {},
+      watchStatus: 'idle', capped: undefined,
+      context: targets[0].context, namespace: targets[0].namespace,
+    });
+    postMsg({ type: 'dk8s:setTargets', targets });
+  },
+
   pinNamespace: (ns) => {
     const ctx = get().context;
     if (!ctx || !ns.trim()) return;
@@ -200,7 +256,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   startWatch: () => {
-    const { context, namespace } = get();
+    const { targets, context, namespace } = get();
+    if (targets.length) {
+      postMsg({ type: 'dk8s:watchPods', targets });
+      return;
+    }
     if (!context || !namespace) return;
     postMsg({ type: 'dk8s:watchPods', context, namespace });
   },
@@ -213,9 +273,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   openContextPicker: () => set({ stage: 'pick-context' }),
   openNamespacePicker: () => {
-    const ctx = get().context;
+    const { selectedContexts, context } = get();
+    const ctxs = selectedContexts.length ? selectedContexts : (context ? [context] : []);
     set({ stage: 'pick-namespace' });
-    if (ctx) postMsg({ type: 'dk8s:namespaces', context: ctx });
+    if (ctxs.length) postMsg({ type: 'dk8s:useContexts', contexts: ctxs });
   },
 
   /** Fold a host message into state. One place, so the stage logic is readable. */
@@ -245,6 +306,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           namespace: msg.namespace as string | undefined,
           sensitivityGuess: !!msg.sensitivityGuess,
           pinned: (msg.pinned as string[]) ?? [],
+          selectedContexts: (msg.selectedContexts as string[]) ?? (context ? [context] : []),
+          targets: (msg.targets as WatchTarget[]) ?? [],
         });
         break;
       }
@@ -282,12 +345,21 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         set({ namespace: msg.namespace as string, stage: 'ready' });
         break;
 
-      case 'dk8s:podSnapshot':
-        set({ pods: (msg.pods as PodSummary[]) ?? [] });
+      case 'dk8s:podSnapshot': {
+        // A snapshot replaces only ITS target's pods. With several namespaces
+        // watched at once, replacing everything would make each snapshot wipe
+        // the others as they arrive.
+        const ctx = msg.context as string;
+        const ns = msg.namespace as string;
+        const incoming = ((msg.pods as PodSummary[]) ?? []).map(p => ({ ...p, context: ctx }));
+        set(s => ({
+          pods: [...s.pods.filter(p => !(p.context === ctx && p.namespace === ns)), ...incoming],
+        }));
         break;
+      }
 
       case 'dk8s:podEvent': {
-        const pod = msg.pod as PodSummary;
+        const pod = { ...(msg.pod as PodSummary), context: msg.context as string };
         const kind = msg.eventType as string;
         set(s => {
           if (kind === 'DELETED') {
@@ -303,9 +375,42 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       }
 
       case 'dk8s:watchStatus':
+        // With several watches, the header shows the WORST state — one
+        // reconnecting namespace matters more than three healthy ones.
+        set(s => {
+          const rank: Record<string, number> = { reconnecting: 0, idle: 1, stopped: 2, connected: 3 };
+          const incoming = msg.status as WatchStatus;
+          const worse = rank[incoming] < rank[s.watchStatus];
+          return worse || incoming === 'connected'
+            ? { watchStatus: incoming, watchDetail: msg.detail as string | undefined }
+            : {};
+        });
+        break;
+
+      case 'dk8s:contextsSet':
         set({
-          watchStatus: msg.status as WatchStatus,
-          watchDetail: msg.detail as string | undefined,
+          busy: false,
+          selectedContexts: (msg.contexts as string[]) ?? [],
+          contextResults: (msg.results as { context: string; reachable: Reachability }[]) ?? [],
+          stage: 'pick-namespace',
+        });
+        break;
+
+      case 'dk8s:namespacesMulti':
+        set({ busy: false, offers: (msg.perContext as NamespaceOffer[]) ?? [] });
+        break;
+
+      case 'dk8s:targetsSet':
+        set({ targets: (msg.targets as WatchTarget[]) ?? [], stage: 'ready' });
+        break;
+
+      case 'dk8s:watchCapped':
+        set({
+          capped: {
+            requested: msg.requested as number,
+            watching: msg.watching as number,
+            max: msg.max as number,
+          },
         });
         break;
 

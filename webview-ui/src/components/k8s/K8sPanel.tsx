@@ -13,7 +13,8 @@ import { useEffect } from 'react';
 import { Dk8sIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
-import { ContextPicker, SensitivityPrompt, NamespacePicker, UnreachableNotice } from './ContextPicker';
+import { SensitivityPrompt, UnreachableNotice } from './ContextPicker';
+import { ClusterPicker, NamespaceMultiPicker } from './MultiPicker';
 import { PodGrid } from './PodGrid';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -24,9 +25,62 @@ const ACCENT = 'var(--color-dk8s)';
  * The first-run flow asks these once; from then on they live here, so nothing
  * the wizard decided is ever locked behind repeating it.
  */
+/**
+ * Collapse a list of names to something that fits.
+ *
+ * Names go in full until roughly `max` characters, then the rest become "+3".
+ * Truncating each name instead would give three unreadable stubs; showing the
+ * first two whole and counting the remainder keeps what the eye can use.
+ */
+function summarise(names: string[], max = 25): { text: string; more: number; full: string } {
+  const full = names.join(', ');
+  if (full.length <= max || names.length <= 1) return { text: full, more: 0, full };
+  const kept: string[] = [];
+  let len = 0;
+  for (const n of names) {
+    const cost = kept.length ? n.length + 2 : n.length;
+    if (kept.length && len + cost > max) break;
+    kept.push(n);
+    len += cost;
+  }
+  return { text: kept.join(', '), more: names.length - kept.length, full };
+}
+
+function Crumb({ names, onClick, title }: { names: string[]; onClick: () => void; title: string }) {
+  const { text, more, full } = summarise(names);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1 text-[12px] font-mono cursor-pointer px-1.5 py-0.5 rounded transition-colors text-[var(--color-text-secondary)]"
+      style={{ background: 'transparent', border: 'none', maxWidth: 300 }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+      title={more ? `${title}
+${full}` : title}
+    >
+      <span className="truncate">{text || '—'}</span>
+      {more > 0 && (
+        <span className="text-[10px] font-semibold px-1 py-px rounded flex-shrink-0"
+              style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 15%, transparent)` }}>
+          +{more}
+        </span>
+      )}
+      <span className="text-[9px] flex-shrink-0 text-[var(--color-text-muted)]">▾</span>
+    </button>
+  );
+}
+
 function Breadcrumb() {
-  const { context, namespace, sensitivity, reachable, openContextPicker, openNamespacePicker } = useK8sStore();
+  const {
+    context, sensitivity, reachable, targets, selectedContexts,
+    openContextPicker, openNamespacePicker,
+  } = useK8sStore();
   const isProd = !!context && sensitivity[context] === 'production';
+
+  const clusterNames = selectedContexts.length ? selectedContexts : (context ? [context] : []);
+  // De-duplicated: two namespaces in one cluster should not name it twice.
+  const namespaceNames = [...new Set(targets.map(t => t.namespace))];
 
   return (
     <div
@@ -38,37 +92,17 @@ function Breadcrumb() {
       </div>
       <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">dk8s</span>
 
-      {context && (
+      {clusterNames.length > 0 && (
         <>
           <span className="text-[12px] text-[var(--color-text-muted)]">/</span>
-          <button
-            type="button"
-            onClick={openContextPicker}
-            className="text-[12px] font-mono cursor-pointer px-1.5 py-0.5 rounded transition-colors text-[var(--color-text-secondary)]"
-            style={{ background: 'transparent', border: 'none' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-            title="Change cluster"
-          >
-            {context} ▾
-          </button>
+          <Crumb names={clusterNames} onClick={openContextPicker} title="Change clusters" />
         </>
       )}
 
-      {namespace && (
+      {namespaceNames.length > 0 && (
         <>
           <span className="text-[12px] text-[var(--color-text-muted)]">/</span>
-          <button
-            type="button"
-            onClick={openNamespacePicker}
-            className="text-[12px] font-mono cursor-pointer px-1.5 py-0.5 rounded transition-colors text-[var(--color-text-secondary)]"
-            style={{ background: 'transparent', border: 'none' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-            title="Change namespace"
-          >
-            {namespace} ▾
-          </button>
+          <Crumb names={namespaceNames} onClick={openNamespacePicker} title="Change namespaces" />
         </>
       )}
 
@@ -128,10 +162,10 @@ export function K8sPanel() {
       {stage === 'probing' && <Probing />}
       {stage === 'no-kubectl' && <KubectlSetupGuide mode="no-kubectl" />}
       {stage === 'no-contexts' && <KubectlSetupGuide mode="no-contexts" />}
-      {stage === 'pick-context' && <ContextPicker />}
+      {stage === 'pick-context' && <ClusterPicker />}
       {stage === 'unreachable' && <UnreachableNotice />}
       {stage === 'ask-sensitivity' && <SensitivityPrompt />}
-      {stage === 'pick-namespace' && <NamespacePicker />}
+      {stage === 'pick-namespace' && <NamespaceMultiPicker />}
       {stage === 'ready' && <PodGrid />}
     </div>
   );

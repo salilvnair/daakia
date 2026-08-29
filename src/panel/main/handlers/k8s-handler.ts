@@ -20,8 +20,13 @@ type PostMessage = (msg: unknown) => void;
 
 /** Persisted across sessions so the tab reopens where the user left it. */
 export interface Dk8sState {
+  /** The context the pickers default to, and the one namespaces are listed from. */
   context?: string;
   namespace?: string;
+  /** Clusters the user ticked. Empty means "just `context`". */
+  contexts?: string[];
+  /** Everything currently being watched, as (context, namespace) pairs. */
+  targets?: WatchTarget[];
   /** context name -> sensitivity, set by the user and never inferred silently. */
   sensitivity?: Record<string, 'normal' | 'production'>;
   kubectlPath?: string;
@@ -35,6 +40,16 @@ export interface Dk8sState {
    * 200 namespaces is a list you scroll, not a list you read.
    */
   pinnedNamespaces?: Record<string, string[]>;
+}
+
+export interface WatchTarget {
+  context: string;
+  namespace: string;
+}
+
+/** Stable key for a target, used for watch bookkeeping and pod identity. */
+export function targetKey(t: WatchTarget): string {
+  return `${t.context}/${t.namespace}`;
 }
 
 function state(): Dk8sState {
@@ -88,12 +103,60 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
     reachable,
     sensitivity: saved.sensitivity ?? {},
     pinned: chosen ? pinnedFor(chosen) : [],
+    selectedContexts: saved.contexts ?? (chosen ? [chosen] : []),
+    targets: saved.targets ?? (chosen && namespace ? [{ context: chosen, namespace }] : []),
     // A context the user has not classified yet needs the one-time prompt.
     needsSensitivity: chosen ? !(saved.sensitivity ?? {})[chosen] : false,
     sensitivityGuess: chosen
       ? looksLikeProduction(chosen, list.contexts.find(c => c.name === chosen)?.cluster ?? '')
       : false,
   });
+}
+
+/**
+ * Select one or more clusters.
+ *
+ * Reachability is checked per context and reported per context, because "one
+ * of your four clusters is behind a VPN you have not connected" is a specific
+ * and fixable thing to be told, and a single combined failure is not.
+ */
+export async function handleDk8sUseContexts(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const contexts = (Array.isArray(msg.contexts) ? msg.contexts : [])
+    .map(c => String(c)).filter(Boolean);
+  if (!contexts.length) return;
+
+  saveState({ contexts, context: contexts[0] });
+
+  const results = await Promise.all(contexts.map(async (context) => ({
+    context,
+    reachable: await checkReachable(context),
+  })));
+
+  postMessage({ type: 'dk8s:contextsSet', contexts, results });
+
+  // List namespaces for every reachable cluster, so the next screen can offer
+  // all of them at once rather than one cluster at a time.
+  await handleDk8sNamespacesFor(
+    results.filter(r => r.reachable.reachable).map(r => r.context),
+    postMessage,
+  );
+}
+
+/** Namespaces for several contexts, each tagged with where it came from. */
+async function handleDk8sNamespacesFor(
+  contexts: string[],
+  postMessage: PostMessage,
+): Promise<void> {
+  const pins = state().pinnedNamespaces ?? {};
+  const per = await Promise.all(contexts.map(async (context) => ({
+    context,
+    ...(await listNamespaces(context)),
+    pinned: pins[context] ?? [],
+  })));
+  postMessage({ type: 'dk8s:namespacesMulti', perContext: per });
 }
 
 /** Select a context for this tab. Does NOT touch the global kubeconfig. */
@@ -165,6 +228,26 @@ export function handleDk8sUnpinNamespace(
   postMessage({ type: 'dk8s:pinnedNamespaces', context, pinned: all[context] });
 }
 
+/** Commit a multi-cluster, multi-namespace selection and start watching it. */
+export function handleDk8sSetTargets(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const targets = (Array.isArray(msg.targets) ? msg.targets : [])
+    .filter((t: WatchTarget) => t?.context && t?.namespace);
+  if (!targets.length) return;
+
+  // Keep the single-value fields in step, so the breadcrumb and the namespace
+  // list still have something sensible to default to.
+  saveState({
+    targets,
+    context: targets[0].context,
+    namespace: targets[0].namespace,
+  });
+  postMessage({ type: 'dk8s:targetsSet', targets });
+  handleDk8sWatchPods({ targets }, postMessage);
+}
+
 export function handleDk8sSetNamespace(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
@@ -174,8 +257,8 @@ export function handleDk8sSetNamespace(
   saveState({ namespace });
   postMessage({ type: 'dk8s:namespaceSet', namespace });
   if (msg.pin) handleDk8sPinNamespace({ namespace }, postMessage);
-  // The old namespace's watch is now pointing at the wrong place; move it.
-  handleDk8sWatchPods({ namespace }, postMessage);
+  // The previous selection is now pointing at the wrong place; reconcile.
+  handleDk8sWatchPods({ context: state().context, namespace }, postMessage);
 }
 
 /** Record the user's answer to "is this production?". Never inferred. */
@@ -191,75 +274,55 @@ export function handleDk8sSetSensitivity(
   postMessage({ type: 'dk8s:sensitivitySet', context, level });
 }
 
-// ── Live pod watch ──────────────────────────────────────────────────────────
+// ── Live pod watches ────────────────────────────────────────────────────────
 //
-// One watch and one metrics poller at a time. dk8s is a single tab holding a
-// single namespace, so a second watch on the same namespace would double the
-// load for nothing — and leaking the old one on every namespace switch is the
-// easy bug to write here.
+// One watch per (context, namespace) the user selected. Each is a kubectl child
+// process, so the count is capped: someone who ticks every namespace in a large
+// cluster would otherwise spawn fifty processes and be rate-limited by the API
+// server rather than helped by the tool.
 
-let activeWatch: WatchHandle | undefined;
-let metricsTimer: NodeJS.Timeout | undefined;
-let watchKey = '';
-
-/**
- * The last thing the watch told us, kept so a reconnecting webview can be
- * caught up without restarting the stream.
- *
- * A webview reload does not restart the host, so the panel comes back and asks
- * to watch a namespace the host is ALREADY watching. Returning early there
- * looks like the right optimisation and leaves the new page empty forever,
- * because the snapshot it needed was delivered to the page that no longer
- * exists. Replaying is the fix.
- */
-let lastSnapshot: unknown[] = [];
-let lastStatus: 'connected' | 'reconnecting' | 'stopped' = 'stopped';
-let lastStatusDetail: string | undefined;
-let lastUsage: unknown = null;
-let lastUsageAvailable = false;
-
-const METRICS_INTERVAL_MS = 15_000;
-
-function stopWatch(): void {
-  activeWatch?.stop();
-  activeWatch = undefined;
-  if (metricsTimer) clearInterval(metricsTimer);
-  metricsTimer = undefined;
-  watchKey = '';
-  lastSnapshot = [];
-  lastStatus = 'stopped';
-  lastStatusDetail = undefined;
-  lastUsage = null;
-  lastUsageAvailable = false;
+interface LiveWatch {
+  handle: WatchHandle;
+  /** Replayed to a webview that re-attaches after a reload. */
+  pods: unknown[];
+  status: 'connected' | 'reconnecting' | 'stopped';
+  detail?: string;
+  usage: unknown;
+  usageAvailable: boolean;
+  metricsTimer?: NodeJS.Timeout;
 }
 
-export function handleDk8sWatchPods(
-  msg: Record<string, unknown>,
-  postMessage: PostMessage,
-): void {
-  const saved = state();
-  const context = String(msg.context ?? saved.context ?? '');
-  const namespace = String(msg.namespace ?? saved.namespace ?? '');
-  if (!context || !namespace) return;
+const watches = new Map<string, LiveWatch>();
 
-  const key = `${context}/${namespace}`;
-  if (key === watchKey && activeWatch) {
-    // Already watching this exact namespace — almost always a webview reload.
-    // Replay what we have instead of restarting the stream, so the fresh page
-    // paints immediately and the cluster sees no extra load.
-    postMessage({ type: 'dk8s:podSnapshot', context, namespace, pods: lastSnapshot });
-    postMessage({ type: 'dk8s:watchStatus', context, namespace, status: lastStatus, detail: lastStatusDetail });
-    if (lastUsageAvailable) {
-      postMessage({ type: 'dk8s:podUsage', context, namespace, usage: lastUsage, available: true });
-    }
-    return;
-  }
-  stopWatch();
-  watchKey = key;
+const METRICS_INTERVAL_MS = 15_000;
+/** Above this, the tool costs the cluster more than it gives the user. */
+export const MAX_WATCH_TARGETS = 12;
 
-  activeWatch = watchPods(context, namespace, {
+function stopWatch(key: string): void {
+  const w = watches.get(key);
+  if (!w) return;
+  w.handle.stop();
+  if (w.metricsTimer) clearInterval(w.metricsTimer);
+  watches.delete(key);
+}
+
+function stopAllWatches(): void {
+  for (const key of [...watches.keys()]) stopWatch(key);
+}
+
+function startWatch(target: WatchTarget, postMessage: PostMessage): void {
+  const key = targetKey(target);
+  const { context, namespace } = target;
+
+  const live: LiveWatch = {
+    handle: undefined as unknown as WatchHandle,
+    pods: [], status: 'reconnecting', usage: null, usageAvailable: false,
+  };
+  watches.set(key, live);
+
+  live.handle = watchPods(context, namespace, {
     onSnapshot: (pods) => {
-      lastSnapshot = pods;
+      live.pods = pods;
       postMessage({ type: 'dk8s:podSnapshot', context, namespace, pods });
     },
     // Spread AFTER `type` would overwrite the message type with the watch
@@ -270,8 +333,8 @@ export function handleDk8sWatchPods(
       eventType: event.type, pod: event.pod,
     }),
     onStatus: (status, detail) => {
-      lastStatus = status;
-      lastStatusDetail = detail;
+      live.status = status;
+      live.detail = detail;
       postMessage({ type: 'dk8s:watchStatus', context, namespace, status, detail });
     },
   });
@@ -281,22 +344,77 @@ export function handleDk8sWatchPods(
   // of reporting a failure the user cannot act on.
   const poll = async () => {
     const usage = await topPods(context, namespace);
-    if (watchKey !== key) return;    // namespace changed while we were waiting
-    lastUsage = usage;
-    lastUsageAvailable = usage !== null;
+    if (!watches.has(key)) return;    // target dropped while we were waiting
+    live.usage = usage;
+    live.usageAvailable = usage !== null;
     postMessage({ type: 'dk8s:podUsage', context, namespace, usage, available: usage !== null });
   };
   void poll();
-  metricsTimer = setInterval(poll, METRICS_INTERVAL_MS);
+  live.metricsTimer = setInterval(poll, METRICS_INTERVAL_MS);
+}
+
+/**
+ * Reconcile the running watches against the requested targets.
+ *
+ * Targets already running are left alone and REPLAYED rather than restarted.
+ * A webview reload does not restart the host, so the panel comes back asking
+ * to watch namespaces the host is already watching; tearing those down and
+ * starting again would drop every pod on screen for a second and cost the
+ * cluster a fresh list per namespace for no reason.
+ */
+export function handleDk8sWatchPods(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const saved = state();
+  let targets: WatchTarget[] = Array.isArray(msg.targets)
+    ? (msg.targets as WatchTarget[]).filter(t => t?.context && t?.namespace)
+    : [];
+
+  if (!targets.length) {
+    const context = String(msg.context ?? saved.context ?? '');
+    const namespace = String(msg.namespace ?? saved.namespace ?? '');
+    if (context && namespace) targets = [{ context, namespace }];
+  }
+  if (!targets.length) return;
+
+  const capped = targets.slice(0, MAX_WATCH_TARGETS);
+  if (capped.length < targets.length) {
+    postMessage({
+      type: 'dk8s:watchCapped',
+      requested: targets.length, watching: capped.length, max: MAX_WATCH_TARGETS,
+    });
+  }
+  saveState({ targets: capped });
+
+  const wanted = new Set(capped.map(targetKey));
+  for (const key of [...watches.keys()]) {
+    if (!wanted.has(key)) stopWatch(key);
+  }
+
+  for (const target of capped) {
+    const key = targetKey(target);
+    const live = watches.get(key);
+    if (live) {
+      // Already watching — catch the new page up instead of restarting.
+      postMessage({ type: 'dk8s:podSnapshot', context: target.context, namespace: target.namespace, pods: live.pods });
+      postMessage({ type: 'dk8s:watchStatus', context: target.context, namespace: target.namespace, status: live.status, detail: live.detail });
+      if (live.usageAvailable) {
+        postMessage({ type: 'dk8s:podUsage', context: target.context, namespace: target.namespace, usage: live.usage, available: true });
+      }
+      continue;
+    }
+    startWatch(target, postMessage);
+  }
 }
 
 export function handleDk8sStopWatch(): void {
-  stopWatch();
+  stopAllWatches();
 }
 
 /** Called when the panel goes away, so a watch cannot outlive its tab. */
 export function disposeDk8s(): void {
-  stopWatch();
+  stopAllWatches();
 }
 
 /** Explicit kubectl path, for when it is installed somewhere unusual. */

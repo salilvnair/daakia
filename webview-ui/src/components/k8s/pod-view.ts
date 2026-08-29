@@ -124,6 +124,75 @@ export function restartLabel(pod: PodSummary, now = Date.now()): string {
   return `${pod.restarts} restart${pod.restarts === 1 ? '' : 's'} · ${when}`;
 }
 
+/**
+ * A stable, washed-out colour for a namespace.
+ *
+ * Groups need to be told apart at a glance without the colour meaning anything
+ * — semantic colour is reserved entirely for pod health, and a namespace tint
+ * that competed with it would make a red pod harder to find, which is the one
+ * thing the grid must never do.
+ *
+ * So: a hue from the name (stable across sessions and machines), then held at
+ * low saturation and mixed heavily into the surface. The result reads as a
+ * tint, not a colour.
+ */
+export function namespaceHue(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  // Skip the 0-40 band: reds there would read as an alert.
+  return 45 + (h % 290);
+}
+
+export interface NamespaceTint {
+  hue: number;
+  /** For the group's hairline border. */
+  border: string;
+  /** For the group's header text. */
+  label: string;
+  /** A barely-there fill, so the box reads as one object. */
+  wash: string;
+}
+
+export function namespaceTint(name: string): NamespaceTint {
+  const hue = namespaceHue(name);
+  return {
+    hue,
+    border: `hsl(${hue} 40% 55% / 0.3)`,
+    label: `hsl(${hue} 45% 62%)`,
+    wash: `hsl(${hue} 40% 50% / 0.045)`,
+  };
+}
+
+/** Group pods by the namespace (and cluster) they came from. */
+export interface PodGroup {
+  key: string;
+  context?: string;
+  namespace: string;
+  pods: PodSummary[];
+  tint: NamespaceTint;
+}
+
+export function groupPods(pods: PodSummary[], now = Date.now()): PodGroup[] {
+  const byKey = new Map<string, PodGroup>();
+  for (const pod of pods) {
+    const key = `${pod.context ?? ''}/${pod.namespace}`;
+    let g = byKey.get(key);
+    if (!g) {
+      g = { key, context: pod.context, namespace: pod.namespace, pods: [], tint: namespaceTint(pod.namespace) };
+      byKey.set(key, g);
+    }
+    g.pods.push(pod);
+  }
+  // Groups holding something broken come first, for the same reason pods do.
+  return [...byKey.values()]
+    .map(g => ({ ...g, pods: sortPods(g.pods, now) }))
+    .sort((a, b) => {
+      const worst = (g: PodGroup) => Math.min(...g.pods.map(p => RANK[severityOf(p, now)]));
+      const d = worst(a) - worst(b);
+      return d !== 0 ? d : a.namespace.localeCompare(b.namespace);
+    });
+}
+
 export interface PulseCounts {
   total: number;
   ready: number;

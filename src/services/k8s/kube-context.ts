@@ -24,33 +24,62 @@ export interface ContextList {
   error?: string;
 }
 
-/** Read the kubeconfig's contexts. Never modifies it. */
+/**
+ * Read the kubeconfig's contexts. Never modifies it.
+ *
+ * Two commands, on purpose. `config get-contexts -o name` is the authoritative
+ * list of what kubectl itself will accept — one name per line, so there is no
+ * column parsing to get wrong — and `config view -o json` supplies the cluster,
+ * user and default namespace for each.
+ *
+ * The JSON alone was enough in every case tested, but the list is what decides
+ * membership: if a context appears in get-contexts and not in the view (a merged
+ * KUBECONFIG, a flattening quirk), it is still offered, with blank details,
+ * rather than silently missing from the picker.
+ */
 export async function listContexts(): Promise<ContextList> {
   const current = (await run(['config', 'current-context'])).stdout.trim() || undefined;
 
-  // -o json gives cluster/user/namespace per context; `get-contexts` alone is
-  // column-formatted and would need parsing by whitespace, which breaks on
-  // names containing spaces.
+  const named = await run(['config', 'get-contexts', '-o', 'name']);
+  const names = named.ok
+    ? named.stdout.split('\n').map(l => l.trim()).filter(Boolean)
+    : [];
+
   const res = await run(['config', 'view', '-o', 'json']);
-  if (!res.ok) {
-    return { contexts: [], current, error: firstLine(res.stderr) || res.failure };
+  const details = new Map<string, { cluster?: string; user?: string; namespace?: string }>();
+  let parseError: string | undefined;
+
+  if (res.ok) {
+    try {
+      const cfg = JSON.parse(res.stdout) as {
+        contexts?: { name: string; context?: { cluster?: string; user?: string; namespace?: string } }[];
+      };
+      for (const c of cfg.contexts ?? []) details.set(c.name, c.context ?? {});
+    } catch (err) {
+      parseError = `could not parse kubeconfig: ${(err as Error).message}`;
+    }
   }
 
-  try {
-    const cfg = JSON.parse(res.stdout) as {
-      contexts?: { name: string; context?: { cluster?: string; user?: string; namespace?: string } }[];
+  // get-contexts decides membership; fall back to the JSON when it failed.
+  const finalNames = names.length ? names : [...details.keys()];
+  if (!finalNames.length) {
+    return {
+      contexts: [], current,
+      error: parseError ?? firstLine(named.stderr) ?? firstLine(res.stderr) ?? undefined,
     };
-    const contexts = (cfg.contexts ?? []).map(c => ({
-      name: c.name,
-      cluster: c.context?.cluster ?? '',
-      user: c.context?.user ?? '',
-      namespace: c.context?.namespace,
-      current: c.name === current,
-    }));
-    return { contexts, current };
-  } catch (err) {
-    return { contexts: [], current, error: `could not parse kubeconfig: ${(err as Error).message}` };
   }
+
+  const contexts = finalNames.map(name => {
+    const d = details.get(name) ?? {};
+    return {
+      name,
+      cluster: d.cluster ?? '',
+      user: d.user ?? '',
+      namespace: d.namespace,
+      current: name === current,
+    };
+  });
+  return { contexts, current, error: parseError };
 }
 
 export interface Reachability {

@@ -16,8 +16,8 @@ import { SparklineView, SearchInputView } from '@salilvnair/dui';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
-  formatBytes, formatCpu, restartLabel, pulse, isRecentRestart,
-  type Severity,
+  formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
+  type Severity, type PodGroup,
 } from './pod-view';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -157,64 +157,104 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
 
 // ── Table ───────────────────────────────────────────────────────────────────
 
+/**
+ * The dense view, in the shape k9s made everyone expect.
+ *
+ * The rule that makes it readable is that the whole ROW takes the severity
+ * colour, not just a status cell. A failing pod becomes one continuous red
+ * line you find without reading, which is the entire point of a table you
+ * scan three hundred rows of.
+ */
 function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary) => void }) {
   const usage = useK8sStore(s => s.usage);
   const metrics = useK8sStore(s => s.metricsAvailable);
+  const multi = useK8sStore(s => s.targets.length > 1);
+
+  const cols = [
+    'Name', ...(multi ? ['Namespace'] : []), 'Ready', 'Status', '\u21bb', 'Node', 'Age',
+    ...(metrics ? ['Memory', 'CPU'] : []),
+  ];
+
   return (
-    <div className="overflow-auto">
+    <div className="overflow-auto rounded-md"
+         style={{ border: '1px solid var(--color-surface-border)' }}>
       <table className="w-full" style={{ borderCollapse: 'collapse' }}>
         <thead>
           <tr>
-            {['Pod', 'Status', 'Ready', '↻', 'Age', 'Node', ...(metrics ? ['Memory', 'CPU'] : [])].map(h => (
+            {cols.map(h => (
               <th key={h}
-                  className="text-[9.5px] uppercase tracking-wider text-left font-semibold px-3 py-1.5 text-[var(--color-text-muted)]"
-                  style={{ borderBottom: '1px solid var(--color-surface-border)', whiteSpace: 'nowrap' }}>
+                  className="text-[9.5px] uppercase tracking-wider text-left font-bold px-3 py-2"
+                  style={{
+                    color: ACCENT,
+                    background: 'var(--color-surface)',
+                    borderBottom: `1px solid color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`,
+                    whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 1,
+                  }}>
                 {h}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {pods.map(pod => {
+          {pods.map((pod, i) => {
             const sev = severityOf(pod);
             const color = severityColor(sev);
             const u = usage[pod.name];
+            const failing = sev === 'critical' || sev === 'warning';
+            // Healthy rows stay near the text colour, so the failing ones are
+            // the only thing on screen carrying a hue.
+            const rowColor = failing ? color : 'var(--color-text-secondary)';
+            const zebra = i % 2 === 1
+              ? 'color-mix(in srgb, var(--color-text-primary) 2.5%, transparent)'
+              : 'transparent';
+            const rest = failing ? `color-mix(in srgb, ${color} 8%, transparent)` : zebra;
+            const cell = {
+              borderBottom: '1px solid var(--color-surface-border)',
+              color: rowColor,
+              whiteSpace: 'nowrap' as const,
+            };
             return (
               <tr key={pod.uid}
                   onClick={() => onOpen(pod)}
                   className="cursor-pointer transition-colors"
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                <td className="text-[11px] font-mono px-3 py-1.5 text-[var(--color-text-primary)]"
-                    style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+                  style={{ background: rest }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 14%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = rest; }}>
+                <td className="text-[11.5px] font-mono px-3 py-1.5"
+                    style={{ ...cell, fontWeight: failing ? 600 : 400 }}>
                   <span style={{
-                    display: 'inline-block', width: 5, height: 5, borderRadius: 3,
-                    background: color, opacity: sev === 'quiet' ? 0.6 : 1, marginRight: 8,
+                    display: 'inline-block', width: 6, height: 6, borderRadius: 3,
+                    background: color, opacity: failing ? 1 : 0.7, marginRight: 9,
                   }} />
                   {pod.name}
                 </td>
-                <td className="text-[11px] px-3 py-1.5" style={{ borderBottom: '1px solid var(--color-surface-border)', color: sev === 'quiet' ? 'var(--color-text-muted)' : color }}>
-                  {pod.reason || pod.phase}
-                </td>
-                <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums text-[var(--color-text-secondary)]" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+                {multi && (
+                  <td className="text-[11px] font-mono px-3 py-1.5" style={cell}>{pod.namespace}</td>
+                )}
+                <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums" style={cell}>
                   {pod.ready.current}/{pod.ready.total}
                 </td>
-                <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums" style={{ borderBottom: '1px solid var(--color-surface-border)', color: isRecentRestart(pod) ? 'var(--color-warning)' : 'var(--color-text-muted)' }}
+                <td className="text-[11px] px-3 py-1.5"
+                    style={{ ...cell, fontWeight: failing ? 600 : 400 }}>
+                  {pod.reason || pod.phase}
+                </td>
+                <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums" style={cell}
                     title={restartLabel(pod)}>
                   {pod.restarts}
                 </td>
-                <td className="text-[11px] font-mono px-3 py-1.5 text-[var(--color-text-muted)]" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-                  {shortAge(pod.startedAt)}
+                <td className="text-[11px] font-mono px-3 py-1.5 truncate"
+                    style={{ ...cell, maxWidth: 170 }}>
+                  {pod.node ?? '\u2014'}
                 </td>
-                <td className="text-[11px] font-mono px-3 py-1.5 text-[var(--color-text-muted)] truncate" style={{ borderBottom: '1px solid var(--color-surface-border)', maxWidth: 160 }}>
-                  {pod.node ?? '—'}
+                <td className="text-[11px] font-mono px-3 py-1.5" style={cell}>
+                  {shortAge(pod.startedAt)}
                 </td>
                 {metrics && (
                   <>
-                    <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums text-[var(--color-text-secondary)]" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+                    <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums" style={cell}>
                       {formatBytes(u?.memBytes)}
                     </td>
-                    <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums text-[var(--color-text-secondary)]" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+                    <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums" style={cell}>
                       {formatCpu(u?.cpuMilli)}
                     </td>
                   </>
@@ -228,10 +268,59 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
   );
 }
 
+/**
+ * One namespace's pods, boxed.
+ *
+ * The box exists because dk8s can watch several namespaces at once, and a flat
+ * grid of forty cards drawn from four namespaces is unreadable. The tint
+ * identifies the group and deliberately stays washed out: semantic colour
+ * belongs to pod health, and a strong namespace colour would compete with the
+ * one thing the grid must never make harder to find.
+ */
+function NamespaceGroup({ group, multi, onOpen }: {
+  group: PodGroup; multi: boolean; onOpen: (p: PodSummary) => void;
+}) {
+  const failing = group.pods.filter(p => severityOf(p) !== 'quiet').length;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg p-3"
+         style={{ border: `1px solid ${group.tint.border}`, background: group.tint.wash }}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-mono font-semibold tracking-wide"
+              style={{ color: group.tint.label }}>
+          {group.namespace}
+        </span>
+        {multi && group.context && (
+          <span className="text-[9.5px] font-mono text-[var(--color-text-muted)]">
+            {group.context}
+          </span>
+        )}
+        <span className="flex-1" style={{ height: 1, background: group.tint.border }} />
+        <span className="text-[9.5px] tabular-nums text-[var(--color-text-muted)]">
+          {group.pods.length} pod{group.pods.length === 1 ? '' : 's'}
+        </span>
+        {failing > 0 && (
+          <span className="text-[9.5px] font-semibold tabular-nums"
+                style={{ color: 'var(--color-error)' }}>
+            {failing} need{failing === 1 ? 's' : ''} attention
+          </span>
+        )}
+      </div>
+
+      <div className="grid gap-2.5"
+           style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+        {group.pods.map(p => (
+          <PodCard key={p.uid} pod={p} onOpen={() => onOpen(p)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── The grid ────────────────────────────────────────────────────────────────
 
 export function PodGrid() {
-  const { pods, filter, view, setFilter, setView, startWatch, selectPod, watchStatus } = useK8sStore();
+  const { pods, filter, view, setFilter, setView, startWatch, selectPod, watchStatus, targets, capped } = useK8sStore();
   const searchRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -264,8 +353,8 @@ export function PodGrid() {
     () => sortPods(pods.filter(p => matchesFilter(p, filter)), now),
     [pods, filter, now],
   );
-  const attention = visible.filter(p => severityOf(p, now) !== 'quiet');
-  const quiet = visible.filter(p => severityOf(p, now) === 'quiet');
+  const groups = useMemo(() => groupPods(visible, now), [visible, now]);
+  const multiTarget = targets.length > 1;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -297,6 +386,18 @@ export function PodGrid() {
         </div>
       </div>
 
+      {capped && (
+        <div className="px-4 py-1.5 flex-shrink-0 text-[11px]"
+             style={{
+               background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
+               color: 'var(--color-warning)',
+               borderBottom: '1px solid color-mix(in srgb, var(--color-warning) 25%, transparent)',
+             }}>
+          Watching {capped.watching} of {capped.requested} namespaces &mdash; dk8s holds at most{' '}
+          {capped.max} live watches, because each one is a process against the API server.
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto px-4 py-3">
         {!pods.length ? (
           <div className="flex items-center justify-center h-full">
@@ -309,38 +410,14 @@ export function PodGrid() {
         ) : view === 'table' ? (
           <PodTable pods={visible} onOpen={p => selectPod(p.name)} />
         ) : (
-          <div className="flex flex-col gap-4">
-            {attention.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)]">
-                  Needs attention first
-                </span>
-                <div className="grid gap-2.5"
-                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
-                  {attention.map(p => (
-                    <PodCard key={p.uid} pod={p} onOpen={() => selectPod(p.name)} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {quiet.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)]">
-                  Healthy · {quiet.length}
-                </span>
-                <div className="grid gap-2.5"
-                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
-                  {quiet.map(p => (
-                    <PodCard key={p.uid} pod={p} onOpen={() => selectPod(p.name)} />
-                  ))}
-                </div>
-              </div>
-            )}
-
+          <div className="flex flex-col gap-3">
+            {groups.map(g => (
+              <NamespaceGroup key={g.key} group={g} multi={multiTarget}
+                              onOpen={p => selectPod(p.name)} />
+            ))}
             {!visible.length && (
               <span className="text-[12px] text-[var(--color-text-muted)] py-6 text-center">
-                No pod matches “{filter}”.
+                No pod matches &ldquo;{filter}&rdquo;.
               </span>
             )}
           </div>
