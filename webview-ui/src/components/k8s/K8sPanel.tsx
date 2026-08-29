@@ -18,6 +18,8 @@ import { ClusterPicker, NamespaceMultiPicker } from './MultiPicker';
 import { PodGrid } from './PodGrid';
 
 const ACCENT = 'var(--color-dk8s)';
+/** Dimmer tone for anything filled or bordered — see MultiPicker. */
+const ACCENT_FILL = 'var(--color-dk8s-muted)';
 
 /**
  * Context and namespace, always visible and always changeable.
@@ -74,7 +76,8 @@ ${full}` : title}
 function Breadcrumb() {
   const {
     context, sensitivity, reachable, targets, selectedContexts,
-    openContextPicker, openNamespacePicker, startWatch, watchStatus,
+    openContextPicker, openNamespacePicker, watchStatus,
+    stage, pendingTargets, commitPendingTargets,
   } = useK8sStore();
   const isProd = !!context && sensitivity[context] === 'production';
 
@@ -106,6 +109,31 @@ function Breadcrumb() {
         </>
       )}
 
+      {/* Only while the namespace picker is open, and it commits exactly what
+          the picker's own Watch button commits — the same ticked set, which is
+          why that set lives in the store rather than in the picker. Showing it
+          the rest of the time made it look like a page-level control. */}
+      {stage === 'pick-namespace' && pendingTargets.length > 0 && (
+        <button
+          type="button"
+          onClick={commitPendingTargets}
+          title={`Watch the ${pendingTargets.length} selected namespace${pendingTargets.length === 1 ? '' : 's'}`}
+          className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md cursor-pointer transition-colors flex-shrink-0"
+          style={{
+            background: 'transparent',
+            border: `1px solid ${watchStatus === 'connected'
+              ? `color-mix(in srgb, ${ACCENT_FILL} 40%, transparent)`
+              : 'var(--color-surface-border)'}`,
+            color: watchStatus === 'connected' ? ACCENT_FILL : 'var(--color-text-muted)',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT_FILL} 14%, transparent)`; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <EyeIcon size={12} strokeWidth={1.8} />
+          Watch
+        </button>
+      )}
+
       {/* Production marker. Persistent and unmissable on purpose — every
           operator has run something against prod thinking they were in dev. */}
       {isProd && (
@@ -119,32 +147,6 @@ function Breadcrumb() {
       )}
 
       <div className="flex-1" />
-
-      {/* The same thing the picker's Watch button does. Once you are past the
-          pickers there is no other way to say "go and look again", and a
-          reconnecting watch is exactly when you want to ask for that. */}
-      {targets.length > 0 && (
-        <button
-          type="button"
-          onClick={startWatch}
-          title={watchStatus === 'connected'
-            ? 'Watching — click to re-read every namespace'
-            : 'Not watching — click to reconnect'}
-          className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md cursor-pointer transition-colors flex-shrink-0"
-          style={{
-            background: 'transparent',
-            border: `1px solid ${watchStatus === 'connected'
-              ? `color-mix(in srgb, ${ACCENT} 35%, transparent)`
-              : 'var(--color-surface-border)'}`,
-            color: watchStatus === 'connected' ? ACCENT : 'var(--color-text-muted)',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 12%, transparent)`; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-        >
-          <EyeIcon size={12} strokeWidth={1.8} />
-          Watch
-        </button>
-      )}
 
       {reachable?.serverVersion && (
         <span className="text-[10.5px] font-mono text-[var(--color-text-muted)]">

@@ -15,6 +15,10 @@ import { ButtonView, SearchInputView, TextInputView } from '@salilvnair/dui';
 import { useK8sStore, type WatchTarget, type NamespaceOffer } from '../../store/k8s-store';
 
 const ACCENT = 'var(--color-dk8s)';
+/** For filled areas. The same cyan that reads well as a small glyph is
+ *  glaring across a whole button, so anything with a solid fill uses the
+ *  muted tone and keeps the bright one for strokes and text. */
+const ACCENT_FILL = 'var(--color-dk8s-muted)';
 
 function Shell({ title, subtitle, children, footer }: {
   title: string; subtitle?: string; children: React.ReactNode; footer?: React.ReactNode;
@@ -91,7 +95,7 @@ export function ClusterPicker() {
           <ButtonView label="Select all" size="sm" variant="secondary"
                       onClick={() => setChecked(contexts.map(c => c.name))} />
           <ButtonView label={busy ? 'Connecting…' : 'Continue'} size="sm" variant="primary"
-                      accentColor={ACCENT}
+                      accentColor={ACCENT_FILL}
                       disabled={!checked.length || busy}
                       onClick={() => useContexts(checked)} />
         </>
@@ -157,15 +161,12 @@ export function ClusterPicker() {
 
 // ── Screen 2: namespaces, across every selected cluster ─────────────────────
 
-function OfferBlock({
-  offer, checked, toggle, manual, setManual, addManual, multiCluster,
-}: {
+function OfferBlock({ offer, checked, toggle, query, multiCluster }: {
   offer: NamespaceOffer;
   checked: WatchTarget[];
   toggle: (t: WatchTarget) => void;
-  manual: string;
-  setManual: (v: string) => void;
-  addManual: () => void;
+  /** The one filter at the top of the screen, shared by every block. */
+  query: string;
   multiCluster: boolean;
 }) {
   const isOn = (ns: string) => checked.some(t => t.context === offer.context && t.namespace === ns);
@@ -176,14 +177,7 @@ function OfferBlock({
     return [...offer.pinned, ...rest];
   }, [offer]);
 
-  // The text box filters the list AND adds to it. Two boxes doing one job each
-  // was the earlier shape and it read as clutter: you type the name you want
-  // either way, and whether it already exists is something the UI can work out
-  // rather than something you should have to decide before typing.
-  const query = manual.trim();
   const shown = query ? all.filter(n => n.toLowerCase().includes(query.toLowerCase())) : all;
-  const exact = all.some(n => n.toLowerCase() === query.toLowerCase());
-  const canAdd = !!query && !exact;
 
   return (
     <div className="flex flex-col gap-2">
@@ -195,32 +189,6 @@ function OfferBlock({
             {offer.forbidden ? 'listing not permitted' : `${offer.namespaces.length}`}
           </span>
         </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <TextInputView
-          value={manual}
-          onChange={e => setManual(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' && canAdd) addManual(); }}
-          placeholder={offer.namespaces.length
-            ? 'filter, or type a namespace to add'
-            : (offer.fallback || 'type a namespace')}
-          size="md"
-          accentColor={ACCENT}
-          style={{ flex: 1, width: '100%', fontFamily: 'monospace' }}
-        />
-        {/* Only offered when the name is not already on the list — otherwise
-            "add" would mean "add a duplicate", which it cannot do. */}
-        {canAdd && (
-          <ButtonView label="+  Add and save" size="md" variant="primary"
-                      accentColor={ACCENT} onClick={addManual} />
-        )}
-      </div>
-
-      {query && !shown.length && !canAdd && (
-        <span className="text-[11px] text-[var(--color-text-muted)]">
-          Nothing matches &ldquo;{query}&rdquo;.
-        </span>
       )}
 
       {offer.forbidden && (
@@ -236,7 +204,13 @@ function OfferBlock({
       {/* One per row, full width. A three-column grid of short names made the
           eye jump around to read a list it should be able to scan straight
           down, and left most of the width unused anyway. */}
-      {all.length > 0 && (
+      {!shown.length && !offer.forbidden && (
+        <span className="text-[11px] text-[var(--color-text-muted)] px-1 py-1">
+          {query ? `Nothing here matches \u201c${query}\u201d.` : 'No namespaces.'}
+        </span>
+      )}
+
+      {shown.length > 0 && (
         <div className="flex flex-col rounded-md overflow-hidden"
              style={{ border: '1px solid var(--color-surface-border)' }}>
           {shown.map((ns, i) => {
@@ -275,17 +249,21 @@ function OfferBlock({
 
 export function NamespaceMultiPicker() {
   const {
-    offers, selectedContexts, contextResults, targets, setTargets,
-    pinNamespace, openContextPicker,
+    offers, selectedContexts, contextResults, pinNamespace, openContextPicker,
+    pendingTargets, setPendingTargets, commitPendingTargets,
   } = useK8sStore();
 
-  const [checked, setChecked] = useState<WatchTarget[]>(targets);
-  const [manual, setManual] = useState<Record<string, string>>({});
+  const checked = pendingTargets;
+  const setChecked = (next: WatchTarget[] | ((prev: WatchTarget[]) => WatchTarget[])) =>
+    setPendingTargets(typeof next === 'function' ? next(useK8sStore.getState().pendingTargets) : next);
+  const [query, setQuery] = useState('');
 
   // A cluster that stops being selected must not leave ticks behind.
   useEffect(() => {
-    setChecked(prev => prev.filter(t => selectedContexts.includes(t.context)));
-  }, [selectedContexts]);
+    const { pendingTargets: p } = useK8sStore.getState();
+    const kept = p.filter(t => selectedContexts.includes(t.context));
+    if (kept.length !== p.length) setPendingTargets(kept);
+  }, [selectedContexts, setPendingTargets]);
 
   const multiCluster = selectedContexts.length > 1;
   const unreachable = contextResults.filter(r => !r.reachable.reachable);
@@ -296,13 +274,29 @@ export function NamespaceMultiPicker() {
         ? prev.filter(x => !(x.context === t.context && x.namespace === t.namespace))
         : [...prev, t]);
 
-  const addManual = (context: string) => {
-    const ns = (manual[context] ?? '').trim();
-    if (!ns) return;
-    setManual(m => ({ ...m, [context]: '' }));
-    pinNamespace(ns);
+  const trimmed = query.trim();
+
+  /**
+   * Clusters where the typed name is not already on offer.
+   *
+   * With more than one cluster selected, "add this namespace" has to say WHERE
+   * — the same name can be missing from one cluster and present in another, and
+   * silently adding it everywhere would start watches for namespaces that do
+   * not exist.
+   */
+  const addableTo = trimmed
+    ? offers.filter(o => !o.namespaces.some(ns => ns.toLowerCase() === trimmed.toLowerCase())
+                      && !o.pinned.some(ns => ns.toLowerCase() === trimmed.toLowerCase()))
+    : [];
+
+  const addTo = (context: string) => {
+    if (!trimmed) return;
+    pinNamespace(trimmed);
     setChecked(prev =>
-      prev.some(x => x.context === context && x.namespace === ns) ? prev : [...prev, { context, namespace: ns }]);
+      prev.some(x => x.context === context && x.namespace === trimmed)
+        ? prev
+        : [...prev, { context, namespace: trimmed }]);
+    setQuery('');
   };
 
   return (
@@ -317,8 +311,8 @@ export function NamespaceMultiPicker() {
             {checked.length ? `${checked.length} namespace${checked.length === 1 ? '' : 's'} selected` : 'Nothing selected yet'}
           </span>
           <ButtonView label="Back" size="sm" variant="secondary" onClick={openContextPicker} />
-          <ButtonView label="Watch" size="sm" variant="primary" accentColor={ACCENT}
-                      disabled={!checked.length} onClick={() => setTargets(checked)} />
+          <ButtonView label="Watch" size="sm" variant="primary" accentColor={ACCENT_FILL}
+                      disabled={!checked.length} onClick={commitPendingTargets} />
         </>
       }
     >
@@ -334,16 +328,44 @@ export function NamespaceMultiPicker() {
         </div>
       )}
 
+      {/* One box for the whole screen. Per-cluster boxes meant three identical
+          inputs asking the same question, and you had to pick which one to
+          type in before you knew whether the name existed at all. */}
+      <TextInputView
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="Filter namespaces, or type one that is not listed"
+        size="md"
+        accentColor={ACCENT}
+        style={{ width: '100%', fontFamily: 'monospace' }}
+      />
+
+      {addableTo.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 rounded-md"
+             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)' }}>
+          <span className="text-[11.5px] text-[var(--color-text-muted)]">
+            <span className="font-mono" style={{ color: 'var(--color-text-primary)' }}>{trimmed}</span>
+            {' '}is not listed{multiCluster ? ' in' : ''} —
+          </span>
+          {addableTo.map(o => (
+            <ButtonView
+              key={o.context}
+              label={multiCluster ? `+  Add to ${o.context}` : '+  Add and save'}
+              size="sm" variant="primary" accentColor={ACCENT_FILL}
+              onClick={() => addTo(o.context)}
+            />
+          ))}
+        </div>
+      )}
+
       {offers.map(offer => (
         <OfferBlock
           key={offer.context}
           offer={offer}
           checked={checked}
           toggle={toggle}
+          query={trimmed}
           multiCluster={multiCluster}
-          manual={manual[offer.context] ?? ''}
-          setManual={(v) => setManual(m => ({ ...m, [offer.context]: v }))}
-          addManual={() => addManual(offer.context)}
         />
       ))}
 

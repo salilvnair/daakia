@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SparklineView, SearchInputView } from '@salilvnair/dui';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { ExportLogsModal } from './ExportLogsModal';
-import { FolderExportIcon } from '../../icons';
+import { FolderExportIcon, CloseIcon } from '../../icons';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
   formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
@@ -442,13 +442,22 @@ export function PodGrid() {
           onClick={toggleSelectMode}
           className="text-[11px] px-2.5 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
           style={{
-            background: selectMode ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
-            border: `1px solid ${selectMode ? `color-mix(in srgb, ${ACCENT} 45%, transparent)` : 'var(--color-surface-border)'}`,
-            color: selectMode ? ACCENT : 'var(--color-text-secondary)',
+            background: selectMode
+              ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
+              : 'transparent',
+            border: `1px solid ${selectMode
+              ? 'color-mix(in srgb, var(--color-error) 45%, transparent)'
+              : 'var(--color-surface-border)'}`,
+            color: selectMode ? 'var(--color-error)' : 'var(--color-text-primary)',
+            fontWeight: 500,
           }}
           title={selectMode ? 'Leave selection mode' : 'Pick pods and export their logs'}
         >
-          <FolderExportIcon size={13} strokeWidth={1.8} />
+          {/* Two different actions wearing one button, so they get two looks:
+              an amber export mark against white text, and a red X to leave. */}
+          {selectMode
+            ? <CloseIcon size={13} strokeWidth={2.2} />
+            : <FolderExportIcon size={13} strokeWidth={1.9} style={{ color: 'var(--color-warning)' }} />}
           {selectMode ? 'Cancel' : 'Export logs'}
         </button>
 

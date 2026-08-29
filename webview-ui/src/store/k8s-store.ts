@@ -165,6 +165,14 @@ interface K8sState {
   offers: NamespaceOffer[];
   /** Everything being watched. */
   targets: WatchTarget[];
+  /**
+   * What the namespace picker currently has ticked, before it is committed.
+   *
+   * In the store rather than the picker's own state because two controls
+   * commit it — the picker's Watch button and the one in the breadcrumb — and
+   * a button outside the picker cannot reach a useState inside it.
+   */
+  pendingTargets: WatchTarget[];
   /** Set when more namespaces were ticked than dk8s will watch at once. */
   capped?: { requested: number; watching: number; max: number };
 
@@ -195,6 +203,8 @@ interface K8sState {
   setNamespace: (ns: string, pin?: boolean) => void;
   useContexts: (names: string[]) => void;
   setTargets: (targets: WatchTarget[]) => void;
+  setPendingTargets: (targets: WatchTarget[]) => void;
+  commitPendingTargets: () => void;
   pinNamespace: (ns: string) => void;
   unpinNamespace: (ns: string) => void;
   setSensitivity: (level: Sensitivity) => void;
@@ -227,6 +237,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   contextResults: [],
   offers: [],
   targets: [],
+  pendingTargets: [],
   sensitivity: {},
   sensitivityGuess: false,
   busy: false,
@@ -264,6 +275,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     if (!names.length) return;
     set({ busy: true, selectedContexts: names, context: names[0] });
     postMsg({ type: 'dk8s:useContexts', contexts: names });
+  },
+
+  setPendingTargets: (pendingTargets) => set({ pendingTargets }),
+
+  commitPendingTargets: () => {
+    const { pendingTargets, setTargets } = get();
+    if (pendingTargets.length) setTargets(pendingTargets);
   },
 
   setTargets: (targets) => {
@@ -361,9 +379,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   openContextPicker: () => set({ stage: 'pick-context' }),
   openNamespacePicker: () => {
-    const { selectedContexts, context } = get();
+    const { selectedContexts, context, targets } = get();
     const ctxs = selectedContexts.length ? selectedContexts : (context ? [context] : []);
-    set({ stage: 'pick-namespace' });
+    set({ stage: 'pick-namespace', pendingTargets: targets });
     if (ctxs.length) postMsg({ type: 'dk8s:useContexts', contexts: ctxs });
   },
 
