@@ -123,7 +123,7 @@ describe('formatting', () => {
   it('says when a restart happened, not just how many', () => {
     expect(restartLabel(pod({ restarts: 7, lastRestartAt: ago(40_000) }), NOW)).toBe('7 restarts · 40s ago');
     expect(restartLabel(pod({ restarts: 1, lastRestartAt: ago(40_000) }), NOW)).toBe('1 restart · 40s ago');
-    expect(restartLabel(pod(), NOW)).toBe('no restarts');
+    expect(restartLabel(pod(), NOW)).toBe('0 restarts');
   });
 
   it('handles a restart with no recorded time rather than showing NaN', () => {

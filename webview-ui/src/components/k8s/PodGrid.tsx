@@ -3,11 +3,13 @@
  *
  * Two rules do most of the work. Colour means status and nothing else, so a
  * failing pod is findable from across the room. And healthy pods recede —
- * smaller, quieter cards, because thirteen of them are not what you came for
- * and giving them equal weight is how a dashboard becomes a wall.
+ * quieter cards, because thirteen of them are not what you came for and
+ * giving them equal weight is how a dashboard becomes a wall.
  *
- * They recede by weight, not by shape: "cards" has to mean cards throughout,
- * so the quiet ones stay cards rather than turning into list rows.
+ * They recede through colour and grouping, not through shape or size: every
+ * pod gets the same card, and a healthy one is simply green. Two shapes on one
+ * screen — or two heights — reads as an unfinished layout rather than a
+ * hierarchy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SparklineView, SearchInputView } from '@salilvnair/dui';
@@ -81,18 +83,14 @@ function WatchIndicator() {
 function StatusLine({ pod, severity }: { pod: PodSummary; severity: Severity }) {
   const color = severityColor(severity);
   const label = pod.reason || pod.phase;
-  const quiet = severity === 'quiet';
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span style={{ width: 6, height: 6, borderRadius: 3, background: color, opacity: quiet ? 0.75 : 1 }} />
-      <span className="text-[11.5px] font-medium"
-            style={{ color: quiet ? 'var(--color-text-muted)' : color }}>
-        {label}
-      </span>
-      <span className="text-[10.5px] font-mono text-[var(--color-text-muted)] tabular-nums">
+      <span style={{ width: 6, height: 6, borderRadius: 3, background: color }} />
+      <span className="text-[11.5px] font-medium" style={{ color }}>{label}</span>
+      <span className="text-[10.5px] font-mono tabular-nums" style={{ color, opacity: 0.75 }}>
         {pod.ready.current}/{pod.ready.total}
       </span>
-      <span className="text-[10.5px] font-mono text-[var(--color-text-muted)]">
+      <span className="text-[10.5px] font-mono" style={{ color, opacity: 0.75 }}>
         {shortAge(pod.startedAt)}
       </span>
     </div>
@@ -114,7 +112,9 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
       className="flex flex-col gap-1.5 p-3 rounded-lg text-left cursor-pointer transition-colors relative overflow-hidden"
       style={{
         background: 'var(--color-surface)',
-        border: `1px solid ${quiet ? 'var(--color-surface-border)' : `color-mix(in srgb, ${color} 40%, var(--color-surface-border))`}`,
+        border: `1px solid ${quiet
+          ? 'var(--color-surface-border)'
+          : `color-mix(in srgb, ${color} 40%, var(--color-surface-border))`}`,
         minWidth: 0,
       }}
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
@@ -142,71 +142,14 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
 
       <div className="flex items-center justify-between gap-2 pl-2 min-w-0">
         <span className="text-[10.5px] font-mono truncate"
-              style={{ color: recent ? 'var(--color-warning)' : 'var(--color-text-muted)' }}>
-          {pod.restarts ? `↻ ${restartLabel(pod)}` : usage ? `${formatBytes(usage.memBytes)} · ${formatCpu(usage.cpuMilli)}` : ''}
+              style={{ color: recent ? 'var(--color-warning)' : color, opacity: recent ? 1 : 0.75 }}>
+          {`↻ ${restartLabel(pod)}`}
+          {usage ? ` · ${formatBytes(usage.memBytes)}` : ''}
         </span>
         {/* A trend needs at least two samples to mean anything. */}
         {history && history.length > 1 && (
           <SparklineView data={history} width={72} height={18} color={color} filled />
         )}
-      </div>
-    </button>
-  );
-}
-
-/**
- * A healthy pod, as a smaller quieter card.
- *
- * The first version rendered these as list rows, which made "cards" mean two
- * different shapes on one screen. Healthy pods should recede by WEIGHT — less
- * contrast, less height, no status text — not by becoming a different kind of
- * object.
- */
-function QuietCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
-  const usage = useK8sStore(s => s.usage[pod.name]);
-  const history = useK8sStore(s => s.usageHistory[pod.name]);
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex flex-col gap-1 p-2.5 rounded-lg text-left cursor-pointer transition-colors relative overflow-hidden"
-      style={{
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-surface-border)',
-        opacity: 0.86,
-        minWidth: 0,
-      }}
-      onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
-      onMouseLeave={e => { e.currentTarget.style.opacity = '0.86'; e.currentTarget.style.background = 'var(--color-surface)'; }}
-    >
-      <span style={{
-        position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
-        background: 'var(--color-method-get)', opacity: 0.5,
-      }} />
-
-      <div className="flex items-center gap-2 pl-2 min-w-0">
-        <span className="text-[11px] font-mono truncate flex-1 min-w-0 text-[var(--color-text-secondary)]"
-              title={pod.name}>
-          {pod.name}
-        </span>
-        <span className="text-[10px] font-mono text-[var(--color-text-muted)] tabular-nums flex-shrink-0">
-          {pod.ready.current}/{pod.ready.total}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 pl-2 min-w-0">
-        <span className="text-[10px] font-mono text-[var(--color-text-muted)] truncate">
-          {usage ? formatBytes(usage.memBytes) : (pod.workload?.name ?? pod.node ?? '')}
-        </span>
-        <span className="flex items-center gap-2 flex-shrink-0">
-          {history && history.length > 1 && (
-            <SparklineView data={history} width={56} height={14} color="var(--color-method-get)" filled />
-          )}
-          <span className="text-[10px] font-mono text-[var(--color-text-muted)]">
-            {shortAge(pod.startedAt)}
-          </span>
-        </span>
       </div>
     </button>
   );
@@ -386,10 +329,10 @@ export function PodGrid() {
                 <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)]">
                   Healthy · {quiet.length}
                 </span>
-                <div className="grid gap-2"
-                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))' }}>
+                <div className="grid gap-2.5"
+                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
                   {quiet.map(p => (
-                    <QuietCard key={p.uid} pod={p} onOpen={() => selectPod(p.name)} />
+                    <PodCard key={p.uid} pod={p} onOpen={() => selectPod(p.name)} />
                   ))}
                 </div>
               </div>

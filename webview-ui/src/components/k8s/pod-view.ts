@@ -117,7 +117,9 @@ export function formatCpu(milli?: number): string {
  * in March does not deserve to.
  */
 export function restartLabel(pod: PodSummary, now = Date.now()): string {
-  if (!pod.restarts) return 'no restarts';
+  // "0 restarts" rather than "no restarts": it sits in the same column as
+  // "26 restarts" on the card next to it, and a number scans against a number.
+  if (!pod.restarts) return '0 restarts';
   const when = pod.lastRestartAt ? `${shortAge(pod.lastRestartAt, now)} ago` : 'time unknown';
   return `${pod.restarts} restart${pod.restarts === 1 ? '' : 's'} · ${when}`;
 }
