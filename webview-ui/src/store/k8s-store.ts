@@ -90,6 +90,64 @@ export type UsageHistory = Record<string, number[]>;
 
 export type WatchStatus = 'idle' | 'connected' | 'reconnecting' | 'stopped';
 
+// ── Pod detail ──────────────────────────────────────────────────────────────
+
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'other';
+
+export interface LogLine {
+  seq: number;
+  ts?: number;
+  level: LogLevel;
+  text: string;
+}
+
+export type LogStatus = 'idle' | 'streaming' | 'ended' | 'error';
+
+export interface PodCapabilities {
+  shell?: string;
+  tar: boolean;
+  python3: boolean;
+  jcmd: boolean;
+  jstack: boolean;
+  jmap: boolean;
+  jfr: boolean;
+  targetPid?: string;
+  unreachable?: string;
+}
+
+export interface PodAction {
+  id: string;
+  label: string;
+  available: boolean;
+  reason?: string;
+  disruptive?: boolean;
+  mutatesPod?: boolean;
+}
+
+export type DetailTab = 'logs' | 'describe' | 'yaml' | 'doctor';
+
+/**
+ * A stretch of log the user has highlighted, held so the AI panel can act on
+ * it after the browser selection is gone — clicking "Ask AI" collapses the
+ * selection, so reading it at click time gets nothing.
+ */
+export interface LogSelection {
+  text: string;
+  firstSeq: number;
+  lastSeq: number;
+  lineCount: number;
+}
+
+/**
+ * How many lines to hold.
+ *
+ * A pod at a few hundred lines a second fills this in minutes, and every line
+ * is a React key and a DOM candidate. Past roughly this point the tab starts
+ * to stutter regardless of virtualisation, so the buffer is bounded and the
+ * drop is shown rather than hidden.
+ */
+export const LOG_BUFFER_MAX = 20_000;
+
 export type LogRange =
   | { kind: 'all' }
   | { kind: 'since'; seconds: number }
@@ -198,6 +256,30 @@ interface K8sState {
   exportOpen: boolean;
   exportState?: ExportState;
 
+  /** The pod whose detail panel is open, if any. */
+  detail?: PodSummary;
+  detailTab: DetailTab;
+  logs: LogLine[];
+  logStatus: LogStatus;
+  logDetail?: string;
+  /** Lines discarded because the pod outran the reader. */
+  logDropped: number;
+  logFilter: string;
+  logLevels: LogLevel[];
+  logFollow: boolean;
+  logWrap: boolean;
+  logPrevious: boolean;
+  logContainer?: string;
+  logSelection?: LogSelection;
+  describeText?: string;
+  yamlText?: string;
+  describeBusy: boolean;
+  capabilities?: PodCapabilities;
+  runtime?: { runtime: string; confidence: number; detectedFrom: string };
+  actions: PodAction[];
+  probeBusy: boolean;
+  shellNotice?: { reason: string; suggestion: string };
+
   probe: () => void;
   useContext: (name: string) => void;
   setNamespace: (ns: string, pin?: boolean) => void;
@@ -216,6 +298,19 @@ interface K8sState {
   setFilter: (v: string) => void;
   setView: (v: 'cards' | 'table') => void;
   selectPod: (name?: string) => void;
+  openDetail: (pod: PodSummary) => void;
+  closeDetail: () => void;
+  setDetailTab: (tab: DetailTab) => void;
+  setLogFilter: (v: string) => void;
+  toggleLogLevel: (level: LogLevel) => void;
+  setLogFollow: (v: boolean) => void;
+  setLogWrap: (v: boolean) => void;
+  setLogPrevious: (v: boolean) => void;
+  setLogContainer: (c?: string) => void;
+  reloadLogs: () => void;
+  setLogSelection: (sel?: LogSelection) => void;
+  openShell: () => void;
+  dismissShellNotice: () => void;
   toggleSelectMode: () => void;
   togglePodSelected: (uid: string) => void;
   selectAllVisible: (uids: string[]) => void;
@@ -252,6 +347,19 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   selectMode: false,
   selected: [],
   exportOpen: false,
+
+  detailTab: 'logs',
+  logs: [],
+  logStatus: 'idle',
+  logDropped: 0,
+  logFilter: '',
+  logLevels: [],
+  logFollow: true,
+  logWrap: false,
+  logPrevious: false,
+  describeBusy: false,
+  actions: [],
+  probeBusy: false,
 
   probe: () => {
     set({ busy: true });
@@ -339,6 +447,71 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   setFilter: (filter) => set({ filter }),
   setView: (view) => set({ view }),
   selectPod: (selectedPod) => set({ selectedPod }),
+
+  openDetail: (pod) => {
+    // Reset every per-pod field. Carrying the last pod's logs into this one's
+    // panel for the moment before the first frame arrives is the kind of bug
+    // that gets someone reading the wrong pod's stack trace.
+    set({
+      detail: pod, detailTab: 'logs',
+      logs: [], logStatus: 'idle', logDetail: undefined, logDropped: 0,
+      logFilter: '', logLevels: [], logFollow: true,
+      logPrevious: false, logContainer: undefined, logSelection: undefined,
+      describeText: undefined, yamlText: undefined, describeBusy: true,
+      capabilities: undefined, runtime: undefined, actions: [], probeBusy: true,
+      shellNotice: undefined,
+    });
+    const base = { context: pod.context, namespace: pod.namespace, pod: pod.name };
+    postMsg({ type: 'dk8s:openLogs', ...base, tailLines: 2000 });
+    postMsg({ type: 'dk8s:describe', ...base });
+    postMsg({ type: 'dk8s:probePod', ...base });
+  },
+
+  closeDetail: () => {
+    postMsg({ type: 'dk8s:closeLogs' });
+    set({ detail: undefined, logs: [], logStatus: 'idle', logSelection: undefined });
+  },
+
+  setDetailTab: (detailTab) => set({ detailTab }),
+  setLogFilter: (logFilter) => set({ logFilter }),
+
+  toggleLogLevel: (level) => set(s => ({
+    logLevels: s.logLevels.includes(level)
+      ? s.logLevels.filter(l => l !== level)
+      : [...s.logLevels, level],
+  })),
+
+  setLogFollow: (logFollow) => set({ logFollow }),
+  setLogWrap: (logWrap) => set({ logWrap }),
+
+  setLogPrevious: (logPrevious) => { set({ logPrevious }); get().reloadLogs(); },
+  setLogContainer: (logContainer) => { set({ logContainer }); get().reloadLogs(); },
+
+  reloadLogs: () => {
+    const { detail, logPrevious, logContainer } = get();
+    if (!detail) return;
+    set({ logs: [], logDropped: 0, logStatus: 'idle', logDetail: undefined, logSelection: undefined });
+    postMsg({
+      type: 'dk8s:openLogs',
+      context: detail.context, namespace: detail.namespace, pod: detail.name,
+      previous: logPrevious, container: logContainer, tailLines: 2000,
+    });
+  },
+
+  setLogSelection: (logSelection) => set({ logSelection }),
+
+  openShell: () => {
+    const { detail, logContainer } = get();
+    if (!detail) return;
+    set({ shellNotice: undefined });
+    postMsg({
+      type: 'dk8s:shell',
+      context: detail.context, namespace: detail.namespace, pod: detail.name,
+      container: logContainer,
+    });
+  },
+
+  dismissShellNotice: () => set({ shellNotice: undefined }),
 
   toggleSelectMode: () => set(s => ({
     selectMode: !s.selectMode,
@@ -573,6 +746,56 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         });
         break;
       }
+
+      case 'dk8s:logLines': {
+        // Ignore frames from a pod that is no longer open: closing the panel
+        // and opening another races the in-flight batch, and without this the
+        // new pod's view briefly shows the old pod's lines.
+        if (msg.pod !== get().detail?.name) break;
+        const incoming = (msg.lines as LogLine[]) ?? [];
+        if (!incoming.length) break;
+        set(s => {
+          const merged = s.logs.concat(incoming);
+          const overflow = merged.length - LOG_BUFFER_MAX;
+          return overflow > 0
+            ? { logs: merged.slice(overflow), logDropped: s.logDropped + overflow }
+            : { logs: merged };
+        });
+        break;
+      }
+
+      case 'dk8s:logStatus':
+        if (msg.pod !== get().detail?.name) break;
+        set({ logStatus: msg.status as LogStatus, logDetail: msg.detail as string | undefined });
+        break;
+
+      case 'dk8s:logDropped':
+        if (msg.pod !== get().detail?.name) break;
+        set(s => ({ logDropped: s.logDropped + (msg.count as number) }));
+        break;
+
+      case 'dk8s:described':
+        if (msg.pod !== get().detail?.name) break;
+        set({
+          describeBusy: false,
+          describeText: msg.describe as string,
+          yamlText: msg.yaml as string,
+        });
+        break;
+
+      case 'dk8s:podProbed':
+        if (msg.pod !== get().detail?.name) break;
+        set({
+          probeBusy: false,
+          capabilities: msg.capabilities as PodCapabilities,
+          runtime: msg.runtime as { runtime: string; confidence: number; detectedFrom: string },
+          actions: (msg.actions as PodAction[]) ?? [],
+        });
+        break;
+
+      case 'dk8s:shellUnavailable':
+        set({ shellNotice: { reason: msg.reason as string, suggestion: msg.suggestion as string } });
+        break;
 
       case 'dk8s:sensitivitySet':
         set(s => ({

@@ -40,6 +40,9 @@ import {
   handleDk8sSetSensitivity, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
+  handleDk8sLogsOpen, handleDk8sLogsClose, handleDk8sDescribe,
+  handleDk8sShell, handleDk8sProbePod, handleDk8sAsk,
+  handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
 } from '../src/panel/main/handlers/k8s-handler';
 import { handleSseConnect, handleSseDisconnect } from '../src/panel/main/handlers/sse-handler';
 import { handleSocketIOConnect, handleSocketIODisconnect, handleSocketIOEmit } from '../src/panel/main/handlers/socketio-handler';
@@ -140,6 +143,33 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:unpinNamespace':
       handleDk8sUnpinNamespace(msg, post);
+      break;
+    case 'dk8s:openLogs':
+      handleDk8sLogsOpen(msg, post);
+      break;
+    case 'dk8s:closeLogs':
+      handleDk8sLogsClose();
+      break;
+    case 'dk8s:describe':
+      await handleDk8sDescribe(msg, post);
+      break;
+    case 'dk8s:shell':
+      await handleDk8sShell(msg, post);
+      break;
+    case 'dk8s:probePod':
+      await handleDk8sProbePod(msg, post);
+      break;
+    case 'dk8s:ask':
+      await handleDk8sAsk(msg, post);
+      break;
+    case 'dk8s:collect':
+      await handleDk8sCollect(msg, post);
+      break;
+    case 'dk8s:analyze':
+      await handleDk8sAnalyze(msg, post, process.cwd());
+      break;
+    case 'dk8s:revealArtifacts':
+      await handleDk8sRevealArtifacts();
       break;
 
     // ── Request Execution ──

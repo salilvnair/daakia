@@ -17,12 +17,19 @@ import { initSecretStore } from './services/secret-store';
 import { exportCollectionsToWorkspace, importCollectionsFromWorkspace, initGitSyncWatcher } from './services/git-sync';
 import { tryAutoUnlockFromKeychain } from './services/vault';
 import { purgeExpiredTrash } from './services/bin';
+import { setDk8sStorageRoot } from './panel/main/handlers/k8s-handler';
 
 export async function activate(context: vscode.ExtensionContext) {
   console.log('[daakia] Activating...');
 
   // Initialize OS keychain secret store (macOS Keychain / Windows Credential Manager / libsecret)
   initSecretStore(context.secrets);
+
+  // dk8s writes heap dumps, thread dumps and recordings here. Global storage
+  // rather than the OS temp directory: a 200MB heap dump that the system
+  // cleans up overnight is worse than useless — you go looking for it the next
+  // morning, which is exactly when you need it.
+  setDk8sStorageRoot(context.globalStorageUri.fsPath);
 
   // Initialize SQLite (async — sql.js WASM) — non-blocking
   // Auto-open panel once DB is ready

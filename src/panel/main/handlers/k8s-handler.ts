@@ -20,6 +20,16 @@ import {
   type ExportTarget, type ExportOptions,
 } from '../../../services/k8s/k8s-logs';
 import * as vscode from 'vscode';
+import * as os from 'os';
+import { join } from 'path';
+import { mkdir as mkdirp } from 'fs/promises';
+import { collectArtifact, type ArtifactKind, type CollectTarget } from '../../../services/k8s/k8s-artifacts';
+import { dk8sPrompt } from '../../chat/dk8s-prompts';
+import { handleAiSend } from './ai-handler';
+import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
+import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-stream';
+import { run, kubectlBinary, resolveBinary } from '../../../services/k8s/kubectl';
+import { probeCapabilities, classifyFromSpec, availableActions } from '../../../services/k8s/pod-classify';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -420,6 +430,9 @@ export function handleDk8sStopWatch(): void {
 /** Called when the panel goes away, so a watch cannot outlive its tab. */
 export function disposeDk8s(): void {
   stopAllWatches();
+  logStream?.stop();
+  logStream = undefined;
+  closeAllTerminals();
 }
 
 /**
@@ -473,6 +486,166 @@ export async function handleDk8sExportLogs(
   }
 }
 
+// ── Pod detail: logs, describe, shell ───────────────────────────────────────
+
+/** One follow per tab. Opening a second pod replaces the first. */
+let logStream: LogStreamHandle | undefined;
+
+export function handleDk8sLogsOpen(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  const pod = String(msg.pod ?? '');
+  if (!context || !namespace || !pod) return;
+
+  logStream?.stop();
+  logStream = streamLogs(context, namespace, pod, {
+    container: msg.container as string | undefined,
+    previous: !!msg.previous,
+    tailLines: (msg.tailLines as number) ?? 2000,
+    sinceSeconds: msg.sinceSeconds as number | undefined,
+  }, {
+    onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, lines }),
+    onStatus: (status, detail) => postMessage({ type: 'dk8s:logStatus', pod, status, detail }),
+    onDropped: (count) => postMessage({ type: 'dk8s:logDropped', pod, count }),
+  });
+}
+
+export function handleDk8sLogsClose(): void {
+  logStream?.stop();
+  logStream = undefined;
+}
+
+/** describe + YAML in one round trip: the detail panel shows both. */
+export async function handleDk8sDescribe(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  const pod = String(msg.pod ?? '');
+  if (!context || !namespace || !pod) return;
+
+  const [described, yaml] = await Promise.all([
+    run(['--context', context, '-n', namespace, 'describe', 'pod', pod], { timeoutMs: 30_000 }),
+    run(['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'yaml'], { timeoutMs: 30_000 }),
+  ]);
+
+  postMessage({
+    type: 'dk8s:described', pod,
+    describe: described.ok ? described.stdout : (described.stderr || described.failure),
+    yaml: yaml.ok ? yaml.stdout : (yaml.stderr || yaml.failure),
+    ok: described.ok && yaml.ok,
+  });
+}
+
+/**
+ * A shell in the pod, in a real VS Code terminal.
+ *
+ * Not xterm.js in the panel: getting a PTY inside a webview needs a native
+ * module, and without one bash prints no prompt, vim hangs and Ctrl-C does
+ * nothing. VS Code already has PTYs, so this is both simpler and strictly
+ * more capable — the terminal the user already knows, with their font,
+ * scrollback and copy-paste.
+ */
+export async function handleDk8sShell(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  const pod = String(msg.pod ?? '');
+  const container = msg.container as string | undefined;
+  if (!context || !namespace || !pod) return;
+
+  // Distroless images have no bash, and many have no sh either. `exec -- bash`
+  // on one fails with an OCI error that reads like a permissions problem and
+  // sends people down entirely the wrong path, so probe first.
+  let shell: string | undefined;
+  for (const candidate of ['bash', 'sh', 'ash']) {
+    const r = await run([
+      '--context', context, '-n', namespace, 'exec', pod,
+      ...(container ? ['-c', container] : []),
+      '--', 'which', candidate,
+    ], { timeoutMs: 15_000 });
+    if (r.ok && r.stdout.trim()) { shell = candidate; break; }
+  }
+
+  if (!shell) {
+    postMessage({
+      type: 'dk8s:shellUnavailable', pod,
+      reason: 'No shell in this container — it looks distroless.',
+      suggestion: `kubectl --context ${context} -n ${namespace} debug -it ${pod} --image=busybox${container ? ` --target=${container}` : ''}`,
+    });
+    return;
+  }
+
+  await resolveBinary();
+  const term = vscode.window.createTerminal({
+    name: `⎈ ${pod}`,
+    iconPath: new vscode.ThemeIcon('server-environment'),
+    // shellPath + shellArgs, never a command string: VS Code execs the binary
+    // directly, so a pod named `a; rm -rf ~` is an argument, not syntax.
+    shellPath: kubectlBinary() ?? 'kubectl',
+    shellArgs: [
+      '--context', context, '-n', namespace,
+      'exec', '-it', pod,
+      ...(container ? ['-c', container] : []),
+      '--', shell,
+    ],
+  });
+  term.show();
+  trackTerminal(pod, term);
+  postMessage({ type: 'dk8s:shellOpened', pod, shell });
+}
+
+/**
+ * Terminals dk8s opened, so they can be closed when the context changes.
+ * A shell left pointing at a cluster you navigated away from an hour ago is a
+ * genuinely dangerous thing to leave lying around.
+ */
+const podTerminals = new Map<string, vscode.Terminal>();
+
+function trackTerminal(pod: string, term: vscode.Terminal): void {
+  podTerminals.get(pod)?.dispose();
+  podTerminals.set(pod, term);
+  const sub = vscode.window.onDidCloseTerminal((t) => {
+    if (t === term) { podTerminals.delete(pod); sub.dispose(); }
+  });
+}
+
+function closeAllTerminals(): void {
+  for (const t of podTerminals.values()) t.dispose();
+  podTerminals.clear();
+}
+
+/** What this pod can actually support — drives which actions are offered. */
+export async function handleDk8sProbePod(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  const pod = String(msg.pod ?? '');
+  const container = msg.container as string | undefined;
+  if (!context || !namespace || !pod) return;
+
+  const spec = await run(['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'json'], { timeoutMs: 20_000 });
+  let runtime: ReturnType<typeof classifyFromSpec> = { runtime: 'unknown', confidence: 0, detectedFrom: 'image' };
+  try {
+    runtime = classifyFromSpec(JSON.parse(spec.stdout));
+  } catch { /* fall through with unknown */ }
+
+  const caps = await probeCapabilities(context, namespace, pod, container);
+  postMessage({
+    type: 'dk8s:podProbed', pod,
+    runtime, capabilities: caps,
+    actions: availableActions(runtime.runtime, caps),
+  });
+}
+
 /** Explicit kubectl path, for when it is installed somewhere unusual. */
 export async function handleDk8sSetKubectlPath(
   msg: Record<string, unknown>,
@@ -482,4 +655,186 @@ export async function handleDk8sSetKubectlPath(
   setKubectlPath(path || undefined);
   saveState({ kubectlPath: path || undefined });
   await handleDk8sProbe(postMessage);
+}
+
+// ── Ask AI ──────────────────────────────────────────────────────────────────
+
+/**
+ * Send a piece of evidence to the model.
+ *
+ * The prompt text lives on the host, not in the webview, so there is exactly
+ * one copy of it and it can be changed without rebuilding the UI bundle. The
+ * webview names a key; anything it does not name is refused rather than passed
+ * through, so a bug in the panel cannot turn into an arbitrary system prompt.
+ */
+export async function handleDk8sAsk(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const key = String(msg.promptKey ?? '');
+  const system = dk8sPrompt(key);
+  if (!system) {
+    postMessage({ type: 'dk8s:aiError', error: `Unknown prompt: ${key}` });
+    return;
+  }
+
+  const evidence = String(msg.evidence ?? '');
+  if (!evidence.trim()) {
+    postMessage({ type: 'dk8s:aiError', error: 'Nothing selected to ask about.' });
+    return;
+  }
+
+  // The context block is what turns "explain this stack trace" into "explain
+  // this stack trace from a pod that has restarted 14 times" — which is often
+  // the whole answer.
+  const ctx = (msg.podContext ?? {}) as Record<string, unknown>;
+  const contextLines = [
+    ctx.pod && `pod: ${ctx.pod}`,
+    ctx.namespace && `namespace: ${ctx.namespace}`,
+    ctx.phase && `phase: ${ctx.phase}`,
+    ctx.restarts !== undefined && `restarts: ${ctx.restarts}`,
+    ctx.reason && `reason: ${ctx.reason}`,
+    ctx.runtime && `runtime: ${ctx.runtime}`,
+    ctx.image && `image: ${ctx.image}`,
+    ctx.age && `age: ${ctx.age}`,
+  ].filter(Boolean).join('\n');
+
+  const label = String(msg.evidenceLabel ?? 'EVIDENCE');
+  const question = String(msg.question ?? '').trim();
+
+  const userPrompt = [
+    contextLines && `━━━ POD ━━━\n${contextLines}`,
+    `━━━ ${label} ━━━\n${evidence}`,
+    question && `━━━ THE DEVELOPER ASKS ━━━\n${question}`,
+  ].filter(Boolean).join('\n\n');
+
+  await handleAiSend({
+    // A fixed tabId: the dk8s panel is the only consumer of this stream, and a
+    // per-request id would leave the panel unable to match chunks to its request.
+    tabId: DK8S_AI_TAB,
+    systemPrompts: [system],
+    userPrompt,
+    conversation: msg.conversation ?? [],
+    stage: key,
+    provider: msg.provider,
+    model: msg.model,
+  }, postMessage);
+}
+
+/** The tabId every dk8s AI request uses. */
+export const DK8S_AI_TAB = 'dk8s-ai';
+
+// ── Doctor actions ──────────────────────────────────────────────────────────
+
+/**
+ * Where artifacts go.
+ *
+ * A stable folder under the extension's storage rather than a save dialog per
+ * dump: during an incident you take four of these in a row, and being asked
+ * where to put each one is friction at exactly the wrong moment. The folder is
+ * shown in the UI and openable in one click.
+ */
+function artifactDir(): string {
+  return join(dk8sStorageRoot(), 'artifacts');
+}
+
+let storageRoot = '';
+
+/** Called once at activation — the extension owns the path, not this module. */
+export function setDk8sStorageRoot(root: string): void {
+  storageRoot = root;
+}
+
+function dk8sStorageRoot(): string {
+  return storageRoot || join(os.tmpdir(), 'daakia-dk8s');
+}
+
+export async function handleDk8sCollect(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const kind = String(msg.kind ?? '') as ArtifactKind;
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  const pod = String(msg.pod ?? '');
+  if (!kind || !context || !namespace || !pod) return;
+
+  const target: CollectTarget = {
+    context, namespace, pod,
+    container: msg.container as string | undefined,
+    targetPid: msg.targetPid as string | undefined,
+  };
+
+  const destDir = artifactDir();
+  postMessage({ type: 'dk8s:collectStarted', pod, kind });
+
+  try {
+    const result = await collectArtifact(target, {
+      kind,
+      destDir,
+      useJstack: !!msg.useJstack,
+      useJmap: !!msg.useJmap,
+      seconds: (msg.seconds as number) ?? 30,
+      allowInstall: !!msg.allowInstall,
+    }, (progress) => {
+      postMessage({ type: 'dk8s:collectProgress', pod, kind, ...progress });
+    });
+
+    postMessage({ type: 'dk8s:collectDone', pod, result, destDir });
+  } catch (err) {
+    postMessage({
+      type: 'dk8s:collectDone', pod, destDir,
+      result: { kind, ok: false, error: (err as Error).message },
+    });
+  }
+}
+
+/**
+ * Hand an artifact to the analyzer that understands it.
+ *
+ * This is the join dk8s exists to make: the Doctor tab's heap and thread
+ * analyzers already work, they just had no way to reach a cluster. Collecting
+ * a dump and then making the user find it in a folder and re-open it by hand
+ * would waste the entire point — so the file goes straight into the analyzer
+ * and the webview is told to bring that tab forward.
+ */
+export async function handleDk8sAnalyze(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+  extensionRoot: string,
+): Promise<void> {
+  const file = String(msg.file ?? '');
+  const kind = String(msg.kind ?? '');
+  if (!file) return;
+
+  // A histogram is not a heap dump — it is text, and the heap analyzer would
+  // reject it. Route by what the file actually IS, not by which button
+  // produced it.
+  const analyzer =
+    kind === 'heapdump' ? 'heap'
+    : kind === 'threaddump' || kind === 'threaddump-sigquit' || kind === 'stackdump' ? 'threads'
+    : 'logs';
+
+  // Tell the webview first, so the Doctor tab is already on screen when the
+  // analyzer's own progress messages start arriving.
+  postMessage({ type: 'dk8s:handoff', analyzer, file, kind });
+
+  switch (analyzer) {
+    case 'heap':
+      handleHeapAnalyze({ path: file }, postMessage, extensionRoot);
+      break;
+    case 'threads':
+      handleThreadsAnalyze({ path: file }, postMessage, extensionRoot);
+      break;
+    default:
+      handleLogsAnalyze({ path: file }, postMessage, extensionRoot);
+      break;
+  }
+}
+
+/** Reveal the artifact folder in the OS file manager. */
+export async function handleDk8sRevealArtifacts(): Promise<void> {
+  const dir = artifactDir();
+  await mkdirp(dir);
+  await vscode.env.openExternal(vscode.Uri.file(dir));
 }

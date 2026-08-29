@@ -16,6 +16,11 @@ import { KubectlSetupGuide } from './KubectlSetupGuide';
 import { SensitivityPrompt, UnreachableNotice } from './ContextPicker';
 import { ClusterPicker, NamespaceMultiPicker } from './MultiPicker';
 import { PodGrid } from './PodGrid';
+import { PodDetail } from './PodDetail';
+import { useDk8sAiStore, applyDk8sAiError } from '../../store/dk8s-ai-store';
+import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
+import { useTabsStore } from '../../store/tabs-store';
+import { useUiStateStore } from '../../store/ui-state-store';
 
 const ACCENT = 'var(--color-dk8s)';
 /** Dimmer tone for anything filled or bordered — see MultiPicker. */
@@ -169,21 +174,53 @@ export function K8sPanel() {
   const stage = useK8sStore(s => s.stage);
   const apply = useK8sStore(s => s.apply);
   const probe = useK8sStore(s => s.probe);
+  const detail = useK8sStore(s => s.detail);
+  const applyAi = useDk8sAiStore(s => s.apply);
+  const applyDoctor = useDk8sDoctorStore(s => s.apply);
+  const handoff = useDk8sDoctorStore(s => s.handoff);
+  const clearHandoff = useDk8sDoctorStore(s => s.clearHandoff);
+  const openDoctorTab = useTabsStore(s => s.openDoctorTab);
+
+  // A collected artifact has been sent to an analyzer, so bring that tab
+  // forward. The analyzer is already parsing by the time this runs — the host
+  // posts the handoff before it starts, precisely so the tab is on screen for
+  // the progress rather than appearing after the result.
+  useEffect(() => {
+    if (!handoff) return;
+    // Select the analyzer BEFORE the tab mounts. A thread dump landing on the
+    // heap analyzer's empty state looks exactly like the handoff failed.
+    useUiStateStore.getState().setPref('doctor.analyzer', handoff.analyzer);
+    openDoctorTab();
+    clearHandoff();
+  }, [handoff, openDoctorTab, clearHandoff]);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data as Record<string, unknown>;
-      if (typeof msg?.type === 'string' && msg.type.startsWith('dk8s:')) {
-        apply(msg);
-      }
+      const type = typeof msg?.type === 'string' ? msg.type : '';
+      if (!type) return;
+
+      if (type === 'dk8s:aiError') { applyDk8sAiError(msg); return; }
+
+      // AI replies arrive on the shared `ai:` channel, not a dk8s-specific one,
+      // so they are routed by tabId inside the store rather than by prefix here.
+      if (type.startsWith('ai:')) { applyAi(msg); return; }
+
+      if (!type.startsWith('dk8s:')) return;
+      // Collection messages belong to the doctor store; everything else to the
+      // pod store. Both are dk8s:-prefixed, so the split is by name.
+      if (/^dk8s:(collect|handoff)/.test(type)) applyDoctor(msg);
+      else apply(msg);
     };
     window.addEventListener('message', handler);
     probe();
     return () => window.removeEventListener('message', handler);
-  }, [apply, probe]);
+  }, [apply, probe, applyAi, applyDoctor]);
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+    // `relative` so the detail overlay can pin to this panel rather than the
+    // whole window — the sidebar and tab bar stay visible and usable.
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
       {/* The breadcrumb only makes sense once there is something to name. */}
       {stage !== 'probing' && stage !== 'no-kubectl' && <Breadcrumb />}
 
@@ -195,6 +232,8 @@ export function K8sPanel() {
       {stage === 'ask-sensitivity' && <SensitivityPrompt />}
       {stage === 'pick-namespace' && <NamespaceMultiPicker />}
       {stage === 'ready' && <PodGrid />}
+
+      {detail && <PodDetail />}
     </div>
   );
 }

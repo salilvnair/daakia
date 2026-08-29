@@ -13,7 +13,7 @@
  * Nothing here uploads an artifact. Parsing and analysis run on this machine; only
  * a redacted evidence pack ever reaches a model, and only when the user asks.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StethoscopeIcon, MemoryIcon, LayersIcon, DocumentIcon } from '../../icons';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { HeapAnalyzerView } from './HeapAnalyzerView';
@@ -46,6 +46,16 @@ export function DoctorPanel() {
     setAnalyzerLocal(id);
     useUiStateStore.getState().setPref('doctor.analyzer', id);
   };
+
+  // Follow the stored value when it changes from outside — dk8s sets it when
+  // it hands an artifact over, and without this the tab opens on whichever
+  // analyzer was last used rather than the one now holding the dump.
+  useEffect(() => {
+    if (stored && stored !== analyzer) setAnalyzerLocal(stored);
+    // Deliberately keyed on `stored` alone: including `analyzer` would fight
+    // the user's own clicks back to the stored value on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stored]);
 
   const active = ANALYZERS.find(a => a.id === analyzer) ?? ANALYZERS[0];
 

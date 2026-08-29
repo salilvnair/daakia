@@ -84,6 +84,12 @@ import {
   handleDk8sWatchPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
+  handleDk8sLogsOpen,
+  handleDk8sLogsClose,
+  handleDk8sDescribe,
+  handleDk8sShell,
+  handleDk8sProbePod,
+  handleDk8sAsk, handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
 } from './handlers/k8s-handler';
 import {
   normalizeProxyConfig, toUiProxyConfig, resolveProxy,
@@ -379,6 +385,33 @@ export class MainPanel {
         break;
       case 'dk8s:unpinNamespace':
         handleDk8sUnpinNamespace(msg, this._post);
+        break;
+      case 'dk8s:openLogs':
+        handleDk8sLogsOpen(msg, this._post);
+        break;
+      case 'dk8s:closeLogs':
+        handleDk8sLogsClose();
+        break;
+      case 'dk8s:describe':
+        handleDk8sDescribe(msg, this._post);
+        break;
+      case 'dk8s:shell':
+        handleDk8sShell(msg, this._post);
+        break;
+      case 'dk8s:probePod':
+        handleDk8sProbePod(msg, this._post);
+        break;
+      case 'dk8s:ask':
+        handleDk8sAsk(msg, this._post);
+        break;
+      case 'dk8s:collect':
+        handleDk8sCollect(msg, this._post);
+        break;
+      case 'dk8s:analyze':
+        handleDk8sAnalyze(msg, this._post, this._extensionUri.fsPath);
+        break;
+      case 'dk8s:revealArtifacts':
+        handleDk8sRevealArtifacts();
         break;
 
       // ── gRPC Client ──

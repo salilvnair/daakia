@@ -386,7 +386,7 @@ function NamespaceGroup({ group, onOpen }: {
 
 export function PodGrid() {
   const {
-    pods, filter, view, setFilter, setView, startWatch, selectPod, watchStatus,
+    pods, filter, view, setFilter, setView, startWatch, openDetail, watchStatus,
     capped, selectMode, selected, exportOpen, exportState,
     toggleSelectMode, selectAllVisible, openExport, closeExport,
   } = useK8sStore();
@@ -579,8 +579,8 @@ export function PodGrid() {
           <div className="flex flex-col gap-3">
             {groups.map(g => (
               view === 'table'
-                ? <NamespaceTableGroup key={g.key} group={g} onOpen={p => selectPod(p.name)} />
-                : <NamespaceGroup key={g.key} group={g} onOpen={p => selectPod(p.name)} />
+                ? <NamespaceTableGroup key={g.key} group={g} onOpen={p => openDetail(p)} />
+                : <NamespaceGroup key={g.key} group={g} onOpen={p => openDetail(p)} />
             ))}
             {!visible.length && (
               <span className="text-[12px] text-[var(--color-text-muted)] py-6 text-center">

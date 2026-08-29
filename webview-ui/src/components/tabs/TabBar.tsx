@@ -4,7 +4,7 @@ import type { Protocol } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { getProtocolAccent } from '../../colors';
 import { MethodBadge, ConfirmDialog, StyledDropdown, ContextMenu, type ContextMenuItem, type ContextMenuSubItem, type DropdownOption } from '../shared';
-import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon } from '../../icons';
+import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon, StethoscopeIcon } from '../../icons';
 import { IconButtonView, StateMachineIcon } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 
@@ -439,8 +439,9 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           const isStateMachine = tab.type === 'state-machine';
           const isWiki = tab.type === 'wiki';
           const isDk8s = tab.type === 'dk8s';
+          const isDoctor = tab.type === 'doctor';
           const SM_ACCENT = 'var(--color-sm-tab, #f59e0b)';
-          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s ? 'var(--color-dk8s)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
+          const tabAccent = isSettings ? 'var(--color-settings)' : isMockServer ? 'var(--color-mock-server)' : isDaakiaAi ? 'var(--color-protocol-ai)' : isStateMachine ? SM_ACCENT : isWiki ? 'var(--color-wiki)' : isDk8s ? 'var(--color-dk8s)' : isDoctor ? 'var(--color-doctor)' : (tab.protocol ? getProtocolAccent(tab.protocol) : requestAccentColor);
           const isDragOver = dragOverIdx === idx && dragIdx !== idx;
           return (
             <div
@@ -480,6 +481,8 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 <BookOpenIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-wiki)' }} />
               ) : isDk8s ? (
                 <Dk8sIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-dk8s)' }} />
+              ) : isDoctor ? (
+                <StethoscopeIcon size={13} className="flex-shrink-0" style={{ color: 'var(--color-doctor)' }} />
               ) : tab.protocol === 'graphql' ? (
                 <span className="inline-block font-mono font-bold text-[10px] leading-none text-[var(--color-protocol-graphql)] flex-shrink-0">GQL</span>
               ) : tab.protocol === 'websocket' ? (
