@@ -150,6 +150,22 @@ let activeWatch: WatchHandle | undefined;
 let metricsTimer: NodeJS.Timeout | undefined;
 let watchKey = '';
 
+/**
+ * The last thing the watch told us, kept so a reconnecting webview can be
+ * caught up without restarting the stream.
+ *
+ * A webview reload does not restart the host, so the panel comes back and asks
+ * to watch a namespace the host is ALREADY watching. Returning early there
+ * looks like the right optimisation and leaves the new page empty forever,
+ * because the snapshot it needed was delivered to the page that no longer
+ * exists. Replaying is the fix.
+ */
+let lastSnapshot: unknown[] = [];
+let lastStatus: 'connected' | 'reconnecting' | 'stopped' = 'stopped';
+let lastStatusDetail: string | undefined;
+let lastUsage: unknown = null;
+let lastUsageAvailable = false;
+
 const METRICS_INTERVAL_MS = 15_000;
 
 function stopWatch(): void {
@@ -158,6 +174,11 @@ function stopWatch(): void {
   if (metricsTimer) clearInterval(metricsTimer);
   metricsTimer = undefined;
   watchKey = '';
+  lastSnapshot = [];
+  lastStatus = 'stopped';
+  lastStatusDetail = undefined;
+  lastUsage = null;
+  lastUsageAvailable = false;
 }
 
 export function handleDk8sWatchPods(
@@ -170,12 +191,25 @@ export function handleDk8sWatchPods(
   if (!context || !namespace) return;
 
   const key = `${context}/${namespace}`;
-  if (key === watchKey && activeWatch) return;   // already watching exactly this
+  if (key === watchKey && activeWatch) {
+    // Already watching this exact namespace — almost always a webview reload.
+    // Replay what we have instead of restarting the stream, so the fresh page
+    // paints immediately and the cluster sees no extra load.
+    postMessage({ type: 'dk8s:podSnapshot', context, namespace, pods: lastSnapshot });
+    postMessage({ type: 'dk8s:watchStatus', context, namespace, status: lastStatus, detail: lastStatusDetail });
+    if (lastUsageAvailable) {
+      postMessage({ type: 'dk8s:podUsage', context, namespace, usage: lastUsage, available: true });
+    }
+    return;
+  }
   stopWatch();
   watchKey = key;
 
   activeWatch = watchPods(context, namespace, {
-    onSnapshot: (pods) => postMessage({ type: 'dk8s:podSnapshot', context, namespace, pods }),
+    onSnapshot: (pods) => {
+      lastSnapshot = pods;
+      postMessage({ type: 'dk8s:podSnapshot', context, namespace, pods });
+    },
     // Spread AFTER `type` would overwrite the message type with the watch
     // event's own ADDED/MODIFIED/DELETED and break routing entirely, so the
     // event kind travels under its own name.
@@ -183,7 +217,11 @@ export function handleDk8sWatchPods(
       type: 'dk8s:podEvent', context, namespace,
       eventType: event.type, pod: event.pod,
     }),
-    onStatus: (status, detail) => postMessage({ type: 'dk8s:watchStatus', context, namespace, status, detail }),
+    onStatus: (status, detail) => {
+      lastStatus = status;
+      lastStatusDetail = detail;
+      postMessage({ type: 'dk8s:watchStatus', context, namespace, status, detail });
+    },
   });
 
   // Metrics are polled rather than watched — there is no watch API for them.
@@ -192,6 +230,8 @@ export function handleDk8sWatchPods(
   const poll = async () => {
     const usage = await topPods(context, namespace);
     if (watchKey !== key) return;    // namespace changed while we were waiting
+    lastUsage = usage;
+    lastUsageAvailable = usage !== null;
     postMessage({ type: 'dk8s:podUsage', context, namespace, usage, available: usage !== null });
   };
   void poll();

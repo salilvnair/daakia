@@ -67,8 +67,11 @@ export function AppSidebar({ activeSection, onSectionChange, onOpenChange, sideb
   const isDaakiaAi = activeTab?.type === 'daakia-ai';
   const isWiki = activeTab?.type === 'wiki';
   const isDoctor = activeTab?.type === 'doctor';
-  // Never show protocol icons when settings, mock-server, doctor, state-machine, daakia-ai, or wiki tab is active
-  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi && !isWiki && !isDoctor;
+  const isDk8s = activeTab?.type === 'dk8s';
+  // Never show protocol icons when a standalone tab is active — settings,
+  // mock-server, doctor, dk8s, state-machine, daakia-ai or wiki. Those own the
+  // whole surface, so a REST collections tree beside them is just noise.
+  const showProtocolIcons = !settingsActive && !isMockServer && !isStateMachine && !isDaakiaAi && !isWiki && !isDoctor && !isDk8s;
   const showRestSidebar = showProtocolIcons && activeProtocol === 'rest';
   const showGraphqlSidebar = showProtocolIcons && activeProtocol === 'graphql';
   const showWebsocketSidebar = showProtocolIcons && activeProtocol === 'websocket';

@@ -705,6 +705,7 @@ export default function App() {
         {activeTab?.type === 'settings' ? (
           <SettingsPanel />
         ) : activeTab?.type === 'mock-server' ? null
+        : activeTab?.type === 'dk8s' ? null
         : activeTab?.type === 'doctor' ? null
         : activeTab?.type === 'state-machine' ? null
         : activeTab?.type === 'wiki' ? null
@@ -790,7 +791,7 @@ export default function App() {
         </div>
 
         {/* Sidebar splitter — only for protocol tabs that have an expandable panel */}
-        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'doctor' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
+        {!(activeTab?.type === 'mock-server' || activeTab?.type === 'doctor' || activeTab?.type === 'dk8s' || activeTab?.type === 'state-machine' || activeTab?.type === 'settings') && (
           <div
             className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
             onPointerDown={handleSidebarPointerDown}

@@ -155,6 +155,25 @@ describe('formatting', () => {
   });
 });
 
+describe('grouping', () => {
+  it('separates what needs attention from what does not', () => {
+    // The grid renders these as two different things — big cards and quiet
+    // rows — so the split has to be exactly the quiet/not-quiet boundary.
+    const pods = [
+      pod({ name: 'ok-1' }),
+      pod({ name: 'ok-2' }),
+      pod({ name: 'crash', reason: 'CrashLoopBackOff', healthy: false }),
+      pod({ name: 'old-restarts', restarts: 312, lastRestartAt: ago(6 * 24 * 3600_000) }),
+    ];
+    const sorted = sortPods(pods, NOW);
+    const attention = sorted.filter(p => severityOf(p, NOW) !== 'quiet');
+    const quiet = sorted.filter(p => severityOf(p, NOW) === 'quiet');
+    expect(attention.map(p => p.name)).toEqual(['crash']);
+    expect(quiet).toHaveLength(3);
+    expect(attention.length + quiet.length).toBe(pods.length);
+  });
+});
+
 describe('cluster pulse', () => {
   it('counts by severity and restarts within the hour', () => {
     const pods = [
