@@ -23,7 +23,7 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import {
   filterLines, densityBuckets, describeBucket, levelCounts, levelColor,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
-  compactCount, type MatchedLine,
+  compactCount, placeSelectionToolbar, type MatchedLine,
 } from './log-view';
 import {
   AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
@@ -47,6 +47,9 @@ const OVERSCAN = 25;
 const RIBBON_W = 38;
 /** The bands themselves. Thick enough to read as colour and to click. */
 const RIBBON_BAND_W = 20;
+/** The selection strip, for placing it clear of the selection and the ribbon. */
+const TOOLBAR_W = 430;
+const TOOLBAR_H = 58;
 
 const LEVEL_SHORT: Record<LogLevel, string> = {
   error: 'err', warn: 'wrn', info: 'info', debug: 'dbg', other: 'plain',
@@ -306,7 +309,7 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
 }) {
   return (
     <div
-      className="absolute z-30 flex items-center gap-2.5 px-4 py-3 rounded-xl"
+      className="absolute z-30 flex items-center gap-3 px-5 py-3 rounded-xl"
       style={{
         top: rect.top, left: rect.left,
         // A solid strip, not floating chips. Over a dense log the buttons had
@@ -315,11 +318,16 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
         background: 'var(--color-surface)',
         border: '1px solid var(--color-surface-border)',
         boxShadow: '0 10px 30px rgba(0,0,0,.6)',
+        minWidth: TOOLBAR_W,
       }}
       onMouseDown={e => e.preventDefault()}   // keep the selection alive
     >
-      <span className="text-[11.5px] px-1 select-none whitespace-nowrap"
-            style={{ color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+      <span className="text-[11.5px] px-1 select-none whitespace-nowrap shrink-0"
+            style={{
+              color: 'var(--color-text-secondary)',
+              fontVariantNumeric: 'tabular-nums',
+              minWidth: 62,
+            }}>
         {lineCount} line{lineCount === 1 ? '' : 's'}
       </span>
 
@@ -475,17 +483,24 @@ export function LogViewer() {
   //
   // Captured while it exists: clicking a button collapses the selection, so
   // reading it at click time returns nothing.
+  /**
+   * Track what is selected. Says nothing about showing the toolbar.
+   *
+   * selectionchange fires on every mouse move during a drag, so positioning
+   * the strip from here made it chase the cursor across the log while the user
+   * was still choosing what to select — and land on top of the lines they had
+   * just highlighted.
+   */
   const captureSelection = useCallback(() => {
     const sel = window.getSelection();
     const host = bodyRef.current;
     if (!sel || sel.isCollapsed || !sel.toString().trim() || !host) {
-      setToolbar(null);
       selectionRef.current = null;
       setLogSelection(undefined);
-      return;
+      return null;
     }
     const range = sel.getRangeAt(0);
-    if (!host.contains(range.commonAncestorContainer)) return;
+    if (!host.contains(range.commonAncestorContainer)) return null;
 
     const seqOf = (node: Node | null): number | undefined => {
       let el: HTMLElement | null =
@@ -495,7 +510,7 @@ export function LogViewer() {
     };
     const a = seqOf(sel.anchorNode);
     const b = seqOf(sel.focusNode);
-    if (a === undefined || b === undefined) { setToolbar(null); return; }
+    if (a === undefined || b === undefined) return null;
 
     const firstSeq = Math.min(a, b);
     const lastSeq = Math.max(a, b);
@@ -505,19 +520,33 @@ export function LogViewer() {
     const count = lastSeq - firstSeq + 1;
     selectionRef.current = { text, first: firstSeq, last: lastSeq, count };
     setLogSelection({ text, firstSeq, lastSeq, lineCount: count });
-
-    const r = range.getBoundingClientRect();
-    const hostRect = host.getBoundingClientRect();
-    setToolbar({
-      // Above the selection where there is room, below it at the very top.
-      top: Math.max(4, r.top - hostRect.top - 54),
-      left: Math.min(Math.max(8, r.left - hostRect.left), Math.max(8, hostRect.width - 400)),
-    });
+    return range;
   }, [logs, setLogSelection]);
 
   useEffect(() => {
-    document.addEventListener('selectionchange', captureSelection);
-    return () => document.removeEventListener('selectionchange', captureSelection);
+    const onChange = () => { captureSelection(); };
+    document.addEventListener('selectionchange', onChange);
+    return () => document.removeEventListener('selectionchange', onChange);
+  }, [captureSelection]);
+
+  /**
+   * The toolbar appears when the gesture ENDS, and never over the selection.
+   *
+   * It is placed below the selected block by default and only flips above when
+   * there is no room underneath — covering the lines you just highlighted
+   * defeats the point of highlighting them.
+   */
+  const showToolbarForSelection = useCallback(() => {
+    const range = captureSelection();
+    const host = bodyRef.current;
+    if (!range || !host) { setToolbar(null); return; }
+
+    setToolbar(placeSelectionToolbar(
+      range.getBoundingClientRect(),
+      host.getBoundingClientRect(),
+      { width: TOOLBAR_W, height: TOOLBAR_H },
+      RIBBON_W,
+    ));
   }, [captureSelection]);
 
   const sendToAi = (promptKey: string, title: string) => {
@@ -596,12 +625,15 @@ export function LogViewer() {
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <LevelChips />
 
-        <div style={{ width: 230 }}>
+        {/* Takes whatever is left between the chips and the controls, rather
+            than a fixed width with dead space after it. */}
+        <div className="flex-1" style={{ minWidth: 180, paddingRight: 8 }}>
           <SearchInputView
             value={logFilter}
             onChange={(v: string) => setLogFilter(v)}
             placeholder="Filter — text, or /regex/"
             size="sm"
+            width="100%"
           />
         </div>
 
@@ -610,8 +642,6 @@ export function LogViewer() {
             {containers.map(c => <ContainerChip key={c.name} name={c.name} />)}
           </div>
         )}
-
-        <div className="flex-1" />
 
         {/* One wrapping unit. As siblings of the spacer these controls wrapped
             individually, so a narrow panel flung Download and Analyze onto
@@ -773,7 +803,14 @@ export function LogViewer() {
       )}
 
       {/* ── Lines, with the ribbon down the right ── */}
-      <div ref={bodyRef} className="relative flex flex-1 min-h-0">
+      <div
+        ref={bodyRef}
+        className="relative flex flex-1 min-h-0"
+        // Hide on the way down so the strip is never in the way of the drag,
+        // and place it on the way up once the selection is settled.
+        onPointerDown={() => setToolbar(null)}
+        onPointerUp={() => window.setTimeout(showToolbarForSelection, 0)}
+      >
         <div
           ref={scrollRef}
           onScroll={onScroll}

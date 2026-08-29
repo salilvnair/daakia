@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildMatcher, filterLines, densityBuckets, levelCounts,
   formatLogTime, selectionText, describeBucket,
-  foldStackTraces, isStackFrame, compactCount,
+  foldStackTraces, isStackFrame, compactCount, placeSelectionToolbar,
 } from './log-view';
 import type { LogLine } from '../../store/k8s-store';
 
@@ -244,5 +244,52 @@ describe('compactCount', () => {
     expect(compactCount(142)).toBe('142');
     expect(compactCount(1200)).toBe('1.2k');
     expect(compactCount(18_400)).toBe('18k');
+  });
+});
+
+describe('placeSelectionToolbar', () => {
+  const host = { top: 0, bottom: 600, left: 0, height: 600, width: 1000 };
+  const toolbar = { width: 430, height: 58 };
+
+  it('sits below the selection when there is room', () => {
+    // Above was the first version's behaviour and it covered the very lines
+    // that had just been highlighted.
+    const p = placeSelectionToolbar(
+      { top: 100, bottom: 160, left: 40, height: 60, width: 500 }, host, toolbar);
+    expect(p.top).toBe(170);
+  });
+
+  it('never overlaps the selection', () => {
+    const sel = { top: 100, bottom: 160, left: 40, height: 60, width: 500 };
+    const p = placeSelectionToolbar(sel, host, toolbar);
+    const overlaps = !(p.top + toolbar.height <= sel.top - host.top || p.top >= sel.bottom - host.top);
+    expect(overlaps).toBe(false);
+  });
+
+  it('flips above when the selection is near the bottom', () => {
+    const p = placeSelectionToolbar(
+      { top: 520, bottom: 570, left: 40, height: 50, width: 500 }, host, toolbar);
+    expect(p.top).toBe(520 - 58 - 10);
+  });
+
+  it('keeps the strip clear of the density ribbon on the right', () => {
+    // Without the gutter the strip slides under the ribbon, which is the one
+    // place it must not go — the ribbon is how you navigate away from here.
+    const p = placeSelectionToolbar(
+      { top: 100, bottom: 160, left: 940, height: 60, width: 40 }, host, toolbar, 38);
+    expect(p.left + toolbar.width + 38).toBeLessThanOrEqual(host.width);
+  });
+
+  it('does not go off the left edge', () => {
+    const p = placeSelectionToolbar(
+      { top: 100, bottom: 160, left: -50, height: 60, width: 500 }, host, toolbar);
+    expect(p.left).toBeGreaterThanOrEqual(8);
+  });
+
+  it('prefers below rather than covering text when neither side fits', () => {
+    const tiny = { top: 0, bottom: 80, left: 0, height: 80, width: 1000 };
+    const p = placeSelectionToolbar(
+      { top: 10, bottom: 70, left: 0, height: 60, width: 500 }, tiny, toolbar);
+    expect(p.top).toBeGreaterThanOrEqual(4);
   });
 });

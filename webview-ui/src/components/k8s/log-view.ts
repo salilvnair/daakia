@@ -281,3 +281,37 @@ export function compactCount(n: number): string {
   if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
+
+// ── Selection toolbar placement ─────────────────────────────────────────────
+
+export interface Rect { top: number; bottom: number; left: number; height: number; width: number; }
+
+/**
+ * Where to put the strip so it does not cover what was just selected.
+ *
+ * Below the selection by default. Above only when there is no room below —
+ * covering the lines you highlighted defeats the point of highlighting them,
+ * and the first version did exactly that by always sitting above.
+ *
+ * Kept pure so the arithmetic can be tested; the component supplies the rects.
+ */
+export function placeSelectionToolbar(
+  selection: Rect,
+  host: Rect,
+  toolbar: { width: number; height: number },
+  gutterRight = 0,
+  gap = 10,
+): { top: number; left: number } {
+  const below = selection.bottom - host.top + gap;
+  const above = selection.top - host.top - toolbar.height - gap;
+  const fitsBelow = below + toolbar.height <= host.height;
+
+  // When neither side fits — a selection taller than the viewport — prefer
+  // below and let it clip at the bottom rather than covering the text.
+  const top = fitsBelow ? below : Math.max(4, above);
+
+  const maxLeft = Math.max(8, host.width - toolbar.width - gutterRight - 8);
+  const left = Math.min(Math.max(8, selection.left - host.left), maxLeft);
+
+  return { top, left };
+}
