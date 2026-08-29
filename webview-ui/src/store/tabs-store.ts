@@ -48,7 +48,7 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'doctor';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'doctor' | 'dk8s';
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -446,6 +446,7 @@ interface TabsState {
   openSettingsTab: () => void;
   openMockServerTab: () => void;
   openDoctorTab: () => void;
+  openDk8sTab: () => void;
   openDaakiaAiTab: () => void;
   openDaakiaWikiTab: () => void;
   openStateMachineTab: (serverId?: string) => void;
@@ -505,6 +506,23 @@ export const useTabsStore = create<TabsState>((set, get) => {
         set({ activeTabId: existing.id, previousTabId: activeTabId });
       } else {
         const tab = createDefaultTab({ type: 'mock-server', name: 'Mock Server' });
+        set(s => ({
+          tabs: [...s.tabs, tab],
+          activeTabId: tab.id,
+          previousTabId: activeTabId,
+        }));
+      }
+    },
+
+    // dk8s — one tab only. It holds a live watch on a namespace, so a second
+    // tab would mean a second watch on the same cluster for no benefit.
+    openDk8sTab: () => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'dk8s');
+      if (existing) {
+        set({ activeTabId: existing.id, previousTabId: activeTabId });
+      } else {
+        const tab = createDefaultTab({ type: 'dk8s', name: 'dk8s' });
         set(s => ({
           tabs: [...s.tabs, tab],
           activeTabId: tab.id,

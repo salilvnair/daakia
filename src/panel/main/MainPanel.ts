@@ -79,6 +79,10 @@ import { handleDebugMessage } from './handlers/debug-handler';
 import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol-audit';
 import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
+  handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
+  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetKubectlPath,
+} from './handlers/k8s-handler';
+import {
   normalizeProxyConfig, toUiProxyConfig, resolveProxy,
   DEFAULT_PROXY, UNPROXIED_PROTOCOLS,
   type ProxyConfig, type ProxyUiConfig,
@@ -330,6 +334,26 @@ export class MainPanel {
         break;
       case 'mqtt:publish':
         handleMqttPublish(msg, this._post);
+        break;
+
+      // ── dk8s — Kubernetes diagnostics ──
+      case 'dk8s:probe':
+        handleDk8sProbe(this._post);
+        break;
+      case 'dk8s:useContext':
+        handleDk8sUseContext(msg, this._post);
+        break;
+      case 'dk8s:namespaces':
+        handleDk8sNamespaces(msg, this._post);
+        break;
+      case 'dk8s:setNamespace':
+        handleDk8sSetNamespace(msg, this._post);
+        break;
+      case 'dk8s:setSensitivity':
+        handleDk8sSetSensitivity(msg, this._post);
+        break;
+      case 'dk8s:setKubectlPath':
+        handleDk8sSetKubectlPath(msg, this._post);
         break;
 
       // ── gRPC Client ──

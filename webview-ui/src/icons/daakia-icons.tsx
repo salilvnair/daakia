@@ -323,6 +323,32 @@ export function ServerIcon(props: IconProps) {
 }
 
 /** Doctor / Diagnostics — heap dumps, thread dumps and log analysis. */
+export function Dk8sIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      {/* Seven spokes at 51.43 degrees, first straight up: the helm everyone
+          reads as Kubernetes. No outer ring — at 14px a ring closes on the
+          spoke tips and the whole glyph turns to mud. Dropping it is also what
+          lets the shape read as a node graph as well as a wheel. */}
+      <path d="M12 8.4V6M14.81 9.76l1.88-.9M15.51 12.8l2.24.49M13.56 15.24l1.33 2.02M10.44 15.24l-1.33 2.02M8.49 12.8l-2.24.49M9.19 9.76l-1.88-.9" />
+      {/* Machined hexagonal hub. Everything else in this set is circles, so a
+          hexagon reads as deliberate rather than as a badly drawn circle. */}
+      <path d="M14.42 13.4L12 14.8l-2.42-1.4v-2.8L12 9.2l2.42 1.4z" />
+      {/* Filled terminals. These keep their separation at 16px, which is the
+          only reason this survives at rail size. */}
+      <g fill="currentColor" stroke="none">
+        <circle cx="12" cy="4" r="1.35" />
+        <circle cx="18.25" cy="7.01" r="1.35" />
+        <circle cx="19.8" cy="13.78" r="1.35" />
+        <circle cx="15.47" cy="19.21" r="1.35" />
+        <circle cx="8.53" cy="19.21" r="1.35" />
+        <circle cx="4.2" cy="13.78" r="1.35" />
+        <circle cx="5.75" cy="7.01" r="1.35" />
+      </g>
+    </svg>
+  );
+}
+
 export function StethoscopeIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

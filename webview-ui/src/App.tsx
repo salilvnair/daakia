@@ -18,6 +18,7 @@ import { AppSidebar, SidebarSection } from './components/sidebar';
 import { SettingsPanel } from './components/sidebar/SettingsPanel';
 import { MockServerPanel } from './components/mock/MockServerPanel';
 import { DoctorPanel } from './components/doctor/DoctorPanel';
+import { K8sPanel } from './components/k8s/K8sPanel';
 import { SmStateMachineTabPage } from './components/mock/SmStateMachineTabPage';
 import { GraphQLPanel } from './components/graphql';
 import { WebSocketPanel } from './components/websocket';
@@ -48,7 +49,7 @@ import { getVsCodeApi, postMsg } from './vscode';
 import { useSMWorkspaceStore } from '@salilvnair/state-machine';
 import { DaakiaSMConsumer } from './consumer/DaakiaSMConsumer';
 import { getProtocolAccent } from './colors';
-import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, DevToolsIcon } from './icons';
+import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, DevToolsIcon } from './icons';
 import { DevToolsPanel } from './components/shared/devtools';
 import { DebugHud } from './components/shared/debugger';
 import { useExtensionMessages } from './app/use-extension-messages';
@@ -200,6 +201,7 @@ export default function App() {
     };
     const tabProtocol = activeTab?.protocol || activeProtocol;
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+      : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
       : activeTab?.type === 'doctor' ? 'var(--color-doctor)'
       : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
@@ -455,6 +457,7 @@ export default function App() {
 
   const tabProtocol = activeTab?.protocol || activeProtocol;
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+    : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
     : activeTab?.type === 'doctor' ? 'var(--color-doctor)'
     : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
@@ -552,6 +555,18 @@ export default function App() {
         {/* Spacer pushes bottom icons down */}
         <div className="flex-1" />
 
+        {/* dk8s — Kubernetes. Sits above Doctor because that is the workflow:
+            dk8s collects the artifact, Doctor analyses it. */}
+        <ProtocolIcon
+          active={activeTab?.type === 'dk8s'}
+          open={tabs.some(t => t.type === 'dk8s')}
+          accentColor="var(--color-dk8s)"
+          onClick={() => useTabsStore.getState().openDk8sTab()}
+          title="dk8s — Kubernetes diagnostics"
+        >
+          <Dk8sIcon size={16} strokeWidth={1.8} />
+        </ProtocolIcon>
+
         {/* Doctor — heap / thread / log diagnostics */}
         <ProtocolIcon
           active={activeTab?.type === 'doctor'}
@@ -633,6 +648,15 @@ export default function App() {
 
         {/* DoctorPanel — kept mounted so a parsed dump and the selected analyzer
             survive Daakia tab switches instead of being re-parsed on every visit. */}
+        {tabs.some(t => t.type === 'dk8s') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'dk8s' ? 'flex' : 'none' }}
+          >
+            <K8sPanel />
+          </div>
+        )}
+
         {tabs.some(t => t.type === 'doctor') && (
           <div
             className="flex-1 flex flex-col min-w-0 overflow-hidden"

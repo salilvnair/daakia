@@ -79,6 +79,10 @@
   /* Doctor — diagnostics (heap / thread / log analysis) */
   --color-doctor: #10b981;
   --color-doctor-muted: #0d9668;
+  /* dk8s takes cyan: doctor holds green and mock-server holds yellow, and it
+     must stay clear of the red/amber/green reserved for pod status. */
+  --color-dk8s: #22d3ee;
+  --color-dk8s-muted: #0e9bb5;
 
   /* Settings */
   --color-settings: #2a9d8f;
@@ -334,6 +338,10 @@
 
   --color-doctor: #047857;
   --color-doctor-muted: #065f46;
+
+  /* Darker cyan so it holds contrast on a light ground. */
+  --color-dk8s: #0891b2;
+  --color-dk8s-muted: #0e7490;
 
   --color-settings: #1f7a6e;
   --color-wiki: #b45309;
