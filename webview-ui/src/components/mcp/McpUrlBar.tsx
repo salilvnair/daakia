@@ -7,7 +7,7 @@ import { postMsg } from '../../vscode';
 import { saveRequest } from '../../services/request';
 import { AiMcpPromptBuilderModal } from '../ai/AiMcpPromptBuilderModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
-import { logUiEvent } from '../../store/ui-audit-store';
+import { logUiEvent, isAuditEventEnabled } from '../../store/ui-audit-store';
 import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
 import { useMockSuggestions } from '../../hooks/useMockSuggestions';
 import { AnchoredMenu } from '../shared';
@@ -75,10 +75,13 @@ export function McpUrlBar() {
       postMsg({ type: 'mcp:disconnect', tabId: activeTab.id });
       updateTab(activeTab.id, { mcpConnected: false, mcpCapabilities: undefined, loading: false });
     } else {
-      logUiEvent('mcp.connect', { transport });
+      // The full session record is written by the extension host when the
+      // connection ends, where the tool calls and the reason exist. Logging on
+      // click as well would put two rows in the log per connect.
       postMsg({
         type: 'mcp:connect',
         tabId: activeTab.id,
+        auditEnabled: isAuditEventEnabled('mcp.connect'),
         transport,
         command: command,
         args: activeTab.mcpArgs || [],

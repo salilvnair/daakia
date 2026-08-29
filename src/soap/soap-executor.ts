@@ -3,13 +3,10 @@
  * Supports SOAP 1.1 (text/xml + SOAPAction header) and SOAP 1.2 (application/soap+xml).
  */
 import http from 'http';
-import https from 'https';
-import net from 'net';
-import tls from 'tls';
 import { URL } from 'url';
 import crypto from 'crypto';
 import type { ResolvedProxy } from '../services/proxy-config';
-import { sniFor } from '../services/tls-policy';
+import { requestOptions, transportFor } from '../services/http-transport';
 
 export interface SoapInvokeParams {
   tabId: string;
@@ -75,8 +72,7 @@ export function executeSoapRequest(params: SoapInvokeParams): Promise<SoapRespon
       return;
     }
 
-    const isHttps = url.protocol === 'https:';
-    const transport = isHttps ? https : http;
+    const transport = transportFor(url);
 
     // Build request headers
     const reqHeaders: Record<string, string> = {};
@@ -120,67 +116,14 @@ export function executeSoapRequest(params: SoapInvokeParams): Promise<SoapRespon
     reqHeaders['Content-Length'] = String(body.length);
 
     const timeout = params.timeout ?? 300000;
-    const targetPort = Number(url.port || (isHttps ? 443 : 80));
-    const viaProxy = params.proxy?.used ? params.proxy.axiosProxy : undefined;
 
-    // Verify unless the caller resolved the settings and said otherwise.
-    const verifyCert = params.rejectUnauthorized ?? true;
-
-    const options: https.RequestOptions = {
-      hostname: url.hostname,
-      port: targetPort,
-      path: url.pathname + url.search,
-      method: 'POST',
-      headers: reqHeaders,
+    // Proxy routing and certificate verification are shared with SSE, which
+    // drives the http module the same way. See services/http-transport.ts.
+    const options = requestOptions(url, 'POST', reqHeaders, {
+      proxy: params.proxy,
+      rejectUnauthorized: params.rejectUnauthorized,
       timeout,
-      ...(isHttps ? { rejectUnauthorized: verifyCert, servername: sniFor(url.hostname) } : {}),
-    };
-
-    if (viaProxy && typeof viaProxy === 'object') {
-      if (isHttps) {
-        // An HTTPS target cannot be given to the proxy in the clear: the proxy
-        // opens a raw tunnel with CONNECT and TLS is negotiated end-to-end
-        // through it, so the proxy never sees the request.
-        options.createConnection = ((_opts: unknown, cb: (err: Error | null, sock?: net.Socket) => void) => {
-          const connect = http.request({
-            host: viaProxy.host,
-            port: viaProxy.port,
-            method: 'CONNECT',
-            path: `${url.hostname}:${targetPort}`,
-            headers: {
-              host: `${url.hostname}:${targetPort}`,
-              ...(viaProxy.auth
-                ? { 'proxy-authorization': `Basic ${Buffer.from(`${viaProxy.auth.username}:${viaProxy.auth.password}`).toString('base64')}` }
-                : {}),
-            },
-            timeout,
-          });
-          connect.on('connect', (res, socket) => {
-            if (res.statusCode !== 200) {
-              socket.destroy();
-              cb(new Error(`Proxy refused the CONNECT tunnel: ${res.statusCode} ${res.statusMessage ?? ''}`.trim()));
-              return;
-            }
-            cb(null, tls.connect({ socket, servername: sniFor(url.hostname), rejectUnauthorized: verifyCert }));
-          });
-          connect.on('error', (err) => cb(err));
-          connect.on('timeout', () => { connect.destroy(); cb(new Error(`Proxy did not answer CONNECT within ${Math.round(timeout / 1000)}s`)); });
-          connect.end();
-          return undefined as unknown as net.Socket;   // the socket arrives via cb
-        }) as unknown as http.RequestOptions['createConnection'];
-      } else {
-        // Plain HTTP through a proxy is an ordinary request to the proxy with
-        // the absolute URL as the request target.
-        options.hostname = viaProxy.host;
-        options.port = viaProxy.port;
-        options.path = url.toString();
-        (options.headers as Record<string, string>).Host = url.host;
-        if (viaProxy.auth) {
-          (options.headers as Record<string, string>)['Proxy-Authorization'] =
-            `Basic ${Buffer.from(`${viaProxy.auth.username}:${viaProxy.auth.password}`).toString('base64')}`;
-        }
-      }
-    }
+    });
 
     const req = transport.request(options, (res) => {
       const chunks: Buffer[] = [];

@@ -27,7 +27,7 @@ import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
 import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
 import { PatternBaselinePopup } from '../../ai/AiRequestPatternStatus';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
-import { logUiEvent } from '../../../store/ui-audit-store';
+import { logUiEvent, isAuditEventEnabled } from '../../../store/ui-audit-store';
 import { isValidProtocolUrl, urlValidationHint } from '../../../services/url-validation';
 import { AnchoredMenu } from '../../shared';
 
@@ -307,12 +307,16 @@ export function MQTTPanel() {
     if (!activeTab) return;
     const url = activeTab.url.trim();
     if (!url) return;
-    logUiEvent('mqtt.connect', { url });
+    // The full session record is written by the extension host when the
+    // connection ends, where the traffic counts and the reason exist.
+    // Logging on click as well would put two rows in the log per connect,
+    // the click-time one carrying only the URL.
     setConnState('connecting');
     setError(null);
     postMsg({
       type: 'mqtt:connect',
       tabId: activeTab.id,
+      auditEnabled: isAuditEventEnabled('mqtt.connect'),
       url,
       clientId,
       username: username || undefined,

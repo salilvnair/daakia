@@ -77,6 +77,7 @@ import {
 } from './handlers/bin-handler';
 import { handleDebugMessage } from './handlers/debug-handler';
 import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol-audit';
+import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
   normalizeProxyConfig, toUiProxyConfig, resolveProxy,
   DEFAULT_PROXY, UNPROXIED_PROTOCOLS,
@@ -183,6 +184,9 @@ export class MainPanel {
 
   public dispose() {
     MainPanel.currentPanel = undefined;
+    // Before the transports are torn down: a live connection has no close event
+    // coming, and the long-lived ones are the most worth having recorded.
+    flushOpenSessions();
     stopAutoSyncTimer();
     cleanupAllWsConnections();
     cleanupAllSseConnections();
@@ -206,6 +210,9 @@ export class MainPanel {
    */
   private _post = (msg: unknown) => {
     auditProtocolResponse(msg as Record<string, unknown>);
+    // Realtime protocols are sessions, not requests: this tallies their traffic
+    // and writes one row when the connection ends. See services/session-audit.ts.
+    auditSessionMessage(msg as Record<string, unknown>);
     this.postMessage(msg);
   };
 
@@ -245,6 +252,7 @@ export class MainPanel {
 
     // Stash sends so the response hook on _post can pair them into one audit row.
     noteProtocolSend(msg);
+    noteSessionConnect(msg);
 
     switch (msg.type) {
       case 'ready':

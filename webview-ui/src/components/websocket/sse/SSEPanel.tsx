@@ -21,7 +21,7 @@ import {
   CopyButtonView,
   type ContextMenuItem,
 } from '@salilvnair/dui';
-import { logUiEvent } from '../../../store/ui-audit-store';
+import { logUiEvent, isAuditEventEnabled } from '../../../store/ui-audit-store';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 import { AiRealtimeLogActions } from '../../ai/AiRealtimeLogActions';
 import { AiPreflightPopover } from '../../ai/AiPreflightPopover';
@@ -207,13 +207,17 @@ export function SSEPanel() {
     if (!activeTab) return;
     const url = activeTab.url.trim();
     if (!url) return;
-    logUiEvent('sse.connect', { url, withPayload });
+    // The full session record is written by the extension host when the
+    // connection ends, where the traffic counts and the reason exist.
+    // Logging on click as well would put two rows in the log per connect,
+    // the click-time one carrying only the URL.
     setConnState('connecting');
     setError(null);
     const ad = (activeTab.authData || {}) as Record<string, string>;
     postMsg({
       type: 'sse:connect',
       tabId: activeTab.id,
+      auditEnabled: isAuditEventEnabled('sse.connect'),
       url,
       eventType,
       headers: activeTab.headers?.filter((h: any) => h.enabled && h.key) || [],

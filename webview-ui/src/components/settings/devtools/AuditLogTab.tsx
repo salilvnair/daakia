@@ -8,6 +8,7 @@ import { postMsg } from '../../../vscode';
 import { CodeEditor } from '../../shared';
 import { TrashIcon, RefreshIcon, SearchIcon, CloseIcon, ChevronDownIcon } from '../../../icons';
 import { RequestAuditDetail, parseRequestAudit } from './RequestAuditDetail';
+import { SessionAuditDetail, parseSessionAudit } from './SessionAuditDetail';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -418,10 +419,13 @@ export function AuditLogTab() {
                                   </div>
                                 )}
                               </div>
-                              {/* A full request record gets laid out; anything
-                                  else (including older thin rows) falls back to
-                                  the raw payload block. */}
+                              {/* Realtime connections get the session layout, request
+                                  protocols the request one, and anything else
+                                  (including older thin rows) falls back to the
+                                  raw payload block. */}
                               {(() => {
+                                const session = parseSessionAudit(e.metadata);
+                                if (session) return <SessionAuditDetail record={session} />;
                                 const record = parseRequestAudit(e.metadata);
                                 return record
                                   ? <RequestAuditDetail record={record} />

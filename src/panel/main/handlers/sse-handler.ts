@@ -3,7 +3,9 @@
  * Uses Node's http/https to connect and parses the text/event-stream format.
  */
 import http from 'http';
-import https from 'https';
+import { resolveProxy, type ProxyConfig } from '../../../services/proxy-config';
+import { resolveTlsPolicy } from '../../../services/tls-policy';
+import { requestOptions, transportFor } from '../../../services/http-transport';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory, getSetting } from '../../../storage/db';
 
@@ -54,27 +56,37 @@ export function handleSseConnect(
     reqHeaders['Content-Length'] = String(Buffer.byteLength(initBody));
   }
 
+  // SSE keeps the response open and reads it as a stream, so it drives the http
+  // module directly rather than going through axios — which meant it inherited
+  // neither the proxy setting nor SSL verification. Both are applied here now.
+  const general = getSetting<Record<string, unknown>>('general') ?? {};
+  const sseProxy = resolveProxy(general.proxy as ProxyConfig | undefined, url);
+
   try {
     const parsedUrl = new URL(url);
-    const isHttps = parsedUrl.protocol === 'https:';
-    const transport = isHttps ? https : http;
+    const transport = transportFor(parsedUrl);
+    const sseTls = resolveTlsPolicy(parsedUrl.hostname, general);
 
     const req = transport.request(
-      {
-        method: hasInitPayload ? initMethod : 'GET',
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port || (isHttps ? 443 : 80),
-        path: parsedUrl.pathname + parsedUrl.search,
-        headers: reqHeaders,
-      },
+      requestOptions(parsedUrl, hasInitPayload ? initMethod! : 'GET', reqHeaders, {
+        proxy: sseProxy,
+        rejectUnauthorized: sseTls.rejectUnauthorized,
+      }),
       (res) => {
         if (res.statusCode && res.statusCode >= 400) {
-          postMessage({ type: 'sse:error', tabId, error: `HTTP ${res.statusCode}: ${res.statusMessage}` });
+          postMessage({
+            type: 'sse:error', tabId,
+            error: `HTTP ${res.statusCode}: ${res.statusMessage}`,
+            proxy: { used: sseProxy.used, description: sseProxy.description, warning: sseProxy.warning },
+          });
           connections.delete(tabId);
           return;
         }
 
-        postMessage({ type: 'sse:connected', tabId });
+        postMessage({
+          type: 'sse:connected', tabId,
+          proxy: { used: sseProxy.used, description: sseProxy.description, warning: sseProxy.warning },
+        });
 
         // Record in history
         try {

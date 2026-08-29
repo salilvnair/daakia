@@ -25,7 +25,7 @@ import { SSEPanel } from '../sse/SSEPanel';
 import { SocketIOPanel } from '../sio/SocketIOPanel';
 import { MQTTPanel } from '../mqtt/MQTTPanel';
 import { WsLogEntry, type WsMessage } from './WsLogEntry';
-import { logUiEvent } from '../../../store/ui-audit-store';
+import { logUiEvent, isAuditEventEnabled } from '../../../store/ui-audit-store';
 import { WsProtocolsTab } from './WsProtocolsTab';
 import { WsTemplatesTab } from './WsTemplatesTab';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
@@ -195,7 +195,7 @@ export function WebSocketPanel() {
               }]);
               const timer = setTimeout(() => {
                 wsReconnectTimers.delete(activeTab.id);
-                postMsg({ type: 'ws:connect', tabId: activeTab.id, url: activeTab.url, protocols: activeTab.authData?.['ws_protocols'] || '', envId: activeTab.envId });
+                postMsg({ type: 'ws:connect', tabId: activeTab.id, auditEnabled: isAuditEventEnabled('ws.connect'), url: activeTab.url, protocols: activeTab.authData?.['ws_protocols'] || '', envId: activeTab.envId });
                 setConnState('connecting');
               }, delay);
               wsReconnectTimers.set(activeTab.id, timer);
@@ -247,11 +247,15 @@ export function WebSocketPanel() {
     const url = activeTab.url.trim();
     if (!url) return;
 
-    logUiEvent('ws.connect', { url, withPayload });
+    // The full session record is written by the extension host when the
+    // connection ends, where the traffic counts and the reason exist.
+    // Logging on click as well would put two rows in the log per connect,
+    // the click-time one carrying only the URL.
     setConnState('connecting');
     postMsg({
       type: 'ws:connect',
       tabId: activeTab.id,
+      auditEnabled: isAuditEventEnabled('ws.connect'),
       url,
       protocols: activeTab.authData?.['ws_protocols'] || '',
       envId: activeTab.envId,
