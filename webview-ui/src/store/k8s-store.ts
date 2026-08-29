@@ -90,6 +90,40 @@ export type UsageHistory = Record<string, number[]>;
 
 export type WatchStatus = 'idle' | 'connected' | 'reconnecting' | 'stopped';
 
+export type LogRange =
+  | { kind: 'all' }
+  | { kind: 'since'; seconds: number }
+  | { kind: 'between'; fromIso: string; toIso: string };
+
+export type LogSlice =
+  | { kind: 'all' }
+  | { kind: 'head'; lines: number }
+  | { kind: 'tail'; lines: number };
+
+export interface ExportOptions {
+  range: LogRange;
+  slice: LogSlice;
+  includePrevious: boolean;
+  keepTimestamps: boolean;
+}
+
+export interface ExportResult {
+  pod: string; namespace: string;
+  file?: string; bytes?: number; lines?: number;
+  empty?: boolean; error?: string; includedPrevious?: boolean;
+}
+
+export interface ExportState {
+  phase: 'running' | 'done' | 'error' | 'cancelled';
+  done: number;
+  total: number;
+  pod?: string;
+  destDir?: string;
+  summary?: string;
+  results?: ExportResult[];
+  error?: string;
+}
+
 /** How many usage samples to keep. At 15s each, ~10 minutes of trend. */
 const USAGE_SAMPLES = 40;
 
@@ -149,6 +183,13 @@ interface K8sState {
   view: 'cards' | 'table';
   selectedPod?: string;
 
+  /** Bulk-select mode for export. Off until the user asks for it. */
+  selectMode: boolean;
+  /** Pod uids ticked for export. */
+  selected: string[];
+  exportOpen: boolean;
+  exportState?: ExportState;
+
   probe: () => void;
   useContext: (name: string) => void;
   setNamespace: (ns: string, pin?: boolean) => void;
@@ -165,6 +206,13 @@ interface K8sState {
   setFilter: (v: string) => void;
   setView: (v: 'cards' | 'table') => void;
   selectPod: (name?: string) => void;
+  toggleSelectMode: () => void;
+  togglePodSelected: (uid: string) => void;
+  selectAllVisible: (uids: string[]) => void;
+  clearSelection: () => void;
+  openExport: () => void;
+  closeExport: () => void;
+  exportLogs: (options: ExportOptions) => void;
   apply: (msg: Record<string, unknown>) => void;
 }
 
@@ -190,6 +238,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   watchStatus: 'idle',
   filter: '',
   view: 'cards',
+  selectMode: false,
+  selected: [],
+  exportOpen: false,
 
   probe: () => {
     set({ busy: true });
@@ -270,6 +321,43 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   setFilter: (filter) => set({ filter }),
   setView: (view) => set({ view }),
   selectPod: (selectedPod) => set({ selectedPod }),
+
+  toggleSelectMode: () => set(s => ({
+    selectMode: !s.selectMode,
+    // Leaving select mode drops the ticks: a hidden selection that survives is
+    // how you end up exporting pods you forgot you had chosen.
+    selected: s.selectMode ? [] : s.selected,
+  })),
+
+  togglePodSelected: (uid) => set(s => ({
+    selected: s.selected.includes(uid) ? s.selected.filter(u => u !== uid) : [...s.selected, uid],
+  })),
+
+  selectAllVisible: (uids) => set(s => ({
+    // Toggle: if everything visible is already ticked, this clears them.
+    selected: uids.every(u => s.selected.includes(u))
+      ? s.selected.filter(u => !uids.includes(u))
+      : [...new Set([...s.selected, ...uids])],
+  })),
+
+  clearSelection: () => set({ selected: [] }),
+  openExport: () => set({ exportOpen: true, exportState: undefined }),
+  closeExport: () => set({ exportOpen: false }),
+
+  exportLogs: (options) => {
+    const { pods, selected } = get();
+    const chosen = pods.filter(p => selected.includes(p.uid));
+    if (!chosen.length) return;
+    set({ exportState: { phase: 'running', done: 0, total: chosen.length } });
+    postMsg({
+      type: 'dk8s:exportLogs',
+      options,
+      targets: chosen.map(p => ({
+        context: p.context, namespace: p.namespace, pod: p.name,
+        containers: p.containers.map(c => c.name),
+      })),
+    });
+  },
 
   openContextPicker: () => set({ stage: 'pick-context' }),
   openNamespacePicker: () => {
@@ -402,6 +490,43 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
       case 'dk8s:targetsSet':
         set({ targets: (msg.targets as WatchTarget[]) ?? [], stage: 'ready' });
+        break;
+
+      case 'dk8s:exportStarted':
+        set(s => ({ exportState: { ...(s.exportState ?? { done: 0, total: 0 }), phase: 'running',
+                                   total: msg.total as number, destDir: msg.destDir as string } }));
+        break;
+
+      case 'dk8s:exportProgress':
+        set(s => ({ exportState: { ...(s.exportState ?? { phase: 'running', total: 0 }),
+                                   phase: 'running',
+                                   done: msg.done as number, total: msg.total as number,
+                                   pod: msg.pod as string } }));
+        break;
+
+      case 'dk8s:exportDone':
+        set(s => ({
+          exportOpen: false,
+          selectMode: false,
+          selected: [],
+          exportState: {
+            phase: 'done',
+            done: s.exportState?.total ?? 0,
+            total: s.exportState?.total ?? 0,
+            destDir: msg.destDir as string,
+            summary: msg.summary as string,
+            results: msg.results as ExportResult[],
+          },
+        }));
+        break;
+
+      case 'dk8s:exportCancelled':
+        set({ exportState: undefined });
+        break;
+
+      case 'dk8s:exportError':
+        set(s => ({ exportState: { ...(s.exportState ?? { done: 0, total: 0 }),
+                                   phase: 'error', error: msg.error as string } }));
         break;
 
       case 'dk8s:watchCapped':

@@ -109,7 +109,7 @@ export function ClusterPicker() {
               key={c.name}
               type="button"
               onClick={() => toggle(c.name)}
-              className="flex items-center gap-3 px-3 py-2.5 text-left cursor-pointer transition-colors"
+              className="flex items-center gap-3 px-4 py-3.5 text-left cursor-pointer transition-colors"
               style={{
                 background: on ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'transparent',
                 border: 'none', borderBottom: '1px solid var(--color-surface-border)',
@@ -118,7 +118,7 @@ export function ClusterPicker() {
               onMouseLeave={e => { e.currentTarget.style.background = on ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'transparent'; }}
             >
               <Check on={on} />
-              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
                 <span className="text-[12.5px] font-mono truncate"
                       style={{ color: on ? ACCENT : 'var(--color-text-primary)' }}>
                   {c.name}
@@ -163,7 +163,6 @@ function OfferBlock({
   addManual: () => void;
   multiCluster: boolean;
 }) {
-  const [filter, setFilter] = useState('');
   const isOn = (ns: string) => checked.some(t => t.context === offer.context && t.namespace === ns);
 
   // Pinned first, then the rest — the ones you chose beat the ones you were given.
@@ -172,7 +171,14 @@ function OfferBlock({
     return [...offer.pinned, ...rest];
   }, [offer]);
 
-  const shown = filter.trim() ? all.filter(n => n.toLowerCase().includes(filter.toLowerCase())) : all;
+  // The text box filters the list AND adds to it. Two boxes doing one job each
+  // was the earlier shape and it read as clutter: you type the name you want
+  // either way, and whether it already exists is something the UI can work out
+  // rather than something you should have to decide before typing.
+  const query = manual.trim();
+  const shown = query ? all.filter(n => n.toLowerCase().includes(query.toLowerCase())) : all;
+  const exact = all.some(n => n.toLowerCase() === query.toLowerCase());
+  const canAdd = !!query && !exact;
 
   return (
     <div className="flex flex-col gap-2">
@@ -190,15 +196,26 @@ function OfferBlock({
         <TextInputView
           value={manual}
           onChange={e => setManual(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') addManual(); }}
-          placeholder={offer.fallback || 'type a namespace'}
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' && canAdd) addManual(); }}
+          placeholder={offer.namespaces.length
+            ? 'filter, or type a namespace to add'
+            : (offer.fallback || 'type a namespace')}
           size="md"
           accentColor={ACCENT}
           style={{ flex: 1, width: '100%', fontFamily: 'monospace' }}
         />
-        <ButtonView label="+  Add and save" size="md" variant="primary"
-                    disabled={!manual.trim()} onClick={addManual} />
+        {/* Only offered when the name is not already on the list — otherwise
+            "add" would mean "add a duplicate", which it cannot do. */}
+        {canAdd && (
+          <ButtonView label="+  Add and save" size="md" variant="primary" onClick={addManual} />
+        )}
       </div>
+
+      {query && !shown.length && !canAdd && (
+        <span className="text-[11px] text-[var(--color-text-muted)]">
+          Nothing matches &ldquo;{query}&rdquo;.
+        </span>
+      )}
 
       {offer.forbidden && (
         <p className="text-[11px] m-0 text-[var(--color-text-muted)]">
@@ -208,10 +225,6 @@ function OfferBlock({
       )}
       {offer.error && (
         <p className="text-[11px] font-mono m-0" style={{ color: 'var(--color-error)' }}>{offer.error}</p>
-      )}
-
-      {all.length > 10 && (
-        <SearchInputView value={filter} onChange={setFilter} placeholder="Filter namespaces" size="sm" />
       )}
 
       {all.length > 0 && (

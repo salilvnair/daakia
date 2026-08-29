@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SparklineView, SearchInputView } from '@salilvnair/dui';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
+import { ExportLogsModal } from './ExportLogsModal';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
   formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
@@ -100,6 +101,9 @@ function StatusLine({ pod, severity }: { pod: PodSummary; severity: Severity }) 
 function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
   const usage = useK8sStore(s => s.usage[pod.name]);
   const history = useK8sStore(s => s.usageHistory[pod.name]);
+  const selectMode = useK8sStore(s => s.selectMode);
+  const picked = useK8sStore(s => s.selected.includes(pod.uid));
+  const togglePodSelected = useK8sStore(s => s.togglePodSelected);
   const severity = severityOf(pod);
   const color = severityColor(severity);
   const quiet = severity === 'quiet';
@@ -108,13 +112,15 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={() => (selectMode ? togglePodSelected(pod.uid) : onOpen())}
       className="flex flex-col gap-1.5 p-3 rounded-lg text-left cursor-pointer transition-colors relative overflow-hidden"
       style={{
-        background: 'var(--color-surface)',
-        border: `1px solid ${quiet
-          ? 'var(--color-surface-border)'
-          : `color-mix(in srgb, ${color} 40%, var(--color-surface-border))`}`,
+        background: picked ? `color-mix(in srgb, ${ACCENT} 9%, var(--color-surface))` : 'var(--color-surface)',
+        border: `1px solid ${picked
+          ? `color-mix(in srgb, ${ACCENT} 55%, transparent)`
+          : quiet
+            ? 'var(--color-surface-border)'
+            : `color-mix(in srgb, ${color} 40%, var(--color-surface-border))`}`,
         minWidth: 0,
       }}
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
@@ -127,9 +133,27 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
       }} />
 
       <div className="flex flex-col gap-0.5 pl-2 min-w-0">
-        <span className="text-[11.5px] font-mono truncate text-[var(--color-text-primary)]"
-              title={pod.name}>
-          {pod.name}
+        <span className="flex items-center gap-2 min-w-0">
+          {selectMode && (
+            <span className="flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: 14, height: 14, borderRadius: 4,
+                    border: `1.5px solid ${picked ? ACCENT : 'var(--color-surface-border)'}`,
+                    background: picked ? ACCENT : 'transparent',
+                  }}>
+              {picked && (
+                <svg width="9" height="9" viewBox="0 0 12 12" fill="none"
+                     stroke="var(--color-panel)" strokeWidth="2.6"
+                     strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2.5 6.5L4.8 8.8L9.5 3.5" />
+                </svg>
+              )}
+            </span>
+          )}
+          <span className="text-[11.5px] font-mono truncate text-[var(--color-text-primary)]"
+                title={pod.name}>
+            {pod.name}
+          </span>
         </span>
         <span className="text-[10px] text-[var(--color-text-muted)] truncate">
           {pod.workload ? `${pod.workload.kind}/${pod.workload.name}` : pod.node ?? '—'}
@@ -168,10 +192,16 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
 function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary) => void }) {
   const usage = useK8sStore(s => s.usage);
   const metrics = useK8sStore(s => s.metricsAvailable);
-  const multi = useK8sStore(s => s.targets.length > 1);
+  const selectMode = useK8sStore(s => s.selectMode);
+  const selected = useK8sStore(s => s.selected);
+  const togglePodSelected = useK8sStore(s => s.togglePodSelected);
 
+  // No Namespace column: the group heading above the table already says which
+  // namespace and cluster these rows belong to, so repeating it on every row
+  // is a column of identical text.
   const cols = [
-    'Name', ...(multi ? ['Namespace'] : []), 'Ready', 'Status', '\u21bb', 'Node', 'Age',
+    ...(selectMode ? [''] : []),
+    'Name', 'Ready', 'Status', '\u21bb', 'Node', 'Age',
     ...(metrics ? ['Memory', 'CPU'] : []),
   ];
 
@@ -200,6 +230,7 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
             const sev = severityOf(pod);
             const color = severityColor(sev);
             const u = usage[pod.name];
+            const picked = selected.includes(pod.uid);
             const failing = sev === 'critical' || sev === 'warning';
             // Healthy rows stay near the text colour, so the failing ones are
             // the only thing on screen carrying a hue.
@@ -215,11 +246,29 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
             };
             return (
               <tr key={pod.uid}
-                  onClick={() => onOpen(pod)}
+                  onClick={() => (selectMode ? togglePodSelected(pod.uid) : onOpen(pod))}
                   className="cursor-pointer transition-colors"
-                  style={{ background: rest }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 14%, transparent)`; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = rest; }}>
+                  style={{ background: picked ? `color-mix(in srgb, ${ACCENT} 13%, transparent)` : rest }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 18%, transparent)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = picked ? `color-mix(in srgb, ${ACCENT} 13%, transparent)` : rest; }}>
+                {selectMode && (
+                  <td className="px-3 py-1.5" style={cell}>
+                    <span className="flex items-center justify-center"
+                          style={{
+                            width: 13, height: 13, borderRadius: 3,
+                            border: `1.5px solid ${picked ? ACCENT : 'var(--color-surface-border)'}`,
+                            background: picked ? ACCENT : 'transparent',
+                          }}>
+                      {picked && (
+                        <svg width="8" height="8" viewBox="0 0 12 12" fill="none"
+                             stroke="var(--color-panel)" strokeWidth="2.8"
+                             strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M2.5 6.5L4.8 8.8L9.5 3.5" />
+                        </svg>
+                      )}
+                    </span>
+                  </td>
+                )}
                 <td className="text-[11.5px] font-mono px-3 py-1.5"
                     style={{ ...cell, fontWeight: failing ? 600 : 400 }}>
                   <span style={{
@@ -228,9 +277,6 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
                   }} />
                   {pod.name}
                 </td>
-                {multi && (
-                  <td className="text-[11px] font-mono px-3 py-1.5" style={cell}>{pod.namespace}</td>
-                )}
                 <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums" style={cell}>
                   {pod.ready.current}/{pod.ready.total}
                 </td>
@@ -268,6 +314,46 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
   );
 }
 
+/** A group heading, shared by both views so they read the same way. */
+function GroupHeader({ group }: { group: PodGroup }) {
+  const failing = group.pods.filter(p => severityOf(p) !== 'quiet').length;
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[10px] font-mono font-semibold tracking-wide"
+            style={{ color: group.tint.label }}>
+        {group.namespace}
+      </span>
+      {group.context && (
+        <span className="text-[9.5px] font-mono text-[var(--color-text-muted)]">
+          {group.context}
+        </span>
+      )}
+      <span className="flex-1" style={{ height: 1, background: group.tint.border }} />
+      <span className="text-[9.5px] tabular-nums text-[var(--color-text-muted)]">
+        {group.pods.length} pod{group.pods.length === 1 ? '' : 's'}
+      </span>
+      {failing > 0 && (
+        <span className="text-[9.5px] font-semibold tabular-nums" style={{ color: 'var(--color-error)' }}>
+          {failing} need{failing === 1 ? 's' : ''} attention
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The table view's equivalent of a card group: same heading, same tint. */
+function NamespaceTableGroup({ group, onOpen }: {
+  group: PodGroup; onOpen: (p: PodSummary) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg p-3"
+         style={{ border: `1px solid ${group.tint.border}`, background: group.tint.wash }}>
+      <GroupHeader group={group} />
+      <PodTable pods={group.pods} onOpen={onOpen} />
+    </div>
+  );
+}
+
 /**
  * One namespace's pods, boxed.
  *
@@ -277,35 +363,13 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
  * belongs to pod health, and a strong namespace colour would compete with the
  * one thing the grid must never make harder to find.
  */
-function NamespaceGroup({ group, multi, onOpen }: {
-  group: PodGroup; multi: boolean; onOpen: (p: PodSummary) => void;
+function NamespaceGroup({ group, onOpen }: {
+  group: PodGroup; onOpen: (p: PodSummary) => void;
 }) {
-  const failing = group.pods.filter(p => severityOf(p) !== 'quiet').length;
-
   return (
     <div className="flex flex-col gap-2 rounded-lg p-3"
          style={{ border: `1px solid ${group.tint.border}`, background: group.tint.wash }}>
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-mono font-semibold tracking-wide"
-              style={{ color: group.tint.label }}>
-          {group.namespace}
-        </span>
-        {multi && group.context && (
-          <span className="text-[9.5px] font-mono text-[var(--color-text-muted)]">
-            {group.context}
-          </span>
-        )}
-        <span className="flex-1" style={{ height: 1, background: group.tint.border }} />
-        <span className="text-[9.5px] tabular-nums text-[var(--color-text-muted)]">
-          {group.pods.length} pod{group.pods.length === 1 ? '' : 's'}
-        </span>
-        {failing > 0 && (
-          <span className="text-[9.5px] font-semibold tabular-nums"
-                style={{ color: 'var(--color-error)' }}>
-            {failing} need{failing === 1 ? 's' : ''} attention
-          </span>
-        )}
-      </div>
+      <GroupHeader group={group} />
 
       <div className="grid gap-2.5"
            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
@@ -320,7 +384,11 @@ function NamespaceGroup({ group, multi, onOpen }: {
 // ── The grid ────────────────────────────────────────────────────────────────
 
 export function PodGrid() {
-  const { pods, filter, view, setFilter, setView, startWatch, selectPod, watchStatus, targets, capped } = useK8sStore();
+  const {
+    pods, filter, view, setFilter, setView, startWatch, selectPod, watchStatus,
+    capped, selectMode, selected, exportOpen, exportState,
+    toggleSelectMode, selectAllVisible, openExport, closeExport,
+  } = useK8sStore();
   const searchRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -354,7 +422,6 @@ export function PodGrid() {
     [pods, filter, now],
   );
   const groups = useMemo(() => groupPods(visible, now), [visible, now]);
-  const multiTarget = targets.length > 1;
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -366,6 +433,22 @@ export function PodGrid() {
           <SearchInputView value={filter} onChange={setFilter} placeholder="Filter pods  ( / )" size="sm" />
         </div>
         <div className="flex-1" />
+
+        {/* Bulk export. Off by default: checkboxes on every card all the time
+            would be clutter for the reading this grid is mostly used for. */}
+        <button
+          type="button"
+          onClick={toggleSelectMode}
+          className="text-[11px] px-2.5 py-1 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
+          style={{
+            background: selectMode ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
+            border: `1px solid ${selectMode ? `color-mix(in srgb, ${ACCENT} 45%, transparent)` : 'var(--color-surface-border)'}`,
+            color: selectMode ? ACCENT : 'var(--color-text-secondary)',
+          }}
+        >
+          {selectMode ? 'Cancel' : 'Export logs'}
+        </button>
+
         <WatchIndicator />
         <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--color-surface-border)' }}>
           {(['cards', 'table'] as const).map(v => (
@@ -385,6 +468,69 @@ export function PodGrid() {
           ))}
         </div>
       </div>
+
+      {selectMode && (
+        <div className="flex items-center gap-3 px-4 py-1.5 flex-shrink-0"
+             style={{
+               background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`,
+               borderBottom: `1px solid color-mix(in srgb, ${ACCENT} 25%, transparent)`,
+             }}>
+          <span className="text-[11.5px]" style={{ color: ACCENT }}>
+            {selected.length
+              ? `${selected.length} pod${selected.length === 1 ? '' : 's'} selected`
+              : 'Pick the pods whose logs you need'}
+          </span>
+          <button
+            type="button"
+            onClick={() => selectAllVisible(visible.map(p => p.uid))}
+            className="text-[11px] cursor-pointer"
+            style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', textDecoration: 'underline' }}
+          >
+            {visible.every(p => selected.includes(p.uid)) && visible.length
+              ? 'Clear all'
+              : `Select all ${visible.length} visible`}
+          </button>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={openExport}
+            disabled={!selected.length}
+            className="text-[11px] px-3 py-1 rounded-md cursor-pointer transition-colors"
+            style={{
+              background: selected.length ? ACCENT : 'var(--color-surface-hover)',
+              color: selected.length ? 'var(--color-panel)' : 'var(--color-text-muted)',
+              border: 'none', fontWeight: 600,
+              cursor: selected.length ? 'pointer' : 'not-allowed',
+            }}
+          >
+            Export {selected.length || ''} log{selected.length === 1 ? '' : 's'}
+          </button>
+        </div>
+      )}
+
+      {/* Where the files went. Worth a persistent line rather than a toast —
+          the path is the thing you need next, and a toast takes it away. */}
+      {exportState?.phase === 'done' && (
+        <div className="flex items-center gap-2 px-4 py-1.5 flex-shrink-0 text-[11px]"
+             style={{
+               background: 'color-mix(in srgb, var(--color-method-get) 9%, transparent)',
+               borderBottom: '1px solid color-mix(in srgb, var(--color-method-get) 25%, transparent)',
+               color: 'var(--color-method-get)',
+             }}>
+          <span>{exportState.summary}</span>
+          <span className="font-mono text-[10.5px] truncate text-[var(--color-text-muted)]"
+                title={exportState.destDir}>
+            {exportState.destDir}
+          </span>
+          <div className="flex-1" />
+          <button type="button"
+                  onClick={() => useK8sStore.setState({ exportState: undefined })}
+                  className="cursor-pointer text-[11px]"
+                  style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)' }}>
+            dismiss
+          </button>
+        </div>
+      )}
 
       {capped && (
         <div className="px-4 py-1.5 flex-shrink-0 text-[11px]"
@@ -407,13 +553,12 @@ export function PodGrid() {
                 : 'Loading pods…'}
             </span>
           </div>
-        ) : view === 'table' ? (
-          <PodTable pods={visible} onOpen={p => selectPod(p.name)} />
         ) : (
           <div className="flex flex-col gap-3">
             {groups.map(g => (
-              <NamespaceGroup key={g.key} group={g} multi={multiTarget}
-                              onOpen={p => selectPod(p.name)} />
+              view === 'table'
+                ? <NamespaceTableGroup key={g.key} group={g} onOpen={p => selectPod(p.name)} />
+                : <NamespaceGroup key={g.key} group={g} onOpen={p => selectPod(p.name)} />
             ))}
             {!visible.length && (
               <span className="text-[12px] text-[var(--color-text-muted)] py-6 text-center">
@@ -423,6 +568,8 @@ export function PodGrid() {
           </div>
         )}
       </div>
+
+      {exportOpen && <ExportLogsModal onClose={closeExport} />}
     </div>
   );
 }

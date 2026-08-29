@@ -39,7 +39,7 @@ import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces, handleDk8sSetNamespace,
   handleDk8sSetSensitivity, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
-  handleDk8sUseContexts, handleDk8sSetTargets,
+  handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
 } from '../src/panel/main/handlers/k8s-handler';
 import { handleSseConnect, handleSseDisconnect } from '../src/panel/main/handlers/sse-handler';
 import { handleSocketIOConnect, handleSocketIODisconnect, handleSocketIOEmit } from '../src/panel/main/handlers/socketio-handler';
@@ -113,6 +113,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:setTargets':
       handleDk8sSetTargets(msg, post);
+      break;
+    case 'dk8s:exportLogs':
+      await handleDk8sExportLogs(msg, post);
       break;
     case 'dk8s:namespaces':
       await handleDk8sNamespaces(msg, post);

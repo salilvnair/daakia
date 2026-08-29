@@ -39,7 +39,16 @@ async function showSaveDialog(opts?: { defaultUri?: { fsPath: string } }) {
   return { fsPath };
 }
 
-async function showOpenDialog(_opts?: unknown) {
+async function showOpenDialog(opts?: { canSelectFolders?: boolean }) {
+  // Folder picks auto-approve to a temp directory so flows that end in "choose
+  // where to save" can actually be exercised in the browser harness. File
+  // picks still cancel — there is nothing sensible to invent for those.
+  if (opts?.canSelectFolders) {
+    const dir = path.join(os.tmpdir(), 'daakia-local-server-out');
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`[vscode-shim] showOpenDialog auto-approved folder -> ${dir}`);
+    return [{ fsPath: dir }];
+  }
   console.log('[vscode-shim] showOpenDialog has no real UI here — returning undefined (cancelled)');
   return undefined;
 }

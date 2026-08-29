@@ -139,8 +139,14 @@ export function restartLabel(pod: PodSummary, now = Date.now()): string {
 export function namespaceHue(name: string): number {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  // Skip the 0-40 band: reds there would read as an alert.
-  return 45 + (h % 290);
+  // Quantise to 12 buckets stepped by the golden angle rather than taking the
+  // hash modulo the range directly. A raw modulo puts two namespaces two
+  // degrees apart as often as not, which is indistinguishable on screen — the
+  // first version did exactly that and every group looked the same colour.
+  // Golden-angle stepping maximises the minimum distance between buckets.
+  const bucket = h % 12;
+  // Start at 45 so a tint can never land in the red band and read as an alert.
+  return 45 + ((bucket * 137.5) % 290);
 }
 
 export interface NamespaceTint {
@@ -157,9 +163,11 @@ export function namespaceTint(name: string): NamespaceTint {
   const hue = namespaceHue(name);
   return {
     hue,
-    border: `hsl(${hue} 40% 55% / 0.3)`,
-    label: `hsl(${hue} 45% 62%)`,
-    wash: `hsl(${hue} 40% 50% / 0.045)`,
+    // Strong enough to tell groups apart, weak enough that a red pod inside
+    // one still wins the eye. Semantic colour must stay the loudest thing.
+    border: `hsl(${hue} 50% 58% / 0.45)`,
+    label: `hsl(${hue} 55% 66%)`,
+    wash: `hsl(${hue} 45% 50% / 0.10)`,
   };
 }
 
@@ -183,13 +191,16 @@ export function groupPods(pods: PodSummary[], now = Date.now()): PodGroup[] {
     }
     g.pods.push(pod);
   }
-  // Groups holding something broken come first, for the same reason pods do.
+  // Namespace first, then cluster. Ordering by severity moved a group every
+  // time a pod changed state, so the thing you were reading slid out from
+  // under you; a stable alphabetical order is worth more than putting the
+  // broken group on top, and the header already says how many need attention.
+  // Pods inside each group are still severity-ordered.
   return [...byKey.values()]
     .map(g => ({ ...g, pods: sortPods(g.pods, now) }))
     .sort((a, b) => {
-      const worst = (g: PodGroup) => Math.min(...g.pods.map(p => RANK[severityOf(p, now)]));
-      const d = worst(a) - worst(b);
-      return d !== 0 ? d : a.namespace.localeCompare(b.namespace);
+      const d = a.namespace.localeCompare(b.namespace);
+      return d !== 0 ? d : (a.context ?? '').localeCompare(b.context ?? '');
     });
 }
 

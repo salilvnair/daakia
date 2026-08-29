@@ -15,6 +15,11 @@ import {
 } from '../../../services/k8s/kube-context';
 import { getSetting, setSetting } from '../../../storage/db';
 import { watchPods, topPods, type WatchHandle } from '../../../services/k8s/k8s-watch';
+import {
+  exportPodLogs, summariseExport,
+  type ExportTarget, type ExportOptions,
+} from '../../../services/k8s/k8s-logs';
+import * as vscode from 'vscode';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -415,6 +420,57 @@ export function handleDk8sStopWatch(): void {
 /** Called when the panel goes away, so a watch cannot outlive its tab. */
 export function disposeDk8s(): void {
   stopAllWatches();
+}
+
+/**
+ * Export logs for a set of pods to a folder the user picks.
+ *
+ * The folder dialog opens BEFORE any kubectl runs. Fetching several hundred
+ * megabytes and only then asking where to put it wastes the user's time and
+ * the cluster's bandwidth if they cancel.
+ */
+export async function handleDk8sExportLogs(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const targets = (Array.isArray(msg.targets) ? msg.targets : []) as ExportTarget[];
+  const options = msg.options as ExportOptions;
+  if (!targets.length || !options) return;
+
+  let destDir: string;
+  try {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: 'Export logs here',
+      title: `Export ${targets.length} pod log${targets.length === 1 ? '' : 's'}`,
+    });
+    if (!picked?.length) {
+      postMessage({ type: 'dk8s:exportCancelled' });
+      return;
+    }
+    destDir = picked[0].fsPath;
+  } catch (err) {
+    postMessage({ type: 'dk8s:exportError', error: (err as Error).message });
+    return;
+  }
+
+  postMessage({ type: 'dk8s:exportStarted', total: targets.length, destDir });
+
+  try {
+    const results = await exportPodLogs(targets, options, destDir, (done, total, pod) => {
+      postMessage({ type: 'dk8s:exportProgress', done, total, pod });
+    });
+    postMessage({
+      type: 'dk8s:exportDone',
+      destDir,
+      results,
+      summary: summariseExport(results),
+    });
+  } catch (err) {
+    postMessage({ type: 'dk8s:exportError', error: (err as Error).message });
+  }
 }
 
 /** Explicit kubectl path, for when it is installed somewhere unusual. */
