@@ -1,6 +1,6 @@
 import { EditorView } from '@salilvnair/dui';
 
-export type CodeLanguage = 'javascript' | 'json' | 'xml' | 'python' | 'text' | 'html' | 'typescript' | 'java' | 'graphql' | 'plaintext';
+export type CodeLanguage = 'javascript' | 'json' | 'xml' | 'python' | 'text' | 'html' | 'typescript' | 'java' | 'graphql' | 'plaintext' | 'yaml';
 
 interface Props {
   value: string;
@@ -32,7 +32,8 @@ interface Props {
 const LANG_MAP: Record<CodeLanguage, Exclude<CodeLanguage, 'text'>> = {
   javascript: 'javascript', typescript: 'typescript', json: 'json', xml: 'xml',
   python: 'python', html: 'html', java: 'java', graphql: 'graphql',
-  plaintext: 'plaintext', text: 'plaintext',
+  plaintext: 'plaintext',
+  yaml: 'yaml', text: 'plaintext',
 };
 
 /**

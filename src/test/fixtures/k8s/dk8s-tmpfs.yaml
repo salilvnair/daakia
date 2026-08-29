@@ -1,0 +1,65 @@
+# =============================================================================
+# jdk-tmpfs — a JVM whose /tmp is memory-backed.
+# =============================================================================
+#
+# The case the heap-dump guard exists for, and the one that surprises people.
+#
+# A great many images mount /tmp as tmpfs, and plenty of Helm charts add an
+# emptyDir with `medium: Memory` for it. A tmpfs write is a MEMORY write: it is
+# charged to the container's cgroup, not to disk. So `jcmd GC.heap_dump
+# /tmp/x.hprof` on a 6GB heap adds 6GB to the pod's memory accounting and the
+# kernel kills it — while every number you would have checked by hand (limit,
+# usage, headroom) looked perfectly survivable.
+#
+# sizeLimit is deliberately smaller than the heap so both failure modes are
+# reachable: the dump does not fit, AND writing it would count against memory.
+#
+# Deploy: kubectl --context docker-desktop apply -f dk8s-tmpfs.yaml
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jdk-tmpfs
+  namespace: dk8s-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: jdk-tmpfs }
+  template:
+    metadata:
+      labels: { app: jdk-tmpfs, dk8s.daakia/runtime: java }
+    spec:
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+      containers:
+        - name: app
+          image: eclipse-temurin:21-jdk
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cat > /Main.java <<'EOF'
+              import java.util.*;
+              public class Main {
+                // Held so the heap has something real in it to dump.
+                static final List<byte[]> HELD = new ArrayList<>();
+                public static void main(String[] a) throws Exception {
+                  System.out.println("jdk-tmpfs up, /tmp is a memory-backed emptyDir");
+                  while (HELD.size() < 120) {
+                    HELD.add(new byte[1024 * 1024]);
+                    Thread.sleep(500);
+                  }
+                  System.out.println("holding " + HELD.size() + "MB, idling");
+                  while (true) Thread.sleep(10000);
+                }
+              }
+              EOF
+              javac -d /app /Main.java
+              exec java -Xmx320m -cp /app Main
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 512Mi }

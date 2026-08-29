@@ -37,7 +37,7 @@ import {
 import { handleWsConnect, handleWsDisconnect, handleWsSend } from '../src/panel/main/handlers/websocket-handler';
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces, handleDk8sSetNamespace,
-  handleDk8sSetSensitivity, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
+  handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
   handleDk8sLogsOpen, handleDk8sLogsClose, handleDk8sDescribe,
@@ -128,6 +128,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:setSensitivity':
       handleDk8sSetSensitivity(msg, post);
+      break;
+    case 'dk8s:setGuardHeapDump':
+      handleDk8sSetGuardHeapDump(msg, post);
       break;
     case 'dk8s:setKubectlPath':
       await handleDk8sSetKubectlPath(msg, post);

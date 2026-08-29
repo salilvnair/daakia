@@ -64,7 +64,7 @@ function localInputValue(d: Date): string {
 }
 
 export function ExportLogsModal({ onClose }: { onClose: () => void }) {
-  const { selected, pods, exportLogs, exportState } = useK8sStore();
+  const { selected, pods, exportLogs, exportState, logExportOpen, detail } = useK8sStore();
 
   const [range, setRange] = useState<RangeKind>('all');
   const [slice, setSlice] = useState<SliceKind>('all');
@@ -76,7 +76,10 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
   const [from, setFrom] = useState(() => localInputValue(new Date(now.getTime() - 3600_000)));
   const [to, setTo] = useState(() => localInputValue(now));
 
-  const chosen = pods.filter(p => selected.includes(p.uid));
+  // Opened from a pod's log view, this exports that pod; opened from the grid,
+  // it exports the ticked ones.
+  const single = logExportOpen && detail ? detail : undefined;
+  const chosen = single ? [single] : pods.filter(p => selected.includes(p.uid));
   const crashers = chosen.filter(p => p.restarts > 0).length;
 
   const submit = () => {
@@ -99,8 +102,12 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
     <ModalView
       open
       onClose={busy ? () => {} : onClose}
-      title="Export logs"
-      subtitle={`${chosen.length} pod${chosen.length === 1 ? '' : 's'} selected`}
+      title={single ? 'Download log' : 'Export logs'}
+      subtitle={single
+        // Opened from inside a pod, the pod is not a selection to be counted —
+        // it is the subject, so name it.
+        ? single.name
+        : `${chosen.length} pod${chosen.length === 1 ? '' : 's'} selected`}
       size="md"
       headerColor={ACCENT}
       footerRight={
@@ -109,6 +116,7 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
           <ButtonView
             label={busy ? 'Exporting…' : 'Choose folder and export'}
             size="sm" variant="primary" disabled={busy || !chosen.length}
+            accentColor={ACCENT}
             onClick={submit}
           />
         </div>
@@ -182,7 +190,9 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
               </span>
               <span className="text-[10.5px] text-[var(--color-text-muted)]">
                 {crashers > 0
-                  ? `${crashers} of these pods have restarted. Their current log is usually just a few lines of boot — the failure is in the previous run.`
+                  ? single
+                    ? 'This pod has restarted. Its current log is usually just a few lines of boot — the failure is in the previous run.'
+                    : `${crashers} of these pods have restarted. Their current log is usually just a few lines of boot — the failure is in the previous run.`
                   : 'For a pod that has restarted, the failure is in the run before the current one.'}
               </span>
             </span>
@@ -199,11 +209,14 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
         <div className="flex flex-col gap-1 px-3 py-2 rounded-md"
              style={{ background: 'var(--color-surface-hover)' }}>
           <span className="text-[10.5px] text-[var(--color-text-muted)]">
-            One file per pod, named <code className="font-mono">&lt;pod&gt;.log</code>
+            {single ? 'Written as ' : <>One file per pod, named </>}
+            <code className="font-mono">
+              {single ? `${single.name}.log` : '<pod>.log'}
+            </code>
             {new Set(chosen.map(p => p.namespace)).size > 1 && (
               <> — prefixed with the namespace, since more than one is selected</>
             )}
-            . You will be asked where to put them.
+            . You will be asked where to put {single ? 'it' : 'them'}.
           </span>
         </div>
 

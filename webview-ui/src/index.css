@@ -1579,3 +1579,14 @@ input[type="number"] {
   border-color: var(--color-surface-border, #e5e7eb) !important;
   color: var(--color-text-primary) !important;
 }
+
+/* The dk8s log view draws its own scrollbar as the density ribbon, which shows
+   where you are AND what is there. Two scrollbars side by side is one too many. */
+.dk8s-no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.dk8s-no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}

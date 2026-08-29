@@ -108,7 +108,7 @@ export function SensitivityPrompt() {
         </p>
       )}
       <div className="flex items-center gap-2">
-        <ButtonView label="Yes — treat as production" size="sm" variant="primary"
+        <ButtonView label="Yes — treat as production" size="sm" variant="primary" accentColor={ACCENT}
                     onClick={() => setSensitivity('production')} />
         <ButtonView label="No — dev or test" size="sm" variant="secondary"
                     onClick={() => setSensitivity('normal')} />
@@ -181,7 +181,7 @@ export function NamespacePicker() {
           <ButtonView
             label="+  Use and save"
             size="md"
-            variant="primary"
+            variant="primary" accentColor={ACCENT}
             disabled={!manual.trim()}
             onClick={addManual}
           />
@@ -299,7 +299,7 @@ export function UnreachableNotice() {
         </pre>
       )}
       <div className="flex items-center gap-2">
-        <ButtonView label={busy ? 'Retrying…' : 'Retry'} size="sm" variant="primary" disabled={busy} onClick={probe} />
+        <ButtonView label={busy ? 'Retrying…' : 'Retry'} size="sm" variant="primary" accentColor={ACCENT} disabled={busy} onClick={probe} />
         <ButtonView label="Pick another cluster" size="sm" variant="secondary" onClick={openContextPicker} />
       </div>
     </Shell>

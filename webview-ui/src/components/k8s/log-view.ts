@@ -208,3 +208,76 @@ export function selectionText(lines: LogLine[], firstSeq: number, lastSeq: numbe
     .map(l => (l.ts !== undefined ? `${new Date(l.ts).toISOString()} ${l.text}` : l.text))
     .join('\n');
 }
+
+// ── Stack-trace folding ─────────────────────────────────────────────────────
+
+/**
+ * A stack trace is one event, not forty.
+ *
+ * An unfolded Java exception costs a screen and a half, so scrolling past three
+ * of them means you never see the fourth. Folding the frames to a single row
+ * keeps the exception message — the part that identifies it — at full weight
+ * and puts the frames one click away.
+ */
+export interface FoldedRow {
+  line: MatchedLine;
+  /** Frames folded under this row, if it heads a stack trace. */
+  folded?: MatchedLine[];
+}
+
+/** A continuation frame: `at com.x.Y.z(...)`, `... 34 more`, or a bare tab. */
+export function isStackFrame(text: string): boolean {
+  return /^\s+at\s|^\s*\.\.\.\s+\d+\s+(more|common frames omitted)/.test(text);
+}
+
+/**
+ * `Caused by:` heads a new section of the SAME trace, so it stays visible —
+ * the root cause is the useful half and folding it away would defeat the point.
+ */
+function isTraceHeader(text: string): boolean {
+  return /^Caused by:|^Suppressed:/.test(text);
+}
+
+export function foldStackTraces(lines: MatchedLine[], enabled: boolean): FoldedRow[] {
+  if (!enabled) return lines.map(line => ({ line }));
+
+  const rows: FoldedRow[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (isStackFrame(line.text)) {
+      // A run of frames with no header above it — can happen after a filter
+      // hides the header. Keep the first so the run is not invisible.
+      const start = i;
+      while (i + 1 < lines.length && isStackFrame(lines[i + 1].text)) i++;
+      const run = lines.slice(start, i + 1);
+      rows.push({ line: run[0], folded: run.slice(1) });
+      continue;
+    }
+
+    // A header line takes the frames that follow it.
+    const folded: MatchedLine[] = [];
+    let j = i + 1;
+    while (j < lines.length && isStackFrame(lines[j].text)) { folded.push(lines[j]); j++; }
+    if (folded.length && (line.level === 'error' || isTraceHeader(line.text))) {
+      rows.push({ line, folded });
+      i = j - 1;
+    } else {
+      rows.push({ line });
+    }
+  }
+  return rows;
+}
+
+/** Bytes held, for the footer. Rough by design — it is a scale, not an audit. */
+export function bufferBytes(lines: LogLine[]): number {
+  let n = 0;
+  for (const l of lines) n += l.text.length + 24;
+  return n;
+}
+
+export function compactCount(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 10_000) return `${(n / 1000).toFixed(1)}k`;
+  if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}

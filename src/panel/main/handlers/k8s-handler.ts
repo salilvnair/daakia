@@ -24,6 +24,7 @@ import * as os from 'os';
 import { join } from 'path';
 import { mkdir as mkdirp } from 'fs/promises';
 import { collectArtifact, type ArtifactKind, type CollectTarget } from '../../../services/k8s/k8s-artifacts';
+import { readMemoryProfile, assessHeapDumpSafety } from '../../../services/k8s/k8s-memory';
 import { dk8sPrompt } from '../../chat/dk8s-prompts';
 import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
@@ -45,6 +46,12 @@ export interface Dk8sState {
   /** context name -> sensitivity, set by the user and never inferred silently. */
   sensitivity?: Record<string, 'normal' | 'production'>;
   kubectlPath?: string;
+  /**
+   * Refuse a heap dump the safety check judges likely to OOM-kill the pod.
+   * Undefined means on — the guard has to protect people who have never opened
+   * Settings, which is most of them.
+   */
+  guardHeapDump?: boolean;
   /**
    * context name -> namespaces the user pinned by hand.
    *
@@ -289,6 +296,26 @@ export function handleDk8sSetSensitivity(
   postMessage({ type: 'dk8s:sensitivitySet', context, level });
 }
 
+/**
+ * Whether to refuse a heap dump that looks likely to OOM-kill the pod.
+ *
+ * Default on. Someone who turns it off has explicitly said they accept the
+ * risk; everyone else is protected by default, because the person most likely
+ * to click this button is the one least likely to have thought about tmpfs.
+ */
+export function guardHeapDumpEnabled(): boolean {
+  return state().guardHeapDump !== false;
+}
+
+export function handleDk8sSetGuardHeapDump(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const on = msg.on !== false;
+  saveState({ guardHeapDump: on });
+  postMessage({ type: 'dk8s:guardHeapDump', on });
+}
+
 // ── Live pod watches ────────────────────────────────────────────────────────
 //
 // One watch per (context, namespace) the user selected. Each is a kubectl child
@@ -502,9 +529,12 @@ export function handleDk8sLogsOpen(
 
   logStream?.stop();
   logStream = streamLogs(context, namespace, pod, {
+    // Follow only when asked. The default is a snapshot of the tail.
+    follow: !!msg.follow,
     container: msg.container as string | undefined,
     previous: !!msg.previous,
-    tailLines: (msg.tailLines as number) ?? 2000,
+    tailLines: (msg.tailLines as number) ?? 200,
+    direction: msg.direction === 'first' ? 'first' : 'last',
     sinceSeconds: msg.sinceSeconds as number | undefined,
   }, {
     onLines: (lines) => postMessage({ type: 'dk8s:logLines', pod, lines }),
@@ -657,10 +687,29 @@ export async function handleDk8sProbePod(
   } catch { /* fall through with unknown */ }
 
   const caps = await probeCapabilities(context, namespace, pod, container);
+
+  // The capabilities answer "can this pod do a heap dump"; the memory profile
+  // answers "should it". Both are needed before the button is drawn, because
+  // an offered-then-refused action is worse than one that was never offered.
+  const memory = caps.unreachable
+    ? undefined
+    : await readMemoryProfile(context, namespace, pod, {
+        container, jcmd: caps.jcmd, targetPid: caps.targetPid,
+      });
+
+  // The verdict is about a heap dump, so it only exists where a heap dump does.
+  // A Python pod was being told its heap dump would OOM-kill it, complete with
+  // an empty -Xmx and "jcmd unavailable" — advice about an action that is not
+  // on the screen. The memory FIGURES are still useful everywhere; the
+  // judgement is not.
+  const actions = availableActions(runtime.runtime, caps);
+  const heapDumpOffered = actions.some(a => a.id === 'heapdump');
+  const safety = memory && heapDumpOffered ? assessHeapDumpSafety(memory) : undefined;
+
   postMessage({
     type: 'dk8s:podProbed', pod,
-    runtime, capabilities: caps,
-    actions: availableActions(runtime.runtime, caps),
+    runtime, capabilities: caps, actions,
+    memory, safety,
   });
 }
 
@@ -782,6 +831,30 @@ export async function handleDk8sCollect(
     container: msg.container as string | undefined,
     targetPid: msg.targetPid as string | undefined,
   };
+
+  // Enforce the guard HERE, not only in the panel. A webview bug, a stale
+  // bundle, or a message crafted by anything else must not be able to fire a
+  // heap dump the safety check just refused — the whole point is that the pod
+  // survives, and a check that only lives in the UI is decoration.
+  if (kind === 'heapdump' && guardHeapDumpEnabled() && !msg.overrideSafety) {
+    const caps = await probeCapabilities(context, namespace, pod, target.container);
+    const profile = await readMemoryProfile(context, namespace, pod, {
+      container: target.container, jcmd: caps.jcmd, targetPid: caps.targetPid,
+    });
+    const safety = assessHeapDumpSafety(profile);
+    if (safety.verdict === 'unsafe') {
+      postMessage({
+        type: 'dk8s:collectDone', pod, destDir: artifactDir(),
+        result: {
+          kind, ok: false,
+          error: `Refused: ${safety.headline} `
+            + 'Turn off the heap-dump guard in Settings if you want to take it anyway.',
+        },
+        safety,
+      });
+      return;
+    }
+  }
 
   const destDir = artifactDir();
   postMessage({ type: 'dk8s:collectStarted', pod, kind });

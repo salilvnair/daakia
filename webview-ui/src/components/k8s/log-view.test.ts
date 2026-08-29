@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildMatcher, filterLines, densityBuckets, levelCounts,
   formatLogTime, selectionText, describeBucket,
+  foldStackTraces, isStackFrame, compactCount,
 } from './log-view';
 import type { LogLine } from '../../store/k8s-store';
 
@@ -175,5 +176,73 @@ describe('selectionText', () => {
 
   it('leaves untimestamped lines bare', () => {
     expect(selectionText(lines, 0, 0)).toBe('before');
+  });
+});
+
+describe('foldStackTraces', () => {
+  const err = (seq: number, text: string) => line(seq, 'error', text);
+  const trace = [
+    err(0, 'ERROR c.d.o.LedgerClient read timed out after 30000ms'),
+    err(1, '\tat java.net.SocketInputStream.socketRead0(Native Method)'),
+    err(2, '\tat java.net.SocketInputStream.read(SocketInputStream.java:150)'),
+    err(3, '\tat com.example.Client.call(Client.java:42)'),
+    line(4, 'info', 'INFO retrying'),
+  ];
+
+  it('folds the frames under the message that heads them', () => {
+    const rows = foldStackTraces(trace, true);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].line.seq).toBe(0);
+    expect(rows[0].folded).toHaveLength(3);
+    expect(rows[1].line.seq).toBe(4);
+  });
+
+  it('keeps every line when folding is off', () => {
+    expect(foldStackTraces(trace, false)).toHaveLength(5);
+  });
+
+  it('keeps "Caused by" visible rather than folding it away', () => {
+    // The root cause is the useful half of a trace; folding it defeats the
+    // entire point of opening the log.
+    const lines = [
+      err(0, 'ERROR boom'),
+      err(1, '\tat com.example.A.a(A.java:1)'),
+      err(2, 'Caused by: java.net.SocketTimeoutException: Read timed out'),
+      err(3, '\tat com.example.B.b(B.java:2)'),
+    ];
+    const rows = foldStackTraces(lines, true);
+    expect(rows).toHaveLength(2);
+    expect(rows[1].line.text).toContain('Caused by');
+  });
+
+  it('does not lose a run of frames whose header was filtered out', () => {
+    const rows = foldStackTraces([
+      err(0, '\tat com.example.A.a(A.java:1)'),
+      err(1, '\tat com.example.B.b(B.java:2)'),
+    ], true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].folded).toHaveLength(1);
+  });
+
+  it('does not fold plain indented text under an info line', () => {
+    const rows = foldStackTraces([
+      line(0, 'info', 'INFO config:'),
+      line(1, 'info', '  key = value'),
+    ], true);
+    expect(rows).toHaveLength(2);
+  });
+
+  it('recognises the omitted-frames marker as a frame', () => {
+    expect(isStackFrame('\t... 20 common frames omitted')).toBe(true);
+    expect(isStackFrame('   ... 35 more')).toBe(true);
+    expect(isStackFrame('INFO started')).toBe(false);
+  });
+});
+
+describe('compactCount', () => {
+  it('keeps small numbers exact and abbreviates large ones', () => {
+    expect(compactCount(142)).toBe('142');
+    expect(compactCount(1200)).toBe('1.2k');
+    expect(compactCount(18_400)).toBe('18k');
   });
 });

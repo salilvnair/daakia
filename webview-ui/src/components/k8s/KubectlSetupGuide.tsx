@@ -120,7 +120,7 @@ export function KubectlSetupGuide({ mode }: { mode: 'no-kubectl' | 'no-contexts'
           <ButtonView
             label={busy ? 'Checking…' : missing ? 'I installed it — check again' : 'Check again'}
             size="sm"
-            variant="primary"
+            variant="primary" accentColor={ACCENT}
             disabled={busy}
             onClick={probe}
           />
@@ -153,7 +153,7 @@ export function KubectlSetupGuide({ mode }: { mode: 'no-kubectl' | 'no-contexts'
               <ButtonView
                 label="Use this"
                 size="sm"
-                variant="primary"
+                variant="primary" accentColor={ACCENT}
                 disabled={!manualPath.trim() || busy}
                 onClick={() => setKubectlPath(manualPath.trim())}
               />

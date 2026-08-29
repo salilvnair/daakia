@@ -124,7 +124,31 @@ export interface PodAction {
   mutatesPod?: boolean;
 }
 
-export type DetailTab = 'logs' | 'describe' | 'yaml' | 'doctor';
+export type DetailTab = 'overview' | 'logs' | 'terminal' | 'doctor' | 'yaml' | 'describe';
+
+export interface MemoryProfile {
+  limitBytes?: number;
+  requestBytes?: number;
+  usageBytes?: number;
+  maxHeapBytes?: number;
+  initialHeapBytes?: number;
+  usedHeapBytes?: number;
+  /** True is the dangerous case: the dump file counts against the pod's memory. */
+  dumpDirIsTmpfs?: boolean;
+  dumpDirFreeBytes?: number;
+  unknowns: string[];
+}
+
+export type SafetyVerdict = 'safe' | 'tight' | 'unsafe' | 'unknown';
+
+export interface HeapDumpSafety {
+  verdict: SafetyVerdict;
+  headline: string;
+  reasons: string[];
+  estimatedCostBytes?: number;
+  headroomBytes?: number;
+  usedFraction?: number;
+}
 
 /**
  * A stretch of log the user has highlighted, held so the AI panel can act on
@@ -267,6 +291,22 @@ interface K8sState {
   logFilter: string;
   logLevels: LogLevel[];
   logFollow: boolean;
+  /**
+   * Whether the stream is open.
+   *
+   * Off by default. A pod doing hundreds of lines a second makes the view
+   * unreadable, the density ribbon thrash, and text impossible to select —
+   * so opening a log gets you a snapshot of the tail, and live is a button.
+   */
+  logLive: boolean;
+  /** How many lines the snapshot asks for. */
+  logTail: number;
+  /** Which end of the log — the tail, or what the pod said on startup. */
+  logDirection: 'last' | 'first';
+  /** Range pushed down to kubectl. */
+  logSince: 'all' | 'restart' | '15m' | '1h' | '6h';
+  /** Per-pod Download, using the same options as the grid's bulk export. */
+  logExportOpen: boolean;
   logWrap: boolean;
   logPrevious: boolean;
   logContainer?: string;
@@ -278,6 +318,14 @@ interface K8sState {
   runtime?: { runtime: string; confidence: number; detectedFrom: string };
   actions: PodAction[];
   probeBusy: boolean;
+  memory?: MemoryProfile;
+  safety?: HeapDumpSafety;
+  /**
+   * The guard is on by default. Someone who has deliberately turned it off in
+   * Settings has said they know what they are doing; everyone else gets caught
+   * before they OOM-kill the pod they were trying to diagnose.
+   */
+  guardHeapDump: boolean;
   shellNotice?: { reason: string; suggestion: string; suggestionLabel?: string };
 
   probe: () => void;
@@ -304,6 +352,13 @@ interface K8sState {
   setLogFilter: (v: string) => void;
   toggleLogLevel: (level: LogLevel) => void;
   setLogFollow: (v: boolean) => void;
+  setLogLive: (v: boolean) => void;
+  setLogTail: (n: number) => void;
+  setLogDirection: (d: 'last' | 'first') => void;
+  setLogSince: (v: 'all' | 'restart' | '15m' | '1h' | '6h') => void;
+  fetchLogs: () => void;
+  openLogExport: () => void;
+  closeLogExport: () => void;
   setLogWrap: (v: boolean) => void;
   setLogPrevious: (v: boolean) => void;
   setLogContainer: (c?: string) => void;
@@ -311,6 +366,7 @@ interface K8sState {
   setLogSelection: (sel?: LogSelection) => void;
   openShell: () => void;
   dismissShellNotice: () => void;
+  setGuardHeapDump: (on: boolean) => void;
   toggleSelectMode: () => void;
   togglePodSelected: (uid: string) => void;
   selectAllVisible: (uids: string[]) => void;
@@ -355,11 +411,20 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   logFilter: '',
   logLevels: [],
   logFollow: true,
-  logWrap: false,
+  logLive: false,
+  logTail: 200,
+  logDirection: 'last',
+  logSince: 'all',
+  logExportOpen: false,
+  // Wrap on by default. A stack frame or a JSON payload running off the right
+  // edge is the common case in a pod log, and horizontal scrolling to read it
+  // is worse than a taller row. Anyone who wants columns can turn it off.
+  logWrap: true,
   logPrevious: false,
   describeBusy: false,
   actions: [],
   probeBusy: false,
+  guardHeapDump: true,
 
   probe: () => {
     set({ busy: true });
@@ -455,14 +520,20 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     set({
       detail: pod, detailTab: 'logs',
       logs: [], logStatus: 'idle', logDetail: undefined, logDropped: 0,
-      logFilter: '', logLevels: [], logFollow: true,
+      logFilter: '', logLevels: [], logFollow: true, logLive: false,
+      logDirection: 'last', logSince: 'all', logExportOpen: false,
       logPrevious: false, logContainer: undefined, logSelection: undefined,
       describeText: undefined, yamlText: undefined, describeBusy: true,
       capabilities: undefined, runtime: undefined, actions: [], probeBusy: true,
+      memory: undefined, safety: undefined,
       shellNotice: undefined,
     });
     const base = { context: pod.context, namespace: pod.namespace, pod: pod.name };
-    postMsg({ type: 'dk8s:openLogs', ...base, tailLines: 2000 });
+    // Snapshot, not a stream. See logLive.
+    postMsg({
+      type: 'dk8s:openLogs', ...base,
+      follow: false, direction: 'last', tailLines: get().logTail,
+    });
     postMsg({ type: 'dk8s:describe', ...base });
     postMsg({ type: 'dk8s:probePod', ...base });
   },
@@ -482,19 +553,54 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   })),
 
   setLogFollow: (logFollow) => set({ logFollow }),
+
+  setLogLive: (logLive) => {
+    set({ logLive });
+    // Going live re-opens the stream with --follow; leaving live stops the
+    // process outright rather than letting it run unread in the background.
+    if (logLive) get().reloadLogs();
+    else postMsg({ type: 'dk8s:closeLogs' });
+  },
+
+  // These only change what the NEXT fetch will ask for. Nothing reloads until
+  // Fetch is pressed — a selector that refetches on change is exactly the
+  // "it keeps refreshing" behaviour this view is supposed to avoid.
+  setLogTail: (logTail) => set({ logTail }),
+  setLogDirection: (logDirection) => set({ logDirection }),
+  setLogSince: (logSince) => set({ logSince }),
+
+  fetchLogs: () => get().reloadLogs(),
+
+  openLogExport: () => set({ logExportOpen: true }),
+  closeLogExport: () => set({ logExportOpen: false }),
   setLogWrap: (logWrap) => set({ logWrap }),
 
   setLogPrevious: (logPrevious) => { set({ logPrevious }); get().reloadLogs(); },
   setLogContainer: (logContainer) => { set({ logContainer }); get().reloadLogs(); },
 
   reloadLogs: () => {
-    const { detail, logPrevious, logContainer } = get();
+    const { detail, logPrevious, logContainer, logLive, logTail, logDirection, logSince } = get();
     if (!detail) return;
     set({ logs: [], logDropped: 0, logStatus: 'idle', logDetail: undefined, logSelection: undefined });
+
+    const SINCE: Record<string, number | undefined> = {
+      all: undefined, '15m': 900, '1h': 3600, '6h': 21600,
+      // "Since the last restart" is the most useful of these and the only one
+      // that needs the pod's own history rather than a fixed window.
+      restart: detail.lastRestartAt
+        ? Math.max(1, Math.round((Date.now() - Date.parse(detail.lastRestartAt)) / 1000))
+        : undefined,
+    };
+
     postMsg({
       type: 'dk8s:openLogs',
       context: detail.context, namespace: detail.namespace, pod: detail.name,
-      previous: logPrevious, container: logContainer, tailLines: 2000,
+      previous: logPrevious, container: logContainer,
+      // Following always tails: a head slice cannot grow.
+      follow: logLive,
+      direction: logLive ? 'last' : logDirection,
+      tailLines: logTail,
+      sinceSeconds: SINCE[logSince],
     });
   },
 
@@ -512,6 +618,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   dismissShellNotice: () => set({ shellNotice: undefined }),
+
+  setGuardHeapDump: (guardHeapDump) => {
+    set({ guardHeapDump });
+    postMsg({ type: 'dk8s:setGuardHeapDump', on: guardHeapDump });
+  },
 
   toggleSelectMode: () => set(s => ({
     selectMode: !s.selectMode,
@@ -536,8 +647,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   closeExport: () => set({ exportOpen: false }),
 
   exportLogs: (options) => {
-    const { pods, selected } = get();
-    const chosen = pods.filter(p => selected.includes(p.uid));
+    const { pods, selected, logExportOpen, detail } = get();
+    // The Download button in the log view exports THIS pod, using the same
+    // options dialog as the grid's bulk export — one set of choices to learn,
+    // not two.
+    const chosen = logExportOpen && detail
+      ? [detail]
+      : pods.filter(p => selected.includes(p.uid));
     if (!chosen.length) return;
     set({ exportState: { phase: 'running', done: 0, total: chosen.length } });
     postMsg({
@@ -698,6 +814,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       case 'dk8s:exportDone':
         set(s => ({
           exportOpen: false,
+          logExportOpen: false,
           selectMode: false,
           selected: [],
           exportState: {
@@ -790,6 +907,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           capabilities: msg.capabilities as PodCapabilities,
           runtime: msg.runtime as { runtime: string; confidence: number; detectedFrom: string },
           actions: (msg.actions as PodAction[]) ?? [],
+          memory: msg.memory as MemoryProfile | undefined,
+          safety: msg.safety as HeapDumpSafety | undefined,
         });
         break;
 
@@ -799,6 +918,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           suggestion: msg.suggestion as string,
           suggestionLabel: msg.suggestionLabel as string | undefined,
         } });
+        break;
+
+      case 'dk8s:guardHeapDump':
+        set({ guardHeapDump: msg.on !== false });
         break;
 
       case 'dk8s:sensitivitySet':

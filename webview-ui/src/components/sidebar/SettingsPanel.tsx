@@ -4,7 +4,8 @@ import { useDbStatusStore } from '../../store/db-status-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon } from '../../icons';
+import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, StethoscopeIcon } from '../../icons';
+import { DoctorSettings } from '../settings/DoctorSettings';
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { GitSyncSettings } from './GitSyncSettings';
 import { VaultSettings } from './VaultSettings';
@@ -30,7 +31,7 @@ import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'doctor';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load';
 
@@ -49,6 +50,7 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'prompt-library':  { label: 'Prompt Library',  icon: <AgentIcon size={14} /> },
   'ai-audit':        { label: 'AI Audit',        icon: <SparkleIcon size={14} /> },
   'devtools':        { label: 'Developer Tools', icon: <CodeBracketsIcon size={14} /> },
+  'doctor':          { label: 'Doctor',          icon: <StethoscopeIcon size={14} /> },
   'power-features':  { label: 'Power Features',  icon: <CodeBracketsIcon size={14} /> },
 };
 
@@ -71,6 +73,7 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
     { id: 'ai-audit', label: SETTINGS_SECTION_META['ai-audit'].label, icon: SETTINGS_SECTION_META['ai-audit'].icon },
   ] },
   { id: 'g-advanced', label: 'Advanced', isGroup: true, children: [
+    { id: 'doctor', label: SETTINGS_SECTION_META.doctor.label, icon: SETTINGS_SECTION_META.doctor.icon },
     { id: 'devtools', label: SETTINGS_SECTION_META.devtools.label, icon: SETTINGS_SECTION_META.devtools.icon },
     { id: 'power-features', label: SETTINGS_SECTION_META['power-features'].label, icon: SETTINGS_SECTION_META['power-features'].icon },
   ] },
@@ -155,6 +158,8 @@ export function SettingsPanel() {
               <AiAuditPanel />
             ) : activeSection === 'power-features' ? (
               <PowerFeaturesPanel />
+            ) : activeSection === 'doctor' ? (
+              <DoctorSettings />
             ) : activeSection === 'devtools' ? (
               <DevToolsSettingsPage />
             ) : activeSection === 'theme' ? (

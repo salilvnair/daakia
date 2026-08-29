@@ -8,7 +8,7 @@
 import { useEffect } from 'react';
 import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
-  WandIcon, ChevronLeftIcon, CopyIcon,
+  WandIcon, ChevronLeftIcon, LayersIcon,
 } from '../../icons';
 import { CopyButtonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
@@ -17,14 +17,22 @@ import { severityOf, severityColor, shortAge, restartLabel } from './pod-view';
 import { LogViewer } from './LogViewer';
 import { AiAnswerPanel } from './AiAnswerPanel';
 import { DoctorTab } from './DoctorTab';
+import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highlight';
+import { CodeEditor } from '../shared/editors/CodeEditor';
+import { ExportLogsModal } from './ExportLogsModal';
+import { OverviewTab } from './OverviewTab';
 
 const ACCENT = 'var(--color-dk8s)';
 
+// Order from the mock: Overview, Logs, Terminal, Doctor, YAML — with Describe
+// alongside YAML, since they answer the same kind of question.
 const TABS: { id: DetailTab; label: string; Icon: typeof FileTextIcon }[] = [
+  { id: 'overview', label: 'Overview', Icon: LayersIcon },
   { id: 'logs', label: 'Logs', Icon: FileTextIcon },
+  { id: 'terminal', label: 'Terminal', Icon: TerminalIcon },
+  { id: 'doctor', label: 'Doctor', Icon: StethoscopeIcon },
   { id: 'describe', label: 'Describe', Icon: CodeIcon },
   { id: 'yaml', label: 'YAML', Icon: CodeIcon },
-  { id: 'doctor', label: 'Doctor', Icon: StethoscopeIcon },
 ];
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -38,8 +46,9 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
   );
 }
 
-/** describe and YAML are both "a wall of text with a copy button". */
-function TextPane({ text, busy, empty }: { text?: string; busy: boolean; empty: string }) {
+function PaneShell({ text, busy, empty, children }: {
+  text?: string; busy: boolean; empty: string; children: React.ReactNode;
+}) {
   if (busy) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -56,13 +65,104 @@ function TextPane({ text, busy, empty }: { text?: string; busy: boolean; empty: 
   }
   return (
     <div className="relative h-full min-h-0">
-      <div className="absolute top-2 right-4 z-10">
+      <div className="absolute top-2 right-5 z-10">
         <CopyButtonView text={text} size="xs" />
       </div>
-      <pre className="h-full overflow-auto px-4 py-3 font-mono m-0"
-           style={{ fontSize: 11.5, lineHeight: '17px', color: 'var(--color-text-primary)', whiteSpace: 'pre' }}>
-        {text}
-      </pre>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * describe output, coloured.
+ *
+ * Not run through the YAML lexer, though it looks like YAML from a distance:
+ * the Events table is columnar, `<none>` is a value rather than a tag, and the
+ * status words are what your eye should land on first. A YAML highlighter
+ * colours none of that usefully.
+ */
+function DescribePane({ text, busy }: { text?: string; busy: boolean }) {
+  return (
+    <PaneShell text={text} busy={busy}
+               empty="No describe output — the pod may have been deleted.">
+      <div className="h-full overflow-auto px-4 py-3 font-mono"
+           style={{ fontSize: 11.5, lineHeight: '18px' }}>
+        {(text ?? '').split('\n').map((line, i) => (
+          <div key={i} style={{ whiteSpace: 'pre-wrap' }}>
+            {tokenizeDescribeLine(line).map((t, j) => (
+              <span key={j} style={{ color: tokenColor(t.kind), fontWeight: tokenWeight(t.kind) }}>
+                {t.text}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </PaneShell>
+  );
+}
+
+/** YAML gets the real editor, since Monaco already knows the grammar. */
+function YamlPane({ text, busy }: { text?: string; busy: boolean }) {
+  return (
+    <PaneShell text={text} busy={busy} empty="No YAML available.">
+      <CodeEditor
+        value={text ?? ''}
+        language="yaml"
+        readOnly
+        height="100%"
+        wordWrap
+        fontSize={11.5}
+      />
+    </PaneShell>
+  );
+}
+
+/**
+ * The terminal tab.
+ *
+ * It does not embed a terminal — it opens the one VS Code already has. A webview
+ * xterm needs a native PTY to be useful, and without one bash prints no prompt,
+ * Ctrl-C does nothing and vim hangs. Handing the user their own terminal, with
+ * their font and their scrollback, is both simpler and strictly more capable.
+ */
+function TerminalTab() {
+  const { detail, capabilities, openShell } = useK8sStore();
+  if (!detail) return null;
+
+  const distroless = capabilities && !capabilities.shell && !capabilities.unreachable;
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 px-8 text-center">
+      <TerminalIcon size={22} color={ACCENT} />
+      <span className="text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
+        Open a shell in this pod
+      </span>
+      <span className="text-[11.5px] max-w-[440px] leading-relaxed"
+            style={{ color: 'var(--color-text-muted)' }}>
+        {distroless
+          ? 'This container looks distroless — there is no shell in it to exec. dk8s will '
+            + 'offer the debug-container command instead.'
+          : 'This opens a VS Code terminal running kubectl exec against '
+            + detail.name + '. Your own terminal, with your font, scrollback and copy-paste.'}
+      </span>
+      <button
+        type="button"
+        onClick={openShell}
+        className="flex items-center gap-2 px-4 py-2 rounded-md text-[12px] cursor-pointer"
+        style={{
+          background: 'color-mix(in srgb, var(--color-dk8s) 18%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--color-dk8s) 45%, transparent)',
+          color: '#fff', fontWeight: 600,
+        }}
+      >
+        <TerminalIcon size={13} color={ACCENT} />
+        Open terminal
+      </button>
+      {capabilities?.shell && (
+        <span className="text-[10.5px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
+          shell: {capabilities.shell}
+        </span>
+      )}
     </div>
   );
 }
@@ -72,6 +172,7 @@ export function PodDetail() {
     detail, detailTab, setDetailTab, closeDetail,
     describeText, yamlText, describeBusy, runtime,
     openShell, shellNotice, dismissShellNotice,
+    logExportOpen, closeLogExport,
   } = useK8sStore();
 
   const aiOpen = useDk8sAiStore(s => s.open);
@@ -226,21 +327,19 @@ export function PodDetail() {
           </div>
 
           <div className="flex-1 min-h-0">
+            {detailTab === 'overview' && <OverviewTab />}
             {detailTab === 'logs' && <LogViewer />}
-            {detailTab === 'describe' && (
-              <TextPane text={describeText} busy={describeBusy}
-                        empty="No describe output — the pod may have been deleted." />
-            )}
-            {detailTab === 'yaml' && (
-              <TextPane text={yamlText} busy={describeBusy}
-                        empty="No YAML available." />
-            )}
+            {detailTab === 'terminal' && <TerminalTab />}
+            {detailTab === 'describe' && <DescribePane text={describeText} busy={describeBusy} />}
+            {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}
             {detailTab === 'doctor' && <DoctorTab />}
           </div>
         </div>
 
         <AiAnswerPanel />
       </div>
+
+      {logExportOpen && <ExportLogsModal onClose={closeLogExport} />}
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { useK8sStore, type PodAction } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sDoctorStore, ARTIFACT_META, type ArtifactKind } from '../../store/dk8s-doctor-store';
+import { MemoryPanel } from './MemoryPanel';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -32,7 +33,7 @@ const ICONS: Record<string, typeof CpuIcon> = {
 };
 
 function ActionCard({ action }: { action: PodAction }) {
-  const { detail, capabilities } = useK8sStore();
+  const { detail, capabilities, safety, guardHeapDump } = useK8sStore();
   const { running, collect } = useDk8sDoctorStore();
   const [confirming, setConfirming] = useState(false);
 
@@ -40,6 +41,15 @@ function ActionCard({ action }: { action: PodAction }) {
   const Icon = ICONS[action.id] ?? StethoscopeIcon;
   const busy = running?.kind === action.id;
   const heavy = !!action.disruptive || !!action.mutatesPod;
+
+  // A heap dump on a pod with no headroom is the one action here that can
+  // destroy the thing it was meant to diagnose, so the memory verdict overrides
+  // "the tooling is present". Blocked, not merely warned about — a warning next
+  // to a live button is what people click through at 3am.
+  const memoryBlocked = action.id === 'heapdump'
+    && guardHeapDump
+    && safety?.verdict === 'unsafe';
+  const available = action.available && !memoryBlocked;
 
   // "logs" is listed by the probe for completeness, but the Logs tab already
   // is the log — a button that switches tabs would be noise.
@@ -67,13 +77,15 @@ function ActionCard({ action }: { action: PodAction }) {
     <div className="flex flex-col rounded-lg overflow-hidden"
          style={{
            background: 'var(--color-surface)',
-           border: `1px solid ${action.available
-             ? 'var(--color-surface-border)'
-             : 'color-mix(in srgb, var(--color-surface-border) 60%, transparent)'}`,
-           opacity: action.available ? 1 : 0.62,
+           border: `1px solid ${memoryBlocked
+             ? 'color-mix(in srgb, var(--color-error) 32%, transparent)'
+             : available
+               ? 'var(--color-surface-border)'
+               : 'color-mix(in srgb, var(--color-surface-border) 60%, transparent)'}`,
+           opacity: available ? 1 : 0.62,
          }}>
       <div className="flex items-start gap-2.5 px-3 py-2.5">
-        <Icon size={15} color={action.available ? ACCENT : 'var(--color-text-muted)'} />
+        <Icon size={15} color={available ? ACCENT : 'var(--color-text-muted)'} />
 
         <div className="flex flex-col gap-1 flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -118,9 +130,16 @@ function ActionCard({ action }: { action: PodAction }) {
               {action.reason}
             </span>
           )}
+
+          {memoryBlocked && safety && (
+            <span className="text-[10.5px] leading-relaxed" style={{ color: 'var(--color-error)' }}>
+              Blocked: {safety.headline} You can turn the guard off in
+              {' '}Settings &rsaquo; Advanced &rsaquo; Doctor.
+            </span>
+          )}
         </div>
 
-        {action.available && !busy && !confirming && (
+        {available && !busy && !confirming && (
           <button
             type="button"
             onClick={() => (heavy ? setConfirming(true) : fire())}
@@ -399,6 +418,9 @@ export function DoctorTab() {
           </div>
         )}
       </div>
+
+      {/* What a dump would cost, before the button that would take one. */}
+      <MemoryPanel />
 
       {actions.filter(a => a.id !== 'logs').length === 0 ? (
         <span className="text-[11.5px] text-[var(--color-text-muted)] py-4 text-center">
