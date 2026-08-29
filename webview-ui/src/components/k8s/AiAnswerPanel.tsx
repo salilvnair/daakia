@@ -7,11 +7,11 @@
  */
 import { useState } from 'react';
 import { CopyButtonView } from '@salilvnair/dui';
-import { WandIcon, CloseIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon } from '../../icons';
+import { WandIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { useDk8sAiStore, type Dk8sAnswer } from '../../store/dk8s-ai-store';
 
-const ACCENT = 'var(--color-dk8s)';
+const ACCENT = 'var(--color-protocol-ai)';
 
 function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
   const [showEvidence, setShowEvidence] = useState(false);
@@ -96,13 +96,13 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
 }
 
 export function AiAnswerPanel() {
-  const { open, answers, activeId, closePanel, clear, cancel } = useDk8sAiStore();
+  const { open, answers, activeId, clear, cancel } = useDk8sAiStore();
   if (!open) return null;
 
   return (
     <div className="flex flex-col shrink-0 min-h-0"
          style={{
-           width: 400,
+           width: 340,
            borderLeft: `1px solid color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
            background: 'var(--color-surface-secondary, var(--color-surface))',
          }}>
@@ -126,10 +126,7 @@ export function AiAnswerPanel() {
             <TrashIcon size={12} color="var(--color-text-muted)" />
           </button>
         )}
-        <button type="button" onClick={closePanel} title="Close"
-                className="p-1 rounded cursor-pointer border-none bg-transparent">
-          <CloseIcon size={12} color="var(--color-text-muted)" />
-        </button>
+
       </div>
 
       <div className="flex-1 overflow-auto px-3 py-3 flex flex-col gap-3 min-h-0">

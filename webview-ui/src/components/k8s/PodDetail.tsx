@@ -23,6 +23,7 @@ import { ExportLogsModal } from './ExportLogsModal';
 import { OverviewTab } from './OverviewTab';
 
 const ACCENT = 'var(--color-dk8s)';
+const AI_ACCENT = 'var(--color-protocol-ai)';
 
 // Order from the mock: Overview, Logs, Terminal, Doctor, YAML — with Describe
 // alongside YAML, since they answer the same kind of question.
@@ -177,6 +178,7 @@ export function PodDetail() {
 
   const aiOpen = useDk8sAiStore(s => s.open);
   const openAi = useDk8sAiStore(s => s.openPanel);
+  const closeAi = useDk8sAiStore(s => s.closePanel);
   const answers = useDk8sAiStore(s => s.answers);
 
   // Escape closes — but only when nothing is selected, so the first Escape
@@ -248,26 +250,31 @@ export function PodDetail() {
           Shell
         </button>
 
-        {!aiOpen && (
-          <button
-            type="button"
-            onClick={openAi}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] cursor-pointer"
-            style={{
-              background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${ACCENT} 38%, transparent)`,
-              color: ACCENT,
-            }}
-          >
-            <WandIcon size={12} color={ACCENT} />
-            AI{answers.length > 0 && ` · ${answers.length}`}
-          </button>
-        )}
-
-        <button type="button" onClick={closeDetail} title="Close"
-                className="p-1 rounded cursor-pointer border-none bg-transparent">
-          <CloseIcon size={14} color="var(--color-text-muted)" />
+        {/* A fixed toggle, the way VS Code toggles a side panel: always in the
+            same place, lit when the panel is open. It used to vanish once the
+            panel appeared, which left the panel's own X as the only way back
+            and meant the button moved around under the cursor. */}
+        <button
+          type="button"
+          onClick={() => (aiOpen ? closeAi() : openAi())}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] cursor-pointer"
+          style={{
+            background: aiOpen
+              ? 'color-mix(in srgb, var(--color-protocol-ai) 22%, transparent)'
+              : 'transparent',
+            border: `1px solid ${aiOpen
+              ? 'color-mix(in srgb, var(--color-protocol-ai) 55%, transparent)'
+              : 'var(--color-surface-border)'}`,
+            color: aiOpen ? '#fff' : 'var(--color-text-secondary)',
+            fontWeight: aiOpen ? 600 : 400,
+          }}
+          title={aiOpen ? 'Hide AI analysis' : 'Show AI analysis'}
+        >
+          <WandIcon size={12} color={AI_ACCENT} />
+          AI{answers.length > 0 && ` · ${answers.length}`}
         </button>
+
+
       </div>
 
       {/* A distroless container has no shell at all, so instead of a bare

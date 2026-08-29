@@ -25,6 +25,9 @@ import {
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
   compactCount, type MatchedLine,
 } from './log-view';
+import {
+  AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
+} from './AnalyzeModal';
 
 const ACCENT = 'var(--color-dk8s)';
 /**
@@ -303,53 +306,64 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
 }) {
   return (
     <div
-      className="absolute z-30 flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
+      className="absolute z-30 flex items-center gap-2.5 px-4 py-3 rounded-xl"
       style={{
         top: rect.top, left: rect.left,
         // A solid strip, not floating chips. Over a dense log the buttons had
-        // log text showing between and behind them and were barely findable.
+        // log text showing between and behind them and were barely findable,
+        // and at the old height it read as part of the log rather than over it.
         background: 'var(--color-surface)',
         border: '1px solid var(--color-surface-border)',
-        boxShadow: '0 6px 20px rgba(0,0,0,.55)',
+        boxShadow: '0 10px 30px rgba(0,0,0,.6)',
       }}
       onMouseDown={e => e.preventDefault()}   // keep the selection alive
     >
-      <span className="text-[10px] px-1 select-none whitespace-nowrap"
-            style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+      <span className="text-[11.5px] px-1 select-none whitespace-nowrap"
+            style={{ color: 'var(--color-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
         {lineCount} line{lineCount === 1 ? '' : 's'}
       </span>
 
       <ButtonView
         label="Ask AI why"
-        size="xs"
+        size="sm"
         variant="secondary"
         accentColor={AI_ACCENT}
         color={AI_ACCENT}
         onClick={onAsk}
-        iconLeft={<WandIcon size={10} color={AI_ACCENT} />}
+        iconLeft={<WandIcon size={12} color={AI_ACCENT} />}
         style={{
-          background: 'color-mix(in srgb, var(--color-protocol-ai) 18%, transparent)',
-          borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 48%, transparent)',
+          background: 'color-mix(in srgb, var(--color-protocol-ai) 20%, transparent)',
+          borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 55%, transparent)',
           fontWeight: 600,
         }}
       />
+      {/* Explain is the other model call, so it keeps the AI tone; Grep talks
+          to the buffer, so it takes the cluster tone. Grey said 'disabled'. */}
       <ButtonView
         label="Explain"
-        size="xs"
+        size="sm"
         variant="secondary"
         accentColor={AI_ACCENT}
+        color={AI_ACCENT}
         onClick={onExplain}
-        iconLeft={<HelpCircleIcon size={10} />}
-        style={{ background: 'transparent' }}
+        iconLeft={<HelpCircleIcon size={12} color={AI_ACCENT} />}
+        style={{
+          background: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)',
+          borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 38%, transparent)',
+        }}
       />
       <ButtonView
         label="Grep"
-        size="xs"
+        size="sm"
         variant="secondary"
         accentColor={ACCENT}
+        color={ACCENT}
         onClick={onGrep}
-        iconLeft={<SearchIcon size={10} />}
-        style={{ background: 'transparent' }}
+        iconLeft={<SearchIcon size={12} color={ACCENT} />}
+        style={{
+          background: 'color-mix(in srgb, var(--color-dk8s) 12%, transparent)',
+          borderColor: 'color-mix(in srgb, var(--color-dk8s) 40%, transparent)',
+        }}
       />
     </div>
   );
@@ -377,6 +391,8 @@ export function LogViewer() {
   const [foldTraces, setFoldTraces] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const [toolbar, setToolbar] = useState<{ top: number; left: number } | null>(null);
+  const [analyzePlan, setAnalyzePlan] = useState<AnalyzePlan | null>(null);
+  const [analyzeContext, setAnalyzeContext] = useState(true);
   const selectionRef = useRef<{ text: string; first: number; last: number; count: number } | null>(null);
 
   const visible = useMemo(
@@ -494,7 +510,7 @@ export function LogViewer() {
     const hostRect = host.getBoundingClientRect();
     setToolbar({
       // Above the selection where there is room, below it at the very top.
-      top: Math.max(4, r.top - hostRect.top - 38),
+      top: Math.max(4, r.top - hostRect.top - 54),
       left: Math.min(Math.max(8, r.left - hostRect.left), Math.max(8, hostRect.width - 400)),
     });
   }, [logs, setLogSelection]);
@@ -520,16 +536,25 @@ export function LogViewer() {
     });
   };
 
-  /** The whole buffer, summarised. The mock's Analyze button. */
+  /**
+   * Analyze asks first.
+   *
+   * This is the only control in dk8s that takes text off the machine, and at
+   * 5,000 lines it also truncates. Both are things to say BEFORE sending, not
+   * afterwards in a footnote under the answer.
+   */
   const analyzeBuffer = () => {
-    if (!logs.length || !detail) return;
-    // Head and tail rather than the middle: a 5000-line buffer will not fit
-    // in a prompt, and the start and end of a window are where the story is.
-    const body = visible.length > 1200
+    if (!visible.length || !detail) return;
+    setAnalyzePlan(planAnalyze(visible));
+  };
+
+  const sendAnalyze = () => {
+    if (!analyzePlan || !detail) return;
+    const body = analyzePlan.truncated
       ? [
-          ...visible.slice(0, 600).map(l => l.text),
-          '\u2026 ' + (visible.length - 1200).toLocaleString() + ' lines omitted \u2026',
-          ...visible.slice(-600).map(l => l.text),
+          ...visible.slice(0, ANALYZE_HEAD).map(l => l.text),
+          '\u2026 ' + analyzePlan.omittedLines.toLocaleString() + ' lines omitted \u2026',
+          ...visible.slice(-ANALYZE_TAIL).map(l => l.text),
         ].join('\n')
       : visible.map(l => l.text).join('\n');
 
@@ -537,12 +562,17 @@ export function LogViewer() {
       promptKey: 'dk8s.log.summarise',
       title: 'Summarise this log',
       evidence: body,
-      evidenceLabel: 'LOG BUFFER (' + visible.length.toLocaleString() + ' lines)',
-      podContext: {
-        pod: detail.name, namespace: detail.namespace, phase: detail.phase,
-        restarts: detail.restarts, reason: detail.reason, runtime: runtime?.runtime,
-      },
+      evidenceLabel: 'LOG BUFFER (' + analyzePlan.sentLines.toLocaleString() + ' of '
+        + analyzePlan.totalLines.toLocaleString() + ' lines)',
+      // Opting out has to actually opt out, or the checkbox is a lie.
+      podContext: analyzeContext
+        ? {
+            pod: detail.name, namespace: detail.namespace, phase: detail.phase,
+            restarts: detail.restarts, reason: detail.reason, runtime: runtime?.runtime,
+          }
+        : { pod: detail.name },
     });
+    setAnalyzePlan(null);
   };
 
   const grepSelection = () => {
@@ -583,6 +613,11 @@ export function LogViewer() {
 
         <div className="flex-1" />
 
+        {/* One wrapping unit. As siblings of the spacer these controls wrapped
+            individually, so a narrow panel flung Download and Analyze onto
+            their own row at the FAR LEFT — reading as a second, broken
+            toolbar rather than a continuation of this one. */}
+        <div className="flex items-center gap-3 flex-wrap justify-end">
         <CheckboxView label="wrap" checked={logWrap} onChange={setLogWrap}
                       size="sm" accentColor={ACCENT} />
         <CheckboxView label="fold traces" checked={foldTraces} onChange={setFoldTraces}
@@ -710,6 +745,7 @@ export function LogViewer() {
         {logStatus === 'error' && (
           <span className="text-[11px]" style={{ color: 'var(--color-error)' }}>error</span>
         )}
+        </div>
       </div>
 
       {/* ── Notices, also on top ── */}
@@ -859,6 +895,17 @@ export function LogViewer() {
           />
         )}
       </div>
+
+      {analyzePlan && detail && (
+        <AnalyzeModal
+          plan={analyzePlan}
+          podName={detail.name}
+          includeContext={analyzeContext}
+          onIncludeContext={setAnalyzeContext}
+          onCancel={() => setAnalyzePlan(null)}
+          onConfirm={sendAnalyze}
+        />
+      )}
 
       {/* ── Footer: what is held, and where you are ── */}
       <div className="flex items-center gap-3 px-4 py-1.5 text-[10.5px] shrink-0"
