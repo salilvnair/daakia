@@ -137,12 +137,23 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   const anyCapped = groups.some(g => g.result.capped);
 
   return (
+    /* dui's widest preset is a hard 920px inline, which truncates most hits
+       mid-message — and this dialog exists to let you read them. `inline` mode
+       is dui's own escape hatch for "the parent handles positioning", so the
+       backdrop and centring are ours and the width is whatever the content
+       actually needs. */
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      style={{ background: 'rgba(0,0,0,.55)' }}
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+    <div className="flex" style={{ width: 'min(1500px, 94vw)', maxHeight: '90vh' }}>
     <ModalView
       open
+      mode="inline"
       onClose={onClose}
       title="Search logs"
       subtitle={`${chosen.length} pod${chosen.length === 1 ? '' : 's'} selected`}
-      size="lg"
       headerColor={ACCENT}
       footerRight={
         <div className="flex items-center gap-2">
@@ -158,7 +169,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         </div>
       }
     >
-      <div className="flex flex-col gap-3" style={{ minHeight: 460 }} onKeyDown={onKey}>
+      <div className="flex flex-col gap-3" style={{ minHeight: 520 }} onKeyDown={onKey}>
         {/* ── Query and options ── */}
         <SearchInputView
           value={options.query}
@@ -237,7 +248,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           onScroll={() => setScrollTop(scrollRef.current?.scrollTop ?? 0)}
           className="flex-1 overflow-auto rounded-md font-mono"
           style={{
-            minHeight: 280, maxHeight: 380,
+            minHeight: 340, maxHeight: 520,
             background: 'var(--color-surface)',
             border: '1px solid var(--color-surface-border)',
             fontSize: 11, lineHeight: `${ROW_H}px`,
@@ -345,5 +356,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         </span>
       </div>
     </ModalView>
+    </div>
+    </div>
   );
 }
