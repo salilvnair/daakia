@@ -34,6 +34,15 @@ interface Verdict {
   hotFrames: { method: string; file?: string; line?: number; threads: number; jdk: boolean }[];
   pools: { name: string; count: number; byState: Partial<Record<State, number>> }[];
   topCpu: { name: string; cpuMs: number; state: State; topFrame?: string }[];
+  /** Optional: an older host bundle will not send these. */
+  suspects?: {
+    markerId: string;
+    severity: 'critical' | 'warning' | 'info';
+    title: string;
+    why: string;
+    threads: { name: string; state: State; frame: string; cpuMs?: number }[];
+  }[];
+  headline?: string;
 }
 interface Loaded {
   name: string;
@@ -112,6 +121,9 @@ export function ThreadAnalyzerView() {
   }
 
   const { verdict: v, dump } = loaded;
+  // Default rather than assume. The host bundle can be a version behind this
+  // view, and a missing field must not take the whole analyzer down with it.
+  const suspects = v.suspects ?? [];
   const states: State[] = ['RUNNABLE', 'BLOCKED', 'WAITING', 'TIMED_WAITING'];
 
   return (
@@ -168,6 +180,79 @@ export function ThreadAnalyzerView() {
                 {v.deadlockDisagreement}
               </span>
             )}
+          </div>
+        )}
+
+        {/* The headline. One line saying what this dump shows — including
+            "nothing, look elsewhere", which is a genuinely useful answer and
+            the one people most often fail to reach on their own. */}
+        {v.headline && (
+          <div className="rounded-lg px-3.5 py-2.5 flex items-center gap-2.5"
+               style={{
+                 border: `1px solid ${suspects.some(x => x.severity === 'critical')
+                   ? 'color-mix(in srgb, var(--color-error) 32%, transparent)'
+                   : 'var(--color-surface-border)'}`,
+                 background: suspects.some(x => x.severity === 'critical')
+                   ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
+                   : 'var(--color-surface)',
+               }}>
+            <span className="text-[12.5px]"
+                  style={{
+                    color: suspects.some(x => x.severity === 'critical')
+                      ? 'var(--color-error)' : 'var(--color-text-secondary)',
+                  }}>
+              {v.headline}
+            </span>
+          </div>
+        )}
+
+        {/* Suspicious frames */}
+        {suspects.length > 0 && (
+          <div className="rounded-lg p-3.5 flex flex-col gap-3"
+               style={{ border: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
+            <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+              What the threads are doing
+            </span>
+            {suspects.map(sus => {
+              const color = sus.severity === 'critical' ? 'var(--color-error)'
+                : sus.severity === 'warning' ? 'var(--color-warning)'
+                : 'var(--color-text-muted)';
+              return (
+                <div key={sus.markerId} className="flex flex-col gap-1.5 pl-2.5"
+                     style={{ borderLeft: `2px solid ${color}` }}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[12.5px] font-medium" style={{ color }}>
+                      {sus.title}
+                    </span>
+                    <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
+                      {sus.threads.length} thread{sus.threads.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {/* The reason, always. A finding that says "suspicious" and
+                      nothing else costs the reader time to dismiss. */}
+                  <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+                    {sus.why}
+                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    {sus.threads.slice(0, 6).map(t => (
+                      <div key={t.name} className="flex items-baseline gap-2 font-mono text-[11px]">
+                        <span style={{ color: 'var(--color-text-primary)' }}>{t.name}</span>
+                        <span style={{ color: STATE_COLOR[t.state] }}>{t.state}</span>
+                        <span className="truncate" style={{ color: 'var(--color-text-muted)' }}>{t.frame}</span>
+                        {t.cpuMs !== undefined && t.cpuMs > 0 && (
+                          <span style={{ color: 'var(--color-text-muted)' }}>{t.cpuMs.toFixed(0)}ms cpu</span>
+                        )}
+                      </div>
+                    ))}
+                    {sus.threads.length > 6 && (
+                      <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+                        and {sus.threads.length - 6} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 

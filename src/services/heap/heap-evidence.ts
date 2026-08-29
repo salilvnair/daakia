@@ -130,24 +130,11 @@ export function buildEvidencePack(
   return pack;
 }
 
-/** The system prompt. Kept beside the pack so the two evolve together. */
-export const HEAP_SYSTEM_PROMPT = `You are a JVM memory analyst reading the output of a heap dump analyzer.
-
-The numbers you are given were computed by a real dominator-tree analysis — treat them as facts and never recompute or contradict them. You are NOT being asked to find the leak; the analyzer already did. You are being asked to explain it.
-
-Ground rules:
-- Only discuss classes that appear in the evidence. Never invent a class, field or stack frame.
-- Cite the actual number beside every claim you make.
-- String contents were deliberately withheld. Reason about shapes and counts; never speculate about what a value contained.
-- If the evidence does not support a conclusion, say what further evidence would settle it.
-
-Answer in four short sections:
-1. **What is holding the memory** — the accumulation point in one or two sentences.
-2. **Why it is still reachable** — read the path to GC roots.
-3. **Most likely cause** — the framework or code pattern this shape usually indicates. Say how confident you are.
-4. **What to check first** — two or three concrete things to look at in the codebase, most specific first.
-
-Be direct and short. A senior engineer is reading this while an incident is open.`;
+/**
+ * The system prompt now lives in the prompt registry with every other prompt in
+ * the product, and is re-exported here so callers do not have to care.
+ */
+export { HEAP_SYSTEM_PROMPT } from '../../panel/chat/doctor-prompts';
 
 export function buildUserMessage(pack: EvidencePack, dumpName: string): string {
   return `Heap dump: ${dumpName}\n\nEvidence:\n${JSON.stringify(pack, null, 2)}`;

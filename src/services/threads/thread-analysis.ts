@@ -9,6 +9,7 @@
  * Where both exist and disagree, that is worth surfacing, not hiding.
  */
 import type { DeadlockCycle, ThreadDump, ThreadInfo, ThreadState } from './jstack-parser';
+import { findSuspects, summariseSuspects, type SuspectFinding } from './thread-suspects';
 
 export interface LockContention {
   lockId: string;
@@ -50,6 +51,10 @@ export interface ThreadVerdict {
   pools: ThreadGroupStat[];
   /** Threads that are runnable and burning CPU, most first. */
   topCpu: { name: string; cpuMs: number; state: ThreadState; topFrame?: string }[];
+  /** Frames known to mean trouble, worst first. */
+  suspects: SuspectFinding[];
+  /** One line on what the dump shows — including "nothing, look elsewhere". */
+  headline: string;
 }
 
 const EMPTY_STATES = (): Record<ThreadState, number> => ({
@@ -248,6 +253,8 @@ export function analyzeThreadDump(dump: ThreadDump): ThreadVerdict {
       topFrame: (t.frames.find(f => !f.jdk) ?? t.frames[0])?.raw,
     }));
 
+  const suspects = findSuspects(threads);
+
   return {
     totalThreads: threads.length,
     daemonThreads,
@@ -258,5 +265,7 @@ export function analyzeThreadDump(dump: ThreadDump): ThreadVerdict {
     hotFrames: findHotFrames(threads),
     pools: groupThreads(threads),
     topCpu,
+    suspects,
+    headline: summariseSuspects(suspects, threads.length),
   };
 }
