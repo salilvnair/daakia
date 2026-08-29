@@ -595,6 +595,46 @@ if (!runningPods.length) {
     });
   }
 
+  // ── CAP_SYS_PTRACE ──
+  //
+  // Both directions, deliberately. A probe that can only ever return false is
+  // indistinguishable from a broken one, and this probe HAS been broken: the
+  // first version ended the shell script on a test that legitimately fails,
+  // and since a script exits with its last command's status, every pod in the
+  // cluster came back "unreachable".
+  const pyPlain = named('blackhole');
+  const pyTraceable = named('py-worker');
+
+  if (!pyPlain) {
+    skip('ptrace absent', 'no blackhole pod');
+  } else {
+    await checkAsync('reports no ptrace on a default container, and still probes it fully', async () => {
+      const c = await probeCapabilities(FIXTURE_CTX, FIXTURE_NS, pyPlain);
+      assert.equal(c.unreachable, undefined, 'probe failed outright: ' + c.unreachable);
+      assert.ok(c.shell, 'no shell found in a container that has bash');
+      assert.equal(c.python3, true, 'missed python3 in a python image');
+      assert.notEqual(c.ptrace, true, 'claimed CAP_SYS_PTRACE on a default container');
+
+      // And the action must be refused with a reason that says what to do,
+      // not attempted and failed after pip-installing into a live pod.
+      const sd = availableActions('python', c).find(a => a.id === 'stackdump');
+      assert.equal(sd.available, false, 'offered py-spy without ptrace');
+      assert.match(sd.reason, /SYS_PTRACE/, 'the refusal does not name the capability');
+    });
+  }
+
+  if (!pyTraceable) {
+    skip('ptrace present', 'no py-worker pod — apply dk8s-ptrace.yaml');
+  } else {
+    await checkAsync('reports ptrace on a container granted SYS_PTRACE', async () => {
+      const c = await probeCapabilities(FIXTURE_CTX, FIXTURE_NS, pyTraceable);
+      assert.equal(c.unreachable, undefined, 'probe failed outright: ' + c.unreachable);
+      assert.equal(c.ptrace, true, 'missed CAP_SYS_PTRACE on a container that holds it');
+      const sd = availableActions('python', c).find(a => a.id === 'stackdump');
+      assert.equal(sd.available, true, 'refused py-spy on a container that can run it');
+    });
+  }
+
   await checkAsync('an unknown artifact kind fails loudly rather than silently', async () => {
     const r = await collectArtifact(
       { context: FIXTURE_CTX, namespace: FIXTURE_NS, pod: runningPods[0].metadata.name },

@@ -1,0 +1,67 @@
+# =============================================================================
+# py-worker — a Python pod that CAN be profiled.
+# =============================================================================
+#
+# Exists to prove the ptrace probe reports true as well as false. The blackhole
+# pod covers the negative case (Kubernetes drops CAP_SYS_PTRACE by default);
+# without a pod that holds it, a probe hard-coded to return false would pass
+# every test we have.
+#
+# SYS_PTRACE is what py-spy needs to read another process's memory. Granting it
+# is a real decision — it lets a process in this container inspect and control
+# any other process in the same pod — which is exactly why dk8s refuses to
+# install py-spy into a container that does not already have it rather than
+# quietly failing afterwards.
+#
+# Deploy: kubectl --context docker-desktop apply -f dk8s-ptrace.yaml
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: py-worker
+  namespace: dk8s-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: py-worker }
+  template:
+    metadata:
+      labels: { app: py-worker, dk8s.daakia/runtime: python }
+    spec:
+      containers:
+        - name: worker
+          image: python:3.12-slim
+          securityContext:
+            capabilities:
+              add: ["SYS_PTRACE"]
+          command: ["python3", "-u", "-c"]
+          args:
+            - |
+              import threading, time, queue
+
+              work = queue.Queue()
+
+              def consume(n):
+                  # Named so the frames are recognisable in a py-spy dump.
+                  while True:
+                      item = work.get()
+                      time.sleep(0.4)
+                      print(f"worker-{n} handled {item}", flush=True)
+
+              def produce():
+                  i = 0
+                  while True:
+                      i += 1
+                      work.put(i)
+                      time.sleep(1.0)
+
+              for n in range(3):
+                  threading.Thread(target=consume, args=(n,), daemon=True).start()
+              threading.Thread(target=produce, daemon=True).start()
+
+              print("py-worker up, 3 consumers and a producer", flush=True)
+              while True:
+                  time.sleep(5)
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }

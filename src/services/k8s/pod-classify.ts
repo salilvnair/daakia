@@ -124,6 +124,14 @@ export interface PodCapabilities {
   jfr: boolean;
   /** PID of the JVM or interpreter, when we could find one. */
   targetPid?: string;
+  /**
+   * CAP_SYS_PTRACE is held.
+   *
+   * Kubernetes drops it by default. Without it nothing can read another
+   * process's memory, which is exactly what py-spy and every other sampling
+   * profiler needs — so an action depending on it must not be offered.
+   */
+  ptrace?: boolean;
   /** Probe could not run at all (no shell, RBAC, pod not running). */
   unreachable?: string;
 }
@@ -143,6 +151,22 @@ const PROBE_SCRIPT = [
   '  e=$(readlink "$p/exe" 2>/dev/null) || continue;',
   '  case "$e" in */java) echo "pid=java:${p#/proc/}"; break;; */python3*|*/python) echo "pid=python:${p#/proc/}"; break;; esac;',
   'done',
+  // CAP_SYS_PTRACE, bit 19 of the effective capability mask. Kubernetes
+  // drops it by default, and without it py-spy attaches and then fails with
+  // "Failed to copy Py_Version symbol" — a message that tells the reader
+  // nothing at all. Worse, by then py-spy has already been pip-installed
+  // into a running container. Knowing this up front is the difference
+  // between a greyed-out button carrying a reason and a pointless mutation
+  // of a live pod.
+  'c=$(grep -i "^CapEff:" /proc/self/status 2>/dev/null | tr -d "[:space:]" | cut -d: -f2);',
+  'if [ -n "$c" ]; then',
+  '  d=$(printf "%d" "0x$c" 2>/dev/null || echo 0);',
+  '  if [ "$(( d / 524288 % 2 ))" -eq 1 ]; then echo "cap=ptrace"; fi;',
+  'fi',
+  // The script's exit status is its last command's, and a capability check
+  // that legitimately finds nothing exits 1. Without this the whole probe
+  // reads as a failed exec and EVERY pod is reported unreachable.
+  'true',
 ].join('\n');
 
 export async function probeCapabilities(
@@ -189,6 +213,8 @@ export async function probeCapabilities(
         else if (b === 'jfr') caps.jfr = true;
       } else if (t.startsWith('pid=')) {
         caps.targetPid = t.slice(4).split(':')[1];
+      } else if (t === 'cap=ptrace') {
+        caps.ptrace = true;
       }
     }
     if (!caps.shell) caps.shell = sh;
@@ -266,10 +292,17 @@ export function availableActions(runtime: PodRuntime, caps: PodCapabilities): Ac
   if (runtime === 'python') {
     A({
       id: 'stackdump', label: 'Stack dump (py-spy)',
-      available: caps.python3,
-      reason: caps.python3
-        ? 'py-spy is installed on demand — off by default, it mutates the pod'
-        : 'no python3 in this container',
+      // Both are needed. Offering this with python3 but no ptrace installs
+      // py-spy into a live container and then fails anyway — the worst of
+      // both outcomes, and exactly what the fixture did before this probe.
+      available: caps.python3 && caps.ptrace === true,
+      reason: !caps.python3
+        ? 'no python3 in this container'
+        : caps.ptrace
+          ? 'py-spy is installed on demand — off by default, it mutates the pod'
+          : 'this container does not hold CAP_SYS_PTRACE, so nothing can read the '
+            + 'interpreter' + String.fromCharCode(8217) + 's memory. Kubernetes drops that '
+            + 'capability by default; add SYS_PTRACE to the securityContext to allow it.',
       mutatesPod: true,
     });
     A({
