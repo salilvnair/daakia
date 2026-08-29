@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SparklineView, SearchInputView } from '@salilvnair/dui';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { ExportLogsModal } from './ExportLogsModal';
+import { FolderExportIcon } from '../../icons';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
   formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
@@ -439,13 +440,15 @@ export function PodGrid() {
         <button
           type="button"
           onClick={toggleSelectMode}
-          className="text-[11px] px-2.5 py-1 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
+          className="text-[11px] px-2.5 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
           style={{
             background: selectMode ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
             border: `1px solid ${selectMode ? `color-mix(in srgb, ${ACCENT} 45%, transparent)` : 'var(--color-surface-border)'}`,
             color: selectMode ? ACCENT : 'var(--color-text-secondary)',
           }}
+          title={selectMode ? 'Leave selection mode' : 'Pick pods and export their logs'}
         >
+          <FolderExportIcon size={13} strokeWidth={1.8} />
           {selectMode ? 'Cancel' : 'Export logs'}
         </button>
 
@@ -470,7 +473,7 @@ export function PodGrid() {
       </div>
 
       {selectMode && (
-        <div className="flex items-center gap-3 px-4 py-1.5 flex-shrink-0"
+        <div className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0"
              style={{
                background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`,
                borderBottom: `1px solid color-mix(in srgb, ${ACCENT} 25%, transparent)`,
@@ -495,7 +498,7 @@ export function PodGrid() {
             type="button"
             onClick={openExport}
             disabled={!selected.length}
-            className="text-[11px] px-3 py-1 rounded-md cursor-pointer transition-colors"
+            className="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
             style={{
               background: selected.length ? ACCENT : 'var(--color-surface-hover)',
               color: selected.length ? 'var(--color-panel)' : 'var(--color-text-muted)',
@@ -503,6 +506,7 @@ export function PodGrid() {
               cursor: selected.length ? 'pointer' : 'not-allowed',
             }}
           >
+            <FolderExportIcon size={12} strokeWidth={2} />
             Export {selected.length || ''} log{selected.length === 1 ? '' : 's'}
           </button>
         </div>
@@ -511,29 +515,35 @@ export function PodGrid() {
       {/* Where the files went. Worth a persistent line rather than a toast —
           the path is the thing you need next, and a toast takes it away. */}
       {exportState?.phase === 'done' && (
-        <div className="flex items-center gap-2 px-4 py-1.5 flex-shrink-0 text-[11px]"
+        <div className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0 text-[11.5px]"
              style={{
                background: 'color-mix(in srgb, var(--color-method-get) 9%, transparent)',
                borderBottom: '1px solid color-mix(in srgb, var(--color-method-get) 25%, transparent)',
                color: 'var(--color-method-get)',
              }}>
-          <span>{exportState.summary}</span>
+          <FolderExportIcon size={13} strokeWidth={1.8} />
+          <span className="font-medium">{exportState.summary}</span>
+          {/* Selectable, not just a tooltip: the path is the thing you need
+              next, and you usually need to paste it somewhere. */}
           <span className="font-mono text-[10.5px] truncate text-[var(--color-text-muted)]"
+                style={{ userSelect: 'text' }}
                 title={exportState.destDir}>
             {exportState.destDir}
           </span>
           <div className="flex-1" />
           <button type="button"
                   onClick={() => useK8sStore.setState({ exportState: undefined })}
-                  className="cursor-pointer text-[11px]"
-                  style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)' }}>
-            dismiss
+                  className="cursor-pointer text-[11px] px-2 py-1 rounded"
+                  style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}>
+            Dismiss
           </button>
         </div>
       )}
 
       {capped && (
-        <div className="px-4 py-1.5 flex-shrink-0 text-[11px]"
+        <div className="px-4 py-2.5 flex-shrink-0 text-[11.5px]"
              style={{
                background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
                color: 'var(--color-warning)',
