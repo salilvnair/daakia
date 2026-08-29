@@ -25,6 +25,10 @@ import { join } from 'path';
 import { mkdir as mkdirp } from 'fs/promises';
 import { collectArtifact, type ArtifactKind, type CollectTarget } from '../../../services/k8s/k8s-artifacts';
 import { readMemoryProfile, assessHeapDumpSafety } from '../../../services/k8s/k8s-memory';
+import {
+  searchLogs, DEFAULT_SEARCH,
+  type SearchHandle, type SearchTarget, type SearchOptions,
+} from '../../../services/k8s/k8s-log-search';
 import { dk8sPrompt } from '../../chat/dk8s-prompts';
 import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
@@ -457,6 +461,8 @@ export function handleDk8sStopWatch(): void {
 /** Called when the panel goes away, so a watch cannot outlive its tab. */
 export function disposeDk8s(): void {
   stopAllWatches();
+  activeSearch?.cancel();
+  activeSearch = undefined;
   logStream?.stop();
   logStream = undefined;
   closeAllTerminals();
@@ -928,4 +934,56 @@ export async function handleDk8sRevealArtifacts(): Promise<void> {
   const dir = artifactDir();
   await mkdirp(dir);
   await vscode.env.openExternal(vscode.Uri.file(dir));
+}
+
+// ── Multi-pod log search ────────────────────────────────────────────────────
+
+/** One search at a time. Starting a second cancels the first. */
+let activeSearch: SearchHandle | undefined;
+
+/**
+ * Search several pods' logs at once.
+ *
+ * Everything expensive stays here. The logs are matched as they stream off
+ * kubectl and discarded line by line; only the hits — capped — are posted to
+ * the webview. Sending whole logs across the bridge and filtering them there
+ * is the version of this feature that locks the tab.
+ */
+export function handleDk8sSearchLogs(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  activeSearch?.cancel();
+
+  const targets = (msg.targets as SearchTarget[]) ?? [];
+  const opts: SearchOptions = {
+    ...DEFAULT_SEARCH,
+    ...(msg.options as Partial<SearchOptions> ?? {}),
+  };
+
+  if (!targets.length || !opts.query.trim()) {
+    postMessage({ type: 'dk8s:searchDone', pods: 0, matched: 0, scanned: 0, stopped: false });
+    return;
+  }
+
+  postMessage({ type: 'dk8s:searchStarted', total: targets.length, query: opts.query });
+
+  activeSearch = searchLogs(targets, opts, {
+    onPodDone: (result, matches) => {
+      postMessage({ type: 'dk8s:searchPod', result, matches });
+    },
+    onProgress: (done, total, pod) => {
+      postMessage({ type: 'dk8s:searchProgress', done, total, pod });
+    },
+    onFinished: (summary) => {
+      activeSearch = undefined;
+      postMessage({ type: 'dk8s:searchDone', ...summary });
+    },
+  });
+}
+
+export function handleDk8sCancelSearch(postMessage: PostMessage): void {
+  activeSearch?.cancel();
+  activeSearch = undefined;
+  postMessage({ type: 'dk8s:searchCancelled' });
 }

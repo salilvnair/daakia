@@ -80,7 +80,7 @@ import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol
 import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
-  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetKubectlPath,
+  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sSetKubectlPath,
   handleDk8sWatchPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
@@ -373,6 +373,12 @@ export class MainPanel {
         break;
       case 'dk8s:setGuardHeapDump':
         handleDk8sSetGuardHeapDump(msg, this._post);
+        break;
+      case 'dk8s:searchLogs':
+        handleDk8sSearchLogs(msg, this._post);
+        break;
+      case 'dk8s:cancelSearch':
+        handleDk8sCancelSearch(this._post);
         break;
       case 'dk8s:setKubectlPath':
         handleDk8sSetKubectlPath(msg, this._post);

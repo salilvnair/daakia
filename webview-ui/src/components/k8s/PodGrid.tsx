@@ -15,7 +15,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SparklineView, SearchInputView } from '@salilvnair/dui';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { ExportLogsModal } from './ExportLogsModal';
-import { FolderExportIcon, CloseIcon } from '../../icons';
+import { LogSearchModal } from './LogSearchModal';
+import { useDk8sSearchStore } from '../../store/dk8s-search-store';
+import { FolderExportIcon, CloseIcon, SearchIcon } from '../../icons';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
   formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
@@ -390,6 +392,9 @@ export function PodGrid() {
     capped, selectMode, selected, exportOpen, exportState,
     toggleSelectMode, selectAllVisible, openExport, closeExport,
   } = useK8sStore();
+  const searchOpen = useDk8sSearchStore(s => s.open);
+  const openSearch = useDk8sSearchStore(s => s.openSearch);
+  const closeSearch = useDk8sSearchStore(s => s.closeSearch);
   const searchRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -430,10 +435,12 @@ export function PodGrid() {
 
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <div ref={searchRef} style={{ maxWidth: 560, flex: 1 }}>
-          <SearchInputView value={filter} onChange={setFilter} placeholder="Filter pods  ( / )" size="sm" />
+        {/* Takes the row rather than capping at 560px — on a wide window the
+            cap left a long dead gap between the filter and the buttons. */}
+        <div ref={searchRef} className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
+          <SearchInputView value={filter} onChange={setFilter}
+                           placeholder="Filter pods  ( / )" size="sm" width="100%" />
         </div>
-        <div className="flex-1" />
 
         {/* Bulk export. Off by default: checkboxes on every card all the time
             would be clutter for the reading this grid is mostly used for. */}
@@ -503,6 +510,31 @@ export function PodGrid() {
               : `Select all ${visible.length} visible`}
           </button>
           <div className="flex-1" />
+
+          {/* Search sits beside Export because they take the same selection.
+              Searching is the cheaper of the two — it reads the logs and keeps
+              only hits — so it comes first. */}
+          <button
+            type="button"
+            onClick={openSearch}
+            disabled={!selected.length}
+            className="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
+            style={{
+              background: selected.length
+                ? 'color-mix(in srgb, var(--color-dk8s) 16%, transparent)'
+                : 'transparent',
+              color: selected.length ? 'var(--color-dk8s)' : 'var(--color-text-muted)',
+              border: `1px solid ${selected.length
+                ? 'color-mix(in srgb, var(--color-dk8s) 45%, transparent)'
+                : 'var(--color-surface-border)'}`,
+              fontWeight: 600,
+              cursor: selected.length ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <SearchIcon size={12} strokeWidth={2} />
+            Search {selected.length || ''} log{selected.length === 1 ? '' : 's'}
+          </button>
+
           <button
             type="button"
             onClick={openExport}
@@ -592,6 +624,7 @@ export function PodGrid() {
       </div>
 
       {exportOpen && <ExportLogsModal onClose={closeExport} />}
+      {searchOpen && <LogSearchModal onClose={closeSearch} />}
     </div>
   );
 }

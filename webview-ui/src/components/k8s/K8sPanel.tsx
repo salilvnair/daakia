@@ -19,6 +19,7 @@ import { PodGrid } from './PodGrid';
 import { PodDetail } from './PodDetail';
 import { useDk8sAiStore, applyDk8sAiError } from '../../store/dk8s-ai-store';
 import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
+import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 
@@ -177,6 +178,7 @@ export function K8sPanel() {
   const detail = useK8sStore(s => s.detail);
   const applyAi = useDk8sAiStore(s => s.apply);
   const applyDoctor = useDk8sDoctorStore(s => s.apply);
+  const applySearch = useDk8sSearchStore(s => s.apply);
   const handoff = useDk8sDoctorStore(s => s.handoff);
   const clearHandoff = useDk8sDoctorStore(s => s.clearHandoff);
   const openDoctorTab = useTabsStore(s => s.openDoctorTab);
@@ -210,12 +212,13 @@ export function K8sPanel() {
       // Collection messages belong to the doctor store; everything else to the
       // pod store. Both are dk8s:-prefixed, so the split is by name.
       if (/^dk8s:(collect|handoff)/.test(type)) applyDoctor(msg);
+      else if (/^dk8s:search/.test(type)) applySearch(msg);
       else apply(msg);
     };
     window.addEventListener('message', handler);
     probe();
     return () => window.removeEventListener('message', handler);
-  }, [apply, probe, applyAi, applyDoctor]);
+  }, [apply, probe, applyAi, applyDoctor, applySearch]);
 
   return (
     // `relative` so the detail overlay can pin to this panel rather than the
