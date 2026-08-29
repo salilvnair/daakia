@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   severityOf, sortPods, matchesFilter, restartLabel, isRecentRestart,
-  shortAge, formatBytes, formatCpu, pulse, groupPods, namespaceHue,
+  shortAge, formatBytes, formatCpu, pulse, groupPods, groupHue,
 } from './pod-view';
 import type { PodSummary } from '../../store/k8s-store';
 
@@ -199,15 +199,33 @@ describe('namespace grouping', () => {
     expect(new Set(groups.map(g => g.context))).toEqual(new Set(['prod', 'staging']));
   });
 
-  it('gives a namespace the same tint every time, and avoids the red band', () => {
-    // Stable so a namespace does not change colour between sessions; off-red
-    // so a group tint can never be mistaken for an alert.
-    expect(namespaceHue('payments')).toBe(namespaceHue('payments'));
-    for (const ns of ['payments', 'dk8s-test', 'zp-platform', 'kube-system', 'a', 'default']) {
-      const h = namespaceHue(ns);
-      expect(h).toBeGreaterThanOrEqual(45);
-      expect(h).toBeLessThan(335);
+  it('spreads group tints as far apart as the count allows', () => {
+    // Deriving the hue from a hash collided twice — dk8s-test and payments
+    // landed on the same value, which is why every group looked green. Spacing
+    // by index makes separation a property of the layout rather than luck.
+    for (const total of [2, 3, 5, 8]) {
+      const hues = Array.from({ length: total }, (_, i) => groupHue(i, total));
+      const gaps = hues.slice(1).map((h, i) => h - hues[i]);
+      const expected = 290 / total;
+      for (const gap of gaps) expect(gap).toBeCloseTo(expected, 5);
     }
+  });
+
+  it('never lands a tint in the red band, where it would read as an alert', () => {
+    for (const total of [1, 2, 3, 8, 20]) {
+      for (let i = 0; i < total; i++) {
+        const h = groupHue(i, total);
+        expect(h).toBeGreaterThanOrEqual(45);
+        expect(h).toBeLessThan(335);
+      }
+    }
+  });
+
+  it('gives every visible group a distinct tint', () => {
+    const pods = ['alpha', 'beta', 'gamma', 'delta'].map(ns =>
+      pod({ name: `p-${ns}`, namespace: ns, context: 'c1' }));
+    const tints = groupPods(pods, NOW).map(g => g.tint.hue);
+    expect(new Set(tints).size).toBe(tints.length);
   });
 });
 

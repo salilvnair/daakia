@@ -136,17 +136,35 @@ export function restartLabel(pod: PodSummary, now = Date.now()): string {
  * low saturation and mixed heavily into the surface. The result reads as a
  * tint, not a colour.
  */
-export function namespaceHue(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  // Quantise to 12 buckets stepped by the golden angle rather than taking the
-  // hash modulo the range directly. A raw modulo puts two namespaces two
-  // degrees apart as often as not, which is indistinguishable on screen — the
-  // first version did exactly that and every group looked the same colour.
-  // Golden-angle stepping maximises the minimum distance between buckets.
-  const bucket = h % 12;
+function hashOf(name: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) {
+    h ^= name.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * Hue for the group at `index` of `total`.
+ *
+ * Three attempts at deriving this from a hash all failed the same way, and the
+ * third makes the reason obvious: hashing to a hue is a random draw, so
+ * collisions are a birthday problem, not bad luck. `hash % 12` collided
+ * outright (`dk8s-test` and `payments` both hit bucket 5); the golden angle on
+ * the raw hash put `dk8s-test` and `zp-platform` 0.4 degrees apart.
+ *
+ * The number of groups is known at render time, so they can simply be spread
+ * evenly instead. Maximum separation, guaranteed, for whatever is on screen.
+ *
+ * The trade is that a namespace's colour depends on how many groups are
+ * showing, so adding one can shift the others. That is worth it: telling this
+ * namespace from that one on the screen in front of you is the job, and a
+ * colour that is stable but indistinguishable does not do it.
+ */
+export function groupHue(index: number, total: number): number {
   // Start at 45 so a tint can never land in the red band and read as an alert.
-  return 45 + ((bucket * 137.5) % 290);
+  return 45 + (index * 290) / Math.max(1, total);
 }
 
 export interface NamespaceTint {
@@ -159,15 +177,18 @@ export interface NamespaceTint {
   wash: string;
 }
 
-export function namespaceTint(name: string): NamespaceTint {
-  const hue = namespaceHue(name);
+export function namespaceTint(index: number, total: number): NamespaceTint {
+  const hue = groupHue(index, total);
+  // Alternating saturation gives neighbouring groups a second difference, so
+  // even a crowded palette does not rely on hue alone.
+  const sat = index % 2 === 0 ? 62 : 45;
   return {
     hue,
     // Strong enough to tell groups apart, weak enough that a red pod inside
     // one still wins the eye. Semantic colour must stay the loudest thing.
-    border: `hsl(${hue} 50% 58% / 0.45)`,
-    label: `hsl(${hue} 55% 66%)`,
-    wash: `hsl(${hue} 45% 50% / 0.10)`,
+    border: `hsl(${hue} ${sat}% 58% / 0.5)`,
+    label: `hsl(${hue} ${sat}% 68%)`,
+    wash: `hsl(${hue} ${sat}% 50% / 0.11)`,
   };
 }
 
@@ -186,7 +207,9 @@ export function groupPods(pods: PodSummary[], now = Date.now()): PodGroup[] {
     const key = `${pod.context ?? ''}/${pod.namespace}`;
     let g = byKey.get(key);
     if (!g) {
-      g = { key, context: pod.context, namespace: pod.namespace, pods: [], tint: namespaceTint(pod.namespace) };
+      // Tint is filled in below: it depends on the group's position in the
+      // final ordering, which is not known until every pod has been placed.
+      g = { key, context: pod.context, namespace: pod.namespace, pods: [], tint: namespaceTint(0, 1) };
       byKey.set(key, g);
     }
     g.pods.push(pod);
@@ -196,12 +219,14 @@ export function groupPods(pods: PodSummary[], now = Date.now()): PodGroup[] {
   // under you; a stable alphabetical order is worth more than putting the
   // broken group on top, and the header already says how many need attention.
   // Pods inside each group are still severity-ordered.
-  return [...byKey.values()]
+  const ordered = [...byKey.values()]
     .map(g => ({ ...g, pods: sortPods(g.pods, now) }))
     .sort((a, b) => {
       const d = a.namespace.localeCompare(b.namespace);
       return d !== 0 ? d : (a.context ?? '').localeCompare(b.context ?? '');
     });
+
+  return ordered.map((g, i) => ({ ...g, tint: namespaceTint(i, ordered.length) }));
 }
 
 export interface PulseCounts {

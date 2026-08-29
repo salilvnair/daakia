@@ -509,7 +509,10 @@ export function PodGrid() {
             disabled={!selected.length}
             className="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
             style={{
-              background: selected.length ? ACCENT : 'var(--color-surface-hover)',
+              // Amber, matching the export mark on the toolbar toggle. This is
+              // the button that actually writes files, so it should read as
+              // the export action rather than as generic dk8s chrome.
+              background: selected.length ? 'var(--color-warning)' : 'var(--color-surface-hover)',
               color: selected.length ? 'var(--color-panel)' : 'var(--color-text-muted)',
               border: 'none', fontWeight: 600,
               cursor: selected.length ? 'pointer' : 'not-allowed',
