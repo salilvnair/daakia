@@ -49,7 +49,7 @@ const {
   createJsonObjectSplitter, probeEnvironment, run,
   listContexts, checkReachable, listNamespaces, looksLikeProduction,
   classifyFromSpec, workloadKey, availableActions, probeCapabilities,
-  toPodSummary, watchPods, topPods,
+  toPodSummary, watchPods, topPods, execFailureKind,
   levelOf, parseLine, streamLogs,
   collectArtifact, extractLastThreadDump, decodeProcNetTcp, artifactName,
   logFileName,
@@ -261,6 +261,37 @@ check('derives the Deployment from a ReplicaSet owner', () => {
     status: { phase: 'Running', containerStatuses: [] },
   });
   assert.deepEqual(p.workload, { kind: 'Deployment', name: 'orders-api' });
+});
+
+// ── Why an exec failed ──────────────────────────────────────────────────────
+//
+// These are the real stderr strings from the fixture cluster. Getting this
+// wrong means telling someone to attach a debug container to a pod that is
+// crashlooping, which cannot work and costs them the time it takes to find
+// out.
+console.log('\nexec failure classification');
+
+check('an OCI executable lookup means the binary is missing', () => {
+  assert.equal(
+    execFailureKind('error: Internal error occurred: error executing command in container: '
+      + 'failed to exec in container: failed to start exec: OCI runtime exec failed: '
+      + 'exec failed: unable to start container process: exec: "bash": executable file not found in $PATH'),
+    'missing-binary');
+});
+
+check('a missing container means the pod is not running', () => {
+  // What a CrashLoopBackOff or OOMKilled pod actually returns.
+  assert.equal(
+    execFailureKind('error: unable to upgrade connection: container not found ("zp-backend")'),
+    'not-running');
+});
+
+check('an unrecognised failure is treated as not-running, not as distroless', () => {
+  // The safer default: claiming a pod is distroless is a positive assertion
+  // that sends the reader somewhere specific, and being wrong about it costs
+  // more than saying nothing.
+  assert.equal(execFailureKind('error: something nobody has seen before'), 'not-running');
+  assert.equal(execFailureKind(''), 'not-running');
 });
 
 // ── Live cluster ────────────────────────────────────────────────────────────
@@ -634,6 +665,41 @@ if (!runningPods.length) {
       assert.equal(sd.available, true, 'refused py-spy on a container that can run it');
     });
   }
+
+  // The three real cases, side by side. A version of this that only ever saw
+  // one of them would happily pass with the classification inverted.
+  await checkAsync('separates distroless from not-running on real pods', async () => {
+    const probeShell = async (podName) => {
+      let lastError = '';
+      for (const c of ['bash', 'sh', 'ash']) {
+        const r = await run(['--context', FIXTURE_CTX, '-n', FIXTURE_NS, 'exec', podName,
+                             '--', 'which', c], { timeoutMs: 15_000 });
+        if (r.ok && r.stdout.trim()) return { shell: c };
+        if (r.stderr) lastError = r.stderr;
+      }
+      return { shell: null, kind: execFailureKind(lastError) };
+    };
+
+    const all = livePods.map(p => p.metadata.name);
+    const distroless = all.find(x => x.startsWith('no-shell'));
+    const down = all.find(x => x.startsWith('zp-backend-crashloop') || x.startsWith('zp-backend-oom'));
+    const normal = all.find(x => x.startsWith('jdk-leaky'));
+
+    if (distroless) {
+      const r = await probeShell(distroless);
+      assert.equal(r.shell, null, 'found a shell in the distroless fixture');
+      assert.equal(r.kind, 'missing-binary', 'distroless pod was not read as missing a binary');
+    }
+    if (down) {
+      const r = await probeShell(down);
+      assert.equal(r.shell, null, 'exec succeeded against a container that is not running');
+      assert.equal(r.kind, 'not-running', 'a down pod was mistaken for distroless');
+    }
+    if (normal) {
+      const r = await probeShell(normal);
+      assert.ok(r.shell, 'no shell found in a container that has bash');
+    }
+  });
 
   await checkAsync('an unknown artifact kind fails loudly rather than silently', async () => {
     const r = await collectArtifact(

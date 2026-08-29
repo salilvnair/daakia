@@ -29,7 +29,7 @@ import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
 import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-stream';
 import { run, kubectlBinary, resolveBinary } from '../../../services/k8s/kubectl';
-import { probeCapabilities, classifyFromSpec, availableActions } from '../../../services/k8s/pod-classify';
+import { probeCapabilities, classifyFromSpec, availableActions, execFailureKind } from '../../../services/k8s/pod-classify';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -564,6 +564,7 @@ export async function handleDk8sShell(
   // on one fails with an OCI error that reads like a permissions problem and
   // sends people down entirely the wrong path, so probe first.
   let shell: string | undefined;
+  let lastError = '';
   for (const candidate of ['bash', 'sh', 'ash']) {
     const r = await run([
       '--context', context, '-n', namespace, 'exec', pod,
@@ -571,13 +572,30 @@ export async function handleDk8sShell(
       '--', 'which', candidate,
     ], { timeoutMs: 15_000 });
     if (r.ok && r.stdout.trim()) { shell = candidate; break; }
+    if (r.stderr) lastError = r.stderr;
   }
 
   if (!shell) {
+    // "No shell" and "this container is not running" both fail exec, and
+    // conflating them is a confident wrong answer: telling someone to attach a
+    // debug container to a CrashLoopBackOff pod sends them down a path that
+    // cannot work, when the real answer is to read the previous run's log.
+    // Only the executable-lookup phrasing actually means the shell is absent.
+    const shellAbsent = execFailureKind(lastError) === 'missing-binary';
+
     postMessage({
       type: 'dk8s:shellUnavailable', pod,
-      reason: 'No shell in this container — it looks distroless.',
-      suggestion: `kubectl --context ${context} -n ${namespace} debug -it ${pod} --image=busybox${container ? ` --target=${container}` : ''}`,
+      reason: shellAbsent
+        ? 'No shell in this container — it looks distroless.'
+        : 'This container is not running, so there is nothing to open a shell in.',
+      suggestion: shellAbsent
+        ? `kubectl --context ${context} -n ${namespace} debug -it ${pod} --image=busybox${container ? ` --target=${container}` : ''}`
+        : `kubectl --context ${context} -n ${namespace} logs ${pod} --previous`,
+      // For a pod that is down, the log from the run before the last restart
+      // is where the failure is — so point straight at it.
+      suggestionLabel: shellAbsent
+        ? 'Attach a debug container with a shell in it instead:'
+        : 'Read the previous run’s log instead — that is where the failure is:',
     });
     return;
   }

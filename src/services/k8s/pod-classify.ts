@@ -169,6 +169,26 @@ const PROBE_SCRIPT = [
   'true',
 ].join('\n');
 
+/**
+ * Why an exec failed.
+ *
+ * "This image has no shell" and "this container is not running" both come back
+ * as a failed exec, and conflating them produces a confident wrong answer:
+ * telling someone to attach a debug container to a CrashLoopBackOff pod sends
+ * them down a path that cannot work, when what they need is the previous run's
+ * log. Only kubectl's executable-lookup phrasing actually means the binary is
+ * missing; "container not found" and "unable to upgrade connection" mean the
+ * container is gone.
+ *
+ * Shared by the capability probe and the shell handler so there is one copy of
+ * this judgement rather than two that can drift apart.
+ */
+export function execFailureKind(stderr: string): 'missing-binary' | 'not-running' {
+  return /executable file not found|no such file or directory/i.test(stderr)
+    ? 'missing-binary'
+    : 'not-running';
+}
+
 export async function probeCapabilities(
   ctx: string,
   namespace: string,
@@ -195,8 +215,7 @@ export async function probeCapabilities(
       // pod was reported as distroless, which is a confident wrong answer and
       // worse than no answer. Only the executable-lookup phrasing means "try
       // the next shell".
-      const missingExe = /executable file not found|no such file or directory/i.test(r.stderr);
-      if (missingExe) continue;
+      if (execFailureKind(r.stderr) === 'missing-binary') continue;
       caps.unreachable = firstLine(r.stderr) || r.failure || `exit ${r.code}`;
       return caps;
     }

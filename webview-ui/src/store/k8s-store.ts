@@ -278,7 +278,7 @@ interface K8sState {
   runtime?: { runtime: string; confidence: number; detectedFrom: string };
   actions: PodAction[];
   probeBusy: boolean;
-  shellNotice?: { reason: string; suggestion: string };
+  shellNotice?: { reason: string; suggestion: string; suggestionLabel?: string };
 
   probe: () => void;
   useContext: (name: string) => void;
@@ -794,7 +794,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         break;
 
       case 'dk8s:shellUnavailable':
-        set({ shellNotice: { reason: msg.reason as string, suggestion: msg.suggestion as string } });
+        set({ shellNotice: {
+          reason: msg.reason as string,
+          suggestion: msg.suggestion as string,
+          suggestionLabel: msg.suggestionLabel as string | undefined,
+        } });
         break;
 
       case 'dk8s:sensitivitySet':

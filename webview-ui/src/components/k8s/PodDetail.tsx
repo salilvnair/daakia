@@ -183,7 +183,7 @@ export function PodDetail() {
               {shellNotice.reason}
             </span>
             <span className="text-[10.5px] text-[var(--color-text-muted)]">
-              Attach a debug container with a shell in it instead:
+              {shellNotice.suggestionLabel ?? 'Attach a debug container with a shell in it instead:'}
             </span>
             <code className="text-[10.5px] font-mono px-2 py-1.5 rounded overflow-auto"
                   style={{ background: 'var(--color-surface-hover)', color: 'var(--color-text-primary)' }}>
