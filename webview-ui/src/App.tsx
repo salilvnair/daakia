@@ -81,6 +81,9 @@ export default function App() {
     return () => window.removeEventListener('message', handler);
   }, []);
   const activeProtocol = useTabsStore(s => s.activeProtocol);
+  // Tabs that take over the whole surface, so the protocol rail should show
+  // nothing as selected while one of them is open.
+  const STANDALONE_TABS = ['settings', 'mock-server', 'doctor', 'dk8s', 'state-machine', 'wiki', 'daakia-ai'];
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
   const protocolAccent = getProtocolAccent(activeProtocol);
@@ -161,6 +164,7 @@ export default function App() {
   // Track response arrival → auto-maximize response
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = tabs.find(t => t.id === activeTabId);
+  const standaloneActive = !!activeTab?.type && STANDALONE_TABS.includes(activeTab.type);
   // Subscribe to breakpoint changes for snapshot persistence
   const debugBreakpoints = useDebugStore(s => s.breakpoints);
   const debugDisabledBps = useDebugStore(s => s.disabledBreakpoints);
@@ -487,10 +491,13 @@ export default function App() {
       {monitorPrefill && (
         <ApiMonitor prefill={monitorPrefill} onClose={() => setMonitorPrefill(null)} />
       )}
+      {/* A standalone tab — settings, dk8s, doctor, mock-server, wiki, the AI
+          tab, the state machine — owns the whole surface. The protocol rail
+          must not keep showing REST as selected underneath it. */}
       {/* Left protocol icon rail */}
       <div className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-r border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
         <ProtocolIcon
-          active={activeProtocol === 'rest'}
+          active={!standaloneActive && activeProtocol === 'rest'}
           accentColor="var(--color-protocol-rest)"
           onClick={() => switchProtocol('rest')}
           title="REST"
@@ -499,7 +506,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'graphql'}
+          active={!standaloneActive && activeProtocol === 'graphql'}
           accentColor="var(--color-protocol-graphql)"
           onClick={() => switchProtocol('graphql')}
           title="GraphQL"
@@ -508,7 +515,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'websocket'}
+          active={!standaloneActive && activeProtocol === 'websocket'}
           accentColor="var(--color-protocol-websocket)"
           onClick={() => switchProtocol('websocket')}
           title="Real time"
@@ -517,7 +524,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'grpc'}
+          active={!standaloneActive && activeProtocol === 'grpc'}
           accentColor="var(--color-protocol-grpc)"
           onClick={() => switchProtocol('grpc')}
           title="gRPC"
@@ -526,7 +533,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'soap'}
+          active={!standaloneActive && activeProtocol === 'soap'}
           accentColor="var(--color-protocol-soap)"
           onClick={() => switchProtocol('soap')}
           title="SOAP"
@@ -535,7 +542,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'ai'}
+          active={!standaloneActive && activeProtocol === 'ai'}
           accentColor="var(--color-protocol-ai)"
           onClick={() => switchProtocol('ai')}
           title="AI"
@@ -544,7 +551,7 @@ export default function App() {
         </ProtocolIcon>
 
         <ProtocolIcon
-          active={activeProtocol === 'mcp'}
+          active={!standaloneActive && activeProtocol === 'mcp'}
           accentColor="var(--color-protocol-mcp)"
           onClick={() => switchProtocol('mcp')}
           title="MCP"
