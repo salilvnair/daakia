@@ -91,6 +91,7 @@ export function ClusterPicker() {
           <ButtonView label="Select all" size="sm" variant="secondary"
                       onClick={() => setChecked(contexts.map(c => c.name))} />
           <ButtonView label={busy ? 'Connecting…' : 'Continue'} size="sm" variant="primary"
+                      accentColor={ACCENT}
                       disabled={!checked.length || busy}
                       onClick={() => useContexts(checked)} />
         </>
@@ -109,17 +110,21 @@ export function ClusterPicker() {
               key={c.name}
               type="button"
               onClick={() => toggle(c.name)}
-              className="flex items-center gap-3 px-4 py-3.5 text-left cursor-pointer transition-colors"
+              className="flex items-center gap-3.5 px-4 py-4 text-left cursor-pointer transition-colors"
               style={{
-                background: on ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'transparent',
-                border: 'none', borderBottom: '1px solid var(--color-surface-border)',
+                background: on ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'transparent',
+                border: 'none',
+                borderBottom: '1px solid var(--color-surface-border)',
+                // Same selected-state rail the namespace rows use, so the two
+                // screens read as one flow rather than two designs.
+                borderLeft: `2px solid ${on ? ACCENT : 'transparent'}`,
               }}
               onMouseEnter={e => { e.currentTarget.style.background = on ? `color-mix(in srgb, ${ACCENT} 13%, transparent)` : 'var(--color-surface-hover)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = on ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'transparent'; }}
             >
               <Check on={on} />
-              <div className="flex flex-col gap-1 flex-1 min-w-0">
-                <span className="text-[12.5px] font-mono truncate"
+              <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                <span className="text-[13px] font-mono truncate"
                       style={{ color: on ? ACCENT : 'var(--color-text-primary)' }}>
                   {c.name}
                 </span>
@@ -128,7 +133,7 @@ export function ClusterPicker() {
                 </span>
               </div>
               {c.current && (
-                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0"
+                <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded flex-shrink-0"
                       style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 14%, transparent)` }}>
                   kubeconfig default
                 </span>
@@ -207,7 +212,8 @@ function OfferBlock({
         {/* Only offered when the name is not already on the list — otherwise
             "add" would mean "add a duplicate", which it cannot do. */}
         {canAdd && (
-          <ButtonView label="+  Add and save" size="md" variant="primary" onClick={addManual} />
+          <ButtonView label="+  Add and save" size="md" variant="primary"
+                      accentColor={ACCENT} onClick={addManual} />
         )}
       </div>
 
@@ -227,10 +233,13 @@ function OfferBlock({
         <p className="text-[11px] font-mono m-0" style={{ color: 'var(--color-error)' }}>{offer.error}</p>
       )}
 
+      {/* One per row, full width. A three-column grid of short names made the
+          eye jump around to read a list it should be able to scan straight
+          down, and left most of the width unused anyway. */}
       {all.length > 0 && (
-        <div className="grid gap-1"
-             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
-          {shown.map(ns => {
+        <div className="flex flex-col rounded-md overflow-hidden"
+             style={{ border: '1px solid var(--color-surface-border)' }}>
+          {shown.map((ns, i) => {
             const on = isOn(ns);
             const pinned = offer.pinned.includes(ns);
             return (
@@ -238,16 +247,18 @@ function OfferBlock({
                 key={ns}
                 type="button"
                 onClick={() => toggle({ context: offer.context, namespace: ns })}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left cursor-pointer transition-colors"
+                className="flex items-center gap-3 px-3.5 py-2.5 text-left cursor-pointer transition-colors"
                 style={{
                   background: on ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'var(--color-surface)',
-                  border: `1px solid ${on ? `color-mix(in srgb, ${ACCENT} 45%, transparent)` : 'var(--color-surface-border)'}`,
+                  border: 'none',
+                  borderBottom: i === shown.length - 1 ? 'none' : '1px solid var(--color-surface-border)',
+                  borderLeft: `2px solid ${on ? ACCENT : 'transparent'}`,
                 }}
                 onMouseEnter={e => { if (!on) e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
                 onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'var(--color-surface)'; }}
               >
                 <Check on={on} />
-                <span className="text-[11.5px] font-mono truncate flex-1"
+                <span className="text-[12px] font-mono truncate flex-1"
                       style={{ color: on ? ACCENT : 'var(--color-text-primary)' }}>
                   {ns}
                 </span>
@@ -306,7 +317,7 @@ export function NamespaceMultiPicker() {
             {checked.length ? `${checked.length} namespace${checked.length === 1 ? '' : 's'} selected` : 'Nothing selected yet'}
           </span>
           <ButtonView label="Back" size="sm" variant="secondary" onClick={openContextPicker} />
-          <ButtonView label="Watch" size="sm" variant="primary"
+          <ButtonView label="Watch" size="sm" variant="primary" accentColor={ACCENT}
                       disabled={!checked.length} onClick={() => setTargets(checked)} />
         </>
       }

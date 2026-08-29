@@ -10,7 +10,7 @@
  * dead-end when a cluster says no.
  */
 import { useEffect } from 'react';
-import { Dk8sIcon } from '../../icons';
+import { Dk8sIcon, EyeIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
 import { SensitivityPrompt, UnreachableNotice } from './ContextPicker';
@@ -74,7 +74,7 @@ ${full}` : title}
 function Breadcrumb() {
   const {
     context, sensitivity, reachable, targets, selectedContexts,
-    openContextPicker, openNamespacePicker,
+    openContextPicker, openNamespacePicker, startWatch, watchStatus,
   } = useK8sStore();
   const isProd = !!context && sensitivity[context] === 'production';
 
@@ -119,6 +119,32 @@ function Breadcrumb() {
       )}
 
       <div className="flex-1" />
+
+      {/* The same thing the picker's Watch button does. Once you are past the
+          pickers there is no other way to say "go and look again", and a
+          reconnecting watch is exactly when you want to ask for that. */}
+      {targets.length > 0 && (
+        <button
+          type="button"
+          onClick={startWatch}
+          title={watchStatus === 'connected'
+            ? 'Watching — click to re-read every namespace'
+            : 'Not watching — click to reconnect'}
+          className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md cursor-pointer transition-colors flex-shrink-0"
+          style={{
+            background: 'transparent',
+            border: `1px solid ${watchStatus === 'connected'
+              ? `color-mix(in srgb, ${ACCENT} 35%, transparent)`
+              : 'var(--color-surface-border)'}`,
+            color: watchStatus === 'connected' ? ACCENT : 'var(--color-text-muted)',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 12%, transparent)`; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          <EyeIcon size={12} strokeWidth={1.8} />
+          Watch
+        </button>
+      )}
 
       {reachable?.serverVersion && (
         <span className="text-[10.5px] font-mono text-[var(--color-text-muted)]">
