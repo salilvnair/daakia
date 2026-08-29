@@ -14,6 +14,7 @@ import {
   listContexts, checkReachable, listNamespaces, defaultNamespace, looksLikeProduction,
 } from '../../../services/k8s/kube-context';
 import { getSetting, setSetting } from '../../../storage/db';
+import { watchPods, topPods, type WatchHandle } from '../../../services/k8s/k8s-watch';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -121,6 +122,8 @@ export function handleDk8sSetNamespace(
   if (!namespace) return;
   saveState({ namespace });
   postMessage({ type: 'dk8s:namespaceSet', namespace });
+  // The old namespace's watch is now pointing at the wrong place; move it.
+  handleDk8sWatchPods({ namespace }, postMessage);
 }
 
 /** Record the user's answer to "is this production?". Never inferred. */
@@ -134,6 +137,74 @@ export function handleDk8sSetSensitivity(
   const sensitivity = { ...(state().sensitivity ?? {}), [context]: level } as Record<string, 'normal' | 'production'>;
   saveState({ sensitivity });
   postMessage({ type: 'dk8s:sensitivitySet', context, level });
+}
+
+// ── Live pod watch ──────────────────────────────────────────────────────────
+//
+// One watch and one metrics poller at a time. dk8s is a single tab holding a
+// single namespace, so a second watch on the same namespace would double the
+// load for nothing — and leaking the old one on every namespace switch is the
+// easy bug to write here.
+
+let activeWatch: WatchHandle | undefined;
+let metricsTimer: NodeJS.Timeout | undefined;
+let watchKey = '';
+
+const METRICS_INTERVAL_MS = 15_000;
+
+function stopWatch(): void {
+  activeWatch?.stop();
+  activeWatch = undefined;
+  if (metricsTimer) clearInterval(metricsTimer);
+  metricsTimer = undefined;
+  watchKey = '';
+}
+
+export function handleDk8sWatchPods(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const saved = state();
+  const context = String(msg.context ?? saved.context ?? '');
+  const namespace = String(msg.namespace ?? saved.namespace ?? '');
+  if (!context || !namespace) return;
+
+  const key = `${context}/${namespace}`;
+  if (key === watchKey && activeWatch) return;   // already watching exactly this
+  stopWatch();
+  watchKey = key;
+
+  activeWatch = watchPods(context, namespace, {
+    onSnapshot: (pods) => postMessage({ type: 'dk8s:podSnapshot', context, namespace, pods }),
+    // Spread AFTER `type` would overwrite the message type with the watch
+    // event's own ADDED/MODIFIED/DELETED and break routing entirely, so the
+    // event kind travels under its own name.
+    onEvent: (event) => postMessage({
+      type: 'dk8s:podEvent', context, namespace,
+      eventType: event.type, pod: event.pod,
+    }),
+    onStatus: (status, detail) => postMessage({ type: 'dk8s:watchStatus', context, namespace, status, detail }),
+  });
+
+  // Metrics are polled rather than watched — there is no watch API for them.
+  // Absent metrics-server is normal, so a null result hides the column instead
+  // of reporting a failure the user cannot act on.
+  const poll = async () => {
+    const usage = await topPods(context, namespace);
+    if (watchKey !== key) return;    // namespace changed while we were waiting
+    postMessage({ type: 'dk8s:podUsage', context, namespace, usage, available: usage !== null });
+  };
+  void poll();
+  metricsTimer = setInterval(poll, METRICS_INTERVAL_MS);
+}
+
+export function handleDk8sStopWatch(): void {
+  stopWatch();
+}
+
+/** Called when the panel goes away, so a watch cannot outlive its tab. */
+export function disposeDk8s(): void {
+  stopWatch();
 }
 
 /** Explicit kubectl path, for when it is installed somewhere unusual. */

@@ -1,5 +1,5 @@
 /**
- * dk8s M1 tests — the runner, the classifier, and the context services.
+ * dk8s tests — the runner, the classifier, the context services, and the watch.
  *
  * Two layers in one file, deliberately:
  *
@@ -32,6 +32,7 @@ writeFileSync(entry, [
   `export * from ${abs('src/services/k8s/kubectl.ts')};`,
   `export * from ${abs('src/services/k8s/kube-context.ts')};`,
   `export * from ${abs('src/services/k8s/pod-classify.ts')};`,
+  `export * from ${abs('src/services/k8s/k8s-watch.ts')};`,
 ].join('\n'));
 
 const esbuild = await import(pathToFileURL(resolve('node_modules/esbuild/lib/main.js')).href);
@@ -45,6 +46,7 @@ const {
   createJsonObjectSplitter, probeEnvironment, run,
   listContexts, checkReachable, listNamespaces, looksLikeProduction,
   classifyFromSpec, workloadKey, availableActions, probeCapabilities,
+  toPodSummary, watchPods, topPods,
 } = k8s;
 
 let failures = 0;
@@ -193,6 +195,68 @@ check('does not match dev or staging', () => {
   assert.equal(looksLikeProduction('reproduction-tests', ''), false, '"reproduction" contains "produc"');
 });
 
+// ── Pod summary mapping ─────────────────────────────────────────────────────
+console.log('\npod summary');
+
+check('surfaces OOMKilled from the PREVIOUS run, not just the current state', () => {
+  // A pod that was OOMKilled and restarted is Running again. The evidence is
+  // in lastState, and a grid that only reads current state calls it healthy.
+  const p = toPodSummary({
+    metadata: { name: 'x', namespace: 'ns', uid: 'u1' },
+    spec: { containers: [{ image: 'app:1' }] },
+    status: {
+      phase: 'Running',
+      containerStatuses: [{
+        name: 'app', ready: true, restartCount: 3, image: 'app:1',
+        lastState: { terminated: { reason: 'OOMKilled', finishedAt: '2026-08-29T11:59:00Z' } },
+      }],
+    },
+  });
+  assert.equal(p.reason, 'OOMKilled');
+  assert.equal(p.restarts, 3);
+  assert.equal(p.lastRestartAt, '2026-08-29T11:59:00Z');
+  assert.equal(p.healthy, false, 'a pod OOMKilled minutes ago is not healthy');
+});
+
+check('a clean exit does not masquerade as a failure reason', () => {
+  const p = toPodSummary({
+    metadata: { name: 'x', namespace: 'ns', uid: 'u2' },
+    spec: { containers: [{ image: 'app:1' }] },
+    status: {
+      phase: 'Running',
+      containerStatuses: [{
+        name: 'app', ready: true, restartCount: 1, image: 'app:1',
+        lastState: { terminated: { reason: 'Completed' } },
+      }],
+    },
+  });
+  assert.equal(p.reason, undefined);
+  assert.equal(p.healthy, true);
+});
+
+check('a deleting pod reads as Terminating, not Running', () => {
+  const p = toPodSummary({
+    metadata: { name: 'x', namespace: 'ns', uid: 'u3', deletionTimestamp: '2026-08-29T12:00:00Z' },
+    spec: { containers: [{ image: 'app:1' }] },
+    status: { phase: 'Running', containerStatuses: [{ name: 'app', ready: true, restartCount: 0 }] },
+  });
+  assert.equal(p.phase, 'Terminating');
+  assert.equal(p.deleting, true);
+  assert.equal(p.healthy, false);
+});
+
+check('derives the Deployment from a ReplicaSet owner', () => {
+  const p = toPodSummary({
+    metadata: {
+      name: 'orders-api-7d9f8b6c4-x2ktp', namespace: 'ns', uid: 'u4',
+      ownerReferences: [{ kind: 'ReplicaSet', name: 'orders-api-7d9f8b6c4' }],
+    },
+    spec: { containers: [{ image: 'app:1' }] },
+    status: { phase: 'Running', containerStatuses: [] },
+  });
+  assert.deepEqual(p.workload, { kind: 'Deployment', name: 'orders-api' });
+});
+
 // ── Live cluster ────────────────────────────────────────────────────────────
 console.log('\nlive cluster');
 
@@ -295,6 +359,54 @@ if (!env.present) {
             assert.match(byId.heapdump.reason, /jattach|jcmd|jmap/, 'a disabled action must say why');
           });
         }
+
+        // The watch is the heart of M2 and the easiest thing to get subtly
+        // wrong, so it is exercised against the real stream rather than mocked.
+        await checkAsync('watches the namespace and delivers a snapshot', async () => {
+          const seen = { snapshot: null, events: 0, statuses: [] };
+          const handle = watchPods(ctx, 'dk8s-test', {
+            onSnapshot: (pods) => { seen.snapshot = pods; },
+            onEvent: () => { seen.events++; },
+            onStatus: (st) => { seen.statuses.push(st); },
+          });
+          // The fixture namespace has pods restarting constantly, so events
+          // should flow; the snapshot must arrive regardless.
+          await new Promise(r => setTimeout(r, 6_000));
+          handle.stop();
+
+          assert.ok(seen.snapshot, 'no snapshot within 6s');
+          assert.ok(seen.snapshot.length > 0, 'snapshot was empty');
+          assert.ok(seen.statuses.includes('connected'), `never reported connected: ${seen.statuses.join(',')}`);
+          const sample = seen.snapshot[0];
+          assert.ok(sample.uid, 'pod summary has no uid to key on');
+          assert.equal(typeof sample.healthy, 'boolean');
+        });
+
+        await checkAsync('stopping a watch actually stops it', async () => {
+          let after = 0;
+          const handle = watchPods(ctx, 'dk8s-test', {
+            onSnapshot: () => {},
+            onEvent: () => { after++; },
+            onStatus: () => {},
+          });
+          await new Promise(r => setTimeout(r, 3_000));
+          handle.stop();
+          const at = after;
+          await new Promise(r => setTimeout(r, 2_500));
+          // A leaked watch keeps emitting and keeps a kubectl child alive.
+          assert.equal(after, at, 'events kept arriving after stop()');
+        });
+
+        await checkAsync('reports metrics honestly when metrics-server is absent', async () => {
+          const usage = await topPods(ctx, 'dk8s-test');
+          // null means "no metrics-server", which is normal and must not be
+          // reported as an error. An array means it is installed.
+          assert.ok(usage === null || Array.isArray(usage));
+          if (Array.isArray(usage) && usage.length) {
+            assert.equal(typeof usage[0].memBytes, 'number');
+            assert.ok(usage[0].memBytes > 0, 'parsed 0 bytes from kubectl top');
+          }
+        });
 
         const noShell = items.find(p => p.metadata.name.startsWith('no-shell') && p.status?.phase === 'Running');
         if (!noShell) {

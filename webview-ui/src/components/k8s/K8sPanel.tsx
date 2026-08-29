@@ -14,6 +14,7 @@ import { Dk8sIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
 import { ContextPicker, SensitivityPrompt, NamespacePicker, UnreachableNotice } from './ContextPicker';
+import { PodGrid } from './PodGrid';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -94,25 +95,6 @@ function Breadcrumb() {
   );
 }
 
-/** M2 replaces this with the live pod grid. */
-function ReadyPlaceholder() {
-  const { context, namespace } = useK8sStore();
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6">
-      <div style={{ color: ACCENT, opacity: 0.5 }}>
-        <Dk8sIcon size={44} strokeWidth={1.4} />
-      </div>
-      <p className="text-[13px] m-0 text-[var(--color-text-secondary)]">
-        Connected to <span className="font-mono">{context}</span> /{' '}
-        <span className="font-mono">{namespace}</span>
-      </p>
-      <p className="text-[11.5px] m-0 text-[var(--color-text-muted)]">
-        The live pod grid arrives in the next milestone.
-      </p>
-    </div>
-  );
-}
-
 function Probing() {
   return (
     <div className="flex-1 flex items-center justify-center">
@@ -150,7 +132,7 @@ export function K8sPanel() {
       {stage === 'unreachable' && <UnreachableNotice />}
       {stage === 'ask-sensitivity' && <SensitivityPrompt />}
       {stage === 'pick-namespace' && <NamespacePicker />}
-      {stage === 'ready' && <ReadyPlaceholder />}
+      {stage === 'ready' && <PodGrid />}
     </div>
   );
 }

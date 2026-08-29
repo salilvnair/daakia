@@ -33,6 +33,46 @@ export interface Reachability {
 
 export type Sensitivity = 'normal' | 'production';
 
+export interface ContainerSummary {
+  name: string;
+  ready: boolean;
+  restarts: number;
+  image: string;
+  reason?: string;
+  lastReason?: string;
+}
+
+export interface PodSummary {
+  name: string;
+  namespace: string;
+  uid: string;
+  phase: string;
+  reason?: string;
+  ready: { current: number; total: number };
+  restarts: number;
+  lastRestartAt?: string;
+  startedAt?: string;
+  node?: string;
+  containers: ContainerSummary[];
+  workload?: { kind: string; name: string };
+  image?: string;
+  healthy: boolean;
+  deleting: boolean;
+}
+
+export interface PodUsage {
+  cpuMilli: number;
+  memBytes: number;
+}
+
+/** Rolling memory samples per pod, so a card can draw a trend. */
+export type UsageHistory = Record<string, number[]>;
+
+export type WatchStatus = 'idle' | 'connected' | 'reconnecting' | 'stopped';
+
+/** How many usage samples to keep. At 15s each, ~10 minutes of trend. */
+const USAGE_SAMPLES = 40;
+
 /** Where the first-run flow currently is. `ready` means the tab can show pods. */
 export type Dk8sStage =
   | 'probing'
@@ -66,6 +106,16 @@ interface K8sState {
 
   busy: boolean;
 
+  pods: PodSummary[];
+  usage: Record<string, PodUsage>;
+  usageHistory: UsageHistory;
+  metricsAvailable: boolean;
+  watchStatus: WatchStatus;
+  watchDetail?: string;
+  filter: string;
+  view: 'cards' | 'table';
+  selectedPod?: string;
+
   probe: () => void;
   useContext: (name: string) => void;
   setNamespace: (ns: string) => void;
@@ -73,6 +123,11 @@ interface K8sState {
   setKubectlPath: (path: string) => void;
   openContextPicker: () => void;
   openNamespacePicker: () => void;
+  startWatch: () => void;
+  stopWatch: () => void;
+  setFilter: (v: string) => void;
+  setView: (v: 'cards' | 'table') => void;
+  selectPod: (name?: string) => void;
   apply: (msg: Record<string, unknown>) => void;
 }
 
@@ -86,6 +141,14 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   sensitivityGuess: false,
   busy: false,
 
+  pods: [],
+  usage: {},
+  usageHistory: {},
+  metricsAvailable: false,
+  watchStatus: 'idle',
+  filter: '',
+  view: 'cards',
+
   probe: () => {
     set({ busy: true });
     postMsg({ type: 'dk8s:probe' });
@@ -97,7 +160,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   setNamespace: (ns) => {
-    set({ namespace: ns, stage: 'ready' });
+    // Drop the old namespace's pods immediately. Leaving them on screen while
+    // the new watch spins up shows pods that are not in the namespace the
+    // breadcrumb now claims — briefly, and wrongly.
+    set({ namespace: ns, stage: 'ready', pods: [], usage: {}, usageHistory: {}, watchStatus: 'idle' });
     postMsg({ type: 'dk8s:setNamespace', namespace: ns });
   },
 
@@ -115,6 +181,18 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     set({ busy: true });
     postMsg({ type: 'dk8s:setKubectlPath', path });
   },
+
+  startWatch: () => {
+    const { context, namespace } = get();
+    if (!context || !namespace) return;
+    postMsg({ type: 'dk8s:watchPods', context, namespace });
+  },
+
+  stopWatch: () => postMsg({ type: 'dk8s:stopWatch' }),
+
+  setFilter: (filter) => set({ filter }),
+  setView: (view) => set({ view }),
+  selectPod: (selectedPod) => set({ selectedPod }),
 
   openContextPicker: () => set({ stage: 'pick-context' }),
   openNamespacePicker: () => {
@@ -180,6 +258,50 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       case 'dk8s:namespaceSet':
         set({ namespace: msg.namespace as string, stage: 'ready' });
         break;
+
+      case 'dk8s:podSnapshot':
+        set({ pods: (msg.pods as PodSummary[]) ?? [] });
+        break;
+
+      case 'dk8s:podEvent': {
+        const pod = msg.pod as PodSummary;
+        const kind = msg.eventType as string;
+        set(s => {
+          if (kind === 'DELETED') {
+            return { pods: s.pods.filter(p => p.uid !== pod.uid) };
+          }
+          const i = s.pods.findIndex(p => p.uid === pod.uid);
+          if (i < 0) return { pods: [...s.pods, pod] };
+          const next = s.pods.slice();
+          next[i] = pod;
+          return { pods: next };
+        });
+        break;
+      }
+
+      case 'dk8s:watchStatus':
+        set({
+          watchStatus: msg.status as WatchStatus,
+          watchDetail: msg.detail as string | undefined,
+        });
+        break;
+
+      case 'dk8s:podUsage': {
+        const available = !!msg.available;
+        if (!available) { set({ metricsAvailable: false }); break; }
+        const rows = (msg.usage as { name: string; cpuMilli: number; memBytes: number }[]) ?? [];
+        set(s => {
+          const usage: Record<string, PodUsage> = {};
+          const history = { ...s.usageHistory };
+          for (const r of rows) {
+            usage[r.name] = { cpuMilli: r.cpuMilli, memBytes: r.memBytes };
+            const prev = history[r.name] ?? [];
+            history[r.name] = [...prev, r.memBytes].slice(-USAGE_SAMPLES);
+          }
+          return { usage, usageHistory: history, metricsAvailable: true };
+        });
+        break;
+      }
 
       case 'dk8s:sensitivitySet':
         set(s => ({

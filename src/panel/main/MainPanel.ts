@@ -81,6 +81,7 @@ import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../.
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetKubectlPath,
+  handleDk8sWatchPods, handleDk8sStopWatch, disposeDk8s,
 } from './handlers/k8s-handler';
 import {
   normalizeProxyConfig, toUiProxyConfig, resolveProxy,
@@ -191,6 +192,7 @@ export class MainPanel {
     // Before the transports are torn down: a live connection has no close event
     // coming, and the long-lived ones are the most worth having recorded.
     flushOpenSessions();
+    disposeDk8s();
     stopAutoSyncTimer();
     cleanupAllWsConnections();
     cleanupAllSseConnections();
@@ -354,6 +356,12 @@ export class MainPanel {
         break;
       case 'dk8s:setKubectlPath':
         handleDk8sSetKubectlPath(msg, this._post);
+        break;
+      case 'dk8s:watchPods':
+        handleDk8sWatchPods(msg, this._post);
+        break;
+      case 'dk8s:stopWatch':
+        handleDk8sStopWatch();
         break;
 
       // ── gRPC Client ──

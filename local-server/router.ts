@@ -35,6 +35,10 @@ import {
   handleExtractFields, handleGenerateSecurity, handleInjectSecurity, handleImportSoapUiProject, handleImportWsdlToCollection,
 } from '../src/panel/main/handlers/soap-handler';
 import { handleWsConnect, handleWsDisconnect, handleWsSend } from '../src/panel/main/handlers/websocket-handler';
+import {
+  handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces, handleDk8sSetNamespace,
+  handleDk8sSetSensitivity, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
+} from '../src/panel/main/handlers/k8s-handler';
 import { handleSseConnect, handleSseDisconnect } from '../src/panel/main/handlers/sse-handler';
 import { handleSocketIOConnect, handleSocketIODisconnect, handleSocketIOEmit } from '../src/panel/main/handlers/socketio-handler';
 import { handleMqttConnect, handleMqttDisconnect, handleMqttSubscribe, handleMqttUnsubscribe, handleMqttPublish } from '../src/panel/main/handlers/mqtt-handler';
@@ -92,6 +96,33 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
   switch (msg.type) {
     case 'ready':
       sendInitialState(post);
+      break;
+
+    // ── dk8s — Kubernetes. Routed here so the pod grid can be driven and
+    //    screenshotted in a real browser without an extension host. ──
+    case 'dk8s:probe':
+      await handleDk8sProbe(post);
+      break;
+    case 'dk8s:useContext':
+      await handleDk8sUseContext(msg, post);
+      break;
+    case 'dk8s:namespaces':
+      await handleDk8sNamespaces(msg, post);
+      break;
+    case 'dk8s:setNamespace':
+      handleDk8sSetNamespace(msg, post);
+      break;
+    case 'dk8s:setSensitivity':
+      handleDk8sSetSensitivity(msg, post);
+      break;
+    case 'dk8s:setKubectlPath':
+      await handleDk8sSetKubectlPath(msg, post);
+      break;
+    case 'dk8s:watchPods':
+      handleDk8sWatchPods(msg, post);
+      break;
+    case 'dk8s:stopWatch':
+      handleDk8sStopWatch();
       break;
 
     // ── Request Execution ──
