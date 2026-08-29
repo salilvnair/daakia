@@ -100,6 +100,8 @@ interface K8sState {
   namespaceFallback?: string;
   namespaceError?: string;
   namespace?: string;
+  /** Namespaces the user pinned for this context, sorted. */
+  pinned: string[];
 
   sensitivity: Record<string, Sensitivity>;
   sensitivityGuess: boolean;
@@ -118,7 +120,9 @@ interface K8sState {
 
   probe: () => void;
   useContext: (name: string) => void;
-  setNamespace: (ns: string) => void;
+  setNamespace: (ns: string, pin?: boolean) => void;
+  pinNamespace: (ns: string) => void;
+  unpinNamespace: (ns: string) => void;
   setSensitivity: (level: Sensitivity) => void;
   setKubectlPath: (path: string) => void;
   openContextPicker: () => void;
@@ -137,6 +141,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   contexts: [],
   namespaces: [],
   namespacesForbidden: false,
+  pinned: [],
   sensitivity: {},
   sensitivityGuess: false,
   busy: false,
@@ -159,12 +164,24 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     postMsg({ type: 'dk8s:useContext', context: name });
   },
 
-  setNamespace: (ns) => {
+  setNamespace: (ns, pin) => {
     // Drop the old namespace's pods immediately. Leaving them on screen while
     // the new watch spins up shows pods that are not in the namespace the
     // breadcrumb now claims — briefly, and wrongly.
     set({ namespace: ns, stage: 'ready', pods: [], usage: {}, usageHistory: {}, watchStatus: 'idle' });
-    postMsg({ type: 'dk8s:setNamespace', namespace: ns });
+    postMsg({ type: 'dk8s:setNamespace', namespace: ns, pin: !!pin });
+  },
+
+  pinNamespace: (ns) => {
+    const ctx = get().context;
+    if (!ctx || !ns.trim()) return;
+    postMsg({ type: 'dk8s:pinNamespace', context: ctx, namespace: ns.trim() });
+  },
+
+  unpinNamespace: (ns) => {
+    const ctx = get().context;
+    if (!ctx) return;
+    postMsg({ type: 'dk8s:unpinNamespace', context: ctx, namespace: ns });
   },
 
   setSensitivity: (level) => {
@@ -227,6 +244,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           contextError: msg.contextError as string | undefined,
           namespace: msg.namespace as string | undefined,
           sensitivityGuess: !!msg.sensitivityGuess,
+          pinned: (msg.pinned as string[]) ?? [],
         });
         break;
       }
@@ -252,7 +270,12 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           namespacesForbidden: !!msg.forbidden,
           namespaceFallback: msg.fallback as string | undefined,
           namespaceError: msg.error as string | undefined,
+          pinned: (msg.pinned as string[]) ?? [],
         });
+        break;
+
+      case 'dk8s:pinnedNamespaces':
+        set({ pinned: (msg.pinned as string[]) ?? [] });
         break;
 
       case 'dk8s:namespaceSet':

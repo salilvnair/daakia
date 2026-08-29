@@ -38,6 +38,7 @@ import { handleWsConnect, handleWsDisconnect, handleWsSend } from '../src/panel/
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces, handleDk8sSetNamespace,
   handleDk8sSetSensitivity, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
+  handleDk8sPinNamespace, handleDk8sUnpinNamespace,
 } from '../src/panel/main/handlers/k8s-handler';
 import { handleSseConnect, handleSseDisconnect } from '../src/panel/main/handlers/sse-handler';
 import { handleSocketIOConnect, handleSocketIODisconnect, handleSocketIOEmit } from '../src/panel/main/handlers/socketio-handler';
@@ -123,6 +124,12 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:stopWatch':
       handleDk8sStopWatch();
+      break;
+    case 'dk8s:pinNamespace':
+      handleDk8sPinNamespace(msg, post);
+      break;
+    case 'dk8s:unpinNamespace':
+      handleDk8sUnpinNamespace(msg, post);
       break;
 
     // ── Request Execution ──

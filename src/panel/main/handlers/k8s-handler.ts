@@ -25,6 +25,16 @@ export interface Dk8sState {
   /** context name -> sensitivity, set by the user and never inferred silently. */
   sensitivity?: Record<string, 'normal' | 'production'>;
   kubectlPath?: string;
+  /**
+   * context name -> namespaces the user pinned by hand.
+   *
+   * Listing namespaces is a cluster-scoped read many clusters refuse, so on
+   * those the only way in is to type the name. Remembering what was typed is
+   * the difference between that being a workaround and being the normal way
+   * to use the tool. Pins are useful even when listing works: a cluster with
+   * 200 namespaces is a list you scroll, not a list you read.
+   */
+  pinnedNamespaces?: Record<string, string[]>;
 }
 
 function state(): Dk8sState {
@@ -77,6 +87,7 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
     namespace,
     reachable,
     sensitivity: saved.sensitivity ?? {},
+    pinned: chosen ? pinnedFor(chosen) : [],
     // A context the user has not classified yet needs the one-time prompt.
     needsSensitivity: chosen ? !(saved.sensitivity ?? {})[chosen] : false,
     sensitivityGuess: chosen
@@ -111,7 +122,47 @@ export async function handleDk8sNamespaces(
   const context = String(msg.context ?? state().context ?? '');
   if (!context) return;
   const result = await listNamespaces(context);
-  postMessage({ type: 'dk8s:namespaces', context, ...result });
+  postMessage({
+    type: 'dk8s:namespaces', context, ...result,
+    pinned: pinnedFor(context),
+  });
+}
+
+function pinnedFor(context: string): string[] {
+  return (state().pinnedNamespaces ?? {})[context] ?? [];
+}
+
+/** Pin a hand-entered namespace so it is one click away next time. */
+export function handleDk8sPinNamespace(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '').trim();
+  if (!context || !namespace) return;
+
+  const all = { ...(state().pinnedNamespaces ?? {}) };
+  const current = all[context] ?? [];
+  // Sorted and de-duplicated, so the list does not depend on entry order.
+  if (!current.includes(namespace)) {
+    all[context] = [...current, namespace].sort((a, b) => a.localeCompare(b));
+    saveState({ pinnedNamespaces: all });
+  }
+  postMessage({ type: 'dk8s:pinnedNamespaces', context, pinned: all[context] ?? current });
+}
+
+export function handleDk8sUnpinNamespace(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '').trim();
+  if (!context || !namespace) return;
+
+  const all = { ...(state().pinnedNamespaces ?? {}) };
+  all[context] = (all[context] ?? []).filter(n => n !== namespace);
+  saveState({ pinnedNamespaces: all });
+  postMessage({ type: 'dk8s:pinnedNamespaces', context, pinned: all[context] });
 }
 
 export function handleDk8sSetNamespace(
@@ -122,6 +173,7 @@ export function handleDk8sSetNamespace(
   if (!namespace) return;
   saveState({ namespace });
   postMessage({ type: 'dk8s:namespaceSet', namespace });
+  if (msg.pin) handleDk8sPinNamespace({ namespace }, postMessage);
   // The old namespace's watch is now pointing at the wrong place; move it.
   handleDk8sWatchPods({ namespace }, postMessage);
 }

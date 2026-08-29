@@ -120,66 +120,164 @@ export function SensitivityPrompt() {
   );
 }
 
+/**
+ * Pick a namespace — from the cluster's list, from your pins, or by typing it.
+ *
+ * The manual entry is NOT a fallback for when listing fails. It is always
+ * there, because two very different situations need it: a locked-down cluster
+ * that refuses a cluster-scoped list, and a cluster with two hundred
+ * namespaces where the three you work in are impossible to find by scrolling.
+ * Pinning is what turns either one from a chore into a click.
+ */
 export function NamespacePicker() {
   const {
-    context, namespaces, namespacesForbidden, namespaceFallback, namespaceError,
-    setNamespace,
+    context, namespace, namespaces, namespacesForbidden, namespaceFallback,
+    namespaceError, pinned, setNamespace, unpinNamespace,
   } = useK8sStore();
   const [filter, setFilter] = useState('');
-  const [manual, setManual] = useState(namespaceFallback ?? '');
+  const [manual, setManual] = useState('');
 
-  // Listing namespaces is a cluster-scoped read that plenty of enterprise
-  // clusters refuse. That is a permission to route around, not a dead end.
-  if (namespacesForbidden || (!namespaces.length && namespaceError)) {
-    return (
-      <Shell
-        title="Which namespace?"
-        subtitle={namespacesForbidden
-          ? 'This cluster does not let you list namespaces — common when you have access inside specific namespaces rather than cluster-wide. Type the one you work in.'
-          : 'Could not list namespaces. Type the one you work in.'}
-      >
-        <div className="flex items-center gap-2">
-          <TextInputView value={manual} onChange={e => setManual(e.target.value)} placeholder="payments" size="sm" accentColor={ACCENT} />
-          <ButtonView label="Use" size="sm" variant="primary"
-                      disabled={!manual.trim()} onClick={() => setNamespace(manual.trim())} />
-        </div>
-        {namespaceError && (
-          <p className="text-[11px] font-mono m-0" style={{ color: 'var(--color-error)' }}>{namespaceError}</p>
-        )}
-      </Shell>
-    );
-  }
+  const listed = namespaces.length > 0;
+  const canList = !namespacesForbidden && !namespaceError;
+
+  const addManual = () => {
+    const ns = manual.trim();
+    if (!ns) return;
+    setManual('');
+    setNamespace(ns, true);      // select it AND pin it
+  };
 
   const shown = filter.trim()
     ? namespaces.filter(n => n.toLowerCase().includes(filter.toLowerCase()))
     : namespaces;
 
   return (
-    <Shell title="Which namespace?" subtitle={`In ${context}.`}>
-      {namespaces.length > 8 && (
-        <SearchInputView value={filter} onChange={setFilter} placeholder="Filter namespaces" size="sm" />
-      )}
-      <div
-        className="flex flex-col rounded-md overflow-hidden"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)', maxHeight: 360, overflowY: 'auto' }}
-      >
-        {shown.map(ns => (
-          <button
-            key={ns}
-            type="button"
-            onClick={() => setNamespace(ns)}
-            className="text-left px-3 py-2 text-[12.5px] font-mono cursor-pointer transition-colors text-[var(--color-text-primary)]"
-            style={{ background: 'transparent', border: 'none', borderBottom: '1px solid var(--color-surface-border)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-          >
-            {ns}
-          </button>
-        ))}
-        {!shown.length && (
-          <span className="text-[12px] text-[var(--color-text-muted)] px-3 py-4">Nothing matches “{filter}”.</span>
+    <Shell
+      title="Which namespace?"
+      subtitle={
+        namespacesForbidden
+          ? `This cluster will not let you list namespaces in ${context} — normal when your access is scoped to specific ones rather than cluster-wide. Type the name and it will be remembered.`
+          : `In ${context}.`
+      }
+    >
+      {/* Always available, listed or not. */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[9.5px] uppercase tracking-wider text-[var(--color-text-muted)]">
+          Enter a namespace
+        </span>
+        {/* The input stretches; the button keeps its natural width. A wrapper
+            with flex:1 is not enough on its own — the input needs an explicit
+            100% or it keeps its intrinsic size and leaves a gap. */}
+        <div className="flex items-center gap-3">
+          <TextInputView
+            value={manual}
+            onChange={e => setManual(e.target.value)}
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') addManual(); }}
+            placeholder={namespaceFallback || 'payments'}
+            size="md"
+            accentColor={ACCENT}
+            style={{ flex: 1, width: '100%', fontFamily: 'monospace' }}
+          />
+          <ButtonView
+            label="+  Use and save"
+            size="md"
+            variant="primary"
+            disabled={!manual.trim()}
+            onClick={addManual}
+          />
+        </div>
+        {namespaceError && (
+          <p className="text-[11px] font-mono m-0" style={{ color: 'var(--color-error)' }}>
+            {namespaceError}
+          </p>
         )}
       </div>
+
+      {/* Saved — the reason typing it once is enough. */}
+      {pinned.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[9.5px] uppercase tracking-wider text-[var(--color-text-muted)]">
+            Saved · {pinned.length}
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {pinned.map(ns => (
+              <span
+                key={ns}
+                className="flex items-center gap-1 rounded-full overflow-hidden"
+                style={{
+                  border: `1px solid color-mix(in srgb, ${ACCENT} 35%, var(--color-surface-border))`,
+                  background: ns === namespace ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setNamespace(ns)}
+                  className="text-[11.5px] font-mono pl-2.5 pr-1 py-1 cursor-pointer"
+                  style={{ background: 'transparent', border: 'none', color: ACCENT }}
+                >
+                  {ns}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => unpinNamespace(ns)}
+                  title={`Forget ${ns}`}
+                  aria-label={`Forget ${ns}`}
+                  className="text-[12px] leading-none pr-2 pl-0.5 py-1 cursor-pointer"
+                  style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-error)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Whatever the cluster is willing to tell us. */}
+      {canList && listed && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[9.5px] uppercase tracking-wider text-[var(--color-text-muted)]">
+              In this cluster · {namespaces.length}
+            </span>
+          </div>
+          {namespaces.length > 8 && (
+            <SearchInputView value={filter} onChange={setFilter} placeholder="Filter namespaces" size="sm" />
+          )}
+          <div
+            className="flex flex-col rounded-md overflow-hidden"
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-surface-border)',
+              maxHeight: 320, overflowY: 'auto',
+            }}
+          >
+            {shown.map(ns => (
+              <button
+                key={ns}
+                type="button"
+                onClick={() => setNamespace(ns)}
+                className="flex items-center gap-2 text-left px-3 py-2 text-[12.5px] font-mono cursor-pointer transition-colors text-[var(--color-text-primary)]"
+                style={{ background: 'transparent', border: 'none', borderBottom: '1px solid var(--color-surface-border)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <span className="flex-1">{ns}</span>
+                {pinned.includes(ns) && (
+                  <span className="text-[9px] uppercase tracking-wider" style={{ color: ACCENT }}>saved</span>
+                )}
+              </button>
+            ))}
+            {!shown.length && (
+              <span className="text-[12px] text-[var(--color-text-muted)] px-3 py-4">
+                Nothing matches &ldquo;{filter}&rdquo;.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }
