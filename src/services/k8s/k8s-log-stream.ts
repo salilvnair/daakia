@@ -149,9 +149,12 @@ export function streamLogs(
 
     child.on('exit', (code) => {
       if (timer) clearInterval(timer);
+      // Nothing more after stop(). kill() triggers this handler, and a caller
+      // that has stopped may already have torn down what these lines were for.
+      // The final flush below is only correct for an exit we did not cause.
+      if (stopped) return;
       if (carry) { pending.push(parseLine(carry, seq++, opts.timestamps !== false)); carry = ''; }
       flush();
-      if (stopped) return;
       const detail = stderrTail.split('\n').map(l => l.trim()).filter(Boolean)[0];
       // A follow that ends on its own means the container went away — which is
       // information, not a malfunction.

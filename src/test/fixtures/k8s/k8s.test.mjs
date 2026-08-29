@@ -33,6 +33,9 @@ writeFileSync(entry, [
   `export * from ${abs('src/services/k8s/kube-context.ts')};`,
   `export * from ${abs('src/services/k8s/pod-classify.ts')};`,
   `export * from ${abs('src/services/k8s/k8s-watch.ts')};`,
+  `export * from ${abs('src/services/k8s/k8s-log-stream.ts')};`,
+  `export * from ${abs('src/services/k8s/k8s-artifacts.ts')};`,
+  `export * from ${abs('src/services/k8s/k8s-logs.ts')};`,
 ].join('\n'));
 
 const esbuild = await import(pathToFileURL(resolve('node_modules/esbuild/lib/main.js')).href);
@@ -47,6 +50,9 @@ const {
   listContexts, checkReachable, listNamespaces, looksLikeProduction,
   classifyFromSpec, workloadKey, availableActions, probeCapabilities,
   toPodSummary, watchPods, topPods,
+  levelOf, parseLine, streamLogs,
+  collectArtifact, extractLastThreadDump, decodeProcNetTcp, artifactName,
+  logFileName,
 } = k8s;
 
 let failures = 0;
@@ -441,10 +447,167 @@ if (!env.present) {
   }
 }
 
+// ── Log streaming and artifacts: the M3–M6 surface ──────────────────────────
+//
+// These need a running pod, so they gate on the fixture namespace being up.
+// Everything above proves the pieces in isolation; this proves they work
+// against a real container, which is where every interesting failure has been.
+console.log('\nlog streaming and artifacts');
+
+const FIXTURE_CTX = 'docker-desktop';
+const FIXTURE_NS = 'dk8s-test';
+
+async function fixturePods() {
+  const res = await run(['--context', FIXTURE_CTX, '-n', FIXTURE_NS, 'get', 'pods', '-o', 'json'],
+                        { timeoutMs: 30_000 });
+  if (!res.ok) return [];
+  try { return JSON.parse(res.stdout).items ?? []; } catch { return []; }
+}
+
+const livePods = env.present ? await fixturePods() : [];
+const runningPods = livePods.filter(p => p.status?.phase === 'Running');
+const named = (needle) => runningPods.find(p => p.metadata.name.startsWith(needle))?.metadata.name;
+
+if (!runningPods.length) {
+  skip('log streaming and artifacts', 'no running pods in ' + FIXTURE_CTX + '/' + FIXTURE_NS);
+} else {
+  const chatty = named('chatty-logger') ?? runningPods[0].metadata.name;
+  const destDir = join(dir, 'artifacts');
+
+  await checkAsync('streams a live pod and parses its lines', async () => {
+    const lines = await new Promise((resolve, reject) => {
+      const seen = [];
+      let handle;
+      const timer = setTimeout(() => { handle?.stop(); resolve(seen); }, 8000);
+      handle = streamLogs(FIXTURE_CTX, FIXTURE_NS, chatty, { tailLines: 40 }, {
+        onLines: (batch) => {
+          seen.push(...batch);
+          if (seen.length >= 20) { clearTimeout(timer); handle.stop(); resolve(seen); }
+        },
+        onStatus: (status, detail) => {
+          if (status === 'error') { clearTimeout(timer); handle?.stop(); reject(new Error(detail)); }
+        },
+        onDropped: () => {},
+      });
+    });
+
+    assert.ok(lines.length > 0, 'no lines from ' + chatty);
+    // Timestamps are the whole reason --timestamps is on by default: without
+    // them the range filters and the model's sense of timing are both gone.
+    assert.ok(lines.some(l => typeof l.ts === 'number'), 'no line carried a parsed timestamp');
+    // seq must strictly increase, or the webview's React keys collide and rows
+    // are silently reused for different lines.
+    for (let i = 1; i < lines.length; i++) {
+      assert.ok(lines[i].seq > lines[i - 1].seq,
+        'seq went backwards at ' + i + ': ' + lines[i - 1].seq + ' then ' + lines[i].seq);
+    }
+  });
+
+  await checkAsync('a stopped stream really stops', async () => {
+    let stopped = false;
+    let after = 0;
+    const handle = streamLogs(FIXTURE_CTX, FIXTURE_NS, chatty, { tailLines: 10 }, {
+      onLines: () => { if (stopped) after++; },
+      onStatus: () => {}, onDropped: () => {},
+    });
+    await new Promise(r => setTimeout(r, 2500));
+    handle.stop();
+    stopped = true;
+    await new Promise(r => setTimeout(r, 2500));
+    assert.equal(after, 0, after + ' batches arrived after stop()');
+  });
+
+  const jdk = named('jdk-leaky');
+  const jre = named('zp-backend-hung');
+
+  if (!jdk) {
+    skip('jcmd artifacts', 'no jdk-leaky pod');
+  } else {
+    const jdkCaps = await probeCapabilities(FIXTURE_CTX, FIXTURE_NS, jdk);
+
+    await checkAsync('collects a thread dump over stdout, with no file copy', async () => {
+      const r = await collectArtifact(
+        { context: FIXTURE_CTX, namespace: FIXTURE_NS, pod: jdk, targetPid: jdkCaps.targetPid },
+        { kind: 'threaddump', destDir });
+      assert.ok(r.ok, 'collect failed: ' + r.error);
+      assert.match(r.text ?? '', /Full thread dump/, 'no dump header in the output');
+      // Written to disk as well as returned — evidence has to survive closing
+      // the panel.
+      assert.ok(r.file, 'no file was written');
+      assert.ok((r.bytes ?? 0) > 500, 'suspiciously small: ' + r.bytes + ' bytes');
+    });
+
+    await checkAsync('a class histogram finds the planted leak', async () => {
+      const r = await collectArtifact(
+        { context: FIXTURE_CTX, namespace: FIXTURE_NS, pod: jdk, targetPid: jdkCaps.targetPid },
+        { kind: 'histogram', destDir });
+      assert.ok(r.ok, 'collect failed: ' + r.error);
+      // jcmd echoes the pid as "1:" on its own line before the table, so the
+      // shape has to be matched properly rather than just the leading index.
+      const rows = (r.text ?? '').split('\n')
+        .filter(l => /^\s*\d+:\s+\d+\s+\d+\s/.test(l));
+      assert.ok(rows.length > 5, 'histogram has almost no rows');
+      // The fault injector holds a large byte[]; it has to dominate, or the
+      // fixture is not doing what the rest of this suite assumes it is.
+      const bytes = Number(rows[0].trim().split(/\s+/)[2]);
+      assert.ok(bytes > 20 * 1024 * 1024,
+        'top class is only ' + bytes + ' bytes — is the leak fixture running?');
+    });
+
+    await checkAsync('a connection snapshot comes back readable, not raw hex', async () => {
+      const r = await collectArtifact(
+        { context: FIXTURE_CTX, namespace: FIXTURE_NS, pod: jdk },
+        { kind: 'conns', destDir });
+      assert.ok(r.ok, 'collect failed: ' + r.error);
+      // Either ss output, or the decoded /proc/net/tcp. Never the raw hex,
+      // which is exactly what the decoder exists to prevent.
+      assert.doesNotMatch(r.text ?? '', /^\s*\d+: [0-9A-F]{8}:[0-9A-F]{4} /m,
+        'raw /proc/net/tcp hex leaked through undecoded');
+    });
+  }
+
+  if (!jre) {
+    skip('SIGQUIT thread dump', 'no zp-backend-hung pod');
+  } else {
+    const jreCaps = await probeCapabilities(FIXTURE_CTX, FIXTURE_NS, jre);
+
+    await checkAsync('a JRE image offers SIGQUIT and JFR but not the jcmd paths', () => {
+      assert.equal(jreCaps.jcmd, false, 'this fixture is supposed to be JRE-only');
+      const actions = availableActions('java', jreCaps);
+      const by = (id) => actions.find(a => a.id === id);
+      assert.equal(by('threaddump').available, false, 'offered jcmd on a JRE image');
+      assert.equal(by('heapdump').available, false, 'offered a heap dump with no jcmd or jmap');
+      assert.equal(by('threaddump-sigquit').available, true, 'did not offer SIGQUIT');
+    });
+
+    await checkAsync('SIGQUIT produces a dump carrying the modern socket frame', async () => {
+      const r = await collectArtifact(
+        { context: FIXTURE_CTX, namespace: FIXTURE_NS, pod: jre, targetPid: jreCaps.targetPid },
+        { kind: 'threaddump-sigquit', destDir });
+      assert.ok(r.ok, 'collect failed: ' + r.error);
+      assert.match(r.text ?? '', /Full thread dump/, 'no dump appeared in the log');
+      // The hung fixture holds threads in a socket read. On JDK 13+ that reads
+      // as NioSocketImpl; if this ever matches SocketInputStream instead, the
+      // fixture was rebuilt on an ancient JDK and the suspect markers — which
+      // are written around exactly this split — need revisiting.
+      assert.match(r.text ?? '', /sun\.nio\.ch\.NioSocketImpl/,
+        'the hung fixture is not actually blocked in a socket read');
+    });
+  }
+
+  await checkAsync('an unknown artifact kind fails loudly rather than silently', async () => {
+    const r = await collectArtifact(
+      { context: FIXTURE_CTX, namespace: FIXTURE_NS, pod: runningPods[0].metadata.name },
+      { kind: 'not-a-real-thing', destDir });
+    assert.equal(r.ok, false, 'an unknown kind reported success');
+    assert.match(r.error ?? '', /Unknown artifact/);
+  });
+}
+
 rmSync(dir, { recursive: true, force: true });
 console.log(
   failures === 0
-    ? `\ndk8s M1 holds.${skipped ? ` (${skipped} skipped)` : ''}`
+    ? `\ndk8s holds.${skipped ? ` (${skipped} skipped)` : ''}`
     : `\n${failures} check(s) FAILED.`,
 );
 process.exit(failures === 0 ? 0 : 1);
