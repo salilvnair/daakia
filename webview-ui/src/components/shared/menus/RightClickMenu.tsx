@@ -36,6 +36,28 @@ const SELECTION_ITEMS: ContextMenuItem[] = [
   { id: 'copy', label: 'Copy', icon: <CopyIcon size={14} />, iconColor: 'var(--color-ctx-duplicate)', shortcut: 'Ctrl+C' },
 ];
 
+/**
+ * Extra entries a surface can contribute to the selection menu.
+ *
+ * A log view wants Search on a selection; a response body does not. Rather
+ * than teaching this menu about dk8s, a surface marks itself with
+ * `data-selection-actions` and answers a custom event with what it can do —
+ * so the menu stays generic and the log-specific behaviour stays in the log
+ * view that implements it.
+ */
+const SEARCH_ITEMS: ContextMenuItem[] = [
+  {
+    id: 'search',
+    label: 'Search',
+    icon: <SearchIcon size={14} />,
+    iconColor: 'var(--color-dk8s, #22d3ee)',
+    submenu: [
+      { id: 'search:here', label: 'Search Here', icon: <SearchIcon size={13} />, iconColor: 'var(--color-dk8s, #22d3ee)' },
+      { id: 'search:everywhere', label: 'Search Everywhere', icon: <SearchIcon size={13} />, iconColor: 'var(--color-dk8s, #22d3ee)' },
+    ],
+  },
+];
+
 function isMonacoEditor(el: HTMLElement | null): boolean {
   if (!el) return false;
   return !!el.closest('.monaco-editor');
@@ -464,6 +486,17 @@ export function RightClickMenu() {
       if (selection && selection.toString()) {
         await navigator.clipboard.writeText(selection.toString());
       }
+      return;
+    }
+
+    // Handed to whichever surface contributed the entry. The selection is
+    // still live at this point — the menu never cleared it.
+    if (id.startsWith('search:')) {
+      const text = window.getSelection()?.toString() ?? '';
+      target?.dispatchEvent(new CustomEvent('daakia:selection-action', {
+        bubbles: true,
+        detail: { action: id, text },
+      }));
     }
   }, [menu]);
 
@@ -475,7 +508,12 @@ export function RightClickMenu() {
   }
 
   // Input & selection contexts use the standard ContextMenu
-  const items = menu.context === 'input' ? INPUT_ITEMS : SELECTION_ITEMS;
+  const items = menu.context === 'input'
+    ? INPUT_ITEMS
+    // A surface that opted in gets Search as well as Copy.
+    : menu.target?.closest('[data-selection-actions~="search"]')
+      ? [...SELECTION_ITEMS, ...SEARCH_ITEMS]
+      : SELECTION_ITEMS;
   const adjustedItems = items.map(item => {
     if (item.separator) return item;
     if (item.id === 'cut' || item.id === 'copy') {

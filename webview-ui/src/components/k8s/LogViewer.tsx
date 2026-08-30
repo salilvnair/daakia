@@ -59,10 +59,8 @@ const RIBBON_W = 38;
 /** The bands themselves. Thick enough to read as colour and to click. */
 const RIBBON_BAND_W = 20;
 /** The selection strip, for placing it clear of the selection and the ribbon. */
-// Four actions now, not three, and the strip lays them out evenly — so the
-// width has to fit the LONGEST label at an equal share, not the average one.
-// At 560 "Search Everywhere" wrapped to two lines while the others sat on one.
-const TOOLBAR_W = 720;
+// Two actions, laid out evenly.
+const TOOLBAR_W = 380;
 const TOOLBAR_H = 58;
 
 const LEVEL_SHORT: Record<LogLevel, string> = {
@@ -314,13 +312,18 @@ function LevelTag({ level }: { level: LogLevel }) {
  * just highlighted to find the button that acts on it. This appears beside the
  * line, which is where your eye already is.
  */
-function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep, onSearchAll }: {
+/**
+ * The floating strip: the two model calls, and nothing else.
+ *
+ * Search moved to the right-click menu, where a submenu can hold both scopes
+ * without the strip growing a button per scope. What is left is what needs a
+ * strip — the actions with no obvious keyboard or menu home.
+ */
+function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
   rect: { top: number; left: number };
   lineCount: number;
   onAsk: () => void;
   onExplain: () => void;
-  onGrep: () => void;
-  onSearchAll: () => void;
 }) {
   return (
     <div
@@ -378,37 +381,6 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep, onSearchA
         style={{
           background: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)',
           borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 38%, transparent)',
-        }}
-      /></div>
-      {/* "Grep" said what it did to the buffer, not what it does for you. The
-          pair now names the only thing that separates them: how far it looks. */}
-      <div className="flex-1 [&>button]:w-full [&_button]:whitespace-nowrap"><ButtonView
-        label="Search Here"
-        size="sm"
-        variant="secondary"
-        accentColor={ACCENT}
-        color={ACCENT}
-        onClick={onGrep}
-        title="Filter this pod's log to lines containing the selection"
-        iconLeft={<SearchIcon size={12} color={ACCENT} />}
-        style={{
-          background: 'color-mix(in srgb, var(--color-dk8s) 12%, transparent)',
-          borderColor: 'color-mix(in srgb, var(--color-dk8s) 40%, transparent)',
-        }}
-      /></div>
-      <div className="flex-1 [&>button]:w-full [&_button]:whitespace-nowrap"><ButtonView
-        label="Search Everywhere"
-        size="sm"
-        variant="secondary"
-        accentColor={ACCENT}
-        color={ACCENT}
-        onClick={onSearchAll}
-        title="Search other pods' logs for the selection"
-        iconLeft={<SearchIcon size={12} color={ACCENT} />}
-        style={{
-          background: 'color-mix(in srgb, var(--color-dk8s) 20%, transparent)',
-          borderColor: 'color-mix(in srgb, var(--color-dk8s) 52%, transparent)',
-          fontWeight: 600,
         }}
       /></div>
       </div>
@@ -737,36 +709,39 @@ export function LogViewer() {
     setAnalyzePlan(null);
   };
 
-  const grepSelection = () => {
-    const sel = selectionRef.current;
-    if (!sel) return;
-    const term = grepTermFor(sel.raw);
-    if (!term) return;
-    setLogFilter(term);
-    setToolbar(null);
-    window.getSelection()?.removeAllRanges();
-  };
-
   /**
-   * The same term, against other pods.
+   * Search chosen from the right-click menu.
    *
    * Finding a request id in one pod's log and wanting to know which other pod
    * touched it is the whole reason multi-pod search exists, and getting there
    * meant leaving the pod, remembering the string and typing it again.
+   * Everywhere closes this pod first, so the dialog is not stacked on top of
+   * the detail overlay it was opened from.
    *
-   * Closes this pod so the search dialog is not stacked on top of the detail
-   * overlay it was opened from.
+   * The menu dispatches rather than calling in, so it stays a generic
+   * selection menu and this stays the only place that knows what searching a
+   * log means. The event carries the selected text because the menu's own
+   * click will have collapsed the selection by the time this runs.
    */
-  const searchEverywhere = () => {
-    const sel = selectionRef.current;
-    if (!sel) return;
-    const term = grepTermFor(sel.raw);
-    if (!term) return;
-    setToolbar(null);
-    window.getSelection()?.removeAllRanges();
-    useK8sStore.getState().closeDetail();
-    useDk8sSearchStore.getState().searchEverywhere(term);
-  };
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const onAction = (e: Event) => {
+      const { action, text } = (e as CustomEvent<{ action: string; text: string }>).detail ?? {};
+      const term = grepTermFor(text ?? '');
+      if (!term) return;
+      if (action === 'search:here') {
+        setLogFilter(term);
+      } else if (action === 'search:everywhere') {
+        useK8sStore.getState().closeDetail();
+        useDk8sSearchStore.getState().searchEverywhere(term);
+      }
+      setToolbar(null);
+      window.getSelection()?.removeAllRanges();
+    };
+    el.addEventListener('daakia:selection-action', onAction);
+    return () => el.removeEventListener('daakia:selection-action', onAction);
+  }, [setLogFilter]);
 
   const containers = detail?.containers ?? [];
   const oldest = logs.find(l => l.ts !== undefined)?.ts;
@@ -968,8 +943,16 @@ export function LogViewer() {
           // the button press re-ran placement against a selection the click had
           // just collapsed, which read as a flicker.
           if ((e.target as HTMLElement).closest('[data-selection-toolbar]')) return;
+          // Right-click opens the context menu, which carries Search. Two
+          // floating panels over one selection is one too many, so the AI
+          // strip stays away.
+          if (e.button === 2) { setToolbar(null); return; }
           window.setTimeout(showToolbarForSelection, 0);
         }}
+        onContextMenu={() => setToolbar(null)}
+        // Opts this surface into the Search entry on the selection menu; the
+        // menu dispatches back here rather than knowing anything about logs.
+        data-selection-actions="search"
       >
         <div
           ref={scrollRef}
@@ -1103,8 +1086,7 @@ export function LogViewer() {
             lineCount={selectionRef.current?.count ?? 0}
             onAsk={() => sendToAi('dk8s.log.askWhy', 'Ask AI why')}
             onExplain={() => sendToAi('dk8s.log.explainError', 'Explain this error')}
-            onGrep={grepSelection}
-            onSearchAll={searchEverywhere}
+
           />
         )}
       </div>
