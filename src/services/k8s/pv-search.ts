@@ -16,9 +16,10 @@
 import { createReadStream } from 'fs';
 import * as readline from 'readline';
 import {
-  buildSearchMatcher, levelOf,
+  buildSearchMatcher, levelOf, isContinuation, hasAppTimestamp,
   type SearchOptions, type SearchMatch, type Matcher,
 } from './k8s-log-search';
+import type { LogLevel } from './k8s-log-stream';
 import { filesForPod, type PvLogConfig, type PvFile, type PodRef } from './pv-logs';
 
 /** One archived file that matched, for the per-pod file list in the results. */
@@ -94,10 +95,30 @@ async function scanFile(
   }
 
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  /*
+    The running level, so a matched stack frame is reported at the level of the
+    event that printed it rather than at no level at all.
+
+    An archive is read start to finish, so unlike a live search there is always
+    a preceding line to inherit from — the context is free, and skipping it
+    would show a WARN's trace as unclassified text.
+  */
+  let prevLevel: LogLevel = 'other';
+  let sawAppTimestamp = false;
+
   try {
     for await (const line of rl) {
       if (signal.cancelled) break;
       result.scanned++;
+
+      const own = levelOf(line);
+      const level: LogLevel = own !== 'other'
+        ? own
+        : isContinuation(line) ? (prevLevel === 'other' ? 'error' : prevLevel)
+          : sawAppTimestamp && !hasAppTimestamp(line) ? prevLevel
+            : 'other';
+      prevLevel = level;
+      sawAppTimestamp = sawAppTimestamp || hasAppTimestamp(line);
 
       for (const p of pending) {
         p.m.after.push(line);
@@ -120,7 +141,7 @@ async function scanFile(
             context: '',
             line: result.scanned,
             ts: timeOf(line),
-            level: levelOf(line),
+            level,
             text: line,
             hits,
             before: before.values(),

@@ -98,20 +98,51 @@ export function levelOf(text: string): LogLevel {
   if (/\bWARN(?:ING)?\b/.test(head)) return 'warn';
   if (/\bINFO\b/.test(head)) return 'info';
   if (/\b(DEBUG|TRACE)\b/.test(head)) return 'debug';
-  // An unlabelled line that looks like a stack frame belongs with its error.
-  if (/^\s+at\s|^Caused by:|^\t/.test(text)) return 'error';
   /*
-    The line a throwable starts on.
+    Everything else is `other` — stack frames and throwable headers included.
 
-    Logback runs its conversion pattern once per event and then dumps the
-    stack trace raw, so an exception's own first line carries no level —
-    `org.hibernate.exception.JDBCConnectionException: unable to obtain...`
-    arrives naked. Its `at` frames were already caught by the rule above,
-    which left the most informative line of the whole trace rendered as
-    plain text between an amber WARN and a wall of red frames.
+    Those used to return 'error' from here, which was wrong and visibly so.
+    Hibernate logs a failed connection at WARN and then dumps a 72-line trace
+    under it; every one of those lines came out red beneath an amber warning,
+    and the log said ERROR where the application had said WARN.
+
+    A frame has no level of its own. It belongs to whatever event printed it —
+    see `isContinuation` and the `prev` argument to parseLine.
   */
-  if (/^[\w$]+(\.[\w$]+)*(Exception|Error|Throwable)(:|\s|$)/.test(text)) return 'error';
   return 'other';
+}
+
+/**
+ * Is this line part of the event above it rather than an event of its own?
+ *
+ * A logging framework runs its conversion pattern once per EVENT and then
+ * dumps the throwable raw, so everything from the exception header down to the
+ * last `... N common frames omitted` carries no timestamp, no logger and no
+ * level. It is one event printed across seventy lines, and it takes that
+ * event's level.
+ */
+export function isContinuation(text: string): boolean {
+  return /^\s*at\s/.test(text)
+    || /^\s*Caused by:/.test(text)
+    || /^\s*Suppressed:/.test(text)
+    || /^\s*\.\.\.\s*\d+\s+(more|common frames omitted)/.test(text)
+    || /^\t/.test(text)
+    // The throwable's own first line: a fully-qualified name ending in
+    // Exception, Error or Throwable.
+    || /^[\w$]+(\.[\w$]+)*(Exception|Error|Throwable)(:|\s|$)/.test(text);
+}
+
+/**
+ * Does the line start with the application's own timestamp?
+ *
+ * kubectl's `--timestamps` prefix is stripped before this runs, so what is
+ * left is the application's own. A line without one, in a log whose other
+ * lines have one, is the second or later line of a multi-line message —
+ * Spring Boot's "Error starting ApplicationContext..." is the common case, and
+ * it matches none of the stack-trace shapes above.
+ */
+export function hasAppTimestamp(text: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/.test(text);
 }
 
 export function parseLine(
@@ -121,21 +152,22 @@ export function parseLine(
   format?: CompiledFormat,
   meter?: FormatMeter,
   /**
-   * The level of the line above, for continuation lines.
+   * What came before, for lines that are not events of their own.
    *
    * A logging framework runs its conversion pattern once per EVENT, so a
-   * message containing a newline prints its prefix on the first line and dumps
-   * the rest raw. Spring Boot does exactly this on a failed start: the
-   * condition report logs an empty INFO event whose body is
-   * "Error starting ApplicationContext...", and that sentence arrives with no
-   * timestamp, no level and no logger. Classified on its own it is `other`,
-   * which renders it as plain white text in the middle of a coloured trace —
-   * the one line a reader most wants to see, styled as though it were noise.
+   * message with a newline in it — or a throwable — prints its prefix on the
+   * first line and dumps the rest raw. Those trailing lines carry no
+   * timestamp, no logger and no level, and they belong to the event above.
    *
-   * Stack frames and exception headers were already special-cased in
-   * `levelOf`; those are two instances of this, not separate rules.
+   * `sawAppTimestamp` is how a line with no recognisable shape is judged.
+   * Spring Boot's "Error starting ApplicationContext..." is not a stack frame
+   * and not a throwable header; the only thing that marks it as a
+   * continuation is that every real event in this log starts with a timestamp
+   * and it does not. Tracking that is what lets the rule fire without a
+   * configured format, and what stops it firing in a log that never had
+   * timestamps to begin with.
    */
-  prevLevel?: LogLevel,
+  prev?: { level: LogLevel; sawAppTimestamp: boolean },
 ): LogLine {
   let ts: number | undefined;
   let text = raw;
@@ -167,24 +199,31 @@ export function parseLine(
     }
   }
 
-  /*
-    No format, or a line it does not fit.
+  return { seq, ts, level: classify(text, prev), text };
+}
 
-    The keyword sniff still applies, so an unmatched line is never worse off
-    than before formats existed. Beyond that: if a format IS configured and
-    this line does not match it while carrying no level of its own, it is a
-    continuation of the event above and inherits its level.
-
-    Gated on `format` deliberately. Only where a shape is known does the
-    absence of that shape mean something — without one, every line is
-    unmatched and inheriting would paint a whole log the colour of its first
-    coloured line.
-  */
+/**
+ * The level of one line, in the context of the line before it.
+ *
+ * Order matters. A level the line states itself always wins — that is the
+ * application telling you what it thinks, and nothing here should second-guess
+ * it. Only when a line says nothing do we ask whether it is a continuation,
+ * and a continuation takes its event's level rather than a level of its own.
+ *
+ * A trace with no event above it falls back to `error`, which is the one place
+ * this guesses: an orphaned stack trace, with the header scrolled off or
+ * filtered away, is far more often an error than anything else.
+ */
+function classify(text: string, prev?: { level: LogLevel; sawAppTimestamp: boolean }): LogLevel {
   const own = levelOf(text);
-  const level = own === 'other' && format && prevLevel && prevLevel !== 'other'
-    ? prevLevel
-    : own;
-  return { seq, ts, level, text };
+  if (own !== 'other') return own;
+
+  if (isContinuation(text)) return prev ? prev.level : 'error';
+
+  // No shape to go on: a line with no timestamp where every event has one.
+  if (prev?.sawAppTimestamp && !hasAppTimestamp(text)) return prev.level;
+
+  return 'other';
 }
 
 export function streamLogs(
@@ -217,8 +256,21 @@ export function streamLogs(
   let seq = 0;
   let pending: LogLine[] = [];
   let carry = '';
-  /** The level of the last line parsed — see the note on parseLine. */
-  let lastLevel: LogLevel | undefined;
+  /**
+   * What the last line was, for continuations — see the note on parseLine.
+   *
+   * `sawAppTimestamp` latches: once this log has shown that its events start
+   * with a timestamp, a later line without one is a continuation even though
+   * the lines immediately around it may also lack one.
+   */
+  let prev: { level: LogLevel; sawAppTimestamp: boolean } | undefined;
+
+  const remember = (line: LogLine) => {
+    prev = {
+      level: line.level,
+      sawAppTimestamp: (prev?.sawAppTimestamp ?? false) || hasAppTimestamp(line.text),
+    };
+  };
   let timer: NodeJS.Timeout | undefined;
 
   const flush = () => {
@@ -255,8 +307,8 @@ export function streamLogs(
       carry = parts.pop() ?? '';
       for (const raw of parts) {
         if (!raw) continue;
-        pending.push(parseLine(raw, seq++, opts.timestamps !== false, compiled, meter, lastLevel));
-        lastLevel = pending[pending.length - 1].level;
+        pending.push(parseLine(raw, seq++, opts.timestamps !== false, compiled, meter, prev));
+        remember(pending[pending.length - 1]);
       }
       // Head mode: once we have what was asked for, stop reading. Streaming a
       // 400MB log to the floor to show its first 200 lines is not a thing to
@@ -280,7 +332,11 @@ export function streamLogs(
       // that has stopped may already have torn down what these lines were for.
       // The final flush below is only correct for an exit we did not cause.
       if (stopped) return;
-      if (carry) { pending.push(parseLine(carry, seq++, opts.timestamps !== false, compiled, meter, lastLevel)); lastLevel = pending[pending.length - 1].level; carry = ''; }
+      if (carry) {
+        pending.push(parseLine(carry, seq++, opts.timestamps !== false, compiled, meter, prev));
+        remember(pending[pending.length - 1]);
+        carry = '';
+      }
       flush();
       const detail = stderrTail.split('\n').map(l => l.trim()).filter(Boolean)[0];
       // A follow that ends on its own means the container went away — which is

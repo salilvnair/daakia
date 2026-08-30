@@ -19,7 +19,7 @@
  */
 import type { ChildProcess } from 'child_process';
 import { spawnKubectl } from './kubectl';
-import { levelOf, parseLine, type LogLevel } from './k8s-log-stream';
+import { levelOf, parseLine, isContinuation, hasAppTimestamp, type LogLevel } from './k8s-log-stream';
 
 export interface SearchTarget {
   context: string;
@@ -379,4 +379,4 @@ export function searchLogs(
 }
 
 /** Re-export so the handler does not need two imports for one concept. */
-export { levelOf };
+export { levelOf, isContinuation, hasAppTimestamp };

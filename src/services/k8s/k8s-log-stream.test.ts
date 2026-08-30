@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { levelOf, parseLine } from './k8s-log-stream';
+import { levelOf, parseLine, isContinuation
+} from './k8s-log-stream';
 import { extractLastThreadDump, decodeProcNetTcp, artifactName } from './k8s-artifacts';
 
 describe('levelOf', () => {
@@ -24,10 +25,27 @@ describe('levelOf', () => {
     expect(levelOf(line)).toBe('info');
   });
 
-  it('keeps stack frames with the error above them', () => {
-    expect(levelOf('\tat com.example.Foo.bar(Foo.java:42)')).toBe('error');
-    expect(levelOf('    at com.example.Foo.bar(Foo.java:42)')).toBe('error');
-    expect(levelOf('Caused by: java.net.SocketTimeoutException')).toBe('error');
+  it('reads no level from a stack frame, because a frame has none', () => {
+    // This used to return `error`. A frame belongs to whatever event printed
+    // it, and Hibernate prints plenty of them under a WARN — see
+    // log-levels.fixture.test.ts, which checks a real log line by line.
+    expect(levelOf('\tat com.example.Foo.bar(Foo.java:42)')).toBe('other');
+    expect(levelOf('    at com.example.Foo.bar(Foo.java:42)')).toBe('other');
+    expect(levelOf('Caused by: java.net.SocketTimeoutException')).toBe('other');
+  });
+
+  it('recognises the shapes that make a line part of the event above', () => {
+    expect(isContinuation('\tat com.example.Foo.bar(Foo.java:42)')).toBe(true);
+    expect(isContinuation('    at com.example.Foo.bar(Foo.java:42)')).toBe(true);
+    expect(isContinuation('Caused by: java.net.SocketTimeoutException')).toBe(true);
+    expect(isContinuation('Suppressed: java.lang.Exception')).toBe(true);
+    expect(isContinuation('\t... 40 common frames omitted')).toBe(true);
+    expect(isContinuation('... 12 more')).toBe(true);
+    expect(isContinuation('org.hibernate.exception.JDBCConnectionException: nope')).toBe(true);
+    expect(isContinuation('java.lang.NullPointerException')).toBe(true);
+
+    expect(isContinuation('2026-08-30T16:45:57.212Z  INFO 1 --- starting')).toBe(false);
+    expect(isContinuation('Tomcat started on port 8090')).toBe(false);
   });
 
   it('falls back to other for an unlabelled line', () => {
@@ -59,7 +77,7 @@ describe('parseLine — continuation lines', () => {
     const cont = parseLine(
       'Error starting ApplicationContext. To display the condition evaluation report'
       + " re-run your application with 'debug' enabled.",
-      2, false, format, undefined, head.level,
+      2, false, format, undefined, { level: head.level, sawAppTimestamp: true },
     );
     // The sentence begins with the word "Error" but carries no level token,
     // so on its own it classified as `other` and rendered as plain text.
@@ -67,25 +85,30 @@ describe('parseLine — continuation lines', () => {
   });
 
   it('does not let a continuation override a level the line does carry', () => {
-    const l = parseLine('2026-08-30T21:27:32.035Z ERROR Application run failed', 3, false, format, undefined, 'info');
+    const l = parseLine('2026-08-30T21:27:32.035Z ERROR Application run failed', 3, false, format, undefined, { level: 'info', sawAppTimestamp: true });
     expect(l.level).toBe('error');
   });
 
-  it('inherits nothing when no format is configured', () => {
-    // Without a known shape, every line is unmatched, and inheriting would
-    // paint a whole log the colour of its first coloured line.
-    const l = parseLine('just a sentence', 4, false, undefined, undefined, 'error');
+  it('inherits nothing in a log that never had timestamps', () => {
+    // Without them there is no way to tell a continuation from a new event,
+    // and inheriting would paint a whole log the colour of its first coloured
+    // line.
+    const l = parseLine('just a sentence', 4, false, undefined, undefined,
+      { level: 'error', sawAppTimestamp: false });
     expect(l.level).toBe('other');
   });
 
   it('does not inherit `other`, so a plain log stays plain', () => {
-    const l = parseLine('another sentence', 5, false, format, undefined, 'other');
+    const l = parseLine('another sentence', 5, false, format, undefined,
+      { level: 'other', sawAppTimestamp: true });
     expect(l.level).toBe('other');
   });
 
-  it('still classifies a stack frame as an error without being told', () => {
-    const l = parseLine('    at com.zapper.Thing.run(Thing.java:1)', 6, false, format, undefined, 'info');
-    expect(l.level).toBe('error');
+  it('gives a frame the level above it rather than calling it an error', () => {
+    const l = parseLine('    at com.zapper.Thing.run(Thing.java:1)', 6, false, format, undefined,
+      { level: 'info', sawAppTimestamp: true });
+    // Inherits, rather than being called an error on sight.
+    expect(l.level).toBe('info');
   });
 });
 
@@ -207,20 +230,45 @@ describe('levelOf on a Logback throwable', () => {
     for (const [line, want] of SEQUENCE) expect(levelOf(line)).toBe(want);
   });
 
-  it('colours the throwable header, which carries no level of its own', () => {
+  it('treats the throwable header as part of the event, not an event', () => {
     // Logback runs its pattern once per event then dumps the trace raw, so
-    // this line arrives naked. It used to fall through to `other` and render
-    // as plain text between an amber WARN and a wall of red frames.
-    expect(levelOf('org.hibernate.exception.JDBCConnectionException: unable to obtain isolated JDBC connection'))
-      .toBe('error');
-    expect(levelOf('java.lang.NullPointerException')).toBe('error');
-    expect(levelOf('java.io.IOException: broken pipe')).toBe('error');
+    // this line arrives naked. It carries no level; it takes one.
+    const header = 'org.hibernate.exception.JDBCConnectionException: unable to obtain isolated JDBC connection';
+    expect(levelOf(header)).toBe('other');
+    expect(isContinuation(header)).toBe(true);
+    expect(isContinuation('java.lang.NullPointerException')).toBe(true);
+    expect(isContinuation('java.io.IOException: broken pipe')).toBe(true);
   });
 
-  it('keeps the frames under it as error', () => {
-    expect(levelOf('\tat org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:100)'))
-      .toBe('error');
-    expect(levelOf('Caused by: java.net.ConnectException: Connection refused')).toBe('error');
+  it('gives the header and its frames the level of the WARN above them', () => {
+    // The sequence ends on a WARN, so the trace under it is amber, not red.
+    // This is the whole point: dk8s reports what the application logged.
+    const prev = { level: 'warn' as const, sawAppTimestamp: true };
+    const header = parseLine(
+      'org.hibernate.exception.JDBCConnectionException: unable to obtain isolated JDBC connection',
+      0, false, undefined, undefined, prev,
+    );
+    expect(header.level).toBe('warn');
+
+    const frame = parseLine(
+      '\tat org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:100)',
+      1, false, undefined, undefined, { level: 'warn', sawAppTimestamp: true },
+    );
+    expect(frame.level).toBe('warn');
+
+    const caused = parseLine(
+      'Caused by: java.net.ConnectException: Connection refused',
+      2, false, undefined, undefined, { level: 'warn', sawAppTimestamp: true },
+    );
+    expect(caused.level).toBe('warn');
+  });
+
+  it('falls back to error for a trace with nothing above it', () => {
+    // A search result, or a log whose header was filtered away. An orphaned
+    // trace is far more often an error than anything else, and this is the one
+    // place the classifier guesses.
+    const orphan = parseLine('\tat com.example.Foo.bar(Foo.java:42)', 0, false);
+    expect(orphan.level).toBe('error');
   });
 
   it('does not colour an ordinary line that merely mentions one', () => {
