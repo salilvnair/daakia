@@ -25,6 +25,7 @@ import { useDk8sArtifactStore, type StoredArtifact } from '../../store/dk8s-arti
 import { shortAge } from './pod-view';
 
 const ACCENT = 'var(--color-dk8s)';
+const DANGER = 'color-mix(in srgb, var(--color-error) 80%, transparent)';
 
 const KIND_ICON: Record<string, typeof MemoryIcon> = {
   heapdump: MemoryIcon,
@@ -189,7 +190,14 @@ export function ArtifactsView() {
           disabled={visible.length === 0}
           title={allShown ? 'Clear the selection' : `Select all ${visible.length} shown`}
           className="flex items-center justify-center cursor-pointer shrink-0 border-none bg-transparent p-0"
-          style={{ width: 22, height: 22, opacity: visible.length === 0 ? 0.4 : 1 }}
+          // Indented to line up with the checkbox on every row below it. The
+          // toolbar and the list share px-4, but each row adds px-3 inside
+          // that; 8 rather than 12 because dui's checkbox insets its own box
+          // by 4. Measured, not guessed.
+          style={{
+            width: 22, height: 22, marginLeft: 8,
+            opacity: visible.length === 0 ? 0.4 : 1,
+          }}
         >
           {allShown
             ? <CheckSquareIcon size={19} color={ACCENT} />
@@ -279,8 +287,10 @@ export function ArtifactsView() {
         <div className="flex justify-center shrink-0 pb-2">
         <HudView
           contained
-          draggable={false}
+          // Draggable, as dui intends — a HUD that cannot be moved is in the
+          // way of whichever row it happens to cover.
           accentColor={ACCENT}
+          className="dk8s-artifact-hud"
           status={`${picked.length} selected · ${bytes(pickedBytes)}`}
           items={[
             {
@@ -292,7 +302,10 @@ export function ArtifactsView() {
             },
             {
               id: 'delete',
-              icon: <TrashIcon size={13} />,
+              // Red, because it is the one item here that destroys something.
+              // Held at 80% so it reads as a warning rather than an alarm —
+              // the HUD is already the accent colour around it.
+              icon: <TrashIcon size={13} color={DANGER} />,
               label: `Delete ${picked.length}`,
               title: 'Delete the selected files from this machine',
               separator: true,

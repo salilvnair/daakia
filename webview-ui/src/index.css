@@ -1591,3 +1591,33 @@ input[type="number"] {
   height: 0;
 }
 
+
+/*
+ * The artifact selection HUD.
+ *
+ * dui sizes its HUD for an icon-only toolbar — 3px of padding and 2px between
+ * items, which is right for a row of square buttons and far too tight once the
+ * items carry labels and a status string. This gives the same control room to
+ * breathe without changing dui's default for everyone else.
+ */
+.dk8s-artifact-hud {
+  padding: 7px 12px;
+  gap: 6px;
+}
+
+.dk8s-artifact-hud button {
+  padding-inline: 9px;
+  height: 26px;
+}
+
+/*
+ * The destructive item, tinted through its label as well as its icon.
+ *
+ * dui's HudItem renders `label` as a plain string and puts no id on the
+ * button, so there is nothing to hook but position. Delete is deliberately
+ * last in the items array in ArtifactsView — if that order changes, this
+ * follows it.
+ */
+.dk8s-artifact-hud button:last-of-type {
+  color: color-mix(in srgb, var(--color-error) 80%, transparent);
+}
