@@ -101,7 +101,7 @@ function Breadcrumb() {
       <div className="flex items-center justify-center flex-shrink-0" style={{ color: ACCENT }}>
         <Dk8sIcon size={17} strokeWidth={1.8} />
       </div>
-      <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">dk8s</span>
+      <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Dk8s</span>
 
       {clusterNames.length > 0 && (
         <>

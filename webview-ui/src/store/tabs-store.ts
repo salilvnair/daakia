@@ -529,7 +529,7 @@ export const useTabsStore = create<TabsState>((set, get) => {
       if (existing) {
         set({ activeTabId: existing.id, previousTabId: activeTabId });
       } else {
-        const tab = createDefaultTab({ type: 'dk8s', name: 'dk8s' });
+        const tab = createDefaultTab({ type: 'dk8s', name: 'Dk8s' });
         set(s => ({
           tabs: [...s.tabs, tab],
           activeTabId: tab.id,

@@ -68,7 +68,7 @@ export function ContextPicker() {
   return (
     <Shell
       title="Which cluster?"
-      subtitle="dk8s passes this on every command and leaves your kubeconfig alone, so picking here will not repoint terminals you have open elsewhere."
+      subtitle="Dk8s passes this on every command and leaves your kubeconfig alone, so picking here will not repoint terminals you have open elsewhere."
     >
       {contexts.length > 6 && (
         <SearchInputView value={filter} onChange={setFilter} placeholder="Filter contexts" size="sm" />

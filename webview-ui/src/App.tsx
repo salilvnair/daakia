@@ -566,7 +566,7 @@ export default function App() {
           open={tabs.some(t => t.type === 'dk8s')}
           accentColor="var(--color-dk8s)"
           onClick={() => useTabsStore.getState().openDk8sTab()}
-          title="dk8s — Kubernetes diagnostics"
+          title="Dk8s — Daakia K8s"
         >
           <Dk8sIcon size={16} strokeWidth={1.8} />
         </ProtocolIcon>

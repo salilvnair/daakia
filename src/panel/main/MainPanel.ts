@@ -356,7 +356,7 @@ export class MainPanel {
         handleMqttPublish(msg, this._post);
         break;
 
-      // ── dk8s — Kubernetes diagnostics ──
+      // ── Dk8s — Daakia K8s ──
       case 'dk8s:probe':
         handleDk8sProbe(this._post);
         break;

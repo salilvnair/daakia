@@ -82,12 +82,12 @@ export function Dk8sSettings() {
       <div className="flex items-center gap-2">
         <Dk8sIcon size={16} color={ACCENT} />
         <span className="text-[14px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          dk8s
+          Dk8s
         </span>
       </div>
       <span className="text-[11.5px] leading-relaxed"
             style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
-        How dk8s behaves against a live cluster.
+        How Dk8s — Daakia K8s — behaves against a live cluster.
       </span>
 
       <div className="flex items-center gap-1.5 mt-1">

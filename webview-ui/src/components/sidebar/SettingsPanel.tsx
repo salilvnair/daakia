@@ -50,7 +50,7 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'prompt-library':  { label: 'Prompt Library',  icon: <AgentIcon size={14} /> },
   'ai-audit':        { label: 'AI Audit',        icon: <SparkleIcon size={14} /> },
   'devtools':        { label: 'Developer Tools', icon: <CodeBracketsIcon size={14} /> },
-  'dk8s':            { label: 'dk8s',            icon: <Dk8sIcon size={14} /> },
+  'dk8s':            { label: 'Dk8s',            icon: <Dk8sIcon size={14} /> },
   'power-features':  { label: 'Power Features',  icon: <CodeBracketsIcon size={14} /> },
 };
 
