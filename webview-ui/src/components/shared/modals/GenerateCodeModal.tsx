@@ -3,11 +3,16 @@ import hljs from 'highlight.js';
 import { generateCode, LANGUAGES, type CodeGenInput } from '../../../utils/code-generator';
 import type { RequestTab } from '../../../store/tabs-store';
 import { WrapLinesIcon, DownloadIcon } from '../../../icons';
+import { createResolver } from '../../../services/resolve/resolve-service';
+import { useEffectiveSettings } from '../settings/use-effective-settings';
+import type { ExecutionSettings } from '../settings/execution-settings';
 import { IconButtonView, CopyButtonView, SelectInputView, ButtonView, ModalView } from '@salilvnair/dui';
 
 const HLJS_LANG_MAP: Record<string, string> = {
   'shell-curl': 'bash',
   'shell-wget': 'bash',
+  'powershell': 'powershell',
+  'windows-cmd': 'dos',
   'javascript-fetch': 'javascript',
   'javascript-axios': 'javascript',
   'javascript-xhr': 'javascript',
@@ -30,6 +35,12 @@ export function GenerateCodeModal({ open, tab, onClose }: GenerateCodeModalProps
   const [language, setLanguage] = useState('shell-curl');
   const [wrap, setWrap] = useState(true);
 
+  // What this request would inherit, so the snippet carries the timeout,
+  // redirect, certificate and proxy decisions it will actually run with.
+  const inherited = useEffectiveSettings(
+    'request', { tabId: tab?.id, collectionId: tab?.collectionId }, open,
+  );
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -39,20 +50,40 @@ export function GenerateCodeModal({ open, tab, onClose }: GenerateCodeModalProps
 
   const code = useMemo(() => {
     if (!tab) return '';
+
+    /*
+      Variables are resolved, not printed.
+
+      The snippet used to come out with `{{backend}}/actuator/health` in it —
+      a command that cannot be run and cannot be shared. The same resolver the
+      Send button uses expands request, collection and environment layers, so
+      what you copy is what Daakia would send.
+    */
+    const resolve = createResolver(tab);
+    const rv = (v: string) => resolve(v ?? '');
+
+    // Resolved settings: what the levels above give, with this request's own
+    // overrides on top. Merged here because the host only answers with what is
+    // inherited — the request's layer lives in the tab.
+    const settings: ExecutionSettings = { ...(inherited.values ?? {}), ...(tab.settings ?? {}) };
+
     const input: CodeGenInput = {
       method: tab.method,
-      url: tab.url,
-      headers: (tab.headers || []).filter(h => h.enabled && h.key).map(h => ({ key: h.key, value: h.value })),
-      params: (tab.params || []).filter(p => p.enabled && p.key).map(p => ({ key: p.key, value: p.value })),
+      url: rv(tab.url),
+      headers: (tab.headers || []).filter(h => h.enabled && h.key).map(h => ({ key: rv(h.key), value: rv(h.value) })),
+      params: (tab.params || []).filter(p => p.enabled && p.key).map(p => ({ key: rv(p.key), value: rv(p.value) })),
       bodyMode: tab.bodyMode || 'none',
-      bodyRaw: tab.bodyRaw || '',
-      bodyFormData: (tab.bodyFormData || []).filter(f => f.enabled && f.key).map(f => ({ key: f.key, value: f.value, type: f.type || 'text' })),
-      bodyUrlEncoded: (tab.bodyUrlEncoded || []).filter(u => u.enabled && u.key).map(u => ({ key: u.key, value: u.value })),
+      bodyRaw: rv(tab.bodyRaw || ''),
+      bodyFormData: (tab.bodyFormData || []).filter(f => f.enabled && f.key).map(f => ({ key: rv(f.key), value: rv(f.value), type: f.type || 'text' })),
+      bodyUrlEncoded: (tab.bodyUrlEncoded || []).filter(u => u.enabled && u.key).map(u => ({ key: rv(u.key), value: rv(u.value) })),
       authType: tab.authType || 'none',
-      authData: tab.authData || {},
+      authData: Object.fromEntries(
+        Object.entries(tab.authData || {}).map(([k, v]) => [k, typeof v === 'string' ? rv(v) : v]),
+      ) as Record<string, string>,
+      settings,
     };
     return generateCode(input, language);
-  }, [tab, language]);
+  }, [tab, language, inherited.values]);
 
   const highlightedHtml = useMemo(() => {
     const lang = HLJS_LANG_MAP[language] || 'plaintext';

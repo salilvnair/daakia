@@ -19,6 +19,14 @@ interface MenuState {
   y: number;
   context: MenuContext;
   target: HTMLElement | null;
+  /**
+   * The selected text, captured when the menu opened.
+   *
+   * Not read again at click time: moving through a submenu can collapse the
+   * selection, and an action that silently does nothing because the selection
+   * went away is worse than no action.
+   */
+  selection: string;
 }
 
 const INPUT_ITEMS: ContextMenuItem[] = [
@@ -432,7 +440,10 @@ export function RightClickMenu() {
       context = 'selection';
     }
 
-    setMenu({ x: e.clientX, y: e.clientY, context, target });
+    setMenu({
+      x: e.clientX, y: e.clientY, context, target,
+      selection: window.getSelection()?.toString() ?? '',
+    });
   }, []);
 
   useEffect(() => {
@@ -443,9 +454,13 @@ export function RightClickMenu() {
 
   const handleClose = useCallback(() => setMenu(null), []);
 
-  const handleInputSelect = useCallback(async (id: string) => {
+  const handleInputSelect = useCallback(async (id: string, subId?: string) => {
     if (!menu) return;
-    const { target, context } = menu;
+    const { target, context, selection: selectedText } = menu;
+    // A submenu reports the parent's id first and the chosen child second, so
+    // the child is the action whenever there is one. Reading only the first
+    // argument is why Search Here and Search Everywhere did nothing.
+    const action = subId ?? id;
     setMenu(null);
 
     // Native input/textarea actions
@@ -481,21 +496,16 @@ export function RightClickMenu() {
     }
 
     // General text selection — copy
-    if (id === 'copy') {
-      const selection = window.getSelection();
-      if (selection && selection.toString()) {
-        await navigator.clipboard.writeText(selection.toString());
-      }
+    if (action === 'copy') {
+      if (selectedText) await navigator.clipboard.writeText(selectedText);
       return;
     }
 
-    // Handed to whichever surface contributed the entry. The selection is
-    // still live at this point — the menu never cleared it.
-    if (id.startsWith('search:')) {
-      const text = window.getSelection()?.toString() ?? '';
+    // Handed to whichever surface contributed the entry.
+    if (action.startsWith('search:')) {
       target?.dispatchEvent(new CustomEvent('daakia:selection-action', {
         bubbles: true,
-        detail: { action: id, text },
+        detail: { action, text: selectedText },
       }));
     }
   }, [menu]);
@@ -517,8 +527,7 @@ export function RightClickMenu() {
   const adjustedItems = items.map(item => {
     if (item.separator) return item;
     if (item.id === 'cut' || item.id === 'copy') {
-      const selection = window.getSelection();
-      return { ...item, disabled: !selection || !selection.toString().trim() };
+      return { ...item, disabled: !menu.selection.trim() };
     }
     return item;
   });

@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   SearchInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
 } from '@salilvnair/dui';
-import { SparkleIcon, SearchIcon, HelpCircleIcon, ChevronRightIcon, ChevronDownIcon } from '../../icons';
+import { SparkleIcon, HelpCircleIcon, ChevronRightIcon, ChevronDownIcon } from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
