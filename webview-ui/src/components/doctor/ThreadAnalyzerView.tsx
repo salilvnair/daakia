@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ButtonView } from '@salilvnair/dui';
 import { SparkleIcon } from '../../icons';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
 import { AnalyzeModal, planAnalyzeText, type AnalyzePlan } from '../k8s/AnalyzeModal';
 import { parseFrame, summariseStack, type FrameOrigin } from './thread-frame';
 import { postMsg } from '../../vscode';
@@ -238,6 +239,25 @@ export function ThreadAnalyzerView() {
     });
   };
 
+  /*
+    Hand the shell what to put in its header.
+
+    Only this component knows it — "37 threads · 0 daemon" comes out of the
+    parse — and the shell owns the header so it reads the same whichever
+    analyzer is showing. Cleared on unload so the next file is not titled with
+    the last one's name.
+  */
+  const setHeader = useDk8sAnalyzeStore(st => st.setHeader);
+  useEffect(() => {
+    if (!loaded) { setHeader(undefined); return; }
+    const v = loaded.verdict;
+    setHeader({
+      name: loaded.name,
+      meta: `${v.totalThreads} threads · ${v.daemonThreads} daemon`
+        + (loaded.dump.timestamp ? ` · ${loaded.dump.timestamp}` : ''),
+    });
+  }, [loaded, setHeader]);
+
   /** Back to the empty state — see the note on the button. */
   const reset = () => {
     setLoaded(null); setError(''); setFilter('');
@@ -321,20 +341,6 @@ export function ThreadAnalyzerView() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {modal}
-      {/* Header */}
-      <div className="flex items-center gap-2.5 px-4 py-2 flex-wrap flex-shrink-0"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <LayersIcon size={15} style={{ color: ACCENT }} />
-        <span className="text-[13px] font-medium text-[var(--color-text-primary)]">{loaded.name}</span>
-        <span className="text-[11.5px] text-[var(--color-text-muted)] font-mono">
-          {v.totalThreads} threads · {v.daemonThreads} daemon
-          {dump.timestamp ? ` · ${dump.timestamp}` : ''}
-        </span>
-        <div className="flex-1" />
-        <ButtonView variant="secondary" size="sm" onClick={reset}>
-          Open another
-        </ButtonView>
-      </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-3.5">
         {/* Deadlocks — the reason to open a dump at all */}

@@ -249,7 +249,7 @@ export type Dk8sStage =
  * switch to `analyze`, and that happens from the artifact store — a collected
  * dump should land on its analyzer without you navigating there yourself.
  */
-export type Dk8sView = 'pods' | 'artifacts' | 'analyze';
+export type Dk8sView = 'pods' | 'artifacts';
 
 interface K8sState {
   stage: Dk8sStage;

@@ -22,7 +22,8 @@ import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
 import { ArtifactsView } from './ArtifactsView';
-import { AnalyzeView } from './AnalyzeView';
+import { ArtifactDetail } from './ArtifactDetail';
+import { openArtifactIn, type AnalyzerId } from '../../store/dk8s-analyze-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -197,7 +198,6 @@ function ViewSwitch({ view, onChange }: {
   const TABS = [
     { id: 'pods' as const, label: 'Pods', icon: null, badge: podCount },
     { id: 'artifacts' as const, label: 'Artifacts', icon: null, badge: count },
-    { id: 'analyze' as const, label: 'Analyze', icon: <StethoscopeIcon size={13} />, badge: 0 },
   ];
   return (
     <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
@@ -261,15 +261,14 @@ export function K8sPanel() {
   // progress rather than appearing after the result.
   useEffect(() => {
     if (!handoff) return;
-    // Select the analyzer BEFORE switching. A thread dump landing on the heap
-    // analyzer's empty state looks exactly like the handoff failed.
-    useUiStateStore.getState().setPref('doctor.analyzer', handoff.analyzer);
     // The pod detail is a full-panel overlay, so leaving it up would hide the
-    // analyzer the collection was for.
+    // analyzer the collection was for. `openArtifactIn` picks the analyzer
+    // before the view mounts, so a thread dump does not land on the heap
+    // analyzer's empty state — which looks exactly like the handoff failed.
     closeDetail();
-    setView('analyze');
+    openArtifactIn(handoff.analyzer as AnalyzerId);
     clearHandoff();
-  }, [handoff, setView, closeDetail, clearHandoff]);
+  }, [handoff, closeDetail, clearHandoff]);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -326,13 +325,6 @@ export function K8sPanel() {
               <ArtifactsView />
             </div>
           )}
-          {seen.has('analyze') && (
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden"
-                 style={{ display: view === 'analyze' ? 'flex' : 'none' }}>
-              <AnalyzeView />
-            </div>
-          )}
-
           {view === 'pods' && (
             stage === 'no-kubectl' ? <KubectlSetupGuide mode="no-kubectl" />
               : stage === 'no-contexts' ? <KubectlSetupGuide mode="no-contexts" />
@@ -346,6 +338,10 @@ export function K8sPanel() {
       )}
 
       {detail && <PodDetail />}
+
+      {/* Over the panel, like the pod detail: an analysis is one artifact you
+          opened, not a place you navigate to. */}
+      <ArtifactDetail />
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ButtonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { DocumentIcon, CloseCircleIcon, StethoscopeIcon } from '../../icons';
+import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
 
 const ACCENT = 'var(--color-doctor)';
 
@@ -168,6 +169,18 @@ export function LogAnalyzerView() {
   const [onlyError, setOnlyError] = useState(false);
   const [onlyWarn, setOnlyWarn] = useState(false);
 
+  /* See the note in ThreadAnalyzerView — the shell owns the header. */
+  const setHeader = useDk8sAnalyzeStore(st => st.setHeader);
+  useEffect(() => {
+    if (!loaded) { setHeader(undefined); return; }
+    const v = loaded.verdict;
+    const r = v.distinctTemplates ? Math.round(v.entries / v.distinctTemplates) : 0;
+    setHeader({
+      name: loaded.name,
+      meta: `${v.entries.toLocaleString()} entries · ${v.distinctTemplates} shapes · ${r}:1`,
+    });
+  }, [loaded, setHeader]);
+
   /** Back to the empty state — see the note on the button. */
   const reset = () => {
     setLoaded(null); setError(''); setFilter('');
@@ -276,20 +289,6 @@ export function LogAnalyzerView() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Header */}
-      <div className="flex items-center gap-2.5 px-4 py-2 flex-wrap flex-shrink-0"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <DocumentIcon size={15} style={{ color: ACCENT }} />
-        <span className="text-[13px] font-medium text-[var(--color-text-primary)]">{loaded.name}</span>
-        <span className="text-[11.5px] text-[var(--color-text-muted)] font-mono">
-          {v.entries.toLocaleString()} entries · {v.distinctTemplates} shapes · {reduction}:1
-          {v.timeRange ? ` · ${time(v.timeRange.start)} → ${time(v.timeRange.end)}` : ''}
-        </span>
-        <div className="flex-1" />
-        <ButtonView variant="secondary" size="sm" onClick={reset}>
-          Open another
-        </ButtonView>
-      </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-3.5">
         {/* Bursts first — the reason to open the file */}

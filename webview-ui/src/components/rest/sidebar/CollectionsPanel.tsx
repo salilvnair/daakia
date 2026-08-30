@@ -1301,11 +1301,12 @@ function TreeNode({
         ) : (
           <span className="text-[12px] text-[var(--color-text-primary)] truncate flex-1">{node.name}</span>
         )}
-        {/* Item count */}
-        {totalItems > 0 && (
-          <span className="text-[10px] text-[var(--color-text-muted)] opacity-60">{totalItems}</span>
-        )}
-        {/* Hover actions */}
+        {/* Hover actions.
+            Before the count, not after it. They are hidden with `opacity-0`
+            rather than `display: none` — so that the count does not jump
+            sideways when the row is hovered — which means they hold their
+            width all the time. With the count to their left it floated a
+            hundred pixels short of the row's edge, against a blank strip. */}
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <ActionBtn title="Add Request" onClick={(e) => { e.stopPropagation(); onNewRequest(node.id); }}>
             <FilePlusIcon size={13} />
@@ -1320,6 +1321,13 @@ function TreeNode({
             <MoreVerticalIcon size={13} />
           </ActionBtn>
         </div>
+
+        {/* Item count, at the row's edge. */}
+        {totalItems > 0 && (
+          <span className="text-[10px] text-[var(--color-text-muted)] opacity-60 tabular-nums">
+            {totalItems}
+          </span>
+        )}
       </div>
 
       {/* Drop indicator - after */}

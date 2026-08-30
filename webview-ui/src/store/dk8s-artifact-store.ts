@@ -8,7 +8,7 @@
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
 import { useUiStateStore } from './ui-state-store';
-import { useK8sStore } from './k8s-store';
+import { openArtifactIn } from './dk8s-analyze-store';
 
 export interface StoredArtifact {
   file: string;
@@ -42,10 +42,10 @@ export const useDk8sArtifactStore = create<ArtifactState>((set) => ({
   reveal: () => postMsg({ type: 'dk8s:revealArtifacts' }),
 
   open: (a) => {
-    // Select the analyzer BEFORE switching, or a thread dump lands on the heap
-    // analyzer's empty state and reads as the open having failed.
-    useUiStateStore.getState().setPref('doctor.analyzer', a.analyzer);
-    useK8sStore.getState().setPanel('analyze');
+    // Over the list rather than off to a tab: this is the same gesture as
+    // opening a pod, and the analyzer is chosen before the view mounts so a
+    // thread dump does not land on the heap analyzer's empty state.
+    openArtifactIn(a.analyzer);
     postMsg({ type: 'dk8s:openArtifact', file: a.file });
   },
 
