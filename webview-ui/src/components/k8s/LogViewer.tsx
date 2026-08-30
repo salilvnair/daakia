@@ -62,8 +62,16 @@ const RIBBON_W = 38;
 /** The bands themselves. Thick enough to read as colour and to click. */
 const RIBBON_BAND_W = 20;
 /** The selection strip, for placing it clear of the selection and the ribbon. */
-// Two actions, laid out evenly.
-const TOOLBAR_W = 380;
+/*
+  Wide enough to clear the selection it is placed under, and no wider.
+
+  This was 720 when the strip carried four actions, and stayed near it after
+  two of them moved to the right-click menu — so two buttons were being
+  stretched across a strip sized for four, with the padding to match. It sizes
+  to its content now; the constant is only a floor so a one-line selection
+  does not produce a strip narrower than its own shadow.
+*/
+const TOOLBAR_W = 236;
 const TOOLBAR_H = 58;
 
 const LEVEL_SHORT: Record<LogLevel, string> = {
@@ -378,7 +386,7 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
   return (
     <div
       data-selection-toolbar
-      className="absolute z-30 flex items-center gap-3 px-5 py-3 rounded-xl"
+      className="absolute z-30 flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
       style={{
         top: rect.top, left: rect.left,
         // A solid strip, not floating chips. Over a dense log the buttons had
@@ -391,20 +399,20 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
       }}
       onMouseDown={e => e.preventDefault()}   // keep the selection alive
     >
-      <span className="text-[11.5px] px-1 select-none whitespace-nowrap shrink-0"
+      <span className="text-[11px] pl-1 select-none whitespace-nowrap shrink-0"
             style={{
-              color: 'var(--color-text-secondary)',
+              color: 'var(--color-text-muted)',
               fontVariantNumeric: 'tabular-nums',
-              minWidth: 62,
             }}>
         {lineCount} line{lineCount === 1 ? '' : 's'}
       </span>
 
-      {/* The actions split what is left evenly, so the strip reads as one
-          control rather than a row of chips huddled at its left edge. */}
-      <div className="flex items-center gap-2.5 flex-1">
+      {/* Sized to their labels rather than stretched to fill. Two buttons
+          spread across a strip built for four read as padding with words in
+          it. */}
+      <div className="flex items-center gap-1.5">
 
-      <div className="flex-1 [&>button]:w-full [&_button]:whitespace-nowrap"><ButtonView
+      <div className="[&_button]:whitespace-nowrap"><ButtonView
         label="Ask AI why"
         size="sm"
         variant="secondary"
@@ -418,9 +426,8 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
           fontWeight: 600,
         }}
       /></div>
-      {/* Explain is the other model call, so it keeps the AI tone; Grep talks
-          to the buffer, so it takes the cluster tone. Grey said 'disabled'. */}
-      <div className="flex-1 [&>button]:w-full [&_button]:whitespace-nowrap"><ButtonView
+      {/* Explain is the other model call, so it keeps the AI tone. */}
+      <div className="[&_button]:whitespace-nowrap"><ButtonView
         label="Explain"
         size="sm"
         variant="secondary"
