@@ -31,6 +31,15 @@ import {
 
 const ACCENT = 'var(--color-dk8s)';
 /**
+ * One size for every control in the toolbar.
+ *
+ * `md`, not `sm`: a segment control's inner pill sits inside the track's
+ * padding, so at the same nominal height it reads visibly daintier than the
+ * select beside it. Matching the token is not enough — the row has to be sized
+ * so the pill itself lands near the select's box.
+ */
+const CTL_SIZE = 'md';
+/**
  * Two tones, and the split is the point: cyan for anything that talks to the
  * cluster, the AI tone for the one button that sends data to a model. Colour
  * here tells you what a control will DO, which is worth more than making the
@@ -655,9 +664,9 @@ export function LogViewer() {
             toolbar rather than a continuation of this one. */}
         <div className="flex items-center gap-3 flex-wrap justify-end">
         <CheckboxView label="wrap" checked={logWrap} onChange={setLogWrap}
-                      size="sm" accentColor={ACCENT} />
+                      size={CTL_SIZE} accentColor={ACCENT} />
         <CheckboxView label="fold traces" checked={foldTraces} onChange={setFoldTraces}
-                      size="sm" accentColor={ACCENT} />
+                      size={CTL_SIZE} accentColor={ACCENT} />
 
         {/* Which end, and how much. Nothing is fetched until Fetch is pressed —
             a selector that reloads on change is the "it keeps refreshing"
@@ -666,7 +675,7 @@ export function LogViewer() {
           value={logDirection}
           onChange={v => setLogDirection(v as 'last' | 'first')}
           options={[{ value: 'last', label: 'last' }, { value: 'first', label: 'first' }]}
-          size="sm"
+          size={CTL_SIZE}
           accentColor={ACCENT}
         />
 
@@ -674,8 +683,7 @@ export function LogViewer() {
           value={String(logTail)}
           onChange={v => setLogTail(Number(v))}
           options={[100, 200, 500, 1000, 5000].map(v => ({ value: String(v), label: String(v) + ' lines' }))}
-          size="sm"
-          width={106}
+          size={CTL_SIZE}
           accentColor={ACCENT}
         />
 
@@ -689,14 +697,13 @@ export function LogViewer() {
             { value: '1h', label: 'last hour' },
             { value: '6h', label: 'last 6 hours' },
           ]}
-          size="sm"
-          width={138}
+          size={CTL_SIZE}
           accentColor={ACCENT}
         />
 
         <ButtonView
           label="Fetch"
-          size="sm"
+          size={CTL_SIZE}
           variant="secondary"
           accentColor={ACCENT}
           color={logLive ? 'var(--color-text-muted)' : ACCENT}
@@ -717,7 +724,7 @@ export function LogViewer() {
             lines a second buries whatever you opened the log to read. */}
         <ButtonView
           label="Following"
-          size="sm"
+          size={CTL_SIZE}
           variant="secondary"
           accentColor={LIVE_ACCENT}
           color={logLive ? LIVE_ACCENT : 'var(--color-text-secondary)'}
@@ -743,7 +750,7 @@ export function LogViewer() {
 
         <ButtonView
           label="Download"
-          size="sm"
+          size={CTL_SIZE}
           variant="secondary"
           onClick={openLogExport}
           title="Write this pod's log to a file, with the same options as a bulk export"
@@ -752,7 +759,7 @@ export function LogViewer() {
 
         <ButtonView
           label="Analyze"
-          size="sm"
+          size={CTL_SIZE}
           variant="secondary"
           accentColor={AI_ACCENT}
           color={logs.length ? AI_ACCENT : 'var(--color-text-muted)'}
@@ -775,7 +782,7 @@ export function LogViewer() {
             --previous just errors, and offering it invites that. */}
         {(detail?.restarts ?? 0) > 0 && (
           <CheckboxView label="previous run" checked={logPrevious} onChange={setLogPrevious}
-                        size="sm" accentColor="var(--color-warning)" />
+                        size={CTL_SIZE} accentColor="var(--color-warning)" />
         )}
 
         {logStatus === 'error' && (

@@ -17,7 +17,8 @@ import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
-import { FolderExportIcon, CloseIcon, SearchIcon, SelectAllIcon } from '../../icons';
+import { FolderExportIcon, CloseIcon, SearchIcon } from '../../icons';
+import { CheckSquareIcon } from '@salilvnair/dui';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
   formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
@@ -452,22 +453,30 @@ export function PodGrid() {
           onClick={toggleSelectMode}
           className="text-[11px] px-2.5 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
           style={{
+            // Green for entering selection, red for leaving it — the same
+            // pairing the pod cards already use for healthy and failing, so
+            // the colour means the same thing here as it does there. Held at a
+            // wash rather than a fill: this is a mode switch, not an alarm.
             background: selectMode
               ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
-              : 'transparent',
+              : 'color-mix(in srgb, var(--color-success) 13%, transparent)',
             border: `1px solid ${selectMode
               ? 'color-mix(in srgb, var(--color-error) 45%, transparent)'
-              : 'var(--color-surface-border)'}`,
-            color: selectMode ? 'var(--color-error)' : 'var(--color-text-primary)',
+              : 'color-mix(in srgb, var(--color-success) 42%, transparent)'}`,
+            color: selectMode
+              ? 'var(--color-error)'
+              : 'color-mix(in srgb, var(--color-success) 88%, var(--color-text-primary))',
             fontWeight: 500,
           }}
           title={selectMode ? 'Leave selection mode' : 'Pick pods to search or export their logs'}
         >
           {/* Two different actions wearing one button, so they get two looks:
-              a select mark in the cluster accent, and a red X to leave. */}
+              a ticked checkbox — the same shape the cards are about to grow —
+              and a red X to leave. */}
           {selectMode
             ? <CloseIcon size={13} strokeWidth={2.2} />
-            : <SelectAllIcon size={13} strokeWidth={1.9} style={{ color: 'var(--color-dk8s)' }} />}
+            : <CheckSquareIcon size={14} strokeWidth={1.9}
+                               style={{ color: 'var(--color-success)', opacity: 0.85 }} />}
           {selectMode ? 'Cancel' : 'Select pods'}
         </button>
 
