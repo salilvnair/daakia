@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from 'react';
 import { heapQuery, bytes, hueFor, type TreemapData } from './heap-query';
 import { squarify, type Tile } from './treemap-layout';
 
-export function HeapTreemapView() {
+export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
   const [data, setData] = useState<TreemapData | null>(null);
   const [error, setError] = useState('');
   const [hover, setHover] = useState<Tile | null>(null);
@@ -23,11 +23,11 @@ export function HeapTreemapView() {
 
   useEffect(() => {
     let live = true;
-    heapQuery<TreemapData>({ type: 'treemap' })
+    heapQuery<TreemapData>({ type: 'treemap', packageFilter })
       .then(d => { if (live) { setData(d); setError(''); } })
       .catch(e => { if (live) setError(e.message); });
     return () => { live = false; };
-  }, []);
+  }, [packageFilter]);
 
   useEffect(() => {
     const canvas = canvasRef.current, wrap = wrapRef.current;

@@ -91,6 +91,17 @@ function severityColor(percent: number): string {
 
 type SubView = 'verdict' | 'histogram' | 'treemap' | 'graph' | 'growth' | 'explain';
 
+/**
+ * Which views a package filter means anything for.
+ *
+ * The aggregate views — a class list, a treemap, a comparison — are lists of
+ * classes, and filtering them is just showing fewer. Retention is a chain from
+ * a GC root and dropping interior links breaks it; Verdict and Explain are
+ * conclusions about the whole heap, and a filtered conclusion is a wrong one.
+ * So the box only appears where it does something.
+ */
+const FILTERABLE: SubView[] = ['histogram', 'treemap', 'growth'];
+
 const SUB_VIEWS: { id: SubView; label: string }[] = [
   { id: 'verdict', label: 'Verdict' },
   { id: 'histogram', label: 'Histogram' },
@@ -103,6 +114,8 @@ const SUB_VIEWS: { id: SubView; label: string }[] = [
 export function HeapAnalyzerView() {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [view, setView] = useState<SubView>('verdict');
+  /** Shared by every filterable sub-view — see FILTERABLE. */
+  const [packageFilter, setPackageFilter] = useState('');
   // Baseline survives loading another dump — comparing is the whole point.
   const [baseline, setBaseline] = useState<{ name: string | null } | null>(null);
 
@@ -232,6 +245,38 @@ export function HeapAnalyzerView() {
           ))}
         </div>
         <div className="flex-1" />
+
+        {/*
+          Package filter — taken from JProfiler's MCP, which puts one on every
+          heap view it exposes.
+
+          Every Java heap is topped by byte[], char[], String and HashMap$Node,
+          and none of them are yours. Being able to say "only com.zapper" is
+          the difference between a class list you skim and one you read.
+
+          One box for all three views rather than one each: it is a statement
+          about whose code you care about, and that does not change when you
+          switch from a table to a treemap.
+        */}
+        {FILTERABLE.includes(view) && (
+          <input
+            value={packageFilter}
+            onChange={e => setPackageFilter(e.target.value)}
+            placeholder="Package filter — com.zapper, org.hibernate"
+            spellCheck={false}
+            title="Comma-separated package prefixes. Matches sub-packages, inner classes and arrays of a filtered type."
+            className="h-[24px] px-2 rounded-md text-[11px] font-mono outline-none"
+            style={{
+              width: 260,
+              color: 'var(--color-text-primary)',
+              background: 'var(--color-surface)',
+              border: `1px solid ${packageFilter.trim()
+                ? 'color-mix(in srgb, var(--color-doctor) 45%, transparent)'
+                : 'var(--color-surface-border)'}`,
+            }}
+          />
+        )}
+
         {/* Clears back to the empty state rather than opening a picker
             straight away: cancelling that dialog left you looking at the old
             dump with no sign that anything had happened. */}
@@ -240,10 +285,10 @@ export function HeapAnalyzerView() {
         </ButtonView>
       </div>
 
-      {view === 'histogram' && <HeapHistogramView liveBytes={liveBytes} />}
-      {view === 'treemap' && <HeapTreemapView />}
+      {view === 'histogram' && <HeapHistogramView liveBytes={liveBytes} packageFilter={packageFilter} />}
+      {view === 'treemap' && <HeapTreemapView packageFilter={packageFilter} />}
       {view === 'graph' && <HeapGraphView liveBytes={liveBytes} />}
-      {view === 'growth' && <HeapGrowthView hasBaseline={!!baseline} baselineName={baseline?.name ?? null} />}
+      {view === 'growth' && <HeapGrowthView hasBaseline={!!baseline} baselineName={baseline?.name ?? null} packageFilter={packageFilter} />}
       {view === 'explain' && <HeapExplainView />}
       {view === 'verdict' && (
       <div className="flex flex-col gap-4 px-4 py-4 overflow-y-auto flex-1 min-h-0">

@@ -32,7 +32,7 @@ interface Growth {
   truncatedRows: number;
 }
 
-export function HeapGrowthView({ hasBaseline, baselineName }: { hasBaseline: boolean; baselineName: string | null }) {
+export function HeapGrowthView({ hasBaseline, baselineName, packageFilter }: { hasBaseline: boolean; baselineName: string | null; packageFilter?: string }) {
   const [growth, setGrowth] = useState<Growth | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,12 +41,12 @@ export function HeapGrowthView({ hasBaseline, baselineName }: { hasBaseline: boo
     if (!hasBaseline) { setGrowth(null); return; }
     let live = true;
     setLoading(true);
-    heapQuery<Growth>({ type: 'growth' })
+    heapQuery<Growth>({ type: 'growth', packageFilter })
       .then(g => { if (live) { setGrowth(g); setError(''); } })
       .catch(e => { if (live) { setError(e.message); setGrowth(null); } })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [hasBaseline]);
+  }, [hasBaseline, packageFilter]);
 
   // ── Nothing to compare against yet ──
   if (!hasBaseline) {

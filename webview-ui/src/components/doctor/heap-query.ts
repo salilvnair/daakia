@@ -8,11 +8,13 @@
 import { postMsg } from '../../vscode';
 
 export type HeapQuery =
-  | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number }
-  | { type: 'treemap' }
+  // `packageFilter` is comma-separated and applies to the aggregate views.
+  // See the note on the worker's Query type for why `children` is exempt.
+  | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number; packageFilter?: string }
+  | { type: 'treemap'; packageFilter?: string }
   | { type: 'children'; row: number; limit?: number }
   | { type: 'evidence' }
-  | { type: 'growth' };
+  | { type: 'growth'; packageFilter?: string };
 
 export interface ClassStat {
   classRow: number;

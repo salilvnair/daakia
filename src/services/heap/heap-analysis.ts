@@ -14,6 +14,7 @@ import {
   FLAG_REACHABLE, KIND_CLASS, KIND_PRIMITIVE_ARRAY,
   displayClassName, type HeapIndex,
 } from './heap-index';
+import { filterByPackages } from './heap-filter';
 
 export interface Dominators {
   /** Immediate dominator per row; `count` means the virtual root. -1 = unreachable. */
@@ -442,11 +443,20 @@ export function computeClassStats(index: HeapIndex, dom: Dominators): ClassStat[
  * heap exactly. Retained sizes overlap by construction, so a retained treemap
  * would draw rectangles totalling more than the heap.
  */
-export function computeTreemap(index: HeapIndex, dom: Dominators, maxLeaves = 400): {
+export function computeTreemap(
+  index: HeapIndex,
+  dom: Dominators,
+  maxLeaves = 400,
+  /** Package prefixes to keep — see heap-filter. Empty keeps everything. */
+  packagePrefixes: string[] = [],
+): {
   totalBytes: number;
   groups: { name: string; bytes: number; children: { name: string; bytes: number; instances: number }[] }[];
 } {
-  const stats = computeClassStats(index, dom);
+  // Filtered before the packages are built, so a filtered treemap is a treemap
+  // OF the filter — groups sized against each other rather than against a heap
+  // the user asked not to see.
+  const stats = filterByPackages(computeClassStats(index, dom), packagePrefixes, s => s.className);
   const byPackage = new Map<string, { name: string; bytes: number; children: { name: string; bytes: number; instances: number }[] }>();
 
   for (const s of stats) {
@@ -477,7 +487,19 @@ export function computeTreemap(index: HeapIndex, dom: Dominators, maxLeaves = 40
     budget -= g.children.length;
   }
 
-  return { totalBytes: dom.liveBytes, groups };
+  /*
+    The total is what the tiles add up to, not the live heap.
+
+    Unfiltered these are the same number. Filtered they are not, and reporting
+    the live heap would tell the renderer to lay out a few megabytes of your
+    classes inside an area sized for the whole dump — a treemap that is mostly
+    empty space, drawn at a scale nothing on screen justifies.
+  */
+  const totalBytes = packagePrefixes.length === 0
+    ? dom.liveBytes
+    : groups.reduce((t, g) => t + g.bytes, 0);
+
+  return { totalBytes, groups };
 }
 
 /**

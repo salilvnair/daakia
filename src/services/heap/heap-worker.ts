@@ -14,6 +14,7 @@ import { readFileSync } from 'fs';
 import { parseHprof, ParseCancelled, type ParseProgress } from './hprof-parser';
 import { displayClassName, KIND_INSTANCE, type HeapIndex } from './heap-index';
 import { scanStrings } from './heap-redaction';
+import { parsePackageFilter, filterByPackages, matchesPackages } from './heap-filter';
 import {
   analyzeHeap, computeClassStats, computeTreemap, dominatorChildrenOf,
   type HeapVerdict, type Dominators,
@@ -231,12 +232,19 @@ export function verifyAgainstTruth(index: HeapIndex, truthPath: string): string[
  * whole graph to the webview is exactly what the columnar design exists to
  * avoid — so the views ask for small, pre-aggregated slices instead.
  */
+/*
+  `packageFilter` is comma-separated, as in JProfiler's MCP, and applies to the
+  three aggregate views. It is deliberately NOT on `children`: filtering a
+  dominator tree would have to either drop interior nodes — breaking the chain
+  that makes the tree readable — or keep them and filter only leaves, which is
+  a different feature wearing the same name.
+*/
 type Query =
-  | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number }
-  | { type: 'treemap' }
+  | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number; packageFilter?: string }
+  | { type: 'treemap'; packageFilter?: string }
   | { type: 'children'; row: number; limit?: number }
   | { type: 'evidence' }
-  | { type: 'growth' }
+  | { type: 'growth'; packageFilter?: string }
   | { type: 'rules' };
 
 type Incoming =
@@ -301,6 +309,10 @@ function runQuery(query: Query): unknown {
   if (query.type === 'histogram') {
     const search = (query.search ?? '').trim().toLowerCase();
     let rows = computeClassStats(index, dominators);
+    // Package filter first: it is the coarse "whose code is this" cut, and the
+    // search box then works within it. The reported total is the filtered one,
+    // so the row count under the table describes what you are looking at.
+    rows = filterByPackages(rows, parsePackageFilter(query.packageFilter), r => r.className);
     if (search) rows = rows.filter(r => r.className.toLowerCase().includes(search));
     const sort = query.sort ?? 'shallow';
     rows.sort((a, b) =>
@@ -312,7 +324,9 @@ function runQuery(query: Query): unknown {
     return { total: rows.length, rows: rows.slice(offset, offset + limit) };
   }
 
-  if (query.type === 'treemap') return computeTreemap(index, dominators);
+  if (query.type === 'treemap') {
+    return computeTreemap(index, dominators, 400, parsePackageFilter(query.packageFilter));
+  }
 
   if (query.type === 'rules') {
     if (!residentVerdict) throw new Error('Analysis has not finished yet.');
@@ -331,7 +345,8 @@ function runQuery(query: Query): unknown {
     if (!baseline) throw new Error('No baseline loaded. Open a dump, set it as the baseline, then open a second one.');
     if (!residentVerdict) throw new Error('Analysis has not finished yet.');
 
-    const current = computeClassStats(index, dominators);
+    const prefixes = parsePackageFilter(query.packageFilter);
+    const current = filterByPackages(computeClassStats(index, dominators), prefixes, c => c.className);
     const seen = new Set<string>();
     const rows: {
       className: string;
@@ -356,6 +371,9 @@ function runQuery(query: Query): unknown {
     // the story when something was released.
     for (const [className, b] of baseline.classes) {
       if (seen.has(className)) continue;
+      // The baseline is filtered on the same terms, or a filtered comparison
+      // would show every vanished class in the JDK as a loss.
+      if (!matchesPackages(className, prefixes)) continue;
       rows.push({
         className,
         beforeBytes: Math.round(b.shallowBytes), afterBytes: 0,

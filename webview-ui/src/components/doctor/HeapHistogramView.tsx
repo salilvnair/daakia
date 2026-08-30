@@ -21,7 +21,7 @@ const COLUMNS: { id: Sort; label: string; title: string }[] = [
   { id: 'instances', label: 'Instances', title: 'Live instance count.' },
 ];
 
-export function HeapHistogramView({ liveBytes }: { liveBytes: number }) {
+export function HeapHistogramView({ liveBytes, packageFilter }: { liveBytes: number; packageFilter?: string }) {
   const [rows, setRows] = useState<ClassStat[]>([]);
   const [total, setTotal] = useState(0);
   const [sort, setSort] = useState<Sort>('shallow');
@@ -37,13 +37,15 @@ export function HeapHistogramView({ liveBytes }: { liveBytes: number }) {
     let live = true;
     const t = setTimeout(() => {
       setLoading(true);
-      heapQuery<{ total: number; rows: ClassStat[] }>({ type: 'histogram', sort, search, limit: 1000 })
+      heapQuery<{ total: number; rows: ClassStat[] }>({ type: 'histogram', sort, search, limit: 1000, packageFilter })
         .then(r => { if (!live) return; setRows(r.rows); setTotal(r.total); setError(''); })
         .catch(e => { if (live) setError(e.message); })
         .finally(() => { if (live) setLoading(false); });
-    }, search ? 180 : 0);
+    }, search || packageFilter ? 180 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [sort, search]);
+    // Debounced on the same timer as the search box: a package filter is
+    // typed a character at a time too, and each keystroke is a full re-scan.
+  }, [sort, search, packageFilter]);
 
   useEffect(() => {
     const el = scrollRef.current;
