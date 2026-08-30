@@ -80,9 +80,24 @@ interface SearchState {
    */
   resultScroll: number;
   cameFromSearch: boolean;
+  /**
+   * Pods to search, by uid.
+   *
+   * Separate from the grid's selection because the search can now be started
+   * from inside a single pod's log view — "Search Everywhere" — where there is
+   * no grid selection to inherit. Empty means "fall back to whatever the grid
+   * has selected", which is what opening the modal from the pod list should do.
+   */
+  picked: string[];
+  /** Whether the pod table is expanded. Open by default when nothing is picked. */
+  pickerOpen: boolean;
 
   openSearch: () => void;
   closeSearch: () => void;
+  setPicked: (uids: string[]) => void;
+  setPickerOpen: (open: boolean) => void;
+  /** Search across pods, starting from a term highlighted in one pod's log. */
+  searchEverywhere: (query: string) => void;
   /** Opening a pod from a hit — records the way back. */
   jumpedToPod: (scrollTop: number) => void;
   /** Back from that pod: reopens the results where they were. */
@@ -99,15 +114,33 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   open: false,
   resultScroll: 0,
   cameFromSearch: false,
+  picked: [],
+  pickerOpen: false,
   options: DEFAULT_OPTIONS,
   running: false,
   progress: { done: 0, total: 0 },
   groups: [],
   collapsed: [],
 
-  openSearch: () => set({ open: true }),
+  // Opened from the pod grid, so the grid's selection is what you meant —
+  // clear any picks a previous Search Everywhere left behind, or they would
+  // silently override it.
+  openSearch: () => set({ open: true, picked: [], pickerOpen: false }),
   // The way back is dropped on a deliberate close: you chose to leave.
   closeSearch: () => set({ open: false, cameFromSearch: false }),
+
+  setPicked: (picked) => set({ picked }),
+  setPickerOpen: (pickerOpen) => set({ pickerOpen }),
+
+  searchEverywhere: (query) => set(s => ({
+    open: true,
+    // Starts from nothing chosen and the table open: you came here from one
+    // pod's log, so the grid's selection — if any — is not what you meant.
+    picked: [],
+    pickerOpen: true,
+    options: { ...s.options, query },
+    groups: [], summary: undefined,
+  })),
 
   jumpedToPod: (scrollTop) => set({ open: false, resultScroll: scrollTop, cameFromSearch: true }),
   returnToSearch: () => set({ open: true, cameFromSearch: false }),

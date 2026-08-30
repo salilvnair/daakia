@@ -19,6 +19,7 @@ import {
 } from '@salilvnair/dui';
 import { SparkleIcon, SearchIcon, HelpCircleIcon, ChevronRightIcon, ChevronDownIcon } from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
+import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import {
   filterLines, densityBuckets, describeBucket, levelCounts, levelColor,
@@ -58,7 +59,9 @@ const RIBBON_W = 38;
 /** The bands themselves. Thick enough to read as colour and to click. */
 const RIBBON_BAND_W = 20;
 /** The selection strip, for placing it clear of the selection and the ribbon. */
-const TOOLBAR_W = 430;
+// Four actions now, not three. The strip lays them out evenly, so an
+// unchanged width would have squeezed every label.
+const TOOLBAR_W = 560;
 const TOOLBAR_H = 58;
 
 const LEVEL_SHORT: Record<LogLevel, string> = {
@@ -310,12 +313,13 @@ function LevelTag({ level }: { level: LogLevel }) {
  * just highlighted to find the button that acts on it. This appears beside the
  * line, which is where your eye already is.
  */
-function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
+function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep, onSearchAll }: {
   rect: { top: number; left: number };
   lineCount: number;
   onAsk: () => void;
   onExplain: () => void;
   onGrep: () => void;
+  onSearchAll: () => void;
 }) {
   return (
     <div
@@ -342,8 +346,8 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
         {lineCount} line{lineCount === 1 ? '' : 's'}
       </span>
 
-      {/* The three actions split what is left evenly, so the strip reads as one
-          control rather than three chips huddled at its left edge. */}
+      {/* The actions split what is left evenly, so the strip reads as one
+          control rather than a row of chips huddled at its left edge. */}
       <div className="flex items-center gap-2.5 flex-1">
 
       <div className="flex-1 [&>button]:w-full"><ButtonView
@@ -375,17 +379,35 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
           borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 38%, transparent)',
         }}
       /></div>
+      {/* "Grep" said what it did to the buffer, not what it does for you. The
+          pair now names the only thing that separates them: how far it looks. */}
       <div className="flex-1 [&>button]:w-full"><ButtonView
-        label="Grep"
+        label="Search Here"
         size="sm"
         variant="secondary"
         accentColor={ACCENT}
         color={ACCENT}
         onClick={onGrep}
+        title="Filter this pod's log to lines containing the selection"
         iconLeft={<SearchIcon size={12} color={ACCENT} />}
         style={{
           background: 'color-mix(in srgb, var(--color-dk8s) 12%, transparent)',
           borderColor: 'color-mix(in srgb, var(--color-dk8s) 40%, transparent)',
+        }}
+      /></div>
+      <div className="flex-1 [&>button]:w-full"><ButtonView
+        label="Search Everywhere"
+        size="sm"
+        variant="secondary"
+        accentColor={ACCENT}
+        color={ACCENT}
+        onClick={onSearchAll}
+        title="Search other pods' logs for the selection"
+        iconLeft={<SearchIcon size={12} color={ACCENT} />}
+        style={{
+          background: 'color-mix(in srgb, var(--color-dk8s) 20%, transparent)',
+          borderColor: 'color-mix(in srgb, var(--color-dk8s) 52%, transparent)',
+          fontWeight: 600,
         }}
       /></div>
       </div>
@@ -724,6 +746,27 @@ export function LogViewer() {
     window.getSelection()?.removeAllRanges();
   };
 
+  /**
+   * The same term, against other pods.
+   *
+   * Finding a request id in one pod's log and wanting to know which other pod
+   * touched it is the whole reason multi-pod search exists, and getting there
+   * meant leaving the pod, remembering the string and typing it again.
+   *
+   * Closes this pod so the search dialog is not stacked on top of the detail
+   * overlay it was opened from.
+   */
+  const searchEverywhere = () => {
+    const sel = selectionRef.current;
+    if (!sel) return;
+    const term = grepTermFor(sel.raw);
+    if (!term) return;
+    setToolbar(null);
+    window.getSelection()?.removeAllRanges();
+    useK8sStore.getState().closeDetail();
+    useDk8sSearchStore.getState().searchEverywhere(term);
+  };
+
   const containers = detail?.containers ?? [];
   const oldest = logs.find(l => l.ts !== undefined)?.ts;
 
@@ -1060,6 +1103,7 @@ export function LogViewer() {
             onAsk={() => sendToAi('dk8s.log.askWhy', 'Ask AI why')}
             onExplain={() => sendToAi('dk8s.log.explainError', 'Explain this error')}
             onGrep={grepSelection}
+            onSearchAll={searchEverywhere}
           />
         )}
       </div>

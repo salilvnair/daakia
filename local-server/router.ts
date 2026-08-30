@@ -22,7 +22,7 @@ import {
   getUiAuditEntries, clearUiAuditEntries,
   getDbTables, getDbTableRows, deleteDbRow,
 } from '../src/storage/db';
-import { handleExecuteRequest, handleGetOAuth2Token } from '../src/panel/main/handlers/request-handler';
+import { handleExecuteRequest, handleGetOAuth2Token, handleGetEffectiveSettings } from '../src/panel/main/handlers/request-handler';
 import { cancelRestRequest } from '../src/http/request-executor';
 import {
   handleExecuteGraphQL, handleGraphQLConnect, handleGraphQLSubscribe, handleGraphQLUnsubscribe, cancelGraphQLRequest,
@@ -488,6 +488,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'getCollectionProperties':
       handleGetCollectionProperties(msg, post);
+      break;
+    case 'settings:getEffective':
+      handleGetEffectiveSettings(msg, post);
       break;
     case 'clearCollections':
       handleClearCollections(post, msg.protocol as string | undefined);

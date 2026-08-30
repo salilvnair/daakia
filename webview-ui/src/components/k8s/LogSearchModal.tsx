@@ -20,6 +20,7 @@ import {
 import { useK8sStore } from '../../store/k8s-store';
 import { useDk8sSearchStore, type SearchMatch, type PodGroup } from '../../store/dk8s-search-store';
 import { levelColor } from './log-view';
+import { severityOf, severityColor, shortAge } from './pod-view';
 import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -88,6 +89,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   const { pods, selected, openDetail } = useK8sStore();
   const {
     options, running, progress, groups, summary, collapsed,
+    picked, pickerOpen, setPicked, setPickerOpen,
     setOptions, run, cancel, toggleCollapsed,
   } = useDk8sSearchStore();
 
@@ -95,7 +97,26 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(360);
 
-  const chosen = pods.filter(p => selected.includes(p.uid));
+  /**
+   * Which pods get searched.
+   *
+   * `picked` when the search chose its own — Search Everywhere starts from
+   * inside one pod's log, where the grid's selection is not what you meant —
+   * and the grid's selection otherwise, so opening this from the pod list
+   * still just works.
+   */
+  const useGrid = picked.length === 0 && !pickerOpen;
+  const chosen = useGrid
+    ? pods.filter(p => selected.includes(p.uid))
+    : pods.filter(p => picked.includes(p.uid));
+
+  const [podFilter, setPodFilter] = useState('');
+  const pickable = useMemo(() => {
+    const q = podFilter.trim().toLowerCase();
+    if (!q) return pods;
+    return pods.filter(p =>
+      p.name.toLowerCase().includes(q) || p.namespace.toLowerCase().includes(q));
+  }, [pods, podFilter]);
 
   const rows = useMemo(
     () => buildRows(groups, collapsed, options.contextLines),
@@ -187,6 +208,124 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="flex flex-col gap-3" style={{ minHeight: 520 }} onKeyDown={onKey}>
+        {/* ── Which pods ──
+            Started from a pod's log there is no grid selection to inherit, so
+            the choice has to be made here. Shown as a strip when the pods are
+            already settled, and expanded when they are not. */}
+        <div className="rounded-md overflow-hidden shrink-0"
+             style={{ border: '1px solid var(--color-surface-border)' }}>
+          <button
+            type="button"
+            onClick={() => {
+              // Opening the table for the first time carries the grid's
+              // selection in, so expanding it never silently clears a choice.
+              if (!pickerOpen && picked.length === 0 && chosen.length > 0) {
+                setPicked(chosen.map(p => p.uid));
+              }
+              setPickerOpen(!pickerOpen);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 cursor-pointer border-none text-left"
+            style={{ background: 'var(--color-surface-hover)' }}
+          >
+            <ChevronRightIcon
+              size={12}
+              color="var(--color-text-muted)"
+              style={{ transform: pickerOpen ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }}
+            />
+            <span className="text-[11.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+              {chosen.length} pod{chosen.length === 1 ? '' : 's'} selected
+            </span>
+            <span className="text-[10.5px] truncate" style={{ color: 'var(--color-text-muted)' }}>
+              {chosen.length === 0
+                ? 'pick the pods to search'
+                : chosen.slice(0, 3).map(p => p.name).join(', ')
+                  + (chosen.length > 3 ? ` and ${chosen.length - 3} more` : '')}
+            </span>
+            <div className="flex-1" />
+            <span className="text-[10.5px]" style={{ color: ACCENT }}>
+              {pickerOpen ? 'done' : 'change'}
+            </span>
+          </button>
+
+          {pickerOpen && (
+            <div className="flex flex-col" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+              <div className="flex items-center gap-2 px-3 py-2">
+                <div className="flex-1">
+                  <SearchInputView value={podFilter} onChange={setPodFilter}
+                                   placeholder="Filter pods" size="md" width="100%" />
+                </div>
+                <ButtonView
+                  label={pickable.every(p => picked.includes(p.uid)) ? 'Clear all' : 'Select all'}
+                  size="sm" variant="secondary"
+                  onClick={() => setPicked(
+                    pickable.every(p => picked.includes(p.uid))
+                      ? picked.filter(u => !pickable.some(p => p.uid === u))
+                      : [...new Set([...picked, ...pickable.map(p => p.uid)])],
+                  )}
+                  style={{ background: 'transparent' }}
+                />
+              </div>
+
+              <div className="overflow-auto" style={{ maxHeight: 260 }}>
+                <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--color-surface)' }}>
+                      {['', 'pod', 'namespace', 'status', 'restarts', 'age'].map((h, i) => (
+                        <th key={i}
+                            className="text-left text-[9.5px] uppercase tracking-wider px-2 py-1.5 sticky top-0"
+                            style={{
+                              color: 'var(--color-text-muted)', fontWeight: 500,
+                              background: 'var(--color-surface)',
+                              borderBottom: '1px solid var(--color-surface-border)',
+                            }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pickable.map(p => {
+                      const on = picked.includes(p.uid);
+                      return (
+                        <tr
+                          key={p.uid}
+                          onClick={() => setPicked(on ? picked.filter(u => u !== p.uid) : [...picked, p.uid])}
+                          className="cursor-pointer"
+                          style={{
+                            background: on ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'transparent',
+                          }}
+                        >
+                          <td className="px-2 py-1.5" style={{ width: 28 }}>
+                            <CheckboxView checked={on} size="md" accentColor={ACCENT} onChange={() => {}} />
+                          </td>
+                          <td className="px-2 py-1.5 text-[11px] font-mono"
+                              style={{ color: 'var(--color-text-primary)' }}>{p.name}</td>
+                          <td className="px-2 py-1.5 text-[10.5px]"
+                              style={{ color: 'var(--color-text-muted)' }}>{p.namespace}</td>
+                          <td className="px-2 py-1.5 text-[10.5px]"
+                              style={{ color: severityColor(severityOf(p)) }}>{p.phase}</td>
+                          <td className="px-2 py-1.5 text-[10.5px]"
+                              style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                            {p.restarts}
+                          </td>
+                          <td className="px-2 py-1.5 text-[10.5px]"
+                              style={{ color: 'var(--color-text-muted)' }}>{shortAge(p.startedAt)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {pickable.length === 0 && (
+                  <div className="px-3 py-4 text-[11px] text-center"
+                       style={{ color: 'var(--color-text-muted)' }}>
+                    No pod matches that filter.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* ── Query and options ── */}
         <SearchInputView
           value={options.query}
