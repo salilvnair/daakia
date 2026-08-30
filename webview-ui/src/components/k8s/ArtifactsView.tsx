@@ -181,24 +181,19 @@ export function ArtifactsView() {
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         {/* Select-all sits with the filter, because what it selects is what
             the filter left on screen. */}
+        {/* The checkbox itself, with nothing drawn around it. A bordered
+            box made it look like a button that contained a checkbox. */}
         <button
           type="button"
           onClick={toggleAll}
           disabled={visible.length === 0}
           title={allShown ? 'Clear the selection' : `Select all ${visible.length} shown`}
-          className="flex items-center justify-center cursor-pointer shrink-0"
-          style={{
-            width: 30, height: 30, borderRadius: 4,
-            background: allShown ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
-            border: `1px solid ${allShown
-              ? `color-mix(in srgb, ${ACCENT} 40%, transparent)`
-              : 'var(--color-surface-border)'}`,
-            opacity: visible.length === 0 ? 0.4 : 1,
-          }}
+          className="flex items-center justify-center cursor-pointer shrink-0 border-none bg-transparent p-0"
+          style={{ width: 22, height: 22, opacity: visible.length === 0 ? 0.4 : 1 }}
         >
           {allShown
-            ? <CheckSquareIcon size={14} color={ACCENT} />
-            : <EmptySquareIcon size={14} color="var(--color-text-muted)" />}
+            ? <CheckSquareIcon size={19} color={ACCENT} />
+            : <EmptySquareIcon size={19} color="var(--color-text-muted)" />}
         </button>
 
         <div className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
@@ -277,6 +272,11 @@ export function ArtifactsView() {
           selected, and a row that appears and disappears would shift the list
           under the cursor every time you tick a box. */}
       {picked.length > 0 && (
+        // Centred in a row of its own. `contained` makes the HUD
+        // position:relative, and as a direct child of this flex column it was
+        // stretched edge to edge into a bar — dui sizes it to its content, and
+        // a flex row is what lets it do that.
+        <div className="flex justify-center shrink-0 pb-2">
         <HudView
           contained
           draggable={false}
@@ -299,8 +299,8 @@ export function ArtifactsView() {
               onClick: deletePicked,
             },
           ]}
-          className="dk8s-artifact-hud"
         />
+        </div>
       )}
 
       <div className="flex items-center gap-3 px-4 py-1.5 text-[10.5px] shrink-0"

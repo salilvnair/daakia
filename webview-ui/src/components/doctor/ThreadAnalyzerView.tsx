@@ -11,6 +11,9 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { ButtonView } from '@salilvnair/dui';
+import { SparkleIcon } from '../../icons';
+import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { parseFrame, summariseStack, type FrameOrigin } from './thread-frame';
 import { postMsg } from '../../vscode';
 import { LayersIcon, CloseCircleIcon, StethoscopeIcon } from '../../icons';
 
@@ -62,12 +65,118 @@ const STATE_COLOR: Record<State, string> = {
   UNKNOWN: 'var(--color-warning)',
 };
 
+
+const AI_ACCENT = 'var(--color-protocol-ai)';
+
+/**
+ * Colour by where a frame comes from.
+ *
+ * Your own code is the only thing rendered at full strength. The JDK and the
+ * frameworks are how the thread got there — necessary to the story, and not
+ * what anyone is scanning for. Printed in one colour, finding your class in
+ * forty frames means reading every line.
+ */
+const ORIGIN_STYLE: Record<FrameOrigin, { color: string; opacity: number }> = {
+  app:       { color: 'var(--color-dk8s)', opacity: 1 },
+  framework: { color: 'var(--color-text-secondary)', opacity: 0.78 },
+  jdk:       { color: 'var(--color-text-muted)', opacity: 0.62 },
+  native:    { color: 'var(--color-warning)', opacity: 0.75 },
+};
+
+function Stack({ frames }: { frames: { raw: string }[] }) {
+  if (!frames.length) {
+    return (
+      <span className="text-[10.5px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
+        no stack recorded
+      </span>
+    );
+  }
+  return (
+    <div className="font-mono text-[10.5px] leading-[1.55] overflow-x-auto"
+         style={{ paddingLeft: 2 }}>
+      {frames.map((f, i) => {
+        const p = parseFrame(f.raw);
+        const st = ORIGIN_STYLE[p.origin];
+        return (
+          <div key={i} className="whitespace-pre" style={{ opacity: st.opacity }}>
+            <span style={{ color: 'var(--color-text-muted)', opacity: 0.5 }}>at </span>
+            {p.packageName && (
+              <span style={{ color: 'var(--color-text-muted)', opacity: 0.55 }}>
+                {p.packageName}.
+              </span>
+            )}
+            <span style={{ color: st.color, fontWeight: p.origin === 'app' ? 600 : 400 }}>
+              {p.className}
+            </span>
+            <span style={{ color: 'var(--color-text-muted)', opacity: 0.5 }}>.</span>
+            <span style={{ color: st.color }}>{p.method}</span>
+            {p.location && (
+              <span style={{ color: 'var(--color-text-muted)', opacity: 0.6 }}> ({p.location})</span>
+            )}
+            {p.origin === 'native' && (
+              <span style={{ color: 'var(--color-warning)', opacity: 0.6 }}> native</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ThreadAnalyzerView() {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [stateFilter, setStateFilter] = useState<State | 'ALL'>('ALL');
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  const ask = useDk8sAiStore(s => s.ask);
+
+  /**
+   * One thread, with its stack, as its own question.
+   *
+   * The state and the name are carried separately because the model should
+   * not have to infer "this is a Tomcat request thread parked in a socket
+   * read" from forty frames when we already know it.
+   */
+  const askThread = (t: Thread) => {
+    ask({
+      promptKey: 'dk8s.threads.explainOne',
+      title: `Explain ${t.name}`,
+      evidence: [
+        `thread: ${t.name}`,
+        `state: ${t.state}${t.daemon ? ' (daemon)' : ''}`,
+        t.waitingToLock ? `waiting to lock: ${t.waitingToLock.className ?? t.waitingToLock.id}` : '',
+        (t.locked ?? []).length
+          ? `holds: ${(t.locked ?? []).map(l => l.className ?? l.id).join(', ')}`
+          : '',
+        '',
+        ...t.frames.map(f => `  at ${f.raw}`),
+      ].filter(Boolean).join('\n'),
+      evidenceLabel: 'THREAD',
+      podContext: {},
+    });
+  };
+
+  /** The grouped picture, rather than one thread out of it. */
+  const askOverview = () => {
+    if (!loaded) return;
+    const v = loaded.verdict;
+    ask({
+      promptKey: 'dk8s.threads.explain',
+      title: 'What these threads are doing',
+      evidence: [
+        `${v.totalThreads} threads, ${v.daemonThreads} daemon`,
+        `states: ${Object.entries(v.byState).map(([k, c]) => `${k}=${c}`).join(', ')}`,
+        v.deadlocks.length ? `deadlocks: ${v.deadlocks.length}` : 'no deadlock reported',
+        '',
+        ...loaded.threads.slice(0, 60).map((t: Thread) =>
+          `${t.name} [${t.state}] ${summariseStack(t.frames)}`),
+      ].join('\n'),
+      evidenceLabel: 'THREAD DUMP',
+      podContext: {},
+    });
+  };
 
   /** Back to the empty state — see the note on the button. */
   const reset = () => {
@@ -364,6 +473,19 @@ export function ThreadAnalyzerView() {
             <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
               Threads
             </span>
+            <ButtonView
+              label="Ask AI"
+              size="sm" variant="secondary"
+              accentColor={AI_ACCENT} color={AI_ACCENT}
+              onClick={askOverview}
+              title="Ask AI what this dump shows overall"
+              iconLeft={<SparkleIcon size={11} color={AI_ACCENT} />}
+              style={{
+                background: `color-mix(in srgb, ${AI_ACCENT} 14%, transparent)`,
+                borderColor: `color-mix(in srgb, ${AI_ACCENT} 40%, transparent)`,
+                fontWeight: 600,
+              }}
+            />
             <input
               value={filter} onChange={e => setFilter(e.target.value)}
               placeholder="Filter by name or frame…"
@@ -380,6 +502,7 @@ export function ThreadAnalyzerView() {
               <div key={`${t.name}-${i}`}
                    style={{ background: 'var(--color-surface)',
                             borderTop: i === 0 ? 'none' : '1px solid var(--color-surface-border)' }}>
+                <div className="flex items-center">
                 <button type="button"
                         onClick={() => setExpanded(expanded === `${t.name}-${i}` ? null : `${t.name}-${i}`)}
                         className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[11.5px] font-mono cursor-pointer text-left"
@@ -388,19 +511,61 @@ export function ThreadAnalyzerView() {
                   <span className="truncate text-[var(--color-text-primary)]" style={{ minWidth: 0, flex: 1 }}>
                     {t.name}
                   </span>
+                  {/* Where the thread actually is, without expanding it.
+                      A list of forty names all reading "runnable" says
+                      nothing; the topmost frame in your own code is the
+                      thing being looked for. */}
+                  <span className="text-[10.5px] truncate shrink-0 hidden md:inline"
+                        style={{ color: 'var(--color-text-muted)', maxWidth: 280 }}>
+                    {summariseStack(t.frames)}
+                  </span>
+                  {t.frames.length > 0 && (
+                    <span className="text-[10px] shrink-0 tabular-nums"
+                          style={{ color: 'var(--color-text-muted)', opacity: 0.7 }}>
+                      {t.frames.length}f
+                    </span>
+                  )}
                   {t.daemon && <span className="text-[10px] text-[var(--color-text-muted)]">daemon</span>}
                   <span className="text-[10.5px] flex-shrink-0" style={{ color: STATE_COLOR[t.state] }}>
                     {t.state.toLowerCase().replace('_', ' ')}
                   </span>
                 </button>
+
+                {/* One thread is a question on its own — "why is this one
+                    here" — and asking it should not mean selecting forty
+                    lines of stack by hand first. */}
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); askThread(t); }}
+                  title={`Ask AI why ${t.name} is where it is`}
+                  className="flex items-center justify-center cursor-pointer shrink-0 mr-2"
+                  style={{
+                    width: 24, height: 24, borderRadius: 4,
+                    background: 'transparent', border: '1px solid transparent',
+                    color: AI_ACCENT,
+                  }}
+                >
+                  <SparkleIcon size={12} color={AI_ACCENT} />
+                </button>
+                </div>
                 {expanded === `${t.name}-${i}` && (
-                  <pre className="m-0 px-3 pb-2 text-[10.5px] font-mono overflow-x-auto"
-                       style={{ color: 'var(--color-text-secondary)' }}>
-                    {t.waitingToLock ? `- waiting to lock ${t.waitingToLock.className ?? t.waitingToLock.id}\n` : ''}
-                    {(t.locked ?? []).map(l => `- locked ${l.className ?? l.id}`).join('\n')}
-                    {(t.locked ?? []).length ? '\n' : ''}
-                    {t.frames.map(f => `  at ${f.raw}`).join('\n')}
-                  </pre>
+                  <div className="px-3 pb-2.5 flex flex-col gap-1.5">
+                    {(t.waitingToLock || (t.locked ?? []).length > 0) && (
+                      <div className="flex flex-col gap-0.5 text-[10.5px] font-mono">
+                        {t.waitingToLock && (
+                          <span style={{ color: 'var(--color-warning)' }}>
+                            waiting to lock {t.waitingToLock.className ?? t.waitingToLock.id}
+                          </span>
+                        )}
+                        {(t.locked ?? []).map((l, li) => (
+                          <span key={li} style={{ color: 'var(--color-text-muted)' }}>
+                            holds {l.className ?? l.id}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <Stack frames={t.frames} />
+                  </div>
                 )}
               </div>
             ))}
