@@ -137,3 +137,41 @@ describe('artifactName', () => {
     expect(name).not.toContain('..');
   });
 });
+
+describe('levelOf on a Logback throwable', () => {
+  // The exact sequence a Hibernate connection failure produces. Every level
+  // below comes from the text the application wrote — dk8s reads them, it
+  // does not assign them.
+  const SEQUENCE = [
+    ['2026-08-30T16:45:57.212Z  INFO 1 --- [zp-backend] [main] com.zaxxer.hikari.HikariDataSource : HikariPool-1 - Starting...', 'info'],
+    ['2026-08-30T16:46:04.301Z  WARN 1 --- [zp-backend] [main] o.h.engine.jdbc.spi.SqlExceptionHelper : SQL Error: 0, SQLState: 08001', 'warn'],
+    ['2026-08-30T16:46:04.301Z ERROR 1 --- [zp-backend] [main] o.h.engine.jdbc.spi.SqlExceptionHelper : The connection attempt failed.', 'error'],
+    ['2026-08-30T16:46:04.302Z  WARN 1 --- [zp-backend] [main] o.h.e.j.e.i.JdbcEnvironmentInitiator : HHH000342: Could not obtain connection', 'warn'],
+  ] as const;
+
+  it('takes each level from the line, not from context', () => {
+    for (const [line, want] of SEQUENCE) expect(levelOf(line)).toBe(want);
+  });
+
+  it('colours the throwable header, which carries no level of its own', () => {
+    // Logback runs its pattern once per event then dumps the trace raw, so
+    // this line arrives naked. It used to fall through to `other` and render
+    // as plain text between an amber WARN and a wall of red frames.
+    expect(levelOf('org.hibernate.exception.JDBCConnectionException: unable to obtain isolated JDBC connection'))
+      .toBe('error');
+    expect(levelOf('java.lang.NullPointerException')).toBe('error');
+    expect(levelOf('java.io.IOException: broken pipe')).toBe('error');
+  });
+
+  it('keeps the frames under it as error', () => {
+    expect(levelOf('\tat org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:100)'))
+      .toBe('error');
+    expect(levelOf('Caused by: java.net.ConnectException: Connection refused')).toBe('error');
+  });
+
+  it('does not colour an ordinary line that merely mentions one', () => {
+    // `ErrorHandler` in a message must not turn an INFO line red.
+    expect(levelOf('Starting ErrorHandler for the application')).toBe('other');
+    expect(levelOf('2026-08-30T16:45:57Z  INFO 1 --- [x] c.e.ExceptionMapper : registered')).toBe('info');
+  });
+});

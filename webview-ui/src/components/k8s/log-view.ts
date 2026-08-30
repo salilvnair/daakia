@@ -235,7 +235,12 @@ export function isStackFrame(text: string): boolean {
  * the root cause is the useful half and folding it away would defeat the point.
  */
 function isTraceHeader(text: string): boolean {
-  return /^Caused by:|^Suppressed:/.test(text);
+  // The throwable's own first line heads a fold too. Without it the frames
+  // folded under the *logged* line above — typically a WARN from a different
+  // logger — so expanding an error opened frames that looked like they
+  // belonged to the warning before it.
+  return /^Caused by:|^Suppressed:/.test(text)
+    || /^[\w$]+(\.[\w$]+)*(Exception|Error|Throwable)(:|\s|$)/.test(text);
 }
 
 export function foldStackTraces(lines: MatchedLine[], enabled: boolean): FoldedRow[] {

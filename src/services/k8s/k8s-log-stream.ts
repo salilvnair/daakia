@@ -100,6 +100,17 @@ export function levelOf(text: string): LogLevel {
   if (/\b(DEBUG|TRACE)\b/.test(head)) return 'debug';
   // An unlabelled line that looks like a stack frame belongs with its error.
   if (/^\s+at\s|^Caused by:|^\t/.test(text)) return 'error';
+  /*
+    The line a throwable starts on.
+
+    Logback runs its conversion pattern once per event and then dumps the
+    stack trace raw, so an exception's own first line carries no level —
+    `org.hibernate.exception.JDBCConnectionException: unable to obtain...`
+    arrives naked. Its `at` frames were already caught by the rule above,
+    which left the most informative line of the whole trace rendered as
+    plain text between an amber WARN and a wall of red frames.
+  */
+  if (/^[\w$]+(\.[\w$]+)*(Exception|Error|Throwable)(:|\s|$)/.test(text)) return 'error';
   return 'other';
 }
 
