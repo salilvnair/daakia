@@ -373,7 +373,7 @@ interface K8sState {
   clearSelection: () => void;
   openExport: () => void;
   closeExport: () => void;
-  exportLogs: (options: ExportOptions) => void;
+  exportLogs: (options: ExportOptions, visibleLines?: string[]) => void;
   apply: (msg: Record<string, unknown>) => void;
 }
 
@@ -646,7 +646,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   openExport: () => set({ exportOpen: true, exportState: undefined }),
   closeExport: () => set({ exportOpen: false }),
 
-  exportLogs: (options) => {
+  exportLogs: (options, visibleLines) => {
     const { pods, selected, logExportOpen, detail } = get();
     // The Download button in the log view exports THIS pod, using the same
     // options dialog as the grid's bulk export — one set of choices to learn,
@@ -659,6 +659,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     postMsg({
       type: 'dk8s:exportLogs',
       options,
+      // Present only for an on-screen export, where the host writes these
+      // rather than re-reading the pod.
+      visibleLines,
       targets: chosen.map(p => ({
         context: p.context, namespace: p.namespace, pod: p.name,
         containers: p.containers.map(c => c.name),

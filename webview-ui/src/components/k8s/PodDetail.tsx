@@ -8,7 +8,7 @@
 import { useEffect } from 'react';
 import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
-  WandIcon, ChevronLeftIcon, LayersIcon,
+  SparkleIcon, ChevronLeftIcon, LayersIcon,
 } from '../../icons';
 import { CopyButtonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
@@ -19,7 +19,6 @@ import { AiAnswerPanel } from './AiAnswerPanel';
 import { DoctorTab } from './DoctorTab';
 import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highlight';
 import { CodeEditor } from '../shared/editors/CodeEditor';
-import { ExportLogsModal } from './ExportLogsModal';
 import { OverviewTab } from './OverviewTab';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -173,7 +172,6 @@ export function PodDetail() {
     detail, detailTab, setDetailTab, closeDetail,
     describeText, yamlText, describeBusy, runtime,
     openShell, shellNotice, dismissShellNotice,
-    logExportOpen, closeLogExport,
   } = useK8sStore();
 
   const aiOpen = useDk8sAiStore(s => s.open);
@@ -270,7 +268,7 @@ export function PodDetail() {
           }}
           title={aiOpen ? 'Hide AI analysis' : 'Show AI analysis'}
         >
-          <WandIcon size={12} color={AI_ACCENT} />
+          <SparkleIcon size={12} color={AI_ACCENT} />
           AI{answers.length > 0 && ` · ${answers.length}`}
         </button>
 
@@ -346,7 +344,6 @@ export function PodDetail() {
         <AiAnswerPanel />
       </div>
 
-      {logExportOpen && <ExportLogsModal onClose={closeLogExport} />}
     </div>
   );
 }

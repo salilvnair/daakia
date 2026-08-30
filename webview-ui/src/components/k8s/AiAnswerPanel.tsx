@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { CopyButtonView } from '@salilvnair/dui';
-import { WandIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon } from '../../icons';
+import { SparkleIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { useDk8sAiStore, type Dk8sAnswer } from '../../store/dk8s-ai-store';
 
@@ -28,7 +28,7 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         {answer.streaming
           ? <SpinnerIcon size={12} color={ACCENT} />
-          : <WandIcon size={12} color={ACCENT} />}
+          : <SparkleIcon size={12} color={ACCENT} />}
         <span className="text-[11.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           {answer.title}
         </span>
@@ -108,7 +108,7 @@ export function AiAnswerPanel() {
          }}>
       <div className="flex items-center gap-2 px-3 py-2.5 shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <WandIcon size={14} color={ACCENT} />
+        <SparkleIcon size={14} color={ACCENT} />
         <span className="text-[12px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           AI analysis
         </span>
@@ -132,7 +132,7 @@ export function AiAnswerPanel() {
       <div className="flex-1 overflow-auto px-3 py-3 flex flex-col gap-3 min-h-0">
         {answers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center">
-            <WandIcon size={22} color="var(--color-text-muted)" />
+            <SparkleIcon size={22} color="var(--color-text-muted)" />
             <span className="text-[11.5px] text-[var(--color-text-muted)]">
               Select any text in the log and ask why. The pod's state goes along with it,
               so the answer accounts for restarts and exit codes rather than just the words.

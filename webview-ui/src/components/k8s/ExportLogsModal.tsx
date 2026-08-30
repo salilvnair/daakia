@@ -24,7 +24,7 @@ const ACCENT = 'var(--color-dk8s)';
  */
 const SIZE = 'md';
 
-type RangeKind = 'all' | '30m' | '1h' | '2h' | 'between';
+type RangeKind = 'all' | 'screen' | '30m' | '1h' | '2h' | 'between';
 type SliceKind = 'all' | 'head' | 'tail';
 
 const RANGE_SECONDS: Record<string, number> = { '30m': 1800, '1h': 3600, '2h': 7200 };
@@ -45,7 +45,16 @@ function localInputValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function ExportLogsModal({ onClose }: { onClose: () => void }) {
+export function ExportLogsModal({ onClose, visibleLines }: {
+  onClose: () => void;
+  /**
+   * What the log view is currently rendering, when opened from one.
+   *
+   * Its presence is what makes "On screen" available: from the pod grid there
+   * is no screen buffer to export.
+   */
+  visibleLines?: string[];
+}) {
   const { selected, pods, exportLogs, exportState, logExportOpen, detail } = useK8sStore();
 
   const [range, setRange] = useState<RangeKind>('all');
@@ -65,6 +74,17 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
   const crashers = chosen.filter(p => p.restarts > 0).length;
 
   const submit = () => {
+    // On screen bypasses every other choice: the range, the slice and the
+    // previous-container toggle all describe how to FETCH a log, and this
+    // export does not fetch one.
+    if (range === 'screen') {
+      exportLogs({
+        range: { kind: 'all' }, slice: { kind: 'all' },
+        includePrevious: false, keepTimestamps,
+      }, visibleLines ?? []);
+      return;
+    }
+
     const n = Math.max(1, parseInt(lines, 10) || 500);
     exportLogs({
       range:
@@ -113,6 +133,8 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
             onChange={v => setRange(v as RangeKind)}
             options={[
               { value: 'all', label: 'Complete log' },
+              // Only where there is a screen to export.
+              ...(visibleLines ? [{ value: 'screen', label: 'On screen' }] : []),
               { value: '30m', label: 'Last 30 min' },
               { value: '1h', label: 'Last hour' },
               { value: '2h', label: 'Last 2 hours' },
@@ -136,6 +158,22 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
+        {/* Everything below describes how to fetch a log, and an on-screen
+            export does not fetch one — so it is replaced rather than shown
+            greyed out beside a choice that no longer applies. */}
+        {range === 'screen' ? (
+          <div className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md"
+               style={{ background: 'var(--color-surface-hover)' }}>
+            <span className="text-[11.5px]" style={{ color: 'var(--color-text-primary)' }}>
+              {(visibleLines?.length ?? 0).toLocaleString()} lines, exactly as shown
+            </span>
+            <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+              Whatever the viewer is displaying right now, filters and all. Nothing is
+              re-read from the pod, so the file matches what you were looking at rather
+              than what the pod has logged since.
+            </span>
+          </div>
+        ) : (
         <Field
           label="How much"
           hint={slice === 'all'
@@ -169,7 +207,10 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
           </div>
         </Field>
 
+        )}
+
         <div className="flex flex-col gap-2">
+          {range !== 'screen' && (
           <label className="flex items-start gap-2 cursor-pointer">
             <input type="checkbox" checked={includePrevious}
                    onChange={e => setIncludePrevious(e.target.checked)}
@@ -187,6 +228,7 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
               </span>
             </span>
           </label>
+          )}
 
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={keepTimestamps}

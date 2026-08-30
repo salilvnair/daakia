@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   SearchInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
 } from '@salilvnair/dui';
-import { WandIcon, SearchIcon, HelpCircleIcon, ChevronRightIcon, ChevronDownIcon } from '../../icons';
+import { SparkleIcon, SearchIcon, HelpCircleIcon, ChevronRightIcon, ChevronDownIcon } from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import {
@@ -28,6 +28,7 @@ import {
 import {
   AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
 } from './AnalyzeModal';
+import { ExportLogsModal } from './ExportLogsModal';
 
 const ACCENT = 'var(--color-dk8s)';
 /**
@@ -352,7 +353,7 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
         accentColor={AI_ACCENT}
         color={AI_ACCENT}
         onClick={onAsk}
-        iconLeft={<WandIcon size={12} color={AI_ACCENT} />}
+        iconLeft={<SparkleIcon size={12} color={AI_ACCENT} />}
         style={{
           background: 'color-mix(in srgb, var(--color-protocol-ai) 20%, transparent)',
           borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 55%, transparent)',
@@ -401,7 +402,7 @@ export function LogViewer() {
     detail, runtime,
     setLogFilter, setLogFollow, setLogLive, setLogTail, setLogDirection,
     setLogSince, setLogWrap, setLogPrevious, setLogSelection,
-    fetchLogs, openLogExport,
+    fetchLogs, openLogExport, logExportOpen, closeLogExport,
   } = useK8sStore();
   const ask = useDk8sAiStore(s => s.ask);
 
@@ -777,7 +778,7 @@ export function LogViewer() {
           disabled={!logs.length}
           onClick={analyzeBuffer}
           title="Ask AI for a timeline of what this log shows"
-          iconLeft={<WandIcon size={11} color={logs.length ? AI_ACCENT : 'var(--color-text-muted)'} />}
+          iconLeft={<SparkleIcon size={11} color={logs.length ? AI_ACCENT : 'var(--color-text-muted)'} />}
           style={{
             background: logs.length
               ? 'color-mix(in srgb, var(--color-protocol-ai) 16%, transparent)'
@@ -965,6 +966,16 @@ export function LogViewer() {
           />
         )}
       </div>
+
+      {/* Rendered here rather than in PodDetail because "On screen" exports
+          `visible` — the filtered buffer this component owns. */}
+      {logExportOpen && (
+        <ExportLogsModal
+          onClose={closeLogExport}
+          visibleLines={visible.map(l =>
+            l.ts !== undefined ? `${new Date(l.ts).toISOString()} ${l.text}` : l.text)}
+        />
+      )}
 
       {analyzePlan && detail && (
         <AnalyzeModal

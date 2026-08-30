@@ -171,6 +171,33 @@ export function logFileName(pod: string, namespace: string, multiNamespace: bool
   return multiNamespace ? `${safe(namespace)}__${safe(pod)}.log` : `${safe(pod)}.log`;
 }
 
+/**
+ * Write exactly what the viewer is showing.
+ *
+ * No kubectl call: the lines are already on screen, already filtered, already
+ * the thing the user was looking at when they decided to keep it. Re-fetching
+ * would produce a DIFFERENT file — the pod has logged more since, the filter
+ * would not be applied, and a range would be re-resolved against a moved
+ * "now". Someone exporting what they can see should get what they can see.
+ */
+export async function exportVisibleLines(
+  pod: string,
+  namespace: string,
+  lines: string[],
+  destDir: string,
+): Promise<ExportResult> {
+  await mkdir(destDir, { recursive: true });
+  const file = join(destDir, logFileName(pod, namespace, false));
+  const body = lines.join('\n');
+  await writeFileStream(file, body ? body + '\n' : '');
+  return {
+    pod, namespace, file,
+    lines: lines.length,
+    bytes: Buffer.byteLength(body, 'utf8'),
+    empty: lines.length === 0,
+  };
+}
+
 export async function exportPodLogs(
   targets: ExportTarget[],
   opts: ExportOptions,

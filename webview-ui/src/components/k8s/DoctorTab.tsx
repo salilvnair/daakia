@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { CopyButtonView } from '@salilvnair/dui';
 import {
   StethoscopeIcon, SpinnerIcon, CheckCircleIcon, XCircleIcon,
-  WandIcon, FolderOpenIcon, WarningTriangleIcon, CpuIcon, MemoryIcon,
+  SparkleIcon, FolderOpenIcon, WarningTriangleIcon, CpuIcon, MemoryIcon,
   TimelineIcon, NetworkIcon, FileTextIcon,
 } from '../../icons';
 import { useK8sStore, type PodAction } from '../../store/k8s-store';
@@ -273,7 +273,7 @@ function ResultCard({ index }: { index: number }) {
                     border: `1px solid color-mix(in srgb, ${ACCENT} 35%, transparent)`,
                     color: ACCENT,
                   }}>
-            <WandIcon size={10} color={ACCENT} />
+            <SparkleIcon size={10} color={ACCENT} />
             Ask AI
           </button>
         )}

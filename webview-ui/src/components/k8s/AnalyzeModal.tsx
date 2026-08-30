@@ -12,7 +12,7 @@
  * it does not.
  */
 import { ModalView, ButtonView, CheckboxView } from '@salilvnair/dui';
-import { WarningTriangleIcon, WandIcon } from '../../icons';
+import { WarningTriangleIcon, SparkleIcon } from '../../icons';
 import type { LogLine } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
@@ -108,7 +108,7 @@ export function AnalyzeModal({
           <ButtonView
             label={`Send ${plan.sentLines.toLocaleString()} lines`}
             size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
-            iconLeft={<WandIcon size={12} color={ACCENT} />}
+            iconLeft={<SparkleIcon size={12} color={ACCENT} />}
             onClick={onConfirm}
             style={softPrimary(ACCENT)}
           />

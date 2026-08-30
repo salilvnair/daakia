@@ -16,7 +16,7 @@ import {
 import { getSetting, setSetting } from '../../../storage/db';
 import { watchPods, topPods, type WatchHandle } from '../../../services/k8s/k8s-watch';
 import {
-  exportPodLogs, summariseExport,
+  exportPodLogs, exportVisibleLines, summariseExport,
   type ExportTarget, type ExportOptions,
 } from '../../../services/k8s/k8s-logs';
 import * as vscode from 'vscode';
@@ -483,6 +483,11 @@ export async function handleDk8sExportLogs(
   const options = msg.options as ExportOptions;
   if (!targets.length || !options) return;
 
+  // "On screen" hands us the rendered lines rather than a range to fetch.
+  const onScreen = Array.isArray(msg.visibleLines)
+    ? (msg.visibleLines as string[])
+    : undefined;
+
   let destDir: string;
   try {
     const picked = await vscode.window.showOpenDialog({
@@ -503,6 +508,21 @@ export async function handleDk8sExportLogs(
   }
 
   postMessage({ type: 'dk8s:exportStarted', total: targets.length, destDir });
+
+  if (onScreen) {
+    try {
+      const t = targets[0];
+      const result = await exportVisibleLines(t.pod, t.namespace, onScreen, destDir);
+      postMessage({
+        type: 'dk8s:exportDone', destDir,
+        summary: `${result.lines?.toLocaleString()} lines written`,
+        results: [result],
+      });
+    } catch (err) {
+      postMessage({ type: 'dk8s:exportError', error: (err as Error).message });
+    }
+    return;
+  }
 
   try {
     const results = await exportPodLogs(targets, options, destDir, (done, total, pod) => {
