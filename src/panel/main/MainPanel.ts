@@ -80,7 +80,7 @@ import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol
 import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
-  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch,
+  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch,
   handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
@@ -402,6 +402,9 @@ export class MainPanel {
       // Archived logs on a mounted volume.
       case 'dk8s:openLogFile':
         void handleDk8sOpenLogFile(msg);
+        break;
+      case 'dk8s:setLogLineNumbers':
+        handleDk8sSetLogLineNumbers(msg, this._post);
         break;
       case 'dk8s:probePv':
         void handleDk8sProbePv(msg, this._post);

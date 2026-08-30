@@ -7,7 +7,7 @@
  * genuinely hurt — a confirmation that names the cost rather than asking
  * "are you sure?".
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CopyButtonView } from '@salilvnair/dui';
 import {
   StethoscopeIcon, SpinnerIcon, CheckCircleIcon, XCircleIcon,
@@ -16,7 +16,7 @@ import {
 } from '../../icons';
 import { useK8sStore, type PodAction } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
-import { useDk8sDoctorStore, ARTIFACT_META, type ArtifactKind } from '../../store/dk8s-doctor-store';
+import { type CollectResult, useDk8sDoctorStore, ARTIFACT_META, type ArtifactKind } from '../../store/dk8s-doctor-store';
 import { MemoryPanel } from './MemoryPanel';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -209,8 +209,7 @@ function ActionCard({ action }: { action: PodAction }) {
   );
 }
 
-function ResultCard({ index }: { index: number }) {
-  const result = useDk8sDoctorStore(s => s.results[index]);
+function ResultCard({ result }: { result: CollectResult }) {
   const analyze = useDk8sDoctorStore(s => s.analyze);
   const detail = useK8sStore(s => s.detail);
   const runtime = useK8sStore(s => s.runtime);
@@ -350,7 +349,26 @@ function formatBytes(n: number): string {
 
 export function DoctorTab() {
   const { actions, probeBusy, capabilities, runtime, detail } = useK8sStore();
-  const { results, reveal } = useDk8sDoctorStore();
+  const { results: allResults, reveal } = useDk8sDoctorStore();
+  const detailPod = useK8sStore(s => s.detail?.name);
+
+  /*
+    Only this pod's artifacts.
+
+    The store keeps one flat list of the last dozen collections, so before this
+    every pod's Doctor tab showed every artifact ever collected — open a second
+    pod and its tab claimed the first pod's heap dump as its own. Reading the
+    wrong pod's thread dump during an incident is exactly the mistake that
+    costs an hour.
+
+    Results collected before results carried a pod have no `pod` field; they
+    are still shown rather than hidden, since a result that vanishes is worse
+    than one attributed loosely.
+  */
+  const results = useMemo(
+    () => allResults.filter(r => !r.pod || !detailPod || r.pod === detailPod),
+    [allResults, detailPod],
+  );
 
   if (probeBusy) {
     return (
@@ -449,7 +467,7 @@ export function DoctorTab() {
               open folder
             </button>
           </div>
-          {results.map((_, i) => <ResultCard key={i} index={i} />)}
+          {results.map((r, i) => <ResultCard key={i} result={r} />)}
         </div>
       )}
 

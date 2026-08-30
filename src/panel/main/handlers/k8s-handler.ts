@@ -67,6 +67,8 @@ export interface Dk8sState {
    * Settings, which is most of them.
    */
   guardHeapDump?: boolean;
+  /** Line numbers in the log view. Undefined means on. */
+  logLineNumbers?: boolean;
   /** User-defined log formats. Built-ins are not stored, only overridden. */
   logFormats?: LogFormat[];
   /** Archived logs on a mounted volume. See services/k8s/pv-logs.ts. */
@@ -153,6 +155,10 @@ export async function handleDk8sProbe(postMessage: PostMessage): Promise<void> {
     sensitivityGuess: chosen
       ? looksLikeProduction(chosen, list.contexts.find(c => c.name === chosen)?.cluster ?? '')
       : false,
+    // View preferences ride along with the probe rather than needing their own
+    // round trip — the panel needs them before it renders anything.
+    guardHeapDump: saved.guardHeapDump !== false,
+    logLineNumbers: saved.logLineNumbers !== false,
   });
 }
 
@@ -326,6 +332,15 @@ export function handleDk8sSetSensitivity(
  */
 export function guardHeapDumpEnabled(): boolean {
   return state().guardHeapDump !== false;
+}
+
+export function handleDk8sSetLogLineNumbers(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const on = msg.on !== false;
+  saveState({ logLineNumbers: on });
+  postMessage({ type: 'dk8s:logLineNumbers', on });
 }
 
 export function handleDk8sSetGuardHeapDump(

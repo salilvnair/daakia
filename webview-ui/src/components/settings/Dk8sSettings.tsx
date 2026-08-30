@@ -55,6 +55,8 @@ function Toggle({ on, onChange, label, description, children }: {
 export function Dk8sSettings() {
   const guardHeapDump = useK8sStore(s => s.guardHeapDump);
   const setGuardHeapDump = useK8sStore(s => s.setGuardHeapDump);
+  const logLineNumbers = useK8sStore(s => s.logLineNumbers);
+  const setLogLineNumbers = useK8sStore(s => s.setLogLineNumbers);
   const apply = useK8sStore(s => s.apply);
 
   // The Settings tab can be opened without dk8s ever having been, so this page
@@ -64,7 +66,8 @@ export function Dk8sSettings() {
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data as Record<string, unknown>;
-      if (typeof msg?.type === 'string' && msg.type === 'dk8s:guardHeapDump') apply(msg);
+      const t = typeof msg?.type === 'string' ? msg.type : '';
+      if (t === 'dk8s:guardHeapDump' || t === 'dk8s:logLineNumbers') apply(msg);
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
@@ -86,6 +89,24 @@ export function Dk8sSettings() {
             style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
         How dk8s behaves against a live cluster.
       </span>
+
+      <div className="flex items-center gap-1.5 mt-1">
+        <span className="text-[9.5px] uppercase tracking-wider"
+              style={{ color: 'var(--color-text-muted)' }}>
+          log view
+        </span>
+        <div className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
+      </div>
+
+      <Toggle
+        on={logLineNumbers}
+        onChange={setLogLineNumbers}
+        label="Show line numbers"
+        description={
+          'A numbered gutter down the left of a pod’s log, like an editor. On by default — '
+          + 'turn it off on a narrow panel, where the width a long line needs matters more.'
+        }
+      />
 
       {/* Sub-heading, so the page can grow other groups (log formats, artifact
           retention) without the diagnostics switches losing their context. */}

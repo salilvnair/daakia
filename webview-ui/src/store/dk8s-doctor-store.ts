@@ -16,6 +16,15 @@ export type ArtifactKind =
 
 export interface CollectResult {
   kind: ArtifactKind;
+  /**
+   * The pod this came from.
+   *
+   * Results were a single flat list, so every pod's Doctor tab showed every
+   * artifact ever collected — open a second pod and its tab claimed the first
+   * pod's heap dump as its own. During an incident, reading the wrong pod's
+   * thread dump is exactly the mistake that costs an hour.
+   */
+  pod?: string;
   ok: boolean;
   file?: string;
   bytes?: number;
@@ -183,7 +192,12 @@ export const useDk8sDoctorStore = create<DoctorState>((set) => ({
           destDir: (msg.destDir as string) ?? s.destDir,
           // Newest first, and capped — during an incident people take a lot of
           // these, and an unbounded list of megabyte text blobs is a leak.
-          results: [msg.result as CollectResult, ...s.results].slice(0, 12),
+          results: [
+            // The host does not echo the pod back, so it is taken from the run
+            // that produced this result.
+            { ...(msg.result as CollectResult), pod: (msg.pod as string) ?? s.running?.pod },
+            ...s.results,
+          ].slice(0, 12),
         }));
         break;
 

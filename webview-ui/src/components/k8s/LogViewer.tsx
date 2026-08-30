@@ -743,6 +743,7 @@ export function LogViewer() {
     return () => el.removeEventListener('daakia:selection-action', onAction);
   }, [setLogFilter]);
 
+  const logLineNumbers = useK8sStore(s => s.logLineNumbers);
   const containers = detail?.containers ?? [];
   const oldest = logs.find(l => l.ts !== undefined)?.ts;
 
@@ -1000,15 +1001,19 @@ export function LogViewer() {
                         opacity: row.isFrame ? 0.75 : 1,
                       }}
                     >
-                      <span className="shrink-0 select-none text-right"
-                            style={{
-                              width: gutterWidth,
-                              color: 'var(--color-text-muted)',
-                              opacity: 0.45,
-                              fontVariantNumeric: 'tabular-nums',
-                            }}>
-                        {lineNo}
-                      </span>
+                      {/* Off is a real preference: on a narrow panel the
+                          gutter is width a long line needs more. */}
+                      {logLineNumbers && (
+                        <span className="shrink-0 select-none text-right"
+                              style={{
+                                width: gutterWidth,
+                                color: 'var(--color-text-muted)',
+                                opacity: 0.45,
+                                fontVariantNumeric: 'tabular-nums',
+                              }}>
+                          {lineNo}
+                        </span>
+                      )}
 
                       {line.ts !== undefined && !row.isFrame && (
                         <span className="shrink-0 select-none"

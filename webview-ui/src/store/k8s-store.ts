@@ -294,6 +294,8 @@ interface K8sState {
   /** The pod whose detail panel is open, if any. */
   detail?: PodSummary;
   detailTab: DetailTab;
+  /** The tab last used on each pod, so reopening one returns to it. */
+  detailTabByPod: Record<string, DetailTab>;
   logs: LogLine[];
   logStatus: LogStatus;
   logDetail?: string;
@@ -337,6 +339,8 @@ interface K8sState {
    * before they OOM-kill the pod they were trying to diagnose.
    */
   guardHeapDump: boolean;
+  /** Line numbers down the left of the log view. On unless turned off. */
+  logLineNumbers: boolean;
   shellNotice?: { reason: string; suggestion: string; suggestionLabel?: string };
 
   probe: () => void;
@@ -378,6 +382,7 @@ interface K8sState {
   openShell: () => void;
   dismissShellNotice: () => void;
   setGuardHeapDump: (on: boolean) => void;
+  setLogLineNumbers: (on: boolean) => void;
   toggleSelectMode: () => void;
   togglePodSelected: (uid: string) => void;
   selectAllVisible: (uids: string[]) => void;
@@ -420,6 +425,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   exportOpen: false,
 
   detailTab: 'logs',
+  detailTabByPod: {},
   logs: [],
   logStatus: 'idle',
   logDropped: 0,
@@ -440,6 +446,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   actions: [],
   probeBusy: false,
   guardHeapDump: true,
+  logLineNumbers: true,
 
   probe: () => {
     set({ busy: true });
@@ -533,7 +540,14 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     // panel for the moment before the first frame arrives is the kind of bug
     // that gets someone reading the wrong pod's stack trace.
     set({
-      detail: pod, detailTab: 'logs',
+      detail: pod,
+      // Back to the tab you were reading on this pod.
+      //
+      // Every open reset to Logs, so going to Doctor, taking a dump, following
+      // it into the analyzer and coming back put you on Logs with the Doctor
+      // tab looking untouched. Keyed by pod, because the tab that matters is a
+      // property of what you were doing with that pod.
+      detailTab: get().detailTabByPod[pod.uid] ?? 'logs',
       logs: [], logStatus: 'idle', logDetail: undefined, logDropped: 0,
       logFilter: '', logLevels: [], logFollow: true, logLive: false,
       logDirection: 'last', logSince: 'all', logExportOpen: false,
@@ -558,7 +572,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     set({ detail: undefined, logs: [], logStatus: 'idle', logSelection: undefined });
   },
 
-  setDetailTab: (detailTab) => set({ detailTab }),
+  setDetailTab: (detailTab) => set(s => ({
+    detailTab,
+    detailTabByPod: s.detail ? { ...s.detailTabByPod, [s.detail.uid]: detailTab } : s.detailTabByPod,
+  })),
   setLogFilter: (logFilter) => set({ logFilter }),
 
   toggleLogLevel: (level) => set(s => ({
@@ -633,6 +650,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   dismissShellNotice: () => set({ shellNotice: undefined }),
+
+  setLogLineNumbers: (logLineNumbers) => {
+    set({ logLineNumbers });
+    postMsg({ type: 'dk8s:setLogLineNumbers', on: logLineNumbers });
+  },
 
   setGuardHeapDump: (guardHeapDump) => {
     set({ guardHeapDump });
@@ -721,6 +743,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           pinned: (msg.pinned as string[]) ?? [],
           selectedContexts: (msg.selectedContexts as string[]) ?? (context ? [context] : []),
           targets: (msg.targets as WatchTarget[]) ?? [],
+          // View preferences ride along with the probe: the panel needs them
+          // before it renders anything, so a separate round trip would show
+          // one frame with the wrong setting.
+          guardHeapDump: msg.guardHeapDump !== false,
+          logLineNumbers: msg.logLineNumbers !== false,
         });
         break;
       }
@@ -936,6 +963,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           suggestion: msg.suggestion as string,
           suggestionLabel: msg.suggestionLabel as string | undefined,
         } });
+        break;
+
+      case 'dk8s:logLineNumbers':
+        set({ logLineNumbers: msg.on !== false });
         break;
 
       case 'dk8s:guardHeapDump':
