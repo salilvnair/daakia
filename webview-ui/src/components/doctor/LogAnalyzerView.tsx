@@ -59,6 +59,62 @@ function topLevel(t: Template): Level {
   return best;
 }
 
+
+/**
+ * A template, with its placeholders picked out.
+ *
+ * `Connection refused to <ip>:<num>` is a shape, and the whole point of the
+ * view is that it IS a shape — the angle-bracket slots are where a million
+ * distinct lines collapsed into one. Rendered in the same colour as the words
+ * around them they read as literal text, which is exactly backwards.
+ */
+function Shape({ template }: { template: string }) {
+  const parts = template.split(/(<[a-z0-9_]+>)/gi);
+  return (
+    <span className="break-all">
+      {parts.map((part, i) =>
+        /^<[a-z0-9_]+>$/i.test(part) ? (
+          <span
+            key={i}
+            style={{
+              color: 'var(--color-dk8s)',
+              background: 'color-mix(in srgb, var(--color-dk8s) 12%, transparent)',
+              borderRadius: 3,
+              padding: '0 3px',
+              fontWeight: 600,
+            }}
+          >
+            {part}
+          </span>
+        ) : (
+          <span key={i} style={{ color: 'var(--color-text-secondary)' }}>{part}</span>
+        ))}
+    </span>
+  );
+}
+
+/** ERROR / WARN / INFO as a readable pill rather than an 8px square. */
+function LevelPill({ level }: { level: Level }) {
+  const color = LEVEL_COLOR[level];
+  return (
+    <span
+      className="shrink-0 text-center uppercase"
+      style={{
+        width: 52, fontSize: 9.5, letterSpacing: '.06em', fontWeight: 700,
+        color,
+        background: `color-mix(in srgb, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 32%, transparent)`,
+        borderRadius: 4, padding: '2px 0', lineHeight: 1.3,
+      }}
+    >
+      {/* A shape whose lines carried no level is not "unknown severity", it
+          is "no level in the text" — a dash says that without implying a
+          judgement the parser never made. */}
+      {level === 'UNKNOWN' ? '—' : level}
+    </span>
+  );
+}
+
 export function LogAnalyzerView() {
   const [loaded, setLoaded] = useState<{ name: string; verdict: Verdict } | null>(null);
   const [error, setError] = useState('');
@@ -79,6 +135,12 @@ export function LogAnalyzerView() {
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, []);
+
+  /** The biggest shape, so every bar is drawn against the same scale. */
+  const topCount = useMemo(
+    () => loaded?.verdict.templates.reduce((m, t) => Math.max(m, t.count), 0) ?? 0,
+    [loaded],
+  );
 
   const templates = useMemo(() => {
     if (!loaded) return [];
@@ -266,15 +328,40 @@ export function LogAnalyzerView() {
           <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-surface-border)' }}>
             {templates.map((t, i) => {
               const lvl = topLevel(t);
+              const share = topCount > 0 ? t.count / topCount : 0;
+              const pct = v.entries > 0 ? (t.count / v.entries) * 100 : 0;
               return (
-                <div key={t.template} className="flex items-baseline gap-3 px-3 py-1.5 text-[11.5px] font-mono"
+                <div key={t.template}
+                     className="flex items-center gap-3 px-3 py-2 text-[11.5px] font-mono"
                      style={{ background: 'var(--color-surface)',
                               borderTop: i === 0 ? 'none' : '1px solid var(--color-surface-border)' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: LEVEL_COLOR[lvl], flexShrink: 0 }} />
-                  <span className="tabular-nums text-right text-[var(--color-text-primary)]" style={{ width: 60 }}>
+                  <LevelPill level={lvl} />
+
+                  <span className="tabular-nums text-right shrink-0"
+                        style={{ width: 62, color: 'var(--color-text-primary)', fontWeight: 600 }}>
                     {t.count.toLocaleString()}
                   </span>
-                  <span className="text-[var(--color-text-secondary)] break-all">{t.template}</span>
+
+                  {/* How much of the file this one shape accounts for. A count
+                      on its own does not say whether 4,000 is most of the log
+                      or a rounding error, and that is the question being asked
+                      of a view whose whole job is collapsing volume. */}
+                  <span className="shrink-0 rounded-full overflow-hidden"
+                        style={{ width: 78, height: 5, background: 'var(--color-surface-hover)' }}>
+                    <span style={{
+                      display: 'block', height: '100%',
+                      width: `${Math.max(2, share * 100)}%`,
+                      background: LEVEL_COLOR[lvl],
+                      opacity: 0.75,
+                      borderRadius: 999,
+                    }} />
+                  </span>
+                  <span className="tabular-nums text-right shrink-0 text-[10px]"
+                        style={{ width: 34, color: 'var(--color-text-muted)' }}>
+                    {pct >= 0.1 ? `${pct.toFixed(1)}%` : '<0.1%'}
+                  </span>
+
+                  <Shape template={t.template} />
                 </div>
               );
             })}

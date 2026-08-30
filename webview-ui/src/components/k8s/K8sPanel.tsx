@@ -87,6 +87,7 @@ function Breadcrumb() {
     openContextPicker, openNamespacePicker, watchStatus,
     stage, pendingTargets, commitPendingTargets,
   } = useK8sStore();
+  const onPods = useK8sStore(st => st.panel) === 'pods';
   const isProd = !!context && sensitivity[context] === 'production';
 
   const clusterNames = selectedContexts.length ? selectedContexts : (context ? [context] : []);
@@ -103,14 +104,17 @@ function Breadcrumb() {
       </div>
       <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Dk8s</span>
 
-      {clusterNames.length > 0 && (
+      {/* A cluster and a namespace are what the pod list is scoped to.
+          Artifacts and Analyze read from disk and are scoped to neither, so
+          showing them there would be naming a filter that is not applied. */}
+      {onPods && clusterNames.length > 0 && (
         <>
           <span className="text-[12px] text-[var(--color-text-muted)]">/</span>
           <Crumb names={clusterNames} onClick={openContextPicker} title="Change clusters" />
         </>
       )}
 
-      {namespaceNames.length > 0 && (
+      {onPods && namespaceNames.length > 0 && (
         <>
           <span className="text-[12px] text-[var(--color-text-muted)]">/</span>
           <Crumb names={namespaceNames} onClick={openNamespacePicker} title="Change namespaces" />
@@ -298,9 +302,11 @@ export function K8sPanel() {
     // `relative` so the detail overlay can pin to this panel rather than the
     // whole window — the sidebar and tab bar stay visible and usable.
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-      {/* The breadcrumb names a context and a namespace, which only the pod
-          view has. */}
-      {view === 'pods' && stage !== 'probing' && stage !== 'no-kubectl' && <Breadcrumb />}
+      {/* Always present once past the probe. Hiding it on Artifacts and
+          Analyze removed a 34px bar and shifted everything under it, so
+          switching tabs flickered. The cluster and namespace crumbs are what
+          belong to the pod view, and only those go. */}
+      {stage !== 'probing' && stage !== 'no-kubectl' && <Breadcrumb />}
 
       {stage === 'probing' ? <Probing /> : (
         <>
