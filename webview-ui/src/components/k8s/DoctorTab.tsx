@@ -230,6 +230,7 @@ function ResultCard({ index }: { index: number }) {
       // dump header plus the first threads).
       evidence: (result.text ?? '').slice(0, 60_000),
       evidenceLabel: (meta?.label ?? result.kind).toUpperCase(),
+      evidenceKind: result.kind,
       podContext: {
         pod: detail?.name, namespace: detail?.namespace,
         phase: detail?.phase, restarts: detail?.restarts,

@@ -10,6 +10,7 @@
  * context without asking the UI for it on every call.
  */
 import { probeEnvironment, setKubectlPath } from '../../../services/k8s/kubectl';
+import { connEvidence } from '../../../services/k8s/conn-summary';
 import {
   listContexts, checkReachable, listNamespaces, defaultNamespace, looksLikeProduction,
 } from '../../../services/k8s/kube-context';
@@ -1005,7 +1006,26 @@ export async function handleDk8sAsk(
     return;
   }
 
-  const evidence = String(msg.evidence ?? '');
+  let evidence = String(msg.evidence ?? '');
+
+  /*
+    A connection snapshot needs reading before it is worth sending.
+
+    On its own it is a table of sockets. For a quiet pod that is two lines —
+    a header and one LISTEN row — which gives a model nothing to reason from,
+    and for a busy one it is hundreds of rows whose meaning is in the counts,
+    not in any single line. summariseConnections turns it into the shape that
+    actually diagnoses something: what is established and to whom, what is
+    stuck in CLOSE_WAIT because the application never closed it, and — the
+    case that prompted this — the fact that nothing is connected at all.
+
+    Done here rather than in the webview so there is one implementation, and
+    one that is under test.
+  */
+  if (msg.evidenceKind === 'conns') {
+    evidence = connEvidence(evidence);
+  }
+
   if (!evidence.trim()) {
     postMessage({ type: 'dk8s:aiError', error: 'Nothing selected to ask about.' });
     return;
@@ -1028,6 +1048,10 @@ export async function handleDk8sAsk(
 
   const label = String(msg.evidenceLabel ?? 'EVIDENCE');
   const question = String(msg.question ?? '').trim();
+
+  // "Show what was sent" has to mean it. The webview holds the raw artifact,
+  // which is no longer what leaves the machine once the host enriches it.
+  postMessage({ type: 'dk8s:aiEvidence', tabId: DK8S_AI_TAB, evidence });
 
   const userPrompt = [
     contextLines && `━━━ POD ━━━\n${contextLines}`,

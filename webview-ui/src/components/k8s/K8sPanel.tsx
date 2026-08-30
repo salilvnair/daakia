@@ -271,6 +271,8 @@ export function K8sPanel() {
       if (!type) return;
 
       if (type === 'dk8s:aiError') { applyDk8sAiError(msg); return; }
+      // The host's account of what it actually sent to the model.
+      if (type === 'dk8s:aiEvidence') { applyAi(msg); return; }
 
       // AI replies arrive on the shared `ai:` channel, not a dk8s-specific one,
       // so they are routed by tabId inside the store rather than by prefix here.

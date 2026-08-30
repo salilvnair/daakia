@@ -20,6 +20,8 @@ export interface AskRequest {
   title: string;
   evidence: string;
   evidenceLabel: string;
+  /** Lets the host enrich the pack before it goes out — see handleDk8sAsk. */
+  evidenceKind?: string;
   podContext: Record<string, unknown>;
   question?: string;
 }
@@ -82,6 +84,7 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
       promptKey: req.promptKey,
       evidence: req.evidence,
       evidenceLabel: req.evidenceLabel,
+      evidenceKind: req.evidenceKind,
       podContext: req.podContext,
       question: req.question,
     });
@@ -110,6 +113,12 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
       set(s => ({ answers: s.answers.map(a => a.id === activeId ? fn(a) : a) }));
 
     switch (msg.type) {
+      // What the host actually sent, which is not always what was handed to
+      // `ask` — a connection snapshot is summarised on the way out.
+      case 'dk8s:aiEvidence':
+        patch(a => ({ ...a, evidence: String(msg.evidence ?? a.evidence) }));
+        break;
+
       case 'ai:chunk':
         patch(a => ({ ...a, text: a.text + String(msg.delta ?? '') }));
         break;
