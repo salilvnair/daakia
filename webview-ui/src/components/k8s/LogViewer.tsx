@@ -8,8 +8,10 @@
  *     strip asks you to mentally rotate it every time you use it. It also
  *     carries a "you are here" marker, which is what makes it a map rather
  *     than a picture.
- *   - Selecting text raises a toolbar AT the selection, not a bar at the
- *     bottom of the panel. The gesture and the action belong in the same place.
+ *   - Selecting text raises the context menu AT the selection, not a bar at
+ *     the bottom of the panel. The gesture and the action belong in the same
+ *     place. It was a bespoke floating strip until that strip and the
+ *     right-click menu started fighting over the same gesture.
  *   - Stack traces fold to one row. An unfolded Java exception costs a screen
  *     and a half, so three of them mean you never see the fourth.
  */
@@ -18,7 +20,7 @@ import {
   SearchInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
 } from '@salilvnair/dui';
 import {
-  SparkleIcon, HelpCircleIcon, ChevronRightIcon, ChevronDownIcon,
+  SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon,
 } from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
@@ -27,7 +29,7 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import {
   filterLines, densityBuckets, describeBucket, levelCounts, levelColor,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
-  compactCount, placeSelectionToolbar, grepTermFor, type MatchedLine,
+  compactCount, grepTermFor, type MatchedLine,
 } from './log-view';
 import {
   AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
@@ -61,22 +63,6 @@ const OVERSCAN = 25;
 const RIBBON_W = 38;
 /** The bands themselves. Thick enough to read as colour and to click. */
 const RIBBON_BAND_W = 20;
-/** The selection strip, for placing it clear of the selection and the ribbon. */
-/*
-  Wide enough to clear the selection it is placed under, and no wider.
-
-  This was 720 when the strip carried four actions, and stayed near it after
-  two of them moved to the right-click menu — so two buttons were being
-  stretched across a strip sized for four, with the padding to match.
-
-  The strip sizes to its content; this is only what the placement math reserves
-  when it decides which side of the selection to sit on. Nothing enforces it as
-  a width, because a floor above the content width has to put the slack
-  somewhere, and wherever it goes it reads as a hole.
-*/
-const TOOLBAR_W = 236;
-const TOOLBAR_H = 58;
-
 const LEVEL_SHORT: Record<LogLevel, string> = {
   error: 'err', warn: 'wrn', info: 'info', debug: 'dbg', other: 'plain',
 };
@@ -317,22 +303,21 @@ function LevelTag({ level }: { level: LogLevel }) {
   );
 }
 
-// ── Selection toolbar ───────────────────────────────────────────────────────
+// ── Selection ────────────────────────────────────────────────────
 
-/**
- * Raised at the selection itself.
- *
- * A bar pinned to the bottom of the panel makes you look away from what you
- * just highlighted to find the button that acts on it. This appears beside the
- * line, which is where your eye already is.
- */
-/**
- * The floating strip: the two model calls, and nothing else.
- *
- * Search moved to the right-click menu, where a submenu can hold both scopes
- * without the strip growing a button per scope. What is left is what needs a
- * strip — the actions with no obvious keyboard or menu home.
- */
+/*
+  There is no floating strip any more.
+
+  A strip over the selection and the right-click menu were two panels fighting
+  over one gesture: the strip had to hide itself on right-click, the menu had to
+  keep out of the strip's way, and neither could hold much before it grew wider
+  than the thing it was pointing at. Both sets of actions now live in the one
+  menu, which opens on selection and on double-click as well as on right-click —
+  so the gesture that makes a selection is the gesture that offers to act on it.
+
+  See `aiItems` in RightClickMenu for what the menu carries.
+*/
+
 /** A hairline between groups of controls — see the note on the toolbar. */
 function Sep() {
   return (
@@ -380,88 +365,6 @@ function IconButton({ on, onClick, title, icon }: {
   );
 }
 
-function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
-  rect: { top: number; left: number };
-  lineCount: number;
-  onAsk: () => void;
-  onExplain: () => void;
-}) {
-  return (
-    <div
-      data-selection-toolbar
-      className="absolute z-30 flex items-center gap-2 px-2.5 py-1.5"
-      style={{
-        // 6px against the buttons' 4px. `rounded-lg` put 8px here, which next
-        // to a 4px button read as a softer, rounder kind of surface than the
-        // controls it holds. A hair more than the button is enough to nest —
-        // matching it exactly makes the two corners fight, and going past it
-        // turns the strip into a pill.
-        borderRadius: 6,
-        top: rect.top, left: rect.left,
-        // A solid strip, not floating chips. Over a dense log the buttons had
-        // log text showing between and behind them and were barely findable,
-        // and at the old height it read as part of the log rather than over it.
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-surface-border)',
-        boxShadow: '0 10px 30px rgba(0,0,0,.6)',
-        // No floor width. TOOLBAR_W is what the placement math reserves, and
-        // enforcing it here as well made the strip wider than its own contents
-        // — the leftover slack collected between the count and the buttons and
-        // read as a hole in the strip.
-      }}
-      onMouseDown={e => e.preventDefault()}   // keep the selection alive
-    >
-      <span className="text-[11px] pl-1 select-none whitespace-nowrap shrink-0"
-            style={{
-              color: 'var(--color-text-muted)',
-              fontVariantNumeric: 'tabular-nums',
-            }}>
-        {lineCount} line{lineCount === 1 ? '' : 's'}
-      </span>
-
-      {/* Sized to their labels rather than stretched to fill. Two buttons
-          spread across a strip built for four read as padding with words in
-          it. */}
-      <div className="flex items-center gap-1.5">
-
-      <div className="[&_button]:whitespace-nowrap"><ButtonView
-        label="Ask AI why"
-        size="sm"
-        variant="secondary"
-        accentColor={AI_ACCENT}
-        color={AI_ACCENT}
-        onClick={onAsk}
-        iconLeft={<SparkleIcon size={12} color={AI_ACCENT} />}
-        style={{
-          background: 'color-mix(in srgb, var(--color-protocol-ai) 20%, transparent)',
-          borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 55%, transparent)',
-          fontWeight: 600,
-          // 4px, the same corner every other button in the log view uses.
-          // dui's default is a pill, which next to the rounded-rectangle
-          // toolbar above reads as a different kind of control.
-          borderRadius: 4,
-        }}
-      /></div>
-      {/* Explain is the other model call, so it keeps the AI tone. */}
-      <div className="[&_button]:whitespace-nowrap"><ButtonView
-        label="Explain"
-        size="sm"
-        variant="secondary"
-        accentColor={AI_ACCENT}
-        color={AI_ACCENT}
-        onClick={onExplain}
-        iconLeft={<HelpCircleIcon size={12} color={AI_ACCENT} />}
-        style={{
-          background: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)',
-          borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 38%, transparent)',
-          borderRadius: 4,
-        }}
-      /></div>
-      </div>
-    </div>
-  );
-}
-
 // ── The viewer ──────────────────────────────────────────────────────────────
 
 export function LogViewer() {
@@ -484,7 +387,8 @@ export function LogViewer() {
   const [viewportW, setViewportW] = useState(0);
   const [foldTraces, setFoldTraces] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-  const [toolbar, setToolbar] = useState<{ top: number; left: number } | null>(null);
+  /** The most recent non-empty selection — see the note in captureSelection. */
+  const lastSelRef = useRef<{ text: string; raw: string; first: number; last: number; count: number } | null>(null);
   const [analyzePlan, setAnalyzePlan] = useState<AnalyzePlan | null>(null);
   const [analyzeContext, setAnalyzeContext] = useState(true);
   /**
@@ -626,7 +530,6 @@ export function LogViewer() {
     const el = scrollRef.current;
     if (!el) return;
     setScrollTop(el.scrollTop);
-    setToolbar(null);
     // While the ribbon is being dragged, the scroll position is an OUTPUT of
     // the gesture. Feeding it back into the follow decision makes the two
     // fight each other, which is what the flicker was.
@@ -674,6 +577,9 @@ export function LogViewer() {
     const sel = window.getSelection();
     const host = bodyRef.current;
     if (!sel || sel.isCollapsed || !sel.toString().trim() || !host) {
+      // `lastSelRef` deliberately survives this. Choosing a menu entry
+      // collapses the selection before the handler runs, so the thing the user
+      // picked the menu for is gone by the time we go to act on it.
       selectionRef.current = null;
       setLogSelection(undefined);
       return null;
@@ -698,6 +604,7 @@ export function LogViewer() {
     const text = selectionText(logs, firstSeq, lastSeq);
     const count = lastSeq - firstSeq + 1;
     selectionRef.current = { text, raw: sel.toString(), first: firstSeq, last: lastSeq, count };
+    lastSelRef.current = selectionRef.current;
     setLogSelection({ text, firstSeq, lastSeq, lineCount: count });
     return range;
   }, [logs, setLogSelection]);
@@ -709,29 +616,32 @@ export function LogViewer() {
   }, [captureSelection]);
 
   /**
-   * The toolbar appears when the gesture ENDS, and never over the selection.
+   * Open the context menu on the selection that just ended.
    *
-   * It is placed below the selected block by default and only flips above when
-   * there is no room underneath — covering the lines you just highlighted
-   * defeats the point of highlighting them.
+   * By synthesising a `contextmenu` event rather than calling into the menu:
+   * RightClickMenu listens globally and builds its items from the target and
+   * the live selection, so a real event gets the identical menu a right-click
+   * would. A second path into it would be a second thing to keep in step.
+   *
+   * Anchored at the end of the selection — the caret is where you stopped
+   * dragging, and a menu at the start would sit on top of what you chose.
    */
-  const showToolbarForSelection = useCallback(() => {
+  const openMenuForSelection = useCallback(() => {
     const range = captureSelection();
     const host = bodyRef.current;
-    if (!range || !host) { setToolbar(null); return; }
+    if (!range || !host) return;
 
-    setToolbar(placeSelectionToolbar(
-      range.getBoundingClientRect(),
-      host.getBoundingClientRect(),
-      { width: TOOLBAR_W, height: TOOLBAR_H },
-      RIBBON_W,
-    ));
+    const rects = range.getClientRects();
+    const at = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
+
+    host.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true, cancelable: true, clientX: at.right, clientY: at.bottom,
+    }));
   }, [captureSelection]);
 
   const sendToAi = (promptKey: string, title: string) => {
-    const sel = selectionRef.current;
+    const sel = selectionRef.current ?? lastSelRef.current;
     if (!sel || !detail) return;
-    setToolbar(null);
     ask({
       promptKey, title,
       evidence: sel.text,
@@ -802,6 +712,21 @@ export function LogViewer() {
     if (!el) return;
     const onAction = (e: Event) => {
       const { action, text } = (e as CustomEvent<{ action: string; text: string }>).detail ?? {};
+
+      // The AI entries act on whole lines, so they run before the search term
+      // is derived — `grepTermFor` rejects a multi-line selection as a search
+      // term, and returning early on that would have taken these with it.
+      if (action === 'ai:askWhy') {
+        sendToAi('dk8s.log.askWhy', 'Ask AI why');
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
+      if (action === 'ai:explain') {
+        sendToAi('dk8s.log.explainError', 'Explain this error');
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
+
       const term = grepTermFor(text ?? '');
       if (!term) return;
       if (action === 'search:here') {
@@ -810,7 +735,6 @@ export function LogViewer() {
         useK8sStore.getState().closeDetail();
         useDk8sSearchStore.getState().searchEverywhere(term);
       }
-      setToolbar(null);
       window.getSelection()?.removeAllRanges();
     };
     el.addEventListener('daakia:selection-action', onAction);
@@ -1045,25 +969,20 @@ export function LogViewer() {
         className="relative flex flex-1 min-h-0"
         // Hide on the way down so the strip is never in the way of the drag,
         // and place it on the way up once the selection is settled.
-        onPointerDown={e => {
-          if ((e.target as HTMLElement).closest('[data-selection-toolbar]')) return;
-          setToolbar(null);
-        }}
         onPointerUp={e => {
-          // A click on the strip is not a new selection gesture. Without this
-          // the button press re-ran placement against a selection the click had
-          // just collapsed, which read as a flicker.
-          if ((e.target as HTMLElement).closest('[data-selection-toolbar]')) return;
-          // Right-click opens the context menu, which carries Search. Two
-          // floating panels over one selection is one too many, so the AI
-          // strip stays away.
-          if (e.button === 2) { setToolbar(null); return; }
-          window.setTimeout(showToolbarForSelection, 0);
+          // Right-click already opens the menu on its own; opening a second one
+          // from here would fight the first.
+          if (e.button === 2) return;
+          // After the event loop turn, so the selection the browser is about to
+          // settle is the one we read.
+          window.setTimeout(openMenuForSelection, 0);
         }}
-        onContextMenu={() => setToolbar(null)}
-        // Opts this surface into the Search entry on the selection menu; the
-        // menu dispatches back here rather than knowing anything about logs.
-        data-selection-actions="search"
+        // Double-click selects a word and raises the menu on it, which is the
+        // fastest way to ask about one order id in a wall of them.
+        onDoubleClick={() => window.setTimeout(openMenuForSelection, 0)}
+        // Opts this surface into the AI and Search groups on the selection
+        // menu; the menu dispatches back here rather than knowing about logs.
+        data-selection-actions="ai search"
       >
         <div
           ref={scrollRef}
@@ -1195,15 +1114,6 @@ export function LogViewer() {
           }}
         />
 
-        {toolbar && (
-          <SelectionToolbar
-            rect={toolbar}
-            lineCount={selectionRef.current?.count ?? 0}
-            onAsk={() => sendToAi('dk8s.log.askWhy', 'Ask AI why')}
-            onExplain={() => sendToAi('dk8s.log.explainError', 'Explain this error')}
-
-          />
-        )}
       </div>
 
       {/* Rendered here rather than in PodDetail because "On screen" exports

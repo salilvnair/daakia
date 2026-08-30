@@ -77,7 +77,10 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
         {showEvidence ? <ChevronDownIcon size={10} /> : <ChevronRightIcon size={10} />}
         {showEvidence ? 'Hide' : 'Show'} what was sent
         {' · '}
-        {answer.evidence.split('\n').length} lines
+        {(() => {
+          const n = answer.evidence.split('\n').length;
+          return `${n} line${n === 1 ? '' : 's'}`;
+        })()}
       </button>
 
       {showEvidence && (

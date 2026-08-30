@@ -23,6 +23,15 @@ export interface ContextMenuItem {
   iconColor?: string;
   danger?: boolean;
   separator?: boolean;
+  /**
+   * A non-interactive label naming the group beneath it.
+   *
+   * Not a disabled item: a disabled item reads as something you could have
+   * clicked under other circumstances, and this never becomes clickable. It
+   * exists so a group can say what it is acting on — "10 lines" over the AI
+   * entries answers "on what?" without a second panel to say it.
+   */
+  heading?: boolean;
   disabled?: boolean;
   shortcut?: string;
   /** Submenu items — renders a flyout panel on hover. Max 10 items recommended. */
@@ -96,7 +105,13 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
       onMouseDown={e => e.stopPropagation()}
     >
       {items.map(item =>
-        item.separator ? (
+        item.heading ? (
+          <div key={item.id}
+               className="px-3.5 pt-1.5 pb-1 text-[10px] uppercase tracking-wider select-none text-[var(--color-text-muted)]"
+               style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {item.label}
+          </div>
+        ) : item.separator ? (
           <div key={item.id} className="my-1 border-t border-[var(--color-surface-border)]" />
         ) : item.submenu ? (
           /* Nested submenu trigger inside flyout */
@@ -267,7 +282,13 @@ export function ContextMenu({ items, position, onSelect, onClose }: ContextMenuP
       style={{ top: position.y, left: position.x, visibility: 'hidden' }}
     >
       {items.map(item =>
-        item.separator ? (
+        item.heading ? (
+          <div key={item.id}
+               className="px-3.5 pt-1.5 pb-1 text-[10px] uppercase tracking-wider select-none text-[var(--color-text-muted)]"
+               style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {item.label}
+          </div>
+        ) : item.separator ? (
           <div key={item.id} className="my-1 border-t border-[var(--color-surface-border)]" />
         ) : item.submenu ? (
           /* Submenu trigger */

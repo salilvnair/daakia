@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
-import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon } from '../../../icons';
+import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, SparkleIcon, HelpCircleIcon } from '../../../icons';
 
 type MenuContext = 'monaco' | 'input' | 'selection';
 
@@ -53,6 +53,39 @@ const SELECTION_ITEMS: ContextMenuItem[] = [
  * so the menu stays generic and the log-specific behaviour stays in the log
  * view that implements it.
  */
+const AI_COLOR = 'var(--color-protocol-ai)';
+
+/**
+ * The two model calls, for a surface that opts into `ai`.
+ *
+ * These lived on a floating strip that appeared over the selection. The strip
+ * was a second panel competing with this menu for the same gesture, so it had
+ * to suppress itself on right-click and this menu had to stay out of its way —
+ * two things arguing over one selection. One menu, and the strip is gone.
+ *
+ * The heading carries what the strip's only real content was: how much is
+ * selected. "Ask AI why" on its own does not say why about what.
+ */
+function aiItems(lineCount: number): ContextMenuItem[] {
+  return [
+    { id: 'ai-sep', label: '', separator: true },
+    {
+      id: 'ai-count',
+      label: `${lineCount} line${lineCount === 1 ? '' : 's'} selected`,
+      heading: true,
+    },
+    {
+      id: 'ai:askWhy', label: 'Ask AI why',
+      icon: <SparkleIcon size={14} />, iconColor: AI_COLOR,
+    },
+    {
+      id: 'ai:explain', label: 'Explain',
+      icon: <HelpCircleIcon size={14} />, iconColor: AI_COLOR,
+    },
+    { id: 'ai-sep-2', label: '', separator: true },
+  ];
+}
+
 const SEARCH_ITEMS: ContextMenuItem[] = [
   {
     id: 'search',
@@ -198,11 +231,17 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
     };
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // The menu is placed at fixed coordinates against content that can move.
+    // Capture phase because the scroller is usually an inner element, and
+    // scroll does not bubble.
+    const handleScroll = () => onClose();
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
+    document.addEventListener('scroll', handleScroll, true);
     return () => {
       document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('scroll', handleScroll, true);
     };
   }, [onClose]);
 
@@ -502,7 +541,9 @@ export function RightClickMenu() {
     }
 
     // Handed to whichever surface contributed the entry.
-    if (action.startsWith('search:')) {
+    // Both groups leave the same way: the menu names an action and the surface
+    // that opted in decides what it means. Nothing here knows about logs.
+    if (action.startsWith('search:') || action.startsWith('ai:')) {
       target?.dispatchEvent(new CustomEvent('daakia:selection-action', {
         bubbles: true,
         detail: { action, text: selectedText },
@@ -518,12 +559,26 @@ export function RightClickMenu() {
   }
 
   // Input & selection contexts use the standard ContextMenu
+  /*
+    Copy first, then whatever the surface opted into.
+
+    The order is the order of certainty: Copy always does the same thing, the
+    AI entries act on what is selected, and Search leaves for somewhere else.
+    Each opted-in group brings its own separators so the menu reads as sections
+    rather than a list.
+  */
+  const wantsAi = !!menu.target?.closest('[data-selection-actions~="ai"]');
+  const wantsSearch = !!menu.target?.closest('[data-selection-actions~="search"]');
+  // Trailing newline from a line-wise selection would otherwise count as a line.
+  const lineCount = menu.selection.replace(/\n+$/, '').split('\n').length;
+
   const items = menu.context === 'input'
     ? INPUT_ITEMS
-    // A surface that opted in gets Search as well as Copy.
-    : menu.target?.closest('[data-selection-actions~="search"]')
-      ? [...SELECTION_ITEMS, ...SEARCH_ITEMS]
-      : SELECTION_ITEMS;
+    : [
+        ...SELECTION_ITEMS,
+        ...(wantsAi ? aiItems(lineCount) : []),
+        ...(wantsSearch ? (wantsAi ? SEARCH_ITEMS : [{ id: 'search-sep', label: '', separator: true }, ...SEARCH_ITEMS]) : []),
+      ];
   const adjustedItems = items.map(item => {
     if (item.separator) return item;
     if (item.id === 'cut' || item.id === 'copy') {
