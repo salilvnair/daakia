@@ -13,7 +13,7 @@
  * Nothing here uploads an artifact. Parsing and analysis run on this machine;
  * only a redacted evidence pack ever reaches a model, and only when asked.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ButtonView } from '@salilvnair/dui';
 import { MemoryIcon, LayersIcon, DocumentIcon, PlusIcon } from '../../icons';
 import { useUiStateStore } from '../../store/ui-state-store';
@@ -51,6 +51,10 @@ export function AnalyzeView() {
     setLocal(id);
     useUiStateStore.getState().setPref('doctor.analyzer', id);
   };
+
+  // Which analyzers have been shown at least once, and so must stay mounted.
+  const seen = useRef(new Set<AnalyzerId>()).current;
+  seen.add(analyzer);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -93,11 +97,26 @@ export function AnalyzeView() {
                     }} />
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {analyzer === 'heap' ? <HeapAnalyzerView />
-          : analyzer === 'threads' ? <ThreadAnalyzerView />
-            : <LogAnalyzerView />}
-      </div>
+      {/*
+        Hidden, not unmounted.
+
+        Each analyzer holds its parsed dump in its own state, so rendering only
+        the selected one threw the analysis away every time you looked at
+        another tab — you came back to the empty state and had to re-open a
+        file you had already opened. Kept mounted, so switching is free and
+        nothing is lost.
+
+        Mounted lazily and then kept: an analyzer you have never opened costs
+        nothing, and one you have opened stays as you left it.
+      */}
+      {ANALYZERS.map(a => seen.has(a.id) && (
+        <div key={a.id} className="flex-1 min-h-0 overflow-hidden"
+             style={{ display: a.id === analyzer ? 'flex' : 'none', flexDirection: 'column' }}>
+          {a.id === 'heap' ? <HeapAnalyzerView />
+            : a.id === 'threads' ? <ThreadAnalyzerView />
+              : <LogAnalyzerView />}
+        </div>
+      ))}
     </div>
   );
 }

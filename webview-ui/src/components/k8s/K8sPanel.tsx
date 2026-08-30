@@ -9,7 +9,7 @@
  * M1 is the way in: find kubectl, choose a cluster and namespace, and never
  * dead-end when a cluster says no.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Dk8sIcon, EyeIcon, StethoscopeIcon } from '../../icons';
 import { useK8sStore, type Dk8sView } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
@@ -240,6 +240,10 @@ export function K8sPanel() {
   const applyArtifacts = useDk8sArtifactStore(s => s.apply);
   const view = useK8sStore(s => s.panel);
   const setView = useK8sStore(s => s.setPanel);
+  // Which views have been opened, and so must stay mounted. See the note by
+  // the render below.
+  const seen = useRef(new Set<Dk8sView>()).current;
+  seen.add(view);
   const handoff = useDk8sDoctorStore(s => s.handoff);
   const clearHandoff = useDk8sDoctorStore(s => s.clearHandoff);
   const closeDetail = useK8sStore(s => s.closeDetail);
@@ -301,15 +305,32 @@ export function K8sPanel() {
               reach of exactly the people who need them. */}
           <ViewSwitch view={view} onChange={setView} />
 
-          {view === 'artifacts' ? <ArtifactsView />
-            : view === 'analyze' ? <AnalyzeView />
-              : stage === 'no-kubectl' ? <KubectlSetupGuide mode="no-kubectl" />
-                : stage === 'no-contexts' ? <KubectlSetupGuide mode="no-contexts" />
-                  : stage === 'pick-context' ? <ClusterPicker />
-                    : stage === 'unreachable' ? <UnreachableNotice />
-                      : stage === 'ask-sensitivity' ? <SensitivityPrompt />
-                        : stage === 'pick-namespace' ? <NamespaceMultiPicker />
-                          : <PodGrid />}
+          {/* Hidden rather than unmounted, and mounted only once first shown.
+              Analyze holds a parsed dump and Artifacts holds a filter, and
+              both were being thrown away by a trip to the pod list — you came
+              back to an empty analyzer and had to re-open the file. */}
+          {seen.has('artifacts') && (
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden"
+                 style={{ display: view === 'artifacts' ? 'flex' : 'none' }}>
+              <ArtifactsView />
+            </div>
+          )}
+          {seen.has('analyze') && (
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden"
+                 style={{ display: view === 'analyze' ? 'flex' : 'none' }}>
+              <AnalyzeView />
+            </div>
+          )}
+
+          {view === 'pods' && (
+            stage === 'no-kubectl' ? <KubectlSetupGuide mode="no-kubectl" />
+              : stage === 'no-contexts' ? <KubectlSetupGuide mode="no-contexts" />
+                : stage === 'pick-context' ? <ClusterPicker />
+                  : stage === 'unreachable' ? <UnreachableNotice />
+                    : stage === 'ask-sensitivity' ? <SensitivityPrompt />
+                      : stage === 'pick-namespace' ? <NamespaceMultiPicker />
+                        : <PodGrid />
+          )}
         </>
       )}
 

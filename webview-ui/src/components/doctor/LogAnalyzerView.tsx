@@ -65,6 +65,11 @@ export function LogAnalyzerView() {
   const [filter, setFilter] = useState('');
   const [onlyProblems, setOnlyProblems] = useState(false);
 
+  /** Back to the empty state — see the note on the button. */
+  const reset = () => {
+    setLoaded(null); setError(''); setFilter(''); setOnlyProblems(false);
+  };
+
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msg = e.data;
@@ -107,8 +112,14 @@ export function LogAnalyzerView() {
           addresses and tokens already replaced — ever leave it.
         </p>
         <ButtonView
-          variant="primary" size="sm"
-          style={{ backgroundColor: ACCENT, borderColor: ACCENT, marginTop: 4 }}
+          variant="secondary" size="sm"
+          accentColor={ACCENT} color={ACCENT}
+          style={{
+            marginTop: 4,
+            background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+            borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
+            fontWeight: 600,
+          }}
           onClick={() => postMsg({ type: 'logs:open' })}
         >
           Open log file
@@ -134,7 +145,7 @@ export function LogAnalyzerView() {
           {v.timeRange ? ` · ${time(v.timeRange.start)} → ${time(v.timeRange.end)}` : ''}
         </span>
         <div className="flex-1" />
-        <ButtonView variant="secondary" size="sm" onClick={() => postMsg({ type: 'logs:open' })}>
+        <ButtonView variant="secondary" size="sm" onClick={reset}>
           Open another
         </ButtonView>
       </div>

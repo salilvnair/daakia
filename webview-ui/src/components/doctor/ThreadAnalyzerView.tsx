@@ -69,6 +69,12 @@ export function ThreadAnalyzerView() {
   const [stateFilter, setStateFilter] = useState<State | 'ALL'>('ALL');
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  /** Back to the empty state — see the note on the button. */
+  const reset = () => {
+    setLoaded(null); setError(''); setFilter('');
+    setStateFilter('ALL'); setExpanded(null);
+  };
+
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msg = e.data;
@@ -110,8 +116,14 @@ export function ThreadAnalyzerView() {
           deadlock cycles, lock contention and where every thread is stuck. Parsing runs on this machine.
         </p>
         <ButtonView
-          variant="primary" size="sm"
-          style={{ backgroundColor: ACCENT, borderColor: ACCENT, marginTop: 4 }}
+          variant="secondary" size="sm"
+          accentColor={ACCENT} color={ACCENT}
+          style={{
+            marginTop: 4,
+            background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+            borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
+            fontWeight: 600,
+          }}
           onClick={() => postMsg({ type: 'threads:open' })}
         >
           Open thread dump
@@ -138,7 +150,7 @@ export function ThreadAnalyzerView() {
           {dump.timestamp ? ` · ${dump.timestamp}` : ''}
         </span>
         <div className="flex-1" />
-        <ButtonView variant="secondary" size="sm" onClick={() => postMsg({ type: 'threads:open' })}>
+        <ButtonView variant="secondary" size="sm" onClick={reset}>
           Open another
         </ButtonView>
       </div>

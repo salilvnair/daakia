@@ -106,6 +106,11 @@ export function HeapAnalyzerView() {
   // Baseline survives loading another dump — comparing is the whole point.
   const [baseline, setBaseline] = useState<{ name: string | null } | null>(null);
 
+  // Back to the empty state, so "Open another" is a decision you can change
+  // your mind about. The baseline is kept: comparing two dumps is the reason
+  // to open a second one at all.
+  const reset = () => { setPhase({ kind: 'idle' }); setView('verdict'); };
+
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msg = e.data;
@@ -142,8 +147,14 @@ export function HeapAnalyzerView() {
           suspects. Parsing runs on this machine — nothing is uploaded.
         </p>
         <ButtonView
-          variant="primary" size="sm"
-          style={{ backgroundColor: ACCENT, borderColor: ACCENT, marginTop: 4 }}
+          variant="secondary" size="sm"
+          accentColor={ACCENT} color={ACCENT}
+          style={{
+            marginTop: 4,
+            background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+            borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
+            fontWeight: 600,
+          }}
           onClick={() => postMsg({ type: 'heap:open' })}
         >
           Open heap dump
@@ -221,7 +232,10 @@ export function HeapAnalyzerView() {
           ))}
         </div>
         <div className="flex-1" />
-        <ButtonView variant="secondary" size="sm" onClick={() => postMsg({ type: 'heap:open' })}>
+        {/* Clears back to the empty state rather than opening a picker
+            straight away: cancelling that dialog left you looking at the old
+            dump with no sign that anything had happened. */}
+        <ButtonView variant="secondary" size="sm" onClick={reset}>
           Open another
         </ButtonView>
       </div>
