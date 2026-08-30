@@ -120,6 +120,22 @@ export function parseLine(
   hasTimestamps: boolean,
   format?: CompiledFormat,
   meter?: FormatMeter,
+  /**
+   * The level of the line above, for continuation lines.
+   *
+   * A logging framework runs its conversion pattern once per EVENT, so a
+   * message containing a newline prints its prefix on the first line and dumps
+   * the rest raw. Spring Boot does exactly this on a failed start: the
+   * condition report logs an empty INFO event whose body is
+   * "Error starting ApplicationContext...", and that sentence arrives with no
+   * timestamp, no level and no logger. Classified on its own it is `other`,
+   * which renders it as plain white text in the middle of a coloured trace —
+   * the one line a reader most wants to see, styled as though it were noise.
+   *
+   * Stack frames and exception headers were already special-cased in
+   * `levelOf`; those are two instances of this, not separate rules.
+   */
+  prevLevel?: LogLevel,
 ): LogLine {
   let ts: number | undefined;
   let text = raw;
@@ -151,9 +167,24 @@ export function parseLine(
     }
   }
 
-  // No format, or a line it does not fit — the keyword sniff still applies, so
-  // an unmatched line is never worse off than before formats existed.
-  return { seq, ts, level: levelOf(text), text };
+  /*
+    No format, or a line it does not fit.
+
+    The keyword sniff still applies, so an unmatched line is never worse off
+    than before formats existed. Beyond that: if a format IS configured and
+    this line does not match it while carrying no level of its own, it is a
+    continuation of the event above and inherits its level.
+
+    Gated on `format` deliberately. Only where a shape is known does the
+    absence of that shape mean something — without one, every line is
+    unmatched and inheriting would paint a whole log the colour of its first
+    coloured line.
+  */
+  const own = levelOf(text);
+  const level = own === 'other' && format && prevLevel && prevLevel !== 'other'
+    ? prevLevel
+    : own;
+  return { seq, ts, level, text };
 }
 
 export function streamLogs(
@@ -186,6 +217,8 @@ export function streamLogs(
   let seq = 0;
   let pending: LogLine[] = [];
   let carry = '';
+  /** The level of the last line parsed — see the note on parseLine. */
+  let lastLevel: LogLevel | undefined;
   let timer: NodeJS.Timeout | undefined;
 
   const flush = () => {
@@ -222,7 +255,8 @@ export function streamLogs(
       carry = parts.pop() ?? '';
       for (const raw of parts) {
         if (!raw) continue;
-        pending.push(parseLine(raw, seq++, opts.timestamps !== false, compiled, meter));
+        pending.push(parseLine(raw, seq++, opts.timestamps !== false, compiled, meter, lastLevel));
+        lastLevel = pending[pending.length - 1].level;
       }
       // Head mode: once we have what was asked for, stop reading. Streaming a
       // 400MB log to the floor to show its first 200 lines is not a thing to
@@ -246,7 +280,7 @@ export function streamLogs(
       // that has stopped may already have torn down what these lines were for.
       // The final flush below is only correct for an exit we did not cause.
       if (stopped) return;
-      if (carry) { pending.push(parseLine(carry, seq++, opts.timestamps !== false, compiled, meter)); carry = ''; }
+      if (carry) { pending.push(parseLine(carry, seq++, opts.timestamps !== false, compiled, meter, lastLevel)); lastLevel = pending[pending.length - 1].level; carry = ''; }
       flush();
       const detail = stderrTail.split('\n').map(l => l.trim()).filter(Boolean)[0];
       // A follow that ends on its own means the container went away — which is

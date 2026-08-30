@@ -101,6 +101,25 @@ export interface PvLogConfig {
    * first.
    */
   appByPod?: Record<string, string>;
+  /**
+   * A path straight from a pod name, for volumes the template cannot describe.
+   *
+   * `{app}`/`{env}` assume the claim is named after the workload and the
+   * environment. Plenty of them are not — a share laid out by team, a path
+   * inherited from before the cluster, one service written somewhere else
+   * entirely. Rather than bending the shared template until it covers the
+   * exception and stops describing the rule, name the exception.
+   *
+   * Keys match the pod name: a glob when the key contains `*` or `?`
+   * (`zp-backend-*`), otherwise a case-insensitive substring, which is how
+   * `appByPod` already behaves. Longest key wins, so a specific pod beats a
+   * family of them.
+   *
+   * Values are templates, so `{app}`, `{env}`, `{date}` and globs all still
+   * work — this replaces which template a matching pod uses, not the fact that
+   * it is a template.
+   */
+  pathByPod?: Record<string, string>;
 }
 
 /**
@@ -241,6 +260,37 @@ export function appOf(cfg: PvLogConfig, ref: PodRef): string {
   }
   if (ref.workload?.trim()) return ref.workload.trim();
   return appNameOf(ref.pod);
+}
+
+/**
+ * Does this mapping key claim this pod?
+ *
+ * Two forms because two habits: people write `zp-backend` meaning "anything
+ * with this in the name", and `zp-backend-*` meaning a pattern. Guessing
+ * between them by looking for glob characters is unambiguous — a key without
+ * `*` or `?` cannot have been meant as a glob.
+ */
+export function podKeyMatches(key: string, pod: string): boolean {
+  const k = key.trim();
+  if (!k) return false;
+  if (k.includes('*') || k.includes('?')) return globToRegExp(k).test(pod);
+  return pod.toLowerCase().includes(k.toLowerCase());
+}
+
+/**
+ * The template a pod's files should be looked for with.
+ *
+ * Most specific first: a path named for this pod, then the mount's own
+ * override, then the shared template. Returns '' when there is nothing to go
+ * on, which the caller treats as "this mount has no opinion about this pod".
+ */
+export function templateForPod(cfg: PvLogConfig, ref: PodRef, mount?: PvMount): string {
+  const keys = Object.keys(cfg.pathByPod ?? {}).sort((a, b) => b.length - a.length);
+  for (const k of keys) {
+    const v = (cfg.pathByPod![k] ?? '').trim();
+    if (v && podKeyMatches(k, ref.pod)) return v;
+  }
+  return (mount?.template ?? cfg.template ?? '').trim();
 }
 
 export function envFor(cfg: PvLogConfig, ref: PodRef): string {
@@ -386,7 +436,7 @@ export async function filesForPod(
     if (!mountApplies(m, ref)) continue;
 
     const root = path.resolve(m.path);
-    const template = (m.template ?? cfg.template ?? '').trim();
+    const template = templateForPod(cfg, ref, m);
     if (!template) continue;
 
     const expanded = expandTemplate(template, ref, envFor(cfg, ref), appOf(cfg, ref));

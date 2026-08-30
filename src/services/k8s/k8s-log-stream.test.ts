@@ -35,6 +35,60 @@ describe('levelOf', () => {
   });
 });
 
+/*
+  A logging framework runs its conversion pattern once per EVENT. A message
+  containing a newline therefore prints its prefix on the first line and dumps
+  the rest raw, so the continuation arrives with no timestamp, no level and no
+  logger — Spring Boot's failed-start report is the case that prompted this.
+*/
+describe('parseLine — continuation lines', () => {
+  /** Recognises "<ISO> <LEVEL> <rest>" and nothing else, like a real format. */
+  const format = {
+    format: { id: 't', name: 'test', kind: 'pattern' },
+    parse: (text: string) => {
+      const m = /^(\S+Z)\s+(ERROR|WARN|INFO|DEBUG)\s+(.*)$/.exec(text);
+      if (!m) return null;
+      return { ts: Date.parse(m[1]), level: m[2].toLowerCase(), message: m[3] };
+    },
+  } as unknown as Parameters<typeof parseLine>[3];
+
+  it('gives a continuation the level of the event it belongs to', () => {
+    const head = parseLine('2026-08-30T21:27:32.023Z INFO report follows', 1, false, format);
+    expect(head.level).toBe('info');
+
+    const cont = parseLine(
+      'Error starting ApplicationContext. To display the condition evaluation report'
+      + " re-run your application with 'debug' enabled.",
+      2, false, format, undefined, head.level,
+    );
+    // The sentence begins with the word "Error" but carries no level token,
+    // so on its own it classified as `other` and rendered as plain text.
+    expect(cont.level).toBe('info');
+  });
+
+  it('does not let a continuation override a level the line does carry', () => {
+    const l = parseLine('2026-08-30T21:27:32.035Z ERROR Application run failed', 3, false, format, undefined, 'info');
+    expect(l.level).toBe('error');
+  });
+
+  it('inherits nothing when no format is configured', () => {
+    // Without a known shape, every line is unmatched, and inheriting would
+    // paint a whole log the colour of its first coloured line.
+    const l = parseLine('just a sentence', 4, false, undefined, undefined, 'error');
+    expect(l.level).toBe('other');
+  });
+
+  it('does not inherit `other`, so a plain log stays plain', () => {
+    const l = parseLine('another sentence', 5, false, format, undefined, 'other');
+    expect(l.level).toBe('other');
+  });
+
+  it('still classifies a stack frame as an error without being told', () => {
+    const l = parseLine('    at com.zapper.Thing.run(Thing.java:1)', 6, false, format, undefined, 'info');
+    expect(l.level).toBe('error');
+  });
+});
+
 describe('parseLine', () => {
   it('splits the RFC3339 prefix kubectl adds', () => {
     const l = parseLine('2026-01-01T12:00:00.123456789Z ERROR boom', 7, true);

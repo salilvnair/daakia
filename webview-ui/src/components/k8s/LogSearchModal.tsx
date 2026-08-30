@@ -212,10 +212,13 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
        backdrop and centring are ours and the width is whatever the content
        actually needs. */
     <div
-      // Aligned to the top rather than dead centre. A dialog this tall
-      // centres to within a few pixels of the viewport edge anyway, and the
-      // eye starts at the query box — which should not be halfway down.
-      className="fixed inset-0 z-50 flex items-start justify-center px-6"
+      // Centred on the page, both ways. This was top-aligned on the argument
+      // that the query box should not start halfway down — but the dialog is
+      // tall enough that top-aligning put it against the tab bar and left the
+      // slack at the bottom, which reads as a panel that has come loose rather
+      // than a dialog. The padding below is the minimum margin, so on a short
+      // window it still cannot touch the edges.
+      className="fixed inset-0 z-50 flex items-center justify-center px-6"
       style={{ background: 'rgba(0,0,0,.55)', paddingTop: '3vh', paddingBottom: '3vh' }}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
     >
