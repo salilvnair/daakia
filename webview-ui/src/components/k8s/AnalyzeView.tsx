@@ -21,6 +21,7 @@ import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
 import { HeapAnalyzerView } from '../doctor/HeapAnalyzerView';
 import { ThreadAnalyzerView } from '../doctor/ThreadAnalyzerView';
 import { LogAnalyzerView } from '../doctor/LogAnalyzerView';
+import { AiAnswerPanel } from './AiAnswerPanel';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -109,14 +110,28 @@ export function AnalyzeView() {
         Mounted lazily and then kept: an analyzer you have never opened costs
         nothing, and one you have opened stays as you left it.
       */}
-      {ANALYZERS.map(a => seen.has(a.id) && (
-        <div key={a.id} className="flex-1 min-h-0 overflow-hidden"
-             style={{ display: a.id === analyzer ? 'flex' : 'none', flexDirection: 'column' }}>
-          {a.id === 'heap' ? <HeapAnalyzerView />
-            : a.id === 'threads' ? <ThreadAnalyzerView />
-              : <LogAnalyzerView />}
+      {/*
+        The analyzer, and the answers beside it.
+
+        Asking about a thread wrote into the AI store and nothing rendered it —
+        the panel lives in the pod detail, which is a different screen. So the
+        sparkle on every row appeared to do nothing at all. Same panel as the
+        pod log view, on the same side, opening the same way.
+      */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {ANALYZERS.map(a => seen.has(a.id) && (
+            <div key={a.id} className="flex-1 min-h-0 overflow-hidden"
+                 style={{ display: a.id === analyzer ? 'flex' : 'none', flexDirection: 'column' }}>
+              {a.id === 'heap' ? <HeapAnalyzerView />
+                : a.id === 'threads' ? <ThreadAnalyzerView />
+                  : <LogAnalyzerView />}
+            </div>
+          ))}
         </div>
-      ))}
+
+        <AiAnswerPanel />
+      </div>
     </div>
   );
 }

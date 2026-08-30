@@ -22,6 +22,7 @@ import {
   FolderOpenIcon, TrashIcon, PlusIcon, StethoscopeIcon, CloseIcon,
 } from '../../icons';
 import { useDk8sArtifactStore, type StoredArtifact } from '../../store/dk8s-artifact-store';
+import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
 import { shortAge } from './pod-view';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -56,12 +57,14 @@ function bytes(n: number): string {
   return `${(n / 1024 ** 3).toFixed(2)} GB`;
 }
 
-function Row({ a, picked, onPick }: {
-  a: StoredArtifact; picked: boolean; onPick: (add: boolean) => void;
+function Row({ a, picked, onPick, onAskDelete }: {
+  a: StoredArtifact;
+  picked: boolean;
+  onPick: (add: boolean) => void;
+  onAskDelete: () => void;
 }) {
-  const { open, remove } = useDk8sArtifactStore();
+  const { open } = useDk8sArtifactStore();
   const Icon = KIND_ICON[a.kind] ?? FileTextIcon;
-  const [confirming, setConfirming] = useState(false);
 
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg"
@@ -101,38 +104,26 @@ function Row({ a, picked, onPick }: {
         </span>
       </div>
 
-      {confirming ? (
-        <>
-          <span className="text-[10.5px]" style={{ color: 'var(--color-warning)' }}>
-            Delete this file?
-          </span>
-          <ButtonView label="Cancel" size="sm" variant="secondary"
-                      onClick={() => setConfirming(false)} style={{ background: 'transparent' }} />
-          <ButtonView label="Delete" size="sm" variant="secondary"
-                      accentColor="var(--color-error)" color="var(--color-error)"
-                      onClick={() => { remove(a.file); setConfirming(false); }}
-                      style={{ background: 'color-mix(in srgb, var(--color-error) 14%, transparent)' }} />
-        </>
-      ) : (
-        <>
-          <CopyButtonView text={a.file} size="xs" />
-          <ButtonView
-            label="Analyze"
-            size="sm" variant="secondary"
-            accentColor={ACCENT} color={ACCENT}
-            onClick={() => open(a)}
-            style={{
-              background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-              borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
-              fontWeight: 600,
-            }}
-          />
-          <ButtonView label="" size="sm" variant="secondary"
-                      iconLeft={<TrashIcon size={11} />}
-                      onClick={() => setConfirming(true)}
-                      style={{ background: 'transparent' }} />
-        </>
-      )}
+      <CopyButtonView text={a.file} size="xs" />
+      <ButtonView
+        label="Analyze"
+        size="sm" variant="secondary"
+        accentColor={ACCENT} color={ACCENT}
+        onClick={() => open(a)}
+        style={{
+          background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+          borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
+          fontWeight: 600,
+        }}
+      />
+      {/* The confirmation is one dialog owned by the view, not a strip that
+          swapped this row's own buttons out — deleting one file and deleting
+          ten are the same decision and should ask the same question. */}
+      <ButtonView label="" size="sm" variant="secondary"
+                  iconLeft={<TrashIcon size={11} color={DANGER} />}
+                  onClick={onAskDelete}
+                  title="Delete this file"
+                  style={{ background: 'transparent' }} />
     </div>
   );
 }
@@ -169,12 +160,29 @@ export function ArtifactsView() {
     ? picked.filter(f => !visible.some(a => a.file === f))
     : [...new Set([...picked, ...visible.map(a => a.file)])]);
 
-  const deletePicked = () => {
+  /**
+   * The files a pending delete would remove.
+   *
+   * `undefined` means no dialog is open. A single-file delete puts that one
+   * file here rather than taking a different path, so both routes end at the
+   * same confirmation and neither can quietly skip it.
+   */
+  const [pendingDelete, setPendingDelete] = useState<string[] | undefined>();
+
+  const confirmDelete = () => {
     // One message per file: the host already knows how to delete one, and a
     // bulk path would be a second way to do the same thing.
-    for (const f of picked) remove(f);
-    setPicked([]);
+    for (const f of pendingDelete ?? []) remove(f);
+    setPicked(p => p.filter(f => !(pendingDelete ?? []).includes(f)));
+    setPendingDelete(undefined);
   };
+
+  const pendingBytes = artifacts
+    .filter(a => (pendingDelete ?? []).includes(a.file))
+    .reduce((n, a) => n + a.bytes, 0);
+  const pendingNames = artifacts
+    .filter(a => (pendingDelete ?? []).includes(a.file))
+    .map(a => a.name);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -271,6 +279,7 @@ export function ArtifactsView() {
               onPick={add => setPicked(add
                 ? [...picked, a.file]
                 : picked.filter(f => f !== a.file))}
+              onAskDelete={() => setPendingDelete([a.file])}
             />
           ))
         )}
@@ -309,11 +318,31 @@ export function ArtifactsView() {
               label: `Delete ${picked.length}`,
               title: 'Delete the selected files from this machine',
               separator: true,
-              onClick: deletePicked,
+              onClick: () => setPendingDelete(picked),
             },
           ]}
         />
         </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          danger
+          title={pendingDelete.length === 1
+            ? 'Delete this artifact?'
+            : `Delete ${pendingDelete.length} artifacts?`}
+          message={
+            (pendingDelete.length === 1
+              ? `${pendingNames[0]} (${bytes(pendingBytes)}) will be removed from this machine.`
+              : `${pendingDelete.length} files totalling ${bytes(pendingBytes)} will be removed `
+                + 'from this machine.')
+            + ' This cannot be undone, and a dump collected from a pod that has since been '
+            + 'replaced cannot be collected again.'
+          }
+          confirmLabel={pendingDelete.length === 1 ? 'Delete' : `Delete ${pendingDelete.length}`}
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(undefined)}
+        />
       )}
 
       <div className="flex items-center gap-3 px-4 py-1.5 text-[10.5px] shrink-0"

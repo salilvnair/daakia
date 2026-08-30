@@ -331,9 +331,25 @@ export function ThreadAnalyzerView() {
         {suspects.length > 0 && (
           <div className="rounded-lg p-3.5 flex flex-col gap-3"
                style={{ border: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
-            <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
-              What the threads are doing
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+                What the threads are doing
+              </span>
+              <div className="flex-1" />
+            <ButtonView
+              label="Ask AI"
+              size="sm" variant="secondary"
+              accentColor={AI_ACCENT} color={AI_ACCENT}
+              onClick={askOverview}
+              title="Ask AI what this dump shows overall"
+              iconLeft={<SparkleIcon size={11} color={AI_ACCENT} />}
+              style={{
+                background: `color-mix(in srgb, ${AI_ACCENT} 14%, transparent)`,
+                borderColor: `color-mix(in srgb, ${AI_ACCENT} 40%, transparent)`,
+                fontWeight: 600,
+              }}
+            />
+            </div>
             {suspects.map(sus => {
               const color = sus.severity === 'critical' ? 'var(--color-error)'
                 : sus.severity === 'warning' ? 'var(--color-warning)'
@@ -534,18 +550,28 @@ export function ThreadAnalyzerView() {
                 {/* One thread is a question on its own — "why is this one
                     here" — and asking it should not mean selecting forty
                     lines of stack by hand first. */}
+                {/* Nothing to explain without a stack — some threads are
+                    reported by name and state alone, and asking about one
+                    would send the model a question it cannot answer. */}
                 <button
                   type="button"
+                  disabled={t.frames.length === 0}
                   onClick={e => { e.stopPropagation(); askThread(t); }}
-                  title={`Ask AI why ${t.name} is where it is`}
-                  className="flex items-center justify-center cursor-pointer shrink-0 mr-2"
+                  title={t.frames.length === 0
+                    ? 'No stack was recorded for this thread'
+                    : `Ask AI why ${t.name} is where it is`}
+                  className="flex items-center justify-center shrink-0 mr-2"
                   style={{
                     width: 24, height: 24, borderRadius: 4,
                     background: 'transparent', border: '1px solid transparent',
-                    color: AI_ACCENT,
+                    cursor: t.frames.length === 0 ? 'default' : 'pointer',
+                    opacity: t.frames.length === 0 ? 0.25 : 1,
                   }}
                 >
-                  <SparkleIcon size={12} color={AI_ACCENT} />
+                  <SparkleIcon
+                    size={12}
+                    color={t.frames.length === 0 ? 'var(--color-text-muted)' : AI_ACCENT}
+                  />
                 </button>
                 </div>
                 {expanded === `${t.name}-${i}` && (
