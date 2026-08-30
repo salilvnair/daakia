@@ -134,7 +134,7 @@ function ActionCard({ action }: { action: PodAction }) {
           {memoryBlocked && safety && (
             <span className="text-[10.5px] leading-relaxed" style={{ color: 'var(--color-error)' }}>
               Blocked: {safety.headline} You can turn the guard off in
-              {' '}Settings &rsaquo; Advanced &rsaquo; Doctor.
+              {' '}Settings &rsaquo; Advanced &rsaquo; dk8s.
             </span>
           )}
         </div>

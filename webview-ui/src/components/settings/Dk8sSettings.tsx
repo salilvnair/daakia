@@ -1,16 +1,21 @@
 /**
- * Doctor settings.
+ * dk8s settings.
  *
- * One switch that matters, so it gets room to explain itself rather than being
- * a line in a list. Turning it off is a real decision with a real consequence,
- * and the person making it should be able to read what that consequence is
- * without leaving the page.
+ * Everything about how dk8s behaves against a live cluster, including the
+ * diagnostics that used to live under a separate "Doctor" heading — they are
+ * dk8s features, collected from dk8s pods, and splitting them across two
+ * settings pages made the reader hunt for which page owned a switch.
+ *
+ * Switches here get room to explain themselves rather than being lines in a
+ * list. Turning one off is a real decision with a real consequence, and the
+ * person making it should be able to read what that consequence is without
+ * leaving the page.
  */
 import { useEffect } from 'react';
-import { StethoscopeIcon, MemoryIcon, WarningTriangleIcon } from '../../icons';
+import { Dk8sIcon, MemoryIcon, WarningTriangleIcon, StethoscopeIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 
-const ACCENT = 'var(--color-doctor)';
+const ACCENT = 'var(--color-dk8s)';
 
 function Toggle({ on, onChange, label, description, children }: {
   on: boolean;
@@ -41,7 +46,7 @@ function Toggle({ on, onChange, label, description, children }: {
   );
 }
 
-export function DoctorSettings() {
+export function Dk8sSettings() {
   const guardHeapDump = useK8sStore(s => s.guardHeapDump);
   const setGuardHeapDump = useK8sStore(s => s.setGuardHeapDump);
   const apply = useK8sStore(s => s.apply);
@@ -62,14 +67,27 @@ export function DoctorSettings() {
   return (
     <div className="flex flex-col gap-4 px-5 py-4 max-w-[680px]">
       <div className="flex items-center gap-2">
-        <StethoscopeIcon size={16} color={ACCENT} />
+        <Dk8sIcon size={16} color={ACCENT} />
         <span className="text-[14px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          Doctor
+          dk8s
         </span>
       </div>
       <span className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-        How dk8s behaves when collecting diagnostics from a running pod. Everything
-        here is about the cost to the pod, not to you.
+        How dk8s behaves against a live cluster.
+      </span>
+
+      {/* Sub-heading, so the page can grow other groups (log formats, artifact
+          retention) without the diagnostics switches losing their context. */}
+      <div className="flex items-center gap-1.5 mt-1">
+        <StethoscopeIcon size={12} color="var(--color-text-muted)" />
+        <span className="text-[9.5px] uppercase tracking-wider"
+              style={{ color: 'var(--color-text-muted)' }}>
+          collecting diagnostics
+        </span>
+        <div className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
+      </div>
+      <span className="text-[11px] leading-relaxed -mt-2" style={{ color: 'var(--color-text-muted)' }}>
+        Everything in this group is about the cost to the pod, not to you.
       </span>
 
       <Toggle
