@@ -1613,12 +1613,13 @@ input[type="number"] {
 /*
  * The destructive item, tinted through its label as well as its icon.
  *
- * dui's HudItem renders `label` as a plain string and puts no id on the
- * button, so there is nothing to hook but position. Delete is deliberately
- * last in the items array in ArtifactsView — if that order changes, this
- * follows it.
+ * Matched on the title rather than on position. dui wraps every HudItem in a
+ * `display: contents` div, so each button is the only one inside its own
+ * wrapper and `:last-of-type` matched all of them — which quietly turned
+ * Cancel red as well. The title is set in ArtifactsView and is the only stable
+ * hook the component gives us.
  */
-.dk8s-artifact-hud button:last-of-type {
+.dk8s-artifact-hud button[title^="Delete the selected"] {
   color: color-mix(in srgb, var(--color-error) 80%, transparent);
 }
 
@@ -1627,7 +1628,7 @@ input[type="number"] {
  * reads as "nothing special happens here". Tinted red so the hover agrees
  * with the label it is highlighting.
  */
-.dk8s-artifact-hud button:last-of-type:hover:not(:disabled) {
+.dk8s-artifact-hud button[title^="Delete the selected"]:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-error) 18%, transparent);
   color: var(--color-error);
 }

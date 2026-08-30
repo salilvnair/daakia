@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon,
+  SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
 } from '@salilvnair/dui';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { ExportLogsModal } from './ExportLogsModal';
@@ -488,41 +488,20 @@ export function PodGrid() {
 
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        {/* Selection mode. Off by default: checkboxes on every card all the
-            time would be clutter for the reading this grid is mostly used for.
-            Named for what it does rather than for one of the things it leads
-            to — it now reveals Search as well as Export, so calling it "Export
-            logs" described half of it. */}
+        {/* The same plain checkbox the Artifacts list uses, in the same place
+            beside the filter. A labelled green button announced a mode; a
+            checkbox is the mode, and it matches the one that appears on every
+            card the moment it is ticked. */}
         <button
           type="button"
           onClick={toggleSelectMode}
-          className="text-[11px] px-2.5 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
-          style={{
-            // Green for entering selection, red for leaving it — the same
-            // pairing the pod cards already use for healthy and failing, so
-            // the colour means the same thing here as it does there. Held at a
-            // wash rather than a fill: this is a mode switch, not an alarm.
-            background: selectMode
-              ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
-              : 'color-mix(in srgb, var(--color-success) 13%, transparent)',
-            border: `1px solid ${selectMode
-              ? 'color-mix(in srgb, var(--color-error) 45%, transparent)'
-              : 'color-mix(in srgb, var(--color-success) 42%, transparent)'}`,
-            color: selectMode
-              ? 'var(--color-error)'
-              : 'color-mix(in srgb, var(--color-success) 88%, var(--color-text-primary))',
-            fontWeight: 500,
-          }}
           title={selectMode ? 'Leave selection mode' : 'Pick pods to search or export their logs'}
+          className="flex items-center justify-center cursor-pointer shrink-0 border-none bg-transparent p-0"
+          style={{ width: 22, height: 22, marginLeft: 4 }}
         >
-          {/* Two different actions wearing one button, so they get two looks:
-              a ticked checkbox — the same shape the cards are about to grow —
-              and a red X to leave. */}
           {selectMode
-            ? <CloseIcon size={13} strokeWidth={2.2} />
-            : <CheckSquareIcon size={14} strokeWidth={1.9}
-                               style={{ color: 'var(--color-success)', opacity: 0.85 }} />}
-          {selectMode ? 'Cancel' : 'Select pods'}
+            ? <CheckSquareIcon size={19} color={ACCENT} />
+            : <EmptySquareIcon size={19} color="var(--color-text-muted)" />}
         </button>
 
         {/* Takes the row rather than capping at 560px — on a wide window the

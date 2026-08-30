@@ -304,7 +304,9 @@ export function ArtifactsView() {
           items={[
             {
               id: 'clear',
-              icon: <CloseIcon size={13} />,
+              // Red X, matching the pod grid's own convention: green to enter
+              // a selection, red to leave it.
+              icon: <CloseIcon size={13} color={DANGER} />,
               label: 'Cancel',
               title: 'Clear the selection',
               onClick: () => setPicked([]),

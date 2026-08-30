@@ -27,10 +27,35 @@ const ACCENT = 'var(--color-dk8s)';
 
 type AnalyzerId = 'heap' | 'threads' | 'logs';
 
-const ANALYZERS: { id: AnalyzerId; label: string; icon: React.ReactNode; tagline: string }[] = [
-  { id: 'heap', label: 'Heap Dump', icon: <MemoryIcon size={13} />, tagline: 'Retained sizes, dominators and leak suspects from a .hprof' },
-  { id: 'threads', label: 'Thread Dump', icon: <LayersIcon size={13} />, tagline: 'Deadlocks, lock contention and thread-state distribution' },
-  { id: 'logs', label: 'Logs', icon: <DocumentIcon size={13} />, tagline: 'Pattern extraction, bursts and anomaly detection' },
+/**
+ * A colour per analyzer, and the same one everywhere that analyzer appears.
+ *
+ * All three tabs were the dk8s cyan, so the only thing telling you which one
+ * you were in was the word. Memory, threads and text are three different
+ * questions about a pod, and giving each its own hue means the tab strip, the
+ * active fill and the icon all say the same thing at a glance.
+ */
+const ANALYZERS: {
+  id: AnalyzerId; label: string; icon: React.ReactNode; tagline: string; color: string;
+}[] = [
+  {
+    id: 'heap', label: 'Heap Dump',
+    icon: <MemoryIcon size={14} />,
+    tagline: 'Retained sizes, dominators and leak suspects from a .hprof',
+    color: 'var(--color-protocol-graphql, #e535ab)',
+  },
+  {
+    id: 'threads', label: 'Thread Dump',
+    icon: <LayersIcon size={14} />,
+    tagline: 'Deadlocks, lock contention and thread-state distribution',
+    color: 'var(--color-dk8s)',
+  },
+  {
+    id: 'logs', label: 'Logs',
+    icon: <DocumentIcon size={14} />,
+    tagline: 'Pattern extraction, bursts and anomaly detection',
+    color: 'var(--color-warning)',
+  },
 ];
 
 export function AnalyzeView() {
@@ -69,15 +94,20 @@ export function AnalyzeView() {
               type="button"
               onClick={() => pick(a.id)}
               title={a.tagline}
-              className="flex items-center gap-1.5 h-[26px] px-2.5 rounded-md text-[11.5px] cursor-pointer"
+              className="flex items-center gap-2 h-[30px] px-3 rounded-md text-[11.5px] cursor-pointer transition-colors"
               style={{
-                color: on ? ACCENT : 'var(--color-text-secondary)',
+                color: on ? a.color : 'var(--color-text-secondary)',
                 fontWeight: on ? 600 : 400,
-                background: on ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
-                border: `1px solid ${on ? `color-mix(in srgb, ${ACCENT} 34%, transparent)` : 'transparent'}`,
+                background: on ? `color-mix(in srgb, ${a.color} 13%, transparent)` : 'transparent',
+                border: `1px solid ${on ? `color-mix(in srgb, ${a.color} 36%, transparent)` : 'var(--color-surface-border)'}`,
               }}
             >
-              {a.icon}
+              {/* The icon keeps its colour when the tab is not active, so the
+                  strip reads as three things rather than one selected thing
+                  and two grey words. */}
+              <span style={{ color: a.color, opacity: on ? 1 : 0.7, display: 'flex' }}>
+                {a.icon}
+              </span>
               {a.label}
             </button>
           );
