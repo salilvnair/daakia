@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { Dk8sIcon, MemoryIcon, WarningTriangleIcon, StethoscopeIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { LogFormatSettings } from './LogFormatSettings';
+import { PvLogSettings } from './PvLogSettings';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -144,6 +145,7 @@ export function Dk8sSettings() {
 
       <div className="mt-3" />
       <LogFormatSettings />
+      <PvLogSettings />
     </div>
   );
 }

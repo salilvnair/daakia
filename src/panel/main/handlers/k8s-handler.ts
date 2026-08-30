@@ -1483,3 +1483,28 @@ export function handleDk8sCancelSearch(postMessage: PostMessage): void {
   activeSearch = undefined;
   postMessage({ type: 'dk8s:searchCancelled' });
 }
+
+/**
+ * Open an archived log file in the editor, at the line that matched.
+ *
+ * The pod behind an archived hit has usually been replaced — that is why the
+ * log is on the volume at all — so there is no live log to jump to. The file
+ * is opened read-only in a normal editor tab, where the search, folding and
+ * navigation people already know all work.
+ */
+export async function handleDk8sOpenLogFile(msg: Record<string, unknown>): Promise<void> {
+  const file = String(msg.file ?? '');
+  if (!file) return;
+  const line = Math.max(0, Number(msg.line ?? 1) - 1);
+  try {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+    const editor = await vscode.window.showTextDocument(doc, { preview: false });
+    const at = new vscode.Position(Math.min(line, doc.lineCount - 1), 0);
+    editor.selection = new vscode.Selection(at, at);
+    editor.revealRange(new vscode.Range(at, at), vscode.TextEditorRevealType.InCenter);
+  } catch (e) {
+    vscode.window.showErrorMessage(
+      `Could not open ${file}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+}

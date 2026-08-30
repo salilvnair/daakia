@@ -57,9 +57,30 @@ export const DEFAULT_OPTIONS: SearchOptions = {
   includePrevious: false,
 };
 
+/** One archived file that had hits, for the file list under a group. */
+export interface PvFileResult {
+  rel: string;
+  file: string;
+  bytes: number;
+  mtime: number;
+  scanned: number;
+  matched: number;
+  error?: string;
+}
+
 export interface PodGroup {
   result: PodSearchResult;
   matches: SearchMatch[];
+  /**
+   * Where these hits came from.
+   *
+   * A hit in a rotated file from last week means something different from one
+   * in a running pod, so the group says which it is rather than leaving the
+   * reader to infer it from the timestamps.
+   */
+  source?: 'live' | 'archive';
+  /** `archive` only: every file that matched, for the expandable list. */
+  files?: PvFileResult[];
 }
 
 interface SearchState {
@@ -72,6 +93,13 @@ interface SearchState {
   summary?: { pods: number; matched: number; scanned: number; stopped: boolean };
   /** Pods the user has collapsed in the result list. */
   collapsed: string[];
+  /** Whether this search included the mounted volume. */
+  archiveSearched: boolean;
+  /** True while the archive half is running, which is the slow half. */
+  scanningArchive: boolean;
+  /** Archive groups whose file list is expanded, keyed by pod. */
+  filesOpen: string[];
+  toggleFiles: (pod: string) => void;
   /**
    * Where the result list was scrolled, and whether a pod was opened from a
    * hit. Together these are what makes Back a return rather than an exit:
@@ -116,6 +144,15 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   cameFromSearch: false,
   picked: [],
   pickerOpen: false,
+  archiveSearched: false,
+  scanningArchive: false,
+  filesOpen: [],
+
+  toggleFiles: (pod) => set(s => ({
+    filesOpen: s.filesOpen.includes(pod)
+      ? s.filesOpen.filter(x => x !== pod)
+      : [...s.filesOpen, pod],
+  })),
   options: DEFAULT_OPTIONS,
   running: false,
   progress: { done: 0, total: 0 },
@@ -176,15 +213,48 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   apply: (msg) => {
     switch (msg.type) {
       case 'dk8s:searchStarted':
-        set({ running: true, groups: [], summary: undefined,
-              progress: { done: 0, total: msg.total as number } });
+        set({
+          running: true, groups: [], summary: undefined,
+          archiveSearched: !!msg.archive,
+          scanningArchive: false,
+          progress: { done: 0, total: msg.total as number },
+        });
         break;
 
       case 'dk8s:searchProgress':
-        set({ progress: {
-          done: msg.done as number, total: msg.total as number, pod: msg.pod as string,
-        } });
+        set({
+          scanningArchive: !!msg.archive,
+          progress: {
+            done: msg.done as number, total: msg.total as number, pod: msg.pod as string,
+          },
+        });
         break;
+
+      /*
+        The archive half.
+
+        Merged into the same list rather than kept apart: you are looking for
+        one string, and which half of the storage it turned up in is a property
+        of the hit, not a reason to read two result lists.
+      */
+      case 'dk8s:searchArchivePod': {
+        const r = msg.result as PodSearchResult & { files?: PvFileResult[] };
+        const matches = (msg.matches as SearchMatch[]) ?? [];
+        if (!r.matched && !r.error) break;
+        set(s => ({
+          groups: [...s.groups, {
+            result: r, matches, source: 'archive' as const, files: r.files ?? [],
+          }].sort((a, b) => {
+            if (!!a.result.error !== !!b.result.error) return a.result.error ? 1 : -1;
+            // Live before archive at the same hit count: the running pod is
+            // the one you can still act on.
+            if (b.result.matched !== a.result.matched) return b.result.matched - a.result.matched;
+            const rank = (g: PodGroup) => (g.source === 'archive' ? 1 : 0);
+            return rank(a) - rank(b);
+          }),
+        }));
+        break;
+      }
 
       case 'dk8s:searchPod': {
         const result = msg.result as PodSearchResult;
