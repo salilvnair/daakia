@@ -67,9 +67,12 @@ const RIBBON_BAND_W = 20;
 
   This was 720 when the strip carried four actions, and stayed near it after
   two of them moved to the right-click menu — so two buttons were being
-  stretched across a strip sized for four, with the padding to match. It sizes
-  to its content now; the constant is only a floor so a one-line selection
-  does not produce a strip narrower than its own shadow.
+  stretched across a strip sized for four, with the padding to match.
+
+  The strip sizes to its content; this is only what the placement math reserves
+  when it decides which side of the selection to sit on. Nothing enforces it as
+  a width, because a floor above the content width has to put the slack
+  somewhere, and wherever it goes it reads as a hole.
 */
 const TOOLBAR_W = 236;
 const TOOLBAR_H = 58;
@@ -401,7 +404,10 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
         background: 'var(--color-surface)',
         border: '1px solid var(--color-surface-border)',
         boxShadow: '0 10px 30px rgba(0,0,0,.6)',
-        minWidth: TOOLBAR_W,
+        // No floor width. TOOLBAR_W is what the placement math reserves, and
+        // enforcing it here as well made the strip wider than its own contents
+        // — the leftover slack collected between the count and the buttons and
+        // read as a hole in the strip.
       }}
       onMouseDown={e => e.preventDefault()}   // keep the selection alive
     >
@@ -412,12 +418,6 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
             }}>
         {lineCount} line{lineCount === 1 ? '' : 's'}
       </span>
-
-      {/* The strip has a floor width, so on a short selection there is slack
-          left over. It sits here rather than after the last button — trailing
-          space reads as a missing control, space after the count reads as a
-          gap between a label and its actions. */}
-      <div className="flex-1" />
 
       {/* Sized to their labels rather than stretched to fill. Two buttons
           spread across a strip built for four read as padding with words in
