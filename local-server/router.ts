@@ -39,7 +39,9 @@ import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces, handleDk8sSetNamespace,
   handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
-  handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
+  handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
+  handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
+  handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
   handleDk8sLogsOpen, handleDk8sLogsClose, handleDk8sDescribe,
@@ -133,6 +135,18 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:setGuardHeapDump':
       handleDk8sSetGuardHeapDump(msg, post);
+      break;
+    case 'dk8s:listArtifacts':
+      handleDk8sListArtifacts(post);
+      break;
+    case 'dk8s:importArtifact':
+      handleDk8sImportArtifact(post);
+      break;
+    case 'dk8s:deleteArtifact':
+      handleDk8sDeleteArtifact(msg, post);
+      break;
+    case 'dk8s:openArtifact':
+      handleDk8sOpenArtifact(msg, post, process.cwd());
       break;
     case 'dk8s:getFormats':
       handleDk8sGetFormats(post);

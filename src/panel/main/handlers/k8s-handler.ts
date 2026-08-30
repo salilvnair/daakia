@@ -21,9 +21,12 @@ import {
 } from '../../../services/k8s/k8s-logs';
 import * as vscode from 'vscode';
 import * as os from 'os';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { mkdir as mkdirp } from 'fs/promises';
-import { collectArtifact, type ArtifactKind, type CollectTarget } from '../../../services/k8s/k8s-artifacts';
+import {
+  collectArtifact, listArtifacts, analyzerFor,
+  type ArtifactKind, type CollectTarget,
+} from '../../../services/k8s/k8s-artifacts';
 import { readMemoryProfile, assessHeapDumpSafety } from '../../../services/k8s/k8s-memory';
 import {
   searchLogs, DEFAULT_SEARCH,
@@ -1157,11 +1160,12 @@ export async function handleDk8sAnalyze(
 
   // A histogram is not a heap dump — it is text, and the heap analyzer would
   // reject it. Route by what the file actually IS, not by which button
-  // produced it.
-  const analyzer =
-    kind === 'heapdump' ? 'heap'
-    : kind === 'threaddump' || kind === 'threaddump-sigquit' || kind === 'stackdump' ? 'threads'
-    : 'logs';
+  // produced it. An explicit analyzer wins, for imported files that have no
+  // collection kind to infer from.
+  const analyzer = (msg.analyzer as string | undefined)
+    ?? (kind === 'heapdump' ? 'heap'
+      : kind === 'threaddump' || kind === 'threaddump-sigquit' || kind === 'stackdump' ? 'threads'
+      : 'logs');
 
   // Tell the webview first, so the Doctor tab is already on screen when the
   // analyzer's own progress messages start arriving.
@@ -1178,6 +1182,85 @@ export async function handleDk8sAnalyze(
       handleLogsAnalyze({ path: file }, postMessage, extensionRoot);
       break;
   }
+}
+
+/** Everything dk8s has collected, plus anything imported alongside it. */
+export async function handleDk8sListArtifacts(postMessage: PostMessage): Promise<void> {
+  const dir = artifactDir();
+  postMessage({
+    type: 'dk8s:artifacts',
+    dir,
+    artifacts: await listArtifacts(dir),
+  });
+}
+
+/**
+ * Bring in a dump dk8s did not collect.
+ *
+ * Heap dumps get emailed around and copied off production by people who have
+ * never opened this extension, so an analyzer that can only read its own
+ * output would be useless for half the dumps anyone actually has.
+ */
+export async function handleDk8sImportArtifact(postMessage: PostMessage): Promise<void> {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: true,
+    title: 'Open a dump',
+    openLabel: 'Add',
+    filters: {
+      'Dumps and logs': ['hprof', 'txt', 'log', 'tdump', 'jstack', 'jfr'],
+      'All files': ['*'],
+    },
+  });
+  if (!picked?.length) return;
+
+  const { copyFile } = await import('fs/promises');
+  const dir = artifactDir();
+  await mkdirp(dir);
+
+  for (const uri of picked) {
+    const name = basename(uri.fsPath);
+    try {
+      // Copied rather than referenced: a dump analysed from someone's
+      // Downloads folder stops existing the moment they tidy up, and the list
+      // would then be full of entries that open nothing.
+      await copyFile(uri.fsPath, join(dir, name));
+    } catch (err) {
+      postMessage({ type: 'dk8s:artifactError', error: (err as Error).message });
+    }
+  }
+  await handleDk8sListArtifacts(postMessage);
+}
+
+export async function handleDk8sDeleteArtifact(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const file = String(msg.file ?? '');
+  if (!file) return;
+  // Only ever inside the artifact folder — a delete driven by a message must
+  // not be able to reach the rest of the filesystem.
+  if (!file.startsWith(artifactDir())) {
+    postMessage({ type: 'dk8s:artifactError', error: 'That file is not in the dk8s artifact folder.' });
+    return;
+  }
+  const { unlink } = await import('fs/promises');
+  try {
+    await unlink(file);
+  } catch (err) {
+    postMessage({ type: 'dk8s:artifactError', error: (err as Error).message });
+  }
+  await handleDk8sListArtifacts(postMessage);
+}
+
+/** Open a stored artifact in whichever analyzer understands it. */
+export async function handleDk8sOpenArtifact(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+  extensionRoot: string,
+): Promise<void> {
+  const file = String(msg.file ?? '');
+  if (!file) return;
+  await handleDk8sAnalyze({ file, analyzer: analyzerFor(file) }, postMessage, extensionRoot);
 }
 
 /** Reveal the artifact folder in the OS file manager. */

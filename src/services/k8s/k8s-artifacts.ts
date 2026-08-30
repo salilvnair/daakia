@@ -475,3 +475,89 @@ export async function collectArtifact(
   onProgress({ phase: 'done', detail: result.ok ? 'Collected.' : (result.error ?? 'Failed.') });
   return result;
 }
+
+// ── The artifact folder as a first-class thing ──────────────────────────────
+
+/**
+ * Everything dk8s has collected, read back off disk.
+ *
+ * Until now a collected dump was only visible in the panel that collected it
+ * and vanished when that pod was closed — so the folder filled up with files
+ * nothing in the app could see. Reading it back makes the collection durable
+ * and gives imported files somewhere to live alongside.
+ */
+export interface StoredArtifact {
+  file: string;
+  name: string;
+  kind: ArtifactKind | 'imported';
+  /** Parsed back out of the filename, where dk8s wrote it. */
+  pod?: string;
+  collectedAt?: number;
+  bytes: number;
+  /** Which analyzer opens this. */
+  analyzer: 'heap' | 'threads' | 'logs';
+}
+
+/** Which analyzer understands a file, by extension and by name. */
+export function analyzerFor(file: string): 'heap' | 'threads' | 'logs' {
+  const lower = file.toLowerCase();
+  if (lower.endsWith('.hprof')) return 'heap';
+  if (/threaddump|sigquit|stackdump|\.tdump$|\.jstack$/.test(lower)) return 'threads';
+  return 'logs';
+}
+
+/**
+ * Undo `artifactName`.
+ *
+ * The filename is the only record of which pod a dump came from — nothing
+ * else on disk says — so it is parsed back rather than stored in a sidecar
+ * that could go missing separately from the file it describes.
+ */
+export function parseArtifactName(name: string): {
+  pod?: string; kind?: ArtifactKind; collectedAt?: number;
+} {
+  const m = /^(.+?)__([a-z-]+)__(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})\.[^.]+$/.exec(name);
+  if (!m) return {};
+  const at = Date.parse(`${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`);
+  return {
+    pod: m[1],
+    kind: m[2] as ArtifactKind,
+    collectedAt: Number.isFinite(at) ? at : undefined,
+  };
+}
+
+export async function listArtifacts(dir: string): Promise<StoredArtifact[]> {
+  const { readdir } = await import('fs/promises');
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    // No folder yet simply means nothing has been collected.
+    return [];
+  }
+
+  const out: StoredArtifact[] = [];
+  for (const name of names) {
+    if (name.startsWith('.')) continue;
+    const file = join(dir, name);
+    let size = 0;
+    try {
+      const info = await stat(file);
+      if (!info.isFile()) continue;
+      size = info.size;
+    } catch {
+      continue;
+    }
+    const parsed = parseArtifactName(name);
+    out.push({
+      file, name,
+      kind: parsed.kind ?? 'imported',
+      pod: parsed.pod,
+      collectedAt: parsed.collectedAt,
+      bytes: size,
+      analyzer: analyzerFor(name),
+    });
+  }
+  // Newest first — during an incident the one you want is the one you just took.
+  return out.sort((a, b) => (b.collectedAt ?? 0) - (a.collectedAt ?? 0));
+}

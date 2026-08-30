@@ -82,7 +82,9 @@ import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
-  handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat, handleDk8sSetKubectlPath,
+  handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
+  handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
+  handleDk8sOpenArtifact, handleDk8sSetKubectlPath,
   handleDk8sWatchPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
@@ -375,6 +377,18 @@ export class MainPanel {
         break;
       case 'dk8s:setGuardHeapDump':
         handleDk8sSetGuardHeapDump(msg, this._post);
+        break;
+      case 'dk8s:listArtifacts':
+        handleDk8sListArtifacts(this._post);
+        break;
+      case 'dk8s:importArtifact':
+        handleDk8sImportArtifact(this._post);
+        break;
+      case 'dk8s:deleteArtifact':
+        handleDk8sDeleteArtifact(msg, this._post);
+        break;
+      case 'dk8s:openArtifact':
+        handleDk8sOpenArtifact(msg, this._post, this._extensionUri.fsPath);
         break;
       case 'dk8s:getFormats':
         handleDk8sGetFormats(this._post);

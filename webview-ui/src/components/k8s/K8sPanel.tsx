@@ -9,7 +9,7 @@
  * M1 is the way in: find kubectl, choose a cluster and namespace, and never
  * dead-end when a cluster says no.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Dk8sIcon, EyeIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
@@ -20,6 +20,8 @@ import { PodDetail } from './PodDetail';
 import { useDk8sAiStore, applyDk8sAiError } from '../../store/dk8s-ai-store';
 import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
+import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
+import { ArtifactsView } from './ArtifactsView';
 import { useTabsStore } from '../../store/tabs-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 
@@ -171,6 +173,54 @@ function Probing() {
   );
 }
 
+/**
+ * Pods or Artifacts.
+ *
+ * Artifacts is the other half of dk8s: collecting a dump is only useful if you
+ * can find it again, and analysing one you already have should not need a
+ * separate tab whose only job is a file picker.
+ */
+function ViewSwitch({ view, onChange }: {
+  view: 'pods' | 'artifacts';
+  onChange: (v: 'pods' | 'artifacts') => void;
+}) {
+  const count = useDk8sArtifactStore(s => s.artifacts.length);
+  return (
+    <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
+         style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+      {([['pods', 'Pods'], ['artifacts', 'Artifacts']] as const).map(([id, label]) => {
+        const on = view === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onChange(id)}
+            className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent transition-colors"
+            style={{
+              color: on ? ACCENT : 'var(--color-text-secondary)',
+              fontWeight: on ? 600 : 400,
+              borderBottom: `2px solid ${on ? ACCENT : 'transparent'}`,
+              marginBottom: -1,
+            }}
+          >
+            {label}
+            {id === 'artifacts' && count > 0 && (
+              <span className="text-[9.5px] px-1.5 py-0.5 rounded"
+                    style={{
+                      background: 'var(--color-surface-hover)',
+                      color: 'var(--color-text-muted)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}>
+                {count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function K8sPanel() {
   const stage = useK8sStore(s => s.stage);
   const apply = useK8sStore(s => s.apply);
@@ -179,6 +229,10 @@ export function K8sPanel() {
   const applyAi = useDk8sAiStore(s => s.apply);
   const applyDoctor = useDk8sDoctorStore(s => s.apply);
   const applySearch = useDk8sSearchStore(s => s.apply);
+  const applyArtifacts = useDk8sArtifactStore(s => s.apply);
+  // Pods or Artifacts. Local rather than persisted: you come back to dk8s to
+  // look at pods, so that is where it should always open.
+  const [view, setView] = useState<'pods' | 'artifacts'>('pods');
   const handoff = useDk8sDoctorStore(s => s.handoff);
   const clearHandoff = useDk8sDoctorStore(s => s.clearHandoff);
   const openDoctorTab = useTabsStore(s => s.openDoctorTab);
@@ -213,12 +267,13 @@ export function K8sPanel() {
       // pod store. Both are dk8s:-prefixed, so the split is by name.
       if (/^dk8s:(collect|handoff)/.test(type)) applyDoctor(msg);
       else if (/^dk8s:search/.test(type)) applySearch(msg);
+      else if (/^dk8s:artifact/.test(type)) applyArtifacts(msg);
       else apply(msg);
     };
     window.addEventListener('message', handler);
     probe();
     return () => window.removeEventListener('message', handler);
-  }, [apply, probe, applyAi, applyDoctor, applySearch]);
+  }, [apply, probe, applyAi, applyDoctor, applySearch, applyArtifacts]);
 
   return (
     // `relative` so the detail overlay can pin to this panel rather than the
@@ -234,7 +289,12 @@ export function K8sPanel() {
       {stage === 'unreachable' && <UnreachableNotice />}
       {stage === 'ask-sensitivity' && <SensitivityPrompt />}
       {stage === 'pick-namespace' && <NamespaceMultiPicker />}
-      {stage === 'ready' && <PodGrid />}
+      {stage === 'ready' && (
+        <>
+          <ViewSwitch view={view} onChange={setView} />
+          {view === 'pods' ? <PodGrid /> : <ArtifactsView />}
+        </>
+      )}
 
       {detail && <PodDetail />}
     </div>
