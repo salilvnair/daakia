@@ -1423,7 +1423,9 @@ async function searchArchives(
       // The context travels with the ref: it is what `{env}` resolves from,
       // and without it a prod pod would read every environment's claim.
       out = await searchPvForPod(
-        cfg, { namespace: t.namespace, pod: t.pod, context: t.context }, opts, signal,
+        cfg,
+        { namespace: t.namespace, pod: t.pod, context: t.context, workload: t.workload },
+        opts, signal,
       );
     } catch (e) {
       postMessage({

@@ -131,7 +131,10 @@ interface SearchState {
   /** Back from that pod: reopens the results where they were. */
   returnToSearch: () => void;
   setOptions: (patch: Partial<SearchOptions>) => void;
-  run: (targets: { context: string; namespace: string; pod: string; containers?: string[] }[]) => void;
+  run: (targets: {
+    context: string; namespace: string; pod: string;
+    containers?: string[]; workload?: string;
+  }[]) => void;
   cancel: () => void;
   toggleCollapsed: (pod: string) => void;
   clear: () => void;

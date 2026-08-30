@@ -89,6 +89,18 @@ export interface PvLogConfig {
    * cannot tell a prod claim from a dev one, so it may find both.
    */
   envByContext?: Record<string, string>;
+  /**
+   * What `{app}` means, for pods the derivation gets wrong.
+   *
+   * Almost never needed: a pod's owner is authoritative and Kubernetes hands
+   * it to us. This is for the two cases it cannot cover — a bare pod with no
+   * owning workload, and a claim whose directory is named something other
+   * than the workload (`payments-api` writing into `payments/`).
+   *
+   * Keys are matched as case-insensitive substrings of the pod name, longest
+   * first.
+   */
+  appByPod?: Record<string, string>;
 }
 
 /**
@@ -140,15 +152,17 @@ export function clearPvCache(): void {
 }
 
 /**
- * The application name behind a pod name.
+ * The application name guessed from a pod name.
  *
- * `zp-backend-7f9455548d-xm6kc` → `zp-backend`. A volume is almost always laid
- * out per application rather than per pod — a directory per pod would grow
- * without bound — so this is the placeholder that usually matters.
+ * `zp-backend-7f9455548d-xm6kc` → `zp-backend`. Deployments add a ReplicaSet
+ * hash and a pod suffix; StatefulSets add an ordinal; DaemonSets add one
+ * suffix, and peeling from the right handles all three.
  *
- * Deployments add a ReplicaSet hash and a pod suffix; StatefulSets add an
- * ordinal; DaemonSets add one suffix. Peeling from the right handles all three
- * without needing to ask the API server what owns the pod.
+ * It is a guess, and only the last resort — see `appOf`. A pod named
+ * `test-abc` has a three-character tail that is not a Kubernetes suffix, and
+ * this returns `test-abc`; an application whose own name ends in something
+ * hash-shaped loses a segment it should have kept. Neither is knowable from
+ * the string alone, which is why the owner is asked first.
  */
 export function appNameOf(pod: string): string {
   let s = pod;
@@ -171,8 +185,17 @@ export interface PodRef {
   namespace: string;
   pod: string;
   container?: string;
-  /** Used to pick which mounts apply. */
+  /** Used to pick which mounts apply, and to resolve `{env}`. */
   context?: string;
+  /**
+   * The owning workload's name, straight from the pod's ownerReferences.
+   *
+   * This is what `{app}` should be whenever we have it. Kubernetes knows the
+   * answer — a Deployment's pods carry a reference to their ReplicaSet, which
+   * carries one to the Deployment — so deriving the name from the pod string
+   * is guesswork we only need when there is no owner at all.
+   */
+  workload?: string;
 }
 
 /**
@@ -181,11 +204,13 @@ export interface PodRef {
  * Returns segments rather than a single string so the walker can tell a
  * literal directory from one that has to be globbed.
  */
-export function expandTemplate(template: string, ref: PodRef, env = '*'): string {
+export function expandTemplate(
+  template: string, ref: PodRef, env = '*', app = appNameOf(ref.pod),
+): string {
   return template
     .replace(/\{namespace\}/g, ref.namespace)
     .replace(/\{pod\}/g, ref.pod)
-    .replace(/\{app\}/g, appNameOf(ref.pod))
+    .replace(/\{app\}/g, app)
     .replace(/\{env\}/g, env)
     .replace(/\{container\}/g, ref.container ?? '*')
     // A date placeholder means "any date": pinning today's would miss the
@@ -200,6 +225,24 @@ export function expandTemplate(template: string, ref: PodRef, env = '*'): string
  * `preprod` — substring matching would otherwise pick whichever was declared
  * first, which is not something a user can see or reason about.
  */
+/**
+ * What `{app}` expands to, in order of how much it is trusted.
+ *
+ *   1. an explicit mapping, because the user knows their own layout
+ *   2. the owning workload, because Kubernetes knows the answer
+ *   3. the pod name with its hash peeled off, because something is better
+ *      than nothing for a bare pod
+ */
+export function appOf(cfg: PvLogConfig, ref: PodRef): string {
+  const pod = ref.pod.toLowerCase();
+  const keys = Object.keys(cfg.appByPod ?? {}).sort((a, b) => b.length - a.length);
+  for (const k of keys) {
+    if (k.trim() && pod.includes(k.trim().toLowerCase())) return cfg.appByPod![k];
+  }
+  if (ref.workload?.trim()) return ref.workload.trim();
+  return appNameOf(ref.pod);
+}
+
 export function envFor(cfg: PvLogConfig, ref: PodRef): string {
   const ctx = (ref.context ?? '').toLowerCase();
   if (!ctx) return '*';
@@ -346,17 +389,17 @@ export async function filesForPod(
     const template = (m.template ?? cfg.template ?? '').trim();
     if (!template) continue;
 
-    const expanded = expandTemplate(template, ref, envFor(cfg, ref));
+    const expanded = expandTemplate(template, ref, envFor(cfg, ref), appOf(cfg, ref));
     for (const f of await matchTemplate(cfg, root, expanded, now)) {
       found.set(f.file, {
         ...f, mount: m.label ?? m.path,
-        namespace: ref.namespace, pod: ref.pod, app: appNameOf(ref.pod),
+        namespace: ref.namespace, pod: ref.pod, app: appOf(cfg, ref),
       });
     }
   }
 
   if (cfg.pattern?.trim()) {
-    const app = appNameOf(ref.pod);
+    const app = appOf(cfg, ref);
     for (const f of applyPattern(await walkMounts(cfg, ref, now), cfg.pattern.trim())) {
       if (found.has(f.file)) continue;
       // A pattern with no groups cannot say who a file belongs to, so fall

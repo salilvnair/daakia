@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-  filesForPod, probePv, clearPvCache, expandTemplate, envFor, type PvLogConfig,
+  filesForPod, probePv, clearPvCache, expandTemplate, envFor, appOf, type PvLogConfig,
 } from './pv-logs';
 import { searchPvForPod } from './pv-search';
 import { DEFAULT_SEARCH } from './k8s-log-search';
@@ -122,5 +122,46 @@ describe('{app}-{env}-pvc / {app}-{env}-logs', () => {
     expect(p.mounts[0].topLevel.sort())
       .toEqual(['zp-backend-dev-pvc', 'zp-backend-prod-pvc', 'zp-payments-prod-pvc']);
     expect(p.fileCount).toBe(5);
+  });
+});
+
+describe('what {app} resolves to', () => {
+  const base: PvLogConfig = { enabled: true };
+
+  it('prefers the owning workload, because Kubernetes knows the answer', () => {
+    // Two replicas of the same Deployment: different pod names, one app.
+    expect(appOf(base, { namespace: 'n', pod: 'test-7f9455548d-xm6kc', workload: 'test' })).toBe('test');
+    expect(appOf(base, { namespace: 'n', pod: 'test-7f9455548d-aa111', workload: 'test' })).toBe('test');
+  });
+
+  it('falls back to peeling the pod name when there is no owner', () => {
+    expect(appOf(base, { namespace: 'n', pod: 'test-7f9455548d-xm6kc' })).toBe('test');
+  });
+
+  it('gets a bare pod wrong without an owner — which is why the mapping exists', () => {
+    // `-xxx` is not a Kubernetes suffix, so there is nothing in the string
+    // that says where the name ends.
+    expect(appOf(base, { namespace: 'n', pod: 'test-xxx' })).toBe('test-xxx');
+    expect(appOf({ ...base, appByPod: { 'test-': 'test' } }, { namespace: 'n', pod: 'test-xxx' }))
+      .toBe('test');
+  });
+
+  it('lets a mapping override even a known workload', () => {
+    // For a claim whose directory is not named after the workload.
+    const cfg: PvLogConfig = { ...base, appByPod: { 'payments-api': 'payments' } };
+    expect(appOf(cfg, { namespace: 'n', pod: 'payments-api-abc12-xy9zq', workload: 'payments-api' }))
+      .toBe('payments');
+  });
+
+  it('prefers the longer key when two mappings both match', () => {
+    const cfg: PvLogConfig = { ...base, appByPod: { 'zp-': 'wrong', 'zp-backend': 'zp-backend' } };
+    expect(appOf(cfg, { namespace: 'n', pod: 'zp-backend-7f9455548d-xm6kc' })).toBe('zp-backend');
+  });
+
+  it('reaches the right directory for two replicas of one Deployment', async () => {
+    const a = await filesForPod(cfg(), { ...prodPod, pod: 'zp-backend-7f9455548d-xm6kc', workload: 'zp-backend' });
+    const b = await filesForPod(cfg(), { ...prodPod, pod: 'zp-backend-7f9455548d-zzzzz', workload: 'zp-backend' });
+    expect(a.map(f => f.rel)).toEqual(b.map(f => f.rel));
+    expect(a.length).toBe(3);
   });
 });

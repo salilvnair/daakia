@@ -29,6 +29,8 @@ export interface PvLogConfig {
   maxAgeDays?: number;
   /** Context substring → the token `{env}` expands to. */
   envByContext?: Record<string, string>;
+  /** Pod-name substring → the token `{app}` expands to. Rarely needed. */
+  appByPod?: Record<string, string>;
 }
 
 export interface PvSampleFile { rel: string; bytes: number; mtime: number }
@@ -74,6 +76,7 @@ export const DEFAULT_PV: PvLogConfig = {
   */
   template: '{app}-{env}-pvc/{app}-{env}-logs/**/{app}*.log*',
   envByContext: {},
+  appByPod: {},
   extensions: ['.log'],
   maxAgeDays: 0,
 };

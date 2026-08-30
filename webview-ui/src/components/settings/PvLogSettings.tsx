@@ -30,6 +30,56 @@ function when(ms?: number): string {
   return new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
 }
 
+/**
+ * Rows of `match → value`.
+ *
+ * Pairs rather than an object while editing, because a half-typed key is a
+ * real state and an object would drop the row the moment the key went blank.
+ */
+function MapEditor({ rows, onChange, keyPlaceholder, valuePlaceholder }: {
+  rows: [string, string][];
+  onChange: (rows: [string, string][]) => void;
+  keyPlaceholder: string;
+  valuePlaceholder: string;
+}) {
+  const setRow = (i: number, k: string, v: string) =>
+    onChange(rows.map((r, j) => (j === i ? [k, v] : r)) as [string, string][]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {rows.map(([k, v], i) => (
+        <div key={i} className="flex items-center gap-2">
+          <TextInputView
+            value={k} size="md" accentColor={ACCENT} placeholder={keyPlaceholder}
+            onChange={e => setRow(i, e.target.value, v)}
+            style={{ width: '100%', fontFamily: 'monospace' }}
+          />
+          <span className="text-[11px] shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+            &rarr;
+          </span>
+          <TextInputView
+            value={v} size="md" accentColor={ACCENT} placeholder={valuePlaceholder}
+            onChange={e => setRow(i, k, e.target.value)}
+            style={{ width: '100%', fontFamily: 'monospace' }}
+          />
+          <ButtonView
+            label="" size="md" variant="secondary"
+            iconLeft={<TrashIcon size={12} />}
+            onClick={() => onChange(rows.filter((_, j) => j !== i))}
+            style={{ background: 'transparent' }}
+          />
+        </div>
+      ))}
+      <ButtonView
+        label="Add a mapping" size="sm" variant="secondary"
+        iconLeft={<PlusIcon size={11} />}
+        onClick={() => onChange([...rows, ['', '']])}
+        style={{ background: 'transparent', alignSelf: 'flex-start' }}
+      />
+    </div>
+  );
+}
+
 function Field({ label, hint, children }: {
   label: string; hint?: React.ReactNode; children: React.ReactNode;
 }) {
@@ -64,11 +114,13 @@ export function PvLogSettings() {
 
   // Kept as pairs rather than an object while editing: a half-typed key is a
   // real state, and an object would drop the row the moment the key is blank.
-  const envRows = Object.entries(draft.envByContext ?? {});
+  const envRows = Object.entries(draft.envByContext ?? {}) as [string, string][];
   const setEnv = (rows: [string, string][]) =>
     patch({ envByContext: Object.fromEntries(rows) });
-  const setEnvRow = (i: number, k: string, v: string) =>
-    setEnv(envRows.map((r, j) => (j === i ? [k, v] : r)) as [string, string][]);
+
+  const appRows = Object.entries(draft.appByPod ?? {}) as [string, string][];
+  const setApp = (rows: [string, string][]) =>
+    patch({ appByPod: Object.fromEntries(rows) });
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -229,39 +281,24 @@ export function PvLogSettings() {
             + 'cannot tell a prod claim from a dev one.'
           }
         >
-          <div className="flex flex-col gap-2">
-            {envRows.map(([k, v], i) => (
-              <div key={i} className="flex items-center gap-2">
-                <TextInputView
-                  value={k} size="md" accentColor={ACCENT}
-                  placeholder="context contains…"
-                  onChange={e => setEnvRow(i, e.target.value, v)}
-                  style={{ width: '100%', fontFamily: 'monospace' }}
-                />
-                <span className="text-[11px] shrink-0" style={{ color: 'var(--color-text-muted)' }}>
-                  &rarr;
-                </span>
-                <TextInputView
-                  value={v} size="md" accentColor={ACCENT}
-                  placeholder="prod"
-                  onChange={e => setEnvRow(i, k, e.target.value)}
-                  style={{ width: '100%', fontFamily: 'monospace' }}
-                />
-                <ButtonView
-                  label="" size="md" variant="secondary"
-                  iconLeft={<TrashIcon size={12} />}
-                  onClick={() => setEnv(envRows.filter((_, j) => j !== i))}
-                  style={{ background: 'transparent' }}
-                />
-              </div>
-            ))}
-            <ButtonView
-              label="Add a mapping" size="sm" variant="secondary"
-              iconLeft={<PlusIcon size={11} />}
-              onClick={() => setEnv([...envRows, ['', '']])}
-              style={{ background: 'transparent', alignSelf: 'flex-start' }}
-            />
-          </div>
+          <MapEditor rows={envRows} onChange={setEnv}
+                     keyPlaceholder="context contains…" valuePlaceholder="prod" />
+        </Field>
+
+        <Field
+          label="what {app} means"
+          hint={
+            <>
+              Usually nothing to do here. <code>{'{app}'}</code> is the pod&rsquo;s owning
+              workload, which Kubernetes reports directly — two replicas of one Deployment
+              both resolve to the same name without any guessing. This is for the two cases
+              that cannot cover: a bare pod with no owner, and a directory named something
+              other than the workload. Match part of a pod name on the left.
+            </>
+          }
+        >
+          <MapEditor rows={appRows} onChange={setApp}
+                     keyPlaceholder="pod name contains…" valuePlaceholder="app" />
         </Field>
 
         <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>

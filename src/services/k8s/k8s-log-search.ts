@@ -26,6 +26,11 @@ export interface SearchTarget {
   namespace: string;
   pod: string;
   containers?: string[];
+  /**
+   * The owning workload's name, for resolving `{app}` against an archive.
+   * Unused by the live search — kubectl needs only the pod.
+   */
+  workload?: string;
 }
 
 export interface SearchOptions {

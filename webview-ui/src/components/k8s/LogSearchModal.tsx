@@ -156,6 +156,9 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     run(chosen.map(p => ({
       context: p.context!, namespace: p.namespace, pod: p.name,
       containers: p.containers.map(c => c.name),
+      // Kubernetes' own answer for what this pod belongs to, so the archive
+      // search does not have to guess it back out of the pod name.
+      workload: p.workload?.name,
     })));
   }, [chosen, run]);
 
