@@ -412,6 +412,7 @@ export function LogViewer() {
   const draggingRef = useRef(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(400);
+  const [viewportW, setViewportW] = useState(0);
   const [foldTraces, setFoldTraces] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const [toolbar, setToolbar] = useState<{ top: number; left: number } | null>(null);
@@ -454,16 +455,94 @@ export function LogViewer() {
   // Sized from the largest number it will hold, so the column does not shift
   // as you scroll from line 99 to line 100.
   const gutterWidth = `${Math.max(2, String(rows.length).length)}ch`;
-  const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const last = Math.min(total, Math.ceil((scrollTop + viewportH) / ROW_HEIGHT) + OVERSCAN);
+
+  /**
+   * Real heights for the rows that have been on screen.
+   *
+   * With wrap on a row is not one line tall — a stack frame or a long JSON
+   * payload takes two or three — so treating every row as ROW_HEIGHT made the
+   * spacer shorter than the content. The last rows then fell outside the
+   * scrollable area: the view stopped short of the end, and setting a
+   * scrollTop past the (too-short) spacer got clamped by the browser, which
+   * read as the scrollbar flickering and snapping back.
+   */
+  const heightsRef = useRef<number[]>([]);
+  const [measuredAt, setMeasuredAt] = useState(0);
+  const remeasure = useRef<number | undefined>(undefined);
+
+  // Rows are re-derived on filter, fold and new lines, so old measurements
+  // would be attached to different content.
+  useEffect(() => {
+    heightsRef.current = [];
+    setMeasuredAt(v => v + 1);
+  }, [visible, foldTraces, expanded, logWrap, viewportW]);
+
+  /**
+   * Where each row starts. Recomputed only when heights change — never on
+   * scroll, which is the path that has to stay cheap.
+   */
+  const offsets = useMemo(() => {
+    const out = new Float64Array(rows.length + 1);
+    const known = heightsRef.current;
+    for (let i = 0; i < rows.length; i++) {
+      out[i + 1] = out[i] + (known[i] || ROW_HEIGHT);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, measuredAt]);
+
+  const contentHeight = offsets[rows.length] || 0;
+
+  /** Binary search rather than a divide: heights are no longer uniform. */
+  const rowAt = useCallback((y: number) => {
+    let lo = 0;
+    let hi = rows.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (offsets[mid + 1] <= y) lo = mid + 1; else hi = mid;
+    }
+    return Math.min(lo, Math.max(0, rows.length - 1));
+  }, [offsets, rows.length]);
+
+  const first = Math.max(0, rowAt(scrollTop) - OVERSCAN);
+  const last = Math.min(total, rowAt(scrollTop + viewportH) + 1 + OVERSCAN);
   const slice = rows.slice(first, last);
+
+  /**
+   * Record what a row actually measured.
+   *
+   * Batched into one frame: a row reporting its height triggers a re-layout
+   * that can make its neighbours report theirs, and applying each
+   * individually would re-render per row.
+   */
+  const measureRow = useCallback((index: number, el: HTMLDivElement | null) => {
+    if (!el) return;
+    const h = el.offsetHeight;
+    if (!h || heightsRef.current[index] === h) return;
+    heightsRef.current[index] = h;
+    if (remeasure.current === undefined) {
+      remeasure.current = window.requestAnimationFrame(() => {
+        remeasure.current = undefined;
+        setMeasuredAt(v => v + 1);
+      });
+    }
+  }, []);
+
+  useEffect(() => () => {
+    if (remeasure.current !== undefined) cancelAnimationFrame(remeasure.current);
+  }, []);
 
   useEffect(() => {
     if (!scrollRef.current) return;
     const el = scrollRef.current;
-    const ro = new ResizeObserver(() => setViewportH(el.clientHeight));
+    const ro = new ResizeObserver(() => {
+      setViewportH(el.clientHeight);
+      // A width change re-wraps every line, so every measured height is stale.
+      setViewportW(el.clientWidth);
+    });
     ro.observe(el);
     setViewportH(el.clientHeight);
+    setViewportW(el.clientWidth);
     return () => ro.disconnect();
   }, []);
 
@@ -507,8 +586,8 @@ export function LogViewer() {
     if (rowIndex === -1) rowIndex = Math.min(visibleIndex, rows.length - 1);
 
     setLogFollow(false);
-    el.scrollTop = Math.max(0, rowIndex * ROW_HEIGHT - el.clientHeight / 3);
-  }, [visible, rows, setLogFollow]);
+    el.scrollTop = Math.max(0, offsets[rowIndex] - el.clientHeight / 3);
+  }, [visible, rows, offsets, setLogFollow]);
 
   // ── Selection ──
   //
@@ -863,8 +942,8 @@ export function LogViewer() {
               </span>
             </div>
           ) : (
-            <div style={{ height: total * ROW_HEIGHT, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: first * ROW_HEIGHT, left: 0, right: 0 }}>
+            <div style={{ height: contentHeight, position: 'relative' }}>
+              <div style={{ position: 'absolute', top: offsets[first], left: 0, right: 0 }}>
                 {slice.map((row, i) => {
                   const line = row.line;
                   const isOpen = expanded.has(line.seq);
@@ -875,6 +954,7 @@ export function LogViewer() {
                   return (
                     <div
                       key={`${line.seq}-${i}`}
+                      ref={el => measureRow(first + i, el)}
                       data-seq={line.seq}
                       className="flex gap-2.5 items-start"
                       style={{
@@ -954,7 +1034,7 @@ export function LogViewer() {
         <DensityRibbon
           lines={visible}
           scrollTop={scrollTop}
-          contentHeight={total * ROW_HEIGHT}
+          contentHeight={contentHeight}
           viewportHeight={viewportH}
           onJump={jumpTo}
           onScrollTo={(top) => {
