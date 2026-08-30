@@ -12,7 +12,7 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@salilvnair/convengine-chat": "^1.6.4",
-    "@salilvnair/dui": "^1.0.7",
+    "@salilvnair/dui": "file:../../dui",
     "@salilvnair/state-machine": "^1.0.1",
     "@xyflow/react": "^12.6.4",
     "graphql": "^17.0.2",

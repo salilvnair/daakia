@@ -15,8 +15,14 @@ import { useK8sStore } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-dk8s)';
-/** Every control in this dialog uses the same dui size, so they line up. */
-const SIZE = 'sm';
+/**
+ * Every control in this dialog uses the same dui size, so they line up.
+ *
+ * `md` rather than `sm`: these are the dialog's primary choices — the range
+ * and the slice — and at `sm` they read as incidental settings next to the
+ * checkboxes below them.
+ */
+const SIZE = 'md';
 
 type RangeKind = 'all' | '30m' | '1h' | '2h' | 'between';
 type SliceKind = 'all' | 'head' | 'tail';
