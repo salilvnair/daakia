@@ -40,6 +40,17 @@ export interface AnalyzePlan {
   truncated: boolean;
 }
 
+/**
+ * The same plan for a caller whose lines are not log lines.
+ *
+ * A thread dump's evidence is assembled here rather than streamed from a pod,
+ * but the question the dialog answers — how much is about to leave this
+ * machine — is identical, and so is the arithmetic.
+ */
+export function planAnalyzeText(texts: string[]): AnalyzePlan {
+  return planAnalyze(texts.map((text, i) => ({ seq: i, level: 'other', text }) as LogLine));
+}
+
 export function planAnalyze(lines: LogLine[]): AnalyzePlan {
   const total = lines.length;
   const truncated = total > ANALYZE_FULL_LIMIT;
@@ -84,13 +95,22 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 
 export function AnalyzeModal({
   plan, podName, includeContext, onIncludeContext, onCancel, onConfirm,
+  title = 'Send this log to AI',
+  bufferLabel = 'in the buffer',
 }: {
   plan: AnalyzePlan;
   podName: string;
-  includeContext: boolean;
-  onIncludeContext: (v: boolean) => void;
+  /**
+   * The pod-state checkbox, when there is a pod. A thread dump opened from a
+   * file has no pod to describe, and offering to include state we do not have
+   * would be offering nothing.
+   */
+  includeContext?: boolean;
+  onIncludeContext?: (v: boolean) => void;
   onCancel: () => void;
   onConfirm: () => void;
+  title?: string;
+  bufferLabel?: string;
 }) {
   const loud = plan.totalLines > LOUD_ABOVE;
 
@@ -98,7 +118,7 @@ export function AnalyzeModal({
     <ModalView
       open
       onClose={onCancel}
-      title="Send this log to AI"
+      title={title}
       subtitle={podName}
       size="md"
       headerColor={ACCENT}
@@ -118,7 +138,7 @@ export function AnalyzeModal({
       <div className="flex flex-col gap-4 py-1">
         <div className="flex gap-7 flex-wrap px-3.5 py-3 rounded-lg"
              style={{ background: 'var(--color-surface-hover)' }}>
-          <Stat label="in the buffer" value={plan.totalLines.toLocaleString()} />
+          <Stat label={bufferLabel} value={plan.totalLines.toLocaleString()} />
           <Stat label="lines sent" value={plan.sentLines.toLocaleString()}
                 tone={plan.truncated ? 'var(--color-warning)' : 'var(--color-success)'} />
           <Stat label="size" value={human(plan.bytes)} />
@@ -162,9 +182,11 @@ export function AnalyzeModal({
           </span>
         )}
 
+        {/* Only where there is a pod to describe. */}
+        {onIncludeContext && (
         <div className="flex flex-col gap-2">
           <CheckboxView
-            checked={includeContext}
+            checked={!!includeContext}
             onChange={onIncludeContext}
             size="sm"
             accentColor={ACCENT}
@@ -177,6 +199,7 @@ export function AnalyzeModal({
             restarted fourteen times&rdquo; are different questions.
           </span>
         </div>
+        )}
 
         {/* Said plainly, once. This is the only thing in dk8s that sends
             anything anywhere. */}

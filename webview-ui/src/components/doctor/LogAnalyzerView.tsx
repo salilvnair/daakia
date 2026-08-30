@@ -130,12 +130,9 @@ function LevelToggle({ on, onClick, color, count, label }: {
 /** ERROR / WARN / INFO as a readable pill rather than an 8px square. */
 function LevelPill({ level }: { level: Level }) {
   /*
-    No level, no pill.
-
-    A shape whose lines carried no level was rendering an outlined box with a
-    dash in it — which reads as a control that failed to load rather than as
-    "this one has no level". The space is kept so the counts beside it still
-    line up down the column.
+    An unlevelled shape reserves the width without drawing anything, so the
+    counts beside it stay in a column. The column itself only exists when
+    something in the file has a level — see `anyLevel`.
   */
   if (level === 'UNKNOWN') return <span className="shrink-0" style={{ width: 52 }} />;
 
@@ -207,6 +204,19 @@ export function LogAnalyzerView() {
       (!q || t.template.toLowerCase().includes(q)) &&
       (wanted.size === 0 || wanted.has(topLevel(t))));
   }, [loaded, filter, onlyError, onlyWarn]);
+
+  /*
+    Does anything here have a level at all?
+
+    A connection snapshot or a plain text file has none — every row would
+    reserve 52px for a pill that is never drawn, indenting the whole list away
+    from its own left edge for no reason. The column earns its place only when
+    it carries something.
+  */
+  const anyLevel = useMemo(
+    () => (loaded?.verdict.templates ?? []).some(t => topLevel(t) !== 'UNKNOWN'),
+    [loaded],
+  );
 
   /** Lines, not shapes: "123 err" means 123 lines, which is what people mean. */
   const levelCounts = useMemo(() => {
@@ -381,14 +391,21 @@ export function LogAnalyzerView() {
               style={{ background: 'var(--color-surface-hover)', color: 'var(--color-text-primary)',
                        border: '1px solid var(--color-surface-border)', minWidth: 200 }}
             />
-            <LevelToggle
-              on={onlyError} onClick={() => setOnlyError(v => !v)}
-              color="var(--color-error)" count={levelCounts.err} label="err"
-            />
-            <LevelToggle
-              on={onlyWarn} onClick={() => setOnlyWarn(v => !v)}
-              color="var(--color-warning)" count={levelCounts.wrn} label="wrn"
-            />
+            {/* Same rule as the column: in a file with no levels at all — a
+                connection snapshot, a plain text dump — "0 err" and "0 wrn"
+                are not answers, they are two dead controls. */}
+            {anyLevel && (
+              <>
+                <LevelToggle
+                  on={onlyError} onClick={() => setOnlyError(v => !v)}
+                  color="var(--color-error)" count={levelCounts.err} label="err"
+                />
+                <LevelToggle
+                  on={onlyWarn} onClick={() => setOnlyWarn(v => !v)}
+                  color="var(--color-warning)" count={levelCounts.wrn} label="wrn"
+                />
+              </>
+            )}
             <span className="text-[11px] text-[var(--color-text-muted)] font-mono tabular-nums">
               {templates.length} of {v.distinctTemplates}
             </span>
@@ -403,7 +420,7 @@ export function LogAnalyzerView() {
                      className="flex items-center gap-3 px-3 py-2 text-[11.5px] font-mono"
                      style={{ background: 'var(--color-surface)',
                               borderTop: i === 0 ? 'none' : '1px solid var(--color-surface-border)' }}>
-                  <LevelPill level={lvl} />
+                  {anyLevel && <LevelPill level={lvl} />}
 
                   <span className="tabular-nums text-right shrink-0"
                         style={{ width: 62, color: 'var(--color-text-primary)', fontWeight: 600 }}>

@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ButtonView } from '@salilvnair/dui';
 import { SparkleIcon } from '../../icons';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { AnalyzeModal, planAnalyzeText, type AnalyzePlan } from '../k8s/AnalyzeModal';
 import { parseFrame, summariseStack, type FrameOrigin } from './thread-frame';
 import { postMsg } from '../../vscode';
 import { LayersIcon, CloseCircleIcon, StethoscopeIcon } from '../../icons';
@@ -171,8 +172,9 @@ export function ThreadAnalyzerView() {
    * `NioSocketImpl.implRead` on screen. Two answers to one question is worse
    * than either answer alone.
    */
-  const askOverview = () => {
-    if (!loaded) return;
+  /** The pack, as lines, so its size can be shown before any of it is sent. */
+  const overviewLines = (): string[] => {
+    if (!loaded) return [];
     const v = loaded.verdict;
     const found = v.suspects ?? [];
 
@@ -208,10 +210,29 @@ export function ThreadAnalyzerView() {
       lines.push(`  … ${loaded.threads.length - 80} more, omitted`);
     }
 
+    return lines;
+  };
+
+  /**
+   * Confirm before sending, exactly as the pod log view does.
+   *
+   * A thread dump is not a handful of lines — thirty-seven threads with their
+   * stacks and groupings runs to hundreds — and this is the last point at
+   * which someone can see how much is about to leave the machine.
+   */
+  const [plan, setPlan] = useState<AnalyzePlan | null>(null);
+
+  const askOverview = () => {
+    if (!loaded) return;
+    setPlan(planAnalyzeText(overviewLines()));
+  };
+
+  const sendOverview = () => {
+    setPlan(null);
     ask({
       promptKey: 'dk8s.threads.explain',
       title: 'What these threads are doing',
-      evidence: lines.join('\n'),
+      evidence: overviewLines().join('\n'),
       evidenceLabel: 'THREAD DUMP',
       podContext: {},
     });
@@ -254,6 +275,17 @@ export function ThreadAnalyzerView() {
     );
   }
 
+  const modal = plan && loaded ? (
+    <AnalyzeModal
+      plan={plan}
+      podName={loaded.name}
+      title="Send this thread dump to AI"
+      bufferLabel="in the pack"
+      onCancel={() => setPlan(null)}
+      onConfirm={sendOverview}
+    />
+  ) : null;
+
   if (!loaded) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
@@ -288,6 +320,7 @@ export function ThreadAnalyzerView() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      {modal}
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-2 flex-wrap flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
@@ -376,11 +409,11 @@ export function ThreadAnalyzerView() {
               </span>
               <div className="flex-1" />
             <ButtonView
-              label="Ask AI"
+              label="Analyze"
               size="sm" variant="secondary"
               accentColor={AI_ACCENT} color={AI_ACCENT}
               onClick={askOverview}
-              title="Ask AI what this dump shows overall"
+              title="Send this dump to AI and get a reading of it"
               iconLeft={<SparkleIcon size={11} color={AI_ACCENT} />}
               style={{
                 background: `color-mix(in srgb, ${AI_ACCENT} 14%, transparent)`,
@@ -528,19 +561,6 @@ export function ThreadAnalyzerView() {
             <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
               Threads
             </span>
-            <ButtonView
-              label="Ask AI"
-              size="sm" variant="secondary"
-              accentColor={AI_ACCENT} color={AI_ACCENT}
-              onClick={askOverview}
-              title="Ask AI what this dump shows overall"
-              iconLeft={<SparkleIcon size={11} color={AI_ACCENT} />}
-              style={{
-                background: `color-mix(in srgb, ${AI_ACCENT} 14%, transparent)`,
-                borderColor: `color-mix(in srgb, ${AI_ACCENT} 40%, transparent)`,
-                fontWeight: 600,
-              }}
-            />
             <input
               value={filter} onChange={e => setFilter(e.target.value)}
               placeholder="Filter by name or frame…"
