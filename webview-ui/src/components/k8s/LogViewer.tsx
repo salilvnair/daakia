@@ -335,15 +335,16 @@ function Sep() {
 }
 
 /**
- * A display mode.
+ * A square icon control, sized to the buttons beside it.
  *
- * Square and icon-only, at the same height as the buttons beside it: wrap and
- * folding change how the lines are drawn rather than fetching anything, and as
+ * Two uses, one shape. `on` present makes it a toggle — wrap and folding
+ * change how the lines are drawn rather than fetching anything, and as
  * labelled checkboxes they were the only things in the bar with a different
- * shape and a different hit target.
+ * shape and hit target. `on` absent makes it a plain action, and the missing
+ * aria-pressed is the point: Download is not a state.
  */
-function IconToggle({ on, onClick, title, icon }: {
-  on: boolean; onClick: () => void; title: string; icon: React.ReactNode;
+function IconButton({ on, onClick, title, icon }: {
+  on?: boolean; onClick: () => void; title: string; icon: React.ReactNode;
 }) {
   return (
     <button
@@ -353,11 +354,12 @@ function IconToggle({ on, onClick, title, icon }: {
       aria-pressed={on}
       className="flex items-center justify-center cursor-pointer shrink-0"
       style={{
-        // 28 to the pixel, because that is what dui renders every control in
-        // this bar at. A toggle two pixels taller than its neighbours is the
-        // kind of thing you see without being able to name.
-        width: 28, height: 28, borderRadius: 6,
-        color: on ? ACCENT : 'var(--color-text-muted)',
+        // 28 square with a 4px radius, because that is exactly what dui
+        // renders every button and select in this bar at. Both numbers were
+        // eyeballed before and both were wrong — 30 tall and 6 round — which
+        // is the kind of thing you see without being able to name.
+        width: 28, height: 28, borderRadius: 4,
+        color: on ? ACCENT : 'var(--color-text-secondary)',
         background: on ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
         border: `1px solid ${on ? `color-mix(in srgb, ${ACCENT} 38%, transparent)` : 'var(--color-surface-border)'}`,
       }}
@@ -839,10 +841,10 @@ export function LogViewer() {
         <div className="flex items-center gap-2 flex-wrap justify-end">
         {/* Modes, not actions, so they are icon toggles rather than labelled
             buttons — and they sit apart from the controls that fetch. */}
-        <IconToggle on={logWrap} onClick={() => setLogWrap(!logWrap)}
+        <IconButton on={logWrap} onClick={() => setLogWrap(!logWrap)}
                     title={logWrap ? 'Wrapping long lines' : 'Long lines run off the right'}
                     icon={<WrapLinesIcon size={13} />} />
-        <IconToggle on={foldTraces} onClick={() => setFoldTraces(!foldTraces)}
+        <IconButton on={foldTraces} onClick={() => setFoldTraces(!foldTraces)}
                     title={foldTraces ? 'Stack traces are folded' : 'Stack traces shown in full'}
                     icon={<LayersIcon size={13} />} />
 
@@ -863,6 +865,13 @@ export function LogViewer() {
           onChange={v => setLogDirection(v as 'last' | 'first')}
           options={[{ value: 'last', label: 'last' }, { value: 'first', label: 'first' }]}
           size={CTL_SIZE}
+          // dui defaults to `pill`, and a fully round track next to a row of
+          // rounded-rectangle selects and buttons is the one shape that does
+          // not belong. Every other segmented control in dk8s already says
+          // this; this one was relying on the default. `sm` rather than the
+          // variant's own `md`, so the corner matches the selects beside it.
+          variant="rounded"
+          borderRadius="sm"
           accentColor={ACCENT}
         />
 
@@ -942,14 +951,13 @@ export function LogViewer() {
 
         <Sep />
 
-        <ButtonView
-          label="Download"
-          size={CTL_SIZE}
-          variant="secondary"
+        {/* Icon only. A quiet outlined button next to Analyze's filled one
+            read as two buttons that could not agree what they were; as an
+            icon it is plainly a different class of thing. */}
+        <IconButton
           onClick={openLogExport}
-          title="Write this pod's log to a file, with the same options as a bulk export"
-          iconLeft={<DownloadIcon size={12} color="var(--color-text-secondary)" />}
-          style={{ background: 'transparent' }}
+          title="Download — write this pod's log to a file, with the same options as a bulk export"
+          icon={<DownloadIcon size={13} />}
         />
 
         <ButtonView
