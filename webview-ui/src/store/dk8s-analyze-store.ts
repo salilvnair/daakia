@@ -34,14 +34,11 @@ interface AnalyzeState {
   analyzer: AnalyzerId;
   /** Undefined until an analyzer has something loaded. */
   header?: AnalysisHeader;
-  /** The AI panel, beside the analysis rather than over it. */
-  aiOpen: boolean;
 
   openAnalyzer: (which?: AnalyzerId) => void;
   close: () => void;
   setAnalyzer: (a: AnalyzerId) => void;
   setHeader: (h: AnalysisHeader | undefined) => void;
-  toggleAi: () => void;
 }
 
 /**
@@ -65,7 +62,6 @@ export function openArtifactIn(analyzer: AnalyzerId): void {
 export const useDk8sAnalyzeStore = create<AnalyzeState>((set) => ({
   open: false,
   analyzer: 'heap',
-  aiOpen: false,
 
   openAnalyzer: (which) => set(s => ({ open: true, analyzer: which ?? s.analyzer })),
 
@@ -75,5 +71,4 @@ export const useDk8sAnalyzeStore = create<AnalyzeState>((set) => ({
 
   setAnalyzer: (analyzer) => set({ analyzer, header: undefined }),
   setHeader: (header) => set({ header }),
-  toggleAi: () => set(s => ({ aiOpen: !s.aiOpen })),
 }));

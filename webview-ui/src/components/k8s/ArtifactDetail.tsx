@@ -21,6 +21,7 @@ import { HeapAnalyzerView } from '../doctor/HeapAnalyzerView';
 import { ThreadAnalyzerView } from '../doctor/ThreadAnalyzerView';
 import { LogAnalyzerView } from '../doctor/LogAnalyzerView';
 import { AiAnswerPanel } from './AiAnswerPanel';
+import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 
 const AI_ACCENT = 'var(--color-protocol-ai)';
 
@@ -43,9 +44,37 @@ const TABS: { id: AnalyzerId; label: string; icon: React.ReactNode; color: strin
   },
 ];
 
+/** The pod header's stat column, to the pixel. */
+function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)]">{label}</span>
+      <span className="text-[11.5px]"
+            style={{ color: color ?? 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export function ArtifactDetail() {
-  const { open, analyzer, header, aiOpen, close, setAnalyzer, toggleAi } = useDk8sAnalyzeStore();
+  const { open, analyzer, header, close, setAnalyzer } = useDk8sAnalyzeStore();
   const importFile = useDk8sArtifactStore(s => s.importFile);
+
+  /*
+    The panel's own open flag, not a second one.
+
+    This kept `aiOpen` in the analyze store and rendered the panel behind it —
+    but AiAnswerPanel already hides itself on `useDk8sAiStore.open`, which is
+    what `ask()` sets. So asking a question opened the AI store while this
+    wrapper kept the panel unmounted, and every sparkle on every thread row
+    did nothing visible. One flag, owned by the panel, exactly as the pod
+    detail does it.
+  */
+  const aiOpen = useDk8sAiStore(s => s.open);
+  const openAi = useDk8sAiStore(s => s.openPanel);
+  const closeAi = useDk8sAiStore(s => s.closePanel);
+  const answers = useDk8sAiStore(s => s.answers);
 
   // Which analyzers have been shown, and so must stay mounted. One that has
   // never been opened costs nothing; one that has stays as you left it.
@@ -75,8 +104,12 @@ export function ArtifactDetail() {
     <div className="absolute inset-0 z-20 flex flex-col"
          style={{ background: 'var(--color-bg, var(--color-surface))' }}>
 
-      {/* ── What you are looking at ── */}
-      <div className="flex items-center gap-2.5 px-3 py-2 flex-shrink-0"
+      {/* ── Header ──
+          Built to the pod detail's measurements, not to its own: same gap,
+          same px-4 py-3, the same two-line name block, and the metadata as
+          stat columns rather than a run-on line. Two screens that do the same
+          job at two different heights read as two different products. */}
+      <div className="flex items-center gap-3 px-4 py-3 shrink-0"
            style={{
              borderBottom: '1px solid var(--color-surface-border)',
              background: `linear-gradient(to right, color-mix(in srgb, ${active.color} 8%, transparent), transparent 60%)`,
@@ -86,19 +119,33 @@ export function ArtifactDetail() {
           <ChevronLeftIcon size={16} color="var(--color-text-secondary)" />
         </button>
 
+        {/* Where the pod header carries a status dot, this carries the kind —
+            it is the one thing about an artifact you cannot infer from the
+            file name at a glance. */}
         <span style={{ color: active.color, display: 'flex' }}>{active.icon}</span>
 
-        {/* The file, and what the parse found in it. Published by whichever
-            analyzer is loaded — see AnalysisHeader. */}
-        <span className="text-[13px] font-semibold truncate"
-              style={{ color: 'var(--color-text-primary)', maxWidth: '46%' }}>
-          {header?.name ?? active.label}
-        </span>
-        {header?.meta && (
-          <span className="text-[11px] font-mono truncate"
-                style={{ color: 'var(--color-text-muted)' }}>
-            {header.meta}
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[13.5px] font-mono truncate"
+                style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+            {header?.name ?? active.label}
           </span>
+          <span className="text-[10.5px] text-[var(--color-text-muted)] truncate">
+            {active.label}
+          </span>
+        </div>
+
+        {/* Published by whichever analyzer is loaded — see AnalysisHeader.
+            Split on the separator the analyzers already use, so each fact gets
+            its own column like the pod's status, ready, restarts and age. */}
+        {header?.meta && (
+          <div className="flex items-center gap-5 ml-4 flex-wrap">
+            {header.meta.split('·').map((part, i) => {
+              const [value, ...rest] = part.trim().split(' ');
+              return (
+                <Stat key={i} label={rest.join(' ') || 'detail'} value={value} />
+              );
+            })}
+          </div>
         )}
 
         <div className="flex-1" />
@@ -113,10 +160,11 @@ export function ArtifactDetail() {
         {/* A toggle, not a launcher: the same control shows and hides the
             panel, which is how the pod log view does it. */}
         <ButtonView
-          label="AI" size="sm" variant="secondary"
+          label={`AI${answers.length > 0 ? ` · ${answers.length}` : ''}`}
+          size="sm" variant="secondary"
           accentColor={AI_ACCENT} color={aiOpen ? AI_ACCENT : 'var(--color-text-secondary)'}
-          onClick={toggleAi}
-          title={aiOpen ? 'Hide the AI panel' : 'Show the AI panel'}
+          onClick={aiOpen ? closeAi : openAi}
+          title={aiOpen ? 'Hide AI analysis' : 'Show AI analysis'}
           iconLeft={<SparkleIcon size={11} color={aiOpen ? AI_ACCENT : 'var(--color-text-muted)'} />}
           style={{
             background: aiOpen
@@ -131,7 +179,7 @@ export function ArtifactDetail() {
       </div>
 
       {/* ── Which analyzer ── */}
-      <div className="flex items-center gap-1 px-3 pt-1.5 flex-shrink-0"
+      <div className="flex items-center gap-1 px-4 pt-1 shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         {TABS.map(t => {
           const on = t.id === analyzer;
@@ -171,7 +219,9 @@ export function ArtifactDetail() {
           ))}
         </div>
 
-        {aiOpen && <AiAnswerPanel />}
+        {/* Rendered always; it hides itself when there is nothing to show,
+            which is what keeps the toggle and the panel from disagreeing. */}
+        <AiAnswerPanel />
       </div>
     </div>
   );
