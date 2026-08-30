@@ -407,6 +407,12 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
         {lineCount} line{lineCount === 1 ? '' : 's'}
       </span>
 
+      {/* The strip has a floor width, so on a short selection there is slack
+          left over. It sits here rather than after the last button — trailing
+          space reads as a missing control, space after the count reads as a
+          gap between a label and its actions. */}
+      <div className="flex-1" />
+
       {/* Sized to their labels rather than stretched to fill. Two buttons
           spread across a strip built for four read as padding with words in
           it. */}
