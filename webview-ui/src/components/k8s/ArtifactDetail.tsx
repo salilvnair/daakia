@@ -44,6 +44,26 @@ const TABS: { id: AnalyzerId; label: string; icon: React.ReactNode; color: strin
   },
 ];
 
+/**
+ * Split a collected artifact's file name into a title and where it came from.
+ *
+ * dk8s names what it collects `<pod>__<kind>__<timestamp>.<ext>`, and the pod
+ * name is the long half — `zp-backend-hung-59cc469bd7-wbgk6` is 31 characters
+ * of which the last 17 are hashes. Leading with the whole string pushed the
+ * part that distinguishes one dump from another off the end of the line.
+ *
+ * So the title is what identifies this file among that pod's dumps, and the
+ * pod moves to the subtitle beside the analyzer's name — the same place the
+ * pod detail puts a pod's namespace and context.
+ *
+ * A file opened from disk has no such structure and keeps its whole name.
+ */
+export function splitArtifactName(name: string): { title: string; pod?: string } {
+  const parts = name.split('__');
+  if (parts.length < 2) return { title: name };
+  return { title: parts.slice(1).join('__'), pod: parts[0] };
+}
+
 /** The pod header's stat column, to the pixel. */
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -124,13 +144,16 @@ export function ArtifactDetail() {
             file name at a glance. */}
         <span style={{ color: active.color, display: 'flex' }}>{active.icon}</span>
 
-        <div className="flex flex-col gap-0.5 min-w-0">
+<div className="flex flex-col gap-0.5 min-w-0">
           <span className="text-[13.5px] font-mono truncate"
                 style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-            {header?.name ?? active.label}
+            {header ? splitArtifactName(header.name).title : active.label}
           </span>
           <span className="text-[10.5px] text-[var(--color-text-muted)] truncate">
-            {active.label}
+            {(() => {
+              const pod = header ? splitArtifactName(header.name).pod : undefined;
+              return pod ? `${pod} · ${active.label}` : active.label;
+            })()}
           </span>
         </div>
 
@@ -140,10 +163,14 @@ export function ArtifactDetail() {
         {header?.meta && (
           <div className="flex items-center gap-5 ml-4 flex-wrap">
             {header.meta.split('·').map((part, i) => {
-              const [value, ...rest] = part.trim().split(' ');
-              return (
-                <Stat key={i} label={rest.join(' ') || 'detail'} value={value} />
-              );
+              const text = part.trim();
+              // "37 threads" is a number and its unit, so it splits into a
+              // stat. "2026-08-29 07:48:05" is one value in two words, and
+              // splitting it produced a date labelled by a time.
+              const m = /^([\d.,]+(?::\d+)?)\s+(.+)$/.exec(text);
+              return m
+                ? <Stat key={i} label={m[2]} value={m[1]} />
+                : <Stat key={i} label="taken" value={text} />;
             })}
           </div>
         )}

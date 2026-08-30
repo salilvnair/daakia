@@ -95,6 +95,18 @@ export function filterLines(lines: LogLine[], spec: LogFilterSpec): MatchedLine[
 
   const out: MatchedLine[] = [];
   for (const line of lines) {
+    /*
+      A line whose message is empty.
+
+      Logback writes one before a stack trace, and `kubectl --timestamps`
+      prefixes it like any other, so it arrives as a timestamp with nothing
+      after it. Rendered, that is a row carrying a clock and no content, which
+      reads as the viewer having failed rather than as the blank line it is.
+
+      Dropped from the view only. The buffer keeps it, so a download and an
+      export are still byte-for-byte what the pod wrote.
+    */
+    if (!line.text.trim()) continue;
     if (levelSet && !levelSet.has(line.level)) continue;
     if (!match) { out.push(line); continue; }
     const hits = match(line.text);

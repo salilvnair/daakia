@@ -26,6 +26,8 @@ import {
 import * as vscode from 'vscode';
 import * as os from 'os';
 import { join, basename } from 'path';
+// `recursive: true` at every call site: plain mkdir throws EEXIST on a
+// directory that is already there, which is every call after the first.
 import { mkdir as mkdirp } from 'fs/promises';
 import {
   collectArtifact, listArtifacts, analyzerFor,
@@ -1288,7 +1290,7 @@ export async function handleDk8sImportArtifact(postMessage: PostMessage): Promis
 
   const { copyFile } = await import('fs/promises');
   const dir = artifactDir();
-  await mkdirp(dir);
+  await mkdirp(dir, { recursive: true });
 
   for (const uri of picked) {
     const name = basename(uri.fsPath);
@@ -1339,7 +1341,7 @@ export async function handleDk8sOpenArtifact(
 /** Reveal the artifact folder in the OS file manager. */
 export async function handleDk8sRevealArtifacts(): Promise<void> {
   const dir = artifactDir();
-  await mkdirp(dir);
+  await mkdirp(dir, { recursive: true });
   await vscode.env.openExternal(vscode.Uri.file(dir));
 }
 

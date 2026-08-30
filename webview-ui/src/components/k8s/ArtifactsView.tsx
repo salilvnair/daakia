@@ -238,9 +238,16 @@ export function ArtifactsView() {
                       borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
                     }} />
 
-        <ButtonView label="Folder" size="md" variant="secondary"
+        {/* "Folder" named a noun and left you to guess the verb. It opens the
+            directory these files live in, in the system file manager — the
+            path is in the footer, and this saves copying it. */}
+        <ButtonView label="Show folder" size="md" variant="secondary"
                     iconLeft={<FolderOpenIcon size={12} />}
-                    onClick={reveal} style={{ background: 'transparent' }} />
+                    onClick={reveal}
+                    title={dir
+                      ? `Open ${dir} in your file manager`
+                      : 'Open the artifact folder in your file manager'}
+                    style={{ background: 'transparent' }} />
       </div>
 
       {error && (
