@@ -8,52 +8,20 @@
  * required.
  */
 import { useState } from 'react';
-import { ModalView, ButtonView, TextInputView, DateTimeInputView } from '@salilvnair/dui';
+import {
+  ModalView, ButtonView, TextInputView, DateTimeInputView, SegmentedControlView,
+} from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-dk8s)';
+/** Every control in this dialog uses the same dui size, so they line up. */
+const SIZE = 'sm';
 
 type RangeKind = 'all' | '30m' | '1h' | '2h' | 'between';
 type SliceKind = 'all' | 'head' | 'tail';
 
 const RANGE_SECONDS: Record<string, number> = { '30m': 1800, '1h': 3600, '2h': 7200 };
-
-function Segment<T extends string>({ options, value, onChange }: {
-  options: { id: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
-  return (
-    // inline-flex, not flex: a block-level flex container stretches to the full
-    // row and draws its border around the empty remainder, which read as a
-    // mysterious extra segment after the last option.
-    <div className="inline-flex rounded-md overflow-hidden flex-wrap self-start"
-         style={{ border: '1px solid var(--color-surface-border)' }}>
-      {options.map((o, i) => (
-        <button
-          key={o.id}
-          type="button"
-          onClick={() => onChange(o.id)}
-          className="text-[11.5px] px-3 py-1.5 cursor-pointer transition-colors"
-          style={{
-            background: value === o.id ? `color-mix(in srgb, ${ACCENT} 16%, transparent)` : 'transparent',
-            color: value === o.id ? ACCENT : 'var(--color-text-secondary)',
-            border: 'none',
-            // No divider after the last one — it drew a rule against the
-            // container's own border.
-            borderRight: i === options.length - 1
-              ? 'none'
-              : '1px solid var(--color-surface-border)',
-            fontWeight: value === o.id ? 600 : 400,
-          }}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -134,16 +102,19 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
     >
       <div className="flex flex-col gap-4 py-1">
         <Field label="Time range">
-          <Segment<RangeKind>
+          <SegmentedControlView
             value={range}
-            onChange={setRange}
+            onChange={v => setRange(v as RangeKind)}
             options={[
-              { id: 'all', label: 'Complete log' },
-              { id: '30m', label: 'Last 30 min' },
-              { id: '1h', label: 'Last hour' },
-              { id: '2h', label: 'Last 2 hours' },
-              { id: 'between', label: 'Between…' },
+              { value: 'all', label: 'Complete log' },
+              { value: '30m', label: 'Last 30 min' },
+              { value: '1h', label: 'Last hour' },
+              { value: '2h', label: 'Last 2 hours' },
+              { value: 'between', label: 'Between\u2026' },
             ]}
+            size={SIZE}
+            variant="rounded"
+            accentColor={ACCENT}
           />
         </Field>
 
@@ -153,9 +124,9 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
             `YYYY-MM-DDTHH:mm` value shape, so it is a straight swap. */}
         {range === 'between' && (
           <div className="flex items-center gap-2 flex-wrap">
-            <DateTimeInputView value={from} onChange={setFrom} size="sm" color={ACCENT} />
+            <DateTimeInputView value={from} onChange={setFrom} size={SIZE} color={ACCENT} />
             <span className="text-[11px] text-[var(--color-text-muted)]">to</span>
-            <DateTimeInputView value={to} onChange={setTo} size="sm" color={ACCENT} />
+            <DateTimeInputView value={to} onChange={setTo} size={SIZE} color={ACCENT} />
           </div>
         )}
 
@@ -168,20 +139,23 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
               : 'The last N lines of the range — where a pod usually dies.'}
         >
           <div className="flex items-center gap-2 flex-wrap">
-            <Segment<SliceKind>
+            <SegmentedControlView
               value={slice}
-              onChange={setSlice}
+              onChange={v => setSlice(v as SliceKind)}
               options={[
-                { id: 'all', label: 'Everything' },
-                { id: 'head', label: 'Head' },
-                { id: 'tail', label: 'Tail' },
+                { value: 'all', label: 'Everything' },
+                { value: 'head', label: 'Head' },
+                { value: 'tail', label: 'Tail' },
               ]}
+              size={SIZE}
+              variant="rounded"
+              accentColor={ACCENT}
             />
             {slice !== 'all' && (
               <TextInputView
                 value={lines}
                 onChange={e => setLines(e.target.value.replace(/[^0-9]/g, ''))}
-                size="sm" accentColor={ACCENT}
+                size={SIZE} accentColor={ACCENT}
                 style={{ width: 90, fontFamily: 'monospace' }}
               />
             )}

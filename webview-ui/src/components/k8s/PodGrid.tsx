@@ -17,7 +17,7 @@ import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
-import { FolderExportIcon, CloseIcon, SearchIcon } from '../../icons';
+import { FolderExportIcon, CloseIcon, SearchIcon, SelectAllIcon } from '../../icons';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
   formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
@@ -442,8 +442,11 @@ export function PodGrid() {
                            placeholder="Filter pods  ( / )" size="sm" width="100%" />
         </div>
 
-        {/* Bulk export. Off by default: checkboxes on every card all the time
-            would be clutter for the reading this grid is mostly used for. */}
+        {/* Selection mode. Off by default: checkboxes on every card all the
+            time would be clutter for the reading this grid is mostly used for.
+            Named for what it does rather than for one of the things it leads
+            to — it now reveals Search as well as Export, so calling it "Export
+            logs" described half of it. */}
         <button
           type="button"
           onClick={toggleSelectMode}
@@ -458,14 +461,14 @@ export function PodGrid() {
             color: selectMode ? 'var(--color-error)' : 'var(--color-text-primary)',
             fontWeight: 500,
           }}
-          title={selectMode ? 'Leave selection mode' : 'Pick pods and export their logs'}
+          title={selectMode ? 'Leave selection mode' : 'Pick pods to search or export their logs'}
         >
           {/* Two different actions wearing one button, so they get two looks:
-              an amber export mark against white text, and a red X to leave. */}
+              a select mark in the cluster accent, and a red X to leave. */}
           {selectMode
             ? <CloseIcon size={13} strokeWidth={2.2} />
-            : <FolderExportIcon size={13} strokeWidth={1.9} style={{ color: 'var(--color-warning)' }} />}
-          {selectMode ? 'Cancel' : 'Export logs'}
+            : <SelectAllIcon size={13} strokeWidth={1.9} style={{ color: 'var(--color-dk8s)' }} />}
+          {selectMode ? 'Cancel' : 'Select pods'}
         </button>
 
         <WatchIndicator />
