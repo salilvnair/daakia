@@ -8,7 +8,7 @@
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
 import { useUiStateStore } from './ui-state-store';
-import { useTabsStore } from './tabs-store';
+import { useK8sStore } from './k8s-store';
 
 export interface StoredArtifact {
   file: string;
@@ -42,10 +42,10 @@ export const useDk8sArtifactStore = create<ArtifactState>((set) => ({
   reveal: () => postMsg({ type: 'dk8s:revealArtifacts' }),
 
   open: (a) => {
-    // Point the Doctor tab at the right analyzer BEFORE it mounts, or a thread
-    // dump lands on the heap analyzer's empty state and reads as a failure.
+    // Select the analyzer BEFORE switching, or a thread dump lands on the heap
+    // analyzer's empty state and reads as the open having failed.
     useUiStateStore.getState().setPref('doctor.analyzer', a.analyzer);
-    useTabsStore.getState().openDoctorTab();
+    useK8sStore.getState().setPanel('analyze');
     postMsg({ type: 'dk8s:openArtifact', file: a.file });
   },
 

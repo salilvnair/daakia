@@ -108,3 +108,32 @@ export const useUiStateStore = create<UiStateStore>((set, get) => ({
     });
   },
 }));
+
+/**
+ * A piece of UI state that survives closing Daakia.
+ *
+ * Which settings section you were reading, which subtab, which panel was
+ * expanded — all of it was `useState`, so every reopen dropped you back on the
+ * first tab of the first section and you had to navigate to your place again.
+ * These are single strings, which is what `prefs` already persists to SQLite,
+ * so the fix is to read and write them there instead.
+ *
+ * `valid` guards against a stored value that no longer names anything — a
+ * renamed subtab would otherwise restore as a blank pane.
+ *
+ * Reads follow the store rather than only seeding from it, so a write from
+ * somewhere else (the command palette jumping to a section) moves an
+ * already-mounted panel instead of being picked up on its next mount.
+ */
+export function usePersistedPref<T extends string>(
+  key: string,
+  fallback: T,
+  valid?: readonly T[],
+): [T, (v: T) => void] {
+  const stored = useUiStateStore(s => s.prefs[key]) as T | undefined;
+  const ok = stored !== undefined && (!valid || valid.includes(stored));
+  return [
+    ok ? stored : fallback,
+    (v: T) => useUiStateStore.getState().setPref(key, v),
+  ];
+}

@@ -7,7 +7,7 @@
  * stream will use — so what you see here is what the log view will do, not a
  * second implementation that can drift from it.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ButtonView, TextInputView, MultilineInputView, SegmentedControlView,
   CheckboxView, SelectInputView,
@@ -15,6 +15,7 @@ import {
 import { SparkleIcon, TrashIcon, PlusIcon, SpinnerIcon, WarningTriangleIcon } from '../../icons';
 import { useDk8sFormatStore, type LogFormat, type PreviewRow } from '../../store/dk8s-format-store';
 import { levelColor } from '../k8s/log-view';
+import { useUiStateStore } from '../../store/ui-state-store';
 
 const ACCENT = 'var(--color-dk8s)';
 const AI_ACCENT = 'var(--color-protocol-ai)';
@@ -69,17 +70,24 @@ function PreviewLine({ row }: { row: PreviewRow }) {
 }
 
 function FormatRow({ f, builtin }: { f: LogFormat; builtin: boolean }) {
-  const { editDraft, remove, toggleBuiltin, disabled } = useDk8sFormatStore();
+  const { draft, editDraft, closeDraft, remove, toggleBuiltin, disabled } = useDk8sFormatStore();
   const off = builtin ? disabled.includes(f.id) : f.enabled === false;
+  // The editor belongs to the row it was opened from, not to the top of the
+  // page: opening it far from the thing you clicked leaves you scrolling back
+  // to find out which format you are looking at.
+  const open = draft?.id === f.id;
 
   const rule = f.match && Object.entries(f.match).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`);
 
   return (
+    <>
     <div className="flex items-center gap-3 px-3 py-2 rounded-md"
          style={{
            background: 'var(--color-surface)',
-           border: '1px solid var(--color-surface-border)',
+           border: `1px solid ${open ? `color-mix(in srgb, ${ACCENT} 45%, transparent)` : 'var(--color-surface-border)'}`,
            opacity: off ? 0.5 : 1,
+           borderBottomLeftRadius: open ? 0 : undefined,
+           borderBottomRightRadius: open ? 0 : undefined,
          }}>
       <CheckboxView
         checked={!off}
@@ -115,14 +123,27 @@ function FormatRow({ f, builtin }: { f: LogFormat; builtin: boolean }) {
         )}
       </div>
 
-      <ButtonView label={builtin ? 'View' : 'Edit'} size="sm" variant="secondary"
-                  onClick={() => editDraft(f)} style={{ background: 'transparent' }} />
+      {/* A toggle, so the same button that opened it closes it. It used to
+          re-open the already-open editor, which looked like nothing happening. */}
+      <ButtonView
+        label={open ? 'Close' : (builtin ? 'View' : 'Edit')}
+        size="sm" variant="secondary"
+        accentColor={ACCENT}
+        color={open ? ACCENT : undefined}
+        onClick={() => (open ? closeDraft() : editDraft(f))}
+        style={{
+          background: open ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
+        }}
+      />
       {!builtin && (
         <ButtonView size="sm" variant="secondary" onClick={() => remove(f.id)}
                     iconLeft={<TrashIcon size={11} />} label=""
                     style={{ background: 'transparent' }} />
       )}
     </div>
+
+    {open && <Editor />}
+    </>
   );
 }
 
@@ -141,8 +162,16 @@ function Editor() {
   const levelled = preview.filter(p => p.matched && p.level && p.level !== 'other').length;
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-4 rounded-lg"
-         style={{ background: 'var(--color-surface)', border: `1px solid ${ACCENT}33` }}>
+    <div className="flex flex-col gap-4 px-4 py-4"
+         style={{
+           background: 'var(--color-surface)',
+           // Joined to the row above rather than floating: it is that row's
+           // detail, and a gap between them reads as two unrelated cards.
+           border: `1px solid color-mix(in srgb, ${ACCENT} 45%, transparent)`,
+           borderTop: 'none',
+           borderBottomLeftRadius: 8,
+           borderBottomRightRadius: 8,
+         }}>
       <div className="flex items-center gap-2">
         <span className="text-[13px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           {draft.builtin ? draft.name : (draft.name || 'New format')}
@@ -334,7 +363,21 @@ function Editor() {
 }
 
 export function LogFormatSettings() {
-  const { formats, builtins, draft, load, newDraft, apply } = useDk8sFormatStore();
+  const { formats, builtins, draft, load, newDraft, apply, editDraft } = useDk8sFormatStore();
+  const isExisting = !!draft
+    && (formats.some(f => f.id === draft.id) || builtins.some(f => f.id === draft.id));
+
+  // Reopen the row that was open last time. Waits for the lists, since they
+  // arrive from the host after mount and there is nothing to reopen until then.
+  const reopenId = useUiStateStore(s => s.prefs['dk8s.format.open']);
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || draft || !reopenId) return;
+    const f = [...formats, ...builtins].find(x => x.id === reopenId);
+    if (!f) return;
+    restored.current = true;
+    editDraft(f);
+  }, [reopenId, formats, builtins, draft, editDraft]);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -372,7 +415,8 @@ export function LogFormatSettings() {
         work with nothing set up here.
       </span>
 
-      {draft && <Editor />}
+      {/* A new format has no row to sit under, so it opens here. */}
+      {draft && !isExisting && <Editor />}
 
       {formats.length > 0 && (
         <div className="flex flex-col gap-1.5">

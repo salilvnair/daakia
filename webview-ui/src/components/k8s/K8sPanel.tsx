@@ -9,9 +9,9 @@
  * M1 is the way in: find kubectl, choose a cluster and namespace, and never
  * dead-end when a cluster says no.
  */
-import { useEffect, useState } from 'react';
-import { Dk8sIcon, EyeIcon } from '../../icons';
-import { useK8sStore } from '../../store/k8s-store';
+import { useEffect } from 'react';
+import { Dk8sIcon, EyeIcon, StethoscopeIcon } from '../../icons';
+import { useK8sStore, type Dk8sView } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
 import { SensitivityPrompt, UnreachableNotice } from './ContextPicker';
 import { ClusterPicker, NamespaceMultiPicker } from './MultiPicker';
@@ -22,7 +22,7 @@ import { useDk8sDoctorStore } from '../../store/dk8s-doctor-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
 import { ArtifactsView } from './ArtifactsView';
-import { useTabsStore } from '../../store/tabs-store';
+import { AnalyzeView } from './AnalyzeView';
 import { useUiStateStore } from '../../store/ui-state-store';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -174,21 +174,28 @@ function Probing() {
 }
 
 /**
- * Pods or Artifacts.
+ * Pods, Artifacts or Analyze.
  *
- * Artifacts is the other half of dk8s: collecting a dump is only useful if you
- * can find it again, and analysing one you already have should not need a
- * separate tab whose only job is a file picker.
+ * The last two are the other half of dk8s: collecting a dump is only useful if
+ * you can find it again, and reading one should not mean leaving for a tab
+ * whose only job was a file picker. Analyze is where every route into an
+ * analyzer now ends — collected from a pod, picked from the folder, or opened
+ * from disk.
  */
 function ViewSwitch({ view, onChange }: {
-  view: 'pods' | 'artifacts';
-  onChange: (v: 'pods' | 'artifacts') => void;
+  view: Dk8sView;
+  onChange: (v: Dk8sView) => void;
 }) {
   const count = useDk8sArtifactStore(s => s.artifacts.length);
+  const TABS = [
+    { id: 'pods' as const, label: 'Pods', icon: null },
+    { id: 'artifacts' as const, label: 'Artifacts', icon: null },
+    { id: 'analyze' as const, label: 'Analyze', icon: <StethoscopeIcon size={13} /> },
+  ];
   return (
     <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
          style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-      {([['pods', 'Pods'], ['artifacts', 'Artifacts']] as const).map(([id, label]) => {
+      {TABS.map(({ id, label, icon }) => {
         const on = view === id;
         return (
           <button
@@ -203,6 +210,7 @@ function ViewSwitch({ view, onChange }: {
               marginBottom: -1,
             }}
           >
+            {icon}
             {label}
             {id === 'artifacts' && count > 0 && (
               <span className="text-[9.5px] px-1.5 py-0.5 rounded"
@@ -230,25 +238,27 @@ export function K8sPanel() {
   const applyDoctor = useDk8sDoctorStore(s => s.apply);
   const applySearch = useDk8sSearchStore(s => s.apply);
   const applyArtifacts = useDk8sArtifactStore(s => s.apply);
-  // Pods or Artifacts. Local rather than persisted: you come back to dk8s to
-  // look at pods, so that is where it should always open.
-  const [view, setView] = useState<'pods' | 'artifacts'>('pods');
+  const view = useK8sStore(s => s.panel);
+  const setView = useK8sStore(s => s.setPanel);
   const handoff = useDk8sDoctorStore(s => s.handoff);
   const clearHandoff = useDk8sDoctorStore(s => s.clearHandoff);
-  const openDoctorTab = useTabsStore(s => s.openDoctorTab);
+  const closeDetail = useK8sStore(s => s.closeDetail);
 
-  // A collected artifact has been sent to an analyzer, so bring that tab
-  // forward. The analyzer is already parsing by the time this runs — the host
-  // posts the handoff before it starts, precisely so the tab is on screen for
-  // the progress rather than appearing after the result.
+  // A collected artifact has been sent to an analyzer, so show it. The
+  // analyzer is already parsing by the time this runs — the host posts the
+  // handoff before it starts, precisely so the view is on screen for the
+  // progress rather than appearing after the result.
   useEffect(() => {
     if (!handoff) return;
-    // Select the analyzer BEFORE the tab mounts. A thread dump landing on the
-    // heap analyzer's empty state looks exactly like the handoff failed.
+    // Select the analyzer BEFORE switching. A thread dump landing on the heap
+    // analyzer's empty state looks exactly like the handoff failed.
     useUiStateStore.getState().setPref('doctor.analyzer', handoff.analyzer);
-    openDoctorTab();
+    // The pod detail is a full-panel overlay, so leaving it up would hide the
+    // analyzer the collection was for.
+    closeDetail();
+    setView('analyze');
     clearHandoff();
-  }, [handoff, openDoctorTab, clearHandoff]);
+  }, [handoff, setView, closeDetail, clearHandoff]);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -279,20 +289,27 @@ export function K8sPanel() {
     // `relative` so the detail overlay can pin to this panel rather than the
     // whole window — the sidebar and tab bar stay visible and usable.
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-      {/* The breadcrumb only makes sense once there is something to name. */}
-      {stage !== 'probing' && stage !== 'no-kubectl' && <Breadcrumb />}
+      {/* The breadcrumb names a context and a namespace, which only the pod
+          view has. */}
+      {view === 'pods' && stage !== 'probing' && stage !== 'no-kubectl' && <Breadcrumb />}
 
-      {stage === 'probing' && <Probing />}
-      {stage === 'no-kubectl' && <KubectlSetupGuide mode="no-kubectl" />}
-      {stage === 'no-contexts' && <KubectlSetupGuide mode="no-contexts" />}
-      {stage === 'pick-context' && <ClusterPicker />}
-      {stage === 'unreachable' && <UnreachableNotice />}
-      {stage === 'ask-sensitivity' && <SensitivityPrompt />}
-      {stage === 'pick-namespace' && <NamespaceMultiPicker />}
-      {stage === 'ready' && (
+      {stage === 'probing' ? <Probing /> : (
         <>
+          {/* Shown at every stage, not only `ready`: a heap dump from a
+              colleague has nothing to do with a cluster, and gating the
+              analyzers behind a kubectl that is missing would put them out of
+              reach of exactly the people who need them. */}
           <ViewSwitch view={view} onChange={setView} />
-          {view === 'pods' ? <PodGrid /> : <ArtifactsView />}
+
+          {view === 'artifacts' ? <ArtifactsView />
+            : view === 'analyze' ? <AnalyzeView />
+              : stage === 'no-kubectl' ? <KubectlSetupGuide mode="no-kubectl" />
+                : stage === 'no-contexts' ? <KubectlSetupGuide mode="no-contexts" />
+                  : stage === 'pick-context' ? <ClusterPicker />
+                    : stage === 'unreachable' ? <UnreachableNotice />
+                      : stage === 'ask-sensitivity' ? <SensitivityPrompt />
+                        : stage === 'pick-namespace' ? <NamespaceMultiPicker />
+                          : <PodGrid />}
         </>
       )}
 

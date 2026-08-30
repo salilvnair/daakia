@@ -16,7 +16,7 @@ import { AiFeatureSettings } from './AiFeatureSettings';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
 import { AiAuditPanel } from './AiAuditPanel';
 import { useMockStore } from '../../store/mock-store';
-import { useUiStateStore } from '../../store/ui-state-store';
+import { useUiStateStore, usePersistedPref } from '../../store/ui-state-store';
 import { CookieManager } from '../power/CookieManager';
 import { ProxySettings } from '../power/ProxySettings';
 import { ClientCertificates } from '../power/ClientCertificates';
@@ -82,25 +82,10 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
 const ALL_SECTION_IDS = new Set<string>(SETTINGS_NAV_ITEMS.flatMap(g => (g.children ?? []).map(c => c.id)));
 
 export function SettingsPanel() {
-  const storedSection = useUiStateStore(s => s.prefs['settings.section']) as ActiveNavId | undefined;
-  const validStored = storedSection && ALL_SECTION_IDS.has(storedSection) ? storedSection : 'general';
-  const [activeSection, setActiveSectionLocal] = useState<ActiveNavId>(validStored);
+  const [activeSection, setActiveSection] = usePersistedPref<ActiveNavId>(
+    'settings.section', 'general', [...ALL_SECTION_IDS] as ActiveNavId[],
+  );
   const [promptTarget, setPromptTarget] = useState<AiPromptTemplateKey | null>(null);
-
-  // Re-sync whenever the pref changes, not just on mount — lets an already-
-  // mounted Settings tab jump to a new section when something outside this
-  // component (e.g. the command palette) writes settings.section directly,
-  // instead of only picking it up the next time this component remounts.
-  useEffect(() => {
-    if (storedSection && ALL_SECTION_IDS.has(storedSection)) {
-      setActiveSectionLocal(storedSection);
-    }
-  }, [storedSection]);
-
-  const setActiveSection = (section: ActiveNavId) => {
-    setActiveSectionLocal(section);
-    useUiStateStore.getState().setPref('settings.section', section);
-  };
 
   const handleNavigateToPrompt = (key: AiPromptTemplateKey) => {
     setPromptTarget(key);
@@ -177,12 +162,7 @@ export function SettingsPanel() {
 // ────────── General Settings with subtabs ──────────
 
 function GeneralSettings() {
-  const storedSubtab = useUiStateStore(s => s.prefs['settings.general.subtab']) as GeneralSubtab | undefined;
-  const [subtab, setSubtabLocal] = useState<GeneralSubtab>(storedSubtab || 'general');
-  const setSubtab = (tab: GeneralSubtab) => {
-    setSubtabLocal(tab);
-    useUiStateStore.getState().setPref('settings.general.subtab', tab);
-  };
+  const [subtab, setSubtab] = usePersistedPref<GeneralSubtab>('settings.general.subtab', 'general');
 
   return (
     <div className="flex flex-col h-full">
@@ -650,14 +630,16 @@ const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon
 ];
 
 function PowerFeaturesPanel() {
-  const [subtab, setSubtab] = useState<PowerSubtab>('cookies');
-  // Panel-open states for "panel-style" tools
+  const [subtab, setSubtab] = usePersistedPref<PowerSubtab>('settings.power.subtab', 'cookies');
+  // Which tool is *selected* persists above; whether its window is open does
+  // not. These are all modals, and launching Daakia into a dialog you opened
+  // days ago would be a worse greeting than the one it replaces.
   const [showCookies, setShowCookies] = useState(false);
   const [showProxy, setShowProxy] = useState(false);
   const [showCerts, setShowCerts] = useState(false);
   const [showMonitor, setShowMonitor] = useState(false);
   const [showInterceptor, setShowInterceptor] = useState(false);
-const [showDiff, setShowDiff] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
 
@@ -723,7 +705,7 @@ const DEVTOOLS_TABS: { id: DevToolsSubtab; label: string }[] = [
 ];
 
 function DevToolsSettingsPage() {
-  const [active, setActive] = useState<DevToolsSubtab>('memory');
+  const [active, setActive] = usePersistedPref<DevToolsSubtab>('settings.devtools.subtab', 'memory');
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Sub-tab bar */}

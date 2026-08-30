@@ -48,7 +48,7 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'doctor' | 'dk8s';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s';
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -445,7 +445,6 @@ interface TabsState {
   addTab: (partial?: Partial<RequestTab>) => void;
   openSettingsTab: () => void;
   openMockServerTab: () => void;
-  openDoctorTab: () => void;
   openDk8sTab: () => void;
   openDaakiaAiTab: () => void;
   openDaakiaWikiTab: () => void;
@@ -523,23 +522,6 @@ export const useTabsStore = create<TabsState>((set, get) => {
         set({ activeTabId: existing.id, previousTabId: activeTabId });
       } else {
         const tab = createDefaultTab({ type: 'dk8s', name: 'dk8s' });
-        set(s => ({
-          tabs: [...s.tabs, tab],
-          activeTabId: tab.id,
-          previousTabId: activeTabId,
-        }));
-      }
-    },
-
-    // Doctor — one tab only; the analyzers inside it keep their own state, so
-    // reopening focuses the existing tab rather than starting a fresh session.
-    openDoctorTab: () => {
-      const { tabs, activeTabId } = get();
-      const existing = tabs.find(t => t.type === 'doctor');
-      if (existing) {
-        set({ activeTabId: existing.id, previousTabId: activeTabId });
-      } else {
-        const tab = createDefaultTab({ type: 'doctor', name: 'Doctor' });
         set(s => ({
           tabs: [...s.tabs, tab],
           activeTabId: tab.id,
@@ -771,7 +753,9 @@ export const useTabsStore = create<TabsState>((set, get) => {
     hydrateSnapshot: (tabs, activeTabId, activeProtocol) => {
       // Restore tabs without response data (response is too large to persist).
       // Strip GQL connection state — the socket is gone after a reload, so always start fresh.
-      const restored = tabs.map(t => {
+      // A Doctor tab saved before the analyzers moved into dk8s would restore
+      // as a tab type nothing renders — a blank pane you cannot explain.
+      const restored = tabs.filter(t => (t.type as string) !== 'doctor').map(t => {
         const base = createDefaultTab({ ...t, response: null, loading: false });
         if (base.protocol === 'graphql' && base.authData?.gql_connected) {
           const { gql_connected, gql_schema, gql_schema_sdl, ...restAuth } = base.authData as Record<string, string>;
@@ -779,7 +763,12 @@ export const useTabsStore = create<TabsState>((set, get) => {
         }
         return base;
       });
-      set({ tabs: restored, activeTabId, activeProtocol });
+      set({
+        tabs: restored,
+        // The dropped tab may have been the active one.
+        activeTabId: restored.some(t => t.id === activeTabId) ? activeTabId : (restored[0]?.id ?? ''),
+        activeProtocol,
+      });
     },
   };
 });

@@ -220,8 +220,19 @@ export type Dk8sStage =
   | 'pick-namespace'
   | 'ready';
 
+/**
+ * Which half of dk8s is on screen.
+ *
+ * In the store rather than in the panel because opening an artifact has to
+ * switch to `analyze`, and that happens from the artifact store — a collected
+ * dump should land on its analyzer without you navigating there yourself.
+ */
+export type Dk8sView = 'pods' | 'artifacts' | 'analyze';
+
 interface K8sState {
   stage: Dk8sStage;
+  panel: Dk8sView;
+  setPanel: (v: Dk8sView) => void;
   env?: KubectlEnv;
   platform: string;
 
@@ -379,6 +390,10 @@ interface K8sState {
 
 export const useK8sStore = create<K8sState>((set, get) => ({
   stage: 'probing',
+  // Not persisted: you come back to dk8s to look at pods, so that is where it
+  // opens, whatever you were reading last time.
+  panel: 'pods',
+  setPanel: (panel) => set({ panel }),
   platform: 'unknown',
   contexts: [],
   namespaces: [],

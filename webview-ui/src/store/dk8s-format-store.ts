@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { useUiStateStore } from './ui-state-store';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'other';
 export type FormatKind = 'json' | 'logfmt' | 'pattern';
@@ -105,7 +106,17 @@ export const useDk8sFormatStore = create<FormatState>((set, get) => ({
   load: () => postMsg({ type: 'dk8s:getFormats' }),
 
   newDraft: () => set({ draft: blank(), preview: [], previewError: undefined, saveError: undefined }),
-  editDraft: (f) => set({ draft: { ...f }, preview: [], previewError: undefined, saveError: undefined }),
+  editDraft: (f) => (
+    // Remembered so the same row is open when you come back. Only the id: the
+    // draft's contents are unsaved edits, and silently restoring those days
+    // later would put changes in front of you that you never chose to keep.
+    useUiStateStore.getState().setPref('dk8s.format.open', f.id),
+    set({
+    // A built-in keeps its id while being viewed, so the row it opened under
+    // can find it — the copy is made on save, in `save`.
+    draft: { ...f },
+    preview: [], previewError: undefined, saveError: undefined,
+  })),
 
   patchDraft: (patch) => {
     const draft = get().draft;
@@ -117,12 +128,30 @@ export const useDk8sFormatStore = create<FormatState>((set, get) => ({
     if (get().sample.length) get().test();
   },
 
-  closeDraft: () => set({ draft: undefined, preview: [], detected: undefined }),
+  closeDraft: () => (
+    useUiStateStore.getState().setPref('dk8s.format.open', ''),
+    set({ draft: undefined, preview: [], detected: undefined })
+  ),
 
   save: () => {
     const draft = get().draft;
     if (!draft?.name.trim()) { set({ saveError: 'Give it a name first.' }); return; }
-    postMsg({ type: 'dk8s:saveFormat', format: draft });
+
+    // Saving an edited built-in creates a copy rather than overwriting it.
+    // Built-ins are shipped defaults; the list would otherwise show the same
+    // id twice, and there would be no way back to the original.
+    const format = draft.builtin
+      ? {
+          ...draft,
+          id: `fmt-${Date.now().toString(36)}`,
+          name: draft.name === get().builtins.find(b => b.id === draft.id)?.name
+            ? `${draft.name} (copy)`
+            : draft.name,
+          builtin: false,
+        }
+      : draft;
+
+    postMsg({ type: 'dk8s:saveFormat', format });
   },
 
   remove: (id) => postMsg({ type: 'dk8s:deleteFormat', id }),
