@@ -127,7 +127,19 @@ export default function App() {
 
   // Sidebar resizable
   const [sidebarWidth, setSidebarWidth] = useState(260);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  /*
+    Closed until something says otherwise.
+
+    This defaulted to open, and the default was reached far more often than it
+    looks: the snapshot only restored the sidebar alongside a restored tab, so
+    a workspace that had never saved one fell through to it on every launch.
+    Worse, the panel is protocol-gated (see `showPanel` in AppSidebar) while
+    this flag is not — on a dk8s or settings tab there is no panel to close, so
+    the flag stayed true unopposed and the collections list sprang open the
+    moment a protocol tab came back. Opening now takes either a snapshot that
+    recorded the sidebar open or the user asking for it.
+  */
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarDragging, setSidebarDragging] = useState(false);
   const [showSplitterTip, setShowSplitterTip] = useState(false);
   const sidebarDragRef = useRef({ startX: 0, startWidth: 0, moved: false });

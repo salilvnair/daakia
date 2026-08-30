@@ -509,14 +509,21 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
         }
         case 'workspaceSnapshot': {
           const snapshot = msg.data as { tabs?: unknown[]; activeTabId?: string; activeProtocol?: string; sidebarSection?: string; sidebarOpen?: boolean; sidebarWidth?: number; breakpoints?: Record<string, number[]>; disabledBreakpoints?: Record<string, number[]>; conditions?: Record<string, Record<number, string>> } | null;
-          if (snapshot && snapshot.tabs && snapshot.tabs.length > 0) {
-            const tabsStore = useTabsStore.getState();
-            // Only restore if app started with no tabs (fresh load)
-            if (tabsStore.tabs.length === 0) {
-              tabsStore.hydrateSnapshot(snapshot.tabs as any[], snapshot.activeTabId || '', snapshot.activeProtocol as any || 'rest');
-              if (snapshot.sidebarSection) setSidebarSection(snapshot.sidebarSection as SidebarSection);
-              if (snapshot.sidebarOpen !== undefined) setSidebarOpen(snapshot.sidebarOpen);
-              if (snapshot.sidebarWidth) setSidebarWidth(snapshot.sidebarWidth);
+          // Only restore into a fresh app: a snapshot arriving after the user
+          // has started working must not overwrite what they are doing.
+          if (snapshot && useTabsStore.getState().tabs.length === 0) {
+            /*
+              The sidebar restores whether or not there are tabs to restore
+              with it. This used to sit inside the tabs branch, so a workspace
+              that had never saved a tab left the sidebar on its built-in
+              default — and the panel opened uninvited on every launch.
+            */
+            if (snapshot.sidebarSection) setSidebarSection(snapshot.sidebarSection as SidebarSection);
+            if (snapshot.sidebarOpen !== undefined) setSidebarOpen(snapshot.sidebarOpen);
+            if (snapshot.sidebarWidth) setSidebarWidth(snapshot.sidebarWidth);
+
+            if (snapshot.tabs && snapshot.tabs.length > 0) {
+              useTabsStore.getState().hydrateSnapshot(snapshot.tabs as any[], snapshot.activeTabId || '', snapshot.activeProtocol as any || 'rest');
               // Restore breakpoints from snapshot
               if (snapshot.breakpoints || snapshot.disabledBreakpoints || snapshot.conditions) {
                 useDebugStore.setState({

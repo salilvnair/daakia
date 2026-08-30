@@ -445,7 +445,7 @@ if (!env.present) {
           skip('JRE capability probe', 'zp-backend-busy not running');
         } else {
           const caps = await probeCapabilities(ctx, 'dk8s-test', jre.metadata.name, 'zp-backend');
-          await checkAsync('a JRE pod offers SIGQUIT and JFR but not a heap dump', () => {
+          await checkAsync('a JRE pod offers SIGQUIT but neither a heap dump nor JFR', () => {
             assert.ok(!caps.unreachable, `probe failed: ${caps.unreachable}`);
             // This is the finding that reshaped M5: JRE images are the common
             // production case and they carry no JDK tooling at all.
@@ -455,7 +455,13 @@ if (!env.present) {
             const byId = Object.fromEntries(actions.map(a => [a.id, a]));
             assert.equal(byId.heapdump.available, false);
             assert.equal(byId['threaddump-sigquit'].available, true, 'the zero-tooling fallback must be offered');
-            assert.equal(byId.jfr.available, true);
+            // Finding the `jfr` binary is not the same as being able to start a
+            // recording: `jfr` only reads recordings that already exist, and
+            // starting one needs `jcmd`. Gating the action on the binary made
+            // every JRE image offer flight recording and then fail with a raw
+            // OCI error, so it is gated on jcmd and a JRE cannot offer it.
+            assert.equal(byId.jfr.available, false, 'jfr the binary cannot start a recording');
+            assert.match(byId.jfr.reason, /jcmd/, 'a disabled action must say why');
             assert.match(byId.heapdump.reason, /jattach|jcmd|jmap/, 'a disabled action must say why');
           });
         }

@@ -57,7 +57,11 @@ function events(describe?: string): string[] {
   if (at === -1) return [];
   return describe.slice(at + 8).split('\n')
     .map(l => l.trim())
-    .filter(l => l && !/^Type\s+Reason/.test(l) && l !== '<none>')
+    // describe prints a table: a `Type Reason Age From Message` header with a
+    // rule of dashes under it. Dropping the header and keeping the rule left a
+    // row of `----  ------  ----` at the top of the card, which reads as a
+    // parse that went wrong rather than as the underline it is.
+    .filter(l => l && !/^Type\s+Reason/.test(l) && !/^[-\s]+$/.test(l) && l !== '<none>')
     .slice(0, 8);
 }
 
