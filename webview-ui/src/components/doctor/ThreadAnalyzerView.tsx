@@ -158,21 +158,60 @@ export function ThreadAnalyzerView() {
     });
   };
 
-  /** The grouped picture, rather than one thread out of it. */
+  /**
+   * The grouped picture, rather than one thread out of it.
+   *
+   * Sends what the screen shows, in the order the screen shows it. This used
+   * to send a flat list of every thread with its topmost application frame,
+   * which had two problems. The model was handed less than the app already
+   * knew — the grouping and the reasoning behind it were computed here and
+   * then thrown away, leaving it to re-derive them. And the frame it named
+   * was picked by a different rule from the one the suspect list uses, so the
+   * same thread appeared as `Dk8sFaultInjector.wedgeOnSocket` in the pack and
+   * `NioSocketImpl.implRead` on screen. Two answers to one question is worse
+   * than either answer alone.
+   */
   const askOverview = () => {
     if (!loaded) return;
     const v = loaded.verdict;
+    const found = v.suspects ?? [];
+
+    const lines: string[] = [
+      `${v.totalThreads} threads, ${v.daemonThreads} daemon`,
+      `states: ${Object.entries(v.byState).map(([k, c]) => `${k}=${c}`).join(', ')}`,
+      v.deadlocks.length ? `deadlocks: ${v.deadlocks.length}` : 'no deadlock reported',
+    ];
+
+    if (v.headline) lines.push('', `headline: ${v.headline}`);
+
+    if (found.length) {
+      lines.push('', 'WHAT STANDS OUT');
+      for (const sus of found) {
+        lines.push('', `[${sus.severity}] ${sus.title} — ${sus.threads.length} thread(s)`);
+        lines.push(`  ${sus.why}`);
+        for (const t of sus.threads.slice(0, 12)) {
+          lines.push(`  ${t.name} [${t.state}] ${t.frame}`);
+        }
+        if (sus.threads.length > 12) {
+          lines.push(`  … ${sus.threads.length - 12} more in this group`);
+        }
+      }
+    }
+
+    // The full roster after the grouping, so nothing is hidden from the model
+    // — but second, because the groups are the reading and this is the data.
+    lines.push('', 'ALL THREADS');
+    for (const t of loaded.threads.slice(0, 80)) {
+      lines.push(`  ${t.name} [${t.state}] ${summariseStack(t.frames)}`);
+    }
+    if (loaded.threads.length > 80) {
+      lines.push(`  … ${loaded.threads.length - 80} more, omitted`);
+    }
+
     ask({
       promptKey: 'dk8s.threads.explain',
       title: 'What these threads are doing',
-      evidence: [
-        `${v.totalThreads} threads, ${v.daemonThreads} daemon`,
-        `states: ${Object.entries(v.byState).map(([k, c]) => `${k}=${c}`).join(', ')}`,
-        v.deadlocks.length ? `deadlocks: ${v.deadlocks.length}` : 'no deadlock reported',
-        '',
-        ...loaded.threads.slice(0, 60).map((t: Thread) =>
-          `${t.name} [${t.state}] ${summariseStack(t.frames)}`),
-      ].join('\n'),
+      evidence: lines.join('\n'),
       evidenceLabel: 'THREAD DUMP',
       podContext: {},
     });
