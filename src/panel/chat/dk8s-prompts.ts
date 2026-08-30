@@ -105,6 +105,37 @@ Produce:
 If the log is mostly one repeated line, say so and say how many times, rather
 than summarising the repetition as though it were a sequence of events.`;
 
+/**
+ * One message shape out of the log analyzer.
+ *
+ * The analyzer collapses a log into templates — the varying parts replaced by
+ * placeholders — so the evidence here is a pattern and a count, not a stretch
+ * of log. Sent to the summarise prompt it tried to build a timeline out of a
+ * single repeated line.
+ */
+export const DK8S_LOG_EXPLAIN_SHAPE = `${DK8S_PREAMBLE}
+
+━━━ THIS TASK ━━━
+The log has been collapsed into message shapes: one template per distinct
+message, with the varying parts replaced by placeholders like <n> and <ip>, and
+a count of how many times it occurred. You have ONE of those shapes, its level,
+its count, and its share of the file. Some example lines may follow.
+
+Answer:
+- What emits this message and what it means. If it is a recognisable framework
+  or library line, name the component.
+- Whether the COUNT is the story. A shape that is 60% of a log file is either
+  the workload itself or a retry storm, and those look identical from one line.
+  Say which the level and wording suggest.
+- Whether this shape is worth acting on, or is normal traffic that happens to
+  be loud. Most high-count shapes are the latter, and saying so is a real
+  answer.
+- If the level is WARN or ERROR, what would have to be true for it to be
+  harmless — so the developer knows what to check before ignoring it.
+
+You are looking at a pattern, not a sequence. Do not construct a timeline or
+infer ordering between shapes.`;
+
 /** Why is this pod crashlooping — evidence is describe + previous logs. */
 export const DK8S_POD_CRASHLOOP = `${DK8S_PREAMBLE}
 
@@ -148,6 +179,33 @@ Focus on:
 Name the specific thread names and frames you are reasoning from. Distinguish
 application frames from framework and JDK frames.`;
 
+/**
+ * One thread out of the dump, with its own stack.
+ *
+ * Separate from DK8S_THREADS_EXPLAIN because the question is different: the
+ * overview asks what the application is doing, and this asks why one thread is
+ * where it is. Pointed at the whole-dump prompt it produced a summary of a
+ * roster it could not see.
+ */
+export const DK8S_THREAD_EXPLAIN_ONE = `${DK8S_PREAMBLE}
+
+━━━ THIS TASK ━━━
+You have ONE thread from a JVM thread dump: its name, its state, the monitors
+it holds or wants, and its stack.
+
+Answer, in this order:
+- What this thread is doing, read from the top frames. Name the frame.
+- Whether its state is a problem. A parked pool worker is healthy and idle; a
+  RUNNABLE thread inside a socket read is neither running nor safe, because a
+  read with no timeout waits forever.
+- If it is BLOCKED, what it is waiting for and what that implies about the
+  thread holding the lock.
+- Whether the application's own code appears in the stack at all. A stack that
+  is entirely framework and JDK frames usually means this thread is waiting on
+  something else, and the cause is in another thread.
+
+Do not generalise to the rest of the dump — you cannot see it.`;
+
 /** Explain a heap histogram or dump summary. */
 export const DK8S_HEAP_EXPLAIN = `${DK8S_PREAMBLE}
 
@@ -168,6 +226,40 @@ Interpret it:
 Be explicit that a histogram shows WHAT is on the heap but not WHO is holding
 it. If the answer needs a dominator tree or reference chain, say so rather
 than guessing at the retainer.`;
+
+/**
+ * One leak suspect out of the dominator tree.
+ *
+ * Unlike the histogram prompt, this evidence DOES say who is holding the
+ * memory — the engine computed the retained size and the path to the GC root
+ * before the model saw anything. So the caveat that a histogram cannot name a
+ * retainer does not apply, and repeating it here would be wrong.
+ */
+export const DK8S_HEAP_EXPLAIN_ONE = `${DK8S_PREAMBLE}
+
+━━━ THIS TASK ━━━
+You have ONE leak suspect from a heap dump, already analysed: the class, how
+much of the live heap it retains, how many objects it keeps alive, what class
+those accumulated objects mostly are, and the path from a GC root down to it.
+
+The retained size and the path are computed facts from a dominator tree, not
+guesses. Reason from them rather than hedging about what a histogram cannot
+show.
+
+Answer:
+- What this structure most likely is, from its class and what it accumulates.
+  A HashMap retaining 60% of the heap and accumulating Session objects is a
+  session cache; say so.
+- Whether the shape is a leak or a legitimately large cache. The distinguishing
+  question is whether anything bounds it, and the path to root often shows
+  which component owns it.
+- Which link in the path to root is the one a developer would change. It is
+  usually not the collection itself but whatever holds it.
+- What in the application's code would produce this, and the cheapest way to
+  confirm it from outside — a metric, an endpoint, a config value.
+
+If the accumulated class is a framework or JDK type, say what application-level
+structure typically holds those, and mark that as inference rather than fact.`;
 
 /** Read a describe/events blob. */
 export const DK8S_DESCRIBE_EXPLAIN = `${DK8S_PREAMBLE}
@@ -258,9 +350,15 @@ export const DK8S_PROMPTS: Record<string, string> = {
   'dk8s.log.askWhy': DK8S_LOG_ASK_WHY,
   'dk8s.log.explainError': DK8S_LOG_EXPLAIN_ERROR,
   'dk8s.log.summarise': DK8S_LOG_SUMMARISE,
+  'dk8s.log.explainShape': DK8S_LOG_EXPLAIN_SHAPE,
   'dk8s.pod.crashloop': DK8S_POD_CRASHLOOP,
   'dk8s.threads.explain': DK8S_THREADS_EXPLAIN,
+  // The per-thread sparkle has sent this key since it was built, and nothing
+  // answered to it — an unregistered key returns undefined and the handler
+  // posts "Unknown prompt", so every sparkle on every thread row failed.
+  'dk8s.threads.explainOne': DK8S_THREAD_EXPLAIN_ONE,
   'dk8s.heap.explain': DK8S_HEAP_EXPLAIN,
+  'dk8s.heap.explainOne': DK8S_HEAP_EXPLAIN_ONE,
   'dk8s.describe.explain': DK8S_DESCRIBE_EXPLAIN,
   'dk8s.format.detect': DK8S_DETECT_FORMAT,
 };
