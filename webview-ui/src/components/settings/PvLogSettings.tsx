@@ -11,7 +11,9 @@
  */
 import { useEffect } from 'react';
 import { ButtonView, TextInputView, CheckboxView, SpinnerIcon } from '@salilvnair/dui';
-import { FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon } from '../../icons';
+import {
+  FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon, TrashIcon, PlusIcon,
+} from '../../icons';
 import { useDk8sPvStore } from '../../store/dk8s-pv-store';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -51,6 +53,22 @@ export function PvLogSettings() {
   const {
     draft, probe, probing, dirty, load, patch, runProbe, save, reset, apply,
   } = useDk8sPvStore();
+
+  // A config written before mounts existed still has `root`; showing it as the
+  // first mount is what stops the page rendering empty over a working setup.
+  const mounts = draft.mounts?.length
+    ? draft.mounts
+    : [{ path: draft.root ?? '' }];
+  const setMount = (i: number, over: Partial<typeof mounts[number]>) =>
+    patch({ mounts: mounts.map((m, j) => (j === i ? { ...m, ...over } : m)), root: undefined });
+
+  // Kept as pairs rather than an object while editing: a half-typed key is a
+  // real state, and an object would drop the row the moment the key is blank.
+  const envRows = Object.entries(draft.envByContext ?? {});
+  const setEnv = (rows: [string, string][]) =>
+    patch({ envByContext: Object.fromEntries(rows) });
+  const setEnvRow = (i: number, k: string, v: string) =>
+    setEnv(envRows.map((r, j) => (j === i ? [k, v] : r)) as [string, string][]);
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
@@ -107,29 +125,54 @@ export function PvLogSettings() {
              opacity: draft.enabled ? 1 : 0.55,
            }}>
         <Field
-          label="mount path"
-          hint="Where the volume is mounted on this machine. Nothing is ever written here — the files are only read."
+          label="mount paths"
+          hint={
+            'Where the volumes are mounted on this machine. Nothing is ever written here — '
+            + 'the files are only read. Add more than one when separate shares are mounted '
+            + 'separately; a single share holding every claim needs only one.'
+          }
         >
-          <div className="flex items-center gap-2">
-            <TextInputView
-              value={draft.root} size="md" accentColor={ACCENT}
-              placeholder={'\\\\\\\\fileserver\\\\k8s-logs   or   /mnt/k8s-logs'}
-              onChange={e => patch({ root: e.target.value })}
-              style={{ width: '100%', fontFamily: 'monospace' }}
-            />
-            <ButtonView
-              label={probing ? 'Checking…' : 'Check'}
-              size="md" variant="secondary"
-              accentColor={ACCENT} color={ACCENT}
-              disabled={probing || !draft.root.trim()}
-              iconLeft={probing ? <SpinnerIcon size={12} /> : <FolderOpenIcon size={12} />}
-              onClick={runProbe}
-              style={{
-                background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-                borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
-                whiteSpace: 'nowrap',
-              }}
-            />
+          <div className="flex flex-col gap-2">
+            {mounts.map((m, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <TextInputView
+                  value={m.path} size="md" accentColor={ACCENT}
+                  placeholder={'\\\\\\\\fileserver\\\\pvcs   or   /mnt/pvcs'}
+                  onChange={e => setMount(i, { path: e.target.value })}
+                  style={{ width: '100%', fontFamily: 'monospace' }}
+                />
+                {mounts.length > 1 && (
+                  <ButtonView
+                    label="" size="md" variant="secondary"
+                    iconLeft={<TrashIcon size={12} />}
+                    onClick={() => patch({ mounts: mounts.filter((_, j) => j !== i) })}
+                    style={{ background: 'transparent' }}
+                  />
+                )}
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <ButtonView
+                label="Add a mount" size="sm" variant="secondary"
+                iconLeft={<PlusIcon size={11} />}
+                onClick={() => patch({ mounts: [...mounts, { path: '' }] })}
+                style={{ background: 'transparent' }}
+              />
+              <div className="flex-1" />
+              <ButtonView
+                label={probing ? 'Checking…' : 'Check'}
+                size="md" variant="secondary"
+                accentColor={ACCENT} color={ACCENT}
+                disabled={probing || !mounts.some(m => m.path.trim())}
+                iconLeft={probing ? <SpinnerIcon size={12} /> : <FolderOpenIcon size={12} />}
+                onClick={runProbe}
+                style={{
+                  background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+                  borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
+                  whiteSpace: 'nowrap',
+                }}
+              />
+            </div>
           </div>
         </Field>
 
@@ -138,18 +181,20 @@ export function PvLogSettings() {
           hint={
             <>
               Where one pod&rsquo;s files live, relative to the mount.
-              {' '}<code>{'{namespace}'}</code>, <code>{'{app}'}</code>, <code>{'{pod}'}</code>,
-              {' '}<code>{'{container}'}</code> and <code>{'{date}'}</code> are filled in per pod;
-              {' '}<code>*</code> and <code>**</code> work as globs.
-              {' '}<code>{'{app}'}</code> is the pod name without its ReplicaSet hash — a volume is
-              almost always laid out per application rather than per pod.
-              {' '}<code>{'{date}'}</code> matches any date, so rotated files are included.
+              {' '}<code>{'{app}'}</code>, <code>{'{env}'}</code>, <code>{'{namespace}'}</code>,
+              {' '}<code>{'{pod}'}</code>, <code>{'{container}'}</code> and <code>{'{date}'}</code>
+              {' '}are filled in per pod; <code>*</code> and <code>**</code> work as globs.
+              {' '}<code>{'{app}'}</code> is the pod name with its ReplicaSet hash and pod suffix
+              removed, so <code>zp-backend-7f9455548d-xm6kc</code> becomes
+              {' '}<code>zp-backend</code>. <code>{'{env}'}</code> comes from the cluster, mapped
+              below. <code>{'{date}'}</code> and <code>**</code> both match anything, which is how
+              rotated files under an <code>archived/</code> directory are picked up.
             </>
           }
         >
           <TextInputView
             value={draft.template ?? ''} size="md" accentColor={ACCENT}
-            placeholder="{namespace}/{app}/{date}/*.log*"
+            placeholder="{app}-{env}-pvc/{app}-{env}-logs/**/{app}*.log*"
             onChange={e => patch({ template: e.target.value })}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />
@@ -173,6 +218,50 @@ export function PvLogSettings() {
             onChange={e => patch({ pattern: e.target.value })}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />
+        </Field>
+
+        <Field
+          label="what {env} means"
+          hint={
+            'Kubernetes has no notion of an environment, so this is the one thing that cannot be '
+            + 'derived. Match part of a context name on the left, and the token it stands for on '
+            + 'the right. Left empty, {env} matches anything — which still finds the logs, it just '
+            + 'cannot tell a prod claim from a dev one.'
+          }
+        >
+          <div className="flex flex-col gap-2">
+            {envRows.map(([k, v], i) => (
+              <div key={i} className="flex items-center gap-2">
+                <TextInputView
+                  value={k} size="md" accentColor={ACCENT}
+                  placeholder="context contains…"
+                  onChange={e => setEnvRow(i, e.target.value, v)}
+                  style={{ width: '100%', fontFamily: 'monospace' }}
+                />
+                <span className="text-[11px] shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+                  &rarr;
+                </span>
+                <TextInputView
+                  value={v} size="md" accentColor={ACCENT}
+                  placeholder="prod"
+                  onChange={e => setEnvRow(i, k, e.target.value)}
+                  style={{ width: '100%', fontFamily: 'monospace' }}
+                />
+                <ButtonView
+                  label="" size="md" variant="secondary"
+                  iconLeft={<TrashIcon size={12} />}
+                  onClick={() => setEnv(envRows.filter((_, j) => j !== i))}
+                  style={{ background: 'transparent' }}
+                />
+              </div>
+            ))}
+            <ButtonView
+              label="Add a mapping" size="sm" variant="secondary"
+              iconLeft={<PlusIcon size={11} />}
+              onClick={() => setEnv([...envRows, ['', '']])}
+              style={{ background: 'transparent', alignSelf: 'flex-start' }}
+            />
+          </div>
         </Field>
 
         <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
@@ -201,12 +290,12 @@ export function PvLogSettings() {
   );
 }
 
-/** What the mount actually holds — the point of the Check button. */
+/** What each mount actually holds — the point of the Check button. */
 function ProbeReport() {
   const probe = useDk8sPvStore(s => s.probe);
   if (!probe) return null;
 
-  if (!probe.ok) {
+  if (probe.error) {
     return (
       <div className="flex items-start gap-2 px-3 py-2 rounded-md"
            style={{
@@ -214,9 +303,38 @@ function ProbeReport() {
              border: '1px solid color-mix(in srgb, var(--color-error) 28%, transparent)',
            }}>
         <WarningTriangleIcon size={13} color="var(--color-error)" />
-        <span className="text-[11.5px]" style={{ color: 'var(--color-error)' }}>
-          {probe.error ?? 'Could not read that path.'}
-        </span>
+        <span className="text-[11.5px]" style={{ color: 'var(--color-error)' }}>{probe.error}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {/* One block per mount. A working prod volume beside a mistyped dev one
+          has to say exactly that, rather than a single verdict that hides
+          half of what was asked for. */}
+      {probe.mounts.map((m, i) => <MountReport key={i} m={m} />)}
+    </div>
+  );
+}
+
+function MountReport({ m }: { m: import('../../store/dk8s-pv-store').PvMountProbe }) {
+  if (!m.ok) {
+    return (
+      <div className="flex items-start gap-2 px-3 py-2 rounded-md"
+           style={{
+             background: 'color-mix(in srgb, var(--color-error) 10%, var(--color-surface))',
+             border: '1px solid color-mix(in srgb, var(--color-error) 28%, transparent)',
+           }}>
+        <WarningTriangleIcon size={13} color="var(--color-error)" />
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[11.5px]" style={{ color: 'var(--color-error)' }}>
+            {m.error ?? 'Could not read that path.'}
+          </span>
+          <span className="text-[10.5px] font-mono truncate" style={{ color: 'var(--color-text-muted)' }}>
+            {m.resolved || m.path}
+          </span>
+        </div>
       </div>
     );
   }
@@ -230,40 +348,42 @@ function ProbeReport() {
       <div className="flex items-center gap-2 flex-wrap">
         <CheckCircleIcon size={13} color="var(--color-success)" />
         <span className="text-[11.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          {probe.fileCount.toLocaleString()} file{probe.fileCount === 1 ? '' : 's'}
+          {m.fileCount.toLocaleString()} file{m.fileCount === 1 ? '' : 's'}
         </span>
         <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-          {bytes(probe.totalBytes)} · {when(probe.oldest)} → {when(probe.newest)}
+          {bytes(m.totalBytes)} · {when(m.oldest)} → {when(m.newest)}
+        </span>
+        <div className="flex-1" />
+        <span className="text-[10px] font-mono truncate" style={{ color: 'var(--color-text-muted)', maxWidth: '40%' }}>
+          {m.resolved}
         </span>
       </div>
 
-      {probe.topLevel.length > 0 && (
+      {m.topLevel.length > 0 && (
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-[9.5px] uppercase tracking-wider shrink-0"
                 style={{ color: 'var(--color-text-muted)' }}>
             top level
           </span>
           <span className="text-[10.5px] font-mono" style={{ color: 'var(--color-text-secondary)' }}>
-            {probe.topLevel.slice(0, 12).join(', ')}
-            {probe.topLevel.length > 12 && ` … +${probe.topLevel.length - 12}`}
+            {m.topLevel.slice(0, 12).join(', ')}
+            {m.topLevel.length > 12 && ` … +${m.topLevel.length - 12}`}
           </span>
         </div>
       )}
 
-      {probe.sample.length > 0 && (
+      {m.sample.length > 0 && (
         <div className="flex flex-col gap-0.5">
           <span className="text-[9.5px] uppercase tracking-wider"
                 style={{ color: 'var(--color-text-muted)' }}>
             newest files — check your template against these
           </span>
-          {probe.sample.map(f => (
+          {m.sample.map(f => (
             <div key={f.rel} className="flex items-baseline gap-2 text-[10.5px] font-mono">
               <span className="truncate flex-1" style={{ color: 'var(--color-text-secondary)' }}>
                 {f.rel}
               </span>
-              <span className="shrink-0" style={{ color: 'var(--color-text-muted)' }}>
-                {bytes(f.bytes)}
-              </span>
+              <span className="shrink-0" style={{ color: 'var(--color-text-muted)' }}>{bytes(f.bytes)}</span>
               <span className="shrink-0" style={{ color: 'var(--color-text-muted)' }}>
                 {when(f.mtime)}
               </span>
@@ -272,7 +392,7 @@ function ProbeReport() {
         </div>
       )}
 
-      {probe.fileCount === 0 && (
+      {m.fileCount === 0 && (
         <span className="text-[11px]" style={{ color: 'var(--color-warning)' }}>
           The path is readable but nothing under it matched. Check the extension filter and the
           age limit before the template — those exclude files before the template is even tried.

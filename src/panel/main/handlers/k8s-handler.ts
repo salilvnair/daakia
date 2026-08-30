@@ -1420,7 +1420,11 @@ async function searchArchives(
     postMessage({ type: 'dk8s:searchProgress', done, total: targets.length, pod: t.pod, archive: true });
     let out: { result: unknown; matches: PvMatch[] };
     try {
-      out = await searchPvForPod(cfg, { namespace: t.namespace, pod: t.pod }, opts, signal);
+      // The context travels with the ref: it is what `{env}` resolves from,
+      // and without it a prod pod would read every environment's claim.
+      out = await searchPvForPod(
+        cfg, { namespace: t.namespace, pod: t.pod, context: t.context }, opts, signal,
+      );
     } catch (e) {
       postMessage({
         type: 'dk8s:searchArchivePod',

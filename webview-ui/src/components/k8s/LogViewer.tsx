@@ -867,11 +867,15 @@ export function LogViewer() {
           size={CTL_SIZE}
           // dui defaults to `pill`, and a fully round track next to a row of
           // rounded-rectangle selects and buttons is the one shape that does
-          // not belong. Every other segmented control in dk8s already says
-          // this; this one was relying on the default. `sm` rather than the
-          // variant's own `md`, so the corner matches the selects beside it.
+          // not belong.
           variant="rounded"
           borderRadius="sm"
+          // The track's own radius is `thumb + 3px` padding, which is the
+          // textbook concentric rule and still lands on 6px against every
+          // other control's 4px. Side by side that reads as a different size
+          // even though the boxes are the same 28px to the pixel, so the outer
+          // edge is pinned to 4 and the thumb keeps its 3.
+          style={{ borderRadius: 4 }}
           accentColor={ACCENT}
         />
 

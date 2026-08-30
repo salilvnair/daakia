@@ -43,7 +43,7 @@ beforeEach(() => clearPvCache());
 
 const cfg = (over: Partial<PvLogConfig> = {}): PvLogConfig => ({
   enabled: true,
-  root,
+  mounts: [{ path: root }],
   template: '{namespace}/{app}/{date}/*.log*',
   extensions: ['.log'],
   ...over,
@@ -82,7 +82,7 @@ describe('expandTemplate', () => {
 
 describe('walkRoot', () => {
   it('finds the log files and skips what the extension filter excludes', async () => {
-    const files = await walkRoot(cfg());
+    const files = await walkRoot(cfg(), root);
     const rels = files.map(f => f.rel);
     expect(rels).toContain('dk8s-test/zp-backend/2026-08-30/app.log');
     expect(rels).toContain('dk8s-test/zp-backend/2026-08-30/app.log.1');
@@ -90,7 +90,7 @@ describe('walkRoot', () => {
   });
 
   it('returns newest first', async () => {
-    const files = await walkRoot(cfg());
+    const files = await walkRoot(cfg(), root);
     for (let i = 1; i < files.length; i++) {
       expect(files[i - 1].mtime).toBeGreaterThanOrEqual(files[i].mtime);
     }
@@ -101,7 +101,7 @@ describe('walkRoot', () => {
     const ancient = new Date(Date.now() - 40 * 86_400_000);
     await fs.utimes(old, ancient, ancient);
     clearPvCache();
-    const files = await walkRoot(cfg({ maxAgeDays: 7 }));
+    const files = await walkRoot(cfg({ maxAgeDays: 7 }), root);
     expect(files.map(f => f.rel)).not.toContain('dk8s-test/zp-backend/2026-08-29/app.log');
   });
 });
@@ -174,18 +174,18 @@ describe('probePv', () => {
   it('reports the tree so a template can be checked before searching', async () => {
     const p = await probePv(cfg());
     expect(p.ok).toBe(true);
-    expect(p.topLevel.sort()).toEqual(['dk8s-test', 'legacy', 'payments']);
+    expect(p.mounts[0].topLevel.sort()).toEqual(['dk8s-test', 'legacy', 'payments']);
     expect(p.fileCount).toBeGreaterThan(0);
     expect(p.sample.length).toBeGreaterThan(0);
   });
 
   it('says plainly when the path is wrong', async () => {
     // "No matches" and "the path was wrong" look identical from the results.
-    const missing = await probePv(cfg({ root: path.join(root, 'does-not-exist') }));
+    const missing = await probePv(cfg({ mounts: [{ path: path.join(root, 'does-not-exist') }] }));
     expect(missing.ok).toBe(false);
-    expect(missing.error).toMatch(/does not exist/);
+    expect(missing.mounts[0].error).toMatch(/does not exist/);
 
-    const blank = await probePv(cfg({ root: '' }));
-    expect(blank.error).toMatch(/No path set/);
+    const blank = await probePv({ enabled: true, mounts: [] });
+    expect(blank.error).toMatch(/No mount path set/);
   });
 });
