@@ -428,3 +428,87 @@ export class FormatMeter {
     return out;
   }
 }
+
+// ── Working it out without being told ───────────────────────────────────────
+
+export interface ProbeResult {
+  format: LogFormat;
+  /** Fraction of the sampled lines this format parsed. */
+  hitRate: number;
+  /** How many of those yielded a real level rather than `other`. */
+  levelled: number;
+}
+
+/**
+ * Try the candidates against a sample and pick the one that actually fits.
+ *
+ * This is what makes the feature work with no configuration at all, which
+ * matters more than the settings page: most people will never open it, and a
+ * pod whose format nobody has described should still get coloured levels.
+ *
+ * Cheap enough to be unconditional — eight formats over twenty lines is a
+ * hundred and sixty parses, about a tenth of a millisecond, paid once when the
+ * stream opens rather than per line.
+ */
+export function probeFormat(
+  lines: string[],
+  candidates: LogFormat[],
+  minHitRate = 0.6,
+): ProbeResult | undefined {
+  const sample = lines.filter(l => l.trim()).slice(0, 20);
+  if (sample.length < 3) return undefined;
+
+  let best: ProbeResult | undefined;
+  for (const format of candidates) {
+    if (format.enabled === false) continue;
+    const compiled = compileFormat(format);
+    let hits = 0;
+    let levelled = 0;
+    for (const line of sample) {
+      const p = compiled.parse(line);
+      if (!p) continue;
+      hits++;
+      if (p.level !== 'other') levelled++;
+    }
+    const hitRate = hits / sample.length;
+    if (hitRate < minHitRate) continue;
+
+    // Prefer the format that reads a LEVEL, not merely the one that matches.
+    // Several patterns will match a given line; the useful one is whichever
+    // gets the colour right, since that is the whole point.
+    const better = !best
+      || levelled > best.levelled
+      || (levelled === best.levelled && hitRate > best.hitRate);
+    if (better) best = { format, hitRate, levelled };
+  }
+  return best;
+}
+
+/**
+ * The whole resolution order, in one place.
+ *
+ * Explicit beats configured beats guessed, and anything unresolved falls back
+ * to the caller's own heuristic rather than to nothing.
+ */
+export function chooseFormat(
+  opts: {
+    /** Chosen by hand for this pod, this session. */
+    pinned?: LogFormat;
+    saved: LogFormat[];
+    builtins: LogFormat[];
+    ctx: PodContext;
+    /** First lines off the stream, for probing. */
+    sample?: string[];
+  },
+): { format?: LogFormat; via: 'pinned' | 'rule' | 'probed' | 'none' } {
+  if (opts.pinned) return { format: opts.pinned, via: 'pinned' };
+
+  const byRule = resolveFormat(opts.saved, opts.ctx);
+  if (byRule) return { format: byRule, via: 'rule' };
+
+  if (opts.sample?.length) {
+    const probed = probeFormat(opts.sample, [...opts.saved, ...opts.builtins]);
+    if (probed) return { format: probed.format, via: 'probed' };
+  }
+  return { via: 'none' };
+}

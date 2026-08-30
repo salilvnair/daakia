@@ -11,7 +11,7 @@
  * screen — or two heights — reads as an unfinished layout rather than a
  * hierarchy.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon,
 } from '@salilvnair/dui';
@@ -19,7 +19,9 @@ import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
-import { FolderExportIcon, CloseIcon, SearchIcon } from '../../icons';
+import {
+  FolderExportIcon, CloseIcon, SearchIcon, ChevronDownIcon, ChevronRightIcon,
+} from '../../icons';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
   formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
@@ -323,10 +325,45 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
 }
 
 /** A group heading, shared by both views so they read the same way. */
-function GroupHeader({ group }: { group: PodGroup }) {
+/**
+ * Which namespace groups are folded away.
+ *
+ * Module-level rather than component state so the two views agree: collapsing
+ * a namespace in cards and switching to table should not silently expand it
+ * again. Keyed by namespace and cluster, since two clusters can hold a
+ * namespace of the same name and they are different groups.
+ */
+function useCollapsedGroups() {
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const toggle = useCallback((key: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
+  return { collapsed, toggle };
+}
+
+const groupKey = (g: PodGroup) => `${g.context ?? ''}/${g.namespace}`;
+
+function GroupHeader({ group, collapsed, onToggle }: {
+  group: PodGroup;
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
   const failing = group.pods.filter(p => severityOf(p) !== 'quiet').length;
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div
+      className={`flex items-center gap-2 flex-wrap${onToggle ? ' cursor-pointer select-none' : ''}`}
+      onClick={onToggle}
+      title={onToggle ? (collapsed ? 'Show these pods' : 'Hide these pods') : undefined}
+    >
+      {onToggle && (
+        collapsed
+          ? <ChevronRightIcon size={11} style={{ color: group.tint.label }} />
+          : <ChevronDownIcon size={11} style={{ color: group.tint.label }} />
+      )}
       <span className="text-[10px] font-mono font-semibold tracking-wide"
             style={{ color: group.tint.label }}>
         {group.namespace}
@@ -345,19 +382,24 @@ function GroupHeader({ group }: { group: PodGroup }) {
           {failing} need{failing === 1 ? 's' : ''} attention
         </span>
       )}
+      {/* The counts stay visible while collapsed — a folded group that hides
+          "2 need attention" would hide the only reason to unfold it. */}
     </div>
   );
 }
 
 /** The table view's equivalent of a card group: same heading, same tint. */
-function NamespaceTableGroup({ group, onOpen }: {
-  group: PodGroup; onOpen: (p: PodSummary) => void;
+function NamespaceTableGroup({ group, onOpen, collapsed, onToggle }: {
+  group: PodGroup;
+  onOpen: (p: PodSummary) => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg p-3"
          style={{ border: `1px solid ${group.tint.border}`, background: group.tint.wash }}>
-      <GroupHeader group={group} />
-      <PodTable pods={group.pods} onOpen={onOpen} />
+      <GroupHeader group={group} collapsed={collapsed} onToggle={onToggle} />
+      {!collapsed && <PodTable pods={group.pods} onOpen={onOpen} />}
     </div>
   );
 }
@@ -371,20 +413,25 @@ function NamespaceTableGroup({ group, onOpen }: {
  * belongs to pod health, and a strong namespace colour would compete with the
  * one thing the grid must never make harder to find.
  */
-function NamespaceGroup({ group, onOpen }: {
-  group: PodGroup; onOpen: (p: PodSummary) => void;
+function NamespaceGroup({ group, onOpen, collapsed, onToggle }: {
+  group: PodGroup;
+  onOpen: (p: PodSummary) => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg p-3"
          style={{ border: `1px solid ${group.tint.border}`, background: group.tint.wash }}>
-      <GroupHeader group={group} />
+      <GroupHeader group={group} collapsed={collapsed} onToggle={onToggle} />
 
-      <div className="grid gap-2.5"
-           style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
-        {group.pods.map(p => (
-          <PodCard key={p.uid} pod={p} onOpen={() => onOpen(p)} />
-        ))}
-      </div>
+      {!collapsed && (
+        <div className="grid gap-2.5"
+             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+          {group.pods.map(p => (
+            <PodCard key={p.uid} pod={p} onOpen={() => onOpen(p)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -397,6 +444,7 @@ export function PodGrid() {
     capped, selectMode, selected, exportOpen, exportState,
     toggleSelectMode, selectAllVisible, openExport, closeExport,
   } = useK8sStore();
+  const { collapsed, toggle } = useCollapsedGroups();
   const searchOpen = useDk8sSearchStore(s => s.open);
   const openSearch = useDk8sSearchStore(s => s.openSearch);
   const closeSearch = useDk8sSearchStore(s => s.closeSearch);
@@ -624,8 +672,12 @@ export function PodGrid() {
           <div className="flex flex-col gap-3">
             {groups.map(g => (
               view === 'table'
-                ? <NamespaceTableGroup key={g.key} group={g} onOpen={p => openDetail(p)} />
-                : <NamespaceGroup key={g.key} group={g} onOpen={p => openDetail(p)} />
+                ? <NamespaceTableGroup key={g.key} group={g} onOpen={p => openDetail(p)}
+                                       collapsed={collapsed.has(groupKey(g))}
+                                       onToggle={() => toggle(groupKey(g))} />
+                : <NamespaceGroup key={g.key} group={g} onOpen={p => openDetail(p)}
+                                  collapsed={collapsed.has(groupKey(g))}
+                                  onToggle={() => toggle(groupKey(g))} />
             ))}
             {!visible.length && (
               <span className="text-[12px] text-[var(--color-text-muted)] py-6 text-center">

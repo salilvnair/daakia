@@ -80,7 +80,9 @@ import { noteProtocolSend, auditProtocolResponse } from '../../services/protocol
 import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../../services/session-audit';
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
-  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sSetKubectlPath,
+  handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch,
+  handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
+  handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat, handleDk8sSetKubectlPath,
   handleDk8sWatchPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
@@ -374,6 +376,24 @@ export class MainPanel {
       case 'dk8s:setGuardHeapDump':
         handleDk8sSetGuardHeapDump(msg, this._post);
         break;
+      case 'dk8s:getFormats':
+        handleDk8sGetFormats(this._post);
+        break;
+      case 'dk8s:saveFormat':
+        handleDk8sSaveFormat(msg, this._post);
+        break;
+      case 'dk8s:deleteFormat':
+        handleDk8sDeleteFormat(msg, this._post);
+        break;
+      case 'dk8s:testFormat':
+        handleDk8sTestFormat(msg, this._post);
+        break;
+      case 'dk8s:sampleLines':
+        handleDk8sSampleLines(msg, this._post);
+        break;
+      case 'dk8s:detectFormat':
+        handleDk8sDetectFormat(msg, this._post);
+        break;
       case 'dk8s:searchLogs':
         handleDk8sSearchLogs(msg, this._post);
         break;
@@ -396,7 +416,7 @@ export class MainPanel {
         handleDk8sUnpinNamespace(msg, this._post);
         break;
       case 'dk8s:openLogs':
-        handleDk8sLogsOpen(msg, this._post);
+        void handleDk8sLogsOpen(msg, this._post);
         break;
       case 'dk8s:closeLogs':
         handleDk8sLogsClose();

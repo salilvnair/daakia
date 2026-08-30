@@ -14,6 +14,7 @@
 import { useEffect } from 'react';
 import { Dk8sIcon, MemoryIcon, WarningTriangleIcon, StethoscopeIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
+import { LogFormatSettings } from './LogFormatSettings';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -129,6 +130,9 @@ export function Dk8sSettings() {
         Thread dumps, class histograms, flight recordings and connection snapshots are
         never blocked by this — none of them writes a file the size of the heap.
       </span>
+
+      <div className="mt-3" />
+      <LogFormatSettings />
     </div>
   );
 }

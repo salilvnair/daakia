@@ -11,15 +11,21 @@
  */
 import type { ChildProcess } from 'child_process';
 import { spawnKubectl } from './kubectl';
+import {
+  compileFormat, FormatMeter,
+  type CompiledFormat, type LogFormat,
+} from './log-format';
 
 export interface LogLine {
   /** Monotonic within a session; the webview keys on it. */
   seq: number;
   /** Milliseconds, parsed from the kubectl timestamp when there is one. */
   ts?: number;
-  /** ERROR / WARN / INFO / DEBUG, best-effort from the line itself. */
+  /** ERROR / WARN / INFO / DEBUG, from the pod's format or a keyword sniff. */
   level: LogLevel;
   text: string;
+  /** The logger or component, where the format names one. */
+  logger?: string;
 }
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'other';
@@ -32,6 +38,14 @@ export interface LogStreamCallbacks {
 }
 
 export interface LogStreamOptions {
+  /**
+   * The application's log format, already resolved for this pod.
+   *
+   * Resolved once by the caller and compiled once here — never per line. When
+   * absent, or when a line does not match it, `levelOf` still runs, so a pod
+   * with no format is exactly as good as it was before rather than worse.
+   */
+  format?: LogFormat;
   /**
    * Keep the stream open.
    *
@@ -89,16 +103,46 @@ export function levelOf(text: string): LogLevel {
   return 'other';
 }
 
-export function parseLine(raw: string, seq: number, hasTimestamps: boolean): LogLine {
+export function parseLine(
+  raw: string,
+  seq: number,
+  hasTimestamps: boolean,
+  format?: CompiledFormat,
+  meter?: FormatMeter,
+): LogLine {
+  let ts: number | undefined;
+  let text = raw;
+
+  // kubectl's own prefix first. It is guaranteed by `--timestamps`, so this is
+  // not a guess and happens regardless of the application's format.
   if (hasTimestamps) {
     const m = RFC3339.exec(raw);
     if (m) {
-      const ts = Date.parse(m[1]);
-      const text = m[2];
-      return { seq, ts: Number.isFinite(ts) ? ts : undefined, level: levelOf(text), text };
+      const parsed = Date.parse(m[1]);
+      if (Number.isFinite(parsed)) ts = parsed;
+      text = m[2];
     }
   }
-  return { seq, level: levelOf(raw), text: raw };
+
+  // Then the application's format, over what is left.
+  if (format && (!meter || meter.healthy)) {
+    const p = meter ? meter.run(() => format.parse(text)) : format.parse(text);
+    if (p) {
+      return {
+        seq,
+        // The pod's own timestamp is more precise than the kubelet's receipt
+        // time, so it wins where the format found one.
+        ts: p.ts ?? ts,
+        level: p.level !== 'other' ? p.level : levelOf(text),
+        logger: p.logger,
+        text,
+      };
+    }
+  }
+
+  // No format, or a line it does not fit — the keyword sniff still applies, so
+  // an unmatched line is never worse off than before formats existed.
+  return { seq, ts, level: levelOf(text), text };
 }
 
 export function streamLogs(
@@ -120,6 +164,11 @@ export function streamLogs(
   ];
 
   const headLimit = opts.direction === 'first' ? (opts.tailLines ?? 200) : undefined;
+
+  // Compiled once for the whole stream. Building this per line is the single
+  // easiest way to turn format support into the reason the view stutters.
+  const compiled = opts.format ? compileFormat(opts.format) : undefined;
+  const meter = compiled ? new FormatMeter() : undefined;
 
   let child: ChildProcess | undefined;
   let stopped = false;
@@ -162,7 +211,7 @@ export function streamLogs(
       carry = parts.pop() ?? '';
       for (const raw of parts) {
         if (!raw) continue;
-        pending.push(parseLine(raw, seq++, opts.timestamps !== false));
+        pending.push(parseLine(raw, seq++, opts.timestamps !== false, compiled, meter));
       }
       // Head mode: once we have what was asked for, stop reading. Streaming a
       // 400MB log to the floor to show its first 200 lines is not a thing to
@@ -186,7 +235,7 @@ export function streamLogs(
       // that has stopped may already have torn down what these lines were for.
       // The final flush below is only correct for an exit we did not cause.
       if (stopped) return;
-      if (carry) { pending.push(parseLine(carry, seq++, opts.timestamps !== false)); carry = ''; }
+      if (carry) { pending.push(parseLine(carry, seq++, opts.timestamps !== false, compiled, meter)); carry = ''; }
       flush();
       const detail = stderrTail.split('\n').map(l => l.trim()).filter(Boolean)[0];
       // A follow that ends on its own means the container went away — which is

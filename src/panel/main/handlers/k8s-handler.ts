@@ -29,6 +29,11 @@ import {
   searchLogs, DEFAULT_SEARCH,
   type SearchHandle, type SearchTarget, type SearchOptions,
 } from '../../../services/k8s/k8s-log-search';
+import {
+  chooseFormat, validatePattern, compileFormat,
+  type LogFormat, type PodContext,
+} from '../../../services/k8s/log-format';
+import { BUILTIN_FORMATS } from '../../../services/k8s/log-format-builtins';
 import { dk8sPrompt } from '../../chat/dk8s-prompts';
 import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
@@ -56,6 +61,10 @@ export interface Dk8sState {
    * Settings, which is most of them.
    */
   guardHeapDump?: boolean;
+  /** User-defined log formats. Built-ins are not stored, only overridden. */
+  logFormats?: LogFormat[];
+  /** Built-in ids the user has switched off. */
+  disabledFormats?: string[];
   /**
    * context name -> namespaces the user pinned by hand.
    *
@@ -544,17 +553,78 @@ export async function handleDk8sExportLogs(
 /** One follow per tab. Opening a second pod replaces the first. */
 let logStream: LogStreamHandle | undefined;
 
-export function handleDk8sLogsOpen(
+/**
+ * Work out which log format applies to a pod.
+ *
+ * Done ONCE here, when the stream opens — never per line — which is what makes
+ * a global list with match rules affordable. The probe reads a short sample
+ * first so a pod nobody has configured still gets coloured levels: eight
+ * formats over twenty lines is about a tenth of a millisecond, paid once.
+ */
+async function resolveFormatFor(
+  context: string,
+  namespace: string,
+  pod: string,
+  pinnedId?: string,
+): Promise<{ format?: LogFormat; via: string }> {
+  const available = allFormats();
+  const pinned = pinnedId ? available.find(f => f.id === pinnedId) : undefined;
+
+  let ctx: PodContext = { namespace, pod };
+  let sample: string[] = [];
+
+  // Only pay for the pod spec and the sample when they can change the answer.
+  if (!pinned) {
+    const spec = await run(
+      ['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'json'],
+      { timeoutMs: 15_000 },
+    );
+    if (spec.ok) {
+      try {
+        const parsed = JSON.parse(spec.stdout);
+        ctx = {
+          namespace, pod,
+          image: parsed.spec?.containers?.[0]?.image,
+          labels: parsed.metadata?.labels ?? {},
+        };
+      } catch { /* match on name and namespace alone */ }
+    }
+
+    const head = await run(
+      ['--context', context, '-n', namespace, 'logs', pod, '--tail=25'],
+      { timeoutMs: 20_000, maxBuffer: 2 * 1024 * 1024 },
+    );
+    if (head.ok) sample = head.stdout.split('\n').filter(l => l.trim());
+  }
+
+  const chosen = chooseFormat({
+    pinned, saved: state().logFormats ?? [], builtins: BUILTIN_FORMATS, ctx, sample,
+  });
+  return { format: chosen.format, via: chosen.via };
+}
+
+export async function handleDk8sLogsOpen(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
-): void {
+): Promise<void> {
   const context = String(msg.context ?? state().context ?? '');
   const namespace = String(msg.namespace ?? '');
   const pod = String(msg.pod ?? '');
   if (!context || !namespace || !pod) return;
 
+  const { format, via } = await resolveFormatFor(
+    context, namespace, pod, msg.formatId as string | undefined,
+  );
+  // Named on screen, so it is always clear which format is running and how it
+  // was picked — a wrong format is much easier to spot than to debug.
+  postMessage({
+    type: 'dk8s:logFormat', pod,
+    formatId: format?.id, formatName: format?.name, via,
+  });
+
   logStream?.stop();
   logStream = streamLogs(context, namespace, pod, {
+    format,
     // Follow only when asked. The default is a snapshot of the tail.
     follow: !!msg.follow,
     container: msg.container as string | undefined,
@@ -748,6 +818,167 @@ export async function handleDk8sSetKubectlPath(
   setKubectlPath(path || undefined);
   saveState({ kubectlPath: path || undefined });
   await handleDk8sProbe(postMessage);
+}
+
+
+// ── Log formats ─────────────────────────────────────────────────────────────
+
+/**
+ * Everything available to match against, user formats first.
+ *
+ * Order is the resolution order, so a user format always beats a built-in of
+ * the same shape — otherwise there would be no way to correct one.
+ */
+function allFormats(): LogFormat[] {
+  const disabled = new Set(state().disabledFormats ?? []);
+  const user = state().logFormats ?? [];
+  return [
+    ...user,
+    ...BUILTIN_FORMATS.map(f => ({ ...f, enabled: !disabled.has(f.id) })),
+  ];
+}
+
+export function handleDk8sGetFormats(postMessage: PostMessage): void {
+  postMessage({
+    type: 'dk8s:formats',
+    formats: state().logFormats ?? [],
+    builtins: BUILTIN_FORMATS,
+    disabled: state().disabledFormats ?? [],
+  });
+}
+
+export function handleDk8sSaveFormat(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const format = msg.format as LogFormat;
+  if (!format?.id || !format.name) return;
+
+  // A pattern that can backtrack catastrophically must never reach a live
+  // stream — one such format against a busy pod would hang the extension host.
+  if (format.kind === 'pattern') {
+    const problem = validatePattern(format.pattern ?? '');
+    if (problem) {
+      postMessage({ type: 'dk8s:formatError', id: format.id, error: problem });
+      return;
+    }
+  }
+
+  const existing = state().logFormats ?? [];
+  const at = existing.findIndex(f => f.id === format.id);
+  const next = at === -1
+    ? [...existing, format]
+    : existing.map(f => (f.id === format.id ? format : f));
+
+  saveState({ logFormats: next });
+  handleDk8sGetFormats(postMessage);
+}
+
+export function handleDk8sDeleteFormat(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const id = String(msg.id ?? '');
+  if (!id) return;
+
+  const builtin = BUILTIN_FORMATS.some(f => f.id === id);
+  if (builtin) {
+    // Built-ins are disabled rather than removed, so they can come back
+    // without the user having to retype one.
+    const disabled = new Set(state().disabledFormats ?? []);
+    if (msg.enabled === false) disabled.add(id); else disabled.delete(id);
+    saveState({ disabledFormats: [...disabled] });
+  } else {
+    saveState({ logFormats: (state().logFormats ?? []).filter(f => f.id !== id) });
+  }
+  handleDk8sGetFormats(postMessage);
+}
+
+/**
+ * Try a format against real lines before it is saved.
+ *
+ * Writing a pattern blind and finding out on a live pod is miserable, so the
+ * editor shows exactly what each line becomes.
+ */
+export function handleDk8sTestFormat(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): void {
+  const format = msg.format as LogFormat;
+  const lines = (msg.lines as string[]) ?? [];
+  if (!format) return;
+
+  if (format.kind === 'pattern') {
+    const problem = validatePattern(format.pattern ?? '');
+    if (problem) {
+      postMessage({ type: 'dk8s:formatTested', error: problem, results: [] });
+      return;
+    }
+  }
+
+  const compiled = compileFormat(format);
+  const results = lines.slice(0, 50).map(line => {
+    const parsed = compiled.parse(line);
+    return {
+      line,
+      matched: !!parsed,
+      level: parsed?.level,
+      logger: parsed?.logger,
+      message: parsed?.message,
+      ts: parsed?.ts,
+    };
+  });
+  postMessage({ type: 'dk8s:formatTested', results });
+}
+
+/**
+ * Ask the model to describe a format from sample lines.
+ *
+ * Its answer is a PROPOSAL, not a saved format: it lands in the editor with
+ * the preview already running against the same lines, so the reader sees what
+ * it actually does before deciding. A detector that saved silently would be a
+ * confident source of mislabelled logs.
+ */
+export async function handleDk8sDetectFormat(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const lines = (msg.lines as string[]) ?? [];
+  if (!lines.length) {
+    postMessage({ type: 'dk8s:formatDetected', error: 'No sample lines to look at.' });
+    return;
+  }
+  const system = dk8sPrompt('dk8s.format.detect');
+  if (!system) return;
+
+  await handleAiSend({
+    tabId: DK8S_FORMAT_TAB,
+    systemPrompts: [system],
+    userPrompt: lines.slice(0, 25).join('\n'),
+    conversation: [],
+    stage: 'dk8s.format.detect',
+  }, postMessage);
+}
+
+/** Its own tab id, so the answer never lands in the pod AI panel. */
+export const DK8S_FORMAT_TAB = 'dk8s-format-detect';
+
+/** Sample lines from a pod, so the editor and the detector have real input. */
+export async function handleDk8sSampleLines(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  const pod = String(msg.pod ?? '');
+  if (!context || !namespace || !pod) return;
+
+  const res = await run([
+    '--context', context, '-n', namespace, 'logs', pod, '--tail=40',
+  ], { timeoutMs: 30_000, maxBuffer: 4 * 1024 * 1024 });
+
+  const lines = res.stdout.split('\n').map(l => l.trim()).filter(Boolean).slice(-25);
+  postMessage({ type: 'dk8s:sampleLines', pod, lines, error: res.ok ? undefined : res.stderr });
 }
 
 // ── Ask AI ──────────────────────────────────────────────────────────────────

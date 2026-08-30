@@ -451,6 +451,9 @@ export function LogViewer() {
   }, [visible, foldTraces, expanded]);
 
   const total = rows.length;
+  // Sized from the largest number it will hold, so the column does not shift
+  // as you scroll from line 99 to line 100.
+  const gutterWidth = `${Math.max(2, String(rows.length).length)}ch`;
   const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
   const last = Math.min(total, Math.ceil((scrollTop + viewportH) / ROW_HEIGHT) + OVERSCAN);
   const slice = rows.slice(first, last);
@@ -865,6 +868,10 @@ export function LogViewer() {
                 {slice.map((row, i) => {
                   const line = row.line;
                   const isOpen = expanded.has(line.seq);
+                  // Position in what is on screen, so it reads 1..N and the
+                  // last number is the count — the same thing an editor's
+                  // gutter tells you at a glance.
+                  const lineNo = first + i + 1;
                   return (
                     <div
                       key={`${line.seq}-${i}`}
@@ -886,6 +893,16 @@ export function LogViewer() {
                         opacity: row.isFrame ? 0.75 : 1,
                       }}
                     >
+                      <span className="shrink-0 select-none text-right"
+                            style={{
+                              width: gutterWidth,
+                              color: 'var(--color-text-muted)',
+                              opacity: 0.45,
+                              fontVariantNumeric: 'tabular-nums',
+                            }}>
+                        {lineNo}
+                      </span>
+
                       {line.ts !== undefined && !row.isFrame && (
                         <span className="shrink-0 select-none"
                               style={{ color: 'var(--color-text-muted)', opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>

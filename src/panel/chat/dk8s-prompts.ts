@@ -189,6 +189,70 @@ Translate Kubernetes' phrasing into plain language. "FailedScheduling: 0/3
 nodes are available: 3 Insufficient memory" means the cluster has nowhere to
 put this pod, which is a capacity problem, not an application problem.`;
 
+
+/**
+ * Work out a log format from sample lines.
+ *
+ * Deliberately NOT built on the shared preamble: this is not a diagnosis, it
+ * is a parsing task with one correct answer shape, and the diagnostic
+ * instructions ("say what the evidence does not show", "end with the cheapest
+ * next check") would produce prose where JSON is needed.
+ */
+export const DK8S_DETECT_FORMAT = `
+You are given sample log lines from one container. Work out how they are
+structured and reply with a single JSON object describing the format.
+
+Reply with JSON and nothing else. No prose, no markdown fence.
+
+The object:
+{
+  "name": "short human name, e.g. Spring Boot or Rails production",
+  "kind": "json" | "logfmt" | "pattern",
+  "pattern": "only when kind is pattern",
+  "fields": { "timestamp": "...", "level": "...", "logger": "...", "message": "..." },
+  "levelMap": { "rawValue": "error|warn|info|debug" },
+  "confidence": 0.0 to 1.0,
+  "note": "one sentence on anything the pattern does not capture"
+}
+
+━━━ CHOOSING THE KIND ━━━
+- Lines starting with "{" and parsing as JSON: kind "json". Give "fields" the
+  property names actually used — do not assume "msg" when the lines say
+  "message".
+- Lines of key=value pairs: kind "logfmt", with "fields" naming the keys.
+- Anything else: kind "pattern".
+
+━━━ WRITING A PATTERN ━━━
+Use these placeholders, which are compiled to a regex:
+  %{TIMESTAMP}  a date and time
+  %{LEVEL}      a level word
+  %{LOGGER}     a logger, class or component name
+  %{MESSAGE}    the rest of the line
+  %{NUM}        a number      %{WORD}   one non-space token
+  %{DATA}       anything, lazily — for parts you want to skip
+Literal text between placeholders is matched literally, and one space matches
+any run of spaces, so do not try to reproduce column padding.
+
+Raw regex is allowed as "/.../" when the placeholders cannot express the shape.
+Never nest one unbounded repeat inside another — no (.*)+ or (\S+)* — it is
+rejected, because on a line that nearly matches it runs effectively forever.
+
+━━━ LEVELS ━━━
+ERROR, WARN, INFO, DEBUG and their usual spellings are understood already;
+"levelMap" is only for values that are not obvious. Map them when the level is
+a number (syslog priority, bunyan's 30/40/50) or an HTTP status, and when it is
+in-house wording. Omit "levelMap" entirely otherwise.
+
+━━━ RULES ━━━
+- Base it only on the lines given. Do not invent a field no line contains.
+- If the lines carry no level at all, say so in "note" and give no level
+  placeholder. A format that mislabels every line is worse than one that
+  labels none.
+- If the sample holds more than one shape, describe the one that covers most
+  lines and say so in "note".
+- Set "confidence" honestly. Below 0.5 tells the reader to check it before
+  saving, which is the point of showing them.`;
+
 /** The registry, keyed the way the webview asks for them. */
 export const DK8S_PROMPTS: Record<string, string> = {
   'dk8s.log.askWhy': DK8S_LOG_ASK_WHY,
@@ -198,6 +262,7 @@ export const DK8S_PROMPTS: Record<string, string> = {
   'dk8s.threads.explain': DK8S_THREADS_EXPLAIN,
   'dk8s.heap.explain': DK8S_HEAP_EXPLAIN,
   'dk8s.describe.explain': DK8S_DESCRIBE_EXPLAIN,
+  'dk8s.format.detect': DK8S_DETECT_FORMAT,
 };
 
 /** What each prompt is offered as in the UI. */

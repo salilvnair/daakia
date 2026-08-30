@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   compileFormat, compileTemplate, validatePattern, normaliseLevel,
-  resolveFormat, FormatMeter, type LogFormat,
+  resolveFormat, FormatMeter, probeFormat, chooseFormat, type LogFormat,
 } from './log-format';
 import { BUILTIN_FORMATS } from './log-format-builtins';
 
@@ -202,5 +202,75 @@ describe('FormatMeter', () => {
     const m = new FormatMeter(0.0001, 2);
     for (let i = 0; i < 5; i++) m.run(() => 1);
     expect(m.run(() => 'still called')).toBe('still called');
+  });
+});
+
+describe('probeFormat', () => {
+  const spring = [
+    '2026-08-30T02:41:05.171Z  WARN 1 --- [app] [main] com.acme.Db : slow',
+    '2026-08-30T02:41:06.001Z  INFO 1 --- [app] [main] com.acme.Api : started',
+    '2026-08-30T02:41:07.500Z ERROR 1 --- [app] [main] com.acme.Db : refused',
+    '2026-08-30T02:41:08.100Z  INFO 1 --- [app] [main] com.acme.Api : ok',
+  ];
+  const json = [
+    '{"level":"info","ts":1756522865,"msg":"listening"}',
+    '{"level":"error","ts":1756522866,"msg":"refused"}',
+    '{"level":"warn","ts":1756522867,"msg":"retrying"}',
+    '{"level":"info","ts":1756522868,"msg":"ok"}',
+  ];
+
+  it('identifies the format with no configuration at all', () => {
+    expect(probeFormat(spring, BUILTIN_FORMATS)?.format.id).toBe('builtin.spring');
+    expect(probeFormat(json, BUILTIN_FORMATS)?.format.id).toBe('builtin.json');
+  });
+
+  it('prefers a format that reads a level over one that merely matches', () => {
+    // Several patterns will match a given line; the useful one is whichever
+    // gets the colour right, which is the entire point of choosing.
+    const best = probeFormat(spring, BUILTIN_FORMATS)!;
+    expect(best.levelled).toBeGreaterThan(0);
+  });
+
+  it('returns nothing rather than a bad guess on unstructured output', () => {
+    const junk = ['starting up', 'still going', 'done', 'bye', 'again'];
+    expect(probeFormat(junk, BUILTIN_FORMATS)).toBeUndefined();
+  });
+
+  it('will not guess from too small a sample', () => {
+    expect(probeFormat([json[0]], BUILTIN_FORMATS)).toBeUndefined();
+  });
+});
+
+describe('chooseFormat', () => {
+  const ctx = { namespace: 'payments', pod: 'api-1', image: 'acme/api', labels: {} };
+  const pinned: LogFormat = { id: 'pin', name: 'pinned', kind: 'json' };
+  const ruled: LogFormat = {
+    id: 'rule', name: 'ruled', kind: 'json', match: { namespace: 'payments' },
+  };
+  const sample = ['{"level":"info","msg":"a"}', '{"level":"info","msg":"b"}', '{"level":"info","msg":"c"}'];
+
+  it('prefers an explicit choice over everything', () => {
+    const r = chooseFormat({ pinned, saved: [ruled], builtins: BUILTIN_FORMATS, ctx, sample });
+    expect(r.via).toBe('pinned');
+    expect(r.format?.id).toBe('pin');
+  });
+
+  it('prefers a configured rule over a guess', () => {
+    const r = chooseFormat({ saved: [ruled], builtins: BUILTIN_FORMATS, ctx, sample });
+    expect(r.via).toBe('rule');
+  });
+
+  it('falls back to probing when nothing is configured', () => {
+    const r = chooseFormat({ saved: [], builtins: BUILTIN_FORMATS, ctx, sample });
+    expect(r.via).toBe('probed');
+    expect(r.format?.id).toBe('builtin.json');
+  });
+
+  it('reports "none" rather than inventing one', () => {
+    // The caller then keeps its own heuristic, which is better than a format
+    // that confidently mislabels every line.
+    const r = chooseFormat({ saved: [], builtins: BUILTIN_FORMATS, ctx, sample: ['junk', 'more junk', 'yet more'] });
+    expect(r.via).toBe('none');
+    expect(r.format).toBeUndefined();
   });
 });

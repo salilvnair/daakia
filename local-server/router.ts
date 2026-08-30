@@ -37,7 +37,9 @@ import {
 import { handleWsConnect, handleWsDisconnect, handleWsSend } from '../src/panel/main/handlers/websocket-handler';
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces, handleDk8sSetNamespace,
-  handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
+  handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch,
+  handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
+  handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
   handleDk8sLogsOpen, handleDk8sLogsClose, handleDk8sDescribe,
@@ -132,6 +134,24 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     case 'dk8s:setGuardHeapDump':
       handleDk8sSetGuardHeapDump(msg, post);
       break;
+    case 'dk8s:getFormats':
+      handleDk8sGetFormats(post);
+      break;
+    case 'dk8s:saveFormat':
+      handleDk8sSaveFormat(msg, post);
+      break;
+    case 'dk8s:deleteFormat':
+      handleDk8sDeleteFormat(msg, post);
+      break;
+    case 'dk8s:testFormat':
+      handleDk8sTestFormat(msg, post);
+      break;
+    case 'dk8s:sampleLines':
+      handleDk8sSampleLines(msg, post);
+      break;
+    case 'dk8s:detectFormat':
+      handleDk8sDetectFormat(msg, post);
+      break;
     case 'dk8s:searchLogs':
       handleDk8sSearchLogs(msg, post);
       break;
@@ -154,7 +174,7 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       handleDk8sUnpinNamespace(msg, post);
       break;
     case 'dk8s:openLogs':
-      handleDk8sLogsOpen(msg, post);
+      await handleDk8sLogsOpen(msg, post);
       break;
     case 'dk8s:closeLogs':
       handleDk8sLogsClose();
