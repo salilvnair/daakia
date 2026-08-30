@@ -24,6 +24,7 @@ interface UiStateStore {
   setScroll: (id: string, position: number) => void;
   getScroll: (id: string) => number;
   setPref: (id: string, value: string) => void;
+  setScopedPref: (prefix: string, id: string, value: string, keep?: number) => void;
   getPref: (id: string, defaultValue?: string) => string | undefined;
   toggleJsonPath: (scopeId: string, path: string) => void;
   getJsonExpanded: (scopeId: string) => Set<string>;
@@ -73,6 +74,32 @@ export const useUiStateStore = create<UiStateStore>((set, get) => ({
       const prefs = { ...s.prefs, [id]: value };
       schedulePersist({ panelHeights: s.panelHeights, scrollPositions: s.scrollPositions, prefs });
       return { prefs };
+    });
+  },
+
+  /**
+   * A pref for one of an unbounded set of things, keeping only the recent ones.
+   *
+   * The existing `<area>.subtab.<id>` prefs are keyed by request tab, and there
+   * are only ever a handful of those. Keying by pod is the same idea against a
+   * set with no ceiling — every pod you ever open would leave a key behind, and
+   * `prefs` is a single JSON blob, so after a few months on a large cluster it
+   * would be thousands of dead entries carried into memory on every launch.
+   *
+   * So the key is rewritten rather than updated: deleting it before re-adding
+   * puts it last in insertion order, which is what makes "keep the most recent
+   * N" mean anything for a plain object.
+   */
+  setScopedPref: (prefix, id, value, keep = 50) => {
+    set(s => {
+      const { [`${prefix}${id}`]: _drop, ...rest } = s.prefs;
+      const next: Record<string, string> = { ...rest, [`${prefix}${id}`]: value };
+
+      const mine = Object.keys(next).filter(k => k.startsWith(prefix));
+      for (const stale of mine.slice(0, Math.max(0, mine.length - keep))) delete next[stale];
+
+      schedulePersist({ panelHeights: s.panelHeights, scrollPositions: s.scrollPositions, prefs: next });
+      return { prefs: next };
     });
   },
 

@@ -7,6 +7,10 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { useUiStateStore } from './ui-state-store';
+
+/** Same shape as `rest.subtab.<id>` and friends — see setScopedPref. */
+const DETAIL_TAB_PREF = 'dk8s.detailTab.';
 
 export interface KubeContext {
   name: string;
@@ -294,8 +298,6 @@ interface K8sState {
   /** The pod whose detail panel is open, if any. */
   detail?: PodSummary;
   detailTab: DetailTab;
-  /** The tab last used on each pod, so reopening one returns to it. */
-  detailTabByPod: Record<string, DetailTab>;
   logs: LogLine[];
   logStatus: LogStatus;
   logDetail?: string;
@@ -425,7 +427,6 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   exportOpen: false,
 
   detailTab: 'logs',
-  detailTabByPod: {},
   logs: [],
   logStatus: 'idle',
   logDropped: 0,
@@ -545,9 +546,12 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       //
       // Every open reset to Logs, so going to Doctor, taking a dump, following
       // it into the analyzer and coming back put you on Logs with the Doctor
-      // tab looking untouched. Keyed by pod, because the tab that matters is a
-      // property of what you were doing with that pod.
-      detailTab: get().detailTabByPod[pod.uid] ?? 'logs',
+      // tab looking untouched. Stored the same way every other panel stores its
+      // subtab — a `prefs` entry in the ui_state row — so it also survives a
+      // reload, and keyed by namespace/name rather than uid so a value written
+      // for a pod is still readable by eye in the database.
+      detailTab: (useUiStateStore.getState()
+        .prefs[`${DETAIL_TAB_PREF}${pod.namespace}/${pod.name}`] as DetailTab | undefined) ?? 'logs',
       logs: [], logStatus: 'idle', logDetail: undefined, logDropped: 0,
       logFilter: '', logLevels: [], logFollow: true, logLive: false,
       logDirection: 'last', logSince: 'all', logExportOpen: false,
@@ -572,10 +576,14 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     set({ detail: undefined, logs: [], logStatus: 'idle', logSelection: undefined });
   },
 
-  setDetailTab: (detailTab) => set(s => ({
-    detailTab,
-    detailTabByPod: s.detail ? { ...s.detailTabByPod, [s.detail.uid]: detailTab } : s.detailTabByPod,
-  })),
+  setDetailTab: (detailTab) => {
+    const pod = get().detail;
+    if (pod) {
+      useUiStateStore.getState()
+        .setScopedPref(DETAIL_TAB_PREF, `${pod.namespace}/${pod.name}`, detailTab);
+    }
+    set({ detailTab });
+  },
   setLogFilter: (logFilter) => set({ logFilter }),
 
   toggleLogLevel: (level) => set(s => ({
