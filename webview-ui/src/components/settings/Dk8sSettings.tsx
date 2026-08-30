@@ -27,7 +27,11 @@ function Toggle({ on, onChange, label, description, children }: {
 }) {
   return (
     <label className="flex items-start gap-3 px-4 py-3.5 rounded-lg cursor-pointer"
-           style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)' }}>
+           style={{
+             background: 'var(--color-surface)',
+             border: '1px solid var(--color-surface-border)',
+             maxWidth: '92ch',
+           }}>
       <input
         type="checkbox"
         checked={on}
@@ -66,14 +70,19 @@ export function Dk8sSettings() {
   }, [apply]);
 
   return (
-    <div className="flex flex-col gap-4 px-5 py-4 max-w-[680px]">
+    // Full width. The 680px cap was inherited from when this page held one
+    // checkbox; the format list has rules, previews and an editor beside each
+    // other, and squeezing those into half a wide window wastes the half that
+    // makes them readable.
+    <div className="flex flex-col gap-4 px-5 py-4">
       <div className="flex items-center gap-2">
         <Dk8sIcon size={16} color={ACCENT} />
         <span className="text-[14px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           dk8s
         </span>
       </div>
-      <span className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+      <span className="text-[11.5px] leading-relaxed"
+            style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
         How dk8s behaves against a live cluster.
       </span>
 
@@ -87,7 +96,8 @@ export function Dk8sSettings() {
         </span>
         <div className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
       </div>
-      <span className="text-[11px] leading-relaxed -mt-2" style={{ color: 'var(--color-text-muted)' }}>
+      <span className="text-[11px] leading-relaxed -mt-2"
+            style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
         Everything in this group is about the cost to the pod, not to you.
       </span>
 
@@ -126,7 +136,8 @@ export function Dk8sSettings() {
         </span>
       </Toggle>
 
-      <span className="text-[10.5px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+      <span className="text-[10.5px] leading-relaxed"
+            style={{ color: 'var(--color-text-muted)', maxWidth: '72ch' }}>
         Thread dumps, class histograms, flight recordings and connection snapshots are
         never blocked by this — none of them writes a file the size of the heap.
       </span>

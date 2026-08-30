@@ -363,7 +363,8 @@ export function LogFormatSettings() {
                     style={{ background: `color-mix(in srgb, ${ACCENT} 14%, transparent)` }} />
       </div>
 
-      <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+      <span className="text-[11px] leading-relaxed"
+            style={{ color: 'var(--color-text-muted)', maxWidth: '84ch' }}>
         How dk8s reads your applications&rsquo; log lines — which part is the timestamp, the
         level, the logger. Without one it falls back to looking for an uppercase level word,
         which finds Java and Python and misses JSON, logfmt and access logs entirely.
