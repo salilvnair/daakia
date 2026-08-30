@@ -192,7 +192,10 @@ export function ArtifactDetail() {
           accentColor={AI_ACCENT} color={aiOpen ? AI_ACCENT : 'var(--color-text-secondary)'}
           onClick={aiOpen ? closeAi : openAi}
           title={aiOpen ? 'Hide AI analysis' : 'Show AI analysis'}
-          iconLeft={<SparkleIcon size={11} color={aiOpen ? AI_ACCENT : 'var(--color-text-muted)'} />}
+          // Always the AI colour. Greying it when the panel is closed made the
+          // icon read as disabled — the pod header keeps it lit and lets the
+          // label and fill carry the on/off state.
+          iconLeft={<SparkleIcon size={11} color={AI_ACCENT} />}
           style={{
             background: aiOpen
               ? `color-mix(in srgb, ${AI_ACCENT} 16%, transparent)`

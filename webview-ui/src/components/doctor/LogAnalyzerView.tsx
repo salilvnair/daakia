@@ -377,8 +377,11 @@ export function LogAnalyzerView() {
           </div>
         )}
 
-        {/* Templates */}
-        <div className="flex flex-col gap-2">
+        {/* Templates.
+             `flex-1` so the list reaches the bottom of the panel. A file with
+             three shapes otherwise left a bordered box hanging in the middle
+             of an empty page, which reads as content that failed to load. */}
+        <div className="flex flex-col gap-2 flex-1 min-h-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
               Message shapes
@@ -409,7 +412,8 @@ export function LogAnalyzerView() {
               {templates.length} of {v.distinctTemplates}
             </span>
           </div>
-          <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-surface-border)' }}>
+          <div className="rounded-lg overflow-y-auto flex-1 min-h-0"
+               style={{ border: '1px solid var(--color-surface-border)' }}>
             {templates.map((t, i) => {
               const lvl = topLevel(t);
               const share = topCount > 0 ? t.count / topCount : 0;
