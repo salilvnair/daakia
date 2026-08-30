@@ -430,6 +430,10 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
           background: 'color-mix(in srgb, var(--color-protocol-ai) 20%, transparent)',
           borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 55%, transparent)',
           fontWeight: 600,
+          // 4px, the same corner every other button in the log view uses.
+          // dui's default is a pill, which next to the rounded-rectangle
+          // toolbar above reads as a different kind of control.
+          borderRadius: 4,
         }}
       /></div>
       {/* Explain is the other model call, so it keeps the AI tone. */}
@@ -444,6 +448,7 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
         style={{
           background: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)',
           borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 38%, transparent)',
+          borderRadius: 4,
         }}
       /></div>
       </div>
