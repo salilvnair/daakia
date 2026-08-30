@@ -386,8 +386,14 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
   return (
     <div
       data-selection-toolbar
-      className="absolute z-30 flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+      className="absolute z-30 flex items-center gap-2 px-2.5 py-1.5"
       style={{
+        // 6px against the buttons' 4px. `rounded-lg` put 8px here, which next
+        // to a 4px button read as a softer, rounder kind of surface than the
+        // controls it holds. A hair more than the button is enough to nest —
+        // matching it exactly makes the two corners fight, and going past it
+        // turns the strip into a pill.
+        borderRadius: 6,
         top: rect.top, left: rect.left,
         // A solid strip, not floating chips. Over a dense log the buttons had
         // log text showing between and behind them and were barely findable,
