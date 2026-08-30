@@ -93,8 +93,52 @@ function Shape({ template }: { template: string }) {
   );
 }
 
+/**
+ * One level, its count, and whether the list is narrowed to it.
+ *
+ * Disabled at zero rather than hidden: "0 err" is an answer, and a button that
+ * vanishes when the news is good makes the toolbar shift under the cursor.
+ */
+function LevelToggle({ on, onClick, color, count, label }: {
+  on: boolean; onClick: () => void; color: string; count: number; label: string;
+}) {
+  const none = count === 0;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={none}
+      title={on ? `Showing only ${label}` : `Show only ${label}`}
+      className="h-[22px] px-2.5 rounded-md text-[11px] cursor-pointer flex items-center gap-1.5"
+      style={{
+        color: on ? color : 'var(--color-text-secondary)',
+        background: on ? `color-mix(in srgb, ${color} 12%, transparent)` : 'transparent',
+        border: `1px solid ${on
+          ? `color-mix(in srgb, ${color} 34%, transparent)`
+          : 'var(--color-surface-border)'}`,
+        opacity: none ? 0.4 : 1,
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: 6, background: color, flexShrink: 0 }} />
+      <span style={{ fontWeight: 600 }}>{count.toLocaleString()}</span>
+      <span style={{ opacity: 0.75 }}>{label}</span>
+    </button>
+  );
+}
+
 /** ERROR / WARN / INFO as a readable pill rather than an 8px square. */
 function LevelPill({ level }: { level: Level }) {
+  /*
+    No level, no pill.
+
+    A shape whose lines carried no level was rendering an outlined box with a
+    dash in it — which reads as a control that failed to load rather than as
+    "this one has no level". The space is kept so the counts beside it still
+    line up down the column.
+  */
+  if (level === 'UNKNOWN') return <span className="shrink-0" style={{ width: 52 }} />;
+
   const color = LEVEL_COLOR[level];
   return (
     <span
@@ -107,10 +151,7 @@ function LevelPill({ level }: { level: Level }) {
         borderRadius: 4, padding: '2px 0', lineHeight: 1.3,
       }}
     >
-      {/* A shape whose lines carried no level is not "unknown severity", it
-          is "no level in the text" — a dash says that without implying a
-          judgement the parser never made. */}
-      {level === 'UNKNOWN' ? '—' : level}
+      {level}
     </span>
   );
 }
@@ -119,11 +160,21 @@ export function LogAnalyzerView() {
   const [loaded, setLoaded] = useState<{ name: string; verdict: Verdict } | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
-  const [onlyProblems, setOnlyProblems] = useState(false);
+  /*
+    Errors and warnings as separate switches.
+
+    One "errors & warnings only" button could not answer the question people
+    actually arrive with — "how many errors are there" — and could not narrow
+    to just errors when a noisy warning drowns them. Two toggles carry their
+    own counts, so the answer is on the button before it is pressed.
+  */
+  const [onlyError, setOnlyError] = useState(false);
+  const [onlyWarn, setOnlyWarn] = useState(false);
 
   /** Back to the empty state — see the note on the button. */
   const reset = () => {
-    setLoaded(null); setError(''); setFilter(''); setOnlyProblems(false);
+    setLoaded(null); setError(''); setFilter('');
+    setOnlyError(false); setOnlyWarn(false);
   };
 
   useEffect(() => {
@@ -145,10 +196,28 @@ export function LogAnalyzerView() {
   const templates = useMemo(() => {
     if (!loaded) return [];
     const q = filter.trim().toLowerCase();
+    // Neither toggle pressed means no level filter at all; both pressed means
+    // errors or warnings, which is the old button's behaviour reachable by
+    // pressing both rather than being the only option.
+    const wanted = new Set<string>();
+    if (onlyError) { wanted.add('ERROR'); wanted.add('FATAL'); }
+    if (onlyWarn) wanted.add('WARN');
+
     return loaded.verdict.templates.filter(t =>
       (!q || t.template.toLowerCase().includes(q)) &&
-      (!onlyProblems || ['ERROR', 'FATAL', 'WARN'].includes(topLevel(t))));
-  }, [loaded, filter, onlyProblems]);
+      (wanted.size === 0 || wanted.has(topLevel(t))));
+  }, [loaded, filter, onlyError, onlyWarn]);
+
+  /** Lines, not shapes: "123 err" means 123 lines, which is what people mean. */
+  const levelCounts = useMemo(() => {
+    let err = 0; let wrn = 0;
+    for (const t of loaded?.verdict.templates ?? []) {
+      const lvl = topLevel(t);
+      if (lvl === 'ERROR' || lvl === 'FATAL') err += t.count;
+      else if (lvl === 'WARN') wrn += t.count;
+    }
+    return { err, wrn };
+  }, [loaded]);
 
   if (error) {
     return (
@@ -312,15 +381,14 @@ export function LogAnalyzerView() {
               style={{ background: 'var(--color-surface-hover)', color: 'var(--color-text-primary)',
                        border: '1px solid var(--color-surface-border)', minWidth: 200 }}
             />
-            <button type="button" onClick={() => setOnlyProblems(v2 => !v2)}
-                    className="h-[22px] px-2.5 rounded-md text-[11px] cursor-pointer"
-                    style={{
-                      color: onlyProblems ? 'var(--color-error)' : 'var(--color-text-secondary)',
-                      background: onlyProblems ? 'color-mix(in srgb, var(--color-error) 12%, transparent)' : 'transparent',
-                      border: `1px solid ${onlyProblems ? 'color-mix(in srgb, var(--color-error) 32%, transparent)' : 'var(--color-surface-border)'}`,
-                    }}>
-              errors &amp; warnings only
-            </button>
+            <LevelToggle
+              on={onlyError} onClick={() => setOnlyError(v => !v)}
+              color="var(--color-error)" count={levelCounts.err} label="err"
+            />
+            <LevelToggle
+              on={onlyWarn} onClick={() => setOnlyWarn(v => !v)}
+              color="var(--color-warning)" count={levelCounts.wrn} label="wrn"
+            />
             <span className="text-[11px] text-[var(--color-text-muted)] font-mono tabular-nums">
               {templates.length} of {v.distinctTemplates}
             </span>
