@@ -39,27 +39,6 @@ function Stat({ n, label, color }: { n: number; label: string; color?: string })
   );
 }
 
-function Pulse({ pods }: { pods: PodSummary[] }) {
-  const counts = useMemo(() => pulse(pods), [pods]);
-  return (
-    <div className="flex items-center gap-5 flex-wrap px-4 py-2.5 flex-shrink-0"
-         style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-      <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)]">
-        Namespace
-      </span>
-      <Stat n={counts.total} label="pods" />
-      <Stat n={counts.ready} label="ready" color="var(--color-method-get)" />
-      {counts.degraded > 0 && <Stat n={counts.degraded} label="degraded" color="var(--color-warning)" />}
-      {counts.critical > 0 && <Stat n={counts.critical} label="failing" color="var(--color-error)" />}
-      {counts.restartsLastHour > 0 && (
-        <Stat n={counts.restartsLastHour} label="restarted in the last hour" color="var(--color-warning)" />
-      )}
-    </div>
-  );
-}
-
-// ── Connection state ────────────────────────────────────────────────────────
-
 /**
  * A watch dies quietly. If the grid keeps rendering the last thing it saw it
  * looks perfectly healthy while being completely stale, which is the worst
@@ -80,6 +59,30 @@ function WatchIndicator() {
       <span style={{ width: 6, height: 6, borderRadius: 3, background: s.color }} />
       <span className="text-[10.5px]" style={{ color: s.color }}>{s.label}</span>
     </span>
+  );
+}
+
+function Pulse({ pods }: { pods: PodSummary[] }) {
+  const counts = useMemo(() => pulse(pods), [pods]);
+  return (
+    <div className="flex items-center gap-5 flex-wrap px-4 py-2.5 flex-shrink-0"
+         style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+      <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)]">
+        Namespace
+      </span>
+      <Stat n={counts.total} label="pods" />
+      <Stat n={counts.ready} label="ready" color="var(--color-method-get)" />
+      {counts.degraded > 0 && <Stat n={counts.degraded} label="degraded" color="var(--color-warning)" />}
+      {counts.critical > 0 && <Stat n={counts.critical} label="failing" color="var(--color-error)" />}
+      {counts.restartsLastHour > 0 && (
+        <Stat n={counts.restartsLastHour} label="restarted in the last hour" color="var(--color-warning)" />
+      )}
+
+      <div className="flex-1" />
+      {/* The watch state belongs with the counts, not in the toolbar: it says
+          whether the numbers to its left are still true. */}
+      <WatchIndicator />
+    </div>
   );
 }
 
@@ -480,18 +483,22 @@ export function PodGrid() {
           {selectMode ? 'Cancel' : 'Select pods'}
         </button>
 
-        <WatchIndicator />
-        <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--color-surface-border)' }}>
+        {/* Same height as Select pods beside it. It was a size smaller, which
+            made the two read as different tiers of control when they are
+            peers on the same row. */}
+        <div className="flex rounded-md overflow-hidden self-stretch"
+             style={{ border: '1px solid var(--color-surface-border)' }}>
           {(['cards', 'table'] as const).map(v => (
             <button
               key={v}
               type="button"
               onClick={() => setView(v)}
-              className="text-[10.5px] px-2.5 py-1 cursor-pointer transition-colors"
+              className="text-[11px] px-3 cursor-pointer transition-colors flex items-center"
               style={{
                 background: view === v ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
                 color: view === v ? ACCENT : 'var(--color-text-muted)',
                 border: 'none',
+                fontWeight: view === v ? 600 : 400,
               }}
             >
               {v}
