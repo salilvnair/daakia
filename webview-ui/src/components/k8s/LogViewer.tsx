@@ -17,7 +17,10 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   SearchInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
 } from '@salilvnair/dui';
-import { SparkleIcon, HelpCircleIcon, ChevronRightIcon, ChevronDownIcon } from '../../icons';
+import {
+  SparkleIcon, HelpCircleIcon, ChevronRightIcon, ChevronDownIcon,
+  WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon,
+} from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
@@ -319,6 +322,51 @@ function LevelTag({ level }: { level: LogLevel }) {
  * without the strip growing a button per scope. What is left is what needs a
  * strip — the actions with no obvious keyboard or menu home.
  */
+/** A hairline between groups of controls — see the note on the toolbar. */
+function Sep() {
+  return (
+    <span aria-hidden
+          style={{
+            width: 1, height: 18, flexShrink: 0,
+            background: 'var(--color-surface-border)',
+            margin: '0 2px',
+          }} />
+  );
+}
+
+/**
+ * A display mode.
+ *
+ * Square and icon-only, at the same height as the buttons beside it: wrap and
+ * folding change how the lines are drawn rather than fetching anything, and as
+ * labelled checkboxes they were the only things in the bar with a different
+ * shape and a different hit target.
+ */
+function IconToggle({ on, onClick, title, icon }: {
+  on: boolean; onClick: () => void; title: string; icon: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={on}
+      className="flex items-center justify-center cursor-pointer shrink-0"
+      style={{
+        // 28 to the pixel, because that is what dui renders every control in
+        // this bar at. A toggle two pixels taller than its neighbours is the
+        // kind of thing you see without being able to name.
+        width: 28, height: 28, borderRadius: 6,
+        color: on ? ACCENT : 'var(--color-text-muted)',
+        background: on ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
+        border: `1px solid ${on ? `color-mix(in srgb, ${ACCENT} 38%, transparent)` : 'var(--color-surface-border)'}`,
+      }}
+    >
+      {icon}
+    </button>
+  );
+}
+
 function SelectionToolbar({ rect, lineCount, onAsk, onExplain }: {
   rect: { top: number; left: number };
   lineCount: number;
@@ -772,19 +820,44 @@ export function LogViewer() {
           </div>
         )}
 
-        {/* One wrapping unit. As siblings of the spacer these controls wrapped
-            individually, so a narrow panel flung Download and Analyze onto
-            their own row at the FAR LEFT — reading as a second, broken
-            toolbar rather than a continuation of this one. */}
-        <div className="flex items-center gap-3 flex-wrap justify-end">
-        <CheckboxView label="wrap" checked={logWrap} onChange={setLogWrap}
-                      size={CTL_SIZE} accentColor={ACCENT} />
-        <CheckboxView label="fold traces" checked={foldTraces} onChange={setFoldTraces}
-                      size={CTL_SIZE} accentColor={ACCENT} />
+        {/*
+          Grouped by what each control does, not by the order they were added.
+
+          It was nine controls in one undifferentiated row, so nothing read as
+          related to anything else, and the two checkboxes were the only
+          non-button shapes in a row of buttons. Now there are three jobs, with
+          a hairline between each:
+
+            view    how the lines are drawn — wrap, folding
+            query   what to fetch, ending in the one button that fetches it
+            output  what to do with what came back
+
+          One wrapping unit, because as siblings of the spacer these wrapped
+          individually and a narrow panel flung Download and Analyze onto their
+          own row at the far left — reading as a second, broken toolbar.
+        */}
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+        {/* Modes, not actions, so they are icon toggles rather than labelled
+            buttons — and they sit apart from the controls that fetch. */}
+        <IconToggle on={logWrap} onClick={() => setLogWrap(!logWrap)}
+                    title={logWrap ? 'Wrapping long lines' : 'Long lines run off the right'}
+                    icon={<WrapLinesIcon size={13} />} />
+        <IconToggle on={foldTraces} onClick={() => setFoldTraces(!foldTraces)}
+                    title={foldTraces ? 'Stack traces are folded' : 'Stack traces shown in full'}
+                    icon={<LayersIcon size={13} />} />
+
+        <Sep />
 
         {/* Which end, and how much. Nothing is fetched until Fetch is pressed —
             a selector that reloads on change is the "it keeps refreshing"
             behaviour this whole view exists to avoid. */}
+        {/* Part of WHAT is fetched, so it belongs with the query controls
+            rather than stranded past Analyze at the far right. */}
+        {(detail?.restarts ?? 0) > 0 && (
+          <CheckboxView label="previous run" checked={logPrevious} onChange={setLogPrevious}
+                        size={CTL_SIZE} accentColor="var(--color-warning)" />
+        )}
+
         <SegmentedControlView
           value={logDirection}
           onChange={v => setLogDirection(v as 'last' | 'first')}
@@ -815,6 +888,9 @@ export function LogViewer() {
           accentColor={ACCENT}
         />
 
+        {/* The only accented button in the bar: it is what acts on the query
+            the three controls to its left just composed. Everything else is
+            quiet, so this reads as the thing to press. */}
         <ButtonView
           label="Fetch"
           size={CTL_SIZE}
@@ -824,16 +900,18 @@ export function LogViewer() {
           disabled={logLive}
           onClick={fetchLogs}
           title={logLive ? 'Following already refetches continuously' : 'Load these lines now'}
+          iconLeft={<RefreshIcon size={12} color={logLive ? 'var(--color-text-muted)' : ACCENT} />}
           style={{
-            background: logLive ? 'transparent' : 'color-mix(in srgb, var(--color-dk8s) 12%, transparent)',
+            background: logLive ? 'transparent' : 'color-mix(in srgb, var(--color-dk8s) 14%, transparent)',
             borderColor: logLive
               ? 'var(--color-surface-border)'
               : 'color-mix(in srgb, var(--color-dk8s) 38%, transparent)',
+            fontWeight: 600,
           }}
         />
 
-        {/* Following is a decision, not a default. A pod doing hundreds of
-            lines a second buries whatever you opened the log to read. */}
+        <Sep />
+
         {/* Following is a decision, not a default. A pod doing hundreds of
             lines a second buries whatever you opened the log to read. */}
         <ButtonView
@@ -862,12 +940,15 @@ export function LogViewer() {
           }
         />
 
+        <Sep />
+
         <ButtonView
           label="Download"
           size={CTL_SIZE}
           variant="secondary"
           onClick={openLogExport}
           title="Write this pod's log to a file, with the same options as a bulk export"
+          iconLeft={<DownloadIcon size={12} color="var(--color-text-secondary)" />}
           style={{ background: 'transparent' }}
         />
 
@@ -891,13 +972,6 @@ export function LogViewer() {
             fontWeight: 600,
           }}
         />
-
-        {/* Only for a pod that has actually restarted — for one that has not,
-            --previous just errors, and offering it invites that. */}
-        {(detail?.restarts ?? 0) > 0 && (
-          <CheckboxView label="previous run" checked={logPrevious} onChange={setLogPrevious}
-                        size={CTL_SIZE} accentColor="var(--color-warning)" />
-        )}
 
         {logStatus === 'error' && (
           <span className="text-[11px]" style={{ color: 'var(--color-error)' }}>error</span>
