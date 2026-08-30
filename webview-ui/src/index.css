@@ -1621,3 +1621,13 @@ input[type="number"] {
 .dk8s-artifact-hud button:last-of-type {
   color: color-mix(in srgb, var(--color-error) 80%, transparent);
 }
+
+/*
+ * dui's hover is a neutral surface wash, which on the one destructive item
+ * reads as "nothing special happens here". Tinted red so the hover agrees
+ * with the label it is highlighting.
+ */
+.dk8s-artifact-hud button:last-of-type:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error) 18%, transparent);
+  color: var(--color-error);
+}
