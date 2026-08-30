@@ -20,6 +20,7 @@ import {
 import { useK8sStore } from '../../store/k8s-store';
 import { useDk8sSearchStore, type SearchMatch, type PodGroup } from '../../store/dk8s-search-store';
 import { levelColor } from './log-view';
+import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-dk8s)';
 const ROW_H = 19;
@@ -133,6 +134,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     openDetail(pod);
   };
 
+  const canSearch = !!options.query.trim() && chosen.length > 0;
   const totalHits = groups.reduce((n, g) => n + g.result.matched, 0);
   const anyCapped = groups.some(g => g.result.capped);
 
@@ -162,10 +164,12 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             ? <ButtonView label="Stop" size="sm" variant="secondary"
                           accentColor="var(--color-error)" color="var(--color-error)"
                           onClick={cancel} />
-            : <ButtonView label="Search" size="sm" variant="primary" accentColor={ACCENT}
-                          disabled={!options.query.trim() || !chosen.length}
-                          iconLeft={<SearchIcon size={12} />}
-                          onClick={submit} />}
+            : <ButtonView label="Search" size="sm" variant="secondary" accentColor={ACCENT}
+                          color={canSearch ? ACCENT : 'var(--color-text-muted)'}
+                          disabled={!canSearch}
+                          iconLeft={<SearchIcon size={12} color={canSearch ? ACCENT : 'var(--color-text-muted)'} />}
+                          onClick={submit}
+                          style={softPrimary(ACCENT, canSearch)} />}
         </div>
       }
     >
@@ -199,8 +203,13 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           <SelectInputView
             value={String(options.contextLines)}
             onChange={v => setOptions({ contextLines: Number(v) })}
-            options={[0, 1, 2, 5].map(v => ({ value: String(v), label: `${v} context` }))}
-            size="sm" width={110} accentColor={ACCENT}
+            options={[
+              { value: '0', label: 'no surrounding lines' },
+              { value: '1', label: '\u00b11 line around' },
+              { value: '2', label: '\u00b12 lines around' },
+              { value: '5', label: '\u00b15 lines around' },
+            ]}
+            size="sm" width={176} accentColor={ACCENT}
           />
         </div>
 

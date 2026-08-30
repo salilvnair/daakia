@@ -309,6 +309,7 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
 }) {
   return (
     <div
+      data-selection-toolbar
       className="absolute z-30 flex items-center gap-3 px-5 py-3 rounded-xl"
       style={{
         top: rect.top, left: rect.left,
@@ -331,7 +332,11 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
         {lineCount} line{lineCount === 1 ? '' : 's'}
       </span>
 
-      <ButtonView
+      {/* The three actions split what is left evenly, so the strip reads as one
+          control rather than three chips huddled at its left edge. */}
+      <div className="flex items-center gap-2.5 flex-1">
+
+      <div className="flex-1 [&>button]:w-full"><ButtonView
         label="Ask AI why"
         size="sm"
         variant="secondary"
@@ -344,10 +349,10 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
           borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 55%, transparent)',
           fontWeight: 600,
         }}
-      />
+      /></div>
       {/* Explain is the other model call, so it keeps the AI tone; Grep talks
           to the buffer, so it takes the cluster tone. Grey said 'disabled'. */}
-      <ButtonView
+      <div className="flex-1 [&>button]:w-full"><ButtonView
         label="Explain"
         size="sm"
         variant="secondary"
@@ -359,8 +364,8 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
           background: 'color-mix(in srgb, var(--color-protocol-ai) 10%, transparent)',
           borderColor: 'color-mix(in srgb, var(--color-protocol-ai) 38%, transparent)',
         }}
-      />
-      <ButtonView
+      /></div>
+      <div className="flex-1 [&>button]:w-full"><ButtonView
         label="Grep"
         size="sm"
         variant="secondary"
@@ -372,7 +377,8 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep }: {
           background: 'color-mix(in srgb, var(--color-dk8s) 12%, transparent)',
           borderColor: 'color-mix(in srgb, var(--color-dk8s) 40%, transparent)',
         }}
-      />
+      /></div>
+      </div>
     </div>
   );
 }
@@ -808,8 +814,17 @@ export function LogViewer() {
         className="relative flex flex-1 min-h-0"
         // Hide on the way down so the strip is never in the way of the drag,
         // and place it on the way up once the selection is settled.
-        onPointerDown={() => setToolbar(null)}
-        onPointerUp={() => window.setTimeout(showToolbarForSelection, 0)}
+        onPointerDown={e => {
+          if ((e.target as HTMLElement).closest('[data-selection-toolbar]')) return;
+          setToolbar(null);
+        }}
+        onPointerUp={e => {
+          // A click on the strip is not a new selection gesture. Without this
+          // the button press re-ran placement against a selection the click had
+          // just collapsed, which read as a flicker.
+          if ((e.target as HTMLElement).closest('[data-selection-toolbar]')) return;
+          window.setTimeout(showToolbarForSelection, 0);
+        }}
       >
         <div
           ref={scrollRef}

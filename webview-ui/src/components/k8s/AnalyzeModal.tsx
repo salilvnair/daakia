@@ -14,6 +14,7 @@
 import { ModalView, ButtonView, CheckboxView } from '@salilvnair/dui';
 import { WarningTriangleIcon, WandIcon } from '../../icons';
 import type { LogLine } from '../../store/k8s-store';
+import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -106,9 +107,10 @@ export function AnalyzeModal({
           <ButtonView label="Cancel" size="sm" variant="secondary" onClick={onCancel} />
           <ButtonView
             label={`Send ${plan.sentLines.toLocaleString()} lines`}
-            size="sm" variant="primary" accentColor={ACCENT}
-            iconLeft={<WandIcon size={12} />}
+            size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
+            iconLeft={<WandIcon size={12} color={ACCENT} />}
             onClick={onConfirm}
+            style={softPrimary(ACCENT)}
           />
         </div>
       }

@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ButtonView, SearchInputView, TextInputView } from '@salilvnair/dui';
 import { useK8sStore, type WatchTarget, type NamespaceOffer } from '../../store/k8s-store';
+import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-dk8s)';
 /** For filled areas. The same cyan that reads well as a small glyph is
@@ -94,9 +95,11 @@ export function ClusterPicker() {
           </span>
           <ButtonView label="Select all" size="sm" variant="secondary"
                       onClick={() => setChecked(contexts.map(c => c.name))} />
-          <ButtonView label={busy ? 'Connecting…' : 'Continue'} size="sm" variant="primary"
+          <ButtonView label={busy ? 'Connecting…' : 'Continue'} size="sm" variant="secondary"
                       accentColor={ACCENT_FILL}
+                      color={!checked.length || busy ? 'var(--color-text-muted)' : ACCENT}
                       disabled={!checked.length || busy}
+                      style={softPrimary(ACCENT, checked.length > 0 && !busy)}
                       onClick={() => useContexts(checked)} />
         </>
       }
@@ -311,7 +314,9 @@ export function NamespaceMultiPicker() {
             {checked.length ? `${checked.length} namespace${checked.length === 1 ? '' : 's'} selected` : 'Nothing selected yet'}
           </span>
           <ButtonView label="Back" size="sm" variant="secondary" onClick={openContextPicker} />
-          <ButtonView label="Watch" size="sm" variant="primary" accentColor={ACCENT_FILL}
+          <ButtonView label="Watch" size="sm" variant="secondary" accentColor={ACCENT_FILL}
+                      color={checked.length ? ACCENT : 'var(--color-text-muted)'}
+                      style={softPrimary(ACCENT, checked.length > 0)}
                       disabled={!checked.length} onClick={commitPendingTargets} />
         </>
       }
@@ -351,7 +356,9 @@ export function NamespaceMultiPicker() {
             <ButtonView
               key={o.context}
               label={multiCluster ? `+  Add to ${o.context}` : '+  Add and save'}
-              size="sm" variant="primary" accentColor={ACCENT_FILL}
+              size="sm" variant="secondary" accentColor={ACCENT_FILL}
+              color={ACCENT}
+              style={softPrimary(ACCENT)}
               onClick={() => addTo(o.context)}
             />
           ))}

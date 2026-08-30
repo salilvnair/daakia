@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { ModalView, ButtonView, TextInputView, DateTimeInputView } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
+import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -24,9 +25,12 @@ function Segment<T extends string>({ options, value, onChange }: {
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex rounded-md overflow-hidden flex-wrap"
+    // inline-flex, not flex: a block-level flex container stretches to the full
+    // row and draws its border around the empty remainder, which read as a
+    // mysterious extra segment after the last option.
+    <div className="inline-flex rounded-md overflow-hidden flex-wrap self-start"
          style={{ border: '1px solid var(--color-surface-border)' }}>
-      {options.map(o => (
+      {options.map((o, i) => (
         <button
           key={o.id}
           type="button"
@@ -36,7 +40,11 @@ function Segment<T extends string>({ options, value, onChange }: {
             background: value === o.id ? `color-mix(in srgb, ${ACCENT} 16%, transparent)` : 'transparent',
             color: value === o.id ? ACCENT : 'var(--color-text-secondary)',
             border: 'none',
-            borderRight: '1px solid var(--color-surface-border)',
+            // No divider after the last one — it drew a rule against the
+            // container's own border.
+            borderRight: i === options.length - 1
+              ? 'none'
+              : '1px solid var(--color-surface-border)',
             fontWeight: value === o.id ? 600 : 400,
           }}
         >
@@ -115,9 +123,11 @@ export function ExportLogsModal({ onClose }: { onClose: () => void }) {
           <ButtonView label="Cancel" size="sm" variant="secondary" disabled={busy} onClick={onClose} />
           <ButtonView
             label={busy ? 'Exporting…' : 'Choose folder and export'}
-            size="sm" variant="primary" disabled={busy || !chosen.length}
+            size="sm" variant="secondary" disabled={busy || !chosen.length}
             accentColor={ACCENT}
+            color={busy || !chosen.length ? 'var(--color-text-muted)' : ACCENT}
             onClick={submit}
+            style={softPrimary(ACCENT, !busy && chosen.length > 0)}
           />
         </div>
       }

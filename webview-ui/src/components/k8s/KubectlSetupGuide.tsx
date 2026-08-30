@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { ButtonView, TextInputView } from '@salilvnair/dui';
 import { CopyButtonView } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
+import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -120,9 +121,11 @@ export function KubectlSetupGuide({ mode }: { mode: 'no-kubectl' | 'no-contexts'
           <ButtonView
             label={busy ? 'Checking…' : missing ? 'I installed it — check again' : 'Check again'}
             size="sm"
-            variant="primary" accentColor={ACCENT}
+            variant="secondary" accentColor={ACCENT}
+            color={busy ? 'var(--color-text-muted)' : ACCENT}
             disabled={busy}
             onClick={probe}
+            style={softPrimary(ACCENT, !busy)}
           />
           {missing && (
             <ButtonView
@@ -153,9 +156,11 @@ export function KubectlSetupGuide({ mode }: { mode: 'no-kubectl' | 'no-contexts'
               <ButtonView
                 label="Use this"
                 size="sm"
-                variant="primary" accentColor={ACCENT}
+                variant="secondary" accentColor={ACCENT}
+                color={!manualPath.trim() || busy ? 'var(--color-text-muted)' : ACCENT}
                 disabled={!manualPath.trim() || busy}
                 onClick={() => setKubectlPath(manualPath.trim())}
+                style={softPrimary(ACCENT, !!manualPath.trim() && !busy)}
               />
             </div>
           </div>

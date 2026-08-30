@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { ButtonView, TextInputView, SearchInputView } from '@salilvnair/dui';
 import { useK8sStore, type KubeContext } from '../../store/k8s-store';
+import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -108,7 +109,11 @@ export function SensitivityPrompt() {
         </p>
       )}
       <div className="flex items-center gap-2">
-        <ButtonView label="Yes — treat as production" size="sm" variant="primary" accentColor={ACCENT}
+        {/* Marking a cluster production is a consequential choice, so this one
+            keeps the warning tone rather than the cluster accent. */}
+        <ButtonView label="Yes — treat as production" size="sm" variant="secondary"
+                    accentColor="var(--color-warning)" color="var(--color-warning)"
+                    style={softPrimary('var(--color-warning)')}
                     onClick={() => setSensitivity('production')} />
         <ButtonView label="No — dev or test" size="sm" variant="secondary"
                     onClick={() => setSensitivity('normal')} />
@@ -181,9 +186,11 @@ export function NamespacePicker() {
           <ButtonView
             label="+  Use and save"
             size="md"
-            variant="primary" accentColor={ACCENT}
+            variant="secondary" accentColor={ACCENT}
+            color={manual.trim() ? ACCENT : 'var(--color-text-muted)'}
             disabled={!manual.trim()}
             onClick={addManual}
+            style={softPrimary(ACCENT, !!manual.trim())}
           />
         </div>
         {namespaceError && (
@@ -299,7 +306,9 @@ export function UnreachableNotice() {
         </pre>
       )}
       <div className="flex items-center gap-2">
-        <ButtonView label={busy ? 'Retrying…' : 'Retry'} size="sm" variant="primary" accentColor={ACCENT} disabled={busy} onClick={probe} />
+        <ButtonView label={busy ? 'Retrying…' : 'Retry'} size="sm" variant="secondary"
+                    accentColor={ACCENT} color={busy ? 'var(--color-text-muted)' : ACCENT}
+                    disabled={busy} onClick={probe} style={softPrimary(ACCENT, !busy)} />
         <ButtonView label="Pick another cluster" size="sm" variant="secondary" onClick={openContextPicker} />
       </div>
     </Shell>
