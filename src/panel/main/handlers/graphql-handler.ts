@@ -4,6 +4,8 @@
 import axios from 'axios';
 import https from 'https';
 import { resolveProxy, type ProxyConfig } from '../../../services/proxy-config';
+import { settingsForRequest } from '../../../services/resolve-request-settings';
+import type { ResolvedSettings } from '../../../services/execution-settings';
 import { resolveTlsPolicy } from '../../../services/tls-policy';
 
 /**
@@ -13,8 +15,9 @@ import { resolveTlsPolicy } from '../../../services/tls-policy';
  * to the same host would take two different routes depending on which tab it
  * was sent from.
  */
-function graphqlProxy(url: string) {
-  const stored = (getSetting<Record<string, unknown>>('general') ?? {}).proxy as ProxyConfig | undefined;
+function graphqlProxy(url: string, resolved?: ResolvedSettings) {
+  const stored = (resolved ?? { proxy: undefined }).proxy
+    ?? (getSetting<Record<string, unknown>>('general') ?? {}).proxy as ProxyConfig | undefined;
   return resolveProxy(stored, url);
 }
 
@@ -23,7 +26,7 @@ function graphqlProxy(url: string) {
  * so `sslVerification: false` and the trusted-host list applied to REST and
  * were ignored here.
  */
-function graphqlAgent(url: string): https.Agent | undefined {
+function graphqlAgent(url: string, resolved?: ResolvedSettings): https.Agent | undefined {
   let hostname: string;
   try {
     const parsed = new URL(url);
@@ -32,7 +35,13 @@ function graphqlAgent(url: string): https.Agent | undefined {
   } catch {
     return undefined;
   }
-  const policy = resolveTlsPolicy(hostname, getSetting<Record<string, unknown>>('general'));
+  // The resolved value when the caller has one, so a request or collection
+  // that relaxes verification is honoured here too and not only in REST.
+  const general = getSetting<Record<string, unknown>>('general') ?? {};
+  const merged = resolved
+    ? { ...general, sslVerification: resolved.sslVerification }
+    : general;
+  const policy = resolveTlsPolicy(hostname, merged);
   return policy.rejectUnauthorized ? undefined : new https.Agent({ rejectUnauthorized: false });
 }
 import WebSocket from 'ws';
@@ -317,19 +326,24 @@ export async function handleExecuteGraphQL(
   const startTime = Date.now();
   const controller = new AbortController();
   activeGqlControllers.set(tabId, controller);
-  const gqlProxy = graphqlProxy(endpoint);
+  // The same global → collection → request chain REST uses. Reading the global
+  // settings straight out of the DB here is what made GraphQL and REST take
+  // different routes to the same host.
+  const resolved = settingsForRequest(msg);
+  const gqlProxy = graphqlProxy(endpoint, resolved);
   try {
     const res = await axios.post(
       endpoint,
       { query, variables },
       {
         headers: mutableHeaders,
-        timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0,
+        timeout: resolved.timeout,
+        maxRedirects: resolved.followRedirects ? 10 : 0,
         validateStatus: () => true,
         transformResponse: [(data) => data], // Keep raw string
         signal: controller.signal,
         proxy: gqlProxy.axiosProxy,
-        httpsAgent: graphqlAgent(endpoint),
+        httpsAgent: graphqlAgent(endpoint, resolved),
       },
     );
 
@@ -384,7 +398,7 @@ export async function handleExecuteGraphQL(
     });
 
     // Save to history
-    const saveResponse = getSetting('saveResponseInHistory') !== 'false';
+    const saveResponse = resolved.saveResponseInHistory;
     insertHistory({
       request_id: tabId,
       method: 'POST',

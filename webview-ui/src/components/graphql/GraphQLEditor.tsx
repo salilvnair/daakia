@@ -16,6 +16,8 @@ import {
 import { setGraphQLSchema, setActiveGraphQLTab } from '../../services/graphql-completion';
 import { formatGraphQLQuery } from '../../services/graphql-formatter';
 import { GraphQLSubscription } from './GraphQLSubscription';
+import { ProtocolSettingsTab } from '../shared/settings/ProtocolSettingsTab';
+import { countOverrides } from '../shared/settings/execution-settings';
 import { GraphQLQueryTabs, initMultiQuery } from './GraphQLQueryTabs';
 import { AiHeaderSuggest, type AiHeaderSuggestHandle } from '../ai/AiHeaderSuggest';
 import { AiRequestFuzzerModal } from '../ai/AiRequestFuzzerModal';
@@ -24,7 +26,7 @@ import { AiGqlSchemaExplainerModal } from '../ai/AiGqlSchemaExplainerModal';
 import { logUiEvent, isAuditEventEnabled } from '../../store/ui-audit-store';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 
-type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'scripts' | 'subscription';
+type EditorTab = 'query' | 'variables' | 'headers' | 'authorization' | 'scripts' | 'subscription' | 'settings';
 
 const ACCENT = 'var(--color-protocol-graphql)';
 
@@ -122,6 +124,14 @@ export function GraphQLEditor() {
       dotColor: ACCENT,
     },
     { id: 'subscription', label: 'Subscription' },
+    // Per-request execution overrides. GraphQL and SOAP go out over HTTP
+    // through the same proxy and TLS decisions as REST, so they get the same
+    // tab rather than a second, quieter set of rules.
+    {
+      id: 'settings', label: 'Settings',
+      badge: countOverrides(activeTab.settings) || undefined,
+      badgeColor: ACCENT,
+    },
   ];
 
   return (
@@ -343,6 +353,8 @@ export function GraphQLEditor() {
         {activeSubTab === 'subscription' && (
           <GraphQLSubscription />
         )}
+
+        {activeSubTab === 'settings' && <ProtocolSettingsTab tab={activeTab} accent={ACCENT} />}
       </div>
 
       {/* Modals */}

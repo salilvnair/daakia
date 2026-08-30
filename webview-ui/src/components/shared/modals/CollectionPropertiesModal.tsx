@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { AuthEditor, ScriptsEditor } from '..';
 import { InfoCircleIcon } from '../../../icons';
 import { ModalView, ButtonView, TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '@salilvnair/dui';
+import { ExecutionSettingsEditor } from '../settings/ExecutionSettingsEditor';
+import { useEffectiveSettings } from '../settings/use-effective-settings';
+import type { ExecutionSettings } from '../settings/execution-settings';
 
 export interface CollectionProperties {
   headers: KeyValueTableRow[];
@@ -10,10 +13,19 @@ export interface CollectionProperties {
   variables: KeyValueTableRow[];
   preRequestScript: string;
   postResponseScript: string;
+  /**
+   * Execution overrides for every request in this collection — timeout,
+   * redirects, SSL, encoding, proxy. Optional, and every field within it is
+   * optional too: what is not set here follows the global settings, and what
+   * a request sets wins over both.
+   */
+  settings?: ExecutionSettings;
 }
 
 interface CollectionPropertiesModalProps {
   open: boolean;
+  /** Needed to ask the host what this collection inherits. */
+  collectionId?: string;
   collectionName: string;
   properties: CollectionProperties;
   onSave: (props: CollectionProperties) => void;
@@ -25,9 +37,10 @@ const TABS: TabItem[] = [
   { id: 'authorization', label: 'Authorization' },
   { id: 'variables',     label: 'Variables' },
   { id: 'scripts',       label: 'Scripts' },
+  { id: 'settings',      label: 'Settings' },
 ];
 
-export function CollectionPropertiesModal({ open, collectionName, properties, onSave, onClose }: CollectionPropertiesModalProps) {
+export function CollectionPropertiesModal({ open, collectionId, collectionName, properties, onSave, onClose }: CollectionPropertiesModalProps) {
   const [activeTab, setActiveTab] = useState('headers');
   const [headers, setHeaders]                     = useState<KeyValueTableRow[]>(properties.headers as KeyValueTableRow[]);
   const [authType, setAuthType]                   = useState(properties.authType);
@@ -35,9 +48,15 @@ export function CollectionPropertiesModal({ open, collectionName, properties, on
   const [variables, setVariables]                 = useState<KeyValueTableRow[]>(properties.variables as KeyValueTableRow[]);
   const [preRequestScript, setPreRequestScript]   = useState(properties.preRequestScript);
   const [postResponseScript, setPostResponseScript] = useState(properties.postResponseScript);
+  const [settings, setSettings] = useState<ExecutionSettings>(properties.settings ?? {});
+
+  // A collection inherits from the global settings only. Passing scope
+  // 'collection' keeps the host from folding this collection's own values in
+  // and showing them back as something it inherited.
+  const effective = useEffectiveSettings('collection', { collectionId }, open);
 
   const handleSave = () => {
-    onSave({ headers, authType, authData, variables, preRequestScript, postResponseScript });
+    onSave({ headers, authType, authData, variables, preRequestScript, postResponseScript, settings });
     onClose();
   };
 
@@ -123,6 +142,18 @@ export function CollectionPropertiesModal({ open, collectionName, properties, on
               postResponseScript={postResponseScript}
               onPreRequestScriptChange={setPreRequestScript}
               onPostResponseScriptChange={setPostResponseScript}
+            />
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <ExecutionSettingsEditor
+              scope="collection"
+              value={settings}
+              onChange={setSettings}
+              inherited={effective.values}
+              inheritedFrom={effective.from}
             />
           </div>
         )}

@@ -189,6 +189,9 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
             variables: props.variables ?? [],
             preRequestScript: props.preRequestScript ?? '',
             postResponseScript: props.postResponseScript ?? (props.testScript as string) ?? '',
+            // Absent on every collection saved before execution overrides
+            // existed, which is the common case.
+            settings: props.settings ?? {},
           },
         });
       }
@@ -1004,6 +1007,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       {propertiesTarget && (
         <CollectionPropertiesModal
           open={true}
+          collectionId={propertiesTarget.id}
           collectionName={propertiesTarget.name}
           properties={propertiesTarget.properties}
           onSave={(props) => {

@@ -16,10 +16,9 @@ import {
   insertUiAudit,
 } from '../../../storage/db';
 import { decryptIfNeeded, encryptEnvVariables } from '../../../services/vault';
-import {
-  resolveExecutionSettings, type ExecutionSettings,
-} from '../../../services/execution-settings';
+import { resolveExecutionSettings, type ExecutionSettings } from '../../../services/execution-settings';
 import { collectionSettings } from '../../../services/collection-settings';
+import { globalSettings, settingsForRequest } from '../../../services/resolve-request-settings';
 
 type PostMessage = (msg: unknown) => void;
 type RefreshFn = () => void;
@@ -39,28 +38,7 @@ export async function handleExecuteRequest(
   try {
     // Resolve execution settings across the three levels — see
     // services/execution-settings.ts for why they inherit per field.
-    //
-    // Global still falls back to VS Code workspace config, which is how these
-    // were configured before there was a settings page at all.
-    const settings = getSetting<Record<string, unknown>>('general') ?? {};
-    const vsConfig = vscode.workspace.getConfiguration('daakia');
-
-    const global: ExecutionSettings = {
-      timeout: (settings.timeout as number | undefined) ?? vsConfig.get<number>('requestTimeout', 0),
-      followRedirects: (settings.followRedirects as boolean | undefined)
-        ?? vsConfig.get<boolean>('followRedirects', true),
-      sslVerification: (settings.sslVerification as boolean | undefined)
-        ?? vsConfig.get<boolean>('sslVerification', true),
-      saveResponseInHistory: settings.saveResponseInHistory as boolean | undefined,
-      encoding: settings.encoding as ExecutionSettings['encoding'],
-      proxy: settings.proxy as ExecutionSettings['proxy'],
-    };
-
-    const resolved = resolveExecutionSettings(
-      global,
-      collectionSettings(msg.collectionId as string | undefined),
-      msg.settings as ExecutionSettings | undefined,
-    );
+    const resolved = settingsForRequest(msg);
 
     msg.timeout = resolved.timeout;
     msg.followRedirects = resolved.followRedirects;
@@ -484,8 +462,11 @@ export async function handleExecuteRequest(
         : undefined,
     });
 
-    // Trim history to configured max entries
-    const maxEntries = (settings.maxHistoryEntries as number) || vsConfig.get<number>('maxHistoryEntries', 500) || 500;
+    // Trim history to configured max entries. Global-only — history is one
+    // shared table, so a per-request cap on it would not mean anything.
+    const maxEntries = ((getSetting<Record<string, unknown>>('general') ?? {}).maxHistoryEntries as number)
+      || vscode.workspace.getConfiguration('daakia').get<number>('maxHistoryEntries', 500)
+      || 500;
     trimHistory(maxEntries);
 
     // Push updated history to webview
@@ -744,3 +725,35 @@ export function buildResponseFilters(contentType: string, ext?: string): Record<
   return { 'Response Files': [resolvedExt], 'All Files': ['*'] };
 }
 
+
+/**
+ * What a request would inherit if it overrode nothing.
+ *
+ * The editor needs this to label its Inherit options with the value they
+ * resolve to. It is computed here rather than in the webview so there is one
+ * implementation of the resolution: a second one in the UI could disagree with
+ * the real one, and a settings screen that misreports the effective value is
+ * worse than a screen that reports nothing.
+ */
+export function handleGetEffectiveSettings(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+) {
+  // A request's Settings tab inherits global + its collection; a collection's
+  // own tab inherits global only, so it is not shown its own values as though
+  // they came from somewhere else.
+  const scope = msg.scope as 'request' | 'collection' | undefined;
+  const collection = scope === 'collection'
+    ? undefined
+    : collectionSettings(msg.collectionId as string | undefined);
+
+  const { from, ...values } = resolveExecutionSettings(globalSettings(), collection);
+  postMessage({
+    type: 'settings:effective',
+    scope,
+    tabId: msg.tabId,
+    collectionId: msg.collectionId,
+    values,
+    from,
+  });
+}

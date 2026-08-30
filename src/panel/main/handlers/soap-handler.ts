@@ -10,6 +10,7 @@ import { parseSoapUiProject } from '../../../soap/soapui-importer';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory, getSetting, upsertCollection, upsertCollectionRequest } from '../../../storage/db';
 import { resolveProxy, type ProxyConfig, type ResolvedProxy } from '../../../services/proxy-config';
+import { settingsForRequest } from '../../../services/resolve-request-settings';
 import { resolveTlsPolicy } from '../../../services/tls-policy';
 
 /** The endpoint may not parse yet; the executor reports that properly. */
@@ -58,15 +59,22 @@ export async function handleSoapInvoke(
     return;
   }
 
+  // The same global → collection → request chain REST uses, so a timeout or
+  // proxy set on a SOAP request reaches it.
+  const resolved = settingsForRequest(msg);
+
   // SOAP goes out through the raw http module, so the proxy decision is made
   // here and handed to the executor rather than being picked up by axios.
   const soapProxy: ResolvedProxy = resolveProxy(
-    (getSetting<Record<string, unknown>>('general') ?? {}).proxy as ProxyConfig | undefined,
+    resolved.proxy as ProxyConfig | undefined,
     endpoint,
   );
   // SOAP verified certificates unconditionally, so the sslVerification and
   // trustedHosts settings applied to REST and not here.
-  const soapTls = resolveTlsPolicy(safeHostname(endpoint), getSetting<Record<string, unknown>>('general'));
+  const soapTls = resolveTlsPolicy(safeHostname(endpoint), {
+    ...(getSetting<Record<string, unknown>>('general') ?? {}),
+    sslVerification: resolved.sslVerification,
+  });
 
   const params: SoapInvokeParams = {
     tabId,
@@ -76,7 +84,7 @@ export async function handleSoapInvoke(
     envelope,
     headers,
     attachments: (msg.attachments as { contentId: string; contentType: string; filename: string; base64Data: string }[] | undefined)?.filter(a => a.base64Data),
-    timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0,
+    timeout: resolved.timeout,
     proxy: soapProxy,
     rejectUnauthorized: soapTls.rejectUnauthorized,
   };

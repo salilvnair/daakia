@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { ExecutionSettings } from '../components/shared/settings/execution-settings';
 import type { KeyValueRow } from '../components/shared';
 import { useEnvStore, GLOBAL_ENV_ID } from './env-store';
 
@@ -71,6 +72,13 @@ export interface RequestTab {
   preRequestScript: string;
   postResponseScript: string;
   variables: KeyValueRow[];
+  /**
+   * Per-request execution overrides — timeout, redirects, SSL, encoding,
+   * proxy. Every field is optional and undefined means inherit, so a tab that
+   * has never opened its Settings tab pins nothing and keeps following the
+   * collection and the global settings as those change.
+   */
+  settings?: ExecutionSettings;
   // Response state
   response: ResponseData | null;
   loading: boolean;

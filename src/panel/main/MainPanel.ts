@@ -10,7 +10,7 @@ import { archiveHistoryEntry, archiveHistoryBatch } from '../../services/bin';
 import { getProviderKeyStatus } from '../../services/llm/llm-provider-service';
 import { storeApiKey, deleteApiKey, getAllKeyStatus } from '../../services/secret-store';
 // Handler imports
-import { handleExecuteRequest, handleGetOAuth2Token } from './handlers/request-handler';
+import { handleExecuteRequest, handleGetOAuth2Token, handleGetEffectiveSettings } from './handlers/request-handler';
 import { cancelRestRequest } from '../../http/request-executor';
 import { cancelGraphQLRequest } from './handlers/graphql-handler';
 import {
@@ -280,6 +280,11 @@ export class MainPanel {
       // ── Request Execution ──
       case 'executeRequest':
         handleExecuteRequest(msg, this._post, () => handleGetEnvironments(this._post), () => this._sendHistory((msg.protocol as string) || 'rest'));
+        break;
+      // What a request or collection would inherit, for the Inherit labels in
+      // its Settings tab. Resolved on the host so there is one implementation.
+      case 'settings:getEffective':
+        handleGetEffectiveSettings(msg, this._post);
         break;
       case 'cancelRequest':
         cancelRestRequest(msg.tabId as string);

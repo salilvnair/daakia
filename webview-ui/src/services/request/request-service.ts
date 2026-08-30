@@ -101,6 +101,9 @@ function buildPayload(tab: RequestTab, opts?: { downloadResponse?: boolean }) {
     postResponseScript: tab.postResponseScript,
     variables: tab.variables,
     collectionId: tab.collectionId,
+    // The host resolves global → collection → this. Sent even when empty so
+    // the request level always exists as a layer.
+    settings: tab.settings,
     // Debugger breakpoints — when present, extension uses async debug session
     // Filter out disabled breakpoints so they don't trigger pauses
     // If breakpoints are muted, send empty arrays

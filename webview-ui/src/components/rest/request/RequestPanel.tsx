@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useTabsStore } from '../../../store/tabs-store';
+import { useTabsStore, type RequestTab } from '../../../store/tabs-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
@@ -11,6 +11,9 @@ import { computeAuthRows } from './requestUtils';
 import { HeadersTab } from './HeadersTab';
 import { BodyEditor } from './BodyEditor';
 import { RequestAiToolbar } from './RequestAiToolbar';
+import { ExecutionSettingsEditor } from '../../shared/settings/ExecutionSettingsEditor';
+import { useEffectiveSettings } from '../../shared/settings/use-effective-settings';
+import { countOverrides } from '../../shared/settings/execution-settings';
 
 const CONFIG_TABS: TabItem[] = [
   { id: 'params', label: 'Params' },
@@ -19,7 +22,35 @@ const CONFIG_TABS: TabItem[] = [
   { id: 'auth', label: 'Authorization' },
   { id: 'scripts', label: 'Scripts' },
   { id: 'variables', label: 'Variables' },
+  // Per-request execution overrides — timeout, redirects, SSL, encoding, proxy.
+  { id: 'settings', label: 'Settings' },
 ];
+
+/**
+ * The Settings tab's body.
+ *
+ * Its own component so the inherited-values hook is not called from inside a
+ * conditional branch of the panel — and so it only asks the host for them when
+ * the tab is actually open.
+ */
+function RequestSettingsTab({ tab }: { tab: RequestTab }) {
+  const updateTab = useTabsStore(s => s.updateTab);
+  const { values, from } = useEffectiveSettings(
+    'request', { tabId: tab.id, collectionId: tab.collectionId },
+  );
+  return (
+    <div className="flex-1 min-h-0 -mx-3 -my-2">
+      <ExecutionSettingsEditor
+        scope="request"
+        value={tab.settings ?? {}}
+        onChange={next => updateTab(tab.id, { settings: next })}
+        inherited={values}
+        inheritedFrom={from}
+        accentColor="var(--color-protocol-rest, var(--color-accent))"
+      />
+    </div>
+  );
+}
 
 export function RequestPanel() {
   const { tabs, activeTabId, updateTab } = useTabsStore();
@@ -138,6 +169,9 @@ export function RequestPanel() {
       case 'params':    return { ...t, badge: tab.params.filter(p => p.enabled && p.key).length };
       case 'headers':   return { ...t, badge: tab.headers.filter(h => h.enabled && h.key).length + hiddenHeadersCount };
       case 'variables': return { ...t, badge: tab.variables?.filter((v: any) => v.enabled && v.key).length || 0 };
+      // The count is how many fields this request pins, not how many exist —
+      // an untouched Settings tab inherits everything and shows nothing.
+      case 'settings':  return { ...t, badge: countOverrides(tab.settings) };
       case 'body':      return { ...t, dot: !!(tab.bodyRaw?.trim()) || !!(tab.bodyFormData?.some((f: any) => f.key)) };
       case 'auth':      return { ...t, dot: tab.authType !== 'none' };
       case 'scripts':   return { ...t, dot: !!(tab.preRequestScript?.trim()) || !!(tab.postResponseScript?.trim()) };
@@ -206,6 +240,10 @@ export function RequestPanel() {
             showDescription
             label="Request Variables"
           />
+        )}
+
+        {activeSection === 'settings' && (
+          <RequestSettingsTab tab={tab} />
         )}
       </div>
     </div>
