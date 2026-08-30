@@ -9,7 +9,8 @@ import { generateWsSecurityHeader, type WsSecurityOptions } from '../../../soap/
 import { parseSoapUiProject } from '../../../soap/soapui-importer';
 import { loadEnvVars, resolveEnvString } from './env-resolver';
 import { insertHistory, trimHistory, getSetting, upsertCollection, upsertCollectionRequest } from '../../../storage/db';
-import { resolveProxy, type ProxyConfig, type ResolvedProxy } from '../../../services/proxy-config';
+import { type ProxyConfig, type ResolvedProxy } from '../../../services/proxy-config';
+import { resolveProxyFor } from '../../../services/proxy-resolve';
 import { settingsForRequest } from '../../../services/resolve-request-settings';
 import { resolveTlsPolicy } from '../../../services/tls-policy';
 
@@ -65,7 +66,7 @@ export async function handleSoapInvoke(
 
   // SOAP goes out through the raw http module, so the proxy decision is made
   // here and handed to the executor rather than being picked up by axios.
-  const soapProxy: ResolvedProxy = resolveProxy(
+  const soapProxy: ResolvedProxy = await resolveProxyFor(
     resolved.proxy as ProxyConfig | undefined,
     endpoint,
   );

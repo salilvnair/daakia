@@ -59,9 +59,10 @@ const RIBBON_W = 38;
 /** The bands themselves. Thick enough to read as colour and to click. */
 const RIBBON_BAND_W = 20;
 /** The selection strip, for placing it clear of the selection and the ribbon. */
-// Four actions now, not three. The strip lays them out evenly, so an
-// unchanged width would have squeezed every label.
-const TOOLBAR_W = 560;
+// Four actions now, not three, and the strip lays them out evenly — so the
+// width has to fit the LONGEST label at an equal share, not the average one.
+// At 560 "Search Everywhere" wrapped to two lines while the others sat on one.
+const TOOLBAR_W = 720;
 const TOOLBAR_H = 58;
 
 const LEVEL_SHORT: Record<LogLevel, string> = {
@@ -350,7 +351,7 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep, onSearchA
           control rather than a row of chips huddled at its left edge. */}
       <div className="flex items-center gap-2.5 flex-1">
 
-      <div className="flex-1 [&>button]:w-full"><ButtonView
+      <div className="flex-1 [&>button]:w-full [&_button]:whitespace-nowrap"><ButtonView
         label="Ask AI why"
         size="sm"
         variant="secondary"
@@ -366,7 +367,7 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep, onSearchA
       /></div>
       {/* Explain is the other model call, so it keeps the AI tone; Grep talks
           to the buffer, so it takes the cluster tone. Grey said 'disabled'. */}
-      <div className="flex-1 [&>button]:w-full"><ButtonView
+      <div className="flex-1 [&>button]:w-full [&_button]:whitespace-nowrap"><ButtonView
         label="Explain"
         size="sm"
         variant="secondary"
@@ -381,7 +382,7 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep, onSearchA
       /></div>
       {/* "Grep" said what it did to the buffer, not what it does for you. The
           pair now names the only thing that separates them: how far it looks. */}
-      <div className="flex-1 [&>button]:w-full"><ButtonView
+      <div className="flex-1 [&>button]:w-full [&_button]:whitespace-nowrap"><ButtonView
         label="Search Here"
         size="sm"
         variant="secondary"
@@ -395,7 +396,7 @@ function SelectionToolbar({ rect, lineCount, onAsk, onExplain, onGrep, onSearchA
           borderColor: 'color-mix(in srgb, var(--color-dk8s) 40%, transparent)',
         }}
       /></div>
-      <div className="flex-1 [&>button]:w-full"><ButtonView
+      <div className="flex-1 [&>button]:w-full [&_button]:whitespace-nowrap"><ButtonView
         label="Search Everywhere"
         size="sm"
         variant="secondary"

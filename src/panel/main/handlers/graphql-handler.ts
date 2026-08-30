@@ -3,7 +3,8 @@
  */
 import axios from 'axios';
 import https from 'https';
-import { resolveProxy, type ProxyConfig } from '../../../services/proxy-config';
+import { type ProxyConfig } from '../../../services/proxy-config';
+import { resolveProxyFor } from '../../../services/proxy-resolve';
 import { settingsForRequest } from '../../../services/resolve-request-settings';
 import type { ResolvedSettings } from '../../../services/execution-settings';
 import { resolveTlsPolicy } from '../../../services/tls-policy';
@@ -18,7 +19,7 @@ import { resolveTlsPolicy } from '../../../services/tls-policy';
 function graphqlProxy(url: string, resolved?: ResolvedSettings) {
   const stored = (resolved ?? { proxy: undefined }).proxy
     ?? (getSetting<Record<string, unknown>>('general') ?? {}).proxy as ProxyConfig | undefined;
-  return resolveProxy(stored, url);
+  return resolveProxyFor(stored, url);
 }
 
 /**
@@ -128,11 +129,15 @@ export async function handleGraphQLConnect(
     }
   }
 
+  // Introspection is a request like any other and goes the same route. It
+  // used to resolve its proxy separately, which is how a schema could load
+  // while the queries against it could not.
+  const introspectionProxy = await graphqlProxy(endpoint);
   try {
     const res = await axios.post(
       endpoint,
       { query: INTROSPECTION_QUERY },
-      { headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0, validateStatus: () => true, proxy: graphqlProxy(endpoint).axiosProxy, httpsAgent: graphqlAgent(endpoint) },
+      { headers: reqHeaders, timeout: ((getSetting<Record<string, unknown>>('general') ?? {}).timeout as number | undefined) ?? 0, validateStatus: () => true, proxy: introspectionProxy.axiosProxy, httpsAgent: graphqlAgent(endpoint) },
     );
 
     if (res.status >= 400) {
@@ -330,7 +335,7 @@ export async function handleExecuteGraphQL(
   // settings straight out of the DB here is what made GraphQL and REST take
   // different routes to the same host.
   const resolved = settingsForRequest(msg);
-  const gqlProxy = graphqlProxy(endpoint, resolved);
+  const gqlProxy = await graphqlProxy(endpoint, resolved);
   try {
     const res = await axios.post(
       endpoint,

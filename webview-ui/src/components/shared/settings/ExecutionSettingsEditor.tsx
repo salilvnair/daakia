@@ -50,8 +50,11 @@ function Row({ title, description, children, overridden }: {
   title: string; description: string; children: React.ReactNode; overridden: boolean;
 }) {
   return (
-    <div className="flex items-start gap-4 py-1">
-      <div className="flex-1 min-w-0" style={{ maxWidth: '46ch' }}>
+    // The row spans the page and the control sits at its right edge. Capping
+    // the text column at 46ch left the control glued to the end of the
+    // sentence with the rest of a wide window empty beside it.
+    <div className="flex items-start gap-6 py-1 w-full">
+      <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="text-[13px] font-medium text-[var(--color-text-primary)] m-0">{title}</p>
           {/* A dot, not a word: it has to be scannable down a column of six
@@ -64,7 +67,9 @@ function Row({ title, description, children, overridden }: {
                   }} />
           )}
         </div>
-        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-0 leading-relaxed">
+        {/* The measure stays on the prose, which is what needed it. */}
+        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-0 leading-relaxed"
+           style={{ maxWidth: '78ch' }}>
           {description}
         </p>
       </div>

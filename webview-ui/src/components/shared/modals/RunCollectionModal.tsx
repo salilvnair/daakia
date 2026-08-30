@@ -96,17 +96,26 @@ export function RunCollectionModal({ open, collectionId, collectionName, onClose
         open={open}
         onClose={() => { if (!running) onClose(); }}
         title="Run collection"
-        size="md"
+        size="lg"
+        noPadding
         footerRight={footerRight}
       >
-        {/* Tab bar — negative margin to flush against modal header */}
-        <div style={{ margin: '-18px -18px 16px', borderBottom: '1px solid var(--color-surface-border)', display: 'flex', alignItems: 'center', padding: '0 18px' }}>
+        {/*
+          `noPadding`, and the padding is ours.
+
+          The tab bar used to reach the modal edges with `margin: -18px`, which
+          made it 36px wider than the body it sat in. The body scrolls
+          vertically, and a box with `overflow-y: auto` gets `overflow-x: auto`
+          too — so those 36px produced a horizontal scrollbar under content
+          that had nothing to scroll to.
+        */}
+        <div style={{ borderBottom: '1px solid var(--color-surface-border)', display: 'flex', alignItems: 'center', padding: '0 18px' }}>
           <TabBtn label="Runner" active={activeTab === 'runner'} onClick={() => setActiveTab('runner')} />
           <TabBtn label="CLI" active={activeTab === 'cli'} onClick={() => setActiveTab('cli')} />
         </div>
 
         {/* Content */}
-        <div className="space-y-4">
+        <div className="space-y-4" style={{ padding: 18 }}>
           {activeTab === 'runner' ? (
             <>
               <div className="space-y-3">

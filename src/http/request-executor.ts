@@ -3,7 +3,8 @@
  * Uses axios for HTTP requests with socket-level timing instrumentation.
  */
 import axios, { AxiosRequestConfig, AxiosError } from 'axios';
-import { resolveProxy, type ProxyConfig, type ResolvedProxy } from '../services/proxy-config';
+import { type ProxyConfig, type ResolvedProxy } from '../services/proxy-config';
+import { resolveProxyFor } from '../services/proxy-resolve';
 import { applyQueryEncoding, type QueryEncoding } from '../services/execution-settings';
 import * as fs from 'fs';
 import {
@@ -251,7 +252,9 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
 
   // One resolver for every protocol — see src/services/proxy-config.ts for why
   // this is not inlined here any more.
-  resolvedProxy = resolveProxy(params.proxy as ProxyConfig | undefined, requestUrl);
+  // Async because "system" may mean reading the OS configuration and running
+  // an auto-config script; explicit settings still resolve synchronously inside.
+  resolvedProxy = await resolveProxyFor(params.proxy as ProxyConfig | undefined, requestUrl);
 
   const config: AxiosRequestConfig = {
     method: params.method.toLowerCase() as AxiosRequestConfig['method'],
