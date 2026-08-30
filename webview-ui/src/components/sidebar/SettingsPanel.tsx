@@ -130,7 +130,9 @@ export function SettingsPanel() {
             accentColor="var(--color-settings)"
             searchable
             searchPlaceholder="Search settings..."
-            size="sm"
+            // md, not sm: this is the primary way around a fourteen-section
+            // page, and at sm the entries read as secondary chrome.
+            size="md"
             className="border-r border-[var(--color-surface-border)]"
           />
         }

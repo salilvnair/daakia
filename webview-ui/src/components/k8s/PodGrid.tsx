@@ -12,13 +12,14 @@
  * hierarchy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SparklineView, SearchInputView } from '@salilvnair/dui';
+import {
+  SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon,
+} from '@salilvnair/dui';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { FolderExportIcon, CloseIcon, SearchIcon } from '../../icons';
-import { CheckSquareIcon } from '@salilvnair/dui';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
   formatBytes, formatCpu, restartLabel, pulse, isRecentRestart, groupPods,
@@ -483,28 +484,21 @@ export function PodGrid() {
           {selectMode ? 'Cancel' : 'Select pods'}
         </button>
 
-        {/* Same height as Select pods beside it. It was a size smaller, which
-            made the two read as different tiers of control when they are
-            peers on the same row. */}
-        <div className="flex rounded-md overflow-hidden self-stretch"
-             style={{ border: '1px solid var(--color-surface-border)' }}>
-          {(['cards', 'table'] as const).map(v => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className="text-[11px] px-3 cursor-pointer transition-colors flex items-center"
-              style={{
-                background: view === v ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
-                color: view === v ? ACCENT : 'var(--color-text-muted)',
-                border: 'none',
-                fontWeight: view === v ? 600 : 400,
-              }}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
+        {/* dui's control rather than a hand-rolled one: it insets the active
+            pill from the track, which is the breathing room the home-made
+            version was missing — its highlight ran edge to edge against the
+            border and read as cramped. `md` matches Select pods beside it. */}
+        <SegmentedControlView
+          value={view}
+          onChange={v => setView(v as 'cards' | 'table')}
+          options={[
+            { value: 'cards', label: 'cards' },
+            { value: 'table', label: 'table' },
+          ]}
+          size="md"
+          variant="rounded"
+          accentColor={ACCENT}
+        />
       </div>
 
       {selectMode && (
