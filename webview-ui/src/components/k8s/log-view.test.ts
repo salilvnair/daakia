@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildMatcher, filterLines, densityBuckets, levelCounts,
   formatLogTime, selectionText, describeBucket,
-  foldStackTraces, isStackFrame, compactCount, placeSelectionToolbar,
+  foldStackTraces, isStackFrame, compactCount, placeSelectionToolbar, grepTermFor,
 } from './log-view';
 import type { LogLine } from '../../store/k8s-store';
 
@@ -291,5 +291,34 @@ describe('placeSelectionToolbar', () => {
     const p = placeSelectionToolbar(
       { top: 10, bottom: 70, left: 0, height: 60, width: 500 }, tiny, toolbar);
     expect(p.top).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('grepTermFor', () => {
+  it('greps the fragment that was highlighted, not its line', () => {
+    // The bug this replaces: selecting a port put the entire log line into the
+    // filter, which matched that one line and nothing else.
+    expect(grepTermFor('5432')).toBe('5432');
+  });
+
+  it('keeps inner whitespace but trims the edges', () => {
+    expect(grepTermFor('  connection refused  ')).toBe('connection refused');
+  });
+
+  it('is null for a selection of only whitespace', () => {
+    expect(grepTermFor('   ')).toBeNull();
+    expect(grepTermFor('')).toBeNull();
+  });
+
+  it('takes the first real line of a multi-line selection', () => {
+    // No single line can contain a newline, so searching the whole thing would
+    // reliably match nothing.
+    expect(grepTermFor('\n\n  SocketTimeoutException\n  at Foo.bar\n'))
+      .toBe('SocketTimeoutException');
+  });
+
+  it('caps a very long selection', () => {
+    const term = grepTermFor('x'.repeat(500))!;
+    expect(term.length).toBe(120);
   });
 });

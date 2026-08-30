@@ -315,3 +315,27 @@ export function placeSelectionToolbar(
 
   return { top, left };
 }
+
+/**
+ * Turn a selection into a filter term.
+ *
+ * Uses what was actually highlighted, never the line it came from. Grepping a
+ * whole log line finds that one line and nothing else — the same line rarely
+ * repeats — while the fragment someone bothered to select (a port, a request
+ * id, an exception name) is exactly the thing they want every occurrence of.
+ */
+export function grepTermFor(rawSelection: string): string | null {
+  const picked = rawSelection.trim();
+  if (!picked) return null;
+
+  // A selection spanning lines cannot match any single line, so take its first
+  // non-empty one rather than searching for something guaranteed to miss.
+  const term = picked.includes('\n')
+    ? (picked.split('\n').map(l => l.trim()).find(Boolean) ?? '')
+    : picked;
+
+  if (!term) return null;
+  // Long enough for a stack frame, short enough not to paste an essay into the
+  // filter box.
+  return term.slice(0, 120);
+}

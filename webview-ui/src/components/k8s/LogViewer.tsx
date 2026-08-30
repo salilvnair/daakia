@@ -23,7 +23,7 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import {
   filterLines, densityBuckets, describeBucket, levelCounts, levelColor,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
-  compactCount, placeSelectionToolbar, type MatchedLine,
+  compactCount, placeSelectionToolbar, grepTermFor, type MatchedLine,
 } from './log-view';
 import {
   AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
@@ -416,7 +416,19 @@ export function LogViewer() {
   const [toolbar, setToolbar] = useState<{ top: number; left: number } | null>(null);
   const [analyzePlan, setAnalyzePlan] = useState<AnalyzePlan | null>(null);
   const [analyzeContext, setAnalyzeContext] = useState(true);
-  const selectionRef = useRef<{ text: string; first: number; last: number; count: number } | null>(null);
+  /**
+   * Two readings of the same selection, because two consumers want different
+   * things from it.
+   *
+   * `text` is rebuilt from the buffer as whole lines with timestamps — what the
+   * AI needs, since "these two lines are 400ms apart" is often the diagnosis.
+   * `raw` is literally what the user highlighted, which is what Grep needs: if
+   * they picked out a port number, they want that port, not the line it was
+   * sitting in.
+   */
+  const selectionRef = useRef<
+    { text: string; raw: string; first: number; last: number; count: number } | null
+  >(null);
 
   const visible = useMemo(
     () => filterLines(logs, { query: logFilter, levels: logLevels }),
@@ -533,7 +545,7 @@ export function LogViewer() {
     // timestamps and would drag the gutter along with it.
     const text = selectionText(logs, firstSeq, lastSeq);
     const count = lastSeq - firstSeq + 1;
-    selectionRef.current = { text, first: firstSeq, last: lastSeq, count };
+    selectionRef.current = { text, raw: sel.toString(), first: firstSeq, last: lastSeq, count };
     setLogSelection({ text, firstSeq, lastSeq, lineCount: count });
     return range;
   }, [logs, setLogSelection]);
@@ -622,10 +634,9 @@ export function LogViewer() {
   const grepSelection = () => {
     const sel = selectionRef.current;
     if (!sel) return;
-    // The first line, trimmed to something that will actually match again —
-    // a whole multi-line selection as a filter matches nothing.
-    const firstLine = sel.text.split('\n')[0].replace(/^\S+\s/, '').trim();
-    setLogFilter(firstLine.slice(0, 60));
+    const term = grepTermFor(sel.raw);
+    if (!term) return;
+    setLogFilter(term);
     setToolbar(null);
     window.getSelection()?.removeAllRanges();
   };
