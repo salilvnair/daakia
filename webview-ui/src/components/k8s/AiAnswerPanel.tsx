@@ -29,11 +29,21 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
         {answer.streaming
           ? <SpinnerIcon size={12} color={ACCENT} />
           : <SparkleIcon size={12} color={ACCENT} />}
-        <span className="text-[11.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+        {/* The title never wraps. It is three short words and the label for the
+            whole card; letting a long pod name push it onto a second line made
+            two cards side by side look like different components. */}
+        <span className="text-[11.5px] whitespace-nowrap shrink-0"
+              style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           {answer.title}
         </span>
         {answer.podName && (
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+          /* A pod name is a workload, a ReplicaSet hash and a pod suffix, and
+             in a 340px column the tail is what distinguishes one card from
+             another — but it is also what will not fit. Truncated to one line
+             with the whole name on hover: the chip says which pod without
+             deciding how tall the header is. */
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded truncate min-w-0"
+                title={answer.podName}
                 style={{ background: 'var(--color-surface-hover)', color: 'var(--color-text-muted)' }}>
             {answer.podName}
           </span>
@@ -83,13 +93,22 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
         })()}
       </button>
 
+      {/* Wrapped, never scrolled sideways.
+          `pre-wrap` alone breaks at whitespace, and a stack frame has none
+          worth breaking at — `java.base/sun.nio.ch.NioSocketImpl.connect` is
+          one token, so the box grew a horizontal scrollbar beside the vertical
+          one. Two scrollbars on a 340px panel, to read text that could simply
+          have wrapped. `anywhere` lets a long token break. */}
       {showEvidence && (
-        <pre className="px-3 py-2 text-[10.5px] font-mono overflow-auto"
+        <pre className="px-3 py-2 text-[10.5px] font-mono"
              style={{
                maxHeight: 200, margin: 0,
+               overflowX: 'hidden',
+               overflowY: 'auto',
                background: 'var(--color-surface-hover)',
                color: 'var(--color-text-secondary)',
                whiteSpace: 'pre-wrap',
+               overflowWrap: 'anywhere',
              }}>
           {answer.evidence}
         </pre>
