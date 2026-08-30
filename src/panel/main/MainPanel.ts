@@ -81,6 +81,7 @@ import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../.
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch,
+  handleDk8sProbePv, handleDk8sSavePv,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
@@ -397,6 +398,13 @@ export class MainPanel {
         break;
       case 'dk8s:getFormats':
         handleDk8sGetFormats(this._post);
+        break;
+      // Archived logs on a mounted volume.
+      case 'dk8s:probePv':
+        void handleDk8sProbePv(msg, this._post);
+        break;
+      case 'dk8s:savePv':
+        void handleDk8sSavePv(msg, this._post);
         break;
       case 'dk8s:saveFormat':
         handleDk8sSaveFormat(msg, this._post);

@@ -11,6 +11,8 @@
  */
 import { probeEnvironment, setKubectlPath } from '../../../services/k8s/kubectl';
 import { connEvidence } from '../../../services/k8s/conn-summary';
+import { probePv, clearPvCache, type PvLogConfig } from '../../../services/k8s/pv-logs';
+import { searchPvForPod, type PvMatch } from '../../../services/k8s/pv-search';
 import {
   listContexts, checkReachable, listNamespaces, defaultNamespace, looksLikeProduction,
 } from '../../../services/k8s/kube-context';
@@ -67,6 +69,8 @@ export interface Dk8sState {
   guardHeapDump?: boolean;
   /** User-defined log formats. Built-ins are not stored, only overridden. */
   logFormats?: LogFormat[];
+  /** Archived logs on a mounted volume. See services/k8s/pv-logs.ts. */
+  pvLogs?: PvLogConfig;
   /** Built-in ids the user has switched off. */
   disabledFormats?: string[];
   /**
@@ -1312,6 +1316,9 @@ export function handleDk8sSearchLogs(
   postMessage: PostMessage,
 ): void {
   activeSearch?.cancel();
+  pvCancel.cancelled = true;
+  pvCancel = { cancelled: false };
+  const signal = pvCancel;
 
   const targets = (msg.targets as SearchTarget[]) ?? [];
   const opts: SearchOptions = {
@@ -1324,7 +1331,30 @@ export function handleDk8sSearchLogs(
     return;
   }
 
-  postMessage({ type: 'dk8s:searchStarted', total: targets.length, query: opts.query });
+  /*
+    The archive is searched alongside the live logs, not instead of them.
+
+    `kubectl logs` reaches the current container and the one before it, and
+    nothing else. A pod that has restarted three hundred times has lost the
+    restart that mattered, and that is exactly the search someone is running.
+    So when a volume is configured, every target is looked for there too and
+    the hits are merged into the same result list, each one labelled with
+    where it came from.
+
+    Archives are searched after the live pods rather than at the same time:
+    the live answer is the common one and it arrives in milliseconds, while a
+    volume can be tens of gigabytes. Nobody should wait on the slow half to
+    see the fast half.
+  */
+  const pv = pvConfig();
+  const searchArchive = !!pv?.enabled && !!pv.root?.trim();
+
+  postMessage({
+    type: 'dk8s:searchStarted',
+    total: targets.length,
+    query: opts.query,
+    archive: searchArchive,
+  });
 
   activeSearch = searchLogs(targets, opts, {
     onPodDone: (result, matches) => {
@@ -1335,13 +1365,121 @@ export function handleDk8sSearchLogs(
     },
     onFinished: (summary) => {
       activeSearch = undefined;
-      postMessage({ type: 'dk8s:searchDone', ...summary });
+      if (!searchArchive || signal.cancelled) {
+        postMessage({ type: 'dk8s:searchDone', ...summary });
+        return;
+      }
+      void searchArchives(pv!, targets, opts, summary, signal, postMessage);
     },
   });
 }
 
+/** Cancels an archive pass, which is not an activeSearch handle. */
+let pvCancel = { cancelled: false };
+
+function pvConfig(): PvLogConfig | undefined {
+  return state().pvLogs;
+}
+
+/**
+ * The archive half of a search.
+ *
+ * One pod at a time and sequential: this is local disk, and reading four
+ * multi-gigabyte files at once is slower than reading them in turn, not
+ * faster. Progress is reported per pod so the dialog keeps moving.
+ */
+async function searchArchives(
+  cfg: PvLogConfig,
+  targets: SearchTarget[],
+  opts: SearchOptions,
+  live: { pods: number; matched: number; scanned: number; stopped: boolean },
+  signal: { cancelled: boolean },
+  postMessage: PostMessage,
+): Promise<void> {
+  let matched = live.matched;
+  let scanned = live.scanned;
+  let done = 0;
+
+  for (const t of targets) {
+    if (signal.cancelled) break;
+    postMessage({ type: 'dk8s:searchProgress', done, total: targets.length, pod: t.pod, archive: true });
+    let out: { result: unknown; matches: PvMatch[] };
+    try {
+      out = await searchPvForPod(cfg, { namespace: t.namespace, pod: t.pod }, opts, signal);
+    } catch (e) {
+      postMessage({
+        type: 'dk8s:searchArchivePod',
+        result: {
+          pod: t.pod, namespace: t.namespace, scanned: 0, matched: 0, capped: false,
+          elapsedMs: 0, files: [], error: e instanceof Error ? e.message : String(e),
+        },
+        matches: [],
+      });
+      done++;
+      continue;
+    }
+    const r = out.result as { matched: number; scanned: number; files: unknown[] };
+    matched += r.matched;
+    scanned += r.scanned;
+    done++;
+    // Only pods with something to show: a row per pod that has no archive is
+    // noise in a result list that already has the live half in it.
+    if (r.matched > 0 || r.files.length > 0) {
+      postMessage({ type: 'dk8s:searchArchivePod', result: out.result, matches: out.matches });
+    }
+  }
+
+  postMessage({
+    type: 'dk8s:searchDone',
+    pods: live.pods,
+    matched,
+    scanned,
+    stopped: live.stopped || signal.cancelled,
+  });
+}
+
+/** Whether a volume is configured, and what it can see — for the settings page. */
+export async function handleDk8sProbePv(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const draft = msg.config as PvLogConfig | undefined;
+  const cfg = draft ?? pvConfig();
+
+  // A probe with no draft is the settings page opening, so it also needs what
+  // is stored — otherwise the page would render empty over a real config.
+  if (!draft) postMessage({ type: 'dk8s:pvConfig', config: cfg ?? null });
+
+  if (!cfg) {
+    postMessage({
+      type: 'dk8s:pvProbe',
+      probe: { ok: false, root: '', topLevel: [], fileCount: 0, totalBytes: 0, sample: [] },
+    });
+    return;
+  }
+  // A probe is the user asking "is this right now?", so it never answers from
+  // a cache built before they changed the path.
+  clearPvCache();
+  postMessage({ type: 'dk8s:pvProbe', probe: await probePv(cfg) });
+}
+
+/** Save the volume configuration and hand back what it now sees. */
+export async function handleDk8sSavePv(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const cfg = msg.config as PvLogConfig;
+  saveState({ pvLogs: cfg });
+  clearPvCache();
+  postMessage({ type: 'dk8s:pvConfig', config: cfg });
+  if (cfg?.root?.trim()) {
+    postMessage({ type: 'dk8s:pvProbe', probe: await probePv(cfg) });
+  }
+}
+
 export function handleDk8sCancelSearch(postMessage: PostMessage): void {
   activeSearch?.cancel();
+  pvCancel.cancelled = true;
   activeSearch = undefined;
   postMessage({ type: 'dk8s:searchCancelled' });
 }
