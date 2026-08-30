@@ -12,11 +12,14 @@
  * the analyzer that understands it.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ButtonView, SearchInputView, SegmentedControlView } from '@salilvnair/dui';
+import {
+  ButtonView, SearchInputView, SegmentedControlView, CheckboxView, HudView,
+  CheckSquareIcon, EmptySquareIcon,
+} from '@salilvnair/dui';
 import { CopyButtonView } from '@salilvnair/dui';
 import {
   MemoryIcon, CpuIcon, FileTextIcon, TimelineIcon, NetworkIcon,
-  FolderOpenIcon, TrashIcon, PlusIcon, StethoscopeIcon,
+  FolderOpenIcon, TrashIcon, PlusIcon, StethoscopeIcon, CloseIcon,
 } from '../../icons';
 import { useDk8sArtifactStore, type StoredArtifact } from '../../store/dk8s-artifact-store';
 import { shortAge } from './pod-view';
@@ -52,14 +55,24 @@ function bytes(n: number): string {
   return `${(n / 1024 ** 3).toFixed(2)} GB`;
 }
 
-function Row({ a }: { a: StoredArtifact }) {
+function Row({ a, picked, onPick }: {
+  a: StoredArtifact; picked: boolean; onPick: (add: boolean) => void;
+}) {
   const { open, remove } = useDk8sArtifactStore();
   const Icon = KIND_ICON[a.kind] ?? FileTextIcon;
   const [confirming, setConfirming] = useState(false);
 
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg"
-         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)' }}>
+         style={{
+           background: picked
+             ? `color-mix(in srgb, ${ACCENT} 8%, var(--color-surface))`
+             : 'var(--color-surface)',
+           border: `1px solid ${picked
+             ? `color-mix(in srgb, ${ACCENT} 40%, transparent)`
+             : 'var(--color-surface-border)'}`,
+         }}>
+      <CheckboxView checked={picked} size="md" accentColor={ACCENT} onChange={onPick} />
       <Icon size={15} color={ACCENT} />
 
       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -124,9 +137,10 @@ function Row({ a }: { a: StoredArtifact }) {
 }
 
 export function ArtifactsView() {
-  const { artifacts, dir, error, load, importFile, reveal } = useDk8sArtifactStore();
+  const { artifacts, dir, error, load, importFile, reveal, remove } = useDk8sArtifactStore();
   const [filter, setFilter] = useState('');
   const [kind, setKind] = useState<'all' | 'heap' | 'threads' | 'logs'>('all');
+  const [picked, setPicked] = useState<string[]>([]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -141,10 +155,52 @@ export function ArtifactsView() {
 
   const totalBytes = artifacts.reduce((n, a) => n + a.bytes, 0);
 
+  // Selection is scoped to what is on screen: "select all" under a filter has
+  // to mean the rows you can see, or it quietly picks up files you filtered
+  // out and then deletes them.
+  const allShown = visible.length > 0 && visible.every(a => picked.includes(a.file));
+  const pickedShown = visible.filter(a => picked.includes(a.file));
+  const pickedBytes = artifacts
+    .filter(a => picked.includes(a.file))
+    .reduce((n, a) => n + a.bytes, 0);
+
+  const toggleAll = () => setPicked(allShown
+    ? picked.filter(f => !visible.some(a => a.file === f))
+    : [...new Set([...picked, ...visible.map(a => a.file)])]);
+
+  const deletePicked = () => {
+    // One message per file: the host already knows how to delete one, and a
+    // bulk path would be a second way to do the same thing.
+    for (const f of picked) remove(f);
+    setPicked([]);
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+        {/* Select-all sits with the filter, because what it selects is what
+            the filter left on screen. */}
+        <button
+          type="button"
+          onClick={toggleAll}
+          disabled={visible.length === 0}
+          title={allShown ? 'Clear the selection' : `Select all ${visible.length} shown`}
+          className="flex items-center justify-center cursor-pointer shrink-0"
+          style={{
+            width: 30, height: 30, borderRadius: 4,
+            background: allShown ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
+            border: `1px solid ${allShown
+              ? `color-mix(in srgb, ${ACCENT} 40%, transparent)`
+              : 'var(--color-surface-border)'}`,
+            opacity: visible.length === 0 ? 0.4 : 1,
+          }}
+        >
+          {allShown
+            ? <CheckSquareIcon size={14} color={ACCENT} />
+            : <EmptySquareIcon size={14} color="var(--color-text-muted)" />}
+        </button>
+
         <div className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
           <SearchInputView value={filter} onChange={setFilter}
                            placeholder="Filter artifacts" size="md" width="100%" />
@@ -204,14 +260,54 @@ export function ArtifactsView() {
             </span>
           </div>
         ) : (
-          visible.map(a => <Row key={a.file} a={a} />)
+          visible.map(a => (
+            <Row
+              key={a.file}
+              a={a}
+              picked={picked.includes(a.file)}
+              onPick={add => setPicked(add
+                ? [...picked, a.file]
+                : picked.filter(f => f !== a.file))}
+            />
+          ))
         )}
       </div>
+
+      {/* A HUD rather than a toolbar row: it only exists while something is
+          selected, and a row that appears and disappears would shift the list
+          under the cursor every time you tick a box. */}
+      {picked.length > 0 && (
+        <HudView
+          contained
+          draggable={false}
+          accentColor={ACCENT}
+          status={`${picked.length} selected · ${bytes(pickedBytes)}`}
+          items={[
+            {
+              id: 'clear',
+              icon: <CloseIcon size={13} />,
+              label: 'Cancel',
+              title: 'Clear the selection',
+              onClick: () => setPicked([]),
+            },
+            {
+              id: 'delete',
+              icon: <TrashIcon size={13} />,
+              label: `Delete ${picked.length}`,
+              title: 'Delete the selected files from this machine',
+              separator: true,
+              onClick: deletePicked,
+            },
+          ]}
+          className="dk8s-artifact-hud"
+        />
+      )}
 
       <div className="flex items-center gap-3 px-4 py-1.5 text-[10.5px] shrink-0"
            style={{ borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
           {artifacts.length} file{artifacts.length === 1 ? '' : 's'} · {bytes(totalBytes)}
+          {pickedShown.length > 0 && ` · ${pickedShown.length} selected`}
         </span>
         <div className="flex-1" />
         <span className="font-mono truncate" style={{ maxWidth: '55%' }}>{dir}</span>

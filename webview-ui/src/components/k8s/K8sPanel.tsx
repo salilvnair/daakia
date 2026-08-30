@@ -187,15 +187,18 @@ function ViewSwitch({ view, onChange }: {
   onChange: (v: Dk8sView) => void;
 }) {
   const count = useDk8sArtifactStore(s => s.artifacts.length);
+  // Artifacts carried a count and Pods did not, which read as though only one
+  // of them held anything.
+  const podCount = useK8sStore(s => s.pods.length);
   const TABS = [
-    { id: 'pods' as const, label: 'Pods', icon: null },
-    { id: 'artifacts' as const, label: 'Artifacts', icon: null },
-    { id: 'analyze' as const, label: 'Analyze', icon: <StethoscopeIcon size={13} /> },
+    { id: 'pods' as const, label: 'Pods', icon: null, badge: podCount },
+    { id: 'artifacts' as const, label: 'Artifacts', icon: null, badge: count },
+    { id: 'analyze' as const, label: 'Analyze', icon: <StethoscopeIcon size={13} />, badge: 0 },
   ];
   return (
     <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
          style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-      {TABS.map(({ id, label, icon }) => {
+      {TABS.map(({ id, label, icon, badge }) => {
         const on = view === id;
         return (
           <button
@@ -212,14 +215,14 @@ function ViewSwitch({ view, onChange }: {
           >
             {icon}
             {label}
-            {id === 'artifacts' && count > 0 && (
+            {badge > 0 && (
               <span className="text-[9.5px] px-1.5 py-0.5 rounded"
                     style={{
                       background: 'var(--color-surface-hover)',
                       color: 'var(--color-text-muted)',
                       fontVariantNumeric: 'tabular-nums',
                     }}>
-                {count}
+                {badge}
               </span>
             )}
           </button>

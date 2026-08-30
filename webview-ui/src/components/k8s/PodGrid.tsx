@@ -488,13 +488,6 @@ export function PodGrid() {
 
       <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        {/* Takes the row rather than capping at 560px — on a wide window the
-            cap left a long dead gap between the filter and the buttons. */}
-        <div ref={searchRef} className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
-          <SearchInputView value={filter} onChange={setFilter}
-                           placeholder="Filter pods  ( / )" size="sm" width="100%" />
-        </div>
-
         {/* Selection mode. Off by default: checkboxes on every card all the
             time would be clutter for the reading this grid is mostly used for.
             Named for what it does rather than for one of the things it leads
@@ -531,6 +524,14 @@ export function PodGrid() {
                                style={{ color: 'var(--color-success)', opacity: 0.85 }} />}
           {selectMode ? 'Cancel' : 'Select pods'}
         </button>
+
+        {/* Takes the row rather than capping at 560px — on a wide window the
+            cap left a long dead gap between the filter and the buttons. */}
+        <div ref={searchRef} className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
+          <SearchInputView value={filter} onChange={setFilter}
+                           placeholder="Filter pods  ( / )" size="sm" width="100%" />
+        </div>
+
 
         {/* dui's control rather than a hand-rolled one: it insets the active
             pill from the track, which is the breathing room the home-made
