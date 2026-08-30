@@ -11,6 +11,7 @@
  */
 import { probeEnvironment, setKubectlPath } from '../../../services/k8s/kubectl';
 import { connEvidence } from '../../../services/k8s/conn-summary';
+import { probeAccess, forbiddenReason } from '../../../services/k8s/k8s-access';
 import { probePv, clearPvCache, type PvLogConfig } from '../../../services/k8s/pv-logs';
 import { searchPvForPod, type PvMatch } from '../../../services/k8s/pv-search';
 import {
@@ -668,6 +669,28 @@ export function handleDk8sLogsClose(): void {
 }
 
 /** describe + YAML in one round trip: the detail panel shows both. */
+/**
+ * What this account may do in this namespace.
+ *
+ * Asked when a pod is opened, so the detail tabs can disable what will not
+ * work and say what to ask an administrator for, rather than offering
+ * everything and letting the wrong ones fail with a raw 403.
+ */
+export async function handleDk8sProbeAccess(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const context = String(msg.context ?? state().context ?? '');
+  const namespace = String(msg.namespace ?? '');
+  if (!context || !namespace) return;
+  postMessage({
+    type: 'dk8s:access',
+    context,
+    namespace,
+    access: await probeAccess(context, namespace),
+  });
+}
+
 export async function handleDk8sDescribe(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
@@ -682,11 +705,18 @@ export async function handleDk8sDescribe(
     run(['--context', context, '-n', namespace, 'get', 'pod', pod, '-o', 'yaml'], { timeoutMs: 30_000 }),
   ]);
 
+  // A wall of `Error from server (Forbidden): ... cannot get resource "pods"
+  // in API group ""` is not something to put in front of someone. Say what
+  // happened, and leave the raw text available underneath.
+  const explain = (r: typeof described) =>
+    forbiddenReason(r.stderr || r.failure || '') ?? (r.stderr || r.failure);
+
   postMessage({
     type: 'dk8s:described', pod,
-    describe: described.ok ? described.stdout : (described.stderr || described.failure),
-    yaml: yaml.ok ? yaml.stdout : (yaml.stderr || yaml.failure),
+    describe: described.ok ? described.stdout : explain(described),
+    yaml: yaml.ok ? yaml.stdout : explain(yaml),
     ok: described.ok && yaml.ok,
+    denied: !described.ok && !!forbiddenReason(described.stderr || ''),
   });
 }
 

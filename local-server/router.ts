@@ -37,7 +37,7 @@ import {
 import { handleWsConnect, handleWsDisconnect, handleWsSend } from '../src/panel/main/handlers/websocket-handler';
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces, handleDk8sSetNamespace,
-  handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sCancelSearch,
+  handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSearchLogs, handleDk8sProbeAccess, handleDk8sCancelSearch,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
@@ -165,6 +165,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:detectFormat':
       handleDk8sDetectFormat(msg, post);
+      break;
+    case 'dk8s:probeAccess':
+      void handleDk8sProbeAccess(msg, post);
       break;
     case 'dk8s:searchLogs':
       handleDk8sSearchLogs(msg, post);

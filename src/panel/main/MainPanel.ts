@@ -81,7 +81,7 @@ import { noteSessionConnect, auditSessionMessage, flushOpenSessions } from '../.
 import {
   handleDk8sProbe, handleDk8sUseContext, handleDk8sNamespaces,
   handleDk8sSetNamespace, handleDk8sSetSensitivity, handleDk8sSetGuardHeapDump, handleDk8sSetLogLineNumbers, handleDk8sSearchLogs, handleDk8sCancelSearch,
-  handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile,
+  handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sProbeAccess,
   handleDk8sGetFormats, handleDk8sSaveFormat, handleDk8sDeleteFormat,
   handleDk8sTestFormat, handleDk8sSampleLines, handleDk8sDetectFormat,
   handleDk8sListArtifacts, handleDk8sImportArtifact, handleDk8sDeleteArtifact,
@@ -400,6 +400,9 @@ export class MainPanel {
         handleDk8sGetFormats(this._post);
         break;
       // Archived logs on a mounted volume.
+      case 'dk8s:probeAccess':
+        void handleDk8sProbeAccess(msg, this._post);
+        break;
       case 'dk8s:openLogFile':
         void handleDk8sOpenLogFile(msg);
         break;

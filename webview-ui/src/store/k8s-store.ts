@@ -12,6 +12,24 @@ import { useUiStateStore } from './ui-state-store';
 /** Same shape as `rest.subtab.<id>` and friends — see setScopedPref. */
 const DETAIL_TAB_PREF = 'dk8s.detailTab.';
 
+/** Mirrors services/k8s/k8s-access.ts. */
+export interface Access {
+  logs: boolean;
+  exec: boolean;
+  get: boolean;
+  events: boolean;
+  portForward: boolean;
+  delete: boolean;
+  patch: boolean;
+  /** False when the probe could not run — nothing was actually checked. */
+  probed: boolean;
+}
+
+export const ALL_ACCESS: Access = {
+  logs: true, exec: true, get: true, events: true,
+  portForward: true, delete: true, patch: true, probed: false,
+};
+
 export interface KubeContext {
   name: string;
   cluster: string;
@@ -343,6 +361,13 @@ interface K8sState {
   guardHeapDump: boolean;
   /** Line numbers down the left of the log view. On unless turned off. */
   logLineNumbers: boolean;
+  /**
+   * What this account may do in the open pod's namespace.
+   *
+   * Everything is allowed until the probe says otherwise, so a slow or
+   * missing answer never hides a tab that would have worked.
+   */
+  access: Access;
   shellNotice?: { reason: string; suggestion: string; suggestionLabel?: string };
 
   probe: () => void;
@@ -448,6 +473,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   probeBusy: false,
   guardHeapDump: true,
   logLineNumbers: true,
+  access: ALL_ACCESS,
 
   probe: () => {
     set({ busy: true });
@@ -569,6 +595,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     });
     postMsg({ type: 'dk8s:describe', ...base });
     postMsg({ type: 'dk8s:probePod', ...base });
+    // What this account may do here, so the tabs can disable what will not
+    // work rather than offering it and failing with a raw 403.
+    postMsg({ type: 'dk8s:probeAccess', context: pod.context, namespace: pod.namespace });
   },
 
   closeDetail: () => {
@@ -971,6 +1000,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           suggestion: msg.suggestion as string,
           suggestionLabel: msg.suggestionLabel as string | undefined,
         } });
+        break;
+
+      case 'dk8s:access':
+        set({ access: msg.access as Access });
         break;
 
       case 'dk8s:logLineNumbers':

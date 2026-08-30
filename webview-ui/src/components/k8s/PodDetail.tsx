@@ -8,7 +8,7 @@
 import { useCallback, useEffect } from 'react';
 import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
-  SparkleIcon, ChevronLeftIcon, LayersIcon,
+  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon,
 } from '../../icons';
 import { CopyButtonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
@@ -27,14 +27,60 @@ const AI_ACCENT = 'var(--color-protocol-ai)';
 
 // Order from the mock: Overview, Logs, Terminal, Doctor, YAML — with Describe
 // alongside YAML, since they answer the same kind of question.
-const TABS: { id: DetailTab; label: string; Icon: typeof FileTextIcon }[] = [
+type AccessKey = 'logs' | 'exec' | 'get' | 'events' | 'portForward' | 'delete' | 'patch';
+
+/** What to ask an administrator for, in the words an RBAC rule uses. */
+const ACCESS_RULE: Record<AccessKey, string> = {
+  logs: 'get on pods/log',
+  exec: 'create on pods/exec',
+  get: 'get on pods',
+  events: 'list on events',
+  portForward: 'create on pods/portforward',
+  delete: 'delete on pods',
+  patch: 'patch on pods',
+};
+
+/**
+ * `needs` is the permission the tab cannot work without.
+ *
+ * Overview needs nothing: it renders what the pod list already told us, which
+ * you must have been able to read to get here at all.
+ */
+const TABS: {
+  id: DetailTab; label: string; Icon: typeof FileTextIcon; needs?: AccessKey;
+}[] = [
   { id: 'overview', label: 'Overview', Icon: LayersIcon },
-  { id: 'logs', label: 'Logs', Icon: FileTextIcon },
-  { id: 'terminal', label: 'Terminal', Icon: TerminalIcon },
-  { id: 'doctor', label: 'Doctor', Icon: StethoscopeIcon },
-  { id: 'describe', label: 'Describe', Icon: CodeIcon },
-  { id: 'yaml', label: 'YAML', Icon: CodeIcon },
+  { id: 'logs', label: 'Logs', Icon: FileTextIcon, needs: 'logs' },
+  { id: 'terminal', label: 'Terminal', Icon: TerminalIcon, needs: 'exec' },
+  { id: 'doctor', label: 'Doctor', Icon: StethoscopeIcon, needs: 'exec' },
+  { id: 'describe', label: 'Describe', Icon: CodeIcon, needs: 'get' },
+  { id: 'yaml', label: 'YAML', Icon: CodeIcon, needs: 'get' },
 ];
+
+/**
+ * Shown in place of a tab this account cannot use.
+ *
+ * The rule is spelled out because the useful next step is asking someone for
+ * it, and "you do not have access" does not tell you what to ask for.
+ */
+function NoAccess({ what, needs }: { what: string; needs: AccessKey }) {
+  const rule = ACCESS_RULE[needs];
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-2.5 px-8 text-center">
+      <LockIcon size={22} color="var(--color-text-muted)" />
+      <span className="text-[12.5px]" style={{ color: 'var(--color-text-primary)' }}>
+        {what} needs access this account does not have
+      </span>
+      <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)', maxWidth: 440 }}>
+        The cluster says you cannot <code>{rule}</code> in this namespace. Nothing is broken and
+        nothing was tried &mdash; dk8s asked first. Every other tab you can use still works.
+      </span>
+      <span className="text-[10.5px] mt-1" style={{ color: 'var(--color-text-muted)', opacity: 0.85 }}>
+        Ask whoever manages the cluster for <code>{rule}</code>.
+      </span>
+    </div>
+  );
+}
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -183,6 +229,7 @@ export function PodDetail() {
    * hand. When the search sent you here, Back returns to it, scrolled to where
    * you left off; otherwise it does what it always did.
    */
+  const access = useK8sStore(s => s.access);
   const cameFromSearch = useDk8sSearchStore(s => s.cameFromSearch);
   const returnToSearch = useDk8sSearchStore(s => s.returnToSearch);
   const goBack = useCallback(() => {
@@ -209,6 +256,13 @@ export function PodDetail() {
   }, [goBack]);
 
   if (!detail) return null;
+
+  // The open tab, when this account cannot use it. Overview has no `needs`,
+  // so there is always somewhere to land.
+  const current = TABS.find(t => t.id === detailTab);
+  const denied = current?.needs && !access[current.needs]
+    ? { label: current.label, needs: current.needs }
+    : undefined;
 
   const sev = severityOf(detail);
   const color = severityColor(sev);
@@ -326,22 +380,30 @@ export function PodDetail() {
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
                style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-            {TABS.map(({ id, label, Icon }) => {
+            {TABS.map(({ id, label, Icon, needs }) => {
               const on = detailTab === id;
+              // Dimmed and padlocked rather than hidden. A tab that vanishes
+              // reads as a missing feature; one that is visibly locked reads
+              // as a permission, which is the true and actionable thing.
+              const locked = !!needs && !access[needs];
               return (
                 <button
                   key={id}
                   type="button"
                   onClick={() => setDetailTab(id)}
+                  title={locked ? `${label} needs ${ACCESS_RULE[needs!]}` : undefined}
                   className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent transition-colors"
                   style={{
                     color: on ? ACCENT : 'var(--color-text-secondary)',
                     fontWeight: on ? 600 : 400,
                     borderBottom: `2px solid ${on ? ACCENT : 'transparent'}`,
                     marginBottom: -1,
+                    opacity: locked ? 0.45 : 1,
                   }}
                 >
-                  <Icon size={12} color={on ? ACCENT : 'var(--color-text-muted)'} />
+                  {locked
+                    ? <LockIcon size={11} color="var(--color-text-muted)" />
+                    : <Icon size={12} color={on ? ACCENT : 'var(--color-text-muted)'} />}
                   {label}
                 </button>
               );
@@ -350,11 +412,17 @@ export function PodDetail() {
 
           <div className="flex-1 min-h-0">
             {detailTab === 'overview' && <OverviewTab />}
-            {detailTab === 'logs' && <LogViewer />}
-            {detailTab === 'terminal' && <TerminalTab />}
-            {detailTab === 'describe' && <DescribePane text={describeText} busy={describeBusy} />}
-            {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}
-            {detailTab === 'doctor' && <DoctorTab />}
+            {denied ? (
+              <NoAccess what={denied.label} needs={denied.needs} />
+            ) : (
+              <>
+                {detailTab === 'logs' && <LogViewer />}
+                {detailTab === 'terminal' && <TerminalTab />}
+                {detailTab === 'describe' && <DescribePane text={describeText} busy={describeBusy} />}
+                {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}
+                {detailTab === 'doctor' && <DoctorTab />}
+              </>
+            )}
           </div>
         </div>
 
