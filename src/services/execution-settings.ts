@@ -103,7 +103,7 @@ export function resolveExecutionSettings(
       // A blank proxy object is not an override. `mode: 'none'` is — that is
       // someone deliberately saying "not through the proxy for this one".
       if (f === 'proxy' && !(v as ProxyConfig).mode) continue;
-      (out as Record<string, unknown>)[f] = v;
+      (out as unknown as Record<string, unknown>)[f] = v;
       from[f] = level;
     }
   }

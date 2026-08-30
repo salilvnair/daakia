@@ -130,9 +130,22 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   const jumpToPod = (m: SearchMatch) => {
     const pod = pods.find(p => p.name === m.pod && p.namespace === m.namespace);
     if (!pod) return;
-    onClose();
+    // Not onClose(): that is the deliberate-exit path, which forgets where you
+    // were. This one records it so the pod's Back returns to these results.
+    useDk8sSearchStore.getState().jumpedToPod(scrollRef.current?.scrollTop ?? 0);
     openDetail(pod);
   };
+
+  // Reopened from a pod's Back — put the list back where it was. One frame
+  // late because the rows have to exist before there is anything to scroll.
+  useEffect(() => {
+    const y = useDk8sSearchStore.getState().resultScroll;
+    if (!y) return;
+    const id = requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = y;
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   const canSearch = !!options.query.trim() && chosen.length > 0;
   const totalHits = groups.reduce((n, g) => n + g.result.matched, 0);
@@ -179,16 +192,16 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           value={options.query}
           onChange={(v: string) => setOptions({ query: v })}
           placeholder="Search across the selected pods’ logs"
-          size="sm"
+          size="md"
           width="100%"
         />
 
         <div className="flex items-center gap-3 flex-wrap">
-          <CheckboxView label="regex" checked={options.regex} size="sm" accentColor={ACCENT}
+          <CheckboxView label="regex" checked={options.regex} size="md" accentColor={ACCENT}
                         onChange={v => setOptions({ regex: v })} />
-          <CheckboxView label="match case" checked={options.caseSensitive} size="sm" accentColor={ACCENT}
+          <CheckboxView label="match case" checked={options.caseSensitive} size="md" accentColor={ACCENT}
                         onChange={v => setOptions({ caseSensitive: v })} />
-          <CheckboxView label="previous runs" checked={options.includePrevious} size="sm"
+          <CheckboxView label="previous runs" checked={options.includePrevious} size="md"
                         accentColor="var(--color-warning)"
                         onChange={v => setOptions({ includePrevious: v })} />
           <div className="flex-1" />
@@ -198,7 +211,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             options={[1000, 5000, 20000, 100000].map(v => ({
               value: String(v), label: `last ${v.toLocaleString()}`,
             }))}
-            size="sm" width={132} accentColor={ACCENT}
+            size="md" width={148} accentColor={ACCENT}
           />
           <SelectInputView
             value={String(options.contextLines)}
@@ -209,7 +222,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
               { value: '2', label: '\u00b12 lines around' },
               { value: '5', label: '\u00b15 lines around' },
             ]}
-            size="sm" width={176} accentColor={ACCENT}
+            size="md" width={192} accentColor={ACCENT}
           />
         </div>
 

@@ -5,7 +5,7 @@
  * activity here, not a peek, and a 380px drawer turns every stack trace into a
  * horizontal scroll. Escape and the back arrow return to the grid.
  */
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
   SparkleIcon, ChevronLeftIcon, LayersIcon,
@@ -13,6 +13,7 @@ import {
 import { CopyButtonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { severityOf, severityColor, shortAge, restartLabel } from './pod-view';
 import { LogViewer } from './LogViewer';
 import { AiAnswerPanel } from './AiAnswerPanel';
@@ -174,6 +175,21 @@ export function PodDetail() {
     openShell, shellNotice, dismissShellNotice,
   } = useK8sStore();
 
+  /**
+   * Back goes where you came from.
+   *
+   * Opening a pod from a search hit and then landing on the pod grid loses the
+   * results — you have to search again and find your place in the list by
+   * hand. When the search sent you here, Back returns to it, scrolled to where
+   * you left off; otherwise it does what it always did.
+   */
+  const cameFromSearch = useDk8sSearchStore(s => s.cameFromSearch);
+  const returnToSearch = useDk8sSearchStore(s => s.returnToSearch);
+  const goBack = useCallback(() => {
+    closeDetail();
+    if (cameFromSearch) returnToSearch();
+  }, [closeDetail, cameFromSearch, returnToSearch]);
+
   const aiOpen = useDk8sAiStore(s => s.open);
   const openAi = useDk8sAiStore(s => s.openPanel);
   const closeAi = useDk8sAiStore(s => s.closePanel);
@@ -186,11 +202,11 @@ export function PodDetail() {
       if (e.key !== 'Escape') return;
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) return;
-      closeDetail();
+      goBack();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeDetail]);
+  }, [goBack]);
 
   if (!detail) return null;
 
@@ -206,7 +222,8 @@ export function PodDetail() {
              borderBottom: '1px solid var(--color-surface-border)',
              background: `linear-gradient(to right, color-mix(in srgb, ${color} 8%, transparent), transparent 60%)`,
            }}>
-        <button type="button" onClick={closeDetail} title="Back to pods"
+        <button type="button" onClick={goBack}
+                title={cameFromSearch ? 'Back to search results' : 'Back to pods'}
                 className="p-1 rounded cursor-pointer border-none bg-transparent">
           <ChevronLeftIcon size={16} color="var(--color-text-secondary)" />
         </button>

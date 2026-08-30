@@ -241,9 +241,11 @@ async function heapDump(
 /**
  * Flight recording.
  *
- * The one deep tool that works on a JRE image, since `jfr` ships in the JRE
- * while jcmd does not. Needs the JVM to have been started with recording
- * enabled, which is the usual reason this fails.
+ * Needs jcmd, so this is NOT the JRE-image escape hatch it was once described
+ * as. The `jfr` binary that ships in the JRE reads recordings; it cannot start
+ * one on a live JVM. pod-classify only offers this action where jcmd exists —
+ * on a JRE image the way to get a recording is to start the JVM with
+ * -XX:StartFlightRecording.
  */
 async function flightRecording(
   t: CollectTarget, destDir: string, seconds: number, onProgress: Progress,

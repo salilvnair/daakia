@@ -16,6 +16,10 @@ import {
   insertUiAudit,
 } from '../../../storage/db';
 import { decryptIfNeeded, encryptEnvVariables } from '../../../services/vault';
+import {
+  resolveExecutionSettings, type ExecutionSettings,
+} from '../../../services/execution-settings';
+import { collectionSettings } from '../../../services/collection-settings';
 
 type PostMessage = (msg: unknown) => void;
 type RefreshFn = () => void;
@@ -33,23 +37,43 @@ export async function handleExecuteRequest(
   refreshHistory: RefreshFn,
 ) {
   try {
-    // Inject execution settings — prefer app_settings DB, fallback to VS Code workspace config
+    // Resolve execution settings across the three levels — see
+    // services/execution-settings.ts for why they inherit per field.
+    //
+    // Global still falls back to VS Code workspace config, which is how these
+    // were configured before there was a settings page at all.
     const settings = getSetting<Record<string, unknown>>('general') ?? {};
     const vsConfig = vscode.workspace.getConfiguration('daakia');
 
-    msg.timeout = settings.timeout ?? vsConfig.get<number>('requestTimeout', 0);
-    msg.followRedirects = settings.followRedirects ?? vsConfig.get<boolean>('followRedirects', true);
-    msg.sslVerification = settings.sslVerification ?? vsConfig.get<boolean>('sslVerification', true);
+    const global: ExecutionSettings = {
+      timeout: (settings.timeout as number | undefined) ?? vsConfig.get<number>('requestTimeout', 0),
+      followRedirects: (settings.followRedirects as boolean | undefined)
+        ?? vsConfig.get<boolean>('followRedirects', true),
+      sslVerification: (settings.sslVerification as boolean | undefined)
+        ?? vsConfig.get<boolean>('sslVerification', true),
+      saveResponseInHistory: settings.saveResponseInHistory as boolean | undefined,
+      encoding: settings.encoding as ExecutionSettings['encoding'],
+      proxy: settings.proxy as ExecutionSettings['proxy'],
+    };
+
+    const resolved = resolveExecutionSettings(
+      global,
+      collectionSettings(msg.collectionId as string | undefined),
+      msg.settings as ExecutionSettings | undefined,
+    );
+
+    msg.timeout = resolved.timeout;
+    msg.followRedirects = resolved.followRedirects;
+    msg.sslVerification = resolved.sslVerification;
+    msg.encoding = resolved.encoding;
+    if (resolved.proxy) msg.proxy = resolved.proxy;
+    // Carried so the response can say which level each value came from,
+    // rather than leaving you to guess why one request timed out at 5s.
+    msg.settingsFrom = resolved.from;
 
     // Inject trusted SSL hosts
     const trustedHosts = getSetting<string[]>('trustedHosts') ?? [];
     msg.trustedHosts = trustedHosts;
-
-    // Inject proxy settings
-    const proxySettings = (settings as any).proxy as { mode: string; host?: string; port?: number; username?: string; password?: string; bypass?: string[] } | undefined;
-    if (proxySettings) {
-      msg.proxy = proxySettings;
-    }
 
     // Cookie jar: inject stored cookies for the request domain
     try {
@@ -426,7 +450,7 @@ export async function handleExecuteRequest(
     }
 
     // Save to history
-    const saveResponse = settings.saveResponseInHistory ?? true;
+    const saveResponse = resolved.saveResponseInHistory;
     // Strip fileData from bodyFormData — never store binary data in DB, only file paths
     const bodyFormDataForHistory = (msg.bodyFormData as any[])?.map((f: any) => {
       const { fileData, ...rest } = f;

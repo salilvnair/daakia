@@ -4,6 +4,7 @@
  */
 import axios, { AxiosRequestConfig, AxiosError } from 'axios';
 import { resolveProxy, type ProxyConfig, type ResolvedProxy } from '../services/proxy-config';
+import { applyQueryEncoding, type QueryEncoding } from '../services/execution-settings';
 import * as fs from 'fs';
 import {
   createTimedHttpAgent, createTimedHttpsAgent,
@@ -28,6 +29,8 @@ export interface ExecuteRequestParams {
   timeout?: number;
   followRedirects?: boolean;
   sslVerification?: boolean;
+  /** How query parameters are encoded. See services/execution-settings.ts. */
+  encoding?: QueryEncoding;
   /** Trusted SSL hostnames — skip verification for these even when sslVerification is true */
   trustedHosts?: string[];
   /** Proxy configuration */
@@ -135,8 +138,38 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     url = 'http://' + url;
   }
   const urlObj = new URL(url);
-  for (const p of params.params) {
-    if (p.key) urlObj.searchParams.append(p.key, p.value);
+
+  /**
+   * The URL that actually goes on the wire.
+   *
+   * `enable` keeps the original URLSearchParams path exactly as it was. It is
+   * the default, so taking the new path here would quietly change the encoding
+   * of every request in the app for a feature nobody opted into — `+` for a
+   * space becoming `%20`, and so on.
+   *
+   * `disable` and `auto` assemble the query from the raw text instead, because
+   * URLSearchParams cannot express "leave this alone": it re-encodes on the way
+   * out, which is the thing those two modes exist to avoid.
+   */
+  const encoding = params.encoding ?? 'enable';
+  let requestUrl: string;
+  if (encoding === 'enable') {
+    for (const p of params.params) {
+      if (p.key) urlObj.searchParams.append(p.key, p.value);
+    }
+    requestUrl = urlObj.toString();
+  } else {
+    // Split the raw string rather than reading it back off `urlObj`, whose
+    // getters have already normalised the query.
+    const hashAt = url.indexOf('#');
+    const hash = hashAt === -1 ? '' : url.slice(hashAt);
+    const head = hashAt === -1 ? url : url.slice(0, hashAt);
+    const qAt = head.indexOf('?');
+    const base = qAt === -1 ? head : head.slice(0, qAt);
+    const typed = qAt === -1 ? '' : head.slice(qAt + 1);
+    const rows = params.params.filter(p => p.key).map(p => `${p.key}=${p.value}`).join('&');
+    const query = [typed, rows].filter(Boolean).join('&');
+    requestUrl = applyQueryEncoding(query ? `${base}?${query}${hash}` : `${base}${hash}`, encoding);
   }
 
   // Build body
@@ -218,11 +251,11 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
 
   // One resolver for every protocol — see src/services/proxy-config.ts for why
   // this is not inlined here any more.
-  resolvedProxy = resolveProxy(params.proxy as ProxyConfig | undefined, urlObj.toString());
+  resolvedProxy = resolveProxy(params.proxy as ProxyConfig | undefined, requestUrl);
 
   const config: AxiosRequestConfig = {
     method: params.method.toLowerCase() as AxiosRequestConfig['method'],
-    url: urlObj.toString(),
+    url: requestUrl,
     headers,
     data,
     validateStatus: () => true, // Don't throw on non-2xx

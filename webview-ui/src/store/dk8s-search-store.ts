@@ -72,9 +72,21 @@ interface SearchState {
   summary?: { pods: number; matched: number; scanned: number; stopped: boolean };
   /** Pods the user has collapsed in the result list. */
   collapsed: string[];
+  /**
+   * Where the result list was scrolled, and whether a pod was opened from a
+   * hit. Together these are what makes Back a return rather than an exit:
+   * clicking a match halfway down 9 results and coming back to the top of the
+   * list means finding your place again by hand.
+   */
+  resultScroll: number;
+  cameFromSearch: boolean;
 
   openSearch: () => void;
   closeSearch: () => void;
+  /** Opening a pod from a hit — records the way back. */
+  jumpedToPod: (scrollTop: number) => void;
+  /** Back from that pod: reopens the results where they were. */
+  returnToSearch: () => void;
   setOptions: (patch: Partial<SearchOptions>) => void;
   run: (targets: { context: string; namespace: string; pod: string; containers?: string[] }[]) => void;
   cancel: () => void;
@@ -85,6 +97,8 @@ interface SearchState {
 
 export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   open: false,
+  resultScroll: 0,
+  cameFromSearch: false,
   options: DEFAULT_OPTIONS,
   running: false,
   progress: { done: 0, total: 0 },
@@ -92,7 +106,11 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   collapsed: [],
 
   openSearch: () => set({ open: true }),
-  closeSearch: () => set({ open: false }),
+  // The way back is dropped on a deliberate close: you chose to leave.
+  closeSearch: () => set({ open: false, cameFromSearch: false }),
+
+  jumpedToPod: (scrollTop) => set({ open: false, resultScroll: scrollTop, cameFromSearch: true }),
+  returnToSearch: () => set({ open: true, cameFromSearch: false }),
 
   setOptions: (patch) => set(s => ({ options: { ...s.options, ...patch } })),
 

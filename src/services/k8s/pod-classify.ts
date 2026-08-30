@@ -302,9 +302,25 @@ export function availableActions(runtime: PodRuntime, caps: PodCapabilities): Ac
       disruptive: true,
     });
     A({
+      // Gated on jcmd, not on the `jfr` binary.
+      //
+      // `jfr` is the file reader — `jfr print`, `jfr summary` — and it reads a
+      // recording that already exists. It cannot start one on a running JVM,
+      // which is what this action does. Only jcmd (or a JVM started with
+      // -XX:StartFlightRecording) can do that.
+      //
+      // Gating on `jfr` offered this on every JRE image, where it then failed
+      // with a raw "exec: jcmd: executable file not found in $PATH" from the
+      // container runtime — the action promised something the image cannot do.
       id: 'jfr', label: 'Flight recording',
-      available: caps.jfr && !!caps.targetPid,
-      reason: caps.jfr ? 'jfr ships in the JRE, so this works where jcmd does not' : 'no jfr binary',
+      available: caps.jcmd && !!caps.targetPid,
+      reason: !caps.jcmd
+        ? 'needs jcmd to start a recording, and this is a JRE image. `jfr` is present '
+          + 'but it only reads recordings that already exist — start the JVM with '
+          + '-XX:StartFlightRecording to profile this pod.'
+        : !caps.targetPid
+          ? 'could not find the JVM pid'
+          : 'profiles a window of time — allocation, locks, I/O',
     });
   }
 
