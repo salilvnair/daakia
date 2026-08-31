@@ -9,11 +9,23 @@
  * partitions the heap exactly — retained sizes overlap, so a retained treemap
  * would draw more area than the heap contains.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { SegmentedControlView, SunburstView } from '@salilvnair/dui';
 import { heapQuery, bytes, hueFor, type TreemapData } from './heap-query';
 import { squarify, type Tile } from './treemap-layout';
 
 export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
+  /*
+    Two geometries over one dataset.
+
+    A treemap packs by area and is the better tool for comparing two things
+    that are far apart on screen. A sunburst reads outward from the centre, so
+    containment is the axis rather than something inferred from adjacency —
+    which is what makes it the profiler's idiom for "what is inside this".
+    Neither is a substitute for the other, and neither is new information, so
+    this is a toggle rather than a seventh tab.
+  */
+  const [shape, setShape] = useState<'treemap' | 'sunburst'>('treemap');
   const [data, setData] = useState<TreemapData | null>(null);
   const [error, setError] = useState('');
   const [hover, setHover] = useState<Tile | null>(null);
@@ -96,6 +108,15 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
     return () => ro.disconnect();
   }, [data]);
 
+  /** The same groups, as a hierarchy the chart can lay out. */
+  const tree = useMemo(() => ({
+    name: 'live heap',
+    children: (data?.groups ?? []).map(g => ({
+      name: g.name,
+      children: g.children.map(c => ({ name: c.name, value: c.bytes })),
+    })),
+  }), [data]);
+
   const onMove = (e: React.MouseEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -111,8 +132,15 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
       <div className="flex items-center gap-3 px-3 py-2 flex-shrink-0 flex-wrap"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <span className="text-[11.5px] text-[var(--color-text-secondary)]">
-          Live heap by package — area is shallow bytes
+          Live heap by package — {shape === 'treemap' ? 'area' : 'arc'} is shallow bytes
         </span>
+        <SegmentedControlView
+          options={[{ label: 'Treemap', value: 'treemap' }, { label: 'Sunburst', value: 'sunburst' }]}
+          value={shape}
+          onChange={(v) => setShape(v as 'treemap' | 'sunburst')}
+          size="sm"
+          accentColor="var(--color-doctor)"
+        />
         <div className="flex-1" />
         {hover ? (
           <span className="text-[11.5px] font-mono text-[var(--color-text-primary)] truncate" style={{ maxWidth: '60%' }}>
@@ -125,9 +153,22 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
           </span>
         )}
       </div>
-      <div ref={wrapRef} className="flex-1 min-h-0" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-        <canvas ref={canvasRef} style={{ display: 'block', cursor: 'crosshair' }} />
-      </div>
+      {shape === 'treemap' ? (
+        <div ref={wrapRef} className="flex-1 min-h-0" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+          <canvas ref={canvasRef} style={{ display: 'block', cursor: 'crosshair' }} />
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 grid place-items-center overflow-auto py-3">
+          <SunburstView
+            root={tree}
+            size={360}
+            maxDepth={2}
+            accentColor="var(--color-doctor)"
+            format={bytes}
+            centerLabel="live heap"
+          />
+        </div>
+      )}
     </div>
   );
 }

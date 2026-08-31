@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseFrame, originOf, appFrameIndices, summariseStack } from './thread-frame';
+import { parseFrame, originOf, appFrameIndices, summariseStack, mergeStacks
+} from './thread-frame';
 
 // Frames copied verbatim from the SIGQUIT dump this was built against.
 const REAL = [
@@ -104,3 +105,62 @@ describe('summariseStack', () => {
     expect(summariseStack([])).toBe('no stack');
   });
 });
+
+describe('mergeStacks', () => {
+  const t = (name: string, frames: string[]) =>
+    ({ name, frames: frames.map(raw => ({ raw })) });
+
+  it('collapses the shared prefix of two identical stacks', () => {
+    const tree = mergeStacks([
+      t('http-1', ['at com.z.Svc.read(Svc.java:9)', 'at com.z.App.main(App.java:1)']),
+      t('http-2', ['at com.z.Svc.read(Svc.java:9)', 'at com.z.App.main(App.java:1)']),
+    ]);
+    // One root child — App.main — because both threads entered the same way.
+    expect(tree.children.length).toBe(1);
+    expect(tree.children[0].name).toBe('App.main');
+    expect(tree.children[0].children[0].name).toBe('Svc.read');
+    expect(tree.children[0].children[0].value).toBe(2);
+  });
+
+  it('roots at the entry point, not at where the thread is now', () => {
+    // A JVM prints innermost first. Merging in that order would put unrelated
+    // threads together at the leaves because they all end in park().
+    const tree = mergeStacks([t('x', ['at com.z.Deep.run(D.java:3)', 'at com.z.App.main(App.java:1)'])]);
+    expect(tree.children[0].name).toBe('App.main');
+  });
+
+  it('branches where the stacks diverge', () => {
+    const tree = mergeStacks([
+      t('a', ['at com.z.A.run(A.java:1)', 'at com.z.App.main(App.java:1)']),
+      t('b', ['at com.z.B.run(B.java:1)', 'at com.z.App.main(App.java:1)']),
+    ]);
+    const main = tree.children[0];
+    expect(main.children.map(c => c.name).sort()).toEqual(['A.run', 'B.run']);
+  });
+
+  it('weights by thread, not by frame depth', () => {
+    // Otherwise a deep stack looks busier than a shallow one, which inverts
+    // the only question a thread dump answers.
+    const tree = mergeStacks([
+      t('deep', ['at com.z.E.e(E.java:1)', 'at com.z.D.d(D.java:1)', 'at com.z.C.c(C.java:1)', 'at com.z.App.main(A.java:1)']),
+      t('shallow', ['at com.z.X.x(X.java:1)', 'at com.z.App.main(A.java:1)']),
+    ]);
+    const main = tree.children[0];
+    const totals = main.children.map(c => sumOf(c));
+    expect(totals).toEqual([1, 1]);
+  });
+
+  it('keeps a thread with no frames, so the totals match the thread count', () => {
+    const tree = mergeStacks([t('idle', []), t('busy', ['at com.z.App.main(A.java:1)'])]);
+    expect(sumOf(tree)).toBe(2);
+    expect(tree.children.map(c => c.name)).toContain('(no stack)');
+  });
+
+  it('is empty for no threads rather than throwing', () => {
+    expect(mergeStacks([]).children).toEqual([]);
+  });
+});
+
+function sumOf(n: { value: number; children: { value: number; children: any[] }[] }): number {
+  return n.value + n.children.reduce((t, c) => t + sumOf(c as any), 0);
+}

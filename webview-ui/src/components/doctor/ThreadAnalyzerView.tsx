@@ -10,12 +10,12 @@
  * text are not.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ButtonView } from '@salilvnair/dui';
+import { ButtonView, FlameGraphView } from '@salilvnair/dui';
 import { SparkleIcon } from '../../icons';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
 import { AnalyzeModal, planAnalyzeText, type AnalyzePlan } from '../k8s/AnalyzeModal';
-import { parseFrame, summariseStack, type FrameOrigin } from './thread-frame';
+import { parseFrame, summariseStack, mergeStacks, type FrameOrigin } from './thread-frame';
 import { postMsg } from '../../vscode';
 import { LayersIcon, CloseCircleIcon, StethoscopeIcon } from '../../icons';
 
@@ -258,6 +258,17 @@ export function ThreadAnalyzerView() {
     });
   }, [loaded, setHeader]);
 
+  /*
+    One tree for the whole dump. Rebuilt only when a new dump is loaded —
+    merging a few hundred stacks is cheap, doing it on every filter keystroke
+    is not, and the shape does not depend on the filter.
+  */
+  const flame = useMemo(
+    () => mergeStacks(loaded?.threads ?? []),
+    [loaded],
+  );
+  const flameWidth = 720;
+
   /** Back to the empty state — see the note on the button. */
   const reset = () => {
     setLoaded(null); setError(''); setFilter('');
@@ -468,6 +479,33 @@ export function ThreadAnalyzerView() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/*
+          Every stack, merged.
+
+          The list above answers "what is each thread doing" one thread at a
+          time; this answers "where are they all" in one shape. A wide plateau
+          is a queue of threads sitting in the same place, which is what a
+          stalled service looks like and what forty separate stacks make you
+          reconstruct by hand.
+        */}
+        {loaded.threads.length > 1 && (
+          <div className="rounded-lg p-3.5 flex flex-col gap-2"
+               style={{ border: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
+            <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+              Merged stacks
+            </span>
+            <div className="overflow-x-auto">
+              <FlameGraphView
+                root={flame}
+                width={Math.max(560, flameWidth)}
+                rowHeight={16}
+                accentColor={ACCENT}
+                format={(v) => `${v} thread${v === 1 ? '' : 's'}`}
+              />
+            </div>
           </div>
         )}
 

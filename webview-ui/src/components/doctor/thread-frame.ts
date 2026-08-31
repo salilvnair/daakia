@@ -125,3 +125,64 @@ export function summariseStack(frames: { raw: string }[]): string {
   const f = parseFrame(frames[app[0] ?? 0].raw);
   return `${f.className}.${f.method}${f.location ? ` (${f.location})` : ''}`;
 }
+
+/**
+ * Every thread's stack, merged into one tree.
+ *
+ * A thread dump is a list of stacks; a flame graph is the same information
+ * with the common prefixes collapsed, which turns "forty threads, look at them
+ * one at a time" into "forty threads, thirty-eight of them are in the same
+ * place". That collapse is the entire value — the shape shows you the plateau
+ * without reading a single stack.
+ *
+ * Stacks arrive innermost-first, the order a JVM prints them, so each is
+ * reversed: a flame graph is rooted at the entry point and grows toward where
+ * the thread actually is. Building it the other way round produces a picture
+ * that is upside down and, worse, merges unrelated threads at the leaves
+ * because they happen to end in the same park().
+ *
+ * Weight is one per thread, not per frame. The question a thread dump answers
+ * is "how many threads are here", and weighting by frame count would make a
+ * deep stack look busier than a shallow one.
+ */
+export function mergeStacks(
+  threads: { name: string; frames: { raw: string }[] }[],
+): MergedNode {
+  const root: MergedNode = { name: 'all threads', value: 0, children: [] };
+
+  for (const t of threads) {
+    // A thread with no frames still exists and still counts. Dropping it would
+    // make the totals disagree with the thread count printed beside them.
+    if (!t.frames.length) {
+      addChild(root, '(no stack)').value += 1;
+      continue;
+    }
+
+    let node = root;
+    for (let i = t.frames.length - 1; i >= 0; i--) {
+      const f = parseFrame(t.frames[i].raw);
+      const label = f.className ? `${f.className}.${f.method}` : f.method;
+      node = addChild(node, label);
+    }
+    // Only the leaf carries weight; parents are the sum of their children,
+    // which is what `totalOf` in the chart already assumes.
+    node.value += 1;
+  }
+
+  return root;
+}
+
+export interface MergedNode {
+  name: string;
+  value: number;
+  children: MergedNode[];
+}
+
+function addChild(parent: MergedNode, name: string): MergedNode {
+  let found = parent.children.find(c => c.name === name);
+  if (!found) {
+    found = { name, value: 0, children: [] };
+    parent.children.push(found);
+  }
+  return found;
+}

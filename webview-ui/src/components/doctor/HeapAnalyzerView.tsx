@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { MemoryIcon, StethoscopeIcon, CloseCircleIcon } from '../../icons';
-import { ButtonView } from '@salilvnair/dui';
+import { ButtonView, DonutView } from '@salilvnair/dui';
 import { HeapHistogramView } from './HeapHistogramView';
 import { HeapTreemapView } from './HeapTreemapView';
 import { HeapGraphView } from './HeapGraphView';
@@ -315,6 +315,42 @@ export function HeapAnalyzerView() {
             <div style={{ width: `${summary.totalBytes ? (v.liveBytes / summary.totalBytes) * 100 : 100}%`, background: ACCENT }} />
             <div style={{ width: `${summary.totalBytes ? 100 - (v.liveBytes / summary.totalBytes) * 100 : 0}%`, background: 'var(--color-text-muted)', opacity: 0.35 }} />
           </div>
+        </div>
+      )}
+
+      {/*
+        Who owns the heap, as one ring.
+
+        The suspect list below says how much each one retains; this says
+        whether there IS an owner. One wedge at 62% and a grey remainder is a
+        leak; eight even wedges is a heap that is simply too small for the
+        workload, and those need opposite fixes. It is the first thing MAT's
+        leak report shows for the same reason.
+      */}
+      {v && v.suspects.length > 0 && (
+        <div className="rounded-lg p-3.5 flex flex-col gap-3"
+             style={{ border: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
+          <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+            What holds the heap
+          </span>
+          <DonutView
+            items={[
+              ...v.suspects.slice(0, 6).map(sp => ({
+                name: sp.className.split('.').pop() ?? sp.className,
+                value: sp.retainedBytes,
+              })),
+              // Named, so nobody reads the ring as "six objects are the heap".
+              {
+                name: 'everything else',
+                value: Math.max(0, v.liveBytes - v.suspects.slice(0, 6)
+                  .reduce((t, sp) => t + sp.retainedBytes, 0)),
+              },
+            ]}
+            size={148}
+            accentColor={ACCENT}
+            format={bytes}
+            centerLabel={bytes(v.liveBytes)}
+          />
         </div>
       )}
 
