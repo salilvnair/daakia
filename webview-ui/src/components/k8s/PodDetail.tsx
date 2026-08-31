@@ -16,7 +16,7 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { severityOf, severityColor, shortAge, restartLabel } from './pod-view';
 import { LogViewer } from './LogViewer';
-import { AiAnswerPanel } from './AiAnswerPanel';
+import { AiSplit } from './AiAnswerPanel';
 import { DoctorTab } from './DoctorTab';
 import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highlight';
 import { CodeEditor } from '../shared/editors/CodeEditor';
@@ -375,8 +375,10 @@ export function PodDetail() {
         </div>
       )}
 
-      {/* ── Tabs + body ── */}
-      <div className="flex flex-1 min-h-0">
+      {/* ── Tabs + body ──
+          AiSplit is the row: it renders the children alone while the AI panel
+          is closed and a draggable split when it is open. */}
+      <AiSplit>
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           <div className="flex items-center gap-1 px-4 pt-2 shrink-0"
                style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
@@ -426,8 +428,7 @@ export function PodDetail() {
           </div>
         </div>
 
-        <AiAnswerPanel />
-      </div>
+      </AiSplit>
 
     </div>
   );

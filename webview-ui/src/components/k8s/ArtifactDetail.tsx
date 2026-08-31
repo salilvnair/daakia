@@ -20,7 +20,7 @@ import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
 import { HeapAnalyzerView } from '../doctor/HeapAnalyzerView';
 import { ThreadAnalyzerView } from '../doctor/ThreadAnalyzerView';
 import { LogAnalyzerView } from '../doctor/LogAnalyzerView';
-import { AiAnswerPanel } from './AiAnswerPanel';
+import { AiSplit } from './AiAnswerPanel';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 
 const AI_ACCENT = 'var(--color-protocol-ai)';
@@ -237,7 +237,7 @@ export function ArtifactDetail() {
       </div>
 
       {/* ── The analysis, and the answers beside it ── */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      <AiSplit>
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {TABS.map(t => seen.has(t.id) && (
             <div key={t.id} className="flex-1 min-h-0 overflow-hidden"
@@ -248,11 +248,7 @@ export function ArtifactDetail() {
             </div>
           ))}
         </div>
-
-        {/* Rendered always; it hides itself when there is nothing to show,
-            which is what keeps the toggle and the panel from disagreeing. */}
-        <AiAnswerPanel />
-      </div>
+      </AiSplit>
     </div>
   );
 }

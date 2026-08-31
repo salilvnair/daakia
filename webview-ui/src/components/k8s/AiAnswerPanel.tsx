@@ -6,10 +6,11 @@
  * reader to choose between the explanation and the thing being explained.
  */
 import { useState } from 'react';
-import { CopyButtonView } from '@salilvnair/dui';
+import { CopyButtonView, SplitPanelView } from '@salilvnair/dui';
 import { SparkleIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { useDk8sAiStore, type Dk8sAnswer } from '../../store/dk8s-ai-store';
+import { useUiStateStore } from '../../store/ui-state-store';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -117,17 +118,80 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
   );
 }
 
+/**
+ * The AI pane's share of the width, as a percentage for the CONTENT side.
+ *
+ * Persisted, because a width is a preference: someone reading long answers
+ * wants a wide pane and someone glancing at them wants a narrow one, and being
+ * asked again on every open is the thing that makes a resizable panel annoying
+ * rather than useful.
+ *
+ * Read from the store but overridden locally while dragging — writing a pref
+ * on every pointer move would post a message per frame, and the stored value
+ * arrives after hydration, so deriving it rather than seeding state is what
+ * keeps a restored width from being replaced by the default.
+ */
+function useAiSplit(): [number, (n: number) => void, (n: number) => void] {
+  const stored = useUiStateStore(s => s.prefs[AI_SPLIT_PREF]);
+  const [dragging, setDragging] = useState<number | null>(null);
+
+  const parsed = Number(stored);
+  const split = dragging ?? (Number.isFinite(parsed) && parsed > 0 ? parsed : 68);
+
+  return [
+    split,
+    setDragging,
+    (n: number) => {
+      setDragging(null);
+      useUiStateStore.getState().setPref(AI_SPLIT_PREF, String(Math.round(n)));
+    },
+  ];
+}
+
+const AI_SPLIT_PREF = 'dk8s.ai.split';
+
+/**
+ * Content on the left, answers on the right, with a handle between them.
+ *
+ * Both the pod detail and the artifact analyzer put the same panel beside the
+ * same kind of thing, so the arrangement lives here once. When the panel is
+ * closed this is not a split at all — it renders the content directly, because
+ * a split pane with one empty half still reserves the divider and the gap.
+ */
+export function AiSplit({ children }: { children: React.ReactNode }) {
+  const open = useDk8sAiStore(s => s.open);
+  const [split, onResize, onResizeEnd] = useAiSplit();
+
+  if (!open) return <>{children}</>;
+
+  return (
+    <SplitPanelView
+      direction="horizontal"
+      className="flex-1 min-h-0"
+      split={split}
+      onResize={onResize}
+      onResizeEnd={onResizeEnd}
+      // The answer is read beside its evidence, so neither side may be dragged
+      // down to a sliver — at which point the pane is closed, not resized, and
+      // there is a button for that.
+      minFirstPct={30}
+      minSecondPct={15}
+      accentColor={ACCENT}
+      first={<div className="flex flex-col h-full min-w-0 overflow-hidden">{children}</div>}
+      second={<AiAnswerPanel />}
+    />
+  );
+}
+
 export function AiAnswerPanel() {
   const { open, answers, activeId, clear, cancel } = useDk8sAiStore();
   if (!open) return null;
 
   return (
-    <div className="flex flex-col shrink-0 min-h-0"
-         style={{
-           width: 340,
-           borderLeft: `1px solid color-mix(in srgb, ${ACCENT} 25%, var(--color-surface-border))`,
-           background: 'var(--color-surface-secondary, var(--color-surface))',
-         }}>
+    // Sized by the split, not by itself. This was a hard 340px, which is why
+    // a stack frame had nowhere to wrap to.
+    <div className="flex flex-col h-full w-full min-h-0 min-w-0"
+         style={{ background: 'var(--color-surface-secondary, var(--color-surface))' }}>
       <div className="flex items-center gap-2 px-3 py-2.5 shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <SparkleIcon size={14} color={ACCENT} />
