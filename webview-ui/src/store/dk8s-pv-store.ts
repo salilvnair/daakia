@@ -31,6 +31,13 @@ export interface PvLogConfig {
   envByContext?: Record<string, string>;
   /** Pod-name substring → the token `{app}` expands to. Rarely needed. */
   appByPod?: Record<string, string>;
+  /**
+   * Pod name → a path template, for volumes the shared template cannot
+   * describe. A glob when the key contains `*` or `?`, a substring otherwise.
+   * Longest key wins, and it beats both the mount's template and the shared
+   * one. See `templateForPod` in pv-logs.
+   */
+  pathByPod?: Record<string, string>;
 }
 
 export interface PvSampleFile { rel: string; bytes: number; mtime: number }
@@ -77,6 +84,7 @@ export const DEFAULT_PV: PvLogConfig = {
   template: '{app}-{env}-pvc/{app}-{env}-logs/**/{app}*.log*',
   envByContext: {},
   appByPod: {},
+  pathByPod: {},
   extensions: ['.log'],
   maxAgeDays: 0,
 };

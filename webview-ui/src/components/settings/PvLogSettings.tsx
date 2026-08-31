@@ -122,6 +122,10 @@ export function PvLogSettings() {
   const setApp = (rows: [string, string][]) =>
     patch({ appByPod: Object.fromEntries(rows) });
 
+  const pathRows = Object.entries(draft.pathByPod ?? {}) as [string, string][];
+  const setPath = (rows: [string, string][]) =>
+    patch({ pathByPod: Object.fromEntries(rows) });
+
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msg = e.data as Record<string, unknown>;
@@ -299,6 +303,30 @@ export function PvLogSettings() {
         >
           <MapEditor rows={appRows} onChange={setApp}
                      keyPlaceholder="pod name contains…" valuePlaceholder="app" />
+        </Field>
+
+        <Field
+          label="a path for one pod"
+          hint={
+            <>
+              For volumes the template above cannot describe. The template assumes a claim
+              named after the workload and the environment; plenty are not — a share laid
+              out by team, a path inherited from before the cluster, one service written
+              somewhere else entirely. Rather than bending the shared template until it
+              covers the exception and stops describing the rule, name the exception here.
+              <br />
+              On the left, a pod name: a glob when it contains <code>*</code> or{' '}
+              <code>?</code> (<code>zp-backend-*</code>), otherwise any pod whose name
+              contains it. The longest match wins, so one pod beats a family of them. On the
+              right, a path relative to the mount — still a template, so{' '}
+              <code>{'{app}'}</code>, <code>{'{env}'}</code>, <code>{'{date}'}</code> and
+              globs all work.
+            </>
+          }
+        >
+          <MapEditor rows={pathRows} onChange={setPath}
+                     keyPlaceholder="zp-backend-*"
+                     valuePlaceholder="shared/team-a/**/{app}*.log*" />
         </Field>
 
         <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
