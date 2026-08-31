@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { MemoryIcon, StethoscopeIcon, CloseCircleIcon } from '../../icons';
-import { ButtonView, DonutView } from '@salilvnair/dui';
+import { ButtonView, DonutView, SegmentedControlView } from '@salilvnair/dui';
 import { ClassNameView } from './ClassNameView';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { SparkleIcon } from '../../icons';
@@ -313,20 +313,24 @@ export function HeapAnalyzerView() {
         <span className="text-[11.5px] text-[var(--color-text-muted)] font-mono">
           {summary.objects.toLocaleString()} objects · {summary.references.toLocaleString()} refs
         </span>
-        <div className="flex items-center gap-1 ml-2">
-          {SUB_VIEWS.map(sv => (
-            <button
-              key={sv.id} type="button" onClick={() => setView(sv.id)}
-              className="h-[24px] px-2.5 rounded-md text-[11.5px] cursor-pointer"
-              style={{
-                color: view === sv.id ? ACCENT : 'var(--color-text-secondary)',
-                background: view === sv.id ? 'color-mix(in srgb, var(--color-doctor) 14%, transparent)' : 'transparent',
-                border: `1px solid ${view === sv.id ? 'color-mix(in srgb, var(--color-doctor) 34%, transparent)' : 'transparent'}`,
-              }}
-            >
-              {sv.label}
-            </button>
-          ))}
+        {/*
+          One control, not six buttons.
+
+          These were six independently styled buttons that only looked like a
+          group because they sat next to each other — nothing tied them
+          together, so the inactive five read as five things you could press
+          rather than as the other positions of one switch. dui's compact
+          density recesses the track, which is what makes a switcher read as
+          navigation instead of competing with the actions beside it.
+        */}
+        <div className="ml-2">
+          <SegmentedControlView
+            options={SUB_VIEWS.map(sv => ({ label: sv.label, value: sv.id }))}
+            value={view}
+            onChange={v => setView(v as SubView)}
+            density="compact"
+            accentColor={ACCENT}
+          />
         </div>
         <div className="flex-1" />
 

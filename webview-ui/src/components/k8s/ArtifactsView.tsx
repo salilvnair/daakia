@@ -226,7 +226,7 @@ export function ArtifactsView() {
             { value: 'threads', label: 'threads' },
             { value: 'logs', label: 'text' },
           ]}
-          size="md" variant="rounded" accentColor={ACCENT}
+          density="compact" accentColor={ACCENT}
         />
 
         <ButtonView label="Open a file…" size="md" variant="secondary"

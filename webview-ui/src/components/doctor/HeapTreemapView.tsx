@@ -143,7 +143,7 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
           options={[{ label: 'Treemap', value: 'treemap' }, { label: 'Sunburst', value: 'sunburst' }]}
           value={shape}
           onChange={(v) => setShape(v as 'treemap' | 'sunburst')}
-          size="sm"
+          density="compact"
           accentColor="var(--color-doctor)"
         />
         <div className="flex-1" />
