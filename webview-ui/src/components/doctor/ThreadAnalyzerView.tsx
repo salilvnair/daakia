@@ -16,6 +16,7 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
 import { AnalyzeModal, planAnalyzeText, type AnalyzePlan } from '../k8s/AnalyzeModal';
 import { parseFrame, summariseStack, mergeStacks, type FrameOrigin } from './thread-frame';
+import { StackShapeView, type ShapeFinding } from './StackShapeView';
 import { postMsg } from '../../vscode';
 import { LayersIcon, CloseCircleIcon, StethoscopeIcon } from '../../icons';
 
@@ -47,6 +48,12 @@ interface Verdict {
     why: string;
     threads: { name: string; state: State; frame: string; cpuMs?: number }[];
   }[];
+  /**
+   * Findings that live in the RELATIONSHIP between two frames — a transaction
+   * held across a network call, a starved pool. Structured by the engine, with
+   * a role per frame, so the view badges rather than parses. See thread-shapes.
+   */
+  shapes?: ShapeFinding[];
   headline?: string;
 }
 interface Loaded {
@@ -413,6 +420,24 @@ export function ThreadAnalyzerView() {
                   }}>
               {v.headline}
             </span>
+          </div>
+        )}
+
+        {/*
+          Findings first.
+
+          These are the ones that name a file and a line, and the ones with a
+          fix attached — they belong above the frame markers, which say where a
+          thread is rather than what is wrong.
+        */}
+        {(v.shapes ?? []).length > 0 && (
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+              Findings
+            </span>
+            {(v.shapes ?? []).map(f => (
+              <StackShapeView key={f.ruleId} finding={f} />
+            ))}
           </div>
         )}
 
