@@ -10,6 +10,7 @@
  */
 import type { DeadlockCycle, ThreadDump, ThreadInfo, ThreadState } from './jstack-parser';
 import { findSuspects, summariseSuspects, type SuspectFinding } from './thread-suspects';
+import { findStackShapes, type ShapeFinding } from './thread-shapes';
 
 export interface LockContention {
   lockId: string;
@@ -53,6 +54,12 @@ export interface ThreadVerdict {
   topCpu: { name: string; cpuMs: number; state: ThreadState; topFrame?: string }[];
   /** Frames known to mean trouble, worst first. */
   suspects: SuspectFinding[];
+  /**
+   * Bugs that exist as a relationship between two frames rather than in any
+   * one of them — a transaction held across a network call, a starved pool.
+   * See thread-shapes.
+   */
+  shapes: ShapeFinding[];
   /** One line on what the dump shows — including "nothing, look elsewhere". */
   headline: string;
 }
@@ -266,6 +273,7 @@ export function analyzeThreadDump(dump: ThreadDump): ThreadVerdict {
     pools: groupThreads(threads),
     topCpu,
     suspects,
+    shapes: findStackShapes(threads),
     headline: summariseSuspects(suspects, threads.length),
   };
 }
