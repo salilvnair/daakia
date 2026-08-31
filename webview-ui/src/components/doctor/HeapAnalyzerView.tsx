@@ -16,6 +16,7 @@ import { ButtonView, DonutView, SegmentedControlView, FindingCardView } from '@s
 import { ClassNameView } from './ClassNameView';
 import { LeakChain } from './LeakChain';
 import { AskChip } from './AskChip';
+import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { decodeClassName, fullClassName } from './class-name';
 import { HeapHistogramView } from './HeapHistogramView';
@@ -214,6 +215,24 @@ export function HeapAnalyzerView() {
       podContext: {},
     });
   };
+
+  /*
+    Hand the shell what to put in its header.
+
+    Without this the overlay falls back to the analyzer's label and reads
+    "Heap Dump / Heap Dump", while the filename sits in a second strip below —
+    two bars saying different halves of one thing. The thread analyzer has
+    published this since it was built.
+  */
+  const setHeader = useDk8sAnalyzeStore(st => st.setHeader);
+  useEffect(() => {
+    if (phase.kind !== 'done') { setHeader(undefined); return; }
+    setHeader({
+      name: phase.name,
+      meta: `${phase.summary.objects.toLocaleString()} objects`
+        + ` · ${phase.summary.references.toLocaleString()} refs`,
+    });
+  }, [phase, setHeader]);
 
   // Back to the empty state, so "Open another" is a decision you can change
   // your mind about. The baseline is kept: comparing two dumps is the reason
@@ -457,9 +476,15 @@ export function HeapAnalyzerView() {
                 name: decodeClassName(sp.className).simpleName,
                 value: sp.retainedBytes,
               })),
-              // Named, so nobody reads the ring as "six objects are the heap".
+              /*
+                Named AND greyed, so nobody reads the ring as "six objects are
+                the heap". It came out green like the suspects beside it — the
+                remainder is not a category, and colouring it like one invites
+                the reader to look for it in the legend as though it were.
+              */
               {
                 name: 'everything else',
+                color: 'var(--color-text-muted)',
                 value: Math.max(0, v.liveBytes - v.suspects.slice(0, 6)
                   .reduce((t, sp) => t + sp.retainedBytes, 0)),
               },
