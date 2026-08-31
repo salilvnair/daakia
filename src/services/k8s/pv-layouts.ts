@@ -146,18 +146,40 @@ export const BUILTIN_LAYOUTS: PvLayout[] = [
 ];
 
 /**
- * Everything the picker offers: what ships, then what has been saved.
+ * The rows to show: what has been saved, or what ships.
  *
- * Saved layouts come last so the shipped ones keep their positions — a picker
- * whose buttons move as you add to it is one you have to re-read every time.
+ * `undefined` means untouched, and yields the shipped list. An empty array
+ * means every row was deleted, which is a real state a user can reach and not
+ * the same thing — falling back to the defaults for it would make deleting the
+ * last row look like it failed.
+ *
+ * The shipped list is copied on the way out so an edit to a row cannot reach
+ * back and change the constant for the rest of the session.
  */
-export function allLayouts(custom: PvLayout[] = []): PvLayout[] {
-  return [...BUILTIN_LAYOUTS, ...custom.map(l => ({ ...l, custom: true }))];
+export function layoutList(saved?: PvLayout[]): PvLayout[] {
+  return saved ? saved.map(l => ({ ...l })) : BUILTIN_LAYOUTS.map(l => ({ ...l }));
 }
 
 /**
- * A layout id from a name, stable enough to delete by and unique enough not to
- * collide with a shipped one.
+ * Whether the list is still the shipped one, so Restore defaults can say so by
+ * being disabled rather than by doing nothing when pressed.
+ *
+ * Compared field by field rather than by reference: the list is materialised
+ * into the config the moment any row is edited, so by the time this is asked
+ * the two are never the same object even when they hold the same rows.
+ */
+export function isDefaultLayouts(saved?: PvLayout[]): boolean {
+  if (!saved) return true;
+  if (saved.length !== BUILTIN_LAYOUTS.length) return false;
+  return saved.every((l, i) => {
+    const b = BUILTIN_LAYOUTS[i]!;
+    return l.id === b.id && l.name === b.name && l.template === b.template;
+  });
+}
+
+/**
+ * A layout id from a name, stable enough to delete by and unique within the
+ * list it is going into.
  */
 export function layoutIdFor(name: string, existing: PvLayout[] = []): string {
   const base = 'custom.' + (name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
@@ -169,17 +191,17 @@ export function layoutIdFor(name: string, existing: PvLayout[] = []): string {
 }
 
 /**
- * Which layout a template came from, if any.
+ * Which row a template came from, if any.
  *
- * Compared as text rather than tracked as a field, so a template that was
- * picked and then edited correctly reads as custom — and one typed by hand
- * that happens to match a shipped layout is recognised as that layout, which
- * is true and worth showing.
+ * Compared as text rather than tracked as a field, so the highlight is a
+ * statement about what will actually be searched: a row edited to something
+ * else stops claiming to be selected, and a template typed by hand that
+ * happens to equal a row's is recognised as that row, which is true.
  */
 export function layoutFor(
-  template: string | undefined, custom: PvLayout[] = [],
+  template: string | undefined, saved?: PvLayout[],
 ): PvLayout | undefined {
   const t = (template ?? '').trim();
   if (!t) return undefined;
-  return allLayouts(custom).find(l => l.template.trim() === t);
+  return layoutList(saved).find(l => l.template.trim() === t);
 }

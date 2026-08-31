@@ -11,7 +11,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  allLayouts, layoutFor, layoutIdFor, type PvLayout,
+  layoutList, isDefaultLayouts, layoutIdFor, type PvLayout,
 } from '@daakia/pv-layouts';
 import { ButtonView, TextInputView, CheckboxView, SpinnerIcon } from '@salilvnair/dui';
 import {
@@ -115,38 +115,80 @@ function Field({ label, hint, children }: {
  * layout correctly drops the highlight: what is shown then is a custom
  * template, which is what it has become.
  */
-function LayoutPicker({ value, custom, onPick, onSave, onRemove }: {
+function LayoutTable({ value, layouts, onChange }: {
   value: string | undefined;
-  custom: PvLayout[];
-  onPick: (template: string) => void;
-  onSave: (name: string) => void;
-  onRemove: (id: string) => void;
+  layouts: PvLayout[] | undefined;
+  onChange: (over: { layouts?: PvLayout[]; template?: string }) => void;
 }) {
-  const [name, setName] = useState('');
-  const current = layoutFor(value, custom);
-  const template = (value ?? '').trim();
-  /*
-    Saving is offered only for a template that is not already a layout.
+  const active = (value ?? '').trim();
+  const saved = layoutList(layouts);
 
-    Otherwise the control invites you to save a duplicate of something already
-    in the table, and the table fills with the same glob under several names.
+  /*
+    A config whose template is in none of the rows still has to be visible.
+
+    The template used to live in a text box below this table, so a volume
+    described by hand had somewhere to be. With the box gone, a template that
+    matches no row would be searched with nothing on screen saying so — the
+    setting would be invisible and uneditable at the same time. It gets a row.
   */
-  const canSave = !!template && !current;
+  const orphan = !!active && !saved.some(l => l.template.trim() === active);
+  const rows: PvLayout[] = orphan
+    ? [{ id: 'current', name: '', template: active, custom: true }, ...saved]
+    : saved;
+
+  /*
+    Any edit materialises the whole list into the config.
+
+    Until something is touched the config holds no layouts at all and the
+    shipped ones are supplied on read, which is what lets a later release add
+    a row to an untouched install. The first edit is the moment that has to
+    stop, or every subsequent read would re-merge and undo the deletions.
+  */
+  const commit = (next: PvLayout[], template?: string) =>
+    onChange(template === undefined ? { layouts: next } : { layouts: next, template });
+
+  const edit = (i: number, over: Partial<PvLayout>) => {
+    const next = rows.map((l, j) => (j === i ? { ...l, ...over } : l));
+    // Editing the selected row's glob is editing what gets searched; the two
+    // must not drift apart, or the highlight would move off the row you are
+    // typing in.
+    const selected = rows[i]!.template.trim() === active;
+    commit(next, selected && over.template !== undefined ? over.template : undefined);
+  };
+
+  const remove = (i: number) => {
+    const next = rows.filter((_, j) => j !== i);
+    // Deleting the selected row leaves nothing selected, so the selection
+    // moves to whatever is now first rather than leaving the table with no
+    // highlight and the search still running the deleted glob.
+    const selected = rows[i]!.template.trim() === active;
+    commit(next, selected ? (next[0]?.template ?? '') : undefined);
+  };
+
+  const add = () => {
+    const row: PvLayout = {
+      id: layoutIdFor('layout', rows), name: '', template: '', custom: true,
+    };
+    // Selected on arrival, so what you type next lands in the search rather
+    // than in a row you then have to remember to click.
+    commit([...rows, row], '');
+  };
+
+  // One blank row at a time: a second would be indistinguishable from the
+  // first, and both would claim to be selected.
+  const blank = rows.some(l => !l.template.trim());
 
   const cell: React.CSSProperties = {
-    padding: '5px 8px', verticalAlign: 'top', textAlign: 'left',
+    padding: '4px 8px', verticalAlign: 'middle', textAlign: 'left',
+  };
+  const field: React.CSSProperties = {
+    width: '100%', background: 'transparent', border: '1px solid transparent',
+    borderRadius: 3, padding: '2px 4px', outline: 'none', color: 'inherit',
+    font: 'inherit',
   };
 
   return (
     <div className="flex flex-col gap-2">
-      {/*
-        A table rather than a row of buttons.
-
-        The pills showed nine names and nothing else, so the one thing that
-        decides which layout is yours -- the glob it searches, and the paths
-        that glob finds -- was only visible after clicking one and reading the
-        template field below. Choosing meant clicking through all nine.
-      */}
       <div className="rounded overflow-hidden"
            style={{ border: '1px solid var(--color-surface-border)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
@@ -154,7 +196,7 @@ function LayoutPicker({ value, custom, onPick, onSave, onRemove }: {
             <col style={{ width: '27%' }} />
             <col style={{ width: '31%' }} />
             <col />
-            <col style={{ width: 26 }} />
+            <col style={{ width: 28 }} />
           </colgroup>
           <thead>
             <tr style={{
@@ -169,21 +211,12 @@ function LayoutPicker({ value, custom, onPick, onSave, onRemove }: {
             </tr>
           </thead>
           <tbody>
-            {allLayouts(custom).map(l => {
-              const on = current?.id === l.id;
+            {rows.map((l, i) => {
+              const on = !!l.template.trim() && l.template.trim() === active;
               return (
                 <tr
                   key={l.id}
-                  onClick={() => onPick(l.template)}
-                  onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onPick(l.template);
-                    }
-                  }}
-                  tabIndex={0}
-                  role="button"
-                  aria-pressed={on}
+                  onClick={() => onChange({ template: l.template })}
                   title={l.hint}
                   className="cursor-pointer"
                   style={{
@@ -196,20 +229,31 @@ function LayoutPicker({ value, custom, onPick, onSave, onRemove }: {
                     boxShadow: on ? `inset 2px 0 0 ${ACCENT}` : undefined,
                   }}
                 >
-                  <td style={{
-                    ...cell,
-                    fontSize: 11,
-                    color: on ? ACCENT : 'var(--color-text-secondary)',
-                    fontWeight: on ? 600 : 400,
-                  }}>
-                    {l.name}
+                  <td style={{ ...cell, fontSize: 11 }}>
+                    <input
+                      value={l.name}
+                      placeholder="name it"
+                      aria-label="Layout name"
+                      onChange={e => edit(i, { name: e.target.value })}
+                      style={{
+                        ...field,
+                        color: on ? ACCENT : 'var(--color-text-secondary)',
+                        fontWeight: on ? 600 : 400,
+                      }}
+                    />
                   </td>
-                  <td style={{
-                    ...cell, fontSize: 10, fontFamily: 'monospace',
-                    color: on ? ACCENT : 'var(--color-text-secondary)',
-                    wordBreak: 'break-all',
-                  }}>
-                    {l.template}
+                  <td style={{ ...cell, fontSize: 10 }}>
+                    <input
+                      value={l.template}
+                      placeholder="{app}-{env}-pvc/**/{app}*.log*"
+                      aria-label="Path template"
+                      spellCheck={false}
+                      onChange={e => edit(i, { template: e.target.value })}
+                      style={{
+                        ...field, fontFamily: 'monospace',
+                        color: on ? ACCENT : 'var(--color-text-secondary)',
+                      }}
+                    />
                   </td>
                   <td style={{
                     ...cell, fontSize: 9.5, fontFamily: 'monospace',
@@ -217,72 +261,92 @@ function LayoutPicker({ value, custom, onPick, onSave, onRemove }: {
                   }}>
                     {/*
                       The live file and a rotated one, which is the pair that
-                      tells you whether this is your volume shape. A saved
-                      layout has none: it came from a real mount, so its own
-                      template is the example.
+                      says whether this is your volume's shape. A row you wrote
+                      has none — it came from a real mount, so its own template
+                      is the example.
                     */}
                     {(l.example ?? []).map(e => <div key={e}>{e}</div>)}
                     {!l.example && (
                       <span style={{ fontFamily: 'inherit', fontStyle: 'italic' }}>
-                        saved by you
+                        yours
                       </span>
                     )}
                   </td>
                   <td style={{ ...cell, textAlign: 'center' }}>
-                    {/* Only a saved layout can be removed. A shipped one has
-                        no delete, because there is nothing to restore it from. */}
-                    {l.custom && (
-                      <button
-                        type="button"
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();   // the row picks; the x removes
-                          onRemove(l.id);
-                        }}
-                        title={`Remove the layout "${l.name}"`}
-                        aria-label={`Remove layout ${l.name}`}
-                        className="cursor-pointer border-none bg-transparent p-0"
-                        style={{ color: 'var(--color-error)', fontSize: 12, lineHeight: 1 }}
-                      >
-                        &times;
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();   // the row selects; the x deletes
+                        remove(i);
+                      }}
+                      title={l.name ? `Delete "${l.name}"` : 'Delete this row'}
+                      aria-label={`Delete layout ${l.name || i + 1}`}
+                      className="cursor-pointer border-none bg-transparent p-0"
+                      style={{ color: 'var(--color-error)', fontSize: 12, lineHeight: 1 }}
+                    >
+                      &times;
+                    </button>
                   </td>
                 </tr>
               );
             })}
+            {!rows.length && (
+              <tr style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+                <td colSpan={4} style={{
+                  ...cell, fontSize: 10.5, fontStyle: 'italic',
+                  color: 'var(--color-text-muted)',
+                }}>
+                  No layouts. Add one, or restore the ones that ship.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      {canSave && (
-        <div className="flex items-center gap-1.5">
-          <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
-            Save this template as a layout
-          </span>
-          <TextInputView
-            value={name} size="sm" accentColor={ACCENT}
-            placeholder="a name for it"
-            onChange={e => setName(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => {
-              if (e.key === 'Enter' && name.trim()) { onSave(name.trim()); setName(''); }
-            }}
-            style={{ width: 200 }}
-          />
-          <ButtonView
-            label="Save layout" size="sm" variant="secondary"
-            accentColor={ACCENT} color={ACCENT}
-            disabled={!name.trim()}
-            onClick={() => { onSave(name.trim()); setName(''); }}
-            style={{
-              background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-              borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
-            }}
-          />
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <ButtonView
+          label="Add layout" size="sm" variant="secondary"
+          iconLeft={<PlusIcon size={11} />}
+          disabled={blank}
+          title={blank ? 'Fill in the empty row first' : 'Add an empty row'}
+          onClick={add}
+          style={{ background: 'transparent' }}
+        />
+        <ButtonView
+          label="Restore defaults" size="sm" variant="secondary"
+          /*
+            Enabled while anything is off the shipped state, which includes a
+            template that matches no row.
+
+            Keying this on the rows alone left the button dead in the one
+            situation it exists for: an install whose saved template predates a
+            change to the shipped ones has untouched rows and a stale
+            selection, so the rows looked default, the button greyed out, and
+            the orphan row had no way back.
+          */
+          disabled={isDefaultLayouts(layouts) && !orphan}
+          title="Bring back the layouts that ship, discarding edits and deletions here"
+          onClick={() => {
+            /*
+              Restoring the rows has to restore the selection too, or the table
+              comes back with nothing highlighted and a template that no row
+              describes — which is the state this button exists to leave.
+            */
+            const shipped = layoutList(undefined);
+            const keep = shipped.some(l => l.template.trim() === active);
+            onChange({
+              layouts: undefined,
+              ...(keep ? {} : { template: shipped[0]!.template }),
+            });
+          }}
+          style={{ background: 'transparent' }}
+        />
+      </div>
     </div>
   );
 }
+
 
 export function PvLogSettings() {
   const {
@@ -419,54 +483,29 @@ export function PvLogSettings() {
 
         <Field
           label="layout"
-          hint="Click the row matching your volume and the template below is filled in. Edit it afterwards for anything these do not cover."
-        >
-          <LayoutPicker
-            value={draft.template}
-            custom={draft.layouts ?? []}
-            onPick={t => patch({ template: t })}
-            onSave={name => patch({
-              layouts: [
-                ...(draft.layouts ?? []),
-                {
-                  id: layoutIdFor(name, allLayouts(draft.layouts ?? [])),
-                  name,
-                  template: (draft.template ?? '').trim(),
-                  custom: true,
-                },
-              ],
-            })}
-            onRemove={id => patch({
-              layouts: (draft.layouts ?? []).filter(l => l.id !== id),
-            })}
-          />
-        </Field>
-
-        <Field
-          label="path template"
           hint={
             <>
-              Where one pod&rsquo;s files live, relative to the mount.
+              Where one pod&rsquo;s files live, relative to the mount. Click a row to
+              use it, edit any row in place, and delete the ones that do not describe
+              anything here.
               {' '}<code>{'{app}'}</code>, <code>{'{env}'}</code>, <code>{'{namespace}'}</code>,
               {' '}<code>{'{pod}'}</code>, <code>{'{container}'}</code> and <code>{'{date}'}</code>
               {' '}are filled in per pod; <code>*</code> and <code>**</code> work as globs.
-              {' '}<code>{'{app}'}</code> is the pod name with its ReplicaSet hash and pod suffix
-              removed, so <code>zp-backend-7f9455548d-xm6kc</code> becomes
-              {' '}<code>zp-backend</code>. <code>{'{env}'}</code> comes from the cluster, mapped
-              below. <code>**</code> matches no directories as well as many, which is what
-              lets one template cover both the file being written now and the rotated ones
-              beside it:
-              {' '}<code>my-app-prod-pvc/my-app.log</code> and
-              {' '}<code>my-app-prod-pvc/archived/my-app-2026-08-30.log.gz</code> are both found by
-              {' '}<code>{'{app}-{env}-pvc/**/{app}*.log*'}</code>.
+              {' '}<code>{'{app}'}</code> is the pod name with its ReplicaSet hash and pod
+              suffix removed, so <code>zp-backend-7f9455548d-xm6kc</code> becomes
+              {' '}<code>zp-backend</code>. <code>{'{env}'}</code> comes from the cluster,
+              mapped below. <code>**</code> matches no directories as well as many, which
+              is what lets one row cover both the file being written now and the rotated
+              ones beside it: <code>my-app-prod-pvc/my-app.log</code> and
+              {' '}<code>my-app-prod-pvc/archived/my-app-2026-08-30.log.gz</code> are both
+              found by <code>{'{app}-{env}-pvc/**/{app}*.log*'}</code>.
             </>
           }
         >
-          <TextInputView
-            value={draft.template ?? ''} size="md" accentColor={ACCENT}
-            placeholder="{app}-{env}-pvc/**/{app}*.log*"
-            onChange={e => patch({ template: e.target.value })}
-            style={{ width: '100%', fontFamily: 'monospace' }}
+          <LayoutTable
+            value={draft.template}
+            layouts={draft.layouts}
+            onChange={patch}
           />
         </Field>
 
