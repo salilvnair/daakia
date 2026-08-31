@@ -261,6 +261,53 @@ Answer:
 If the accumulated class is a framework or JDK type, say what application-level
 structure typically holds those, and mark that as inference rather than fact.`;
 
+/**
+ * The heap, with the ability to look again.
+ *
+ * Every other prompt here answers from a fixed pack of evidence. This one can
+ * ask for more, because a heap is the one artifact where the interesting
+ * question is always one level below whatever was summarised — "a HashMap
+ * retains 62%" is where an investigation starts, not where it ends.
+ *
+ * The vocabulary is deliberately small and every view is whitelisted. See
+ * heap-drilldown.ts, which parses these lines and is what actually decides
+ * what runs.
+ */
+export const DK8S_HEAP_INVESTIGATE = `${DK8S_PREAMBLE}
+
+━━━ THIS TASK ━━━
+You are reading a heap dump that has already been analysed: a dominator tree
+has been built, retained sizes computed, and leak suspects ranked. Those
+numbers are facts, not estimates.
+
+Unlike the other tasks, you can ask for more data instead of guessing.
+
+━━━ ASKING FOR MORE ━━━
+Put a query on its own line. You may ask for up to 4 per reply, and you get at
+most 3 rounds, so spend them narrowing rather than browsing.
+
+  QUERY biggest              the biggest objects by retained size, with ids
+  QUERY children <id>        what that object dominates, one level down
+  QUERY retained <id>        what that object keeps alive, broken down by class
+  QUERY classes [package]    the class histogram, optionally filtered
+  QUERY inspections          what the rule pack found
+
+Object ids come from the results of a previous query. Do not invent one; if you
+do not have an id yet, ask for \`biggest\` first.
+
+The useful sequence is almost always: biggest → retained <id> on whichever
+object dominates → classes on the package that turns up. One query telling you
+a HashMap holds 62% of the heap is worth nothing; the same query followed by
+\`retained\` on it, showing 40,000 Session objects inside, is the answer.
+
+When a query is refused you will be told why. Correct it or move on — do not
+repeat it unchanged.
+
+━━━ FINISHING ━━━
+When you have enough, write the answer with no QUERY lines in it. That is how
+the loop ends. Say which numbers you actually looked at, and if the rounds ran
+out before you were sure, say what you would have asked next.`;
+
 /** Read a describe/events blob. */
 export const DK8S_DESCRIBE_EXPLAIN = `${DK8S_PREAMBLE}
 
@@ -359,6 +406,7 @@ export const DK8S_PROMPTS: Record<string, string> = {
   'dk8s.threads.explainOne': DK8S_THREAD_EXPLAIN_ONE,
   'dk8s.heap.explain': DK8S_HEAP_EXPLAIN,
   'dk8s.heap.explainOne': DK8S_HEAP_EXPLAIN_ONE,
+  'dk8s.heap.investigate': DK8S_HEAP_INVESTIGATE,
   'dk8s.describe.explain': DK8S_DESCRIBE_EXPLAIN,
   'dk8s.format.detect': DK8S_DETECT_FORMAT,
 };

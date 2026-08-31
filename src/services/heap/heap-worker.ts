@@ -16,7 +16,7 @@ import { displayClassName, KIND_INSTANCE, type HeapIndex } from './heap-index';
 import { scanStrings } from './heap-redaction';
 import { parsePackageFilter, filterByPackages, matchesPackages } from './heap-filter';
 import {
-  analyzeHeap, computeClassStats, computeTreemap, dominatorChildrenOf,
+  analyzeHeap, computeClassStats, computeTreemap, dominatorChildrenOf, retainedClassesOf,
   type HeapVerdict, type Dominators,
 } from './heap-analysis';
 import { buildEvidencePack, buildUserMessage, HEAP_SYSTEM_PROMPT } from './heap-evidence';
@@ -243,6 +243,8 @@ type Query =
   | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number; packageFilter?: string }
   | { type: 'treemap'; packageFilter?: string }
   | { type: 'children'; row: number; limit?: number }
+  // What one object keeps alive, by class — JProfiler's `retained_classes`.
+  | { type: 'retainedClasses'; row: number; limit?: number }
   | { type: 'evidence' }
   | { type: 'growth'; packageFilter?: string }
   | { type: 'rules' };
@@ -409,6 +411,13 @@ function runQuery(query: Query): unknown {
     return {
       row: query.row,
       children: dominatorChildrenOf(index, dominators, query.row, query.limit ?? 12),
+    };
+  }
+
+  if (query.type === 'retainedClasses') {
+    return {
+      row: query.row,
+      ...retainedClassesOf(index, dominators, query.row, query.limit ?? 25),
     };
   }
 

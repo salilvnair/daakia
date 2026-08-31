@@ -535,6 +535,71 @@ export function dominatorChildrenOf(
   }));
 }
 
+/**
+ * What one object is keeping alive, grouped by class.
+ *
+ * The question a dominator tree raises and does not answer. "This HashMap
+ * retains 240 MB" is where an investigation starts; "of which 238 MB is
+ * 40,000 Session objects" is where it ends, and getting there by expanding
+ * the tree by hand costs hundreds of clicks on a real dump.
+ *
+ * Everything dominated by `row` is walked — that set is exactly what would be
+ * freed if the object were collected, so the totals here sum to its retained
+ * size and can be trusted as shares of it. The walk is iterative because a
+ * dominator tree over 45M objects is deep enough to blow the stack.
+ *
+ * JProfiler exposes this as `retained_classes` and it is the third of the
+ * three heap views its MCP offers.
+ */
+export function retainedClassesOf(
+  index: HeapIndex,
+  dom: Dominators,
+  row: number,
+  limit = 25,
+): {
+  totalBytes: number;
+  totalObjects: number;
+  rows: { className: string; instances: number; bytes: number }[];
+} {
+  const { childOffset, childTarget } = childrenIndex(index, dom);
+  const target = row < 0 ? index.count : row;
+
+  const byClass = new Map<string, { instances: number; bytes: number }>();
+  let totalBytes = 0;
+  let totalObjects = 0;
+
+  // Iterative DFS. The root itself is excluded — it is the thing doing the
+  // retaining, not part of what it retains.
+  const stack: number[] = [];
+  for (let e = childOffset[target]; e < childOffset[target + 1]; e++) {
+    stack.push(childTarget[e]);
+  }
+
+  while (stack.length) {
+    const node = stack.pop()!;
+    const name = classNameOf(index, node);
+    const bytes = index.shallow[node];
+
+    let agg = byClass.get(name);
+    if (!agg) { agg = { instances: 0, bytes: 0 }; byClass.set(name, agg); }
+    agg.instances++;
+    agg.bytes += bytes;
+
+    totalObjects++;
+    totalBytes += bytes;
+
+    for (let e = childOffset[node]; e < childOffset[node + 1]; e++) {
+      stack.push(childTarget[e]);
+    }
+  }
+
+  const rows = [...byClass.entries()]
+    .map(([className, v]) => ({ className, instances: v.instances, bytes: v.bytes }))
+    .sort((a, b) => b.bytes - a.bytes);
+
+  return { totalBytes, totalObjects, rows: rows.slice(0, limit) };
+}
+
 export function buildVerdict(index: HeapIndex, dom: Dominators): HeapVerdict {
   let unreachableObjects = 0;
   let unreachableBytes = 0;

@@ -13,6 +13,8 @@ export type HeapQuery =
   | { type: 'histogram'; sort?: 'shallow' | 'instances' | 'retained'; search?: string; offset?: number; limit?: number; packageFilter?: string }
   | { type: 'treemap'; packageFilter?: string }
   | { type: 'children'; row: number; limit?: number }
+  /** What one object keeps alive, by class. JProfiler's `retained_classes`. */
+  | { type: 'retainedClasses'; row: number; limit?: number }
   | { type: 'evidence' }
   | { type: 'growth'; packageFilter?: string };
 
