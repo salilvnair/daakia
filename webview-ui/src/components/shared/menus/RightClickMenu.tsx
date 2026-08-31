@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
-import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, SparkleIcon, HelpCircleIcon, FilterIcon, CloseIcon } from '../../../icons';
+import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon } from '../../../icons';
 import { getFilterMenu, type FilterMenu } from './filter-provider';
 
 type MenuContext = 'monaco' | 'input' | 'selection';
@@ -67,12 +67,17 @@ const AI_COLOR = 'var(--color-protocol-ai)';
  * The heading carries what the strip's only real content was: how much is
  * selected. "Ask AI why" on its own does not say why about what.
  */
-function aiItems(lineCount: number): ContextMenuItem[] {
+function aiItems(lineCount: number, hasSelection: boolean): ContextMenuItem[] {
   return [
     { id: 'ai-sep', label: '', separator: true },
     {
       id: 'ai-count',
-      label: `${lineCount} line${lineCount === 1 ? '' : 's'} selected`,
+      // The heading carries what the strip's only real content was: how much
+      // is selected. With nothing selected it says so, which is the reason the
+      // two entries under it are greyed out.
+      label: hasSelection
+        ? `${lineCount} line${lineCount === 1 ? '' : 's'} selected`
+        : 'Nothing selected',
       heading: true,
     },
     {
@@ -119,11 +124,15 @@ function filterItems(menu: FilterMenu): ContextMenuItem[] {
       label: g.label,
       icon: <FilterIcon size={13} />,
       iconColor: FILTER_COLOR,
-      submenu: g.options.map((o, i) => ({
-        id: `filter:${g.id}:${i}`,
-        label: o.label,
-        shortcut: o.hint,
-      })),
+      submenu: [
+        // Said once, at the top, rather than on every row — see FilterGroup.note.
+        ...(g.note ? [{ id: `filter:${g.id}:note`, label: g.note, heading: true }] : []),
+        ...g.options.map((o, i) => ({
+          id: `filter:${g.id}:${i}`,
+          label: o.label,
+          shortcut: o.hint,
+        })),
+      ],
     });
   }
 
@@ -132,8 +141,10 @@ function filterItems(menu: FilterMenu): ContextMenuItem[] {
     submenu.push({
       id: 'filter:clear',
       label: 'Clear filter',
-      icon: <CloseIcon size={13} />,
-      iconColor: 'var(--color-text-muted)',
+      // The funnel says what is being cleared; the cross inside it is red on
+      // its own, so no iconColor here — see FilterClearIcon.
+      icon: <FilterClearIcon size={13} />,
+      iconColor: 'var(--color-text-secondary)',
     });
   }
 
@@ -525,24 +536,38 @@ export function RightClickMenu() {
     // Don't intercept Monaco glyph margin (breakpoint gutter has own handler)
     if (target.closest('[data-daakia-bp-gutter]')) return;
 
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-
     let context: MenuContext;
     if (isMonacoEditor(target)) {
       context = 'monaco';
     } else if (isTextInput(target)) {
       context = 'input';
     } else {
-      // Only show selection context menu if there's actual text selected
-      const selection = window.getSelection();
-      if (!selection || !selection.toString().trim()) {
-        // No text selected — don't show any menu
-        return;
-      }
+      const selected = window.getSelection()?.toString().trim() ?? '';
+      /*
+        No selection is still worth a menu — on a surface that has something to
+        offer without one.
+
+        Right-clicking a log line to filter by its thread never needed a
+        selection, and requiring one meant right-click did nothing at all
+        there. A surface says whether it has anything by opting in with
+        `data-selection-actions`; anywhere else, an empty right-click falls
+        through untouched.
+      */
+      const opted = !!target.closest('[data-selection-actions]');
+      if (!selected && !opted) return;
       context = 'selection';
     }
+
+    /*
+      Suppressed only once a menu is actually going to appear.
+
+      This used to run before the check above, so every right-click in the app
+      with nothing selected swallowed the event and then showed nothing —
+      leaving no menu of ours and no native one either.
+    */
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
 
     setMenu({
       x: e.clientX, y: e.clientY, context, target,
@@ -666,20 +691,42 @@ export function RightClickMenu() {
   // Trailing newline from a line-wise selection would otherwise count as a line.
   const lineCount = menu.selection.replace(/\n+$/, '').split('\n').length;
 
+  /*
+    The same menu with or without a selection.
+
+    Stripping the selection-dependent entries left a single "Filter By" row
+    with a submenu hanging off it, which reads as a broken menu rather than a
+    small one — and it moved every remaining entry to a different place
+    depending on whether text happened to be selected. So the list is always
+    the same shape and the entries that need a selection are disabled without
+    one: what is unavailable stays visible, in its usual position, and the
+    reason is legible from the greyed-out row.
+  */
+  const hasSelection = !!menu.selection.trim();
+
   const items = menu.context === 'input'
     ? INPUT_ITEMS
     : [
         ...SELECTION_ITEMS,
-        ...(wantsAi ? aiItems(lineCount) : []),
+        ...(wantsAi ? aiItems(lineCount, hasSelection) : []),
         ...(wantsSearch ? (wantsAi ? SEARCH_ITEMS : [{ id: 'search-sep', label: '', separator: true }, ...SEARCH_ITEMS]) : []),
         ...(filterMenu ? filterItems(filterMenu) : []),
       ];
+  /*
+    One rule: an entry that acts on the selection needs one.
+
+    Copy, Cut, the two AI actions and both Search entries all take the
+    highlighted text as their input. Filter By does not — it reads the view —
+    so it stays live, which is what makes an empty right-click worth opening.
+  */
+  const NEEDS_SELECTION = new Set([
+    'cut', 'copy', 'ai:askWhy', 'ai:explain', 'search', 'search:here', 'search:everywhere',
+  ]);
+
   const adjustedItems = items.map(item => {
-    if (item.separator) return item;
-    if (item.id === 'cut' || item.id === 'copy') {
-      return { ...item, disabled: !menu.selection.trim() };
-    }
-    return item;
+    if (item.separator || item.heading) return item;
+    if (!NEEDS_SELECTION.has(item.id)) return item;
+    return { ...item, disabled: !hasSelection };
   });
 
   return (

@@ -125,14 +125,24 @@ function FormatRow({ f, builtin }: { f: LogFormat; builtin: boolean }) {
 
       {/* A toggle, so the same button that opened it closes it. It used to
           re-open the already-open editor, which looked like nothing happening. */}
+      {/*
+        Close is tinted red, View and Edit are not.
+
+        All three were the accent, so the button that dismisses the editor
+        looked exactly like Save two rows below it — the same colour promising
+        two opposite outcomes. Red is not a warning here; it is the same
+        vocabulary the rest of the app uses for "this closes/removes", and it
+        is what stops Close reading as the primary action of the panel.
+      */}
       <ButtonView
         label={open ? 'Close' : (builtin ? 'View' : 'Edit')}
         size="sm" variant="secondary"
-        accentColor={ACCENT}
-        color={open ? ACCENT : undefined}
+        accentColor={open ? 'var(--color-error)' : ACCENT}
+        color={open ? 'var(--color-error)' : undefined}
         onClick={() => (open ? closeDraft() : editDraft(f))}
         style={{
-          background: open ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
+          background: open ? 'color-mix(in srgb, var(--color-error) 12%, transparent)' : 'transparent',
+          borderColor: open ? 'color-mix(in srgb, var(--color-error) 40%, transparent)' : undefined,
         }}
       />
       {!builtin && (

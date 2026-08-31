@@ -7,7 +7,9 @@
  */
 import { useState } from 'react';
 import { CopyButtonView, SplitPanelView } from '@salilvnair/dui';
-import { SparkleIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon } from '../../icons';
+import {
+  SparkleIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon, ShieldIcon,
+} from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { useDk8sAiStore, type Dk8sAnswer } from '../../store/dk8s-ai-store';
 import { useUiStateStore } from '../../store/ui-state-store';
@@ -93,6 +95,26 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
           return `${n} line${n === 1 ? '' : 's'}`;
         })()}
       </button>
+
+      {/*
+        What was taken out, next to what was sent.
+
+        Only when something was actually removed — a standing "0 secrets found"
+        on every answer is a line nobody reads by the second time, and its
+        absence would then mean nothing. Shown above the evidence because it
+        explains the «redacted» markers the reader is about to meet.
+      */}
+      {showEvidence && answer.redactionNote && (
+        <div className="px-3 py-1.5 text-[10px] flex items-start gap-1.5"
+             style={{
+               background: 'color-mix(in srgb, var(--color-success) 10%, transparent)',
+               color: 'var(--color-success)',
+               borderTop: '1px solid color-mix(in srgb, var(--color-success) 25%, transparent)',
+             }}>
+          <ShieldIcon size={11} />
+          <span>{answer.redactionNote}</span>
+        </div>
+      )}
 
       {/* Wrapped, never scrolled sideways.
           `pre-wrap` alone breaks at whitespace, and a stack frame has none

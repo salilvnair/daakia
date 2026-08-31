@@ -48,6 +48,7 @@ import {
 } from '../../../services/k8s/k8s-search-export';
 import { dk8sPrompt, dk8sUserPrompt } from '../../chat/dk8s-prompt-resolve';
 import { renderDk8sUserPrompt } from '../../chat/dk8s-prompts';
+import { redact, describeRedactions } from '../../../services/k8s/redact';
 import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
 import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-stream';
@@ -1152,6 +1153,23 @@ export async function handleDk8sAsk(
     return;
   }
 
+  /*
+    ── Secrets come out here, and only here ──
+
+    Every dk8s AI call arrives at this handler — every prompt key, every
+    surface, the log view and the analyzers alike — which is what makes this
+    the one place worth putting it. A redaction step in the log view would
+    protect the log view and nothing else, and the next surface to send
+    evidence would silently not have it.
+
+    Above the `aiEvidence` post below on purpose: "show what was sent" has to
+    show what was actually sent, so the panel is given the redacted text rather
+    than the original.
+  */
+  const cleaned = redact(evidence);
+  evidence = cleaned.text;
+  const redactionNote = describeRedactions(cleaned.found);
+
   // The context block is what turns "explain this stack trace" into "explain
   // this stack trace from a pod that has restarted 14 times" — which is often
   // the whole answer.
@@ -1172,7 +1190,12 @@ export async function handleDk8sAsk(
 
   // "Show what was sent" has to mean it. The webview holds the raw artifact,
   // which is no longer what leaves the machine once the host enriches it.
-  postMessage({ type: 'dk8s:aiEvidence', tabId: DK8S_AI_TAB, evidence });
+  postMessage({
+    type: 'dk8s:aiEvidence', tabId: DK8S_AI_TAB, evidence,
+    // So the panel can say what left and what did not.
+    redacted: cleaned.total || undefined,
+    redactionNote,
+  });
 
   /*
     The user turn comes from a template now, not from concatenation here.

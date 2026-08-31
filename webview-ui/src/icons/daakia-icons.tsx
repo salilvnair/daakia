@@ -2326,3 +2326,36 @@ export function StarIcon({ filled, ...props }: IconProps & { filled?: boolean })
     </svg>
   );
 }
+
+/**
+ * The funnel, struck through with a red cross: clear the filter.
+ *
+ * Two colours on purpose, and the only icon here that hard-codes one. The
+ * funnel says which thing is being acted on and the cross says what is being
+ * done to it — a plain × beside the words "Clear filter" said the second half
+ * twice and the first half not at all, which is why it read as a generic
+ * close.
+ *
+ * The funnel is shortened and shifted left to make room, so the cross sits in
+ * the corner rather than on top of it.
+ */
+export function FilterClearIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <polygon points="19 3 2 3 9 11.5 9 18 13 20 13 11.5 19 3" />
+      <g stroke="var(--color-error)">
+        <line x1="16.5" y1="14.5" x2="22" y2="20" />
+        <line x1="22" y1="14.5" x2="16.5" y2="20" />
+      </g>
+    </svg>
+  );
+}
+
+/** A shield. Used where something was protected on the way out. */
+export function ShieldIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}

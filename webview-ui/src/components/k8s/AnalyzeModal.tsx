@@ -208,6 +208,20 @@ export function AnalyzeModal({
           <span className="text-[10.5px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
             These lines leave this machine and go to your configured AI provider. Everything
             else dk8s collects — dumps, recordings, exported logs — stays local.
+            {' '}
+            {/*
+              Stated here because this is the moment of consent, and stated
+              with its limits because a promise of "secrets are removed" that
+              someone trusts completely is more dangerous than no promise: the
+              rules catch credentials that are recognisable as credentials, and
+              a secret logged as a bare string looks like any other string.
+            */}
+            <span style={{ color: 'var(--color-text-secondary)' }}>
+              Passwords, tokens, keys and email addresses are stripped first —
+              anything recognisable as a credential. A secret logged as a plain
+              value with no name on it cannot be spotted, so give the lines a
+              glance before sending.
+            </span>
           </span>
         </div>
       </div>

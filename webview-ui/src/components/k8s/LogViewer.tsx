@@ -21,7 +21,7 @@ import {
 } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
-  WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon,
+  WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon,
 } from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
@@ -436,12 +436,18 @@ export function LogViewer() {
       const groups: FilterGroup[] = facets.map(facet => ({
         id: facet.field,
         label: facet.label,
+        /*
+          What the numbers count, stated once.
+
+          They are counts of the events currently on screen, not of the pod's
+          log — the buffer holds a few hundred lines out of millions — and a
+          bare number would be read as a total. Saying so per row cost more
+          width than the values themselves had.
+        */
+        note: `of ${facet.scanned.toLocaleString()} events on screen`,
         options: facet.values.map(v => ({
           label: v.value,
-          // Qualified, because it is a count of the buffer and not of the log.
-          // A bare number here reads as "there are 22 of these" and the buffer
-          // holds a few hundred lines out of a pod's millions.
-          hint: `${v.count.toLocaleString()} of ${facet.scanned.toLocaleString()} shown`,
+          hint: v.count.toLocaleString(),
           apply: () => setLogFilter(filterTermFor(facet.field, v.value)),
         })),
       }));
@@ -853,6 +859,30 @@ export function LogViewer() {
             placeholder="Filter — text, or /regex/"
             size="sm"
             width="100%"
+            /*
+              A way out of the filter, inside the filter.
+
+              Filter By writes its term in here, and a term like
+              `[http-nio-8080-exec-3]` is long enough that clearing it meant
+              selecting the field and deleting — for something applied with one
+              click. Red because clearing is the one destructive thing this
+              control does, and only present when there is something to clear,
+              so it never sits there as decoration.
+            */
+            suffix={logFilter ? (
+              <button
+                type="button"
+                onClick={() => setLogFilter('')}
+                title="Clear filter"
+                aria-label="Clear filter"
+                className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0"
+                style={{ color: 'var(--color-text-secondary)', lineHeight: 0 }}
+              >
+                {/* The same mark the menu's Clear filter carries, so the two
+                    ways out of a filter look like one idea. */}
+                <FilterClearIcon size={13} />
+              </button>
+            ) : undefined}
           />
         </div>
 

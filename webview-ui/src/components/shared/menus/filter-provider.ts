@@ -23,6 +23,15 @@ export interface FilterGroup {
   label: string;
   /** Stable id, used to key the submenu. */
   id: string;
+  /**
+   * One line at the top of the submenu qualifying what the counts mean.
+   *
+   * It belongs here rather than on each option because it is the same
+   * statement for all of them: putting "of 21 shown" beside fifteen values
+   * repeated one fact fifteen times, and made the hint column wide enough to
+   * push the values themselves out of view.
+   */
+  note?: string;
   options: {
     /** What the person reads. */
     label: string;

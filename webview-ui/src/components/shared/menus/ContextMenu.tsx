@@ -52,6 +52,20 @@ interface ContextMenuProps {
   onClose: () => void;
 }
 
+/**
+ * The vertical padding both menus carry (`py-1.5`), in pixels.
+ *
+ * A flyout is positioned against the ROW that opened it, and its own padding
+ * sits above its first item — so anchoring the flyout's box to the row's top
+ * puts its first item that far below the row, and the two menus read as
+ * misaligned by exactly this much. Subtracting it lines item up with item,
+ * which is what the eye is actually comparing.
+ */
+const MENU_PAD_Y = 6;
+
+/** Gap between a menu and its flyout. Small, so they read as one object. */
+const FLYOUT_GAP = 2;
+
 // ─── Submenu Flyout ───────────────────────────────────────────────────────────
 
 interface SubmenuProps {
@@ -80,16 +94,18 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
 
     let left: number;
     if (preferLeft) {
-      left = anchorRect.left - rect.width - 4;
-      if (left < 4) left = anchorRect.right + 4;
+      left = anchorRect.left - rect.width - FLYOUT_GAP;
+      if (left < 4) left = anchorRect.right + FLYOUT_GAP;
     } else {
-      left = anchorRect.right + 4;
-      if (left + rect.width > vw) left = Math.max(4, anchorRect.left - rect.width - 4);
+      left = anchorRect.right + FLYOUT_GAP;
+      if (left + rect.width > vw) left = Math.max(4, anchorRect.left - rect.width - FLYOUT_GAP);
     }
     left = Math.max(4, Math.min(left, vw - rect.width - 4));
 
-    let top = anchorRect.top;
+    // Item-to-item, not box-to-box — see MENU_PAD_Y.
+    let top = anchorRect.top - MENU_PAD_Y;
     if (top + rect.height > vh) top = Math.max(4, vh - rect.height - 4);
+    if (top < 4) top = 4;
 
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
@@ -117,10 +133,10 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
           /* Nested submenu trigger inside flyout */
           <div
             key={item.id}
-            className={`relative flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] cursor-pointer transition-colors select-none ${
+            className={`relative flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] transition-colors select-none ${
               item.disabled
                 ? 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
-                : 'text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
+                : 'cursor-pointer text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
             } ${openNestedId === item.id ? 'bg-[var(--color-item-hover-bg)]' : ''}`}
             onMouseEnter={e => {
               if (item.disabled) return;
@@ -162,12 +178,12 @@ function SubmenuFlyout({ items, anchorRect, onSelect, onCloseAll, keepOpenOnSele
               if (!keepOpenOnSelect) onCloseAll();
             }}
             onMouseEnter={() => setOpenNestedId(null)}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] text-left cursor-pointer transition-colors ${
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] text-left transition-colors ${
               item.danger
                 ? 'text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]'
                 : item.disabled
                   ? 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
-                  : 'text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
+                  : 'cursor-pointer text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
             }`}
           >
             <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
@@ -294,10 +310,10 @@ export function ContextMenu({ items, position, onSelect, onClose }: ContextMenuP
           /* Submenu trigger */
           <div
             key={item.id}
-            className={`relative flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] cursor-pointer transition-colors select-none ${
+            className={`relative flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] transition-colors select-none ${
               item.disabled
                 ? 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
-                : 'text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
+                : 'cursor-pointer text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
             } ${openSubmenuId === item.id ? 'bg-[var(--color-item-hover-bg)]' : ''}`}
             onMouseEnter={e => {
               if (item.disabled) return;
@@ -339,12 +355,12 @@ export function ContextMenu({ items, position, onSelect, onClose }: ContextMenuP
               onClose();
             }}
             onMouseEnter={() => setOpenSubmenuId(null)}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] text-left cursor-pointer transition-colors ${
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-[12.5px] text-left transition-colors ${
               item.danger
                 ? 'text-[var(--color-error)] hover:bg-[rgba(239,68,68,0.08)]'
                 : item.disabled
                   ? 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
-                  : 'text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
+                  : 'cursor-pointer text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]'
             }`}
           >
             {item.checked !== undefined && (

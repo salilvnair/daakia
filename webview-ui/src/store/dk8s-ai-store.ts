@@ -33,6 +33,13 @@ export interface Dk8sAnswer {
   promptKey: string;
   /** The evidence sent, so the answer can be read against what produced it. */
   evidence: string;
+  /**
+   * What the host stripped out on the way, when it stripped anything.
+   *
+   * Present only when something was removed, so its absence is not a claim
+   * that the log was clean — it is the absence of a claim.
+   */
+  redactionNote?: string;
   podName?: string;
   text: string;
   streaming: boolean;
@@ -135,7 +142,13 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
       // What the host actually sent, which is not always what was handed to
       // `ask` — a connection snapshot is summarised on the way out.
       case 'dk8s:aiEvidence':
-        patch(a => ({ ...a, evidence: String(msg.evidence ?? a.evidence) }));
+        patch(a => ({
+          ...a,
+          evidence: String(msg.evidence ?? a.evidence),
+          // What the host removed on the way out, so "show what was sent" is
+          // literally true and the person can see the difference.
+          redactionNote: msg.redactionNote as string | undefined,
+        }));
         break;
 
       case 'ai:chunk':
