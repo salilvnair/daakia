@@ -24,6 +24,8 @@
  *     See `FormatMeter`.
  */
 
+import { isConversionPattern, fromConversionPattern } from './logback-pattern';
+
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'other';
 
 /**
@@ -47,6 +49,20 @@ export interface LogFormat {
    * regex for anything the templates cannot express.
    */
   pattern?: string;
+
+  /**
+   * Several layouts for one format, tried in order.
+   *
+   * A single application legitimately emits more than one shape: an access log
+   * beside an application log, a library that configures its own appender, a
+   * sidecar sharing the stream. With one pattern the second shape simply does
+   * not parse, and — because a line that does not parse is a continuation —
+   * every one of those lines is silently folded into the event above it.
+   *
+   * Taken from log-viewer, which has the same field for the same reason. When
+   * both are present `pattern` is tried first and these follow.
+   */
+  patterns?: string[];
 
   /** For `json`: which properties hold each field. Dotted paths allowed. */
   fields?: {
@@ -124,14 +140,58 @@ export function normaliseLevel(raw: unknown, map?: Record<string, LogLevel>): Lo
 
 // ── Templates ───────────────────────────────────────────────────────────────
 
+/** The month names every one of these date shapes spells out. */
+const MONTH = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec';
+
+/**
+ * Every date shape a log line is likely to start with.
+ *
+ * Ordered longest-first: the alternation is greedy in the order written, so a
+ * fractional second or a zone offset must be tried before the plainer shape
+ * that would match without it and leave the remainder to be read as a field.
+ *
+ * `Date.parse` cannot read several of these — `31-08-2026`, `20260831 132001`,
+ * a bare syslog `Aug 31` — and that is deliberately acceptable. Matching the
+ * shape is what lets the line PARSE, which is what gives it a level, a logger
+ * and an event/continuation verdict. When the value cannot be turned into a
+ * time, `parseLine` falls back to the timestamp kubectl already put on the
+ * line, so nothing is lost but precision.
+ */
+export const DATE_SHAPES = [
+  // 2026-08-31T13:20:01.123Z / 2026/08/31 13:20:01,123+02:00
+  String.raw`\d{4}[-/]\d{2}[-/]\d{2}[ T_]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?`,
+  // 2026-Aug-31 13:20:01.123
+  String.raw`\d{4}[- ](?:${MONTH})[- ]\d{2}[ T_]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?`,
+  // 31-08-2026 13:20:01.123 / 31.08.26 13:20:01
+  String.raw`\d{2}[-.]\d{2}[-.]\d{2,4}[ T_]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?`,
+  // 31 Aug 2026 13:20:01.123
+  String.raw`\d{1,2} (?:${MONTH}) \d{4} \d{2}:\d{2}:\d{2}(?:[.,]\d+)?`,
+  // 20260831T132001.123 — compact, with or without a separator
+  String.raw`\d{8}[ T_]?\d{6}(?:[.,]\d+)?`,
+  // Aug 31 13:20:01 — syslog, which carries no year at all
+  String.raw`(?:${MONTH})\s+\d{1,2} \d{2}:\d{2}:\d{2}`,
+].join('|');
+
 /**
  * `%{NAME}` placeholders, so nobody has to hand-write a regex to say
  * "timestamp, level, message".
  */
 const PLACEHOLDERS: Record<string, string> = {
-  TIMESTAMP: String.raw`(?<timestamp>\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?)`,
+  TIMESTAMP: `(?<timestamp>${DATE_SHAPES})`,
   LEVEL: String.raw`(?<level>[A-Za-z]{3,8})`,
-  LOGGER: String.raw`(?<logger>[\w.$/-]+)`,
+  /*
+    A logger name, which may contain brackets.
+
+    Tomcat's is `o.a.c.c.C.[Tomcat].[localhost].[/]`, and Spring Boot logs
+    through it on every startup. Without the brackets that line matched no
+    pattern, so it was filed as a continuation of the event above — one real
+    event silently absorbed into another, on a line that appears in every Java
+    web application's log.
+
+    It may not START with a bracket, which is what keeps it distinguishable
+    from the `[thread]` that precedes it.
+  */
+  LOGGER: String.raw`(?<logger>[\w.$/-][\w.$/\[\]-]*)`,
   MESSAGE: String.raw`(?<message>.*)`,
   THREAD: String.raw`(?<thread>[^\]]+)`,
   // Spring Boot writes this when spring.application.name is set, in its own
@@ -165,6 +225,22 @@ function escapeLiteral(s: string): string {
  * difference between a microsecond and a millisecond.
  */
 export function compileTemplate(template: string): RegExp {
+  /*
+    A Logback or log4j conversion pattern is accepted as-is.
+
+    The application's layout is already written down in its own config, and
+    asking someone to hand-translate `%d{...} [%thread] %-5level %logger{36}`
+    into our placeholders is asking them to redo work they have done — badly,
+    because the translation is fiddly and a mistake shows up as "no lines
+    match" with nothing to point at.
+
+    Translated at compile time rather than at save time so the stored pattern
+    stays the string they pasted. What they see in Settings is what they know.
+  */
+  if (isConversionPattern(template)) {
+    template = fromConversionPattern(template);
+  }
+
   if (template.startsWith('/')) {
     // Raw regex escape hatch: /.../flags
     const end = template.lastIndexOf('/');
@@ -379,13 +455,34 @@ export function compileFormat(fmt: LogFormat): CompiledFormat {
   if (fmt.kind === 'logfmt') {
     return { format: fmt, parse: (t) => parseLogfmtLine(t, fmt), hasLevel: true };
   }
-  const re = compileTemplate(fmt.pattern ?? '%{MESSAGE}');
+  /*
+    One compiled regex per layout, compiled once here rather than per line.
+
+    Ordered: the explicit `pattern` first, then `patterns`. The first that
+    matches a line wins, which makes the order meaningful — a looser layout
+    listed before a stricter one would swallow lines the stricter one describes
+    better.
+  */
+  const templates = [
+    ...(fmt.pattern ? [fmt.pattern] : []),
+    ...(fmt.patterns ?? []),
+  ];
+  const compiled = (templates.length ? templates : ['%{MESSAGE}']).map(compileTemplate);
+
   return {
     format: fmt,
-    parse: (t) => parsePatternLine(t, fmt, re),
+    parse: (t) => {
+      for (const re of compiled) {
+        const p = parsePatternLine(t, fmt, re);
+        if (p) return p;
+      }
+      return null;
+    },
     // `%{LEVEL}` compiles to a `level` capture group; its absence is what
-    // "this pattern says nothing about levels" looks like.
-    hasLevel: re.source.includes('(?<level>'),
+    // "this pattern says nothing about levels" looks like. Every layout has to
+    // name one, or a line matching the layout that does not would come back
+    // with `other` and no way to tell that from a genuine unknown level.
+    hasLevel: compiled.every(re => re.source.includes('(?<level>')),
   };
 }
 
@@ -574,7 +671,7 @@ export function chooseFormat(
     /** First lines off the stream, for probing. */
     sample?: string[];
   },
-): { format?: LogFormat; via: 'pinned' | 'rule' | 'probed' | 'none' } {
+): { format?: LogFormat; via: 'pinned' | 'rule' | 'probed' | 'detected' | 'none' } {
   if (opts.pinned) return { format: opts.pinned, via: 'pinned' };
 
   const byRule = resolveFormat(opts.saved, opts.ctx);
@@ -584,5 +681,13 @@ export function chooseFormat(
     const probed = probeFormat(opts.sample, [...opts.saved, ...opts.builtins]);
     if (probed) return { format: probed.format, via: 'probed' };
   }
+  /*
+    `detected` is in the union but never returned from here.
+
+    Detection is the caller's move, not this function's: `log-format-detect`
+    imports the date vocabulary from this file, so importing it back would be a
+    cycle. It is also a different act — this chooses among formats that already
+    exist, and detection invents one. See `resolveFormatFor`.
+  */
   return { via: 'none' };
 }

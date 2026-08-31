@@ -21,12 +21,12 @@ import {
 } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
-  WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon,
+  WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
 } from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
-import { buildFacets, filterTermFor } from './log-facets';
+import { buildFacets } from './log-facets';
 import {
   setFilterProvider, clearFilterProvider,
   type FilterMenu, type FilterGroup,
@@ -34,7 +34,7 @@ import {
 import {
   filterLines, densityBuckets, describeBucket, levelCounts, levelColor,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
-  compactCount, grepTermFor, type MatchedLine,
+  compactCount, grepTermFor, frameOrigin, type MatchedLine, type FieldFilter,
 } from './log-view';
 import {
   AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
@@ -71,6 +71,63 @@ const RIBBON_BAND_W = 20;
 const LEVEL_SHORT: Record<LogLevel, string> = {
   error: 'err', warn: 'wrn', info: 'info', debug: 'dbg', other: 'plain',
 };
+
+/**
+ * An applied field filter, as a chip.
+ *
+ * The chip exists because a filter you cannot see is a filter you cannot
+ * undo. Choosing a thread from the menu used to write a term into the search
+ * box, which said what was filtered only if you could read the term and knew
+ * it had been put there by a menu.
+ *
+ * Clicking the body flips include ↔ exclude, which is the other thing anyone
+ * wants to do with a filter they just applied; the × removes it. Amber for an
+ * include and red for an exclude, matching the funnel and the clear mark.
+ */
+function FieldFilterChip({ filter, onFlip, onRemove }: {
+  filter: FieldFilter;
+  onFlip: () => void;
+  onRemove: () => void;
+}) {
+  const excluded = filter.mode === 'exclude';
+  const color = excluded ? 'var(--color-error)' : 'var(--color-warning)';
+
+  return (
+    <span
+      className="flex items-center rounded overflow-hidden shrink-0"
+      style={{
+        border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+        background: `color-mix(in srgb, ${color} 12%, transparent)`,
+        height: 22,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onFlip}
+        title={excluded
+          ? `Hiding ${filter.field} ${filter.value} — click to show only it`
+          : `Showing only ${filter.field} ${filter.value} — click to hide it instead`}
+        className="flex items-center gap-1 px-1.5 cursor-pointer border-none bg-transparent h-full"
+        style={{ color, fontSize: 10.5, fontFamily: 'inherit' }}
+      >
+        <span style={{ opacity: 0.7 }}>{excluded ? 'not' : ''}</span>
+        <span className="font-mono truncate" style={{ maxWidth: 150, fontWeight: 600 }}>
+          {filter.value}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        title="Remove this filter"
+        aria-label={`Remove filter ${filter.value}`}
+        className="flex items-center px-1 cursor-pointer border-none bg-transparent h-full"
+        style={{ color, opacity: 0.75 }}
+      >
+        <CloseIcon size={9} />
+      </button>
+    </span>
+  );
+}
 
 // ── Density ribbon: vertical, on the right ──────────────────────────────────
 
@@ -375,6 +432,7 @@ function IconButton({ on, onClick, title, icon }: {
 export function LogViewer() {
   const {
     logs, logStatus, logDetail, logDropped, logFilter, logLevels, logRequestedAt,
+    logFieldFilters, addFieldFilter, removeFieldFilter,
     logFollow, logLive, logTail, logDirection, logSince, logWrap, logPrevious,
     detail, runtime,
     setLogFilter, setLogFollow, setLogLive, setLogTail, setLogDirection,
@@ -448,7 +506,15 @@ export function LogViewer() {
         options: facet.values.map(v => ({
           label: v.value,
           hint: v.count.toLocaleString(),
-          apply: () => setLogFilter(filterTermFor(facet.field, v.value)),
+          /*
+            Applied as a FILTER on the field, not as text in the search box.
+
+            The box was a substring match over the whole line, so filtering by
+            thread `main` also matched every message that mentioned it, and
+            there was no way at all to say "everything except this thread".
+            Choosing the same value again flips it to an exclude.
+          */
+          apply: () => addFieldFilter({ field: facet.field, value: v.value, mode: 'include' }),
         })),
       }));
 
@@ -460,19 +526,24 @@ export function LogViewer() {
         ? picked
         : undefined;
 
-      if (!groups.length && !oneLine && !logFilter) return null;
+      const anyFilter = !!logFilter || logFieldFilters.length > 0;
+      if (!groups.length && !oneLine && !anyFilter) return null;
       return {
         groups,
         selection: oneLine
           ? { label: `"${oneLine}"`, apply: () => setLogFilter(oneLine) }
           : undefined,
-        clear: logFilter ? () => setLogFilter('') : undefined,
+        // Clears both kinds. Two ways to be filtered and one way out of it —
+        // someone who wants the whole log back does not care which is which.
+        clear: anyFilter
+          ? () => { setLogFilter(''); useK8sStore.getState().clearFieldFilters(); }
+          : undefined,
       };
     };
 
     setFilterProvider(provide);
     return () => clearFilterProvider(provide);
-  }, [logs, logFilter, setLogFilter]);
+  }, [logs, logFilter, logFieldFilters, addFieldFilter, setLogFilter]);
 
   const ask = useDk8sAiStore(s => s.ask);
 
@@ -504,8 +575,8 @@ export function LogViewer() {
   >(null);
 
   const visible = useMemo(
-    () => filterLines(logs, { query: logFilter, levels: logLevels }),
-    [logs, logFilter, logLevels],
+    () => filterLines(logs, { query: logFilter, levels: logLevels, fields: logFieldFilters }),
+    [logs, logFilter, logLevels, logFieldFilters],
   );
 
   // Fold, then expand the ones the user opened. Expansion is keyed on the
@@ -850,6 +921,16 @@ export function LogViewer() {
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <LevelChips />
 
+        {/* Applied field filters, where they can be seen and undone. */}
+        {logFieldFilters.map(f => (
+          <FieldFilterChip
+            key={`${f.field}:${f.value}`}
+            filter={f}
+            onFlip={() => addFieldFilter(f)}
+            onRemove={() => removeFieldFilter(f.field, f.value)}
+          />
+        ))}
+
         {/* Takes whatever is left between the chips and the controls, rather
             than a fixed width with dead space after it. */}
         <div className="flex-1" style={{ minWidth: 180, paddingRight: 8 }}>
@@ -1181,6 +1262,14 @@ export function LogViewer() {
                           : line.level === 'warn' ? 'var(--color-warning)'
                           : line.level === 'debug' ? 'var(--color-text-muted)'
                           : 'var(--color-text-primary)',
+                        /*
+                          Library frames recede so the application's own stand
+                          out. Dimmed rather than hidden: the framework's stack
+                          is often how you tell WHICH of your calls failed, so
+                          removing it would take away the context that makes
+                          your frames mean something.
+                        */
+                        opacity: row.isFrame && frameOrigin(line.text) === 'library' ? 0.55 : 1,
                         flex: logWrap ? 1 : undefined,
                         minWidth: 0,
                       }}>
@@ -1233,7 +1322,24 @@ export function LogViewer() {
                           }}
                         >
                           {isOpen ? <ChevronDownIcon size={9} /> : <ChevronRightIcon size={9} />}
-                          {isOpen ? 'hide' : `… ${row.folded.length} more frames`}
+                          {isOpen ? 'hide' : (() => {
+                            /*
+                              How many of the hidden frames are known library
+                              frames.
+
+                              Not "how many are yours" — that needs home
+                              packages nobody has stated, and the first version
+                              of this claimed thirteen of yours in a trace that
+                              contained none. Counting what can be RECOGNISED
+                              is honest and still useful: "70 frames, 66 of
+                              them framework" says the same thing about where
+                              to look without inventing the other number.
+                            */
+                            const lib = row.folded!.filter(f => frameOrigin(f.text) === 'library').length;
+                            return lib
+                              ? `… ${row.folded!.length} more frames · ${lib} framework`
+                              : `… ${row.folded!.length} more frames`;
+                          })()}
                         </button>
                       )}
                     </div>

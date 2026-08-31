@@ -49,6 +49,7 @@ import {
 import { dk8sPrompt, dk8sUserPrompt } from '../../chat/dk8s-prompt-resolve';
 import { renderDk8sUserPrompt } from '../../chat/dk8s-prompts';
 import { redact, describeRedactions } from '../../../services/k8s/redact';
+import { detectFormat, detectPattern } from '../../../services/k8s/log-format-detect';
 import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
 import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-stream';
@@ -697,7 +698,25 @@ async function resolveFormatFor(
   const chosen = chooseFormat({
     pinned, saved: state().logFormats ?? [], builtins: BUILTIN_FORMATS, ctx, sample,
   });
-  return { format: chosen.format, via: chosen.via };
+  if (chosen.format) return { format: chosen.format, via: chosen.via };
+
+  /*
+    Nothing known fits, so work one out from the log itself.
+
+    Last, deliberately. A builtin that probes well is a NAMED format the person
+    can find in Settings, read and edit; a detected one is correct but
+    anonymous, so the known answer is preferred where there is one. This is for
+    the case the detector was written for — a log no builtin covers, which is
+    precisely where dk8s used to give up and render a grey wall with no levels,
+    no fields and every stack frame counted as its own event.
+
+    `detectFormat` declines unless one shape holds more than two thirds of the
+    sample, so getting nothing back here is a real answer rather than a failure.
+  */
+  const detected = sample.length ? detectFormat(sample) : undefined;
+  if (detected) return { format: detected, via: 'detected' };
+
+  return { format: undefined, via: chosen.via };
 }
 
 export async function handleDk8sLogsOpen(
@@ -1074,6 +1093,32 @@ export async function handleDk8sDetectFormat(
     postMessage({ type: 'dk8s:formatDetected', error: 'No sample lines to look at.' });
     return;
   }
+
+  /*
+    Try to work it out first, and only ask a model if that fails.
+
+    The deterministic detector is better than the model on every axis that
+    matters here: it gives the same answer twice, it needs no provider
+    configured, it costs no round trip, and it can be tested. It also abstains
+    honestly — when a log has two shapes or one it cannot express, it says so
+    rather than producing a plausible pattern that matches two lines in five.
+
+    That abstention is exactly where a guess beats nothing, so the model keeps
+    the case it is actually good at.
+  */
+  const worked = detectPattern(lines);
+  if (worked) {
+    postMessage({
+      type: 'dk8s:formatDetected',
+      pattern: worked.pattern,
+      via: 'rules',
+      confidence: worked.confidence,
+      note: `Worked out from ${worked.votes} sample lines`
+        + ` — ${Math.round(worked.confidence * 100)}% of them match this shape.`,
+    });
+    return;
+  }
+
   const system = dk8sPrompt('dk8s.format.detect');
   if (!system) return;
 

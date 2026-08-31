@@ -3,6 +3,7 @@ import {
   buildMatcher, filterLines, densityBuckets, levelCounts,
   formatLogTime, selectionText, describeBucket,
   foldStackTraces, isStackFrame, compactCount, placeSelectionToolbar, grepTermFor,
+  matchesFieldFilters, frameOrigin,
 } from './log-view';
 import type { LogLine } from '../../store/k8s-store';
 
@@ -353,5 +354,268 @@ describe('grepTermFor', () => {
   it('caps a very long selection', () => {
     const term = grepTermFor('x'.repeat(500))!;
     expect(term.length).toBe(120);
+  });
+});
+
+/*
+  Field filters, which replace putting `[main]` in the search box.
+
+  That was a substring match over the whole line: it also matched any message
+  mentioning `[main]`, and it could not express "everything except this noisy
+  thread" at all.
+*/
+describe('matchesFieldFilters', () => {
+  const ev = (thread?: string, logger?: string) => ({ thread, logger, app: undefined });
+
+  it('keeps everything when there are no filters', () => {
+    expect(matchesFieldFilters(ev('main'), [])).toBe(true);
+  });
+
+  it('includes only the chosen value', () => {
+    const f = [{ field: 'thread' as const, value: 'main', mode: 'include' as const }];
+    expect(matchesFieldFilters(ev('main'), f)).toBe(true);
+    expect(matchesFieldFilters(ev('worker-1'), f)).toBe(false);
+  });
+
+  it('excludes the chosen value and keeps the rest', () => {
+    const f = [{ field: 'thread' as const, value: 'main', mode: 'exclude' as const }];
+    expect(matchesFieldFilters(ev('main'), f)).toBe(false);
+    expect(matchesFieldFilters(ev('worker-1'), f)).toBe(true);
+  });
+
+  it('ORs two includes on the same field', () => {
+    const f = [
+      { field: 'thread' as const, value: 'main', mode: 'include' as const },
+      { field: 'thread' as const, value: 'worker-1', mode: 'include' as const },
+    ];
+    expect(matchesFieldFilters(ev('main'), f)).toBe(true);
+    expect(matchesFieldFilters(ev('worker-1'), f)).toBe(true);
+    expect(matchesFieldFilters(ev('worker-2'), f)).toBe(false);
+  });
+
+  it('ANDs includes across different fields', () => {
+    const f = [
+      { field: 'thread' as const, value: 'main', mode: 'include' as const },
+      { field: 'logger' as const, value: 'com.acme.Boot', mode: 'include' as const },
+    ];
+    expect(matchesFieldFilters(ev('main', 'com.acme.Boot'), f)).toBe(true);
+    expect(matchesFieldFilters(ev('main', 'com.acme.Db'), f)).toBe(false);
+  });
+
+  it('lets an exclude beat an include', () => {
+    // "Hide this" is the stronger statement — a line matching both is one
+    // somebody has explicitly asked not to see.
+    const f = [
+      { field: 'thread' as const, value: 'main', mode: 'include' as const },
+      { field: 'thread' as const, value: 'main', mode: 'exclude' as const },
+    ];
+    expect(matchesFieldFilters(ev('main'), f)).toBe(false);
+  });
+
+  it('matches a wildcard', () => {
+    const f = [{ field: 'thread' as const, value: 'pool-*', mode: 'include' as const }];
+    expect(matchesFieldFilters(ev('pool-2-thread-1'), f)).toBe(true);
+    expect(matchesFieldFilters(ev('main'), f)).toBe(false);
+  });
+
+  it('does not let a wildcard value smuggle in a regex', () => {
+    // `.` and `+` are literal; only `*` is special.
+    const f = [{ field: 'logger' as const, value: 'com.acme.Boot', mode: 'include' as const }];
+    expect(matchesFieldFilters(ev(undefined, 'comXacmeXBoot'), f)).toBe(false);
+  });
+
+  it('drops a line that has no value for an included field', () => {
+    const f = [{ field: 'thread' as const, value: 'main', mode: 'include' as const }];
+    expect(matchesFieldFilters(ev(undefined, 'com.acme.Boot'), f)).toBe(false);
+  });
+
+  it('keeps a line that has no value for an EXCLUDED field', () => {
+    // An exclude says "not this one", not "only lines that have this field".
+    const f = [{ field: 'thread' as const, value: 'main', mode: 'exclude' as const }];
+    expect(matchesFieldFilters(ev(undefined, 'com.acme.Boot'), f)).toBe(true);
+  });
+});
+
+describe('filterLines — field filters and continuations', () => {
+  const event = (seq: number, thread: string, text: string) =>
+    ({ ...line(seq, 'error', text), thread, continuation: false });
+  const frame = (seq: number, text: string) =>
+    ({ ...line(seq, 'error', text), continuation: true });
+
+  /*
+    The trap this avoids: judging a stack frame on its own strips every trace
+    out from under the errors that produced them. The filter looks like it
+    worked and the evidence is gone.
+  */
+  it('keeps a kept event’s stack trace with it', () => {
+    const lines = [
+      event(0, 'main', 'ERROR boom'),
+      frame(1, '\tat com.acme.Foo.run(Foo.java:1)'),
+      frame(2, '\tat com.acme.Bar.go(Bar.java:2)'),
+      event(3, 'worker-1', 'ERROR other'),
+      frame(4, '\tat com.acme.Baz.go(Baz.java:3)'),
+    ];
+    const out = filterLines(lines, {
+      query: '', levels: [],
+      fields: [{ field: 'thread', value: 'main', mode: 'include' }],
+    });
+    expect(out.map(l => l.seq)).toEqual([0, 1, 2]);
+  });
+
+  it('drops a filtered-out event’s trace with it', () => {
+    const lines = [
+      event(0, 'worker-1', 'ERROR other'),
+      frame(1, '\tat com.acme.Baz.go(Baz.java:3)'),
+      event(2, 'main', 'ERROR boom'),
+    ];
+    const out = filterLines(lines, {
+      query: '', levels: [],
+      fields: [{ field: 'thread', value: 'main', mode: 'include' }],
+    });
+    expect(out.map(l => l.seq)).toEqual([2]);
+  });
+
+  it('behaves exactly as before when there are no field filters', () => {
+    const lines = [event(0, 'main', 'ERROR boom'), frame(1, '\tat com.acme.Foo.run(Foo.java:1)')];
+    expect(filterLines(lines, { query: '', levels: [] }).map(l => l.seq)).toEqual([0, 1]);
+  });
+});
+
+describe('filterLines — lines before the first event', () => {
+  /*
+    The banner and the JVM's startup notice are printed before any logger is
+    configured, so they belong to no event. Under a field filter they match
+    nothing and have to go — they were being kept because the "is the current
+    event kept" flag started out true.
+  */
+  const banner = (seq: number, text: string) =>
+    ({ ...line(seq, 'other', text), continuation: true });
+  const event = (seq: number, thread: string, text: string) =>
+    ({ ...line(seq, 'info', text), thread, continuation: false });
+
+  const lines = [
+    banner(0, 'Picked up JAVA_TOOL_OPTIONS: -Xmx192m'),
+    banner(1, ' :: Spring Boot ::   (v3.4.1)'),
+    event(2, 'main', 'INFO started'),
+    event(3, 'worker-1', 'INFO handled'),
+  ];
+
+  it('drops pre-event noise when a field filter is on', () => {
+    const out = filterLines(lines, {
+      query: '', levels: [],
+      fields: [{ field: 'thread', value: 'main', mode: 'include' }],
+    });
+    expect(out.map(l => l.seq)).toEqual([2]);
+  });
+
+  it('keeps pre-event noise when no field filter is on', () => {
+    expect(filterLines(lines, { query: '', levels: [] }).map(l => l.seq))
+      .toEqual([0, 1, 2, 3]);
+  });
+
+  it('drops an excluded event’s trace along with it', () => {
+    const withTrace = [
+      event(0, 'main', 'ERROR boom'),
+      { ...line(1, 'error', '\tat com.acme.Foo.run(Foo.java:1)'), continuation: true },
+      event(2, 'worker-1', 'INFO fine'),
+    ];
+    const out = filterLines(withTrace, {
+      query: '', levels: [],
+      fields: [{ field: 'thread', value: 'main', mode: 'exclude' }],
+    });
+    expect(out.map(l => l.seq)).toEqual([2]);
+  });
+});
+
+describe('filterLines — an exclude is not a membership test', () => {
+  const banner = (seq: number) =>
+    ({ ...line(seq, 'other', 'Picked up JAVA_TOOL_OPTIONS'), continuation: true });
+  const event = (seq: number, logger: string) =>
+    ({ ...line(seq, 'info', `INFO from ${logger}`), logger, continuation: false });
+
+  const lines = [banner(0), event(1, 'com.acme.Noisy'), event(2, 'com.acme.Quiet')];
+
+  /*
+    "Hide this logger" says nothing about the startup banner, which has no
+    logger at all. Dropping it threw away eight lines of boot output every
+    time somebody muted one class.
+  */
+  it('keeps pre-event lines under an exclude', () => {
+    const out = filterLines(lines, {
+      query: '', levels: [],
+      fields: [{ field: 'logger', value: 'com.acme.Noisy', mode: 'exclude' }],
+    });
+    expect(out.map(l => l.seq)).toEqual([0, 2]);
+  });
+
+  it('drops pre-event lines under an include', () => {
+    // "Show me this logger" cannot be satisfied by a line that has none.
+    const out = filterLines(lines, {
+      query: '', levels: [],
+      fields: [{ field: 'logger', value: 'com.acme.Noisy', mode: 'include' }],
+    });
+    expect(out.map(l => l.seq)).toEqual([1]);
+  });
+
+  it('drops them when an include and an exclude are both on', () => {
+    const out = filterLines(lines, {
+      query: '', levels: [],
+      fields: [
+        { field: 'logger', value: 'com.acme.Quiet', mode: 'include' },
+        { field: 'logger', value: 'com.acme.Noisy', mode: 'exclude' },
+      ],
+    });
+    expect(out.map(l => l.seq)).toEqual([2]);
+  });
+});
+
+/*
+  Where a frame came from.
+
+  The first version read the jar tag and called anything unversioned "yours".
+  Against the real fixture that claimed thirteen frames were the application's
+  — and all thirteen were JDK classes tagged `~[na:na]` or Spring's own
+  launcher tagged `~[app.jar]`. The tag says which archive a class was loaded
+  from, which is not the same question.
+*/
+describe('frameOrigin', () => {
+  it.each([
+    ['the JDK', '	at java.base/java.net.Socket.connect(Socket.java:751) ~[na:na]'],
+    ['Spring', '	at org.springframework.orm.jpa.Foo.bar(Foo.java:390) ~[spring-orm-6.2.1.jar!/:6.2.1]'],
+    ['Spring’s launcher', '	at org.springframework.boot.loader.launch.JarLauncher.main(JarLauncher.java:58) ~[app.jar:1.0.0]'],
+    ['Hibernate', '	at org.hibernate.boot.model.relational.Database.<init>(Database.java:45) ~[hibernate-core-6.6.4.Final.jar!/:6.6.4.Final]'],
+    ['Hikari', '	at com.zaxxer.hikari.HikariDataSource.getConnection(HikariDataSource.java:1) ~[HikariCP-5.1.0.jar!/:na]'],
+  ])('knows a %s frame is not yours', (_what, line) => {
+    expect(frameOrigin(line)).toBe('library');
+  });
+
+  /*
+    The correction. These were all called `app` by the jar-tag rule, and the
+    only thing they have in common is the archive they were loaded from.
+  */
+  it('does not call a JDK frame yours because its jar has no version', () => {
+    expect(frameOrigin('	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[na:na]'))
+      .toBe('library');
+  });
+
+  it('says unknown for a package it cannot place', () => {
+    // There is no way to tell your `com.acme` from a vendor's `com.acme`.
+    expect(frameOrigin('	at com.acme.Thing.go(Thing.java:9) ~[app.jar:1.0.0]')).toBe('unknown');
+  });
+
+  it('answers properly once the home packages are known', () => {
+    const line = '	at com.acme.Thing.go(Thing.java:9) ~[app.jar:1.0.0]';
+    expect(frameOrigin(line, ['com.acme'])).toBe('app');
+    expect(frameOrigin('	at com.vendor.Lib.run(Lib.java:1)', ['com.acme'])).toBe('library');
+  });
+
+  it('keeps the runtime out of your packages even if you claim them', () => {
+    // `java.` is never yours, and a stated prefix that overlaps it is a typo.
+    expect(frameOrigin('	at java.base/java.net.Socket.connect(Socket.java:751)', ['com.acme']))
+      .toBe('library');
+  });
+
+  it('says unknown for a line that is not a frame', () => {
+    expect(frameOrigin('2026-08-31 INFO started')).toBe('unknown');
   });
 });

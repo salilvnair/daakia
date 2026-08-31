@@ -31,11 +31,88 @@ export function levelLabel(level: LogLevel): string {
   return level === 'other' ? 'plain' : level;
 }
 
+/**
+ * A filter on a field a format named, rather than on the line's text.
+ *
+ * Filtering by thread used to mean putting `[main]` in the search box, which
+ * is a substring match over the whole line: it also matched any message that
+ * mentioned `[main]`, and it could not express "everything EXCEPT this noisy
+ * thread" at all. Matching the parsed field says what was meant.
+ *
+ * `*` is the only wildcard, because these are values picked from a menu and a
+ * regex here would be a second syntax to learn for a control that is mostly
+ * clicked. log-viewer's thread filter uses exactly this.
+ */
+export interface FieldFilter {
+  field: 'thread' | 'logger' | 'app';
+  value: string;
+  /** `exclude` hides matching lines; `include` hides everything else. */
+  mode: 'include' | 'exclude';
+}
+
 export interface LogFilterSpec {
   /** Free text; case-insensitive substring, or /regex/ when it parses as one. */
   query: string;
   /** Empty means every level — a filter that hides everything by default is a trap. */
   levels: LogLevel[];
+  /** Field filters, if any. Empty behaves exactly as before. */
+  fields?: FieldFilter[];
+}
+
+/** `pool-*-thread-1` → a matcher. `*` is the only special character. */
+function wildcard(value: string): (v: string) => boolean {
+  if (!value.includes('*')) {
+    const lower = value.toLowerCase();
+    return v => v.toLowerCase() === lower;
+  }
+  const re = new RegExp(
+    '^' + value.split('*').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$',
+    'i',
+  );
+  return v => re.test(v);
+}
+
+/**
+ * Does this line survive the field filters?
+ *
+ * Includes are OR'd within a field and AND'd across fields — picking two
+ * threads means "either thread", and picking a thread and a logger means
+ * "both". Excludes always win, because "hide this" is the stronger statement
+ * and a line matching both an include and an exclude is one someone has
+ * explicitly asked not to see.
+ *
+ * A continuation carries no fields, so it follows the event above it rather
+ * than being judged on its own — otherwise filtering to one thread would show
+ * that thread's errors with every stack trace stripped out from under them.
+ */
+export function matchesFieldFilters(
+  line: Pick<LogLine, 'thread' | 'logger' | 'app'>,
+  filters: FieldFilter[],
+): boolean {
+  if (!filters.length) return true;
+
+  for (const f of filters) {
+    if (f.mode !== 'exclude') continue;
+    const v = line[f.field];
+    if (v && wildcard(f.value)(v)) return false;
+  }
+
+  const includes = filters.filter(f => f.mode === 'include');
+  if (!includes.length) return true;
+
+  const byField = new Map<FieldFilter['field'], FieldFilter[]>();
+  for (const f of includes) {
+    const list = byField.get(f.field) ?? [];
+    list.push(f);
+    byField.set(f.field, list);
+  }
+
+  for (const [field, list] of byField) {
+    const v = line[field];
+    if (!v) return false;
+    if (!list.some(f => wildcard(f.value)(v))) return false;
+  }
+  return true;
 }
 
 export interface MatchedLine extends LogLine {
@@ -92,6 +169,21 @@ export function buildMatcher(query: string): ((text: string) => [number, number]
 export function filterLines(lines: LogLine[], spec: LogFilterSpec): MatchedLine[] {
   const match = buildMatcher(spec.query);
   const levelSet = spec.levels.length ? new Set(spec.levels) : null;
+  const fields = spec.fields ?? [];
+  /*
+    Whether the event a continuation belongs to survived the field filters.
+
+    The starting value is the interesting part, and it decides what happens to
+    the lines before the FIRST event — the JVM's startup notice and the Spring
+    banner, which belong to no event at all.
+
+    An include is a membership test: "show me this thread" cannot be satisfied
+    by a line that has no thread, so those lines go. An exclude is only a
+    rejection: "hide this logger" says nothing about the banner, so it stays.
+    Treating both the same dropped eight lines of startup output every time
+    somebody excluded one noisy logger.
+  */
+  let keepingEvent = !fields.some(f => f.mode === 'include');
 
   const out: MatchedLine[] = [];
   for (const line of lines) {
@@ -108,6 +200,21 @@ export function filterLines(lines: LogLine[], spec: LogFilterSpec): MatchedLine[
     */
     if (!line.text.trim()) continue;
     if (levelSet && !levelSet.has(line.level)) continue;
+    /*
+      Field filters apply to events; a continuation inherits its event's fate.
+
+      Judging a stack frame on its own would strip every trace out from under
+      the errors that produced them — the filter would appear to work and the
+      evidence would be gone.
+    */
+    if (fields.length) {
+      if (line.continuation) {
+        if (!keepingEvent) continue;
+      } else {
+        keepingEvent = matchesFieldFilters(line, fields);
+        if (!keepingEvent) continue;
+      }
+    }
     if (!match) { out.push(line); continue; }
     const hits = match(line.text);
     if (hits) out.push({ ...line, hits });
@@ -261,6 +368,62 @@ export function isStackFrame(text: string): boolean {
  */
 function foldsInto(line: MatchedLine): boolean {
   return line.continuation ?? isStackFrame(line.text);
+}
+
+/**
+ * Where a stack frame came from.
+ *
+ * ── Why this returns `unknown` ──
+ *
+ * The first version of this read the jar tag the JVM appends — `~[app.jar]`,
+ * `~[na:na]`, `~[hibernate-core-6.6.4.Final.jar!/]` — and called anything
+ * without a version "the application's". Against the real crashloop log that
+ * claimed thirteen frames were yours. Every one was wrong: the `na:na` frames
+ * are JDK classes (`java.base/java.net.Socket.connect`) and the `app.jar`
+ * frames are Spring Boot's own launcher, which lives in your jar without being
+ * your code.
+ *
+ * So the jar tag is gone. What is left is two things that can be known:
+ *
+ *  - The runtime and the frameworks announce themselves by package. `java.base/`
+ *    and `org.springframework.` are not yours, whoever you are.
+ *  - Everything else is `unknown` unless someone has SAID which packages are
+ *    theirs, because there is no way to tell your `com.acme` from a vendor's.
+ *
+ * `unknown` is a real answer and the UI treats it as one: no dimming, no count.
+ * Claiming thirteen of your frames are in a trace that contains none of them is
+ * worse than saying nothing.
+ */
+export type FrameOrigin = 'app' | 'library' | 'unknown';
+
+/**
+ * Packages that belong to the runtime or to a framework, never to you.
+ *
+ * Deliberately short and deliberately certain. Anything arguable is left out —
+ * a package that MIGHT be a library is `unknown`, and unknown frames are shown
+ * at full weight.
+ */
+const NOT_YOURS = [
+  'java.', 'javax.', 'jakarta.', 'jdk.', 'sun.', 'com.sun.',
+  'org.springframework.', 'org.hibernate.', 'org.apache.', 'org.eclipse.',
+  'ch.qos.logback.', 'org.slf4j.', 'io.netty.', 'reactor.', 'com.zaxxer.hikari.',
+  'org.postgresql.', 'com.mysql.', 'org.mongodb.', 'redis.clients.',
+  'org.junit.', 'org.mockito.', 'com.fasterxml.jackson.', 'kotlin.', 'scala.',
+];
+
+/** The class a frame names, with any JPMS module prefix removed. */
+function frameClass(text: string): string | undefined {
+  return /^\s*at\s+(?:[\w.$]+\/)?([\w.$]+)\.[\w$<>]+\(/.exec(text)?.[1];
+}
+
+export function frameOrigin(text: string, homePackages: string[] = []): FrameOrigin {
+  const cls = frameClass(text);
+  if (!cls) return 'unknown';
+
+  // A stated home package is the best answer available and wins outright.
+  if (homePackages.some(p => cls.startsWith(p))) return 'app';
+  if (NOT_YOURS.some(p => cls.startsWith(p))) return 'library';
+  return homePackages.length ? 'library' : 'unknown';
 }
 
 /**

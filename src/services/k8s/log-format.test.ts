@@ -363,3 +363,43 @@ describe('probeFormat — samples that are mostly stack trace', () => {
       .toBe('builtin.spring');
   });
 });
+
+/*
+  A pattern pasted straight from logback.xml has to work without translation.
+
+  Handled inside compileTemplate, so it applies everywhere a pattern is used —
+  a saved format, a builtin, a detected one — rather than at one entry point
+  somebody remembers to route through.
+*/
+describe('compileTemplate — conversion patterns', () => {
+  const parse = (pattern: string, line: string) =>
+    compileFormat({ id: 't', name: 't', kind: 'pattern', pattern }).parse(line);
+
+  it('accepts a logback pattern verbatim', () => {
+    expect(parse(
+      '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n',
+      '2026-08-31 13:20:01.123 [main] INFO  com.acme.Boot - started',
+    )).toMatchObject({ level: 'info', thread: 'main', logger: 'com.acme.Boot' });
+  });
+
+  it('still accepts our own placeholder syntax', () => {
+    expect(parse(
+      '%{TIMESTAMP} [%{THREAD}] %{LEVEL} %{LOGGER} - %{MESSAGE}',
+      '2026-08-31 13:20:01.123 [main] INFO  com.acme.Boot - started',
+    )).toMatchObject({ level: 'info', thread: 'main' });
+  });
+
+  it('does not mangle a literal percent in a pattern', () => {
+    // `100% done` has a `%` that introduces nothing.
+    expect(parse('%{LEVEL} 100% done %{MESSAGE}', 'INFO 100% done fine'))
+      .toMatchObject({ level: 'info', message: 'fine' });
+  });
+
+  it('reports hasLevel correctly for a translated pattern', () => {
+    const c = compileFormat({
+      id: 't', name: 't', kind: 'pattern',
+      pattern: '%d{HH:mm:ss} [%thread] %-5level %logger - %msg%n',
+    });
+    expect(c.hasLevel).toBe(true);
+  });
+});

@@ -7,6 +7,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import type { FieldFilter } from '../components/k8s/log-view';
 import { logUiEvent } from './ui-audit-store';
 import { useUiStateStore } from './ui-state-store';
 
@@ -370,6 +371,14 @@ interface K8sState {
   logDropped: number;
   logFilter: string;
   logLevels: LogLevel[];
+  /**
+   * Filters on fields a format named, as opposed to on the line's text.
+   *
+   * Separate from `logFilter` because they are different questions and were
+   * being answered with the same control: putting `[main]` in the search box
+   * matched any message mentioning it and could not say "everything except".
+   */
+  logFieldFilters: FieldFilter[];
   logFollow: boolean;
   /**
    * Whether the stream is open.
@@ -439,6 +448,10 @@ interface K8sState {
   closeDetail: () => void;
   setDetailTab: (tab: DetailTab) => void;
   setLogFilter: (v: string) => void;
+  /** Add a field filter, or flip its mode if that field/value is already on. */
+  addFieldFilter: (f: FieldFilter) => void;
+  removeFieldFilter: (field: FieldFilter['field'], value: string) => void;
+  clearFieldFilters: () => void;
   toggleLogLevel: (level: LogLevel) => void;
   setLogFollow: (v: boolean) => void;
   setLogLive: (v: boolean) => void;
@@ -505,6 +518,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   logDropped: 0,
   logFilter: '',
   logLevels: [],
+  logFieldFilters: [],
   logFollow: true,
   logLive: false,
   logTail: 200,
@@ -633,7 +647,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         .prefs[`${DETAIL_TAB_PREF}${pod.namespace}/${pod.name}`] as DetailTab | undefined) ?? 'logs',
       logs: [], logStatus: 'loading', logDetail: undefined, logDropped: 0,
       logRequestedAt: Date.now(),
-      logFilter: '', logLevels: [], logFollow: true, logLive: false,
+      logFilter: '', logLevels: [], logFieldFilters: [], logFollow: true, logLive: false,
       logDirection: 'last', logSince: 'all', logExportOpen: false,
       logPrevious: false, logContainer: undefined, logSelection: undefined,
       describeText: undefined, yamlText: undefined, describeBusy: true,
@@ -682,6 +696,30 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     set({ detailTab });
   },
   setLogFilter: (logFilter) => set({ logFilter }),
+
+  /*
+    Adding a filter that is already there flips it rather than duplicating it.
+
+    Clicking `main` twice in the menu should not produce two identical chips,
+    and the second click has an obvious meaning — the person is pointing at the
+    same value again, and the only other thing to do with it is invert it.
+  */
+  addFieldFilter: (f) => set(s => {
+    const existing = s.logFieldFilters.find(x => x.field === f.field && x.value === f.value);
+    if (!existing) return { logFieldFilters: [...s.logFieldFilters, f] };
+    return {
+      logFieldFilters: s.logFieldFilters.map(x =>
+        x === existing
+          ? { ...x, mode: x.mode === 'include' ? 'exclude' as const : 'include' as const }
+          : x),
+    };
+  }),
+
+  removeFieldFilter: (field, value) => set(s => ({
+    logFieldFilters: s.logFieldFilters.filter(x => !(x.field === field && x.value === value)),
+  })),
+
+  clearFieldFilters: () => set({ logFieldFilters: [] }),
 
   toggleLogLevel: (level) => set(s => ({
     logLevels: s.logLevels.includes(level)
