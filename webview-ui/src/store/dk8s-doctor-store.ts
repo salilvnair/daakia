@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { logUiEvent } from './ui-audit-store';
 
 export type ArtifactKind =
   | 'threaddump' | 'threaddump-sigquit' | 'histogram'
@@ -156,6 +157,13 @@ export const useDk8sDoctorStore = create<DoctorState>((set) => ({
     // One at a time. Two heap dumps against the same JVM would each stop the
     // world while the other was copying, and the panel has no way to show two
     // progress bars honestly anyway.
+    /*
+      A collection runs a command inside a live container — jcmd, jmap, a
+      SIGQUIT — and several of them pause the JVM while they work. That is a
+      thing done TO a running system, so the whole request is recorded, not a
+      summary of it.
+    */
+    logUiEvent('dk8s.collect', { ...req });
     set({ running: { kind: req.kind, pod: req.pod } });
     postMsg({ type: 'dk8s:collect', ...req });
   },

@@ -261,11 +261,6 @@ export function HeapAnalyzerView() {
     if (activeSubView && activeSubView !== view) setView(activeSubView as SubView);
   }, [activeSubView, view]);
 
-  // Back to the empty state, so "Open another" is a decision you can change
-  // your mind about. The baseline is kept: comparing two dumps is the reason
-  // to open a second one at all.
-  const reset = () => { setPhase({ kind: 'idle' }); setView('verdict'); };
-
   useEffect(() => {
     const handler = (e: MessageEvent) => {
       const msg = e.data;
@@ -424,14 +419,14 @@ export function HeapAnalyzerView() {
           />
         )}
 
-        <div className="flex-1" />
+        {/*
+          "Open another" used to sit here, at the far right of this bar.
 
-        {/* Clears back to the empty state rather than opening a picker
-            straight away: cancelling that dialog left you looking at the old
-            dump with no sign that anything had happened. */}
-        <ButtonView variant="secondary" size="sm" onClick={reset}>
-          Open another
-        </ButtonView>
+          It was a second way to do what the header's "Open a file…" already
+          does, one level further in and framed as if it belonged to the dump
+          you were reading. Two controls for one action, on the same screen, is
+          how you get someone hunting for the difference between them.
+        */}
       </div>
 
       {view === 'histogram' && <HeapHistogramView liveBytes={liveBytes} packageFilter={packageFilter} />}

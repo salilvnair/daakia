@@ -7,6 +7,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { logUiEvent } from './ui-audit-store';
 import { useUiStateStore } from './ui-state-store';
 import { openArtifactIn } from './dk8s-analyze-store';
 
@@ -37,14 +38,29 @@ export const useDk8sArtifactStore = create<ArtifactState>((set) => ({
   artifacts: [],
 
   load: () => postMsg({ type: 'dk8s:listArtifacts' }),
-  importFile: () => postMsg({ type: 'dk8s:importArtifact' }),
-  remove: (file) => postMsg({ type: 'dk8s:deleteArtifact', file }),
-  reveal: () => postMsg({ type: 'dk8s:revealArtifacts' }),
+  importFile: () => {
+    logUiEvent('dk8s.artifact_import', {});
+    postMsg({ type: 'dk8s:importArtifact' });
+  },
+  remove: (file) => {
+    // Deleting is the one artifact action that cannot be undone, so the record
+    // carries the whole file path rather than just its display name.
+    logUiEvent('dk8s.artifact_delete', { file });
+    postMsg({ type: 'dk8s:deleteArtifact', file });
+  },
+  reveal: () => {
+    logUiEvent('dk8s.artifact_reveal', {});
+    postMsg({ type: 'dk8s:revealArtifacts' });
+  },
 
   open: (a) => {
     // Over the list rather than off to a tab: this is the same gesture as
     // opening a pod, and the analyzer is chosen before the view mounts so a
     // thread dump does not land on the heap analyzer's empty state.
+    logUiEvent('dk8s.artifact_analyze', {
+      name: a.name, kind: a.kind, analyzer: a.analyzer,
+      pod: a.pod, bytes: a.bytes, file: a.file,
+    });
     openArtifactIn(a.analyzer);
     postMsg({ type: 'dk8s:openArtifact', file: a.file });
   },

@@ -4,11 +4,25 @@
  * Config persists to localStorage via ui-audit-store.
  * Groups are collapsible via the category chip (like AiFeatureSettings).
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ChevronRightIcon } from '../../../icons';
+import { useUiStateStore } from '../../../store/ui-state-store';
 import { AUDIT_EVENT_DEFS, getAuditConfig, setAuditEventEnabled, isAuditEventEnabled, resetAuditConfig, logUiEvent } from '../../../store/ui-audit-store';
 
-const MODULE_ORDER = ['REST', 'GraphQL', 'gRPC', 'SOAP', 'WebSocket', 'SSE', 'MQTT', 'Socket.IO', 'Mock Server', 'Collections', 'History', 'Settings'];
+const MODULE_ORDER = ['REST', 'GraphQL', 'gRPC', 'SOAP', 'WebSocket', 'SSE', 'MQTT', 'Socket.IO', 'Mock Server', 'dk8s', 'Collections', 'History', 'Settings'];
+
+/**
+ * Which groups are folded shut, and where the list was scrolled.
+ *
+ * This was `useState(new Set())` — so every visit reopened all twelve groups
+ * and jumped to the top. On a list of 176 events that meant the person who
+ * had collapsed everything except the two groups they were tuning got their
+ * work undone by switching tabs once. Collapse state IS the configuration of
+ * this screen, and it lives in `prefs` with everything else that survives a
+ * reload.
+ */
+const COLLAPSED_PREF = 'devtools.audit.collapsed';
+const SCROLL_ID = 'devtools.audit.scroll';
 
 function useAuditConfig() {
   const [tick, setTick] = useState(0);
@@ -19,11 +33,30 @@ function useAuditConfig() {
 export function AuditConfigTab() {
   const { refresh } = useAuditConfig();
   const config = getAuditConfig();
-  // Empty set = all groups expanded by default
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  const toggleCollapse = (module: string) =>
-    setCollapsed(prev => { const n = new Set(prev); n.has(module) ? n.delete(module) : n.add(module); return n; });
+  // Empty set = all groups expanded, which stays the default for a first visit.
+  const collapsedRaw = useUiStateStore(s => s.prefs[COLLAPSED_PREF]);
+  const collapsed = new Set((collapsedRaw ?? '').split(',').filter(Boolean));
+
+  const toggleCollapse = (module: string) => {
+    const n = new Set(collapsed);
+    n.has(module) ? n.delete(module) : n.add(module);
+    useUiStateStore.getState().setPref(COLLAPSED_PREF, [...n].join(','));
+  };
+
+  /*
+    Scroll position, restored once on mount and recorded as it changes.
+
+    `scrollTop` is set in a layout effect rather than on the element, because
+    the rows have to exist before there is anything to scroll past — setting
+    it during render puts it back to 0 on the next paint.
+  */
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = useUiStateStore.getState().getScroll(SCROLL_ID);
+  }, []);
 
   const toggle = (id: string, enabled: boolean) => {
     logUiEvent('devtools.audit_config', { eventId: id, enabled, scope: 'single' });
@@ -99,7 +132,9 @@ export function AuditConfigTab() {
       </div>
 
       {/* ─── Event type list ─── */}
-      <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-4 py-3">
+      <div ref={listRef}
+           onScroll={e => useUiStateStore.getState().setScroll(SCROLL_ID, e.currentTarget.scrollTop)}
+           className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-4 py-3">
         <div className="flex flex-col gap-4">
           {grouped.map(({ module, defs }) => {
             const color = defs[0]?.color ?? 'var(--color-text-muted)';

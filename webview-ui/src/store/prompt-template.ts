@@ -10,6 +10,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { DK8S_PROMPTS, DK8S_USER_PROMPTS, DK8S_USER_VARIABLES } from '@daakia/dk8s-prompts';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 1 — Agent Prompts
@@ -341,11 +342,80 @@ export type AiPromptTemplateKey =
   | 'platform.request.clustering.system'
   // ── AI Enrich Captured Traffic ────────────────────────────────────────────
   | 'mock.traffic.enrich'
-  | 'mock.traffic.enrich.system';
+  | 'mock.traffic.enrich.system'
+  // ── dk8s ──────────────────────────────────────────────────────────────────
+  // The text for these lives in the extension host's own prompt registry and
+  // is imported, not copied. See the alias in vite.config.ts.
+  //
+  // Both halves are registered, the same as every other entry: `<key>` is the
+  // user turn that carries the evidence, `<key>.system` is the instruction
+  // block. Registering only one produced a library that showed the system
+  // prompt in the User tab and left the System tab empty — a listing that did
+  // not describe what was actually being sent.
+  | 'dk8s.log.askWhy'
+  | 'dk8s.log.askWhy.system'
+  | 'dk8s.log.explainError'
+  | 'dk8s.log.explainError.system'
+  | 'dk8s.log.summarise'
+  | 'dk8s.log.summarise.system'
+  | 'dk8s.log.explainShape'
+  | 'dk8s.log.explainShape.system'
+  | 'dk8s.pod.crashloop'
+  | 'dk8s.pod.crashloop.system'
+  | 'dk8s.threads.explain'
+  | 'dk8s.threads.explain.system'
+  | 'dk8s.threads.explainOne'
+  | 'dk8s.threads.explainOne.system'
+  | 'dk8s.heap.explain'
+  | 'dk8s.heap.explain.system'
+  | 'dk8s.heap.explainOne'
+  | 'dk8s.heap.explainOne.system'
+  | 'dk8s.heap.investigate'
+  | 'dk8s.heap.investigate.system'
+  | 'dk8s.describe.explain'
+  | 'dk8s.describe.explain.system'
+  | 'dk8s.format.detect'
+  | 'dk8s.format.detect.system';
 
 // ─── Default templates ────────────────────────────────────────────────────────
 
+/**
+ * The dk8s prompts, taken from the host's registry rather than restated here.
+ *
+ * `DK8S_PROMPTS` is keyed by the same strings the webview sends on `dk8s:ask`,
+ * so the library shows exactly the text that will be used. The cast is the
+ * price of that: the registry is a plain `Record<string, string>` on the host
+ * side, and narrowing it here would mean maintaining the key list twice — the
+ * guard test in prompt-keys.test.ts is what actually keeps the two in step.
+ */
+const DK8S_SYSTEM = DK8S_PROMPTS as Record<string, string>;
+const DK8S_USER = DK8S_USER_PROMPTS as Record<string, string>;
+
 export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = {
+  'dk8s.log.askWhy': DK8S_USER['dk8s.log.askWhy'] ?? '',
+  'dk8s.log.askWhy.system': DK8S_SYSTEM['dk8s.log.askWhy'] ?? '',
+  'dk8s.log.explainError': DK8S_USER['dk8s.log.explainError'] ?? '',
+  'dk8s.log.explainError.system': DK8S_SYSTEM['dk8s.log.explainError'] ?? '',
+  'dk8s.log.summarise': DK8S_USER['dk8s.log.summarise'] ?? '',
+  'dk8s.log.summarise.system': DK8S_SYSTEM['dk8s.log.summarise'] ?? '',
+  'dk8s.log.explainShape': DK8S_USER['dk8s.log.explainShape'] ?? '',
+  'dk8s.log.explainShape.system': DK8S_SYSTEM['dk8s.log.explainShape'] ?? '',
+  'dk8s.pod.crashloop': DK8S_USER['dk8s.pod.crashloop'] ?? '',
+  'dk8s.pod.crashloop.system': DK8S_SYSTEM['dk8s.pod.crashloop'] ?? '',
+  'dk8s.threads.explain': DK8S_USER['dk8s.threads.explain'] ?? '',
+  'dk8s.threads.explain.system': DK8S_SYSTEM['dk8s.threads.explain'] ?? '',
+  'dk8s.threads.explainOne': DK8S_USER['dk8s.threads.explainOne'] ?? '',
+  'dk8s.threads.explainOne.system': DK8S_SYSTEM['dk8s.threads.explainOne'] ?? '',
+  'dk8s.heap.explain': DK8S_USER['dk8s.heap.explain'] ?? '',
+  'dk8s.heap.explain.system': DK8S_SYSTEM['dk8s.heap.explain'] ?? '',
+  'dk8s.heap.explainOne': DK8S_USER['dk8s.heap.explainOne'] ?? '',
+  'dk8s.heap.explainOne.system': DK8S_SYSTEM['dk8s.heap.explainOne'] ?? '',
+  'dk8s.heap.investigate': DK8S_USER['dk8s.heap.investigate'] ?? '',
+  'dk8s.heap.investigate.system': DK8S_SYSTEM['dk8s.heap.investigate'] ?? '',
+  'dk8s.describe.explain': DK8S_USER['dk8s.describe.explain'] ?? '',
+  'dk8s.describe.explain.system': DK8S_SYSTEM['dk8s.describe.explain'] ?? '',
+  'dk8s.format.detect': DK8S_USER['dk8s.format.detect'] ?? '',
+  'dk8s.format.detect.system': DK8S_SYSTEM['dk8s.format.detect'] ?? '',
   // ── Response & Diagnostics — system prompts ───────────────────────────────
   'askAiWhy.system':
     `You are a precise HTTP error diagnosis assistant. Analyze the status code, response body, and request context to identify the root cause and provide actionable fix steps. Be concise and technical. Format with numbered steps.`,
@@ -704,6 +774,30 @@ Return ONLY a JSON array of stub objects — no explanation, no markdown fences.
 // ─── Labels for UI ────────────────────────────────────────────────────────────
 
 export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: string; description: string }> = {
+  'dk8s.log.askWhy': { label: 'Ask AI why (logs)', description: 'A highlighted stretch of pod log — what it means and why it is happening' },
+  'dk8s.log.askWhy.system': { label: 'Ask AI why (logs) — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.log.explainError': { label: 'Explain this error', description: 'An exception in a log: what it means and whether it matters' },
+  'dk8s.log.explainError.system': { label: 'Explain this error — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.log.summarise': { label: 'Summarise logs', description: 'A timeline of what a log run actually shows' },
+  'dk8s.log.summarise.system': { label: 'Summarise logs — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.log.explainShape': { label: 'Explain a log shape', description: 'A repeating pattern the log analyzer detected' },
+  'dk8s.log.explainShape.system': { label: 'Explain a log shape — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.pod.crashloop': { label: 'Explain a CrashLoopBackOff', description: 'Why a pod keeps restarting, from its events and exit codes' },
+  'dk8s.pod.crashloop.system': { label: 'Explain a CrashLoopBackOff — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.threads.explain': { label: 'Explain a thread dump', description: 'Deadlocks, contention and what the threads are collectively doing' },
+  'dk8s.threads.explain.system': { label: 'Explain a thread dump — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.threads.explainOne': { label: 'Explain one thread', description: 'A single stack: what it is blocked on and what that costs' },
+  'dk8s.threads.explainOne.system': { label: 'Explain one thread — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.heap.explain': { label: 'Explain a heap dump', description: 'Retained sizes and leak suspects, read as a whole' },
+  'dk8s.heap.explain.system': { label: 'Explain a heap dump — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.heap.explainOne': { label: 'Explain one leak suspect', description: 'A single class: what it accumulates and what holds it' },
+  'dk8s.heap.explainOne.system': { label: 'Explain one leak suspect — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.heap.investigate': { label: 'Investigate the heap', description: 'Drill-down loop — the model asks the heap its own questions' },
+  'dk8s.heap.investigate.system': { label: 'Investigate the heap — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.describe.explain': { label: 'Explain kubectl describe', description: 'A pod description, in terms of what is actually wrong' },
+  'dk8s.describe.explain.system': { label: 'Explain kubectl describe — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.format.detect': { label: 'Detect a log format', description: 'Infer a parser from sample lines' },
+  'dk8s.format.detect.system': { label: 'Detect a log format — system', description: 'Instruction block: who the model is and how it must answer' },
   askAiWhy:               { label: 'Ask AI Why (Error Diagnosis)', description: 'Prompt used when "Ask AI why" is clicked on a failed HTTP response' },
   explainWithAi:          { label: 'Explain with AI',              description: 'Prompt used when "Explain" is clicked on a successful HTTP response' },
   followupWithAi:         { label: 'Follow-up with AI',            description: 'Prompt used when "Follow-up Requests" is clicked to suggest next API calls' },
@@ -857,6 +951,32 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
 // ─── Variables available per template ────────────────────────────────────────
 
 export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]> = {
+  // The user halves interpolate; the system halves are instructions and take
+  // no variables, the same as every other `.system` entry here.
+  'dk8s.log.askWhy': [...DK8S_USER_VARIABLES],
+  'dk8s.log.askWhy.system': [],
+  'dk8s.log.explainError': [...DK8S_USER_VARIABLES],
+  'dk8s.log.explainError.system': [],
+  'dk8s.log.summarise': [...DK8S_USER_VARIABLES],
+  'dk8s.log.summarise.system': [],
+  'dk8s.log.explainShape': [...DK8S_USER_VARIABLES],
+  'dk8s.log.explainShape.system': [],
+  'dk8s.pod.crashloop': [...DK8S_USER_VARIABLES],
+  'dk8s.pod.crashloop.system': [],
+  'dk8s.threads.explain': [...DK8S_USER_VARIABLES],
+  'dk8s.threads.explain.system': [],
+  'dk8s.threads.explainOne': [...DK8S_USER_VARIABLES],
+  'dk8s.threads.explainOne.system': [],
+  'dk8s.heap.explain': [...DK8S_USER_VARIABLES],
+  'dk8s.heap.explain.system': [],
+  'dk8s.heap.explainOne': [...DK8S_USER_VARIABLES],
+  'dk8s.heap.explainOne.system': [],
+  'dk8s.heap.investigate': [...DK8S_USER_VARIABLES],
+  'dk8s.heap.investigate.system': [],
+  'dk8s.describe.explain': [...DK8S_USER_VARIABLES],
+  'dk8s.describe.explain.system': [],
+  'dk8s.format.detect': [...DK8S_USER_VARIABLES],
+  'dk8s.format.detect.system': [],
   askAiWhy:               ['{method}', '{url}', '{status}', '{statusText}', '{body}'],
   explainWithAi:          ['{method}', '{url}', '{status}', '{statusText}', '{body}'],
   followupWithAi:         ['{method}', '{url}', '{body}'],
@@ -1095,6 +1215,26 @@ export const AI_TEMPLATE_CATEGORIES: {
     kind: 'mock',
     keys: ['ws.traffic.analyzer', 'sse.traffic.analyzer', 'sse.event.suggester', 'mqtt.topic.suggester', 'sio.traffic.analyzer'],
   },
+  // ── dk8s ──────────────────────────────────────────────────────────────────
+  {
+    id: 'dk8s',
+    label: 'dk8s',
+    kind: 'mock',
+    keys: [
+      'dk8s.log.askWhy',
+      'dk8s.log.explainError',
+      'dk8s.log.summarise',
+      'dk8s.log.explainShape',
+      'dk8s.pod.crashloop',
+      'dk8s.threads.explain',
+      'dk8s.threads.explainOne',
+      'dk8s.heap.explain',
+      'dk8s.heap.explainOne',
+      'dk8s.heap.investigate',
+      'dk8s.describe.explain',
+      'dk8s.format.detect',
+    ],
+  },
   // ── MCP & Platform AI ─────────────────────────────────────────────────────
   {
     id: 'mcp-platform',
@@ -1111,6 +1251,30 @@ export const AI_TEMPLATE_CATEGORIES: {
 ];
 
 export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
+  'dk8s.log.askWhy': '#22d3ee',
+  'dk8s.log.askWhy.system': '#22d3ee',
+  'dk8s.log.explainError': '#ef4444',
+  'dk8s.log.explainError.system': '#ef4444',
+  'dk8s.log.summarise': '#f59e0b',
+  'dk8s.log.summarise.system': '#f59e0b',
+  'dk8s.log.explainShape': '#a78bfa',
+  'dk8s.log.explainShape.system': '#a78bfa',
+  'dk8s.pod.crashloop': '#ef4444',
+  'dk8s.pod.crashloop.system': '#ef4444',
+  'dk8s.threads.explain': '#22d3ee',
+  'dk8s.threads.explain.system': '#22d3ee',
+  'dk8s.threads.explainOne': '#22d3ee',
+  'dk8s.threads.explainOne.system': '#22d3ee',
+  'dk8s.heap.explain': '#ec4899',
+  'dk8s.heap.explain.system': '#ec4899',
+  'dk8s.heap.explainOne': '#ec4899',
+  'dk8s.heap.explainOne.system': '#ec4899',
+  'dk8s.heap.investigate': '#ec4899',
+  'dk8s.heap.investigate.system': '#ec4899',
+  'dk8s.describe.explain': '#22d3ee',
+  'dk8s.describe.explain.system': '#22d3ee',
+  'dk8s.format.detect': '#10b981',
+  'dk8s.format.detect.system': '#10b981',
   askAiWhy:               '#ef4444',
   explainWithAi:          '#06b6d4',
   followupWithAi:         '#10b981',

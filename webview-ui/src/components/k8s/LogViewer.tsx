@@ -369,13 +369,39 @@ function IconButton({ on, onClick, title, icon }: {
 
 export function LogViewer() {
   const {
-    logs, logStatus, logDetail, logDropped, logFilter, logLevels,
+    logs, logStatus, logDetail, logDropped, logFilter, logLevels, logRequestedAt,
     logFollow, logLive, logTail, logDirection, logSince, logWrap, logPrevious,
     detail, runtime,
     setLogFilter, setLogFollow, setLogLive, setLogTail, setLogDirection,
     setLogSince, setLogWrap, setLogPrevious, setLogSelection,
     fetchLogs, openLogExport, logExportOpen, closeLogExport,
   } = useK8sStore();
+  /*
+    The first moment after asking, when an empty view means nothing yet.
+
+    "No output yet" and "waiting for the pod to say something" are both claims
+    about the POD. Neither can be made until we have actually waited: the
+    stream reports `streaming` the instant it opens, which is before the tail
+    has come back, so for the half second in between every pod was being
+    described as silent. Under this window the view says what is true — that it
+    is still reading.
+
+    A timer rather than a status because there is no message that means "the
+    initial read is done"; the stream just starts and lines arrive or they
+    don't. Only armed while there is nothing to show, so it costs nothing on a
+    pod that is talking.
+  */
+  const SETTLE_MS = 900;
+  const [settling, setSettling] = useState(false);
+  useEffect(() => {
+    if (!logRequestedAt) { setSettling(false); return; }
+    const left = SETTLE_MS - (Date.now() - logRequestedAt);
+    if (left <= 0) { setSettling(false); return; }
+    setSettling(true);
+    const t = setTimeout(() => setSettling(false), left);
+    return () => clearTimeout(t);
+  }, [logRequestedAt]);
+
   const ask = useDk8sAiStore(s => s.ask);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -994,7 +1020,9 @@ export function LogViewer() {
             <div className="flex items-center justify-center h-full">
               <span className="text-[12px] text-[var(--color-text-muted)]" style={{ fontFamily: 'inherit' }}>
                 {logs.length === 0
-                  ? logStatus === 'streaming' ? 'Connected — waiting for the pod to say something.' : 'No output yet.'
+                  ? settling ? 'Reading logs…'
+                    : logStatus === 'streaming' ? 'Connected — waiting for the pod to say something.'
+                      : 'No output yet.'
                   : `No line matches. ${logs.length.toLocaleString()} hidden by the filter.`}
               </span>
             </div>

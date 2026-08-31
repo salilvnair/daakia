@@ -154,18 +154,24 @@ const AI_SPLIT_PREF = 'dk8s.ai.split';
  * Content on the left, answers on the right, with a handle between them.
  *
  * Both the pod detail and the artifact analyzer put the same panel beside the
- * same kind of thing, so the arrangement lives here once. When the panel is
- * closed this is not a split at all — it renders the content directly, because
- * a split pane with one empty half still reserves the divider and the gap.
+ * same kind of thing, so the arrangement lives here once.
+ *
+ * The split is rendered in both states and collapsed when the panel is closed,
+ * which is not a stylistic preference. This used to `return <>{children}</>`
+ * when closed and mount the split when open — and that moves `children` to a
+ * different position in the tree, so React unmounted and rebuilt the whole
+ * subtree on every toggle. What that meant in practice: open a 200MB heap
+ * dump, wait for it to parse, click AI, and the analyzer came back on its
+ * "open a file" empty state with the parse thrown away. Toggling a side panel
+ * must not be able to destroy what the panel is there to talk about.
  */
 export function AiSplit({ children }: { children: React.ReactNode }) {
   const open = useDk8sAiStore(s => s.open);
   const [split, onResize, onResizeEnd] = useAiSplit();
 
-  if (!open) return <>{children}</>;
-
   return (
     <SplitPanelView
+      collapsed={!open}
       direction="horizontal"
       className="flex-1 min-h-0"
       split={split}

@@ -66,6 +66,7 @@ const MODULE_MAP: Record<string, ModuleInfo> = {
   'AI Features': { label: 'AI Features', color: 'var(--color-protocol-ai)' },
   'Tabs':        { label: 'Tabs',        color: 'var(--color-text-secondary)' },
   'Environment': { label: 'Environment', color: 'var(--color-success)' },
+  'dk8s':        { label: 'dk8s',        color: 'var(--color-dk8s)' },
 };
 
 function moduleFromStage(stage: string): ModuleInfo {
@@ -90,6 +91,15 @@ function moduleFromStage(stage: string): ModuleInfo {
   if (stage.startsWith('tab.'))                          return MODULE_MAP['Tabs']!;
   if (stage.startsWith('env.'))                          return MODULE_MAP['Environment']!;
   if (stage.startsWith('history.'))                      return MODULE_MAP['History']!;
+  /*
+    Before this line existed, every dk8s event fell through to the fallback
+    below and was filed under "System" — the bucket for events whose origin is
+    unknown. Collecting a heap dump from a production pod is not a system
+    event; it is the most specific thing in the log, and it was the one row
+    you could not search for.
+  */
+  if (stage.startsWith('dk8s.') || stage.startsWith('heap.') || stage.startsWith('threads.'))
+    return MODULE_MAP['dk8s']!;
   return { label: 'System', color: 'var(--color-text-muted)' };
 }
 

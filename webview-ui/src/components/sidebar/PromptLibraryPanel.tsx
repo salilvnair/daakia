@@ -85,17 +85,41 @@ function computeDecos(text: string, monaco: any): any[] {
   return decos;
 }
 
-// ─── Prompt preview ({{var}} and {var} as pills) ──────────────────────────────
+// ─── Prompt preview ───────────────────────────────────────────────────────────
 
-function PromptPreview({ text }: { text: string }) {
+/**
+ * The prompt, with its real variables marked.
+ *
+ * `vars` is the list this prompt actually interpolates — the same list the
+ * ribbon above offers — and nothing outside it gets a pill.
+ *
+ * That restriction is the whole point. Marking every `{word}` looks right
+ * until a prompt legitimately contains braces that are not variables: the log
+ * format prompt documents `%{TIMESTAMP}` and `%{LEVEL}` as pattern syntax for
+ * the model to write, and highlighting them said they would be substituted
+ * before the model ever saw them. A pill is a claim about what happens at send
+ * time, so it has to be made from the list that decides it.
+ */
+function PromptPreview({ text, vars }: { text: string; vars: string[] }) {
   if (!text) return <p className="text-[12px] text-[var(--color-text-muted)] italic">No prompt — switch to Edit to add one.</p>;
+
+  const known = new Set(vars);
+  // Longest first, so `{{x}}` is matched before the `{x}` inside it.
+  const alternatives = [...known]
+    .sort((a, b) => b.length - a.length)
+    .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+
+  const parts = alternatives.length
+    ? text.split(new RegExp(`(${alternatives.join('|')})`, 'g'))
+    : [text];
+
   return (
     <div className="text-[12px] font-mono leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">
-      {text.split(/(\{\{[a-zA-Z_][a-zA-Z0-9_.]*\}\}|\{[a-zA-Z_][a-zA-Z0-9_.]*\})/g).map((part, i) => {
-        if (/^(\{\{[a-zA-Z_][a-zA-Z0-9_.]*\}\}|\{[a-zA-Z_][a-zA-Z0-9_.]*\})$/.test(part))
-          return <span key={i} className="inline-block rounded px-1 font-semibold" style={{ background:'rgba(139,92,246,.18)', color:'#c084fc', border:'1px solid rgba(139,92,246,.35)', lineHeight:'1.6' }}>{part}</span>;
-        return <span key={i}>{part}</span>;
-      })}
+      {parts.map((part, i) => (
+        known.has(part)
+          ? <span key={i} className="inline-block rounded px-1 font-semibold" style={{ background:'rgba(139,92,246,.18)', color:'#c084fc', border:'1px solid rgba(139,92,246,.35)', lineHeight:'1.6' }}>{part}</span>
+          : <span key={i}>{part}</span>
+      ))}
     </div>
   );
 }
@@ -607,7 +631,7 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
               {/* Editor / Preview content */}
               <div className="flex-1 overflow-hidden">
                 {viewMode === 'preview' ? (
-                  <div className="h-full overflow-auto p-4 [scrollbar-gutter:stable]"><PromptPreview text={currentText} /></div>
+                  <div className="h-full overflow-auto p-4 [scrollbar-gutter:stable]"><PromptPreview text={currentText} vars={allVars.map(v => v.pill)} /></div>
                 ) : (
                   <EditorView
                     key={`${isAgent ? (active as {scenario:string}).scenario : (active as {key:string}).key}-${editRole}-${active?.kind}`}

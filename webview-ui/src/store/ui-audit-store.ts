@@ -233,6 +233,56 @@ export const AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'devtools.audit_config',     module: 'DevTools', button: 'Audit Config',      action: 'toggle', description: 'Toggle audit event enabled/disabled',  color: 'var(--color-settings)', defaultEnabled: false },
   { id: 'devtools.snapshot_dl',      module: 'DevTools', button: 'Download Snapshot', action: 'click',  description: 'Download debug snapshot JSON',         color: 'var(--color-settings)', defaultEnabled: false },
   { id: 'devtools.db_query',         module: 'DevTools', button: 'DB Query',          action: 'click',  description: 'Run DB Explorer query',                color: 'var(--color-settings)', defaultEnabled: false },
+// ── dk8s ───────────────────────────────────────────────────────────────────
+  /*
+    What is auditable about a Kubernetes tool.
+
+    `defaultEnabled` here is not "is this interesting" — it is "would you want
+    a record of this afterwards". Everything that touches the cluster, writes a
+    file to disk, or sends data to a model is on by default; browsing is off.
+    That is the line that makes the log worth reading a week later, when the
+    question is what was actually DONE to a namespace rather than who looked
+    at it.
+  */
+  // Cluster
+  { id: 'dk8s.context_switch',   module: 'dk8s', button: 'Context',       action: 'update', description: 'Switch kubectl context',                    color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.namespace_switch', module: 'dk8s', button: 'Namespace',     action: 'update', description: 'Change the watched namespaces',             color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.watch_start',      module: 'dk8s', button: 'Watch',         action: 'toggle', description: 'Start watching pods',                       color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.pod_open',         module: 'dk8s', button: 'Pod',           action: 'click',  description: 'Open a pod detail',                         color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.pod_favorite',     module: 'dk8s', button: 'Star',          action: 'toggle', description: 'Star or unstar a workload',                 color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.describe',         module: 'dk8s', button: 'Describe',      action: 'click',  description: 'Run kubectl describe on a pod',             color: 'var(--color-dk8s)', defaultEnabled: false },
+  // Exec is on by default and stays that way: a shell in a production pod is
+  // the single most sensitive thing this tool can do.
+  { id: 'dk8s.shell',            module: 'dk8s', button: 'Shell',         action: 'click',  description: 'Open an interactive shell in a container',  color: 'var(--color-dk8s)', defaultEnabled: true },
+
+  // Logs
+  { id: 'dk8s.logs_open',        module: 'dk8s', button: 'Logs',          action: 'click',  description: 'Stream logs from a pod',                    color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.logs_search',      module: 'dk8s', button: 'Search logs',   action: 'click',  description: 'Search logs across selected pods',          color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.logs_export',      module: 'dk8s', button: 'Export logs',   action: 'click',  description: 'Export pod logs to disk',                   color: 'var(--color-dk8s)', defaultEnabled: true },
+
+  // Collection — every one of these runs a command inside a live container
+  { id: 'dk8s.collect',          module: 'dk8s', button: 'Collect',       action: 'create', description: 'Collect a dump or recording from a pod',    color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.collect_failed',   module: 'dk8s', button: 'Collect',       action: 'error',  description: 'A collection attempt failed',               color: 'var(--color-dk8s)', defaultEnabled: true },
+
+  // Artifacts
+  { id: 'dk8s.artifact_analyze', module: 'dk8s', button: 'Analyze',       action: 'click',  description: 'Open an artifact in an analyzer',           color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.artifact_import',  module: 'dk8s', button: 'Open a file',   action: 'create', description: 'Import a dump or log from disk',            color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.artifact_delete',  module: 'dk8s', button: 'Delete',        action: 'delete', description: 'Delete a collected artifact',               color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.artifact_reveal',  module: 'dk8s', button: 'Show folder',   action: 'click',  description: 'Reveal the artifact folder',                color: 'var(--color-dk8s)', defaultEnabled: false },
+
+  // Analysis
+  { id: 'dk8s.heap_query',       module: 'dk8s', button: 'Heap query',    action: 'click',  description: 'Run a query against a parsed heap',         color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.heap_drilldown',   module: 'dk8s', button: 'Drill down',    action: 'click',  description: 'Drill into a heap object or class',         color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.heap_baseline',    module: 'dk8s', button: 'Set baseline',  action: 'update', description: 'Set a heap dump as the growth baseline',    color: 'var(--color-dk8s)', defaultEnabled: false },
+  { id: 'dk8s.open_source',      module: 'dk8s', button: 'Open source',   action: 'click',  description: 'Jump from a finding to a source file',      color: 'var(--color-dk8s)', defaultEnabled: false },
+
+  // AI — on by default because the evidence leaves the machine
+  { id: 'dk8s.ai_ask',           module: 'dk8s', button: 'Ask AI',        action: 'click',  description: 'Send evidence to a model for analysis',     color: 'var(--color-dk8s)', defaultEnabled: true },
+
+  // Configuration
+  { id: 'dk8s.pv_mapping_save',  module: 'dk8s', button: 'Save mapping',  action: 'update', description: 'Save a pod-name to log-path mapping',       color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.format_save',      module: 'dk8s', button: 'Save format',   action: 'update', description: 'Save a custom log format',                  color: 'var(--color-dk8s)', defaultEnabled: true },
+  { id: 'dk8s.kubectl_path',     module: 'dk8s', button: 'kubectl path',  action: 'update', description: 'Point dk8s at a different kubectl binary',  color: 'var(--color-dk8s)', defaultEnabled: true },
 ];
 
 // ─── Config (localStorage) ────────────────────────────────────────────────────

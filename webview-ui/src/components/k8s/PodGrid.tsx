@@ -16,11 +16,16 @@ import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
 } from '@salilvnair/dui';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
+import {
+  useFavoriteKeys, toggleFavorite, favoriteKey, favoritesFirst,
+} from '../../store/dk8s-favorites-store';
+import { useUiStateStore } from '../../store/ui-state-store';
 import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import {
   FolderExportIcon, CloseIcon, SearchIcon, ChevronDownIcon, ChevronRightIcon,
+  StarIcon,
 } from '../../icons';
 import {
   sortPods, severityOf, severityColor, matchesFilter, shortAge,
@@ -29,6 +34,10 @@ import {
 } from './pod-view';
 
 const ACCENT = 'var(--color-dk8s)';
+/* Amber, not the dk8s accent: a star is a personal mark, not a status, and
+   reusing the accent made starred rows look selected. */
+const FAV_COLOR = 'var(--color-warning)';
+const SCOPE_PREF = 'dk8s.pods.scope';
 
 // ── Cluster pulse ───────────────────────────────────────────────────────────
 
@@ -108,6 +117,52 @@ function StatusLine({ pod, severity }: { pod: PodSummary; severity: Severity }) 
   );
 }
 
+/**
+ * The star, in both views.
+ *
+ * A `span` with a click handler rather than a `button`, because in the card it
+ * sits inside one — the card itself is the button that opens the pod — and a
+ * button inside a button is invalid HTML that browsers resolve by dropping the
+ * inner one. `stopPropagation` is what keeps starring from also opening the
+ * pod detail.
+ *
+ * Hollow when off, filled and amber when on, and it holds its box either way
+ * so nothing shifts as it toggles.
+ */
+function FavoriteStar({ pod, size = 13 }: { pod: PodSummary; size?: number }) {
+  const key = favoriteKey(pod);
+  const on = useFavoriteKeys().includes(key);
+
+  return (
+    <span
+      role="button"
+      tabIndex={-1}
+      aria-pressed={on}
+      title={on
+        ? `Unstar ${pod.workload ? `${pod.workload.kind}/${pod.workload.name}` : pod.name}`
+        : `Star ${pod.workload ? `${pod.workload.kind}/${pod.workload.name}` : pod.name} — keeps it at the top`}
+      onClick={e => { e.stopPropagation(); toggleFavorite(key); }}
+      /*
+        Off-stars appear on hover; on-stars are always there.
+
+        A grey star on every row is twenty-eight pieces of furniture for a
+        feature most rows are not using — and worse, it makes the handful of
+        real stars hard to pick out, which is the one thing the star is for.
+        Hovering a row is already how you find out what you can do to it.
+      */
+      className={`flex items-center justify-center shrink-0 cursor-pointer transition-opacity ${
+        on ? 'opacity-100' : 'opacity-0 group-hover:opacity-45 hover:!opacity-100'
+      }`}
+      style={{
+        width: size + 6, height: size + 6, borderRadius: 4,
+        color: on ? FAV_COLOR : 'var(--color-text-muted)',
+      }}
+    >
+      <StarIcon size={size} filled={on} />
+    </span>
+  );
+}
+
 function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
   const usage = useK8sStore(s => s.usage[pod.name]);
   const history = useK8sStore(s => s.usageHistory[pod.name]);
@@ -123,7 +178,7 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
     <button
       type="button"
       onClick={() => (selectMode ? togglePodSelected(pod.uid) : onOpen())}
-      className="flex flex-col gap-1.5 p-3 rounded-lg text-left cursor-pointer transition-colors relative overflow-hidden"
+      className="group flex flex-col gap-1.5 p-3 rounded-lg text-left cursor-pointer transition-colors relative overflow-hidden"
       style={{
         background: picked ? `color-mix(in srgb, ${ACCENT} 9%, var(--color-surface))` : 'var(--color-surface)',
         border: `1px solid ${picked
@@ -180,10 +235,13 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
           {`↻ ${restartLabel(pod)}`}
           {usage ? ` · ${formatBytes(usage.memBytes)}` : ''}
         </span>
-        {/* A trend needs at least two samples to mean anything. */}
-        {history && history.length > 1 && (
-          <SparklineView data={history} width={72} height={18} color={color} filled />
-        )}
+        <span className="flex items-center gap-1 shrink-0">
+          {/* A trend needs at least two samples to mean anything. */}
+          {history && history.length > 1 && (
+            <SparklineView data={history} width={72} height={18} color={color} filled />
+          )}
+          <FavoriteStar pod={pod} />
+        </span>
       </div>
     </button>
   );
@@ -257,7 +315,7 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
             return (
               <tr key={pod.uid}
                   onClick={() => (selectMode ? togglePodSelected(pod.uid) : onOpen(pod))}
-                  className="cursor-pointer transition-colors"
+                  className="group cursor-pointer transition-colors"
                   style={{ background: picked ? `color-mix(in srgb, ${ACCENT} 13%, transparent)` : rest }}
                   onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 18%, transparent)`; }}
                   onMouseLeave={e => { e.currentTarget.style.background = picked ? `color-mix(in srgb, ${ACCENT} 13%, transparent)` : rest; }}>
@@ -279,13 +337,25 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
                     </span>
                   </td>
                 )}
+                {/*
+                  The star rides with the name.
+
+                  It had its own column, which bought a fixed hit target at the
+                  cost of a permanent empty gutter down the left of every table
+                  — a column of whitespace on twenty-eight rows so that one row
+                  could show a star. Beside the name it costs nothing when
+                  nothing is starred.
+                */}
                 <td className="text-[11.5px] font-mono px-3 py-1.5"
                     style={{ ...cell, fontWeight: failing ? 600 : 400 }}>
-                  <span style={{
-                    display: 'inline-block', width: 6, height: 6, borderRadius: 3,
-                    background: color, opacity: failing ? 1 : 0.7, marginRight: 9,
-                  }} />
-                  {pod.name}
+                  <span className="flex items-center gap-1.5">
+                    <span style={{
+                      display: 'inline-block', width: 6, height: 6, borderRadius: 3,
+                      background: color, opacity: failing ? 1 : 0.7, flexShrink: 0,
+                    }} />
+                    {pod.name}
+                    <FavoriteStar pod={pod} size={11} />
+                  </span>
                 </td>
                 <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums" style={cell}>
                   {pod.ready.current}/{pod.ready.total}
@@ -476,11 +546,54 @@ export function PodGrid() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const visible = useMemo(
-    () => sortPods(pods.filter(p => matchesFilter(p, filter)), now),
-    [pods, filter, now],
-  );
+  /*
+    ── Starred, and what "default to starred" has to mean ──
+
+    The scope defaults to `fav`, but a scope that hides everything on first run
+    is a broken app rather than a preference: nobody has starred anything yet,
+    so the honest reading of "start on favourites" is "start there once there
+    are favourites". With an empty star list the view falls back to all pods
+    and the control says so.
+
+    In `all`, starred pods still sort to the top. That is the other half of
+    what starring is for — you asked for them to come first, not only to be
+    filterable.
+  */
+  const favKeys = useFavoriteKeys();
+  const favScope = (useUiStateStore(s => s.prefs[SCOPE_PREF]) ?? 'fav') as 'fav' | 'all';
+  const setFavScope = (v: 'fav' | 'all') =>
+    useUiStateStore.getState().setPref(SCOPE_PREF, v);
+  const scope = favKeys.length === 0 ? 'all' : favScope;
+
+  const visible = useMemo(() => {
+    const matched = pods.filter(p => matchesFilter(p, filter));
+    const scoped = scope === 'fav'
+      ? matched.filter(p => favKeys.includes(favoriteKey(p)))
+      : matched;
+    return favoritesFirst(sortPods(scoped, now), favKeys);
+  }, [pods, filter, now, scope, favKeys]);
+
   const groups = useMemo(() => groupPods(visible, now), [visible, now]);
+
+  /*
+    Starring a selection.
+
+    Counted over distinct workload keys, not over pods: selecting three
+    replicas of one Deployment adds one favourite, and a button offering to
+    add three would be lying about what it is going to do.
+  */
+  const selectedPods = pods.filter(p => selected.includes(p.uid));
+  const newlyStarred = new Set(
+    selectedPods.map(favoriteKey).filter(k => !favKeys.includes(k)),
+  ).size;
+  const starSelected = () => {
+    // Each key is toggled at most once and only when it is not already
+    // starred, so `favKeys` — the snapshot this render was built from — stays
+    // correct for the whole loop even though every call writes.
+    for (const k of new Set(selectedPods.map(favoriteKey))) {
+      if (!favKeys.includes(k)) toggleFavorite(k);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -527,6 +640,31 @@ export function PodGrid() {
           variant="rounded"
           accentColor={ACCENT}
         />
+
+        {/*
+          Starred or everything.
+
+          Its own control rather than a third position on cards|table, because
+          the two are different questions — one is how the pods are drawn, the
+          other is which pods there are — and folding them together would mean
+          switching to the table silently changed what you were looking at.
+
+          Hidden until something is starred: a filter whose only setting shows
+          nothing is a dead end, and there is no way to star from inside it.
+        */}
+        {favKeys.length > 0 && (
+          <SegmentedControlView
+            value={scope}
+            onChange={v => setFavScope(v as 'fav' | 'all')}
+            options={[
+              { value: 'fav', label: `★ ${favKeys.length}` },
+              { value: 'all', label: 'all' },
+            ]}
+            size="md"
+            variant="rounded"
+            accentColor={FAV_COLOR}
+          />
+        )}
       </div>
 
       {selectMode && (
@@ -593,6 +731,40 @@ export function PodGrid() {
           >
             <FolderExportIcon size={12} strokeWidth={2} />
             Export {selected.length || ''} log{selected.length === 1 ? '' : 's'}
+          </button>
+
+          {/*
+            Star everything selected, in one go.
+
+            The per-row star is fine for one pod and tedious for eight, and
+            picking eight pods is already what this bar is for. It stars rather
+            than toggling: a mixed selection where half are starred has no
+            sensible toggle — you would be unstarring things you just asked to
+            keep — so the verb is always "add", and the label says how many are
+            actually new.
+          */}
+          <button
+            type="button"
+            onClick={starSelected}
+            disabled={!newlyStarred}
+            title={newlyStarred
+              ? `Star ${newlyStarred} workload${newlyStarred === 1 ? '' : 's'}`
+              : 'Every selected pod is already starred'}
+            className="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors flex items-center gap-1.5"
+            style={{
+              background: newlyStarred
+                ? `color-mix(in srgb, ${FAV_COLOR} 16%, transparent)`
+                : 'var(--color-surface-hover)',
+              color: newlyStarred ? FAV_COLOR : 'var(--color-text-muted)',
+              border: `1px solid ${newlyStarred
+                ? `color-mix(in srgb, ${FAV_COLOR} 45%, transparent)`
+                : 'transparent'}`,
+              fontWeight: 600,
+              cursor: newlyStarred ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <StarIcon size={12} filled={!newlyStarred} />
+            Add {newlyStarred || ''} to favourites
           </button>
         </div>
       )}

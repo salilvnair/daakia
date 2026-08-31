@@ -2310,3 +2310,19 @@ export function DaakiaMockProviderIcon({ size = 22 }: { size?: number }) {
     </svg>
   );
 }
+
+/**
+ * A star, hollow or filled.
+ *
+ * One component rather than StarIcon and StarFilledIcon, because the two
+ * states have to be the same shape at the same weight — a filled star drawn
+ * from different path data than the hollow one appears to change size when it
+ * is clicked, which reads as the row moving rather than the star toggling.
+ */
+export function StarIcon({ filled, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <svg {...withDefaults(props)} fill={filled ? 'currentColor' : 'none'}>
+      <path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5-5.8-3.05-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" />
+    </svg>
+  );
+}

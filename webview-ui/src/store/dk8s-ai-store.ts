@@ -7,6 +7,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { logUiEvent } from './ui-audit-store';
 
 /** Mirrors DK8S_LOG_ACTIONS on the host. Labels only — the prompts live there. */
 export const DK8S_LOG_ACTIONS = [
@@ -78,6 +79,24 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
         startedAt: Date.now(),
       }, ...s.answers].slice(0, 20),
     }));
+
+    /*
+      Recorded because the evidence leaves the machine.
+
+      The evidence itself is not in the metadata — a heap histogram or a
+      thread dump would swamp the log — but its size and kind are, so the
+      record answers "what was sent, and roughly how much of it" without
+      becoming a second copy of the data.
+    */
+    logUiEvent('dk8s.ai_ask', {
+      promptKey: req.promptKey,
+      title: req.title,
+      evidenceKind: req.evidenceKind,
+      evidenceLabel: req.evidenceLabel,
+      evidenceChars: req.evidence?.length ?? 0,
+      question: req.question,
+      ...req.podContext,
+    });
 
     postMsg({
       type: 'dk8s:ask',

@@ -27,6 +27,17 @@ import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
 import { shortAge } from './pod-view';
 
 const ACCENT = 'var(--color-dk8s)';
+
+/**
+ * One height for every control in the toolbar.
+ *
+ * The row had four: a `md` search input, a `compact` segmented control and
+ * `md` buttons, each rounded to whatever its own scale said. Sizes that come
+ * from four different scales do not line up by luck, and the eye reads the
+ * tallest one as the important one — which is how the file picker ended up
+ * looking like the primary action of the whole view.
+ */
+const CTRL_H = 26;
 const DANGER = 'color-mix(in srgb, var(--color-error) 80%, transparent)';
 
 const KIND_ICON: Record<string, typeof MemoryIcon> = {
@@ -215,7 +226,8 @@ export function ArtifactsView() {
 
         <div className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
           <SearchInputView value={filter} onChange={setFilter}
-                           placeholder="Filter artifacts" size="md" width="100%" />
+                           placeholder="Filter artifacts" size="sm" width="100%"
+                           style={{ height: CTRL_H }} />
         </div>
 
         <SegmentedControlView
@@ -230,11 +242,22 @@ export function ArtifactsView() {
           density="compact" accentColor={ACCENT}
         />
 
-        <ButtonView label="Open a file…" size="md" variant="secondary"
+        {/*
+          One height across this whole row.
+
+          These were `md` beside a `compact` segmented control, so the filter
+          sat visibly shorter than the buttons and the accent fill on this one
+          made it read as larger again than the two plain buttons next to it.
+          Three heights in a row of four controls. They are all `sm` now, which
+          is what the compact control is built to sit with, and the accent here
+          is carried by colour alone rather than by extra weight.
+        */}
+        <ButtonView label="Open a file…" size="sm" variant="secondary"
                     accentColor={ACCENT} color={ACCENT}
                     iconLeft={<PlusIcon size={12} />}
                     onClick={importFile}
                     style={{
+                      height: CTRL_H,
                       background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
                       borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
                     }} />
@@ -242,13 +265,13 @@ export function ArtifactsView() {
         {/* "Folder" named a noun and left you to guess the verb. It opens the
             directory these files live in, in the system file manager — the
             path is in the footer, and this saves copying it. */}
-        <ButtonView label="Show folder" size="md" variant="secondary"
+        <ButtonView label="Show folder" size="sm" variant="secondary"
                     iconLeft={<FolderOpenIcon size={12} />}
                     onClick={reveal}
                     title={dir
                       ? `Open ${dir} in your file manager`
                       : 'Open the artifact folder in your file manager'}
-                    style={{ background: 'transparent' }} />
+                    style={{ height: CTRL_H, background: 'transparent' }} />
 
         {/*
           The analyzer, with nothing loaded.
@@ -259,11 +282,11 @@ export function ArtifactsView() {
           the analyzer on its empty state, which is the screen that already
           knows how to ask for a file.
         */}
-        <ButtonView label="" size="md" variant="secondary"
+        <ButtonView label="" size="sm" variant="secondary"
                     iconLeft={<StethoscopeIcon size={13} />}
                     onClick={() => openArtifactIn('heap')}
                     title="Open the analyzer — for a dump you already have on disk"
-                    style={{ background: 'transparent' }} />
+                    style={{ height: CTRL_H, width: CTRL_H, background: 'transparent' }} />
       </div>
 
       {error && (

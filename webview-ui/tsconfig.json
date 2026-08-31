@@ -16,8 +16,9 @@
       "react": ["./node_modules/@types/react"],
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"],
       "react-dom": ["./node_modules/@types/react-dom"],
-      "react-dom/client": ["./node_modules/@types/react-dom/client"]
+      "react-dom/client": ["./node_modules/@types/react-dom/client"],
+      "@daakia/dk8s-prompts": ["../src/panel/chat/dk8s-prompts.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../src/panel/chat/dk8s-prompts.ts"]
 }

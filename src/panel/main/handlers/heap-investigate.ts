@@ -20,7 +20,7 @@ import {
   parseDrillRequests, queryFor, formatDrillResult, formatRefusals,
   MAX_ROUNDS, type DrillRequest,
 } from '../../../services/heap/heap-drilldown';
-import { dk8sPrompt } from '../../chat/dk8s-prompts';
+import { dk8sPrompt } from '../../chat/dk8s-prompt-resolve';
 import { handleAiSend } from './ai-handler';
 import { heapQueryOnce } from './heap-handler';
 

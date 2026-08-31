@@ -14,6 +14,7 @@ import { useEffect, useRef } from 'react';
 import { ButtonView } from '@salilvnair/dui';
 import {
   ChevronLeftIcon, SparkleIcon, MemoryIcon, LayersIcon, DocumentIcon, PlusIcon,
+  StethoscopeIcon,
 } from '../../icons';
 import { useDk8sAnalyzeStore, type AnalyzerId } from '../../store/dk8s-analyze-store';
 import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
@@ -64,8 +65,48 @@ export function splitArtifactName(name: string): { title: string; pod?: string }
   return { title: parts.slice(1).join('__'), pod: parts[0] };
 }
 
+/**
+ * The tab strip under the header, and one tab in it.
+ *
+ * Shared because the strip has two jobs — choosing an analyzer when nothing is
+ * open, showing a file's views when something is — and they have to be the
+ * same object to the eye. Two strips built separately drift: one gains a pixel
+ * of padding, the other keeps its underline a shade lighter, and the view
+ * appears to move when a file finishes parsing.
+ */
+function Strip({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-1 px-4 pt-1 shrink-0"
+         style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+      {children}
+    </div>
+  );
+}
+
+function Tab({ on, color, onClick, mark, title, children }: {
+  on: boolean; color: string; onClick: () => void;
+  mark: React.ReactNode; title?: string; children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button" onClick={onClick} title={title}
+      className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent transition-colors"
+      style={{
+        color: on ? color : 'var(--color-text-secondary)',
+        fontWeight: on ? 600 : 400,
+        // Sits on the strip's own bottom border rather than under it.
+        borderBottom: `2px solid ${on ? color : 'transparent'}`,
+        marginBottom: -1,
+      }}
+    >
+      {mark}
+      {children}
+    </button>
+  );
+}
+
 export function ArtifactDetail() {
-  const { open, analyzer, header, close, subViews, activeSubView, setSubView }
+  const { open, analyzer, header, close, subViews, activeSubView, setSubView, setAnalyzer }
     = useDk8sAnalyzeStore();
   const importFile = useDk8sArtifactStore(s => s.importFile);
 
@@ -108,6 +149,21 @@ export function ArtifactDetail() {
 
   const active = TABS.find(t => t.id === analyzer) ?? TABS[0];
 
+  /*
+    Nothing loaded yet — so this is the analyzer, not an artifact.
+
+    The difference decides both the header and the tab strip below it. Opened
+    from a file, the file is the subject: it is named in the header, and the
+    tabs are the views of it. Opened from the stethoscope, there is no subject
+    yet, and the only real choice on screen is what kind of file you are about
+    to open — which is exactly what the three tabs are for.
+
+    Titling this state "Heap Dump / Heap Dump" and giving it a file's header
+    was wrong twice over: it named a file that was not open, and it hid the
+    other two analyzers behind a switch that was no longer on screen.
+  */
+  const empty = !header;
+
   return (
     <div className="absolute inset-0 z-20 flex flex-col"
          style={{ background: 'var(--color-bg, var(--color-surface))' }}>
@@ -129,38 +185,53 @@ export function ArtifactDetail() {
 
         {/* Where the pod header carries a status dot, this carries the kind —
             it is the one thing about an artifact you cannot infer from the
-            file name at a glance. */}
-        <span style={{ color: active.color, display: 'flex' }}>{active.icon}</span>
-
-<div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-[13.5px] font-mono truncate"
-                style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-            {header ? splitArtifactName(header.name).title : active.label}
-          </span>
-          <span className="text-[10.5px] text-[var(--color-text-muted)] truncate">
-            {(() => {
-              const pod = header ? splitArtifactName(header.name).pod : undefined;
-              return pod ? `${pod} · ${active.label}` : active.label;
-            })()}
-          </span>
-        </div>
+            file name at a glance. With nothing open there is no kind yet, so
+            it carries the stethoscope this screen was reached by. */}
+        <span style={{ color: empty ? 'var(--color-text-secondary)' : active.color, display: 'flex' }}>
+          {empty ? <StethoscopeIcon size={14} /> : active.icon}
+        </span>
 
         {/*
-          Published by whichever analyzer is loaded — see AnalysisHeader.
+          The name block and the numbers beside it.
 
-          One muted line, not a row of stat columns. Splitting it gave every
-          fact a heading, which turned "112,817 objects · 358,173 refs" —
-          already a sentence a person can read — into OBJECTS / REFS labels
-          taking twice the height to say the same thing.
+          These were two separate children of the header row with a spacer
+          after them, which let the flex row put the counts wherever the name
+          happened to end — hard against a short name, far away from a long
+          one, and in a different place on every file. They belong to the same
+          thing, so they are one group that starts at one place, and the meta
+          hangs off the end of the name at a fixed distance from it.
         */}
-        {header?.meta && (
-          <span className="text-[11.5px] font-mono ml-3 truncate"
-                style={{ color: 'var(--color-text-muted)' }}>
-            {header.meta}
-          </span>
-        )}
+        <div className="flex items-baseline gap-3 min-w-0 flex-1">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-[13.5px] font-mono truncate"
+                  style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+              {empty ? 'Analyze a file' : splitArtifactName(header!.name).title}
+            </span>
+            <span className="text-[10.5px] text-[var(--color-text-muted)] truncate">
+              {(() => {
+                if (empty) return 'Open a dump or a log you already have on disk';
+                const pod = splitArtifactName(header!.name).pod;
+                return pod ? `${pod} · ${active.label}` : active.label;
+              })()}
+            </span>
+          </div>
 
-        <div className="flex-1" />
+          {/*
+            Published by whichever analyzer is loaded — see AnalysisHeader.
+
+            One muted line, not a row of stat columns. Splitting it gave every
+            fact a heading, which turned "112,817 objects · 358,173 refs" —
+            already a sentence a person can read — into OBJECTS / REFS labels
+            taking twice the height to say the same thing. It sits on the
+            name's baseline so the two read as one line.
+          */}
+          {header?.meta && (
+            <span className="text-[11.5px] font-mono truncate shrink-0"
+                  style={{ color: 'var(--color-text-muted)' }}>
+              {header.meta}
+            </span>
+          )}
+        </div>
 
         <ButtonView
           label="Open a file…" size="sm" variant="secondary"
@@ -205,34 +276,36 @@ export function ArtifactDetail() {
         So the analyzer publishes its views and the shell draws them. An
         analyzer with a single screen publishes none and the strip disappears
         rather than showing one lonely tab.
+
+        With nothing loaded the strip does the other job: it picks the analyzer.
+        That is the same strip in the same place meaning two different things,
+        which is only defensible because they never overlap — before a file is
+        open the only question is which kind you are opening, and after it is
+        open that question has been answered by the file itself.
       */}
-      {subViews.length > 1 && (
-        <div className="flex items-center gap-1 px-4 pt-1 shrink-0"
-             style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-          {subViews.map(sv => {
-            const on = sv.id === activeSubView;
-            return (
-              <button
-                key={sv.id}
-                type="button"
-                onClick={() => setSubView(sv.id)}
-                className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent transition-colors"
-                style={{
-                  color: on ? sv.color : 'var(--color-text-secondary)',
-                  fontWeight: on ? 600 : 400,
-                  borderBottom: `2px solid ${on ? sv.color : 'transparent'}`,
-                  marginBottom: -1,
-                }}
-              >
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: sv.color, opacity: on ? 1 : 0.5, flexShrink: 0,
-                }} />
-                {sv.label}
-              </button>
-            );
-          })}
-        </div>
+      {empty ? (
+        <Strip>
+          {TABS.map(t => (
+            <Tab key={t.id} on={t.id === analyzer} color={t.color}
+                 onClick={() => setAnalyzer(t.id)} title={t.tagline}
+                 mark={<span style={{ color: t.color, display: 'flex' }}>{t.icon}</span>}>
+              {t.label}
+            </Tab>
+          ))}
+        </Strip>
+      ) : subViews.length > 1 && (
+        <Strip>
+          {subViews.map(sv => (
+            <Tab key={sv.id} on={sv.id === activeSubView} color={sv.color}
+                 onClick={() => setSubView(sv.id)}
+                 mark={<span style={{
+                   width: 6, height: 6, borderRadius: '50%', background: sv.color,
+                   opacity: sv.id === activeSubView ? 1 : 0.5, flexShrink: 0,
+                 }} />}>
+              {sv.label}
+            </Tab>
+          ))}
+        </Strip>
       )}
 
       {/* ── The analysis, and the answers beside it ── */}

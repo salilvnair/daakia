@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { logUiEvent } from './ui-audit-store';
 
 export interface PvMount {
   path: string;
@@ -123,6 +124,13 @@ export const useDk8sPvStore = create<PvState>((set, get) => ({
   save: () => {
     const cfg = get().draft;
     set({ config: cfg, dirty: false, probing: true });
+    logUiEvent('dk8s.pv_mapping_save', {
+      enabled: cfg.enabled,
+      mounts: cfg.mounts?.length ?? 0,
+      pattern: cfg.pattern,
+      extensions: cfg.extensions,
+      maxAgeDays: cfg.maxAgeDays,
+    });
     postMsg({ type: 'dk8s:savePv', config: cfg });
   },
 

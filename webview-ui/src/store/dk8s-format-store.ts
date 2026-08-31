@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { logUiEvent } from './ui-audit-store';
 import { useUiStateStore } from './ui-state-store';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'other';
@@ -151,6 +152,7 @@ export const useDk8sFormatStore = create<FormatState>((set, get) => ({
         }
       : draft;
 
+    logUiEvent('dk8s.format_save', { id: format.id, name: format.name });
     postMsg({ type: 'dk8s:saveFormat', format });
   },
 

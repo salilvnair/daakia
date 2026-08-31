@@ -43,7 +43,8 @@ import {
   type LogFormat, type PodContext,
 } from '../../../services/k8s/log-format';
 import { BUILTIN_FORMATS } from '../../../services/k8s/log-format-builtins';
-import { dk8sPrompt } from '../../chat/dk8s-prompts';
+import { dk8sPrompt, dk8sUserPrompt } from '../../chat/dk8s-prompt-resolve';
+import { renderDk8sUserPrompt } from '../../chat/dk8s-prompts';
 import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
 import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-stream';
@@ -1104,11 +1105,28 @@ export async function handleDk8sAsk(
   // which is no longer what leaves the machine once the host enriches it.
   postMessage({ type: 'dk8s:aiEvidence', tabId: DK8S_AI_TAB, evidence });
 
-  const userPrompt = [
-    contextLines && `━━━ POD ━━━\n${contextLines}`,
-    `━━━ ${label} ━━━\n${evidence}`,
-    question && `━━━ THE DEVELOPER ASKS ━━━\n${question}`,
-  ].filter(Boolean).join('\n\n');
+  /*
+    The user turn comes from a template now, not from concatenation here.
+
+    Same output for the same inputs, but it is a template the Prompt Library
+    can show and edit — which it has to be, because the library lists these
+    prompts, and an entry you can edit that nothing reads is worse than one
+    that was never listed at all.
+  */
+  const userPrompt = renderDk8sUserPrompt(dk8sUserPrompt(key) ?? '', {
+    podContext: contextLines,
+    label,
+    evidence,
+    question,
+    pod: ctx.pod as string | undefined,
+    namespace: ctx.namespace as string | undefined,
+    phase: ctx.phase as string | undefined,
+    restarts: ctx.restarts === undefined ? '' : String(ctx.restarts),
+    reason: ctx.reason as string | undefined,
+    runtime: ctx.runtime as string | undefined,
+    image: ctx.image as string | undefined,
+    age: ctx.age as string | undefined,
+  });
 
   await handleAiSend({
     // A fixed tabId: the dk8s panel is the only consumer of this stream, and a

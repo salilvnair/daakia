@@ -424,6 +424,104 @@ export const DK8S_LOG_ACTIONS: Dk8sPromptOption[] = [
   { key: 'dk8s.log.summarise', label: 'Summarise', hint: 'A timeline of what this log shows' },
 ];
 
-export function dk8sPrompt(key: string): string | undefined {
-  return DK8S_PROMPTS[key];
+/*
+  The resolver used to live here. It moved to `dk8s-prompt-resolve.ts` when the
+  Prompt Library started reading this file directly: resolving an override
+  means reading the database, and this module has to stay import-free for the
+  webview to be able to import it.
+*/
+
+// ── User prompts ────────────────────────────────────────────────────────────
+
+/**
+ * The message the evidence arrives in.
+ *
+ * The prompts above are system prompts — they say who the model is and how to
+ * answer. This is the other half: the actual turn, carrying the pod it came
+ * from, the artifact, and the developer's question if they typed one.
+ *
+ * It was assembled inline in the handler, which meant the Prompt Library could
+ * show the system half and had nothing to show for the user half — every dk8s
+ * entry opened on "No prompt". Worse, the structure that decides what the
+ * model actually reads was the one part nobody could see or change.
+ *
+ * `{podContext}` is the pre-formatted block; the individual fields are
+ * available too, so the template can be rewritten to put the pod inline or
+ * drop it entirely.
+ */
+export const DK8S_USER_TEMPLATE = `━━━ POD ━━━
+{podContext}
+
+━━━ {label} ━━━
+{evidence}
+
+━━━ THE DEVELOPER ASKS ━━━
+{question}`;
+
+/** Every prompt starts from the same shape; each can be edited away from it. */
+export const DK8S_USER_PROMPTS: Record<string, string> = Object.fromEntries(
+  Object.keys(DK8S_PROMPTS).map(k => [k, DK8S_USER_TEMPLATE]),
+);
+
+/**
+ * The variables a dk8s user prompt can use.
+ *
+ * Written with their braces, which is the convention every other entry in the
+ * Prompt Library follows — `AI_PROMPT_TEMPLATE_VARIABLES.askAiWhy` is
+ * `['{method}', '{url}', …]`. The library inserts these verbatim at the cursor,
+ * so a bare name here would paste `podContext` into the template and produce a
+ * word the renderer never substitutes.
+ */
+export const DK8S_USER_VARIABLES = [
+  '{podContext}', '{label}', '{evidence}', '{question}',
+  '{pod}', '{namespace}', '{phase}', '{restarts}',
+  '{reason}', '{runtime}', '{image}', '{age}',
+];
+
+/**
+ * Fill a dk8s user template, dropping the parts that have nothing in them.
+ *
+ * A block whose body is empty after substitution is removed entirely, header
+ * and all. Without that, a pod with no restarts and no typed question still
+ * sends two section headers with nothing under them — which reads to the model
+ * as "this section was deliberately left blank" rather than "not applicable",
+ * and is exactly the kind of noise these prompts tell it not to invent from.
+ *
+ * A block is a run of lines separated from its neighbours by a blank line; its
+ * body is everything after the first line.
+ */
+/** `━━━ ANYTHING ━━━` — the section rule these templates are written with. */
+function isHeader(line: string): boolean {
+  return /^━{2,}.*━{2,}$/.test(line.trim());
+}
+
+export function renderDk8sUserPrompt(
+  template: string,
+  vars: Record<string, string | undefined>,
+): string {
+  const filled = template.replace(
+    /\{(\w+)\}/g,
+    (whole, key: string) => (key in vars ? (vars[key] ?? '') : whole),
+  );
+
+  return filled
+    .split(/\n{2,}/)
+    .filter(block => {
+      const [first, ...body] = block.split('\n');
+      /*
+        A section header is a label for something. With nothing under it, it
+        labels nothing — and it does not even survive as an empty block,
+        because an emptied `{podContext}` leaves `━━━ POD ━━━` alone on its
+        line with the blank line after it collapsed into the separator. So the
+        header has to be recognised and dropped with the body it lost.
+
+        Any other block is kept as long as it has content, which is what stops
+        a plain line of template text from being swallowed.
+      */
+      return isHeader(first ?? '')
+        ? body.join('\n').trim() !== ''
+        : block.trim() !== '';
+    })
+    .join('\n\n')
+    .trim();
 }

@@ -11,6 +11,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { logUiEvent } from './ui-audit-store';
 import type { LogLevel } from './k8s-store';
 
 export interface SearchMatch {
@@ -196,6 +197,11 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
       summary: undefined,
       collapsed: [],
       progress: { done: 0, total: targets.length },
+    });
+    logUiEvent('dk8s.logs_search', {
+      query: options.query, podCount: targets.length,
+      pods: targets.map((t: { pod: string }) => t.pod).slice(0, 25),
+      regex: options.regex, caseSensitive: options.caseSensitive,
     });
     postMsg({ type: 'dk8s:searchLogs', targets, options });
   },

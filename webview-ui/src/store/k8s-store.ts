@@ -7,6 +7,7 @@
  */
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
+import { logUiEvent } from './ui-audit-store';
 import { useUiStateStore } from './ui-state-store';
 
 /** Same shape as `rest.subtab.<id>` and friends — see setScopedPref. */
@@ -123,7 +124,16 @@ export interface LogLine {
   text: string;
 }
 
-export type LogStatus = 'idle' | 'streaming' | 'ended' | 'error';
+/**
+ * `loading` is the gap between asking for logs and the first byte arriving.
+ *
+ * It exists because `idle` was doing two jobs — "nothing has been requested"
+ * and "a request is in flight" — and the viewer rendered the same thing for
+ * both: "No output yet.". So for the half-second round trip through kubectl,
+ * every pod claimed to have produced no output, which is a statement of fact
+ * about the pod made before anything had been read from it.
+ */
+export type LogStatus = 'idle' | 'loading' | 'streaming' | 'ended' | 'error';
 
 export interface PodCapabilities {
   shell?: string;
@@ -318,6 +328,14 @@ interface K8sState {
   detailTab: DetailTab;
   logs: LogLine[];
   logStatus: LogStatus;
+  /**
+   * When the current log request went out.
+   *
+   * The viewer needs it to tell "this pod is quiet" from "we asked half a
+   * second ago". The stream reports `streaming` as soon as it opens, which is
+   * before the tail has been delivered, so status alone cannot make that call.
+   */
+  logRequestedAt: number;
   logDetail?: string;
   /** Lines discarded because the pod outran the reader. */
   logDropped: number;
@@ -454,6 +472,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   detailTab: 'logs',
   logs: [],
   logStatus: 'idle',
+  logRequestedAt: 0,
   logDropped: 0,
   logFilter: '',
   logLevels: [],
@@ -481,6 +500,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   useContext: (name) => {
+    logUiEvent('dk8s.context_switch', { context: name, from: get().context });
     set({ busy: true, context: name });
     postMsg({ type: 'dk8s:useContext', context: name });
   },
@@ -489,6 +509,9 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     // Drop the old namespace's pods immediately. Leaving them on screen while
     // the new watch spins up shows pods that are not in the namespace the
     // breadcrumb now claims — briefly, and wrongly.
+    logUiEvent('dk8s.namespace_switch', {
+      namespace: ns, pinned: !!pin, context: get().context, from: get().namespace,
+    });
     set({ namespace: ns, stage: 'ready', pods: [], usage: {}, usageHistory: {}, watchStatus: 'idle' });
     postMsg({ type: 'dk8s:setNamespace', namespace: ns, pin: !!pin });
   },
@@ -542,6 +565,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   },
 
   setKubectlPath: (path) => {
+    logUiEvent('dk8s.kubectl_path', { path });
     set({ busy: true });
     postMsg({ type: 'dk8s:setKubectlPath', path });
   },
@@ -578,7 +602,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       // for a pod is still readable by eye in the database.
       detailTab: (useUiStateStore.getState()
         .prefs[`${DETAIL_TAB_PREF}${pod.namespace}/${pod.name}`] as DetailTab | undefined) ?? 'logs',
-      logs: [], logStatus: 'idle', logDetail: undefined, logDropped: 0,
+      logs: [], logStatus: 'loading', logDetail: undefined, logDropped: 0,
+      logRequestedAt: Date.now(),
       logFilter: '', logLevels: [], logFollow: true, logLive: false,
       logDirection: 'last', logSince: 'all', logExportOpen: false,
       logPrevious: false, logContainer: undefined, logSelection: undefined,
@@ -594,6 +619,20 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       follow: false, direction: 'last', tailLines: get().logTail,
     });
     postMsg({ type: 'dk8s:describe', ...base });
+    /*
+      One event for opening a pod, carrying what makes it worth opening.
+
+      The phase and restart count are in the metadata rather than left for
+      whoever reads the log to go and look up, because by then the pod is
+      almost certainly in a different state — a CrashLoopBackOff with 579
+      restarts is why this row exists, and it is not recoverable after the fact.
+    */
+    logUiEvent('dk8s.pod_open', {
+      ...base, workload: pod.workload ? `${pod.workload.kind}/${pod.workload.name}` : undefined,
+      phase: pod.phase, reason: pod.reason, restarts: pod.restarts,
+      ready: `${pod.ready.current}/${pod.ready.total}`, node: pod.node, image: pod.image,
+    });
+    logUiEvent('dk8s.describe', base);
     postMsg({ type: 'dk8s:probePod', ...base });
     // What this account may do here, so the tabs can disable what will not
     // work rather than offering it and failing with a raw 403.
@@ -650,7 +689,10 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   reloadLogs: () => {
     const { detail, logPrevious, logContainer, logLive, logTail, logDirection, logSince } = get();
     if (!detail) return;
-    set({ logs: [], logDropped: 0, logStatus: 'idle', logDetail: undefined, logSelection: undefined });
+    set({
+      logs: [], logDropped: 0, logStatus: 'loading',
+      logDetail: undefined, logSelection: undefined, logRequestedAt: Date.now(),
+    });
 
     const SINCE: Record<string, number | undefined> = {
       all: undefined, '15m': 900, '1h': 3600, '6h': 21600,
@@ -679,6 +721,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     const { detail, logContainer } = get();
     if (!detail) return;
     set({ shellNotice: undefined });
+    // The most sensitive action in the tool, so the record is the fullest.
+    logUiEvent('dk8s.shell', {
+      context: detail.context, namespace: detail.namespace, pod: detail.name,
+      container: logContainer ?? detail.containers[0]?.name,
+      containers: detail.containers.map(c => c.name),
+      image: detail.image, node: detail.node, phase: detail.phase,
+    });
     postMsg({
       type: 'dk8s:shell',
       context: detail.context, namespace: detail.namespace, pod: detail.name,
@@ -729,6 +778,11 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       ? [detail]
       : pods.filter(p => selected.includes(p.uid));
     if (!chosen.length) return;
+    logUiEvent('dk8s.logs_export', {
+      pods: chosen.map(p => p.name), podCount: chosen.length,
+      namespaces: [...new Set(chosen.map(p => p.namespace))],
+      context: chosen[0]?.context, options, onScreen: !!visibleLines,
+    });
     set({ exportState: { phase: 'running', done: 0, total: chosen.length } });
     postMsg({
       type: 'dk8s:exportLogs',
