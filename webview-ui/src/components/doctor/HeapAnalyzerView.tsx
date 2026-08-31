@@ -122,13 +122,21 @@ type SubView = 'verdict' | 'histogram' | 'treemap' | 'graph' | 'growth' | 'expla
  */
 const FILTERABLE: SubView[] = ['histogram', 'treemap', 'growth'];
 
-const SUB_VIEWS: { id: SubView; label: string }[] = [
-  { id: 'verdict', label: 'Verdict' },
-  { id: 'histogram', label: 'Histogram' },
-  { id: 'treemap', label: 'Treemap' },
-  { id: 'graph', label: 'Retention' },
-  { id: 'growth', label: 'Growth' },
-  { id: 'explain', label: 'Explain' },
+/*
+  A colour per view, so the strip reads as a set of places rather than a list.
+
+  Chosen by what each one is FOR, not to fill a palette: the verdict is the
+  diagnosis and takes the analyzer's own accent, retention and growth are the
+  two structural views and share the graph tone, and Explain is the only one
+  that talks to a model so it takes the AI colour wherever it appears.
+*/
+const SUB_VIEWS: { id: SubView; label: string; color: string }[] = [
+  { id: 'verdict',   label: 'Verdict',   color: 'var(--color-doctor)' },
+  { id: 'histogram', label: 'Histogram', color: 'var(--color-dk8s)' },
+  { id: 'treemap',   label: 'Treemap',   color: 'var(--color-success)' },
+  { id: 'graph',     label: 'Retention', color: 'var(--color-protocol-graphql, #e535ab)' },
+  { id: 'growth',    label: 'Growth',    color: 'var(--color-warning)' },
+  { id: 'explain',   label: 'Explain',   color: 'var(--color-protocol-ai)' },
 ];
 
 export function HeapAnalyzerView() {
@@ -225,6 +233,8 @@ export function HeapAnalyzerView() {
     published this since it was built.
   */
   const setHeader = useDk8sAnalyzeStore(st => st.setHeader);
+  const setSubViews = useDk8sAnalyzeStore(st => st.setSubViews);
+  const activeSubView = useDk8sAnalyzeStore(st => st.activeSubView);
   useEffect(() => {
     if (phase.kind !== 'done') { setHeader(undefined); return; }
     setHeader({
@@ -233,6 +243,23 @@ export function HeapAnalyzerView() {
         + ` · ${phase.summary.references.toLocaleString()} refs`,
     });
   }, [phase, setHeader]);
+
+  /*
+    Publish the switcher to the shell.
+
+    Only while a dump is loaded: an empty analyzer offering six tabs that all
+    show the same "open a file" screen is six ways to do nothing.
+  */
+  useEffect(() => {
+    if (phase.kind !== 'done') { setSubViews([]); return; }
+    setSubViews(SUB_VIEWS);
+  }, [phase.kind, setSubViews]);
+
+  // The shell owns which one is showing; this mirrors it back into the local
+  // state the render already reads.
+  useEffect(() => {
+    if (activeSubView && activeSubView !== view) setView(activeSubView as SubView);
+  }, [activeSubView, view]);
 
   // Back to the empty state, so "Open another" is a decision you can change
   // your mind about. The baseline is kept: comparing two dumps is the reason
@@ -354,34 +381,17 @@ export function HeapAnalyzerView() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Dump header + view switcher */}
+      {/*
+        What is left of the inner bar.
+
+        The filename and the counts moved to the shell's header, and the view
+        switcher moved to the shell's tab strip — this repeated both, so the
+        window carried two bars naming the same file and two rows of tabs. What
+        remains is what belongs to the heap and nothing else: the package
+        filter, and the way out.
+      */}
       <div className="flex items-center gap-2.5 px-4 py-2 flex-wrap flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <MemoryIcon size={15} style={{ color: ACCENT }} />
-        <span className="text-[13px] font-medium text-[var(--color-text-primary)]">{name}</span>
-        <span className="text-[11.5px] text-[var(--color-text-muted)] font-mono">
-          {summary.objects.toLocaleString()} objects · {summary.references.toLocaleString()} refs
-        </span>
-        {/*
-          One control, not six buttons.
-
-          These were six independently styled buttons that only looked like a
-          group because they sat next to each other — nothing tied them
-          together, so the inactive five read as five things you could press
-          rather than as the other positions of one switch. dui's compact
-          density recesses the track, which is what makes a switcher read as
-          navigation instead of competing with the actions beside it.
-        */}
-        <div className="ml-2">
-          <SegmentedControlView
-            options={SUB_VIEWS.map(sv => ({ label: sv.label, value: sv.id }))}
-            value={view}
-            onChange={v => setView(v as SubView)}
-            density="compact"
-            accentColor={ACCENT}
-          />
-        </div>
-        <div className="flex-1" />
 
         {/*
           Package filter — taken from JProfiler's MCP, which puts one on every
@@ -413,6 +423,8 @@ export function HeapAnalyzerView() {
             }}
           />
         )}
+
+        <div className="flex-1" />
 
         {/* Clears back to the empty state rather than opening a picker
             straight away: cancelling that dialog left you looking at the old

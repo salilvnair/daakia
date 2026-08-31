@@ -22,6 +22,7 @@ import {
   FolderOpenIcon, TrashIcon, PlusIcon, StethoscopeIcon, CloseIcon,
 } from '../../icons';
 import { useDk8sArtifactStore, type StoredArtifact } from '../../store/dk8s-artifact-store';
+import { openArtifactIn } from '../../store/dk8s-analyze-store';
 import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
 import { shortAge } from './pod-view';
 
@@ -247,6 +248,21 @@ export function ArtifactsView() {
                     title={dir
                       ? `Open ${dir} in your file manager`
                       : 'Open the artifact folder in your file manager'}
+                    style={{ background: 'transparent' }} />
+
+        {/*
+          The analyzer, with nothing loaded.
+
+          Every other way in starts from a file in this list, which leaves no
+          route to a dump that is not in it — and dumps arrive by email and by
+          `kubectl cp` far more often than they arrive through here. This opens
+          the analyzer on its empty state, which is the screen that already
+          knows how to ask for a file.
+        */}
+        <ButtonView label="" size="md" variant="secondary"
+                    iconLeft={<StethoscopeIcon size={13} />}
+                    onClick={() => openArtifactIn('heap')}
+                    title="Open the analyzer — for a dump you already have on disk"
                     style={{ background: 'transparent' }} />
       </div>
 

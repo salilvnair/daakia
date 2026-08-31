@@ -64,21 +64,9 @@ export function splitArtifactName(name: string): { title: string; pod?: string }
   return { title: parts.slice(1).join('__'), pod: parts[0] };
 }
 
-/** The pod header's stat column, to the pixel. */
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)]">{label}</span>
-      <span className="text-[11.5px]"
-            style={{ color: color ?? 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
 export function ArtifactDetail() {
-  const { open, analyzer, header, close, setAnalyzer } = useDk8sAnalyzeStore();
+  const { open, analyzer, header, close, subViews, activeSubView, setSubView }
+    = useDk8sAnalyzeStore();
   const importFile = useDk8sArtifactStore(s => s.importFile);
 
   /*
@@ -157,22 +145,19 @@ export function ArtifactDetail() {
           </span>
         </div>
 
-        {/* Published by whichever analyzer is loaded — see AnalysisHeader.
-            Split on the separator the analyzers already use, so each fact gets
-            its own column like the pod's status, ready, restarts and age. */}
+        {/*
+          Published by whichever analyzer is loaded — see AnalysisHeader.
+
+          One muted line, not a row of stat columns. Splitting it gave every
+          fact a heading, which turned "112,817 objects · 358,173 refs" —
+          already a sentence a person can read — into OBJECTS / REFS labels
+          taking twice the height to say the same thing.
+        */}
         {header?.meta && (
-          <div className="flex items-center gap-5 ml-4 flex-wrap">
-            {header.meta.split('·').map((part, i) => {
-              const text = part.trim();
-              // "37 threads" is a number and its unit, so it splits into a
-              // stat. "2026-08-29 07:48:05" is one value in two words, and
-              // splitting it produced a date labelled by a time.
-              const m = /^([\d.,]+(?::\d+)?)\s+(.+)$/.exec(text);
-              return m
-                ? <Stat key={i} label={m[2]} value={m[1]} />
-                : <Stat key={i} label="taken" value={text} />;
-            })}
-          </div>
+          <span className="text-[11.5px] font-mono ml-3 truncate"
+                style={{ color: 'var(--color-text-muted)' }}>
+            {header.meta}
+          </span>
         )}
 
         <div className="flex-1" />
@@ -208,33 +193,47 @@ export function ArtifactDetail() {
         />
       </div>
 
-      {/* ── Which analyzer ── */}
-      <div className="flex items-center gap-1 px-4 pt-1 shrink-0"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        {TABS.map(t => {
-          const on = t.id === analyzer;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setAnalyzer(t.id)}
-              title={t.tagline}
-              className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent transition-colors"
-              style={{
-                color: on ? t.color : 'var(--color-text-secondary)',
-                fontWeight: on ? 600 : 400,
-                borderBottom: `2px solid ${on ? t.color : 'transparent'}`,
-                marginBottom: -1,
-              }}
-            >
-              <span style={{ color: t.color, opacity: on ? 1 : 0.65, display: 'flex' }}>
-                {t.icon}
-              </span>
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
+      {/*
+        ── The loaded analyzer's own views ──
+
+        This used to be Heap Dump / Thread Dump / Logs — a switch between three
+        analyzers, two of which had nothing loaded. You do not choose an
+        analyzer, you open an artifact and it chooses one; offering the other
+        two put two tab strips on screen, this one and the analyzer's own,
+        neither of which was about the file you were looking at.
+
+        So the analyzer publishes its views and the shell draws them. An
+        analyzer with a single screen publishes none and the strip disappears
+        rather than showing one lonely tab.
+      */}
+      {subViews.length > 1 && (
+        <div className="flex items-center gap-1 px-4 pt-1 shrink-0"
+             style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+          {subViews.map(sv => {
+            const on = sv.id === activeSubView;
+            return (
+              <button
+                key={sv.id}
+                type="button"
+                onClick={() => setSubView(sv.id)}
+                className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] cursor-pointer border-none bg-transparent transition-colors"
+                style={{
+                  color: on ? sv.color : 'var(--color-text-secondary)',
+                  fontWeight: on ? 600 : 400,
+                  borderBottom: `2px solid ${on ? sv.color : 'transparent'}`,
+                  marginBottom: -1,
+                }}
+              >
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: sv.color, opacity: on ? 1 : 0.5, flexShrink: 0,
+                }} />
+                {sv.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── The analysis, and the answers beside it ── */}
       <AiSplit>
