@@ -528,6 +528,18 @@ export function parseArtifactName(name: string): {
   };
 }
 
+/**
+ * Is this a file an analyzer wrote, rather than one you collected?
+ *
+ * A list, not a pattern, so adding a cache format is a deliberate act. The
+ * alternative — hiding anything with two extensions — would also hide
+ * `app.log.1` and `dump.hprof.gz`, which are exactly the files someone copies
+ * in by hand.
+ */
+export function isDerived(name: string): boolean {
+  return name.toLowerCase().endsWith('.dkheap');
+}
+
 export async function listArtifacts(dir: string): Promise<StoredArtifact[]> {
   const { readdir } = await import('fs/promises');
   let names: string[];
@@ -541,6 +553,19 @@ export async function listArtifacts(dir: string): Promise<StoredArtifact[]> {
   const out: StoredArtifact[] = [];
   for (const name of names) {
     if (name.startsWith('.')) continue;
+    /*
+      Skip what the analyzers leave behind.
+
+      Parsing a heap dump writes a `.dkheap` index beside it — that is the
+      whole point of the cache, and dumps live in this folder, so the sidecar
+      lands in the list of things you collected. It is not one.
+
+      Worse than clutter: `analyzerFor` routes anything it does not recognise
+      to the log analyzer, and `foo.hprof.dkheap` does not end in `.hprof`. So
+      the row offered an Analyze button that fed several megabytes of binary
+      index to the log parser, and the screen went blank.
+    */
+    if (isDerived(name)) continue;
     const file = join(dir, name);
     let size = 0;
     try {

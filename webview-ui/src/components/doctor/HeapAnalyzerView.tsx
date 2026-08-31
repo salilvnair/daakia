@@ -9,7 +9,7 @@
  * Every number here is computed by the analysis engine. Nothing on this screen
  * comes from a model.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { MemoryIcon, StethoscopeIcon, CloseCircleIcon } from '../../icons';
 import { ButtonView, DonutView } from '@salilvnair/dui';
@@ -37,7 +37,21 @@ interface Verdict {
   unreachableObjects: number;
   unreachableBytes: number;
   suspects: Suspect[];
-  topRetainedClasses: { className: string; retainedBytes: number; instances: number }[];
+  /*
+    `topClasses`, which is what the engine actually sends.
+
+    This was declared as `topRetainedClasses` and read as such, and nothing
+    ever mapped between the two — so the field was undefined and the section
+    below threw on `.length`, taking the whole webview down with it. It
+    survived because it only fires once a verdict exists, and that needs a
+    heap dump to have been loaded.
+  */
+  topClasses?: {
+    className: string;
+    instances: number;
+    shallowBytes: number;
+    retainedSumBytes: number;
+  }[];
 }
 
 interface RuleFinding {
@@ -217,6 +231,21 @@ export function HeapAnalyzerView() {
   // ── Loaded ──
   const { summary, name } = phase;
   const v = summary.verdict;
+  /*
+    Sorted here, because the section claims to be sorted.
+
+    The engine ranks `topClasses` by SHALLOW bytes — it is the histogram's
+    order — while this section is headed "Largest by retained size" and prints
+    retained. Showing one order under the other heading is the kind of wrong
+    that nobody catches, because every row is individually correct.
+  */
+  const topByRetained = useMemo(
+    () => [...(v?.topClasses ?? [])]
+      .sort((a, b) => b.retainedSumBytes - a.retainedSumBytes)
+      .slice(0, 10),
+    [v],
+  );
+
   const liveBytes = v?.liveBytes ?? 0;
 
   return (
@@ -432,14 +461,14 @@ export function HeapAnalyzerView() {
       )}
 
       {/* Retained by class */}
-      {v && v.topRetainedClasses.length > 0 && (
+      {topByRetained.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
             Largest by retained size
           </span>
           <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-surface-border)' }}>
-            {v.topRetainedClasses.slice(0, 10).map((c, i) => {
-              const share = v.liveBytes ? (c.retainedBytes / v.liveBytes) * 100 : 0;
+            {topByRetained.map((c, i) => {
+              const share = v && v.liveBytes ? (c.retainedSumBytes / v.liveBytes) * 100 : 0;
               return (
                 <div key={i} className="flex items-center gap-3 px-3 py-1.5 text-[11.5px]"
                      style={{
@@ -447,7 +476,7 @@ export function HeapAnalyzerView() {
                        borderTop: i === 0 ? 'none' : '1px solid var(--color-surface-border)',
                      }}>
                   <span className="font-mono tabular-nums text-right text-[var(--color-text-primary)]" style={{ width: 72 }}>
-                    {bytes(c.retainedBytes)}
+                    {bytes(c.retainedSumBytes)}
                   </span>
                   <div style={{ width: 60, height: 4, borderRadius: 2, background: 'var(--color-surface-hover)', overflow: 'hidden', flexShrink: 0 }}>
                     <div style={{ width: `${share}%`, height: '100%', background: ACCENT }} />

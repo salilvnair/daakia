@@ -1321,6 +1321,15 @@ export async function handleDk8sDeleteArtifact(
   const { unlink } = await import('fs/promises');
   try {
     await unlink(file);
+    /*
+      And the parsed index beside it.
+
+      The sidecar is hidden from the list, so leaving it behind would leave
+      several megabytes on disk that nothing shows and nothing will ever
+      collect — invisible for the same reason it is now unreachable. It is
+      keyed on the dump's path, so it is worthless once the dump is gone.
+    */
+    await unlink(`${file}.dkheap`).catch(() => { /* there may not be one */ });
   } catch (err) {
     postMessage({ type: 'dk8s:artifactError', error: (err as Error).message });
   }

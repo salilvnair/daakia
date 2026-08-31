@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseArtifactName, analyzerFor, artifactName } from './k8s-artifacts';
+import { parseArtifactName, analyzerFor, artifactName, isDerived
+} from './k8s-artifacts';
 
 describe('parseArtifactName', () => {
   it('round-trips what artifactName writes', () => {
@@ -45,5 +46,37 @@ describe('analyzerFor', () => {
 
   it('defaults anything unrecognised to logs rather than failing', () => {
     expect(analyzerFor('whatever.log')).toBe('logs');
+  });
+});
+
+describe('isDerived', () => {
+  it('hides the index an analyzer writes beside a dump', () => {
+    // Parsing writes `<dump>.dkheap` next to the dump, and dumps live in the
+    // artifact folder — so without this the cache appears as a thing you
+    // collected, with an Analyze button that feeds binary to the log parser.
+    expect(isDerived('pod__heapdump__2026-08-30_20-56-25.hprof.dkheap')).toBe(true);
+    expect(isDerived('leak.hprof.dkheap')).toBe(true);
+    expect(isDerived('LEAK.HPROF.DKHEAP')).toBe(true);
+  });
+
+  it('leaves the dump itself alone', () => {
+    expect(isDerived('pod__heapdump__2026-08-30_20-56-25.hprof')).toBe(false);
+  });
+
+  it('does not hide files that merely have two extensions', () => {
+    // The tempting rule is "anything with a second extension", which would
+    // also swallow the rotated logs and compressed dumps people copy in.
+    expect(isDerived('app.log.1')).toBe(false);
+    expect(isDerived('dump.hprof.gz')).toBe(false);
+    expect(isDerived('threads.txt.bak')).toBe(false);
+  });
+});
+
+describe('analyzerFor on a sidecar', () => {
+  it('would route it to the log analyzer, which is why it must be hidden', () => {
+    // Documents the trap rather than the fix: `.hprof.dkheap` does not end in
+    // `.hprof`, so nothing here recognises it and it falls through to logs.
+    expect(analyzerFor('pod__heapdump__2026-08-30.hprof.dkheap')).toBe('logs');
+    expect(analyzerFor('pod__heapdump__2026-08-30.hprof')).toBe('heap');
   });
 });
