@@ -5,16 +5,28 @@
  * volume — the code was covered by unit tests over synthetic paths, which
  * proves the walker walks and proves nothing about whether the feature works.
  *
- * The fixture is generated rather than committed: three rotated Spring Boot
- * logs, ~2.3MB, laid out the way a claim actually mounts —
- * `{namespace}/{app}/{date}/*.log` — with stack traces scattered through them
- * so continuation handling is exercised too. Ground truth for every assertion
- * is counted from the generated text, not asserted from memory.
+ * The fixture is generated rather than committed, and laid out the way a claim
+ * is actually mounted:
+ *
+ *     <app>-<env>-pvc/
+ *       <app>.log                       the file being written now
+ *       archived/
+ *         <app>-2026-08-30.log          rotated, one per day
+ *         <app>-2026-08-29.log
+ *
+ * The first version of this test used `{namespace}/{app}/{date}/*.log`, which
+ * was invented rather than observed — a layout nobody mounts. It passed, which
+ * is the point: a test built on a made-up shape proves the code handles the
+ * made-up shape. The structure above is the one in use, and the live file
+ * sitting beside an `archived/` directory is the part that matters, because it
+ * is what makes `**` necessary in the template.
+ *
+ * Ground truth for every assertion is counted from the generated text.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { searchPvForPod } from './pv-search';
 import { clearPvCache, type PvLogConfig } from './pv-logs';
 import { DEFAULT_SEARCH } from './k8s-log-search';
@@ -54,28 +66,44 @@ function makeLog(app: string, day: string, count: number, seed: number): string 
   return lines.join('\n') + '\n';
 }
 
+/** `rel` is relative to the mount, and mirrors a real claim's layout. */
 const FILES = [
-  { app: 'pv-checkout', day: '2026-08-29', count: 4000, seed: 11 },
-  { app: 'pv-checkout', day: '2026-08-30', count: 6000, seed: 22 },
-  { app: 'pv-billing', day: '2026-08-30', count: 3000, seed: 33 },
+  // The live file, at the root of the claim.
+  { app: 'pv-checkout', day: '2026-08-31', count: 2000, seed: 5,
+    rel: 'pv-checkout-prod-pvc/pv-checkout.log' },
+  // Rotated, under `archived/`, named with the day they cover.
+  { app: 'pv-checkout', day: '2026-08-30', count: 6000, seed: 22,
+    rel: 'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-30.log' },
+  { app: 'pv-checkout', day: '2026-08-29', count: 4000, seed: 11,
+    rel: 'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-29.log' },
+  { app: 'pv-billing', day: '2026-08-31', count: 1500, seed: 7,
+    rel: 'pv-billing-prod-pvc/pv-billing.log' },
+  { app: 'pv-billing', day: '2026-08-30', count: 3000, seed: 33,
+    rel: 'pv-billing-prod-pvc/archived/pv-billing-2026-08-30.log' },
 ];
 
-/** Counted from the written files — the assertions below compare against this. */
-const truth: Record<string, { lines: number; failures: number }> = {};
+/**
+ * Counted from the written files, totalled per app.
+ *
+ * Per app rather than per file because that is the unit every assertion works
+ * in: a search is for a pod, and a pod's answer spans its live file and all
+ * its rotated ones.
+ */
+const truth: Record<string, { lines: number; failures: number; files: number }> = {};
 
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'dk8s-pv-'));
   for (const f of FILES) {
-    const dir = join(root, 'dk8s-test', f.app, f.day);
-    mkdirSync(dir, { recursive: true });
-    const file = join(dir, 'app.log');
+    const file = join(root, ...f.rel.split('/'));
+    mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, makeLog(f.app, f.day, f.count, f.seed));
 
     const text = readFileSync(file, 'utf8');
-    truth[`${f.app}/${f.day}`] = {
-      lines: text.split('\n').filter(Boolean).length,
-      failures: (text.match(/ledger post failed/g) ?? []).length,
-    };
+    const acc = truth[f.app] ?? { lines: 0, failures: 0, files: 0 };
+    acc.lines += text.split('\n').filter(Boolean).length;
+    acc.failures += (text.match(/ledger post failed/g) ?? []).length;
+    acc.files += 1;
+    truth[f.app] = acc;
   }
   clearPvCache();
 });
@@ -85,7 +113,13 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 const cfg = (): PvLogConfig => ({
   enabled: true,
   mounts: [{ path: root, label: 'test-pv' }],
-  template: '{namespace}/{app}/{date}/*.log',
+  /*
+    `**` matches zero directories as well as many, which is what lets one
+    template cover the live file at the claim's root and the rotated ones
+    under `archived/`. A template without it finds only one of the two, and
+    which one it misses depends on where you put the wildcard.
+  */
+  template: '{app}-{env}-pvc/**/{app}*.log',
   extensions: ['.log'],
 });
 
@@ -103,17 +137,14 @@ describe('searching a mounted volume', () => {
     const { result } = await search('pv-checkout', {
       query: 'ledger post failed', maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
     });
-    const expected = truth['pv-checkout/2026-08-29']!.failures
-      + truth['pv-checkout/2026-08-30']!.failures;
-    expect(result.matched).toBe(expected);
-    expect(result.files).toHaveLength(2);
+    expect(result.matched).toBe(truth['pv-checkout']!.failures);
+    // The live file and both rotated ones.
+    expect(result.files).toHaveLength(truth['pv-checkout']!.files);
   });
 
   it('scans every line of those files', async () => {
     const { result } = await search('pv-checkout', { query: 'ledger post failed' });
-    const expected = truth['pv-checkout/2026-08-29']!.lines
-      + truth['pv-checkout/2026-08-30']!.lines;
-    expect(result.scanned).toBe(expected);
+    expect(result.scanned).toBe(truth['pv-checkout']!.lines);
   });
 
   /*
@@ -125,16 +156,17 @@ describe('searching a mounted volume', () => {
     const { result, matches } = await search('pv-billing', {
       query: 'ledger post failed', maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
     });
-    expect(result.matched).toBe(truth['pv-billing/2026-08-30']!.failures);
-    expect(result.files).toHaveLength(1);
+    expect(result.matched).toBe(truth['pv-billing']!.failures);
+    expect(result.files).toHaveLength(truth['pv-billing']!.files);
     expect(matches.every(m => m.rel.includes('pv-billing'))).toBe(true);
   });
 
   it('reports which files the hits came from', async () => {
     const { result } = await search('pv-checkout', { query: 'ledger post failed' });
     expect(result.files.map(f => f.rel).sort()).toEqual([
-      'dk8s-test/pv-checkout/2026-08-29/app.log',
-      'dk8s-test/pv-checkout/2026-08-30/app.log',
+      'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-29.log',
+      'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-30.log',
+      'pv-checkout-prod-pvc/pv-checkout.log',
     ]);
     for (const f of result.files) expect(f.matched).toBeGreaterThan(0);
   });
@@ -186,7 +218,10 @@ describe('searching a mounted volume', () => {
       query: 'order 10000[0-9]\\b', regex: true,
       maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
     });
-    expect(result.matched).toBe(20);   // 100000-100009 in each of two files
+    // Orders 100000-100009 appear once in every one of the pod's files, live
+    // and archived alike — derived rather than hardcoded, so adding a rotated
+    // file to the fixture does not silently make this assertion wrong.
+    expect(result.matched).toBe(10 * truth['pv-checkout']!.files);
   });
 
   it('stops when cancelled', async () => {
@@ -210,17 +245,14 @@ describe('searching a mounted volume', () => {
     const { result } = await search('pv-checkout', {
       query: 'ledger post failed', sinceSeconds: 3600,
     });
-    const whole = truth['pv-checkout/2026-08-29']!.lines
-      + truth['pv-checkout/2026-08-30']!.lines;
-    expect(result.scanned).toBeLessThan(whole / 10);
+    expect(result.scanned).toBeLessThan(truth['pv-checkout']!.lines / 10);
   });
 
   it('still finds everything when no range is set', async () => {
     const { result } = await search('pv-checkout', {
       query: 'ledger post failed', maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
     });
-    expect(result.matched).toBe(
-      truth['pv-checkout/2026-08-29']!.failures + truth['pv-checkout/2026-08-30']!.failures);
+    expect(result.matched).toBe(truth['pv-checkout']!.failures);
   });
 
   it('reports no files rather than an error for an app with no volume', async () => {

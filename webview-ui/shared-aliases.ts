@@ -29,4 +29,13 @@ export const SHARED_ALIASES = {
     second thing to keep matching the one that actually parses the logs.
   */
   '@daakia/log-format': resolve(__dirname, '..', 'src', 'services', 'k8s', 'log-format.ts'),
+
+  /*
+    The shipped PV layouts, shared for the same reason as the two above.
+
+    The settings page offers them and the host resolves paths with them, so a
+    second copy would be a second place for a template to be right in one half
+    of the app and wrong in the other.
+  */
+  '@daakia/pv-layouts': resolve(__dirname, '..', 'src', 'services', 'k8s', 'pv-layouts.ts'),
 };

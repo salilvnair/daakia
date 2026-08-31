@@ -271,7 +271,7 @@ export function ExportSearchModal({ pods, onClose }: {
           */}
           <CheckboxView
             label="Combine into a single file"
-            checked={combine} size="xs" accentColor={ACCENT}
+            checked={combine} size="md" accentColor={ACCENT}
             onChange={setCombine}
           />
         </Field>
@@ -286,7 +286,7 @@ export function ExportSearchModal({ pods, onClose }: {
         <Field label="Restarts">
           <CheckboxView
             label="Include the previous container's log"
-            checked={includePrevious} size="xs" accentColor={ACCENT}
+            checked={includePrevious} size="md" accentColor={ACCENT}
             onChange={setIncludePrevious}
           />
         </Field>

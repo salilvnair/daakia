@@ -10,6 +10,7 @@
  * matches, and no way to tell which one you are looking at.
  */
 import { useEffect } from 'react';
+import { BUILTIN_LAYOUTS, layoutFor } from '@daakia/pv-layouts';
 import { ButtonView, TextInputView, CheckboxView, SpinnerIcon } from '@salilvnair/dui';
 import {
   FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon, TrashIcon, PlusIcon,
@@ -94,6 +95,68 @@ function Field({ label, hint, children }: {
               style={{ maxWidth: '92ch' }}>
           {hint}
         </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The shipped layouts, as a row of choices that fill in the template.
+ *
+ * A template is the one setting nobody can guess, and getting it wrong looks
+ * exactly like having no archives — the search runs, finds nothing, and says
+ * so without a hint that the path was the problem. Offering the shapes that
+ * actually occur turns writing a glob into recognising your own directory
+ * tree.
+ *
+ * The chosen one is highlighted by comparing the text, so editing a picked
+ * layout correctly drops the highlight: what is shown then is a custom
+ * template, which is what it has become.
+ */
+function LayoutPicker({ value, onPick }: {
+  value: string | undefined;
+  onPick: (template: string) => void;
+}) {
+  const current = layoutFor(value);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {BUILTIN_LAYOUTS.map(l => {
+          const on = current?.id === l.id;
+          return (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() => onPick(l.template)}
+              title={`${l.hint}
+
+${l.example[0]}
+${l.example[1]}`}
+              className="px-2 py-1 rounded cursor-pointer text-left"
+              style={{
+                fontSize: 10.5,
+                color: on ? ACCENT : 'var(--color-text-secondary)',
+                background: on
+                  ? `color-mix(in srgb, ${ACCENT} 14%, transparent)`
+                  : 'var(--color-surface-hover)',
+                border: `1px solid ${on
+                  ? `color-mix(in srgb, ${ACCENT} 45%, transparent)`
+                  : 'var(--color-surface-border)'}`,
+                fontWeight: on ? 600 : 400,
+              }}
+            >
+              {l.name}
+            </button>
+          );
+        })}
+      </div>
+      {/* The two paths the chosen layout matches, so the glob is legible
+          without mentally expanding it. */}
+      {current && (
+        <div className="flex flex-col gap-0.5 font-mono"
+             style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+          {current.example.map(e => <span key={e}>{e}</span>)}
+        </div>
       )}
     </div>
   );
@@ -233,6 +296,13 @@ export function PvLogSettings() {
         </Field>
 
         <Field
+          label="layout"
+          hint="Pick the shape your volume uses and the template below is filled in. Edit it afterwards for anything these do not cover."
+        >
+          <LayoutPicker value={draft.template} onPick={t => patch({ template: t })} />
+        </Field>
+
+        <Field
           label="path template"
           hint={
             <>
@@ -243,14 +313,18 @@ export function PvLogSettings() {
               {' '}<code>{'{app}'}</code> is the pod name with its ReplicaSet hash and pod suffix
               removed, so <code>zp-backend-7f9455548d-xm6kc</code> becomes
               {' '}<code>zp-backend</code>. <code>{'{env}'}</code> comes from the cluster, mapped
-              below. <code>{'{date}'}</code> and <code>**</code> both match anything, which is how
-              rotated files under an <code>archived/</code> directory are picked up.
+              below. <code>**</code> matches no directories as well as many, which is what
+              lets one template cover both the file being written now and the rotated ones
+              beside it:
+              {' '}<code>my-app-prod-pvc/my-app.log</code> and
+              {' '}<code>my-app-prod-pvc/archived/my-app-2026-08-30.log</code> are both found by
+              {' '}<code>{'{app}-{env}-pvc/**/{app}*.log'}</code>.
             </>
           }
         >
           <TextInputView
             value={draft.template ?? ''} size="md" accentColor={ACCENT}
-            placeholder="{app}-{env}-pvc/{app}-{env}-logs/**/{app}*.log*"
+            placeholder="{app}-{env}-pvc/**/{app}*.log"
             onChange={e => patch({ template: e.target.value })}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />

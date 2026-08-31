@@ -418,11 +418,11 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         />
 
         <div className="flex items-center gap-3 flex-wrap">
-          <CheckboxView label="regex" checked={options.regex} size="xs" accentColor={ACCENT}
+          <CheckboxView label="regex" checked={options.regex} size="md" accentColor={ACCENT}
                         onChange={v => setOptions({ regex: v })} />
-          <CheckboxView label="match case" checked={options.caseSensitive} size="xs" accentColor={ACCENT}
+          <CheckboxView label="match case" checked={options.caseSensitive} size="md" accentColor={ACCENT}
                         onChange={v => setOptions({ caseSensitive: v })} />
-          <CheckboxView label="previous runs" checked={options.includePrevious} size="xs"
+          <CheckboxView label="previous runs" checked={options.includePrevious} size="md"
                         accentColor="var(--color-warning)"
                         onChange={v => setOptions({ includePrevious: v })} />
           <div className="flex-1" />
@@ -597,9 +597,16 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                             week means something different from one in a pod
                             that is running now. */}
                         {row.group.source === 'archive' && (
-                          <span className="px-1.5 rounded shrink-0"
+                          <span className="px-1 rounded shrink-0"
                                 style={{
-                                  fontSize: 9.5,
+                                  // Sized to sit inside the row rather than
+                                  // set its height: the row is a 19px line of
+                                  // monospace, and a badge with the default
+                                  // line-height was taller than the text it
+                                  // was labelling.
+                                  fontSize: 8,
+                                  lineHeight: '13px',
+                                  fontWeight: 600,
                                   background: 'color-mix(in srgb, var(--color-warning) 18%, transparent)',
                                   color: 'var(--color-warning)',
                                   textTransform: 'uppercase',
