@@ -281,10 +281,10 @@ function LayoutTable({ value, layouts, onChange }: {
                       }}
                       title={l.name ? `Delete "${l.name}"` : 'Delete this row'}
                       aria-label={`Delete layout ${l.name || i + 1}`}
-                      className="cursor-pointer border-none bg-transparent p-0"
-                      style={{ color: 'var(--color-error)', fontSize: 12, lineHeight: 1 }}
+                      className="cursor-pointer border-none bg-transparent p-0 flex items-center justify-center"
+                      style={{ color: 'var(--color-error)', lineHeight: 1 }}
                     >
-                      &times;
+                      <TrashIcon size={11} />
                     </button>
                   </td>
                 </tr>
