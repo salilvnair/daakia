@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { ExternalLinkIcon } from '../../icons';
+import { ClassNameView } from './ClassNameView';
 
 interface Located {
   files: { path: string; relative: string }[];
@@ -78,9 +79,8 @@ export function ClassSourceLink({ className }: { className: string }) {
 
   if (foreign || (located && !found)) {
     return (
-      <span className="truncate text-[var(--color-text-primary)]" title={className}
-            onMouseEnter={() => setHovered(true)}>
-        {className}
+      <span className="truncate min-w-0" onMouseEnter={() => setHovered(true)}>
+        <ClassNameView name={className} />
       </span>
     );
   }
@@ -102,7 +102,10 @@ export function ClassSourceLink({ className }: { className: string }) {
         }}
         onClick={found ? open : undefined}
       >
-        {className}
+        {/* The raw descriptor stays the identity — it is what the workspace
+            lookup and the engine both key on — while what is drawn is the
+            name a person would say out loud. */}
+        <ClassNameView name={className} />
       </span>
       {found && <ExternalLinkIcon size={11} style={{ color: 'var(--color-doctor)', flexShrink: 0 }} />}
     </span>

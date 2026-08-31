@@ -13,6 +13,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { MemoryIcon, StethoscopeIcon, CloseCircleIcon } from '../../icons';
 import { ButtonView, DonutView } from '@salilvnair/dui';
+import { ClassNameView } from './ClassNameView';
+import { decodeClassName, fullClassName } from './class-name';
 import { HeapHistogramView } from './HeapHistogramView';
 import { HeapTreemapView } from './HeapTreemapView';
 import { HeapGraphView } from './HeapGraphView';
@@ -238,13 +240,16 @@ export function HeapAnalyzerView() {
     order — while this section is headed "Largest by retained size" and prints
     retained. Showing one order under the other heading is the kind of wrong
     that nobody catches, because every row is individually correct.
+
+    Not a useMemo, deliberately. This sits below three early returns — idle,
+    running and error — so a hook here runs on some renders and not others,
+    and React tears the component down the moment a dump finishes loading.
+    Twenty items sorted per render costs nothing; the memo bought nothing and
+    cost the whole screen.
   */
-  const topByRetained = useMemo(
-    () => [...(v?.topClasses ?? [])]
-      .sort((a, b) => b.retainedSumBytes - a.retainedSumBytes)
-      .slice(0, 10),
-    [v],
-  );
+  const topByRetained = [...(v?.topClasses ?? [])]
+    .sort((a, b) => b.retainedSumBytes - a.retainedSumBytes)
+    .slice(0, 10);
 
   const liveBytes = v?.liveBytes ?? 0;
 
@@ -365,7 +370,7 @@ export function HeapAnalyzerView() {
           <DonutView
             items={[
               ...v.suspects.slice(0, 6).map(sp => ({
-                name: sp.className.split('.').pop() ?? sp.className,
+                name: decodeClassName(sp.className).simpleName,
                 value: sp.retainedBytes,
               })),
               // Named, so nobody reads the ring as "six objects are the heap".
@@ -410,21 +415,21 @@ export function HeapAnalyzerView() {
                 {s.retainedObjects.toLocaleString()} objects retained
               </span>
             </div>
-            <span className="text-[12.5px] font-mono break-all text-[var(--color-text-primary)]">{s.className}</span>
+            <ClassNameView name={s.className} size={12.5} />
             {s.heldIn && (
               <span className="text-[11.5px] text-[var(--color-text-secondary)]">
-                Held in <span className="font-mono">{s.heldIn.className}</span> ({bytes(s.heldIn.retainedBytes)})
+                Held in <ClassNameView name={s.heldIn.className} size={11.5} /> ({bytes(s.heldIn.retainedBytes)})
               </span>
             )}
             {s.accumulates && (
               <span className="text-[11.5px] text-[var(--color-text-secondary)]">
                 Accumulating {s.accumulates.count.toLocaleString()} ×{' '}
-                <span className="font-mono">{s.accumulates.className}</span>
+                <ClassNameView name={s.accumulates.className} size={11.5} />
               </span>
             )}
             {s.pathToRoot.length > 0 && (
               <span className="text-[11px] text-[var(--color-text-muted)] font-mono break-all">
-                {s.pathToRoot.map(p => p.className).join('  →  ')}
+                {s.pathToRoot.map(p => fullClassName(p.className)).join('  →  ')}
               </span>
             )}
           </div>
@@ -484,7 +489,7 @@ export function HeapAnalyzerView() {
                   <span className="font-mono tabular-nums text-[var(--color-text-muted)] text-right" style={{ width: 64 }}>
                     {c.instances.toLocaleString()}
                   </span>
-                  <span className="font-mono truncate text-[var(--color-text-primary)]">{c.className}</span>
+                  <ClassNameView name={c.className} />
                 </div>
               );
             })}

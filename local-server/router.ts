@@ -23,6 +23,10 @@ import {
   getDbTables, getDbTableRows, deleteDbRow,
 } from '../src/storage/db';
 import { handleExecuteRequest, handleGetOAuth2Token, handleGetEffectiveSettings } from '../src/panel/main/handlers/request-handler';
+import {
+  handleHeapOpen, handleHeapQuery, handleHeapSetBaseline, handleHeapCancel,
+  handleHeapLocateClass, handleHeapOpenSource,
+} from '../src/panel/main/handlers/heap-handler';
 import { cancelRestRequest } from '../src/http/request-executor';
 import {
   handleExecuteGraphQL, handleGraphQLConnect, handleGraphQLSubscribe, handleGraphQLUnsubscribe, cancelGraphQLRequest,
@@ -216,6 +220,34 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:revealArtifacts':
       await handleDk8sRevealArtifacts();
+      break;
+
+    /*
+      Heap analyzer.
+
+      `dk8s:analyze` already forks the parse worker here — the same code the
+      extension host runs — but the channel the views read back on was never
+      routed, so the analyzer opened and then sat empty forever. Every heap
+      screen queries: the histogram, the treemap, the retention tree, growth
+      and the evidence pack all go through `heap:query`.
+    */
+    case 'heap:open':
+      await handleHeapOpen(post, process.cwd());
+      break;
+    case 'heap:query':
+      handleHeapQuery(msg, post);
+      break;
+    case 'heap:setBaseline':
+      handleHeapSetBaseline(post);
+      break;
+    case 'heap:cancel':
+      handleHeapCancel(post);
+      break;
+    case 'heap:locateClass':
+      await handleHeapLocateClass(msg, post);
+      break;
+    case 'heap:openSource':
+      await handleHeapOpenSource(msg);
       break;
 
     // ── Request Execution ──
