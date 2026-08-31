@@ -15,7 +15,8 @@
  * What the model IS for sits at the top of the card: explaining the finding,
  * and answering what a term means. See the sparkle.
  */
-import { SparkleIcon, ExternalLinkIcon } from '../../icons';
+import { FindingCardView } from '@salilvnair/dui';
+import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 
@@ -52,12 +53,6 @@ const ROLE: Partial<Record<FrameRole, { label: string; color: string }>> = {
   'tx-open': { label: 'tx open', color: 'var(--color-dk8s)' },
   'db-call': { label: 'db call', color: 'var(--color-warning)' },
   'lock-wait': { label: 'lock wait', color: 'var(--color-warning)' },
-};
-
-const SEVERITY: Record<ShapeFinding['severity'], string> = {
-  critical: 'var(--color-error)',
-  warning: 'var(--color-warning)',
-  info: 'var(--color-dk8s)',
 };
 
 function Chip({ label, color, onClick, title }: {
@@ -135,14 +130,13 @@ function Stack({ frames }: { frames: AnnotatedFrame[] }) {
 
 export function StackShapeView({ finding }: { finding: ShapeFinding }) {
   const ask = useDk8sAiStore(s => s.ask);
-  const colour = SEVERITY[finding.severity];
 
   /*
     The whole finding, as evidence.
 
-    Including the remediation the rule already wrote: the model should be
-    building on what the engine concluded rather than re-deriving it from the
-    stack and possibly landing somewhere else.
+    Including the remediation the rule already wrote: the model should build on
+    what the engine concluded rather than re-derive it from the stack and
+    possibly land somewhere else.
   */
   const explain = () => {
     const t = finding.threads[0];
@@ -155,9 +149,9 @@ export function StackShapeView({ finding }: { finding: ShapeFinding }) {
         `suggested fix: ${finding.remediation}`,
         '',
         `thread: ${t?.name ?? '(none)'}${t ? ` — ${t.state}` : ''}`,
-        ...(t?.frames ?? []).map(f =>
-          `  at ${f.method}${f.file && f.line !== undefined ? ` (${f.file}:${f.line})` : ''}`
-          + (ROLE[f.role] ? `   [${ROLE[f.role]!.label}]` : '')),
+        ...(t?.frames ?? []).map(fr =>
+          `  at ${fr.method}${fr.file && fr.line !== undefined ? ` (${fr.file}:${fr.line})` : ''}`
+          + (ROLE[fr.role] ? `   [${ROLE[fr.role]!.label}]` : '')),
       ].join('\n'),
       evidenceLabel: 'STACK FINDING',
       podContext: {},
@@ -165,22 +159,13 @@ export function StackShapeView({ finding }: { finding: ShapeFinding }) {
   };
 
   return (
-    <div className="rounded-lg overflow-hidden"
-         style={{ border: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
-      <div className="flex items-center gap-2 px-3 py-2"
-           style={{
-             borderBottom: '1px solid var(--color-surface-border)',
-             background: `color-mix(in srgb, ${colour} 7%, transparent)`,
-           }}>
-        <span style={{ color: colour, fontSize: 11 }}>◆</span>
-        <span className="text-[12.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          {finding.title}
-        </span>
-        <Chip label={finding.severity} color={colour} />
-        <span className="text-[10.5px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
-          {finding.ruleId}
-        </span>
-        <div className="flex-1" />
+    <FindingCardView
+      severity={finding.severity}
+      title={finding.title}
+      meta={finding.ruleId}
+      detail={finding.detail}
+      remediation={finding.remediation}
+      actions={
         <button
           type="button" onClick={explain}
           className="flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer"
@@ -192,32 +177,19 @@ export function StackShapeView({ finding }: { finding: ShapeFinding }) {
         >
           <SparkleIcon size={10} color={AI_ACCENT} /> Ask AI
         </button>
-      </div>
+      }
+    >
+      {finding.threads[0] && <Stack frames={finding.threads[0].frames} />}
 
-      <div className="flex flex-col gap-2.5 px-3 py-2.5">
-        <span className="text-[11.5px]" style={{ color: 'var(--color-text-secondary)' }}>
-          {finding.detail}
+      {finding.threads.length > 1 && (
+        <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+          {finding.threads.length - 1} other thread
+          {finding.threads.length === 2 ? '' : 's'} in the same shape
+          {' — '}
+          {finding.threads.slice(1, 4).map(t => t.name).join(', ')}
+          {finding.threads.length > 4 ? '…' : ''}
         </span>
-
-        {finding.threads[0] && <Stack frames={finding.threads[0].frames} />}
-
-        {finding.threads.length > 1 && (
-          <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
-            {finding.threads.length - 1} other thread
-            {finding.threads.length === 2 ? '' : 's'} in the same shape
-            {' — '}
-            {finding.threads.slice(1, 4).map(t => t.name).join(', ')}
-            {finding.threads.length > 4 ? '…' : ''}
-          </span>
-        )}
-
-        <div className="flex items-start gap-1.5">
-          <ExternalLinkIcon size={11} style={{ color: colour, marginTop: 2, flexShrink: 0 }} />
-          <span className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-            {finding.remediation}
-          </span>
-        </div>
-      </div>
-    </div>
+      )}
+    </FindingCardView>
   );
 }

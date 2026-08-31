@@ -12,10 +12,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { MemoryIcon, StethoscopeIcon, CloseCircleIcon } from '../../icons';
-import { ButtonView, DonutView, SegmentedControlView } from '@salilvnair/dui';
+import { ButtonView, DonutView, SegmentedControlView, FindingCardView } from '@salilvnair/dui';
 import { ClassNameView } from './ClassNameView';
+import { LeakChain } from './LeakChain';
+import { AskChip } from './AskChip';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
-import { SparkleIcon } from '../../icons';
 import { decodeClassName, fullClassName } from './class-name';
 import { HeapHistogramView } from './HeapHistogramView';
 import { HeapTreemapView } from './HeapTreemapView';
@@ -165,6 +166,35 @@ export function HeapAnalyzerView() {
           : '',
       ].filter(Boolean).join('\n'),
       evidenceLabel: 'LEAK SUSPECT',
+      podContext: {},
+    });
+  };
+
+  /*
+    A rule finding, as its own question.
+
+    The evidence leads with what the rule already concluded, so the model
+    builds on it rather than re-deriving a different answer from the same
+    numbers and leaving the reader with two.
+  */
+  const askFinding = (fnd: RuleFinding) => {
+    const sp = v?.suspects[0];
+    ask({
+      promptKey: 'dk8s.heap.explainOne',
+      title: fnd.title,
+      evidence: [
+        `finding: ${fnd.title} (${fnd.severity})`,
+        `rule: ${fnd.ruleId}`,
+        `detail: ${fnd.detail}`,
+        `suggested fix: ${fnd.remediation}`,
+        sp ? '' : undefined,
+        sp ? `top suspect: ${fullClassName(sp.className)}` : undefined,
+        sp ? `retains: ${bytes(sp.retainedBytes)} (${sp.retainedPercent.toFixed(1)}%)` : undefined,
+        sp?.accumulates
+          ? `accumulating: ${sp.accumulates.count.toLocaleString()} x ${fullClassName(sp.accumulates.className)}`
+          : undefined,
+      ].filter(x => x !== undefined).join('\n'),
+      evidenceLabel: 'HEAP FINDING',
       podContext: {},
     });
   };
@@ -468,6 +498,8 @@ export function HeapAnalyzerView() {
               <span className="text-[11.5px] text-[var(--color-text-muted)]">
                 {s.retainedObjects.toLocaleString()} objects retained
               </span>
+              <div className="flex-1" />
+              <AskChip onClick={() => askSuspect(s)} />
             </div>
             <ClassNameView name={s.className} size={12.5} />
             {s.heldIn && (
@@ -496,26 +528,30 @@ export function HeapAnalyzerView() {
           <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
             Diagnosis · rule pack {summary.rules.version}
           </span>
-          {summary.rules.findings.map(f => {
-            const color = f.severity === 'critical' ? 'var(--color-error)'
-              : f.severity === 'warning' ? 'var(--color-warning)' : ACCENT;
-            return (
-              <div key={f.ruleId} className="rounded-lg p-3.5 flex flex-col gap-1.5"
-                   style={{ border: '1px solid var(--color-surface-border)',
-                            borderLeft: `3px solid ${color}`, background: 'var(--color-surface)' }}>
-                <div className="flex items-baseline gap-2.5 flex-wrap">
-                  <span className="text-[9.5px] font-mono font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                        style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}>
-                    {f.severity}
-                  </span>
-                  <span className="text-[13px] font-medium text-[var(--color-text-primary)]">{f.title}</span>
-                  <span className="text-[10.5px] font-mono text-[var(--color-text-muted)]">{f.ruleId}</span>
-                </div>
-                <span className="text-[12px] text-[var(--color-text-secondary)]">{f.detail}</span>
-                <span className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">{f.remediation}</span>
-              </div>
-            );
-          })}
+          {summary.rules.findings.map(f => (
+            <FindingCardView
+              key={f.ruleId}
+              severity={f.severity}
+              title={f.title}
+              meta={f.ruleId}
+              detail={f.detail}
+              remediation={f.remediation}
+              actions={
+                <AskChip onClick={() => askFinding(f)} />
+              }
+            >
+              {/*
+                The chain, when the suspect this rule fired on has one.
+
+                A finding that says "an unbounded ArrayList holds 98%" and stops
+                is a fact without a destination. The four rows below are the
+                four questions in order — what accumulates, what holds it, where
+                it lives in your code, and only then what to change, which the
+                card already renders underneath.
+              */}
+              {v?.suspects[0] && <LeakChain suspect={v.suspects[0]} />}
+            </FindingCardView>
+          ))}
         </div>
       )}
 
@@ -529,7 +565,7 @@ export function HeapAnalyzerView() {
             {topByRetained.map((c, i) => {
               const share = v && v.liveBytes ? (c.retainedSumBytes / v.liveBytes) * 100 : 0;
               return (
-                <div key={i} className="flex items-center gap-3 px-3 py-1.5 text-[11.5px]"
+                <div key={i} className="group flex items-center gap-3 px-3 py-1.5 text-[11.5px]"
                      style={{
                        background: 'var(--color-surface)',
                        borderTop: i === 0 ? 'none' : '1px solid var(--color-surface-border)',
@@ -544,6 +580,13 @@ export function HeapAnalyzerView() {
                     {c.instances.toLocaleString()}
                   </span>
                   <ClassNameView name={c.className} />
+                  <div className="flex-1" />
+                  {/* Shown on hover: ten rows each with a permanent button is
+                      ten buttons competing with the numbers they sit beside. */}
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <AskChip label="" onClick={() => askClass(c)}
+                             title={`Ask about ${c.className}`} />
+                  </span>
                 </div>
               );
             })}
