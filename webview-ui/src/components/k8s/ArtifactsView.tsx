@@ -88,7 +88,7 @@ function Row({ a, picked, onPick, onAskDelete }: {
              ? `color-mix(in srgb, ${ACCENT} 40%, transparent)`
              : 'var(--color-surface-border)'}`,
          }}>
-      <CheckboxView checked={picked} size="md" accentColor={ACCENT} onChange={onPick} />
+      <CheckboxView checked={picked} size="xs" accentColor={ACCENT} onChange={onPick} />
       <Icon size={15} color={ACCENT} />
 
       <div className="flex flex-col gap-0.5 min-w-0 flex-1">

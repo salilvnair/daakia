@@ -34,8 +34,24 @@ export const BUILTIN_FORMATS: LogFormat[] = [
     name: 'Spring Boot',
     kind: 'pattern',
     builtin: true,
-    // 2026-08-30T02:41:05.171Z  WARN 1 --- [app] [ main] o.h.e.j.SqlExceptionHelper : message
-    pattern: '%{TIMESTAMP} %{LEVEL} %{NUM} --- %{DATA}%{LOGGER} : %{MESSAGE}',
+    /*
+      Two shapes, one pattern.
+
+        ...  WARN 1 --- [   main] o.h.e.j.SqlExceptionHelper : message
+        ...  WARN 1 --- [app] [   main] o.h.e.j.SqlExceptionHelper : message
+
+      Spring emits the second when `spring.application.name` is set. `%{DATA}`
+      is lazy, so on the first shape it matches nothing and `[%{THREAD}]` takes
+      the only bracket; on the second it cannot complete — the logger pattern
+      will not match a `[` — so it backtracks, absorbs `[app] `, and the thread
+      lands correctly.
+
+      This used to be `%{DATA}%{LOGGER}`, where DATA swallowed the brackets
+      whole and the thread was never captured at all. It parsed, so nothing
+      looked broken; there was simply no thread to filter by, which is what
+      made a heuristic look necessary in the first place.
+    */
+    pattern: '%{TIMESTAMP} %{LEVEL} %{NUM} --- %{DATA}[%{THREAD}] %{LOGGER} : %{MESSAGE}',
   },
   {
     id: 'builtin.python',

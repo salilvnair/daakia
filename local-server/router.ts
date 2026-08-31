@@ -19,7 +19,7 @@ import {
   getSqliteStatus, getDbPath, getHistory, clearHistory, deleteHistoryById, getSetting, setSetting, getCookies,
   getAllPrompts, upsertPrompt, resetPrompt,
   getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries,
-  getUiAuditEntries, clearUiAuditEntries,
+  getUiAuditEntries, clearUiAuditEntries, insertUiAudit,
   getDbTables, getDbTableRows, deleteDbRow,
 } from '../src/storage/db';
 import { handleExecuteRequest, handleGetOAuth2Token, handleGetEffectiveSettings } from '../src/panel/main/handlers/request-handler';
@@ -48,6 +48,7 @@ import {
   handleDk8sOpenArtifact, handleDk8sSetKubectlPath, handleDk8sWatchPods, handleDk8sStopWatch,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
+  handleDk8sExportSearch,
   handleDk8sLogsOpen, handleDk8sLogsClose, handleDk8sDescribe,
   handleDk8sShell, handleDk8sProbePod, handleDk8sAsk,
   handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
@@ -128,6 +129,33 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     case 'dk8s:exportLogs':
       await handleDk8sExportLogs(msg, post);
       break;
+    case 'dk8s:exportSearch':
+      await handleDk8sExportSearch(msg, post);
+      break;
+
+    /*
+      Audit events, which were reaching nothing in browser mode.
+
+      The extension host has written these to SQLite for a long time; this
+      mirror never wired the message, so every dk8s action audited itself into
+      the server's "no handler wired" warning and the Audit Log stayed empty
+      for anyone testing here. The whole point of an audit trail is that it is
+      there afterwards, so a path that silently drops it is worse than one that
+      never claimed to record.
+    */
+    case 'uiAudit:log': {
+      const { event_type, module, button, action, metadata } = msg as unknown as {
+        event_type: string; module: string;
+        button?: string; action?: string; metadata?: Record<string, unknown>;
+      };
+      if (event_type && module) {
+        insertUiAudit({
+          event_type, module, button, action,
+          metadata: metadata ? JSON.stringify(metadata) : undefined,
+        });
+      }
+      break;
+    }
     case 'dk8s:namespaces':
       await handleDk8sNamespaces(msg, post);
       break;

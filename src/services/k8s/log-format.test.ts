@@ -274,3 +274,92 @@ describe('chooseFormat', () => {
     expect(r.format).toBeUndefined();
   });
 });
+
+/*
+  The Spring Boot builtin has to name the thread, not swallow it.
+
+  Its pattern used `%{DATA}%{LOGGER}`, where DATA absorbed the bracketed run
+  whole. The line parsed and the logger came out right, so nothing looked
+  broken — there was simply never a thread to filter by, and that absence is
+  what made the log view invent one.
+*/
+describe('builtin.spring — bracketed fields', () => {
+  const spring = compileFormat(BUILTIN_FORMATS.find(f => f.id === 'builtin.spring')!);
+
+  it('names the thread when there is no application name', () => {
+    const line = '2026-08-31T05:48:22.724Z  INFO 1 --- [   main] com.example.Startup : started in 4.2s';
+    expect(spring.parse(line)).toMatchObject({
+      level: 'info', thread: 'main', logger: 'com.example.Startup',
+      message: 'started in 4.2s',
+    });
+  });
+
+  it('names both when spring.application.name is set', () => {
+    const line = '2026-08-31T05:48:22.724Z  INFO 1 --- [zp-backend] [   dk8s-traffic] com.zapper.zp.ledger.LedgerClient        : POST /v2/ledger/entries  attempt 1';
+    expect(spring.parse(line)).toMatchObject({
+      level: 'info',
+      thread: 'dk8s-traffic',
+      logger: 'com.zapper.zp.ledger.LedgerClient',
+    });
+  });
+
+  it('still refuses a stack frame, so it reads as a continuation', () => {
+    // The whole continuation rule rests on this: a frame must NOT parse.
+    expect(spring.parse('\tat com.zapper.zp.Foo.run(Foo.java:42) ~[app.jar:1.0.0]')).toBeNull();
+    expect(spring.parse('Caused by: java.net.ConnectException: Connection refused')).toBeNull();
+  });
+
+  it('declares that it knows where the level is', () => {
+    expect(spring.hasLevel).toBe(true);
+  });
+});
+
+/*
+  The probe has to survive a crashlooping pod.
+
+  This is the case that actually mattered in production: a CrashLoopBackOff
+  container dies inside a Hibernate stack trace, so `kubectl logs --tail` comes
+  back as pure continuation lines. Every candidate format scored zero, dk8s
+  reported `via: none`, and the log view fell back to guessing — on the one pod
+  whose format is the most standard Spring Boot in existence.
+*/
+describe('probeFormat — samples that are mostly stack trace', () => {
+  const frames = [
+    '\tat org.hibernate.boot.model.relational.Database.<init>(Database.java:45) ~[hibernate-core-6.6.4.Final.jar!/:6.6.4.Final]',
+    '\tat org.hibernate.boot.internal.InFlightMetadataCollectorImpl.getDatabase(InFlightMetadataCollectorImpl.java:226) ~[hibernate-core-6.6.4.Final.jar!/:6.6.4.Final]',
+    '\tat org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean.afterPropertiesSet(LocalContainerEntityManagerFactoryBean.java:366) ~[spring-orm-6.2.1.jar!/:6.2.1]',
+    'Caused by: org.postgresql.util.PSQLException: The connection attempt failed.',
+    '\t... 20 common frames omitted',
+  ];
+  const events = [
+    '2026-08-31T12:25:13.220Z  INFO 1 --- [zp-backend] [           main] com.zapper.zp.ZpBackendApplication       : Starting ZpBackendApplication v1.0.0',
+    '2026-08-31T12:25:13.222Z  INFO 1 --- [zp-backend] [           main] com.zapper.zp.ZpBackendApplication       : No active profile set',
+    '2026-08-31T12:25:14.211Z  INFO 1 --- [zp-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories',
+    '2026-08-31T12:25:24.660Z  WARN 1 --- [zp-backend] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 08001',
+  ];
+
+  it('finds the format when the events are buried under frames', () => {
+    // Frames outnumber events 5:4 — under the old rule the hit rate was 4/9,
+    // below the 0.6 threshold, and nothing was chosen.
+    const sample = [...events, ...frames];
+    expect(probeFormat(sample, BUILTIN_FORMATS)?.format.id).toBe('builtin.spring');
+  });
+
+  it('still declines when there is nothing but frames', () => {
+    // No events to judge, so no format. Abstaining is the correct answer here,
+    // and it is different from choosing badly.
+    expect(probeFormat(frames, BUILTIN_FORMATS)).toBeUndefined();
+  });
+
+  it('ignores a boot banner rather than counting it against the format', () => {
+    // Spring's ASCII art. Indented, so `cannotBeAnEvent` drops it before the
+    // vote rather than counting three misses against every candidate.
+    const banner = [
+      '  .   ____          _            __ _ _',
+      '  ( ( )___ | | _ | | | | _ \\/ _` | | | | |',
+      ' :: Spring Boot ::                (v3.4.1)',
+    ];
+    expect(probeFormat([...banner, ...events], BUILTIN_FORMATS)?.format.id)
+      .toBe('builtin.spring');
+  });
+});

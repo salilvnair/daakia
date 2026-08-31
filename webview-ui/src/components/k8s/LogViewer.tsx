@@ -26,6 +26,11 @@ import {
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { buildFacets, filterTermFor } from './log-facets';
+import {
+  setFilterProvider, clearFilterProvider,
+  type FilterMenu, type FilterGroup,
+} from '../shared/menus/filter-provider';
 import {
   filterLines, densityBuckets, describeBucket, levelCounts, levelColor,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
@@ -401,6 +406,67 @@ export function LogViewer() {
     const t = setTimeout(() => setSettling(false), left);
     return () => clearTimeout(t);
   }, [logRequestedAt]);
+
+  /*
+    What this view can filter itself by, offered to the context menu.
+
+    Built from the lines currently in the buffer rather than from a schema,
+    because that is the only place the values exist — a thread name is not
+    configuration, it is whatever the application happened to call its threads
+    this run. Formats configured in Settings are passed in so a pattern that
+    names `%{THREAD}` wins over the heuristics.
+
+    Registered rather than exported: the menu is shared with surfaces that have
+    no notion of a log, and it asks whoever is mounted instead of importing
+    from here.
+  */
+  useEffect(() => {
+    const provide = (): FilterMenu | null => {
+      /*
+        Fields the HOST parsed, never fields this view inferred.
+
+        `buildFacets` no longer reads text — it reads `line.thread`,
+        `line.logger` and `line.app`, which exist only where a configured
+        format named them. With no format configured there are no groups, and
+        the menu falls back to filtering by the selection alone. That is the
+        honest state, and it is exactly the state the old heuristics filled
+        with jar tags out of stack frames.
+      */
+      const facets = buildFacets(logs);
+      const groups: FilterGroup[] = facets.map(facet => ({
+        id: facet.field,
+        label: facet.label,
+        options: facet.values.map(v => ({
+          label: v.value,
+          // Qualified, because it is a count of the buffer and not of the log.
+          // A bare number here reads as "there are 22 of these" and the buffer
+          // holds a few hundred lines out of a pod's millions.
+          hint: `${v.count.toLocaleString()} of ${facet.scanned.toLocaleString()} shown`,
+          apply: () => setLogFilter(filterTermFor(facet.field, v.value)),
+        })),
+      }));
+
+      // Whatever is selected, as a filter. A double-click selects a word, and
+      // this is the shortest path from "that token looks interesting" to a log
+      // showing only the lines containing it.
+      const picked = (window.getSelection()?.toString() ?? '').trim();
+      const oneLine = picked && !picked.includes('\n') && picked.length <= 120
+        ? picked
+        : undefined;
+
+      if (!groups.length && !oneLine && !logFilter) return null;
+      return {
+        groups,
+        selection: oneLine
+          ? { label: `"${oneLine}"`, apply: () => setLogFilter(oneLine) }
+          : undefined,
+        clear: logFilter ? () => setLogFilter('') : undefined,
+      };
+    };
+
+    setFilterProvider(provide);
+    return () => clearFilterProvider(provide);
+  }, [logs, logFilter, setLogFilter]);
 
   const ask = useDk8sAiStore(s => s.ask);
 
@@ -1008,7 +1074,7 @@ export function LogViewer() {
         onDoubleClick={() => window.setTimeout(openMenuForSelection, 0)}
         // Opts this surface into the AI and Search groups on the selection
         // menu; the menu dispatches back here rather than knowing about logs.
-        data-selection-actions="ai search"
+        data-selection-actions="ai search filter"
       >
         <div
           ref={scrollRef}
@@ -1089,6 +1155,34 @@ export function LogViewer() {
                         minWidth: 0,
                       }}>
                         <Highlighted text={line.text} hits={line.hits} />
+                        {/*
+                          A cut line says it was cut.
+
+                          Lines past 32KB are truncated on ingest, because a
+                          serialised payload on one line costs every stage that
+                          touches it. Silently dropping the tail is the part
+                          that would be unacceptable — someone searching for a
+                          string that was in the discarded half needs to know
+                          it could have been there.
+                        */}
+                        {line.truncated && (
+                          <span
+                            title="This line was longer than 32 KB and has been cut here."
+                            className="ml-1.5 px-1 rounded shrink-0"
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 700,
+                              letterSpacing: '.05em',
+                              textTransform: 'uppercase',
+                              color: 'var(--color-warning)',
+                              background: 'color-mix(in srgb, var(--color-warning) 16%, transparent)',
+                              border: '1px solid color-mix(in srgb, var(--color-warning) 38%, transparent)',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            cut
+                          </span>
+                        )}
                       </span>
 
                       {/* The fold. One row instead of forty, and the count is

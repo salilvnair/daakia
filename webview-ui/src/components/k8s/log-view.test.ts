@@ -197,6 +197,39 @@ describe('foldStackTraces', () => {
     expect(rows[1].line.seq).toBe(4);
   });
 
+  /*
+    The host's verdict wins over the text heuristic.
+
+    `isStackFrame` only knows Java. A Python traceback, a Go panic and a block
+    of wrapped SQL are all continuations it calls events, so they stayed
+    unfolded and pushed the message that caused them off the screen. When a
+    format is configured the host marks them, and the fold follows that.
+  */
+  it('folds a continuation the text heuristic would not recognise', () => {
+    const cont = (seq: number, text: string) =>
+      ({ ...line(seq, 'error', text), continuation: true });
+    const rows = foldStackTraces([
+      line(0, 'error', 'ERROR worker failed'),
+      cont(1, 'Traceback (most recent call last):'),
+      cont(2, '  File "/app/main.py", line 12, in run'),
+      cont(3, 'ValueError: bad input'),
+      line(4, 'info', 'INFO retrying'),
+    ], true);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.folded).toHaveLength(3);
+  });
+
+  it('does not fold a line the host called an event, whatever its text', () => {
+    // An application that legitimately logs a line starting "  at " as its own
+    // event. The format parsed it, so it is an event and stays one.
+    const rows = foldStackTraces([
+      line(0, 'error', 'ERROR boom'),
+      { ...line(1, 'info', '	at the gate, waiting'), continuation: false },
+    ], true);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.folded).toBeUndefined();
+  });
+
   it('keeps every line when folding is off', () => {
     expect(foldStackTraces(trace, false)).toHaveLength(5);
   });

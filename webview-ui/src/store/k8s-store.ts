@@ -122,6 +122,35 @@ export interface LogLine {
   ts?: number;
   level: LogLevel;
   text: string;
+
+  /**
+   * Fields a configured FORMAT named on this line. Never guessed.
+   *
+   * These are parsed on the host and were previously dropped at this boundary,
+   * which is why the log view had to guess at structure to offer a filter — and
+   * why the Thread name menu ended up offering `na:na` and `app.jar:1.0.0`,
+   * both of which are jar tags inside stack frames.
+   *
+   * Absent means absent: no format configured, or one is and this line did not
+   * parse. A UI that offers "filter by thread" may only do so where a thread
+   * was actually identified.
+   */
+  logger?: string;
+  thread?: string;
+  app?: string;
+
+  /**
+   * This line belongs to the event above it rather than being one itself.
+   *
+   * With a format configured this is exact — the format did not parse the
+   * line, which is the whole definition of a continuation. Without one it is a
+   * prefix heuristic, and `continuationGuessed` says so.
+   */
+  continuation?: boolean;
+  continuationGuessed?: boolean;
+
+  /** The line was longer than the cap; this is its head. */
+  truncated?: boolean;
 }
 
 /**

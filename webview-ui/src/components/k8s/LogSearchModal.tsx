@@ -16,8 +16,10 @@ import {
 } from '@salilvnair/dui';
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
+  FolderExportIcon,
 } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
+import { ExportSearchModal } from './ExportSearchModal';
 import { postMsg } from '../../vscode';
 import {
   useDk8sSearchStore, type SearchMatch, type PodGroup, type PvFileResult,
@@ -113,6 +115,21 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(360);
 
+  /*
+    Which result groups are ticked for export.
+
+    Separate from `picked`, which chooses what to SEARCH. Once a search has
+    run, the interesting subset is usually smaller than what was scanned —
+    twenty-eight pods go in and five come back with hits — so the thing you
+    want to keep is picked from the results, not from the pod list.
+
+    Undefined means "not touched yet", which is what lets the default be
+    "every pod that matched" without having to re-tick them each time a search
+    finishes with a different set.
+  */
+  const [exportPicked, setExportPicked] = useState<string[] | undefined>();
+  const [exportOpen, setExportOpen] = useState(false);
+
   /**
    * Which pods get searched.
    *
@@ -138,6 +155,29 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     () => buildRows(groups, collapsed, options.contextLines, filesOpen),
     [groups, collapsed, options.contextLines, filesOpen],
   );
+
+  /*
+    The pods that actually matched, and which of them are ticked.
+
+    A group with zero hits is not offered: exporting "no matches from this pod"
+    is a file nobody wants, and having it tickable makes the count in the
+    button wrong.
+  */
+  const matchedPods = useMemo(
+    () => groups.filter(g => g.result.matched > 0 && !g.result.error).map(g => g.result.pod),
+    [groups],
+  );
+  const ticked = exportPicked ?? matchedPods;
+  const tickedPods = useMemo(
+    () => pods.filter(p => ticked.includes(p.name)),
+    [pods, ticked],
+  );
+  const allTicked = matchedPods.length > 0 && matchedPods.every(p => ticked.includes(p));
+
+  const toggleTick = (pod: string) => setExportPicked(
+    ticked.includes(pod) ? ticked.filter(p => p !== pod) : [...ticked, pod],
+  );
+  const toggleAllTicks = () => setExportPicked(allTicked ? [] : matchedPods);
 
   const first = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
   const last = Math.min(rows.length, Math.ceil((scrollTop + viewportH) / ROW_H) + OVERSCAN);
@@ -338,7 +378,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                           }}
                         >
                           <td className="px-2 py-1.5" style={{ width: 28 }}>
-                            <CheckboxView checked={on} size="md" accentColor={ACCENT} onChange={() => {}} />
+                            <CheckboxView checked={on} size="xs" accentColor={ACCENT} onChange={() => {}} />
                           </td>
                           <td className="px-2 py-1.5 text-[11px] font-mono"
                               style={{ color: 'var(--color-text-primary)' }}>{p.name}</td>
@@ -378,11 +418,11 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         />
 
         <div className="flex items-center gap-3 flex-wrap">
-          <CheckboxView label="regex" checked={options.regex} size="md" accentColor={ACCENT}
+          <CheckboxView label="regex" checked={options.regex} size="xs" accentColor={ACCENT}
                         onChange={v => setOptions({ regex: v })} />
-          <CheckboxView label="match case" checked={options.caseSensitive} size="md" accentColor={ACCENT}
+          <CheckboxView label="match case" checked={options.caseSensitive} size="xs" accentColor={ACCENT}
                         onChange={v => setOptions({ caseSensitive: v })} />
-          <CheckboxView label="previous runs" checked={options.includePrevious} size="md"
+          <CheckboxView label="previous runs" checked={options.includePrevious} size="xs"
                         accentColor="var(--color-warning)"
                         onChange={v => setOptions({ includePrevious: v })} />
           <div className="flex-1" />
@@ -437,7 +477,54 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 }} />
               </div>
             )}
+
+            {/*
+              Keeping the results.
+
+              On the same row as the counts rather than in the footer, because
+              it acts on what that sentence just described — and because the
+              footer already has Search, which is the other, opposite thing you
+              do from here.
+            */}
+            {!running && matchedPods.length > 0 && (
+              <>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={toggleAllTicks}
+                  className="cursor-pointer border-none bg-transparent px-1 shrink-0"
+                  style={{ color: ACCENT, fontSize: 11, fontFamily: 'inherit' }}
+                >
+                  {allTicked ? 'clear' : `select all ${matchedPods.length}`}
+                </button>
+                <ButtonView
+                  label={`Export ${ticked.length || ''}`.trim()}
+                  size="sm" variant="secondary"
+                  iconLeft={<FolderExportIcon size={11} />}
+                  disabled={!ticked.length}
+                  onClick={() => setExportOpen(true)}
+                  title={ticked.length
+                    ? `Write every match from ${ticked.length} pod${ticked.length === 1 ? '' : 's'} to disk`
+                    : 'Tick a pod to export its matches'}
+                  style={{
+                    height: 24,
+                    background: ticked.length
+                      ? 'color-mix(in srgb, var(--color-warning) 16%, transparent)'
+                      : 'transparent',
+                    borderColor: ticked.length
+                      ? 'color-mix(in srgb, var(--color-warning) 45%, transparent)'
+                      : 'var(--color-surface-border)',
+                    color: ticked.length ? 'var(--color-warning)' : 'var(--color-text-muted)',
+                    fontWeight: 600,
+                  }}
+                />
+              </>
+            )}
           </div>
+        )}
+
+        {exportOpen && (
+          <ExportSearchModal pods={tickedPods} onClose={() => setExportOpen(false)} />
         )}
 
         {/* The caps are stated where the counts are, so a truncated list is
@@ -493,6 +580,15 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                         }}
                       >
                         {isCollapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} />}
+                        {/* Ticking a pod must not also collapse it — the row
+                            behind this is the expand/collapse target. */}
+                        {r.matched > 0 && !r.error && (
+                          <span onClick={e => { e.stopPropagation(); toggleTick(r.pod); }}
+                                className="flex items-center shrink-0">
+                            <CheckboxView checked={ticked.includes(r.pod)} size="xs"
+                                          accentColor={ACCENT} onChange={() => {}} />
+                          </span>
+                        )}
                         <span style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
                           {r.pod}
                         </span>

@@ -18,4 +18,15 @@ export const SHARED_ALIASES = {
     displays something the host is no longer sending.
   */
   '@daakia/dk8s-prompts': resolve(__dirname, '..', 'src', 'panel', 'chat', 'dk8s-prompts.ts'),
+
+  /*
+    The log format engine, shared for the same reason and on the same terms.
+
+    `src/services/k8s/log-format.ts` is also import-free. The webview needs it
+    because a format the user configured in Settings has to win over the
+    webview's own heuristics when it decides what a log line's fields are —
+    and a second implementation of `%{THREAD}` in the webview would be a
+    second thing to keep matching the one that actually parses the logs.
+  */
+  '@daakia/log-format': resolve(__dirname, '..', 'src', 'services', 'k8s', 'log-format.ts'),
 };

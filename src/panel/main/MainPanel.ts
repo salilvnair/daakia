@@ -89,6 +89,7 @@ import {
   handleDk8sWatchPods, handleDk8sStopWatch, disposeDk8s,
   handleDk8sPinNamespace, handleDk8sUnpinNamespace,
   handleDk8sUseContexts, handleDk8sSetTargets, handleDk8sExportLogs,
+  handleDk8sExportSearch,
   handleDk8sLogsOpen,
   handleDk8sLogsClose,
   handleDk8sDescribe,
@@ -372,6 +373,9 @@ export class MainPanel {
         break;
       case 'dk8s:exportLogs':
         handleDk8sExportLogs(msg, this._post);
+        break;
+      case 'dk8s:exportSearch':
+        handleDk8sExportSearch(msg, this._post);
         break;
       case 'dk8s:namespaces':
         handleDk8sNamespaces(msg, this._post);

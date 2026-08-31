@@ -10,7 +10,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
-import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, SparkleIcon, HelpCircleIcon } from '../../../icons';
+import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, SparkleIcon, HelpCircleIcon, FilterIcon, CloseIcon } from '../../../icons';
+import { getFilterMenu, type FilterMenu } from './filter-provider';
 
 type MenuContext = 'monaco' | 'input' | 'selection';
 
@@ -83,6 +84,70 @@ function aiItems(lineCount: number): ContextMenuItem[] {
       icon: <HelpCircleIcon size={14} />, iconColor: AI_COLOR,
     },
     { id: 'ai-sep-2', label: '', separator: true },
+  ];
+}
+
+/*
+  Filter By, built from whatever the surface knows about its own content.
+
+  The colour is the one thing hard-coded here: amber, because filtering is the
+  only entry in this menu that changes what you are looking at rather than
+  acting on what you selected, and it should not read as another neutral verb
+  beside Copy.
+
+  The actions come back as closures, so this renders a list of labels and calls
+  one — it never learns what a thread is.
+*/
+const FILTER_COLOR = 'var(--color-warning)';
+
+function filterItems(menu: FilterMenu): ContextMenuItem[] {
+  const submenu: ContextMenuItem[] = [];
+
+  if (menu.selection) {
+    submenu.push({
+      id: 'filter:selection',
+      label: menu.selection.label,
+      icon: <FilterIcon size={13} />,
+      iconColor: FILTER_COLOR,
+    });
+    if (menu.groups.length) submenu.push({ id: 'filter:sel-sep', label: '', separator: true });
+  }
+
+  for (const g of menu.groups) {
+    submenu.push({
+      id: `filter:group:${g.id}`,
+      label: g.label,
+      icon: <FilterIcon size={13} />,
+      iconColor: FILTER_COLOR,
+      submenu: g.options.map((o, i) => ({
+        id: `filter:${g.id}:${i}`,
+        label: o.label,
+        shortcut: o.hint,
+      })),
+    });
+  }
+
+  if (menu.clear) {
+    if (submenu.length) submenu.push({ id: 'filter:clear-sep', label: '', separator: true });
+    submenu.push({
+      id: 'filter:clear',
+      label: 'Clear filter',
+      icon: <CloseIcon size={13} />,
+      iconColor: 'var(--color-text-muted)',
+    });
+  }
+
+  if (!submenu.length) return [];
+
+  return [
+    { id: 'filter-sep', label: '', separator: true },
+    {
+      id: 'filter',
+      label: 'Filter By',
+      icon: <FilterIcon size={14} />,
+      iconColor: FILTER_COLOR,
+      submenu,
+    },
   ];
 }
 
@@ -502,6 +567,30 @@ export function RightClickMenu() {
     const action = subId ?? id;
     setMenu(null);
 
+    /*
+      Filter actions, dispatched by id.
+
+      Three levels deep — Filter By, a field, a value — and the menu reports a
+      parent and a child rather than a full path. So the id encodes everything
+      needed to act on it, and the more specific of the two arguments wins:
+      `filter:thread:4` beats `filter:group:thread` regardless of which slot
+      each arrived in.
+    */
+    const filterId = [subId, id]
+      .filter((x): x is string => !!x && x.startsWith('filter:') && !x.startsWith('filter:group:'))
+      .sort((a, b) => b.split(':').length - a.split(':').length)[0];
+
+    if (filterId) {
+      const fm = getFilterMenu();
+      if (!fm) return;
+      if (filterId === 'filter:clear') { fm.clear?.(); return; }
+      if (filterId === 'filter:selection') { fm.selection?.apply(); return; }
+      const [, groupId, index] = filterId.split(':');
+      const group = fm.groups.find(g => g.id === groupId);
+      group?.options[Number(index)]?.apply();
+      return;
+    }
+
     // Native input/textarea actions
     if (context === 'input' && target) {
       const inputEl = target as HTMLInputElement | HTMLTextAreaElement;
@@ -569,6 +658,11 @@ export function RightClickMenu() {
   */
   const wantsAi = !!menu.target?.closest('[data-selection-actions~="ai"]');
   const wantsSearch = !!menu.target?.closest('[data-selection-actions~="search"]');
+  const wantsFilter = !!menu.target?.closest('[data-selection-actions~="filter"]');
+  // Read once, when the menu opens. Calling the provider again at click time
+  // would rebuild the facets from a buffer that has moved on, and the closure
+  // chosen would belong to a different list than the one on screen.
+  const filterMenu = wantsFilter ? getFilterMenu() : null;
   // Trailing newline from a line-wise selection would otherwise count as a line.
   const lineCount = menu.selection.replace(/\n+$/, '').split('\n').length;
 
@@ -578,6 +672,7 @@ export function RightClickMenu() {
         ...SELECTION_ITEMS,
         ...(wantsAi ? aiItems(lineCount) : []),
         ...(wantsSearch ? (wantsAi ? SEARCH_ITEMS : [{ id: 'search-sep', label: '', separator: true }, ...SEARCH_ITEMS]) : []),
+        ...(filterMenu ? filterItems(filterMenu) : []),
       ];
   const adjustedItems = items.map(item => {
     if (item.separator) return item;

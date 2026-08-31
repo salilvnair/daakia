@@ -237,9 +237,30 @@ export interface FoldedRow {
   folded?: MatchedLine[];
 }
 
-/** A continuation frame: `at com.x.Y.z(...)`, `... 34 more`, or a bare tab. */
+/**
+ * A continuation frame: `at com.x.Y.z(...)`, `... 34 more`, or a bare tab.
+ *
+ * Kept only for lines that arrived without a verdict. The host now decides
+ * this exactly — a line is a continuation when the configured format failed to
+ * parse it — and `foldsInto` prefers that answer wherever it exists. This
+ * remains the fallback for a pod with no format configured, where a guess is
+ * all anyone has.
+ */
 export function isStackFrame(text: string): boolean {
   return /^\s+at\s|^\s*\.\.\.\s+\d+\s+(more|common frames omitted)/.test(text);
+}
+
+/**
+ * Does this line belong to the one above it?
+ *
+ * The host's `continuation` flag when there is one, the text heuristic when
+ * there is not. Preferring the flag matters because the heuristic only knows
+ * Java: a Python traceback, a Go panic and a block of wrapped SQL are all
+ * continuations that `isStackFrame` calls events, so they stayed unfolded and
+ * pushed the message that caused them off the screen.
+ */
+function foldsInto(line: MatchedLine): boolean {
+  return line.continuation ?? isStackFrame(line.text);
 }
 
 /**
@@ -261,11 +282,11 @@ export function foldStackTraces(lines: MatchedLine[], enabled: boolean): FoldedR
   const rows: FoldedRow[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (isStackFrame(line.text)) {
+    if (foldsInto(line)) {
       // A run of frames with no header above it — can happen after a filter
       // hides the header. Keep the first so the run is not invisible.
       const start = i;
-      while (i + 1 < lines.length && isStackFrame(lines[i + 1].text)) i++;
+      while (i + 1 < lines.length && foldsInto(lines[i + 1])) i++;
       const run = lines.slice(start, i + 1);
       rows.push({ line: run[0], folded: run.slice(1) });
       continue;
@@ -274,7 +295,7 @@ export function foldStackTraces(lines: MatchedLine[], enabled: boolean): FoldedR
     // A header line takes the frames that follow it.
     const folded: MatchedLine[] = [];
     let j = i + 1;
-    while (j < lines.length && isStackFrame(lines[j].text)) { folded.push(lines[j]); j++; }
+    while (j < lines.length && foldsInto(lines[j])) { folded.push(lines[j]); j++; }
     if (folded.length && (line.level === 'error' || isTraceHeader(line.text))) {
       rows.push({ line, folded });
       i = j - 1;

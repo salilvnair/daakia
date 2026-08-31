@@ -24,8 +24,29 @@ export interface LogLine {
   /** ERROR / WARN / INFO / DEBUG, from the pod's format or a keyword sniff. */
   level: LogLevel;
   text: string;
-  /** The logger or component, where the format names one. */
+  /**
+   * Fields a FORMAT named. Never guessed.
+   *
+   * Absent when no format is configured, or when one is and this line did not
+   * parse. The absence is the point: a UI that offers "filter by thread" can
+   * only do so where a thread was actually identified, rather than where a
+   * regex found a bracket and hoped.
+   */
   logger?: string;
+  thread?: string;
+  app?: string;
+  /**
+   * This line belongs to the event above it rather than being one itself.
+   *
+   * With a format configured this is exact — it means the format did not parse
+   * the line. Without one it is the older prefix heuristic, which is a guess,
+   * and is marked as such by `continuationGuessed`.
+   */
+  continuation?: boolean;
+  /** The continuation call came from heuristics, not from a format. */
+  continuationGuessed?: boolean;
+  /** The line exceeded MAX_LINE_LENGTH and what is here is the head of it. */
+  truncated?: boolean;
 }
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'other';
@@ -85,6 +106,40 @@ const MAX_PER_FLUSH = 2_000;
 const RFC3339 = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s?(.*)$/;
 
 /**
+ * The longest line worth keeping whole.
+ *
+ * Applications do serialise a 40MB payload onto one line, and that line has to
+ * be survivable: at this size it is already unreadable, and everything
+ * downstream — the format parse, the level sniff, the DOM node — pays for
+ * every character. 32KB is what log-viewer settled on for the same reason, and
+ * it is far past any line a person reads.
+ *
+ * Truncation is marked rather than silent. A log that quietly drops the end of
+ * a line is worse than one that says it did.
+ */
+export const MAX_LINE_LENGTH = 32 * 1024;
+
+/**
+ * SGR escape sequences, stripped before anything else looks at the line.
+ *
+ * A container with `spring.output.ansi.enabled=always` — which is common,
+ * because the JVM sees a TTY — writes the level as `\u001b[32mINFO\u001b[m`.
+ * Those bytes sit between the fields, so every position a format depends on
+ * shifts, the parse fails, and the line is filed as a continuation of whatever
+ * came before it. One `.replace` upstream of the parse is the whole fix.
+ *
+ * Deliberately only the CSI sequences a logger emits, not the full terminal
+ * grammar: this runs per line on a hot path.
+ */
+const ANSI = /\u001b\[[0-9;]*m/g;
+
+export function stripAnsi(text: string): string {
+  // The test is a cheap bail-out: the overwhelming majority of lines have no
+  // escape at all, and indexOf beats running the regex on all of them.
+  return text.indexOf('\u001b') === -1 ? text : text.replace(ANSI, '');
+}
+
+/**
  * Classify a line.
  *
  * Deliberately simple and deliberately anchored: matching "error" anywhere
@@ -94,10 +149,18 @@ const RFC3339 = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s?(.*)$/;
 export function levelOf(text: string): LogLevel {
   // Look only at the head of the line, where a level token actually appears.
   const head = text.slice(0, 120);
-  if (/\b(ERROR|SEVERE|FATAL|CRITICAL)\b/.test(head)) return 'error';
+  /*
+    The vocabulary is log4j's, java.util.logging's and syslog's together.
+
+    It used to be five words, so a java.util.logging application — which says
+    SEVERE, CONFIG, FINE, FINER, FINEST — had most of its lines classified as
+    `other` and rendered plain. Nothing about that log was unusual; it just
+    spoke a dialect this function had never been taught.
+  */
+  if (/\b(ERROR|SEVERE|FATAL|CRITICAL|CRIT|EMERGENCY|EMERG|ALERT|PANIC)\b/.test(head)) return 'error';
   if (/\bWARN(?:ING)?\b/.test(head)) return 'warn';
-  if (/\bINFO\b/.test(head)) return 'info';
-  if (/\b(DEBUG|TRACE)\b/.test(head)) return 'debug';
+  if (/\b(INFO|NOTICE|CONFIG|INFORMATIONAL)\b/.test(head)) return 'info';
+  if (/\b(DEBUG|TRACE|VERBOSE|FINEST|FINER|FINE)\b/.test(head)) return 'debug';
   /*
     Everything else is `other` — stack frames and throwable headers included.
 
@@ -183,27 +246,101 @@ export function parseLine(
     }
   }
 
-  // Then the application's format, over what is left.
+  // Colour codes go before anything reads a position in this line — see ANSI.
+  text = stripAnsi(text);
+
+  let truncated = false;
+  if (text.length > MAX_LINE_LENGTH) {
+    text = text.slice(0, MAX_LINE_LENGTH);
+    truncated = true;
+  }
+
+  /*
+    ── With a format, the parse decides everything ──
+
+    A line that parses is an event and its fields are what the format named.
+    A line that does not parse is a continuation of the event above it. That is
+    the whole rule, and it is exact rather than heuristic: stack frames,
+    `Caused by:`, wrapped SQL, ASCII-art banners, a Python traceback and a Go
+    panic all fail to match an event layout, so all of them are handled without
+    this file knowing what any of them are.
+
+    The prefix heuristics below run only when there is no format to ask.
+  */
   if (format && (!meter || meter.healthy)) {
     const p = meter ? meter.run(() => format.parse(text)) : format.parse(text);
+
     if (p) {
       return {
         seq,
         // The pod's own timestamp is more precise than the kubelet's receipt
         // time, so it wins where the format found one.
         ts: p.ts ?? ts,
-        level: p.level !== 'other' ? p.level : levelOf(text),
+        // Only sniff when the format has no level field at all. If it named
+        // one and the token was unrecognised, `other` is the format's answer
+        // and finding the word ERROR elsewhere in the line would be overruling
+        // it — see CompiledFormat.hasLevel.
+        level: p.level !== 'other' ? p.level
+          : format.hasLevel ? 'other'
+            : levelOf(text),
         logger: p.logger,
+        thread: p.thread,
+        app: p.app,
         text,
+        /*
+          Explicitly false, not absent.
+
+          Three states, and consumers need all three: `true` is a continuation,
+          `false` is "a format looked at this and it is an event", `undefined`
+          is "nobody decided". Leaving it absent here collapsed the last two,
+          so the fold fell back to its text heuristic for lines a format had
+          already ruled on — and an application that logs a line beginning
+          `  at the gate` would have had it folded into the event above.
+        */
+        continuation: false,
+        truncated: truncated || undefined,
       };
     }
+
+    /*
+      Did not parse, so it is not an event.
+
+      Inheriting the level is what keeps a WARN's seventy-line stack trace
+      amber instead of repainting it red, and `continuation` lets the view fold
+      it. No level of its own is invented: a frame under an event that was
+      never seen — the header scrolled past, or filtered away — is left as
+      `other` rather than guessed at.
+    */
+    return {
+      seq, ts, level: prev ? prev.level : 'other', text,
+      continuation: true,
+      truncated: truncated || undefined,
+    };
   }
 
-  return { seq, ts, level: classify(text, prev), text };
+  // ── No format: the older heuristics, and honest about being heuristics ──
+  const guessed = classify(text, prev);
+  const isCont = guessed.continuation;
+  return {
+    seq, ts, level: guessed.level, text,
+    // Left absent when the heuristic says "event", because it did not decide
+    // that — it merely failed to recognise a continuation, which is a weaker
+    // claim than the format path's `false`.
+    continuation: isCont || undefined,
+    continuationGuessed: isCont || undefined,
+    truncated: truncated || undefined,
+  };
 }
 
 /**
- * The level of one line, in the context of the line before it.
+ * The level of one line, and whether it is a continuation, in the context of
+ * the line before it.
+ *
+ * This is the NO-FORMAT path. With a format configured, `parseLine` never
+ * reaches here — a line is a continuation exactly when the format failed to
+ * parse it, which needs no heuristics at all. What follows is the best that
+ * can be done for a pod nobody has configured a format for, and callers can
+ * tell the two apart through `continuationGuessed`.
  *
  * Order matters. A level the line states itself always wins — that is the
  * application telling you what it thinks, and nothing here should second-guess
@@ -214,16 +351,23 @@ export function parseLine(
  * this guesses: an orphaned stack trace, with the header scrolled off or
  * filtered away, is far more often an error than anything else.
  */
-function classify(text: string, prev?: { level: LogLevel; sawAppTimestamp: boolean }): LogLevel {
+function classify(
+  text: string,
+  prev?: { level: LogLevel; sawAppTimestamp: boolean },
+): { level: LogLevel; continuation: boolean } {
   const own = levelOf(text);
-  if (own !== 'other') return own;
+  if (own !== 'other') return { level: own, continuation: false };
 
-  if (isContinuation(text)) return prev ? prev.level : 'error';
+  if (isContinuation(text)) {
+    return { level: prev ? prev.level : 'error', continuation: true };
+  }
 
   // No shape to go on: a line with no timestamp where every event has one.
-  if (prev?.sawAppTimestamp && !hasAppTimestamp(text)) return prev.level;
+  if (prev?.sawAppTimestamp && !hasAppTimestamp(text)) {
+    return { level: prev.level, continuation: true };
+  }
 
-  return 'other';
+  return { level: 'other', continuation: false };
 }
 
 export function streamLogs(

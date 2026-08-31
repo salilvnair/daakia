@@ -84,6 +84,15 @@ export interface ParsedLine {
   ts?: number;
   level: LogLevel;
   logger?: string;
+  /**
+   * The thread, and the application, where the format names them.
+   *
+   * `%{THREAD}` already existed and its capture was thrown away here, so a
+   * pattern could say where the thread was and nothing could read it. Both are
+   * carried now because the log view groups by them — see log-facets.ts.
+   */
+  thread?: string;
+  app?: string;
   /** The message, with the parsed fields removed where the format found them. */
   message: string;
 }
@@ -93,10 +102,12 @@ export interface ParsedLine {
 /** Canonical names, plus the spellings every common logger actually emits. */
 const LEVEL_ALIASES: Record<string, LogLevel> = {
   error: 'error', err: 'error', severe: 'error', fatal: 'error', critical: 'error',
-  crit: 'error', panic: 'error', emerg: 'error', alert: 'error',
+  crit: 'error', panic: 'error', emerg: 'error', emergency: 'error', alert: 'error',
   warn: 'warn', warning: 'warn',
-  info: 'info', notice: 'info', log: 'info',
-  debug: 'debug', trace: 'debug', verbose: 'debug', fine: 'debug', finer: 'debug',
+  info: 'info', notice: 'info', log: 'info', config: 'info', informational: 'info',
+  debug: 'debug', trace: 'debug', verbose: 'debug',
+  // java.util.logging's own ladder, which nothing else spells this way.
+  fine: 'debug', finer: 'debug', finest: 'debug',
   // Numeric severities: syslog 0-7, and bunyan/pino's 10-60 scale.
   '0': 'error', '1': 'error', '2': 'error', '3': 'error',
   '4': 'warn', '5': 'info', '6': 'info', '7': 'debug',
@@ -123,6 +134,9 @@ const PLACEHOLDERS: Record<string, string> = {
   LOGGER: String.raw`(?<logger>[\w.$/-]+)`,
   MESSAGE: String.raw`(?<message>.*)`,
   THREAD: String.raw`(?<thread>[^\]]+)`,
+  // Spring Boot writes this when spring.application.name is set, in its own
+  // bracket before the thread's.
+  APP: String.raw`(?<app>[^\]]+)`,
   NUM: String.raw`\d+`,
   WORD: String.raw`\S+`,
   SPACE: String.raw`\s+`,
@@ -253,6 +267,11 @@ function parseJsonLine(text: string, fmt: LogFormat): ParsedLine | null {
     ts: toMillis(pick(obj, f.timestamp ?? 'ts') ?? pick(obj, 'time') ?? pick(obj, 'timestamp')),
     level: normaliseLevel(pick(obj, f.level ?? 'level') ?? pick(obj, 'severity'), fmt.levelMap),
     logger: (pick(obj, f.logger ?? 'logger') ?? pick(obj, 'caller')) as string | undefined,
+    // Conventional keys rather than configurable ones, for now: logstash's
+    // encoder writes `thread_name`, Spring's writes `thread`, and nobody has
+    // asked to point these somewhere else.
+    thread: (pick(obj, 'thread_name') ?? pick(obj, 'thread')) as string | undefined,
+    app: (pick(obj, 'app_name') ?? pick(obj, 'application') ?? pick(obj, 'app')) as string | undefined,
     message: typeof message === 'string' ? message : JSON.stringify(message),
   };
 }
@@ -302,6 +321,8 @@ function parseLogfmtLine(text: string, fmt: LogFormat): ParsedLine | null {
     ts: toMillis(read(f.timestamp ?? 'ts') ?? read('time')),
     level: normaliseLevel(level, fmt.levelMap),
     logger: read(f.logger ?? 'logger') ?? read('component'),
+    thread: read('thread') ?? read('thread_name'),
+    app: read('app') ?? read('application'),
     message: msgFull,
   };
 }
@@ -314,6 +335,8 @@ function parsePatternLine(text: string, fmt: LogFormat, re: RegExp): ParsedLine 
     ts: g.timestamp ? toMillis(g.timestamp.replace(',', '.')) : undefined,
     level: normaliseLevel(g.level, fmt.levelMap),
     logger: g.logger,
+    thread: g.thread?.trim() || undefined,
+    app: g.app?.trim() || undefined,
     // The regex only saw the head, so take the message from the full line —
     // otherwise anything past 256 chars would be silently truncated.
     message: g.message !== undefined && m.index + m[0].length >= Math.min(text.length, HEAD)
@@ -327,6 +350,20 @@ function parsePatternLine(text: string, fmt: LogFormat, re: RegExp): ParsedLine 
 export interface CompiledFormat {
   format: LogFormat;
   parse: (text: string) => ParsedLine | null;
+  /**
+   * Whether the format declares where the level is.
+   *
+   * The distinction matters because `parse` returning level `other` means two
+   * different things. If the format names a level field and the line's level
+   * token was unrecognised, `other` is the answer — the format looked in the
+   * right place and found nothing usable, and sniffing the line for the word
+   * ERROR elsewhere would be overruling it with a guess.
+   *
+   * If the format names no level field at all, `other` means the format has
+   * no opinion, and a keyword sniff is the only information available rather
+   * than a second opinion competing with a first.
+   */
+  hasLevel: boolean;
 }
 
 /**
@@ -334,13 +371,22 @@ export interface CompiledFormat {
  */
 export function compileFormat(fmt: LogFormat): CompiledFormat {
   if (fmt.kind === 'json') {
-    return { format: fmt, parse: (t) => parseJsonLine(t, fmt) };
+    // A key-value format finds its level by name, and both parsers try the
+    // conventional keys as well as a configured one — so the level position is
+    // known either way.
+    return { format: fmt, parse: (t) => parseJsonLine(t, fmt), hasLevel: true };
   }
   if (fmt.kind === 'logfmt') {
-    return { format: fmt, parse: (t) => parseLogfmtLine(t, fmt) };
+    return { format: fmt, parse: (t) => parseLogfmtLine(t, fmt), hasLevel: true };
   }
   const re = compileTemplate(fmt.pattern ?? '%{MESSAGE}');
-  return { format: fmt, parse: (t) => parsePatternLine(t, fmt, re) };
+  return {
+    format: fmt,
+    parse: (t) => parsePatternLine(t, fmt, re),
+    // `%{LEVEL}` compiles to a `level` capture group; its absence is what
+    // "this pattern says nothing about levels" looks like.
+    hasLevel: re.source.includes('(?<level>'),
+  };
 }
 
 // ── Choosing a format for a pod ─────────────────────────────────────────────
@@ -450,12 +496,40 @@ export interface ProbeResult {
  * hundred and sixty parses, about a tenth of a millisecond, paid once when the
  * stream opens rather than per line.
  */
+/**
+ * Lines that cannot be events, skipped before the vote.
+ *
+ * Without this the probe is defeated by exactly the pods that need it most. A
+ * CrashLoopBackOff pod's last 25 lines are 25 stack frames — the container
+ * just died mid-trace — so every candidate format scores a hit rate of zero
+ * and dk8s concludes the pod has no recognisable format. It has a very
+ * recognisable format; the sample simply contained none of it.
+ *
+ * `sevdokimov/log-viewer` skips the same shapes in its own detector for the
+ * same reason. This is deliberately a crude prefix test rather than the real
+ * continuation rule, because the real rule needs a format and a format is what
+ * this is trying to find.
+ */
+function cannotBeAnEvent(line: string): boolean {
+  if (!line.trim()) return true;
+  if (/^\s/.test(line)) return true;                        // frames, wrapped text
+  return /^(at\s|Caused by:|Suppressed:|\.{3}\s*\d+\s)/.test(line);
+}
+
 export function probeFormat(
   lines: string[],
   candidates: LogFormat[],
   minHitRate = 0.6,
 ): ProbeResult | undefined {
-  const sample = lines.filter(l => l.trim()).slice(0, 20);
+  /*
+    Take the sample from the END.
+
+    The head of a Java log is the boot banner — ASCII art that matches nothing
+    — and on a pod that has been up for a week the head is also a week old. The
+    tail is what the person is looking at, and it is what the format has to fit.
+  */
+  const usable = lines.filter(l => !cannotBeAnEvent(l));
+  const sample = usable.slice(-40);
   if (sample.length < 3) return undefined;
 
   let best: ProbeResult | undefined;

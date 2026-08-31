@@ -43,6 +43,9 @@ import {
   type LogFormat, type PodContext,
 } from '../../../services/k8s/log-format';
 import { BUILTIN_FORMATS } from '../../../services/k8s/log-format-builtins';
+import {
+  exportSearchResults, type SearchExportOptions,
+} from '../../../services/k8s/k8s-search-export';
 import { dk8sPrompt, dk8sUserPrompt } from '../../chat/dk8s-prompt-resolve';
 import { renderDk8sUserPrompt } from '../../chat/dk8s-prompts';
 import { handleAiSend } from './ai-handler';
@@ -575,6 +578,63 @@ export async function handleDk8sExportLogs(
   }
 }
 
+/**
+ * Export a search's hits to disk.
+ *
+ * Deliberately a different path from `dk8s:exportLogs`: that one writes whole
+ * pod logs by time range, this one writes only the lines that matched and
+ * their surroundings. They share the folder picker and the progress messages
+ * because to the person watching they are the same act — "put this on my
+ * disk" — but what gets written is not the same thing, and folding them into
+ * one handler with a mode flag would make both harder to read.
+ */
+export async function handleDk8sExportSearch(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const targets = (Array.isArray(msg.targets) ? msg.targets : []) as SearchTarget[];
+  const options = msg.options as SearchExportOptions | undefined;
+  if (!targets.length || !options?.query?.trim()) return;
+
+  let destDir: string;
+  try {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: 'Export results here',
+      title: `Export search results from ${targets.length} pod${targets.length === 1 ? '' : 's'}`,
+    });
+    if (!picked?.length) {
+      postMessage({ type: 'dk8s:exportCancelled' });
+      return;
+    }
+    destDir = picked[0].fsPath;
+  } catch (err) {
+    postMessage({ type: 'dk8s:exportError', error: (err as Error).message });
+    return;
+  }
+
+  postMessage({ type: 'dk8s:exportStarted', total: targets.length, destDir });
+
+  try {
+    // A timestamp per export, not per file, so one run's files sort together
+    // and a second run does not overwrite the first.
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+    const results = await exportSearchResults(targets, options, destDir, stamp,
+      (done: number, total: number, pod: string) =>
+        postMessage({ type: 'dk8s:exportProgress', done, total, pod }));
+    postMessage({
+      type: 'dk8s:exportDone',
+      destDir,
+      results,
+      summary: summariseExport(results),
+    });
+  } catch (err) {
+    postMessage({ type: 'dk8s:exportError', error: (err as Error).message });
+  }
+}
+
 // ── Pod detail: logs, describe, shell ───────────────────────────────────────
 
 /** One follow per tab. Opening a second pod replaces the first. */
@@ -617,9 +677,18 @@ async function resolveFormatFor(
       } catch { /* match on name and namespace alone */ }
     }
 
+    /*
+      A window, not a handful of lines.
+
+      This was `--tail=25`, which is fine for a healthy pod and useless for a
+      broken one: a CrashLoopBackOff container dies inside a stack trace, so
+      its last 25 lines are 25 frames and the probe sees no events at all. 200
+      is enough to reach past a Hibernate trace to the events above it, and it
+      is one call paid once per stream.
+    */
     const head = await run(
-      ['--context', context, '-n', namespace, 'logs', pod, '--tail=25'],
-      { timeoutMs: 20_000, maxBuffer: 2 * 1024 * 1024 },
+      ['--context', context, '-n', namespace, 'logs', pod, '--tail=200'],
+      { timeoutMs: 20_000, maxBuffer: 4 * 1024 * 1024 },
     );
     if (head.ok) sample = head.stdout.split('\n').filter(l => l.trim());
   }
