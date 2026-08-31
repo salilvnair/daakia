@@ -106,6 +106,7 @@ import {
   handleHeapSetBaseline, handleHeapLocateClass, handleHeapOpenSource,
   handleThreadsOpen, handleThreadsAnalyze, handleLogsOpen, handleLogsAnalyze,
 } from './handlers/heap-handler';
+import { handleDk8sHeapInvestigate } from './handlers/heap-investigate';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
   initSmWorkflowStorage,
@@ -468,6 +469,11 @@ export class MainPanel {
         break;
       case 'dk8s:ask':
         handleDk8sAsk(msg, this._post);
+        break;
+      // The heap gets its own entry point because it is the one artifact the
+      // model can ask follow-up questions about — see heap-investigate.
+      case 'dk8s:heapInvestigate':
+        handleDk8sHeapInvestigate(msg, this._post);
         break;
       case 'dk8s:collect':
         handleDk8sCollect(msg, this._post);

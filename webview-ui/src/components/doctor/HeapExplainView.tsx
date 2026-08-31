@@ -162,6 +162,15 @@ export function HeapExplainView() {
           size="md" accentColor={ACCENT} loading={streaming} disabled={streaming}
           onClick={explain}
         />
+        {/* The same evidence, but the model may ask for more.
+            Explain answers from the pack alone; Investigate lets it open a
+            suspect and see what is inside — which is the difference between
+            "a HashMap holds 62%" and naming what is in the HashMap. */}
+        <AIButtonView
+          label={streaming ? 'Investigating…' : 'Investigate'}
+          size="md" accentColor={ACCENT} loading={streaming} disabled={streaming}
+          onClick={() => postMsg({ type: 'dk8s:heapInvestigate' })}
+        />
         {answer && !streaming && <CopyButtonView text={answer} title="Copy analysis" accentColor={ACCENT} />}
         <span className="text-[11px] text-[var(--color-text-muted)]">
           Nothing is sent until you press this.

@@ -181,6 +181,53 @@ export async function handleHeapOpenSource(msg: Record<string, unknown>) {
   });
 }
 
+/**
+ * One query, awaited.
+ *
+ * The view path is fire-and-forget: the webview sends a request id and matches
+ * the reply when it arrives. The investigation loop cannot work that way — it
+ * has to have the numbers before it can decide what to ask next — so this
+ * wraps the same channel in a promise.
+ *
+ * The listener is removed on every exit path including the timeout. A loop
+ * that leaks one listener per query would accumulate them for as long as the
+ * dump stays open, and each one holds a closure over the resolver.
+ */
+export function heapQueryOnce<T = unknown>(query: unknown, timeoutMs = 30_000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    if (!active) { reject(new Error('No heap dump is loaded.')); return; }
+    const worker = active;
+    const requestId = `hq-host-${++hostQuerySeq}`;
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      worker.off('message', onMessage);
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('The heap worker did not answer in time.'));
+    }, timeoutMs);
+
+    const onMessage = (m: unknown) => {
+      const r = m as { type?: string; requestId?: string; result?: T; message?: string };
+      if (r?.requestId !== requestId) return;
+      if (r.type === 'queryResult') { cleanup(); resolve(r.result as T); return; }
+      if (r.type === 'queryError') { cleanup(); reject(new Error(r.message ?? 'query failed')); }
+    };
+
+    worker.on('message', onMessage);
+    try {
+      worker.send({ type: 'query', requestId, query });
+    } catch {
+      cleanup();
+      reject(new Error('The heap worker is no longer running.'));
+    }
+  });
+}
+
+let hostQuerySeq = 0;
+
 /** Relay a view's query to the resident worker. */
 export function handleHeapQuery(msg: Record<string, unknown>, postMessage: PostMessage) {
   const requestId = msg.requestId as string;
