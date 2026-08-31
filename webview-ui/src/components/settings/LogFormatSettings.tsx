@@ -12,6 +12,7 @@ import {
   ButtonView, TextInputView, MultilineInputView, SegmentedControlView,
   CheckboxView, SelectInputView,
 } from '@salilvnair/dui';
+import { Hint } from './prose';
 import { SparkleIcon, TrashIcon, PlusIcon, SpinnerIcon, WarningTriangleIcon } from '../../icons';
 import { useDk8sFormatStore, type LogFormat, type PreviewRow } from '../../store/dk8s-format-store';
 import { levelColor } from '../k8s/log-view';
@@ -416,14 +417,16 @@ export function LogFormatSettings() {
                     style={{ background: `color-mix(in srgb, ${ACCENT} 14%, transparent)` }} />
       </div>
 
-      <span className="text-[11px] leading-relaxed"
-            style={{ color: 'var(--color-text-muted)', maxWidth: '84ch' }}>
-        How dk8s reads your applications&rsquo; log lines — which part is the timestamp, the
-        level, the logger. Without one it falls back to looking for an uppercase level word,
-        which finds Java and Python and misses JSON, logfmt and access logs entirely.
-        A pod with no matching format is checked against the built-ins by content, so most
-        work with nothing set up here.
-      </span>
+      <Hint
+        lead={<>How dk8s reads your applications&rsquo; log lines — which part is the
+          timestamp, which is the level, which is the logger.</>}
+        points={[
+          <>A pod with no matching format is checked against the built-ins by content, so
+            most work with nothing set up here.</>,
+          <>With no format at all, dk8s falls back to looking for an uppercase level word —
+            which finds Java and Python, and misses JSON, logfmt and access logs entirely.</>,
+        ]}
+      />
 
       {/* A new format has no row to sit under, so it opens here. */}
       {draft && !isExisting && <Editor />}

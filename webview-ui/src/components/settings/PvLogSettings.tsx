@@ -14,8 +14,9 @@ import {
   layoutList, isDefaultLayouts, layoutIdFor, type PvLayout,
 } from '@daakia/pv-layouts';
 import { ButtonView, TextInputView, CheckboxView, SpinnerIcon } from '@salilvnair/dui';
+import { Hint, Lit, Tok, Why } from './prose';
 import {
-  FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon, TrashIcon, PlusIcon,
+  FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon, TrashIcon, PlusIcon, PencilIcon,
 } from '../../icons';
 import { useDk8sPvStore } from '../../store/dk8s-pv-store';
 
@@ -65,11 +66,9 @@ function MapEditor({ rows, onChange, keyPlaceholder, valuePlaceholder }: {
             onChange={e => setRow(i, k, e.target.value)}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />
-          <ButtonView
-            label="" size="md" variant="secondary"
-            iconLeft={<TrashIcon size={12} />}
+          <DeleteButton
+            title="Delete this mapping"
             onClick={() => onChange(rows.filter((_, j) => j !== i))}
-            style={{ background: 'transparent' }}
           />
         </div>
       ))}
@@ -83,8 +82,50 @@ function MapEditor({ rows, onChange, keyPlaceholder, valuePlaceholder }: {
   );
 }
 
-function Field({ label, hint, children }: {
-  label: string; hint?: React.ReactNode; children: React.ReactNode;
+/**
+ * Delete, as an icon and nothing else.
+ *
+ * These sat in bordered ghost buttons, which gave a destructive control the
+ * same visual weight as the text input it deletes and drew a box around empty
+ * space on every row. The icon carries the meaning; the border only added
+ * furniture to a column that repeats down the page.
+ */
+function IconButton({ onClick, title, color, active, children }: {
+  onClick: () => void; title: string; color: string;
+  active?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      className="cursor-pointer border-none bg-transparent p-1 shrink-0 flex items-center
+                 justify-center transition-opacity"
+      style={{ color, opacity: active ? 1 : 0.7 }}
+      onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+      onMouseLeave={e => { e.currentTarget.style.opacity = active ? '1' : '0.7'; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DeleteButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <IconButton onClick={onClick} title={title} color="var(--color-error)">
+      <TrashIcon size={12} />
+    </IconButton>
+  );
+}
+
+function Field({ label, hint, after, children }: {
+  label: string;
+  hint?: React.ReactNode;
+  /** Rendered below the hint, for anything that reads as a footnote to it. */
+  after?: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -98,6 +139,7 @@ function Field({ label, hint, children }: {
           {hint}
         </span>
       )}
+      {after}
     </div>
   );
 }
@@ -120,6 +162,15 @@ function LayoutTable({ value, layouts, onChange }: {
   layouts: PvLayout[] | undefined;
   onChange: (over: { layouts?: PvLayout[]; template?: string }) => void;
 }) {
+  /*
+    Which row is open for editing, if any.
+
+    Every cell used to be a live input, which made nine rows of text boxes out
+    of what is mostly a reference table: the shipped rows are read far more
+    often than they are changed, and rendering them as fields invited edits to
+    a row you meant to select and made the column impossible to skim.
+  */
+  const [editing, setEditing] = useState<string | null>(null);
   const active = (value ?? '').trim();
   const saved = layoutList(layouts);
 
@@ -169,9 +220,10 @@ function LayoutTable({ value, layouts, onChange }: {
     const row: PvLayout = {
       id: layoutIdFor('layout', rows), name: '', template: '', custom: true,
     };
-    // Selected on arrival, so what you type next lands in the search rather
-    // than in a row you then have to remember to click.
+    // Selected and open on arrival, so what you type next lands in the search
+    // rather than in a row you then have to remember to click and unlock.
     commit([...rows, row], '');
+    setEditing(row.id);
   };
 
   // One blank row at a time: a second would be indistinguishable from the
@@ -181,10 +233,17 @@ function LayoutTable({ value, layouts, onChange }: {
   const cell: React.CSSProperties = {
     padding: '4px 8px', verticalAlign: 'middle', textAlign: 'left',
   };
+  const box: React.CSSProperties = {
+    display: 'block', width: '100%', borderRadius: 3, padding: '2px 4px',
+    border: '1px solid transparent',
+  };
+  // Same box for both states, so opening a row for editing does not move the
+  // text inside it by a pixel.
+  const text: React.CSSProperties = { ...box, font: 'inherit' };
   const field: React.CSSProperties = {
-    width: '100%', background: 'transparent', border: '1px solid transparent',
-    borderRadius: 3, padding: '2px 4px', outline: 'none', color: 'inherit',
-    font: 'inherit',
+    ...box, background: 'var(--color-surface-hover)',
+    borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)`,
+    outline: 'none', color: 'inherit', font: 'inherit',
   };
 
   return (
@@ -196,7 +255,7 @@ function LayoutTable({ value, layouts, onChange }: {
             <col style={{ width: '27%' }} />
             <col style={{ width: '31%' }} />
             <col />
-            <col style={{ width: 28 }} />
+            <col style={{ width: 56 }} />
           </colgroup>
           <thead>
             <tr style={{
@@ -207,12 +266,13 @@ function LayoutTable({ value, layouts, onChange }: {
               <th style={cell}>Layout</th>
               <th style={cell}>Path template</th>
               <th style={cell}>Files it finds</th>
-              <th style={cell} aria-label="Remove" />
+              <th style={cell} aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
             {rows.map((l, i) => {
               const on = !!l.template.trim() && l.template.trim() === active;
+              const open_ = editing === l.id;
               return (
                 <tr
                   key={l.id}
@@ -230,30 +290,60 @@ function LayoutTable({ value, layouts, onChange }: {
                   }}
                 >
                   <td style={{ ...cell, fontSize: 11 }}>
-                    <input
-                      value={l.name}
-                      placeholder="name it"
-                      aria-label="Layout name"
-                      onChange={e => edit(i, { name: e.target.value })}
-                      style={{
-                        ...field,
+                    {open_ ? (
+                      <input
+                        value={l.name}
+                        placeholder="name it"
+                        aria-label="Layout name"
+                        autoFocus
+                        onKeyDown={(e: React.KeyboardEvent) => {
+                          if (e.key === 'Enter' || e.key === 'Escape') setEditing(null);
+                        }}
+                        onChange={e => edit(i, { name: e.target.value })}
+                        style={{
+                          ...field,
+                          color: on ? ACCENT : 'var(--color-text-secondary)',
+                          fontWeight: on ? 600 : 400,
+                        }}
+                      />
+                    ) : (
+                      <span style={{
+                        ...text,
                         color: on ? ACCENT : 'var(--color-text-secondary)',
                         fontWeight: on ? 600 : 400,
-                      }}
-                    />
+                        fontStyle: l.name ? undefined : 'italic',
+                        opacity: l.name ? 1 : 0.6,
+                      }}>
+                        {l.name || 'unnamed'}
+                      </span>
+                    )}
                   </td>
                   <td style={{ ...cell, fontSize: 10 }}>
-                    <input
-                      value={l.template}
-                      placeholder="{app}-{env}-pvc/**/{app}*.log*"
-                      aria-label="Path template"
-                      spellCheck={false}
-                      onChange={e => edit(i, { template: e.target.value })}
-                      style={{
-                        ...field, fontFamily: 'monospace',
+                    {open_ ? (
+                      <input
+                        value={l.template}
+                        placeholder="{app}-{env}-pvc/**/{app}*.log*"
+                        aria-label="Path template"
+                        spellCheck={false}
+                        onKeyDown={(e: React.KeyboardEvent) => {
+                          if (e.key === 'Enter' || e.key === 'Escape') setEditing(null);
+                        }}
+                        onChange={e => edit(i, { template: e.target.value })}
+                        style={{
+                          ...field, fontFamily: 'monospace',
+                          color: on ? ACCENT : 'var(--color-text-secondary)',
+                        }}
+                      />
+                    ) : (
+                      <span style={{
+                        ...text, fontFamily: 'monospace',
                         color: on ? ACCENT : 'var(--color-text-secondary)',
-                      }}
-                    />
+                        fontStyle: l.template ? undefined : 'italic',
+                        opacity: l.template ? 1 : 0.6,
+                      }}>
+                        {l.template || 'no template'}
+                      </span>
+                    )}
                   </td>
                   <td style={{
                     ...cell, fontSize: 9.5, fontFamily: 'monospace',
@@ -273,19 +363,22 @@ function LayoutTable({ value, layouts, onChange }: {
                     )}
                   </td>
                   <td style={{ ...cell, textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();   // the row selects; the x deletes
-                        remove(i);
-                      }}
-                      title={l.name ? `Delete "${l.name}"` : 'Delete this row'}
-                      aria-label={`Delete layout ${l.name || i + 1}`}
-                      className="cursor-pointer border-none bg-transparent p-0 flex items-center justify-center"
-                      style={{ color: 'var(--color-error)', lineHeight: 1 }}
-                    >
-                      <TrashIcon size={11} />
-                    </button>
+                    {/* The row selects; these act on it. */}
+                    <span className="flex items-center justify-end gap-0.5 pl-1"
+                          onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                      <IconButton
+                        title={open_ ? 'Done editing' : 'Edit this row'}
+                        color={open_ ? ACCENT : 'var(--color-text-muted)'}
+                        active={open_}
+                        onClick={() => setEditing(open_ ? null : l.id)}
+                      >
+                        <PencilIcon size={11} />
+                      </IconButton>
+                      <DeleteButton
+                        title={l.name ? `Delete "${l.name}"` : 'Delete this row'}
+                        onClick={() => remove(i)}
+                      />
+                    </span>
                   </td>
                 </tr>
               );
@@ -407,13 +500,19 @@ export function PvLogSettings() {
         )}
       </div>
 
-      <span className="text-[11px] leading-relaxed"
-            style={{ color: 'var(--color-text-muted)', maxWidth: '92ch' }}>
-        <code>kubectl logs</code> reaches the running container and the one before it, and
-        nothing else — a pod that has restarted for a day has lost the restart that mattered.
-        If your cluster ships logs to a volume that is mounted on this machine, point dk8s at
-        it and Search Everywhere will look there too, alongside the live pods.
-      </span>
+      <div>
+        <Hint
+          lead={<>
+            <Lit>kubectl logs</Lit> reaches the running container and the one before it, and
+            nothing else — a pod that has restarted all day has lost the restart that
+            mattered.
+          </>}
+          points={[
+            <>If your cluster ships logs to a volume mounted on this machine, point dk8s at
+              it and Search Everywhere looks there too, alongside the live pods.</>,
+          ]}
+        />
+      </div>
 
       <CheckboxView
         label="Search archived logs as well as live pods"
@@ -447,11 +546,9 @@ export function PvLogSettings() {
                   style={{ width: '100%', fontFamily: 'monospace' }}
                 />
                 {mounts.length > 1 && (
-                  <ButtonView
-                    label="" size="md" variant="secondary"
-                    iconLeft={<TrashIcon size={12} />}
+                  <DeleteButton
+                    title="Remove this mount"
                     onClick={() => patch({ mounts: mounts.filter((_, j) => j !== i) })}
-                    style={{ background: 'transparent' }}
                   />
                 )}
               </div>
@@ -484,22 +581,23 @@ export function PvLogSettings() {
         <Field
           label="layout"
           hint={
-            <>
-              Where one pod&rsquo;s files live, relative to the mount. Click a row to
-              use it, edit any row in place, and delete the ones that do not describe
-              anything here.
-              {' '}<code>{'{app}'}</code>, <code>{'{env}'}</code>, <code>{'{namespace}'}</code>,
-              {' '}<code>{'{pod}'}</code>, <code>{'{container}'}</code> and <code>{'{date}'}</code>
-              {' '}are filled in per pod; <code>*</code> and <code>**</code> work as globs.
-              {' '}<code>{'{app}'}</code> is the pod name with its ReplicaSet hash and pod
-              suffix removed, so <code>zp-backend-7f9455548d-xm6kc</code> becomes
-              {' '}<code>zp-backend</code>. <code>{'{env}'}</code> comes from the cluster,
-              mapped below. <code>**</code> matches no directories as well as many, which
-              is what lets one row cover both the file being written now and the rotated
-              ones beside it: <code>my-app-prod-pvc/my-app.log</code> and
-              {' '}<code>my-app-prod-pvc/archived/my-app-2026-08-30.log.gz</code> are both
-              found by <code>{'{app}-{env}-pvc/**/{app}*.log*'}</code>.
-            </>
+            <Hint
+              lead={<>Where one pod&rsquo;s files live, relative to the mount.</>}
+              points={[
+                <>Click a row to use it, edit any row in place, and delete the ones
+                  that describe nothing here.</>,
+                <><Tok>{'{app}'}</Tok> <Tok>{'{env}'}</Tok> <Tok>{'{namespace}'}</Tok>{' '}
+                  <Tok>{'{pod}'}</Tok> <Tok>{'{container}'}</Tok> <Tok>{'{date}'}</Tok>{' '}
+                  are filled in per pod. <Lit>*</Lit> and <Lit>**</Lit> are globs.</>,
+                <><Tok>{'{app}'}</Tok> is the pod name without its ReplicaSet hash and pod
+                  suffix, so <Lit>zp-backend-7f9455548d-xm6kc</Lit> becomes{' '}
+                  <Lit>zp-backend</Lit>. <Tok>{'{env}'}</Tok> comes from the cluster, mapped
+                  below.</>,
+                <><Lit>**</Lit> matches no directories as well as many, which is what lets
+                  one row cover both <Lit>my-app-prod-pvc/my-app.log</Lit> and{' '}
+                  <Lit>my-app-prod-pvc/archived/my-app-2026-08-30.log.gz</Lit>.</>,
+              ]}
+            />
           }
         >
           <LayoutTable
@@ -512,13 +610,16 @@ export function PvLogSettings() {
         <Field
           label="fallback pattern"
           hint={
-            <>
-              Optional. A regular expression matched against each file&rsquo;s path below the
-              mount, for anything the template cannot express. Named groups
-              {' '}<code>{'(?<namespace>…)'}</code>, <code>{'(?<app>…)'}</code> and
-              {' '}<code>{'(?<pod>…)'}</code> say which pod a file belongs to; without them a file is
-              claimed when the pod or application name appears in its path.
-            </>
+            <Hint
+              lead={<>Optional. A regular expression matched against each file&rsquo;s path
+                below the mount, for anything the rows above cannot express.</>}
+              points={[
+                <>Named groups <Lit>{'(?<namespace>…)'}</Lit>, <Lit>{'(?<app>…)'}</Lit> and{' '}
+                  <Lit>{'(?<pod>…)'}</Lit> say which pod a file belongs to.</>,
+                <>Without them, a file is claimed when the pod or application name appears
+                  anywhere in its path.</>,
+              ]}
+            />
           }
         >
           <TextInputView
@@ -532,10 +633,15 @@ export function PvLogSettings() {
         <Field
           label="what {env} means"
           hint={
-            'Kubernetes has no notion of an environment, so this is the one thing that cannot be '
-            + 'derived. Match part of a context name on the left, and the token it stands for on '
-            + 'the right. Left empty, {env} matches anything — which still finds the logs, it just '
-            + 'cannot tell a prod claim from a dev one.'
+            <Hint
+              lead={<>The one thing that cannot be derived, because Kubernetes has no
+                notion of an environment.</>}
+              points={[
+                <>Left: part of a context name. Right: what <Tok>{'{env}'}</Tok> becomes.</>,
+                <>Left empty, <Tok>{'{env}'}</Tok> matches anything — which still finds the
+                  logs, it just cannot tell a prod claim from a dev one.</>,
+              ]}
+            />
           }
         >
           <MapEditor rows={envRows} onChange={setEnv}
@@ -545,13 +651,16 @@ export function PvLogSettings() {
         <Field
           label="what {app} means"
           hint={
-            <>
-              Usually nothing to do here. <code>{'{app}'}</code> is the pod&rsquo;s owning
-              workload, which Kubernetes reports directly — two replicas of one Deployment
-              both resolve to the same name without any guessing. This is for the two cases
-              that cannot cover: a bare pod with no owner, and a directory named something
-              other than the workload. Match part of a pod name on the left.
-            </>
+            <Hint
+              lead={<>Usually nothing to do here. <Tok>{'{app}'}</Tok> is the pod&rsquo;s
+                owning workload, which Kubernetes reports directly — two replicas of one
+                Deployment resolve to the same name without any guessing.</>}
+              points={[
+                <>For the two cases that cannot cover: a bare pod with no owner, and a
+                  directory named something other than the workload.</>,
+                <>Match part of a pod name on the left.</>,
+              ]}
+            />
           }
         >
           <MapEditor rows={appRows} onChange={setApp}
@@ -561,20 +670,27 @@ export function PvLogSettings() {
         <Field
           label="a path for one pod"
           hint={
-            <>
-              For volumes the template above cannot describe. The template assumes a claim
-              named after the workload and the environment; plenty are not — a share laid
-              out by team, a path inherited from before the cluster, one service written
-              somewhere else entirely. Rather than bending the shared template until it
-              covers the exception and stops describing the rule, name the exception here.
-              <br />
-              On the left, a pod name: a glob when it contains <code>*</code> or{' '}
-              <code>?</code> (<code>zp-backend-*</code>), otherwise any pod whose name
-              contains it. The longest match wins, so one pod beats a family of them. On the
-              right, a path relative to the mount — still a template, so{' '}
-              <code>{'{app}'}</code>, <code>{'{env}'}</code>, <code>{'{date}'}</code> and
-              globs all work.
-            </>
+            <Hint
+              lead={<>One pod that lives somewhere the rows above do not describe.</>}
+              points={[
+                <>Left: a pod name. A glob when it contains <Lit>*</Lit> or <Lit>?</Lit>{' '}
+                  (<Lit>zp-backend-*</Lit>), otherwise any pod whose name contains it.</>,
+                <>The longest match wins, so a rule for one pod beats a rule for a family
+                  of them.</>,
+                <>Right: a path relative to the mount — still a template, so{' '}
+                  <Tok>{'{app}'}</Tok>, <Tok>{'{env}'}</Tok>, <Tok>{'{date}'}</Tok> and globs
+                  all work.</>,
+              ]}
+            />
+          }
+          after={
+            <Why>
+              The rows above assume a claim named after the workload and the environment.
+              Plenty are not — a share laid out by team, a path inherited from before the
+              cluster, one service written somewhere else entirely. Rather than bending a
+              shared template until it covers the exception and stops describing the rule,
+              name the exception here.
+            </Why>
           }
         >
           <MapEditor rows={pathRows} onChange={setPath}
@@ -583,7 +699,12 @@ export function PvLogSettings() {
         </Field>
 
         <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
-          <Field label="file extensions" hint="Comma separated. Blank means every file.">
+          <Field
+            label="file extensions"
+            hint={<Hint lead={<>Comma separated. Blank means every file. Matched
+              anywhere in the name, so <Lit>.log</Lit> also admits <Lit>.log.gz</Lit>
+              and <Lit>.log.1</Lit>.</>} />}
+          >
             <TextInputView
               value={(draft.extensions ?? []).join(', ')} size="md" accentColor={ACCENT}
               placeholder=".log, .txt"
@@ -593,7 +714,10 @@ export function PvLogSettings() {
               style={{ width: '100%', fontFamily: 'monospace' }}
             />
           </Field>
-          <Field label="ignore files older than" hint="Days. 0 searches everything.">
+          <Field
+            label="ignore files older than"
+            hint={<Hint lead={<>Days. <Lit>0</Lit> searches everything.</>} />}
+          >
             <TextInputView
               type="number" value={String(draft.maxAgeDays ?? 0)} size="md" accentColor={ACCENT}
               onChange={e => patch({ maxAgeDays: Math.max(0, parseInt(e.target.value, 10) || 0) })}
