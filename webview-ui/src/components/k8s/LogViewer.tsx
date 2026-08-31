@@ -1398,8 +1398,20 @@ export function LogViewer() {
       {/* ── Footer: what is held, and where you are ── */}
       <div className="flex items-center gap-3 px-4 py-1.5 text-[10.5px] shrink-0"
            style={{ borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
+        {/*
+          What is held, said as a fraction of what was asked for.
+
+          "161 lines buffered" reads as "this is the log". It is the tail of a
+          pod that may have written millions, and the number that makes it
+          legible is the one next to it: 161 OF THE LAST 200 requested. Live
+          pods cannot say how many lines exist — kubectl does not offer a count
+          and asking for one means reading the whole log, which is the thing
+          being avoided — so the denominator is the request, which is a fact,
+          rather than the total, which would be a guess.
+        */}
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-          {logs.length.toLocaleString()} lines buffered
+          {logs.length.toLocaleString()} of the last {logTail.toLocaleString()} lines
+          {logs.length >= logTail && ' · at the limit'}
           {logs.length > 0 && ` · ${(bufferBytes(logs) / 1024 / 1024).toFixed(1)} MB`}
           {oldest !== undefined && ` · oldest ${formatLogTime(oldest)}`}
         </span>

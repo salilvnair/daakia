@@ -21,6 +21,7 @@ import {
 } from './k8s-log-search';
 import type { LogLevel } from './k8s-log-stream';
 import { filesForPod, type PvLogConfig, type PvFile, type PodRef } from './pv-logs';
+import { openLog, findTimeOffset } from './log-window';
 
 /** One archived file that matched, for the per-pod file list in the results. */
 export interface PvFileResult {
@@ -86,9 +87,36 @@ async function scanFile(
   // Lines still owed an `after` context, so a hit near the end still gets it.
   let pending: { m: PvMatch; want: number }[] = [];
 
+  /*
+    Start where the time range starts, rather than at byte 0.
+
+    An archive is opened and bisected to find the first line at or after the
+    cutoff, so `--since 1h` over a multi-gigabyte rotated log reads the last
+    hour rather than the whole history. Without this the range narrowed what
+    was REPORTED and not what was read — the slow half of the work happened
+    either way, which is the opposite of what a filter is for.
+
+    A failure here is not fatal: the offset falls back to 0 and the file is
+    scanned in full, which is exactly the old behaviour.
+  */
+  let startAt = 0;
+  if (opts.sinceSeconds && opts.sinceSeconds > 0) {
+    const cutoff = Date.now() - opts.sinceSeconds * 1000;
+    try {
+      const win = await openLog(f.file);
+      try {
+        startAt = await findTimeOffset(win, cutoff);
+      } finally {
+        await win.close();
+      }
+    } catch {
+      startAt = 0;
+    }
+  }
+
   let stream;
   try {
-    stream = createReadStream(f.file, { encoding: 'utf8' });
+    stream = createReadStream(f.file, { encoding: 'utf8', start: startAt });
   } catch (e) {
     result.error = e instanceof Error ? e.message : String(e);
     return { result, matches };

@@ -12,7 +12,9 @@
 import { probeEnvironment, setKubectlPath } from '../../../services/k8s/kubectl';
 import { connEvidence } from '../../../services/k8s/conn-summary';
 import { probeAccess, forbiddenReason } from '../../../services/k8s/k8s-access';
-import { probePv, clearPvCache, type PvLogConfig } from '../../../services/k8s/pv-logs';
+import {
+  probePv, clearPvCache, mountsOf, type PvLogConfig,
+} from '../../../services/k8s/pv-logs';
 import { searchPvForPod, type PvMatch } from '../../../services/k8s/pv-search';
 import {
   listContexts, checkReachable, listNamespaces, defaultNamespace, looksLikeProduction,
@@ -1558,7 +1560,17 @@ export function handleDk8sSearchLogs(
     see the fast half.
   */
   const pv = pvConfig();
-  const searchArchive = !!pv?.enabled && !!pv.root?.trim();
+  /*
+    Asked through `mountsOf`, not through `pv.root`.
+
+    `root` is the deprecated single-mount field, kept only so an old config
+    still loads. Every config the settings screen writes uses `mounts`, so
+    gating on `root` meant the archive pass never ran for anyone who had
+    configured archives through the UI — the feature was dead for its own
+    supported shape, and silently: the live half returned, the archive half
+    was skipped, and nothing said so.
+  */
+  const searchArchive = !!pv?.enabled && mountsOf(pv).length > 0;
 
   postMessage({
     type: 'dk8s:searchStarted',
@@ -1689,7 +1701,9 @@ export async function handleDk8sSavePv(
   saveState({ pvLogs: cfg });
   clearPvCache();
   postMessage({ type: 'dk8s:pvConfig', config: cfg });
-  if (cfg?.root?.trim()) {
+  // Same reason as above: a config with mounts and no legacy root would save
+  // without ever reporting whether the path it named actually exists.
+  if (cfg && mountsOf(cfg).length > 0) {
     postMessage({ type: 'dk8s:pvProbe', probe: await probePv(cfg) });
   }
 }

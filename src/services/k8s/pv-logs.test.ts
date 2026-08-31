@@ -5,6 +5,7 @@ import * as path from 'path';
 import {
   appNameOf, expandTemplate, filesForPod, walkRoot, applyPattern, probePv,
   isInsideRoot, clearPvCache, type PvLogConfig,
+ mountsOf,
 } from './pv-logs';
 
 let root: string;
@@ -187,5 +188,44 @@ describe('probePv', () => {
 
     const blank = await probePv({ enabled: true, mounts: [] });
     expect(blank.error).toMatch(/No mount path set/);
+  });
+});
+
+/*
+  The gate that made archive search dead.
+
+  `handleDk8sSearchLogs` asked `pv.root?.trim()` before running the archive
+  pass. `root` is the deprecated single-mount field; every config the settings
+  screen writes uses `mounts`. So archives were never searched for anyone who
+  had configured them through the UI — silently, because the live half still
+  returned. `mountsOf` is the question that should have been asked, and these
+  pin its behaviour for both shapes.
+*/
+describe('mountsOf — what counts as configured', () => {
+  it('reports a modern config with mounts', () => {
+    expect(mountsOf({ enabled: true, mounts: [{ path: '/mnt/pv' }] } as PvLogConfig))
+      .toHaveLength(1);
+  });
+
+  it('still reports a legacy config with only root', () => {
+    expect(mountsOf({ enabled: true, root: '/mnt/pv' } as PvLogConfig)).toHaveLength(1);
+  });
+
+  it('prefers mounts when both are present', () => {
+    const out = mountsOf({
+      enabled: true, root: '/old', mounts: [{ path: '/new' }],
+    } as PvLogConfig);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.path).toBe('/new');
+  });
+
+  it('reports nothing when neither is set', () => {
+    expect(mountsOf({ enabled: true } as PvLogConfig)).toHaveLength(0);
+  });
+
+  it('ignores a mount with a blank path', () => {
+    // An empty row left behind in the settings list must not count as configured.
+    expect(mountsOf({ enabled: true, mounts: [{ path: '  ' }] } as PvLogConfig))
+      .toHaveLength(0);
   });
 });

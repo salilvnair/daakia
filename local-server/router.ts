@@ -52,7 +52,9 @@ import {
   handleDk8sLogsOpen, handleDk8sLogsClose, handleDk8sDescribe,
   handleDk8sShell, handleDk8sProbePod, handleDk8sAsk,
   handleDk8sCollect, handleDk8sAnalyze, handleDk8sRevealArtifacts,
+  handleDk8sProbePv, handleDk8sSavePv, handleDk8sOpenLogFile, handleDk8sSetLogLineNumbers,
 } from '../src/panel/main/handlers/k8s-handler';
+import { handleDk8sHeapInvestigate } from '../src/panel/main/handlers/heap-investigate';
 import { handleSseConnect, handleSseDisconnect } from '../src/panel/main/handlers/sse-handler';
 import { handleSocketIOConnect, handleSocketIODisconnect, handleSocketIOEmit } from '../src/panel/main/handlers/socketio-handler';
 import { handleMqttConnect, handleMqttDisconnect, handleMqttSubscribe, handleMqttUnsubscribe, handleMqttPublish } from '../src/panel/main/handlers/mqtt-handler';
@@ -131,6 +133,31 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:exportSearch':
       await handleDk8sExportSearch(msg, post);
+      break;
+
+    /*
+      Five messages the webview has always sent and this mirror never answered.
+
+      Each one silently did nothing in browser mode: the archived-logs settings
+      screen accepted a mount path and a template, said Save, and wrote
+      nothing — so every PV feature looked broken to anyone testing here, with
+      no error to explain it. Found by pointing dk8s at a real volume for the
+      first time.
+    */
+    case 'dk8s:savePv':
+      await handleDk8sSavePv(msg, post);
+      break;
+    case 'dk8s:probePv':
+      await handleDk8sProbePv(msg, post);
+      break;
+    case 'dk8s:openLogFile':
+      await handleDk8sOpenLogFile(msg);
+      break;
+    case 'dk8s:setLogLineNumbers':
+      handleDk8sSetLogLineNumbers(msg, post);
+      break;
+    case 'dk8s:heapInvestigate':
+      await handleDk8sHeapInvestigate(msg, post);
       break;
 
     /*
