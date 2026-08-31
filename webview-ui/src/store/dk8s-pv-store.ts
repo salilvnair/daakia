@@ -19,12 +19,21 @@ export interface PvMount {
   template?: string;
 }
 
+import type { PvLayout } from '@daakia/pv-layouts';
+
 export interface PvLogConfig {
   enabled: boolean;
   mounts?: PvMount[];
   /** @deprecated the old single mount; still read so existing configs work. */
   root?: string;
   template?: string;
+  /**
+   * Layouts saved from the settings screen, offered beside the shipped ones.
+   *
+   * Stored with the rest of the PV config rather than on their own: a layout
+   * only means anything next to the mounts it describes.
+   */
+  layouts?: PvLayout[];
   pattern?: string;
   extensions?: string[];
   maxAgeDays?: number;

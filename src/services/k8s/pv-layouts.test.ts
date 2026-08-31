@@ -10,7 +10,9 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, dirname } from 'path';
-import { BUILTIN_LAYOUTS, layoutFor } from './pv-layouts';
+import {
+  BUILTIN_LAYOUTS, allLayouts, layoutFor, layoutIdFor,
+} from './pv-layouts';
 import { filesForPod, clearPvCache, type PvLogConfig } from './pv-logs';
 
 /** The pod the examples are written for. */
@@ -72,11 +74,11 @@ describe('the layouts as a set', () => {
 
 describe('layoutFor', () => {
   it('recognises a template that came from a layout', () => {
-    expect(layoutFor('{app}-{env}-pvc/**/{app}*.log')?.id).toBe('pvc-per-app-env');
+    expect(layoutFor('{app}-{env}-pvc/**/{app}*.log*')?.id).toBe('pvc-per-app-env');
   });
 
   it('tolerates surrounding whitespace', () => {
-    expect(layoutFor('  {app}-{env}-pvc/**/{app}*.log  ')?.id).toBe('pvc-per-app-env');
+    expect(layoutFor('  {app}-{env}-pvc/**/{app}*.log*  ')?.id).toBe('pvc-per-app-env');
   });
 
   /*
@@ -90,5 +92,67 @@ describe('layoutFor', () => {
   it('recognises nothing for an empty template', () => {
     expect(layoutFor('')).toBeUndefined();
     expect(layoutFor(undefined)).toBeUndefined();
+  });
+});
+
+/*
+  Layouts somebody saves, beside the ones that ship.
+
+  The shipped nine are a starting point; a volume laid out some other way has
+  to be nameable and reusable, or the template field is retyped from memory
+  every time a new mount is added.
+*/
+describe('saved layouts', () => {
+  const mine = { id: 'custom.ours', name: 'Ours', template: 'logs/{app}/*.log' };
+
+  it('offers saved layouts after the shipped ones', () => {
+    const all = allLayouts([mine]);
+    expect(all).toHaveLength(BUILTIN_LAYOUTS.length + 1);
+    // Position matters: a picker whose buttons move as you add to it has to be
+    // re-read every time.
+    expect(all[all.length - 1]!.id).toBe('custom.ours');
+    expect(all.slice(0, BUILTIN_LAYOUTS.length).map(l => l.id))
+      .toEqual(BUILTIN_LAYOUTS.map(l => l.id));
+  });
+
+  it('marks saved ones as custom so only they can be removed', () => {
+    const all = allLayouts([mine]);
+    expect(all.find(l => l.id === 'custom.ours')!.custom).toBe(true);
+    expect(all.find(l => l.id === 'pvc-per-app-env')!.custom).toBeUndefined();
+  });
+
+  it('recognises a saved layout as the current one', () => {
+    expect(layoutFor('logs/{app}/*.log', [mine])?.id).toBe('custom.ours');
+  });
+
+  it('still recognises a shipped layout when saved ones exist', () => {
+    expect(layoutFor('{app}-{env}-pvc/**/{app}*.log*', [mine])?.id).toBe('pvc-per-app-env');
+  });
+
+  it('leaves the shipped list untouched', () => {
+    // `allLayouts` copies rather than mutating, or saving one layout would
+    // mark a shipped one custom for the rest of the session.
+    allLayouts([mine]);
+    expect(BUILTIN_LAYOUTS.some(l => l.custom)).toBe(false);
+  });
+});
+
+describe('layoutIdFor', () => {
+  it('makes a readable id from a name', () => {
+    expect(layoutIdFor('Our Prod Claim')).toBe('custom.our-prod-claim');
+  });
+
+  it('cannot collide with a shipped id', () => {
+    // Every generated id is namespaced, so naming one "Pod named" is fine.
+    expect(layoutIdFor('pod named').startsWith('custom.')).toBe(true);
+  });
+
+  it('disambiguates a repeated name', () => {
+    const first = { id: 'custom.ours', name: 'Ours', template: 'a' };
+    expect(layoutIdFor('Ours', [first])).toBe('custom.ours-2');
+  });
+
+  it('falls back for a name with nothing usable in it', () => {
+    expect(layoutIdFor('!!!')).toBe('custom.layout');
   });
 });

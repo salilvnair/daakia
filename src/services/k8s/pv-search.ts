@@ -14,6 +14,7 @@
  */
 
 import { createReadStream } from 'fs';
+import { createGunzip } from 'zlib';
 import * as readline from 'readline';
 import {
   buildSearchMatcher, levelOf, isContinuation, hasAppTimestamp,
@@ -99,13 +100,18 @@ async function scanFile(
     A failure here is not fatal: the offset falls back to 0 and the file is
     scanned in full, which is exactly the old behaviour.
   */
+  const cutoffMs = opts.sinceSeconds && opts.sinceSeconds > 0
+    ? Date.now() - opts.sinceSeconds * 1000
+    : undefined;
+
+  const gz = /\.gz$/i.test(f.file);
+
   let startAt = 0;
-  if (opts.sinceSeconds && opts.sinceSeconds > 0) {
-    const cutoff = Date.now() - opts.sinceSeconds * 1000;
+  if (cutoffMs !== undefined && !gz) {
     try {
       const win = await openLog(f.file);
       try {
-        startAt = await findTimeOffset(win, cutoff);
+        startAt = await findTimeOffset(win, cutoffMs);
       } finally {
         await win.close();
       }
@@ -114,9 +120,26 @@ async function scanFile(
     }
   }
 
+  /*
+    A rotated archive is usually compressed, and reading it as text finds
+    nothing.
+
+    `app.log.gz` passes the extension filter — the check is a contains, so
+    `.log` matches — and was then opened as UTF-8, which turns compressed bytes
+    into replacement characters. The search ran, scanned a nonsense line count
+    and reported no matches, which is indistinguishable from a file that simply
+    did not contain the term.
+
+    A gzip stream cannot be seeked into, so the time-range offset does not
+    apply to one: there is no way to know where a byte lands in the compressed
+    file without inflating everything before it. The range still filters what
+    is reported, it just cannot save the read — which is why the range is also
+    enforced per line below.
+  */
   let stream;
   try {
-    stream = createReadStream(f.file, { encoding: 'utf8', start: startAt });
+    const raw = createReadStream(f.file, gz ? {} : { encoding: 'utf8', start: startAt });
+    stream = gz ? raw.pipe(createGunzip()).setEncoding('utf8') : raw;
   } catch (e) {
     result.error = e instanceof Error ? e.message : String(e);
     return { result, matches };
@@ -133,11 +156,31 @@ async function scanFile(
   */
   let prevLevel: LogLevel = 'other';
   let sawAppTimestamp = false;
+  /** The most recent time seen, carried across lines that have none. */
+  let seenTs: number | undefined;
 
   try {
     for await (const line of rl) {
       if (signal.cancelled) break;
       result.scanned++;
+
+      /*
+        The range, enforced on the line as well as on the offset.
+
+        Seeking was the only thing keeping out-of-range lines out of the
+        answer: everything before the cutoff was physically skipped, so no
+        check was needed. A compressed file cannot be seeked, so that
+        arrangement silently stopped filtering the moment one was read — a
+        one-hour search returned hits from days ago, because nothing had ever
+        compared a line's time to the cutoff.
+
+        A line with no time of its own inherits the last one seen, so a stack
+        frame is kept or dropped with the event that printed it, and a file
+        whose format carries no timestamp at all is never filtered away.
+      */
+      const lineTs = timeOf(line);
+      if (lineTs !== undefined) seenTs = lineTs;
+      const inRange = cutoffMs === undefined || seenTs === undefined || seenTs >= cutoffMs;
 
       const own = levelOf(line);
       const level: LogLevel = own !== 'other'
@@ -154,7 +197,7 @@ async function scanFile(
       }
       pending = pending.filter(p => p.want > 0);
 
-      const hits = match(line);
+      const hits = inRange ? match(line) : null;
       if (hits) {
         result.matched++;
         if (budget.left > 0) {
@@ -168,7 +211,7 @@ async function scanFile(
             // renders through exactly the same component as a live one.
             context: '',
             line: result.scanned,
-            ts: timeOf(line),
+            ts: lineTs,
             level,
             text: line,
             hits,

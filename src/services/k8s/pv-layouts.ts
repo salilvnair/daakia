@@ -27,21 +27,30 @@ export interface PvLayout {
   /** The template it fills in. */
   template: string;
   /** One line on when this is the right one. */
-  hint: string;
-  /** Two paths it matches, so the shape is legible without parsing globs. */
-  example: [string, string];
+  hint?: string;
+  /**
+   * Two paths it matches, so the shape is legible without parsing globs.
+   *
+   * Shipped layouts carry these and a test checks each one against its own
+   * examples. A layout somebody saves does not — it came from a real volume,
+   * which is a better example than any that could be written for it.
+   */
+  example?: [string, string];
+  /** Saved by the user rather than shipped. Only these can be removed. */
+  custom?: boolean;
 }
 
 export const BUILTIN_LAYOUTS: PvLayout[] = [
   {
     id: 'pvc-per-app-env',
     name: 'Claim per app and environment, with archived/',
-    template: '{app}-{env}-pvc/**/{app}*.log',
+    template: '{app}-{env}-pvc/**/{app}*.log*',
     hint: 'A claim named for the app and environment, the live file at its root '
-      + 'and rotated files in a subdirectory.',
+      + 'and rotated files in a subdirectory. The trailing * catches compressed '
+      + 'rotations, which is what most of an archive is.',
     example: [
       'my-app-prod-pvc/my-app.log',
-      'my-app-prod-pvc/archived/my-app-2026-08-30.log',
+      'my-app-prod-pvc/archived/my-app-2026-08-30.log.gz',
     ],
   },
   {
@@ -137,15 +146,40 @@ export const BUILTIN_LAYOUTS: PvLayout[] = [
 ];
 
 /**
- * Which shipped layout a template came from, if any.
+ * Everything the picker offers: what ships, then what has been saved.
+ *
+ * Saved layouts come last so the shipped ones keep their positions — a picker
+ * whose buttons move as you add to it is one you have to re-read every time.
+ */
+export function allLayouts(custom: PvLayout[] = []): PvLayout[] {
+  return [...BUILTIN_LAYOUTS, ...custom.map(l => ({ ...l, custom: true }))];
+}
+
+/**
+ * A layout id from a name, stable enough to delete by and unique enough not to
+ * collide with a shipped one.
+ */
+export function layoutIdFor(name: string, existing: PvLayout[] = []): string {
+  const base = 'custom.' + (name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'layout');
+  if (!existing.some(l => l.id === base)) return base;
+  let n = 2;
+  while (existing.some(l => l.id === `${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}
+
+/**
+ * Which layout a template came from, if any.
  *
  * Compared as text rather than tracked as a field, so a template that was
  * picked and then edited correctly reads as custom — and one typed by hand
  * that happens to match a shipped layout is recognised as that layout, which
  * is true and worth showing.
  */
-export function layoutFor(template: string | undefined): PvLayout | undefined {
+export function layoutFor(
+  template: string | undefined, custom: PvLayout[] = [],
+): PvLayout | undefined {
   const t = (template ?? '').trim();
   if (!t) return undefined;
-  return BUILTIN_LAYOUTS.find(l => l.template === t);
+  return allLayouts(custom).find(l => l.template.trim() === t);
 }

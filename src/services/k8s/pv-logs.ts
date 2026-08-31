@@ -54,6 +54,8 @@ export interface PvMount {
   template?: string;
 }
 
+import type { PvLayout } from './pv-layouts';
+
 export interface PvLogConfig {
   enabled: boolean;
   /**
@@ -67,6 +69,14 @@ export interface PvLogConfig {
   root?: string;
   /** `{namespace}/{app}/{date}/*.log`. Relative to each mount. */
   template?: string;
+  /**
+   * Layouts saved from this screen, offered beside the shipped ones.
+   *
+   * Stored with the rest of the PV config rather than in their own setting:
+   * a layout is only meaningful next to the mounts it describes, and splitting
+   * them would let one be exported or reset without the other.
+   */
+  layouts?: PvLayout[];
   /** Regex over the mount-relative path, for anything the template misses. */
   pattern?: string;
   /** Only consider files matching these extensions. Empty means all. */

@@ -9,8 +9,10 @@
  * Without that, a wrong path and an empty archive produce the same result: no
  * matches, and no way to tell which one you are looking at.
  */
-import { useEffect } from 'react';
-import { BUILTIN_LAYOUTS, layoutFor } from '@daakia/pv-layouts';
+import { useEffect, useState } from 'react';
+import {
+  allLayouts, layoutFor, layoutIdFor, type PvLayout,
+} from '@daakia/pv-layouts';
 import { ButtonView, TextInputView, CheckboxView, SpinnerIcon } from '@salilvnair/dui';
 import {
   FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon, TrashIcon, PlusIcon,
@@ -113,49 +115,169 @@ function Field({ label, hint, children }: {
  * layout correctly drops the highlight: what is shown then is a custom
  * template, which is what it has become.
  */
-function LayoutPicker({ value, onPick }: {
+function LayoutPicker({ value, custom, onPick, onSave, onRemove }: {
   value: string | undefined;
+  custom: PvLayout[];
   onPick: (template: string) => void;
+  onSave: (name: string) => void;
+  onRemove: (id: string) => void;
 }) {
-  const current = layoutFor(value);
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap gap-1.5">
-        {BUILTIN_LAYOUTS.map(l => {
-          const on = current?.id === l.id;
-          return (
-            <button
-              key={l.id}
-              type="button"
-              onClick={() => onPick(l.template)}
-              title={`${l.hint}
+  const [name, setName] = useState('');
+  const current = layoutFor(value, custom);
+  const template = (value ?? '').trim();
+  /*
+    Saving is offered only for a template that is not already a layout.
 
-${l.example[0]}
-${l.example[1]}`}
-              className="px-2 py-1 rounded cursor-pointer text-left"
-              style={{
-                fontSize: 10.5,
-                color: on ? ACCENT : 'var(--color-text-secondary)',
-                background: on
-                  ? `color-mix(in srgb, ${ACCENT} 14%, transparent)`
-                  : 'var(--color-surface-hover)',
-                border: `1px solid ${on
-                  ? `color-mix(in srgb, ${ACCENT} 45%, transparent)`
-                  : 'var(--color-surface-border)'}`,
-                fontWeight: on ? 600 : 400,
-              }}
-            >
-              {l.name}
-            </button>
-          );
-        })}
+    Otherwise the control invites you to save a duplicate of something already
+    in the table, and the table fills with the same glob under several names.
+  */
+  const canSave = !!template && !current;
+
+  const cell: React.CSSProperties = {
+    padding: '5px 8px', verticalAlign: 'top', textAlign: 'left',
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {/*
+        A table rather than a row of buttons.
+
+        The pills showed nine names and nothing else, so the one thing that
+        decides which layout is yours -- the glob it searches, and the paths
+        that glob finds -- was only visible after clicking one and reading the
+        template field below. Choosing meant clicking through all nine.
+      */}
+      <div className="rounded overflow-hidden"
+           style={{ border: '1px solid var(--color-surface-border)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '27%' }} />
+            <col style={{ width: '31%' }} />
+            <col />
+            <col style={{ width: 26 }} />
+          </colgroup>
+          <thead>
+            <tr style={{
+              background: 'var(--color-surface-hover)',
+              fontSize: 9.5, letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: 'var(--color-text-muted)',
+            }}>
+              <th style={cell}>Layout</th>
+              <th style={cell}>Path template</th>
+              <th style={cell}>Files it finds</th>
+              <th style={cell} aria-label="Remove" />
+            </tr>
+          </thead>
+          <tbody>
+            {allLayouts(custom).map(l => {
+              const on = current?.id === l.id;
+              return (
+                <tr
+                  key={l.id}
+                  onClick={() => onPick(l.template)}
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onPick(l.template);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-pressed={on}
+                  title={l.hint}
+                  className="cursor-pointer"
+                  style={{
+                    borderTop: '1px solid var(--color-surface-border)',
+                    background: on
+                      ? `color-mix(in srgb, ${ACCENT} 12%, transparent)`
+                      : 'transparent',
+                    // Marks the chosen row without moving anything, so the
+                    // table does not reflow as you click down it.
+                    boxShadow: on ? `inset 2px 0 0 ${ACCENT}` : undefined,
+                  }}
+                >
+                  <td style={{
+                    ...cell,
+                    fontSize: 11,
+                    color: on ? ACCENT : 'var(--color-text-secondary)',
+                    fontWeight: on ? 600 : 400,
+                  }}>
+                    {l.name}
+                  </td>
+                  <td style={{
+                    ...cell, fontSize: 10, fontFamily: 'monospace',
+                    color: on ? ACCENT : 'var(--color-text-secondary)',
+                    wordBreak: 'break-all',
+                  }}>
+                    {l.template}
+                  </td>
+                  <td style={{
+                    ...cell, fontSize: 9.5, fontFamily: 'monospace',
+                    color: 'var(--color-text-muted)', wordBreak: 'break-all',
+                  }}>
+                    {/*
+                      The live file and a rotated one, which is the pair that
+                      tells you whether this is your volume shape. A saved
+                      layout has none: it came from a real mount, so its own
+                      template is the example.
+                    */}
+                    {(l.example ?? []).map(e => <div key={e}>{e}</div>)}
+                    {!l.example && (
+                      <span style={{ fontFamily: 'inherit', fontStyle: 'italic' }}>
+                        saved by you
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ ...cell, textAlign: 'center' }}>
+                    {/* Only a saved layout can be removed. A shipped one has
+                        no delete, because there is nothing to restore it from. */}
+                    {l.custom && (
+                      <button
+                        type="button"
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();   // the row picks; the x removes
+                          onRemove(l.id);
+                        }}
+                        title={`Remove the layout "${l.name}"`}
+                        aria-label={`Remove layout ${l.name}`}
+                        className="cursor-pointer border-none bg-transparent p-0"
+                        style={{ color: 'var(--color-error)', fontSize: 12, lineHeight: 1 }}
+                      >
+                        &times;
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-      {/* The two paths the chosen layout matches, so the glob is legible
-          without mentally expanding it. */}
-      {current && (
-        <div className="flex flex-col gap-0.5 font-mono"
-             style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
-          {current.example.map(e => <span key={e}>{e}</span>)}
+
+      {canSave && (
+        <div className="flex items-center gap-1.5">
+          <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
+            Save this template as a layout
+          </span>
+          <TextInputView
+            value={name} size="sm" accentColor={ACCENT}
+            placeholder="a name for it"
+            onChange={e => setName(e.target.value)}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' && name.trim()) { onSave(name.trim()); setName(''); }
+            }}
+            style={{ width: 200 }}
+          />
+          <ButtonView
+            label="Save layout" size="sm" variant="secondary"
+            accentColor={ACCENT} color={ACCENT}
+            disabled={!name.trim()}
+            onClick={() => { onSave(name.trim()); setName(''); }}
+            style={{
+              background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+              borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`,
+            }}
+          />
         </div>
       )}
     </div>
@@ -297,9 +419,27 @@ export function PvLogSettings() {
 
         <Field
           label="layout"
-          hint="Pick the shape your volume uses and the template below is filled in. Edit it afterwards for anything these do not cover."
+          hint="Click the row matching your volume and the template below is filled in. Edit it afterwards for anything these do not cover."
         >
-          <LayoutPicker value={draft.template} onPick={t => patch({ template: t })} />
+          <LayoutPicker
+            value={draft.template}
+            custom={draft.layouts ?? []}
+            onPick={t => patch({ template: t })}
+            onSave={name => patch({
+              layouts: [
+                ...(draft.layouts ?? []),
+                {
+                  id: layoutIdFor(name, allLayouts(draft.layouts ?? [])),
+                  name,
+                  template: (draft.template ?? '').trim(),
+                  custom: true,
+                },
+              ],
+            })}
+            onRemove={id => patch({
+              layouts: (draft.layouts ?? []).filter(l => l.id !== id),
+            })}
+          />
         </Field>
 
         <Field
@@ -317,14 +457,14 @@ export function PvLogSettings() {
               lets one template cover both the file being written now and the rotated ones
               beside it:
               {' '}<code>my-app-prod-pvc/my-app.log</code> and
-              {' '}<code>my-app-prod-pvc/archived/my-app-2026-08-30.log</code> are both found by
-              {' '}<code>{'{app}-{env}-pvc/**/{app}*.log'}</code>.
+              {' '}<code>my-app-prod-pvc/archived/my-app-2026-08-30.log.gz</code> are both found by
+              {' '}<code>{'{app}-{env}-pvc/**/{app}*.log*'}</code>.
             </>
           }
         >
           <TextInputView
             value={draft.template ?? ''} size="md" accentColor={ACCENT}
-            placeholder="{app}-{env}-pvc/**/{app}*.log"
+            placeholder="{app}-{env}-pvc/**/{app}*.log*"
             onChange={e => patch({ template: e.target.value })}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />

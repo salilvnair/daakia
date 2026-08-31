@@ -13,6 +13,7 @@
  *       archived/
  *         <app>-2026-08-30.log          rotated, one per day
  *         <app>-2026-08-29.log
+ *         <app>-2026-08-28.log.gz       older rotations, compressed
  *
  * The first version of this test used `{namespace}/{app}/{date}/*.log`, which
  * was invented rather than observed — a layout nobody mounts. It passed, which
@@ -25,6 +26,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
+import { gzipSync } from 'zlib';
 import { tmpdir } from 'os';
 import { join, dirname } from 'path';
 import { searchPvForPod } from './pv-search';
@@ -80,6 +82,18 @@ const FILES = [
     rel: 'pv-billing-prod-pvc/pv-billing.log' },
   { app: 'pv-billing', day: '2026-08-30', count: 3000, seed: 33,
     rel: 'pv-billing-prod-pvc/archived/pv-billing-2026-08-30.log' },
+  /*
+    Compressed, because that is what a rotation older than a day or two
+    actually is on disk.
+
+    This file is why the fixture matters more than the unit tests. `.log.gz`
+    passed the extension filter — the check is a contains, so `.log` matches —
+    and the scanner then opened it as UTF-8 text, turning compressed bytes into
+    replacement characters. It reported zero matches and a nonsense line count,
+    which reads exactly like a file that does not contain the term.
+  */
+  { app: 'pv-checkout', day: '2026-08-28', count: 3000, seed: 41,
+    rel: 'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-28.log.gz', gzip: true },
 ];
 
 /**
@@ -91,19 +105,26 @@ const FILES = [
  */
 const truth: Record<string, { lines: number; failures: number; files: number }> = {};
 
+/** Lines per file, so a claim about seeking can exclude the unseekable one. */
+const linesByRel: Record<string, number> = {};
+
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'dk8s-pv-'));
   for (const f of FILES) {
     const file = join(root, ...f.rel.split('/'));
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, makeLog(f.app, f.day, f.count, f.seed));
+    const body = makeLog(f.app, f.day, f.count, f.seed);
+    writeFileSync(file, f.gzip ? gzipSync(Buffer.from(body, 'utf8')) : body);
 
-    const text = readFileSync(file, 'utf8');
+    // Truth comes from the text that was written, not from the file, so a
+    // compressed one contributes the same counts as a plain one.
+    const text = f.gzip ? body : readFileSync(file, 'utf8');
     const acc = truth[f.app] ?? { lines: 0, failures: 0, files: 0 };
     acc.lines += text.split('\n').filter(Boolean).length;
     acc.failures += (text.match(/ledger post failed/g) ?? []).length;
     acc.files += 1;
     truth[f.app] = acc;
+    linesByRel[f.rel] = text.split('\n').filter(Boolean).length;
   }
   clearPvCache();
 });
@@ -119,7 +140,7 @@ const cfg = (): PvLogConfig => ({
     under `archived/`. A template without it finds only one of the two, and
     which one it misses depends on where you put the wildcard.
   */
-  template: '{app}-{env}-pvc/**/{app}*.log',
+  template: '{app}-{env}-pvc/**/{app}*.log*',
   extensions: ['.log'],
 });
 
@@ -164,6 +185,7 @@ describe('searching a mounted volume', () => {
   it('reports which files the hits came from', async () => {
     const { result } = await search('pv-checkout', { query: 'ledger post failed' });
     expect(result.files.map(f => f.rel).sort()).toEqual([
+      'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-28.log.gz',
       'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-29.log',
       'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-30.log',
       'pv-checkout-prod-pvc/pv-checkout.log',
@@ -238,14 +260,35 @@ describe('searching a mounted volume', () => {
     filtered afterwards, so the expensive half happened regardless — a filter
     that cost the same as no filter.
   */
-  it('reads only the tail of a file for a recent time range', async () => {
-    // Every fixture line is dated 2026-08-29/30, so a one-hour window ending
-    // now contains none of them: the seek should land at the end and the scan
-    // should walk almost nothing.
+  it('reads only the tail of a seekable file for a recent time range', async () => {
+    // Every fixture line is dated 2026-08-28/31, so a one-hour window ending
+    // now contains none of them: the seek should land at the end of each
+    // plain file and the scan should walk almost nothing.
     const { result } = await search('pv-checkout', {
       query: 'ledger post failed', sinceSeconds: 3600,
     });
-    expect(result.scanned).toBeLessThan(truth['pv-checkout']!.lines / 10);
+    const gzLines = linesByRel['pv-checkout-prod-pvc/archived/pv-checkout-2026-08-28.log.gz']!;
+    const seekable = truth['pv-checkout']!.lines - gzLines;
+    expect(result.scanned - gzLines).toBeLessThan(seekable / 10);
+  });
+
+  /*
+    The limit of the optimisation, asserted rather than left implicit.
+
+    A byte offset means nothing in a compressed stream — there is no way to
+    know where a byte lands without inflating everything before it — so a date
+    range narrows what a `.gz` REPORTS but cannot narrow what it READS. Better
+    to state that here than to let a future reader assume the seek covers
+    every file and quietly wonder why the numbers do not add up.
+  */
+  it('still reads a compressed file whole, because gzip cannot be seeked', async () => {
+    const { result } = await search('pv-checkout', {
+      query: 'ledger post failed', sinceSeconds: 3600,
+    });
+    const gzLines = linesByRel['pv-checkout-prod-pvc/archived/pv-checkout-2026-08-28.log.gz']!;
+    expect(result.scanned).toBeGreaterThanOrEqual(gzLines);
+    // And the range still filters the answer: none of those lines are recent.
+    expect(result.matched).toBe(0);
   });
 
   it('still finds everything when no range is set', async () => {
@@ -253,6 +296,42 @@ describe('searching a mounted volume', () => {
       query: 'ledger post failed', maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
     });
     expect(result.matched).toBe(truth['pv-checkout']!.failures);
+  });
+
+  /*
+    Compression is invisible to everything above the reader.
+
+    A rotation that was gzipped last night must answer the same question the
+    same way as the one that was not, or the answer silently depends on how
+    old the file is.
+  */
+  it('searches inside a compressed rotation', async () => {
+    const { matches } = await search('pv-checkout', {
+      query: 'ledger post failed', maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
+    });
+    const gz = matches.filter(m => m.rel.endsWith('.gz'));
+    expect(gz.length).toBeGreaterThan(0);
+    expect(gz.every(m => m.text.includes('ledger post failed'))).toBe(true);
+  });
+
+  it('reads a compressed file as text, not as bytes', async () => {
+    // The failure this replaces returned lines full of replacement characters
+    // and matched nothing; asserting the text is clean is what catches it.
+    const { matches } = await search('pv-checkout', { query: 'OrderController' });
+    const gz = matches.filter(m => m.rel.endsWith('.gz'));
+    expect(gz.length).toBeGreaterThan(0);
+    expect(gz.every(m => !m.text.includes('\uFFFD'))).toBe(true);
+    expect(gz.every(m => /^\d{4}-\d{2}-\d{2}T/.test(m.text))).toBe(true);
+  });
+
+  it('counts a compressed file in the totals', async () => {
+    const { result } = await search('pv-checkout', {
+      query: 'ledger post failed', maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
+    });
+    // Four files now, and the truth includes the compressed one's lines.
+    expect(result.files).toHaveLength(truth['pv-checkout']!.files);
+    expect(result.matched).toBe(truth['pv-checkout']!.failures);
+    expect(result.scanned).toBe(truth['pv-checkout']!.lines);
   });
 
   it('reports no files rather than an error for an app with no volume', async () => {
