@@ -14,6 +14,8 @@ import { postMsg } from '../../vscode';
 import { MemoryIcon, StethoscopeIcon, CloseCircleIcon } from '../../icons';
 import { ButtonView, DonutView } from '@salilvnair/dui';
 import { ClassNameView } from './ClassNameView';
+import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { SparkleIcon } from '../../icons';
 import { decodeClassName, fullClassName } from './class-name';
 import { HeapHistogramView } from './HeapHistogramView';
 import { HeapTreemapView } from './HeapTreemapView';
@@ -134,6 +136,54 @@ export function HeapAnalyzerView() {
   const [packageFilter, setPackageFilter] = useState('');
   // Baseline survives loading another dump — comparing is the whole point.
   const [baseline, setBaseline] = useState<{ name: string | null } | null>(null);
+
+  const ask = useDk8sAiStore(st => st.ask);
+
+  /*
+    One suspect, as its own question.
+
+    The same gesture the thread list has: the overview asks what is wrong with
+    the heap, this asks what THIS thing is. The evidence carries the numbers the
+    engine already computed — retained share, what accumulates inside it, the
+    path from a GC root — because a model asked about a class name alone can
+    only tell you what the class does in general.
+  */
+  const askSuspect = (sp: Suspect) => {
+    ask({
+      promptKey: 'dk8s.heap.explainOne',
+      title: `Why is ${decodeClassName(sp.className).simpleName} holding the heap`,
+      evidence: [
+        `class: ${fullClassName(sp.className)}`,
+        `retains: ${bytes(sp.retainedBytes)} (${sp.retainedPercent.toFixed(1)}% of live heap)`,
+        `keeps alive: ${sp.retainedObjects.toLocaleString()} objects`,
+        sp.heldIn ? `held in: ${fullClassName(sp.heldIn.className)} (${bytes(sp.heldIn.retainedBytes)})` : '',
+        sp.accumulates
+          ? `accumulating: ${sp.accumulates.count.toLocaleString()} x ${fullClassName(sp.accumulates.className)}`
+          : '',
+        sp.pathToRoot.length
+          ? `path from GC root: ${sp.pathToRoot.map(pr => fullClassName(pr.className)).join(' -> ')}`
+          : '',
+      ].filter(Boolean).join('\n'),
+      evidenceLabel: 'LEAK SUSPECT',
+      podContext: {},
+    });
+  };
+
+  /** One class out of the retained list — same idea, less to go on. */
+  const askClass = (c: { className: string; instances: number; retainedSumBytes: number }) => {
+    ask({
+      promptKey: 'dk8s.heap.explainOne',
+      title: `What is holding ${decodeClassName(c.className).simpleName}`,
+      evidence: [
+        `class: ${fullClassName(c.className)}`,
+        `instances: ${c.instances.toLocaleString()}`,
+        `retained (summed over instances): ${bytes(c.retainedSumBytes)}`,
+        v ? `live heap: ${bytes(v.liveBytes)} across ${v.liveObjects.toLocaleString()} objects` : '',
+      ].filter(Boolean).join('\n'),
+      evidenceLabel: 'CLASS',
+      podContext: {},
+    });
+  };
 
   // Back to the empty state, so "Open another" is a decision you can change
   // your mind about. The baseline is kept: comparing two dumps is the reason

@@ -11,6 +11,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SegmentedControlView, SunburstView } from '@salilvnair/dui';
+import { decodeClassName, fullClassName } from './class-name';
 import { heapQuery, bytes, hueFor, type TreemapData } from './heap-query';
 import { squarify, type Tile } from './treemap-layout';
 
@@ -91,7 +92,8 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
           ctx.font = '10px ui-monospace, monospace';
           ctx.save();
           ctx.beginPath(); ctx.rect(t.x + 2, t.y + 2, t.w - 4, t.h - 4); ctx.clip();
-          ctx.fillText(t.label, t.x + 4, t.y + 12);
+          // Decoded, or the largest tile in most heaps is labelled `[B`.
+          ctx.fillText(decodeClassName(t.label).simpleName, t.x + 4, t.y + 12);
           if (t.h > 28) {
             ctx.globalAlpha = 0.8;
             ctx.fillText(bytes(t.value), t.x + 4, t.y + 24);
@@ -113,7 +115,10 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
     name: 'live heap',
     children: (data?.groups ?? []).map(g => ({
       name: g.name,
-      children: g.children.map(c => ({ name: c.name, value: c.bytes })),
+      children: g.children.map(c => ({
+        name: decodeClassName(c.name).simpleName,
+        value: c.bytes,
+      })),
     })),
   }), [data]);
 
@@ -144,7 +149,9 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
         <div className="flex-1" />
         {hover ? (
           <span className="text-[11.5px] font-mono text-[var(--color-text-primary)] truncate" style={{ maxWidth: '60%' }}>
-            {hover.group}.{hover.label} · {bytes(hover.value)}
+            {hover.group === 'arrays'
+              ? fullClassName(hover.label)
+              : `${hover.group}.${decodeClassName(hover.label).simpleName}`} · {bytes(hover.value)}
             {hover.instances !== undefined && ` · ${hover.instances.toLocaleString()} objects`}
           </span>
         ) : (
