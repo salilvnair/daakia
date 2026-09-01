@@ -19,7 +19,7 @@ export interface PvMount {
   template?: string;
 }
 
-import type { PvLayout } from '@daakia/pv-layouts';
+import { layoutFor, type PvLayout } from '@daakia/pv-layouts';
 
 export interface PvLogConfig {
   enabled: boolean;
@@ -92,6 +92,9 @@ export interface PvProbe {
    */
   layouts?: Record<string, { rel: string[]; count: number }>;
 }
+
+/** The key the probe reports the in-force template under. See PvLogSettings. */
+const CURRENT_LAYOUT = '@current';
 
 export const DEFAULT_PV: PvLogConfig = {
   enabled: false,
@@ -176,9 +179,28 @@ export const useDk8sPvStore = create<PvState>((set, get) => ({
   save: () => {
     const cfg = get().draft;
     set({ config: cfg, dirty: false, probing: true });
+    /*
+      The record says what was saved, not merely that something was.
+
+      It carried a mount count and an extension list — true, and useless for
+      the question this row gets read for, which is "what changed about where
+      dk8s looks". The template is the setting; the layout is the name someone
+      would say out loud for it; and the match count is the only field that
+      says whether the thing just saved finds anything at all.
+    */
+    const probe = get().probe;
+    const layout = layoutFor(cfg.template, cfg.layouts);
+    const found = probe?.layouts?.[layout?.id ?? CURRENT_LAYOUT];
     logUiEvent('dk8s.pv_mapping_save', {
       enabled: cfg.enabled,
       mounts: cfg.mounts?.length ?? 0,
+      layout: layout?.name ?? '(not a saved layout)',
+      template: cfg.template,
+      // Only from a probe of this same config; stale numbers would be worse
+      // than none, because a count reads as a measurement.
+      filesItFinds: found?.count,
+      filesSeen: probe?.fileCount,
+      layouts: cfg.layouts?.length,
       pattern: cfg.pattern,
       extensions: cfg.extensions,
       maxAgeDays: cfg.maxAgeDays,

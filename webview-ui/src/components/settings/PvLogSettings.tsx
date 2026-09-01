@@ -29,6 +29,7 @@ import {
   CheckIcon,
 } from '../../icons';
 import { useDk8sPvStore } from '../../store/dk8s-pv-store';
+import { logUiEvent } from '../../store/ui-audit-store';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -220,6 +221,22 @@ function LayoutTable({ value, layouts, found, onChange }: {
   };
 
   const remove = (i: number) => {
+    const gone = rows[i]!;
+    /*
+      A deleted layout is the one change nothing else can reconstruct.
+
+      The saved config afterwards shows what remains; only this row says what
+      was there and what it was finding when it went. Recorded at the moment
+      of the delete rather than on the next save, because the two are not the
+      same event and a delete may never be followed by one.
+    */
+    logUiEvent('dk8s.pv_layout_delete', {
+      layout: gone.name || '(unnamed)',
+      template: gone.template,
+      filesItFound: found?.[gone.id]?.count,
+      shipped: !gone.custom,
+      remaining: rows.length - 1,
+    });
     const next = rows.filter((_, j) => j !== i);
     // Deleting the selected row leaves nothing selected, so the selection
     // moves to whatever is now first rather than leaving the table with no
@@ -236,6 +253,7 @@ function LayoutTable({ value, layouts, found, onChange }: {
     // rather than in a row you then have to remember to click and unlock.
     commit([...rows, row], '');
     setEditing(row.id);
+    logUiEvent('dk8s.pv_layout_add', { layouts: rows.length + 1 });
   };
 
   // One blank row at a time: a second would be indistinguishable from the
