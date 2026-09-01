@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
 } from '@salilvnair/dui';
+import { useLongPress } from './use-long-press';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useFavoriteKeys, toggleFavorite, favoriteKey, favoritesFirst,
@@ -169,6 +170,8 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
   const selectMode = useK8sStore(s => s.selectMode);
   const picked = useK8sStore(s => s.selected.includes(pod.uid));
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
+  const beginSelection = useK8sStore(s => s.beginSelection);
+  const { handlers, consumed } = useLongPress(() => beginSelection(pod.uid));
   const severity = severityOf(pod);
   const color = severityColor(severity);
   const quiet = severity === 'quiet';
@@ -177,8 +180,14 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
   return (
     <button
       type="button"
-      onClick={() => (selectMode ? togglePodSelected(pod.uid) : onOpen())}
-      className="group flex flex-col gap-1.5 p-3 rounded-lg text-left cursor-pointer transition-colors relative overflow-hidden"
+      {...handlers}
+      onClick={() => {
+        // The hold already acted; the click it ends with would otherwise open
+        // the pod that was just selected.
+        if (consumed()) return;
+        if (selectMode) togglePodSelected(pod.uid); else onOpen();
+      }}
+      className="group flex flex-col gap-1.5 p-3 rounded-lg text-left cursor-pointer transition-colors relative overflow-hidden select-none"
       style={{
         background: picked ? `color-mix(in srgb, ${ACCENT} 9%, var(--color-surface))` : 'var(--color-surface)',
         border: `1px solid ${picked
@@ -262,6 +271,16 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
   const metrics = useK8sStore(s => s.metricsAvailable);
   const selectMode = useK8sStore(s => s.selectMode);
   const selected = useK8sStore(s => s.selected);
+  const beginSelection = useK8sStore(s => s.beginSelection);
+  /*
+    One press timer for the table, and a ref saying which row armed it.
+
+    Rows are rendered in a map, so they cannot each hold a hook. Only one row
+    can be under the pointer at a time, which makes a single timer and the uid
+    that started it exactly as much state as the gesture has.
+  */
+  const held = useRef<string | null>(null);
+  const press = useLongPress(() => { if (held.current) beginSelection(held.current); });
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
 
   // No Namespace column: the group heading above the table already says which
@@ -314,8 +333,22 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
             };
             return (
               <tr key={pod.uid}
-                  onClick={() => (selectMode ? togglePodSelected(pod.uid) : onOpen(pod))}
-                  className="group cursor-pointer transition-colors"
+                  onPointerDown={e => {
+                    // Which row is under the finger, for the shared timer.
+                    held.current = pod.uid;
+                    press.handlers.onPointerDown(e);
+                  }}
+                  onPointerMove={press.handlers.onPointerMove}
+                  onPointerUp={press.handlers.onPointerUp}
+                  onPointerLeave={press.handlers.onPointerLeave}
+                  onPointerCancel={press.handlers.onPointerCancel}
+                  onClick={() => {
+                    // The hold already acted; the click it ends with would
+                    // otherwise open the pod that was just selected.
+                    if (press.consumed()) return;
+                    if (selectMode) togglePodSelected(pod.uid); else onOpen(pod);
+                  }}
+                  className="group cursor-pointer transition-colors select-none"
                   style={{ background: picked ? `color-mix(in srgb, ${ACCENT} 13%, transparent)` : rest }}
                   onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 18%, transparent)`; }}
                   onMouseLeave={e => { e.currentTarget.style.background = picked ? `color-mix(in srgb, ${ACCENT} 13%, transparent)` : rest; }}>

@@ -472,6 +472,7 @@ interface K8sState {
   setLogLineNumbers: (on: boolean) => void;
   toggleSelectMode: () => void;
   togglePodSelected: (uid: string) => void;
+  beginSelection: (uid: string) => void;
   selectAllVisible: (uids: string[]) => void;
   clearSelection: () => void;
   openExport: () => void;
@@ -823,6 +824,19 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   togglePodSelected: (uid) => set(s => ({
     selected: s.selected.includes(uid) ? s.selected.filter(u => u !== uid) : [...s.selected, uid],
+  })),
+
+  /*
+    Enter selection mode already holding something.
+
+    Turning the mode on and selecting nothing would answer a press-and-hold
+    with an empty toolbar, leaving the pod you were holding to be clicked
+    again. Additive rather than exclusive, so holding a second pod while
+    already selecting adds to the set instead of restarting it.
+  */
+  beginSelection: (uid) => set(s => ({
+    selectMode: true,
+    selected: s.selected.includes(uid) ? s.selected : [...s.selected, uid],
   })),
 
   selectAllVisible: (uids) => set(s => ({
