@@ -20,7 +20,7 @@ import { useMemo } from 'react';
 import { ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
 import {
   StarIcon, CopyIcon, TerminalIcon, FileTextIcon, StethoscopeIcon,
-  CheckCircleIcon, CpuIcon, MemoryIcon, NetworkIcon, TimelineIcon,
+  CheckCircleIcon, XCircleIcon, CpuIcon, MemoryIcon, NetworkIcon, TimelineIcon,
 } from '../../icons';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
@@ -78,6 +78,8 @@ export function PodContextMenu({ pod, at, onClose, onOpen }: {
   onOpen: (pod: PodSummary, tab?: 'logs' | 'doctor') => void;
 }) {
   const beginSelection = useK8sStore(s => s.beginSelection);
+  const togglePodSelected = useK8sStore(s => s.togglePodSelected);
+  const selected = useK8sStore(s => s.selected);
   const copyPodText = useK8sStore(s => s.copyPodText);
   const openShellFor = useK8sStore(s => s.openShellFor);
   const menuProbe = useK8sStore(s => s.menuProbe);
@@ -91,6 +93,7 @@ export function PodContextMenu({ pod, at, onClose, onOpen }: {
     if (!pod) return [];
     const key = favoriteKey(pod);
     const starred = favorites.includes(key);
+    const picked = selected.includes(pod.uid);
     const copy = (text: string) => () => { void navigator.clipboard?.writeText(text); onClose(); };
 
     // The probe is for this pod, or it is for the last one and says nothing
@@ -170,10 +173,22 @@ export function PodContextMenu({ pod, at, onClose, onOpen }: {
       },
       {
         id: 'select',
-        label: 'Select',
-        description: 'Pick this pod, and others, to search or export together.',
-        icon: <CheckCircleIcon size={13} />,
-        onClick: () => { beginSelection(pod.uid); onClose(); },
+        /*
+          The item says what pressing it does, which on an already-ticked pod
+          is the opposite of what it used to say. Offering "Select" on a pod
+          that is selected reads as a no-op, and a menu that describes the
+          state rather than the action is one you have to test to understand.
+        */
+        label: picked ? 'Deselect' : 'Select',
+        description: picked
+          ? 'Drop this pod from the selection.'
+          : 'Pick this pod, and others, to search or export together.',
+        icon: picked ? <XCircleIcon size={13} /> : <CheckCircleIcon size={13} />,
+        iconColor: picked ? 'var(--color-warning)' : undefined,
+        onClick: () => {
+          if (picked) togglePodSelected(pod.uid); else beginSelection(pod.uid);
+          onClose();
+        },
       },
       { id: 'sep-1', label: '', separator: true },
       {
@@ -242,8 +257,9 @@ export function PodContextMenu({ pod, at, onClose, onOpen }: {
         children: doctor,
       },
     ];
-  }, [pod, favorites, menuProbe, guardHeapDump, access, running,
-    beginSelection, copyPodText, openShellFor, collect, onClose, onOpen]);
+  }, [pod, favorites, selected, menuProbe, guardHeapDump, access, running,
+    beginSelection, togglePodSelected, copyPodText, openShellFor, collect,
+    onClose, onOpen]);
 
   return (
     <ContextMenuView
