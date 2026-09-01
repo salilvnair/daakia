@@ -44,6 +44,24 @@ const DOCTOR: { id: ArtifactKind; icon: React.ReactNode }[] = [
   { id: 'conns', icon: <NetworkIcon size={13} /> },
 ];
 
+/*
+  A short line per action, for the menu.
+
+  ARTIFACT_META.what is written for the Doctor tab, where a card has the room
+  to explain itself in a sentence or two. Six of those stacked in a submenu is
+  a wall of prose you have to read past to reach the one you wanted, so the
+  menu gets its own line: what it gives you, not why you would want it. The
+  full sentence is still one click away, on the card.
+*/
+const BRIEF: Record<string, string> = {
+  threaddump: 'Every thread and what it waits on.',
+  'threaddump-sigquit': 'Same, printed to the pod’s own log.',
+  histogram: 'What is on the heap, by class.',
+  heapdump: 'The whole heap, as a .hprof.',
+  jfr: 'A 30s profile — allocation, locks, I/O.',
+  conns: 'Open sockets and their states.',
+};
+
 /** Cost, coloured by what it costs the pod rather than by how it reads. */
 function costColor(kind: ArtifactKind): string {
   const cost = ARTIFACT_META[kind]?.cost;
@@ -99,10 +117,9 @@ export function PodContextMenu({ pod, at, onClose, onOpen }: {
         : !pod.context ? 'No cluster context for this pod, so this cannot be run safely.'
           : !action ? 'Not available on this pod.'
             : memoryBlocked
-              ? `Blocked: ${probe?.safety?.headline ?? 'not enough space for the dump.'} `
-                + 'You can turn the guard off in Settings › Advanced › dk8s.'
+              ? `Blocked: ${probe?.safety?.headline ?? 'Not enough space for the dump.'}`
               : !action.available ? (action.reason ?? 'Not available on this pod.')
-                : meta.what;
+                : (BRIEF[id] ?? meta.what);
 
       /*
         No context means we cannot say WHICH cluster this pod is in, and with
@@ -235,7 +252,7 @@ export function PodContextMenu({ pod, at, onClose, onOpen }: {
       position={at}
       onClose={onClose}
       items={items}
-      width={264}
+      width={270}
     />
   );
 }
