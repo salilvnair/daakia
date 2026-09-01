@@ -9,9 +9,12 @@
  *
  * So the same content gets structure instead of more words — a lead sentence,
  * then discrete points, with the things you type set apart from the prose that
- * describes them. A token is accented because it is substituted; a literal is
- * neutral because it is typed as-is. That distinction is the one a reader
- * needs most here and it costs nothing to encode.
+ * describes them.
+ *
+ * Accenting the substituted names to distinguish them from the literal ones
+ * was tried and reverted: a paragraph with six cyan chips in it reads as six
+ * things demanding attention, and the colour drowned the sentence it was
+ * supposed to be annotating. Code is code here — one neutral chip.
  */
 import React from 'react';
 
@@ -27,7 +30,7 @@ const chip: React.CSSProperties = {
 };
 
 /**
- * A literal: something typed exactly as written — a path, a flag, a filename.
+ * Code: anything typed or substituted verbatim — a path, a flag, a token.
  */
 export function Lit({ children }: { children: React.ReactNode }) {
   return (
@@ -36,26 +39,6 @@ export function Lit({ children }: { children: React.ReactNode }) {
       background: 'color-mix(in srgb, var(--color-text-muted) 12%, transparent)',
       border: '1px solid color-mix(in srgb, var(--color-text-muted) 18%, transparent)',
       color: 'var(--color-text-secondary)',
-    }}>
-      {children}
-    </code>
-  );
-}
-
-/**
- * A token: something replaced before use.
- *
- * Accented rather than neutral, because the difference between a name that is
- * substituted and a name that is typed is the single thing most likely to be
- * got wrong in a path template, and prose saying so is weaker than showing it.
- */
-export function Tok({ children }: { children: React.ReactNode }) {
-  return (
-    <code style={{
-      ...chip,
-      background: `color-mix(in srgb, ${ACCENT} 13%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${ACCENT} 28%, transparent)`,
-      color: ACCENT,
     }}>
       {children}
     </code>

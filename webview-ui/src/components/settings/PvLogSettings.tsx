@@ -14,7 +14,7 @@ import {
   layoutList, isDefaultLayouts, layoutIdFor, type PvLayout,
 } from '@daakia/pv-layouts';
 import { ButtonView, TextInputView, CheckboxView, SpinnerIcon } from '@salilvnair/dui';
-import { Hint, Lit, Tok, Why } from './prose';
+import { Hint, Lit, Why } from './prose';
 import {
   FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon, TrashIcon, PlusIcon, PencilIcon,
 } from '../../icons';
@@ -586,12 +586,12 @@ export function PvLogSettings() {
               points={[
                 <>Click a row to use it, edit any row in place, and delete the ones
                   that describe nothing here.</>,
-                <><Tok>{'{app}'}</Tok> <Tok>{'{env}'}</Tok> <Tok>{'{namespace}'}</Tok>{' '}
-                  <Tok>{'{pod}'}</Tok> <Tok>{'{container}'}</Tok> <Tok>{'{date}'}</Tok>{' '}
+                <><Lit>{'{app}'}</Lit> <Lit>{'{env}'}</Lit> <Lit>{'{namespace}'}</Lit>{' '}
+                  <Lit>{'{pod}'}</Lit> <Lit>{'{container}'}</Lit> <Lit>{'{date}'}</Lit>{' '}
                   are filled in per pod. <Lit>*</Lit> and <Lit>**</Lit> are globs.</>,
-                <><Tok>{'{app}'}</Tok> is the pod name without its ReplicaSet hash and pod
+                <><Lit>{'{app}'}</Lit> is the pod name without its ReplicaSet hash and pod
                   suffix, so <Lit>zp-backend-7f9455548d-xm6kc</Lit> becomes{' '}
-                  <Lit>zp-backend</Lit>. <Tok>{'{env}'}</Tok> comes from the cluster, mapped
+                  <Lit>zp-backend</Lit>. <Lit>{'{env}'}</Lit> comes from the cluster, mapped
                   below.</>,
                 <><Lit>**</Lit> matches no directories as well as many, which is what lets
                   one row cover both <Lit>my-app-prod-pvc/my-app.log</Lit> and{' '}
@@ -637,8 +637,8 @@ export function PvLogSettings() {
               lead={<>The one thing that cannot be derived, because Kubernetes has no
                 notion of an environment.</>}
               points={[
-                <>Left: part of a context name. Right: what <Tok>{'{env}'}</Tok> becomes.</>,
-                <>Left empty, <Tok>{'{env}'}</Tok> matches anything — which still finds the
+                <>Left: part of a context name. Right: what <Lit>{'{env}'}</Lit> becomes.</>,
+                <>Left empty, <Lit>{'{env}'}</Lit> matches anything — which still finds the
                   logs, it just cannot tell a prod claim from a dev one.</>,
               ]}
             />
@@ -652,7 +652,7 @@ export function PvLogSettings() {
           label="what {app} means"
           hint={
             <Hint
-              lead={<>Usually nothing to do here. <Tok>{'{app}'}</Tok> is the pod&rsquo;s
+              lead={<>Usually nothing to do here. <Lit>{'{app}'}</Lit> is the pod&rsquo;s
                 owning workload, which Kubernetes reports directly — two replicas of one
                 Deployment resolve to the same name without any guessing.</>}
               points={[
@@ -678,7 +678,7 @@ export function PvLogSettings() {
                 <>The longest match wins, so a rule for one pod beats a rule for a family
                   of them.</>,
                 <>Right: a path relative to the mount — still a template, so{' '}
-                  <Tok>{'{app}'}</Tok>, <Tok>{'{env}'}</Tok>, <Tok>{'{date}'}</Tok> and globs
+                  <Lit>{'{app}'}</Lit>, <Lit>{'{env}'}</Lit>, <Lit>{'{date}'}</Lit> and globs
                   all work.</>,
               ]}
             />
