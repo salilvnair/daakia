@@ -204,7 +204,21 @@ function Editor() {
                     }} />
       </div>
 
-      <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(280px, 1fr) minmax(320px, 1.2fr)' }}>
+      {/*
+        The form sits on its own surface inside the panel.
+
+        Header, fields and preview were all one flat sheet, so nothing said
+        where the row's identity stopped and its editable detail began — a page
+        of controls with a title floating above them. An inset card puts a
+        visible edge around the part you are editing while the panel keeps the
+        accent that ties it to the row it belongs to.
+      */}
+      <div className="grid gap-4 p-3.5 rounded-lg"
+           style={{
+             gridTemplateColumns: 'minmax(280px, 1fr) minmax(320px, 1.2fr)',
+             background: 'var(--color-panel, var(--color-surface-hover))',
+             border: '1px solid var(--color-surface-border)',
+           }}>
         {/* ── Definition ── */}
         <div className="flex flex-col gap-3.5">
           <Field label="name">

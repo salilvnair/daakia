@@ -288,6 +288,14 @@ function PodCard({ pod, onOpen, onMenu }: {
  * line you find without reading, which is the entire point of a table you
  * scan three hundred rows of.
  */
+/** The tick column's header, which has no label to show. */
+const SELECT_COL = '';
+
+/** Sized to the tick it holds, with the padding a checkbox actually needs. */
+const SELECT_CELL: React.CSSProperties = {
+  width: 30, minWidth: 30, paddingLeft: 10, paddingRight: 0,
+};
+
 function PodTable({ pods, onOpen, onMenu }: {
   pods: PodSummary[];
   onOpen: (p: PodSummary) => void;
@@ -315,7 +323,7 @@ function PodTable({ pods, onOpen, onMenu }: {
   // namespace and cluster these rows belong to, so repeating it on every row
   // is a column of identical text.
   const cols = [
-    ...(selectMode ? [''] : []),
+    ...(selectMode ? [SELECT_COL] : []),
     'Name', 'Ready', 'Status', '\u21bb', 'Node', 'Age',
     ...(metrics ? ['Memory', 'CPU'] : []),
   ];
@@ -330,6 +338,14 @@ function PodTable({ pods, onOpen, onMenu }: {
               <th key={h}
                   className="text-[9.5px] uppercase tracking-wider text-left font-bold px-3 py-2"
                   style={{
+                    /*
+                      The tick column holds a 13px box and was taking 64px,
+                      because an unsized column in an auto-layout table is
+                      handed a share of the row rather than the width of what
+                      is in it. Sized to its content, so the name sits next to
+                      the checkbox instead of across a gap from it.
+                    */
+                    ...(h === SELECT_COL ? SELECT_CELL : {}),
                     color: ACCENT,
                     background: 'var(--color-surface)',
                     borderBottom: `1px solid color-mix(in srgb, ${ACCENT} 30%, var(--color-surface-border))`,
@@ -387,7 +403,7 @@ function PodTable({ pods, onOpen, onMenu }: {
                   onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT} 18%, transparent)`; }}
                   onMouseLeave={e => { e.currentTarget.style.background = picked ? `color-mix(in srgb, ${ACCENT} 13%, transparent)` : rest; }}>
                 {selectMode && (
-                  <td className="px-3 py-1.5" style={cell}>
+                  <td className="py-1.5" style={{ ...cell, ...SELECT_CELL }}>
                     <span className="flex items-center justify-center"
                           style={{
                             width: 13, height: 13, borderRadius: 3,
