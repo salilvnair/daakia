@@ -81,7 +81,15 @@ function FormatRow({ f, builtin }: { f: LogFormat; builtin: boolean }) {
   const rule = f.match && Object.entries(f.match).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`);
 
   return (
-    <>
+    /*
+      The row and its editor are one element of the list, not two.
+
+      As siblings in a fragment they were separated by the list's own gap — a
+      strip of page showing between a card's header and its body, which is the
+      last thing left making them read as two cards. Wrapped, the gap falls
+      between formats where it belongs.
+    */
+    <div className="flex flex-col">
     <div className="flex items-center gap-3 px-3 py-2 rounded-md"
          style={{
            background: 'var(--color-surface)',
@@ -163,7 +171,7 @@ function FormatRow({ f, builtin }: { f: LogFormat; builtin: boolean }) {
     </div>
 
     {open && <Editor />}
-    </>
+    </div>
   );
 }
 
