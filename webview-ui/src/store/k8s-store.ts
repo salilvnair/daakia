@@ -407,6 +407,28 @@ interface K8sState {
   runtime?: { runtime: string; confidence: number; detectedFrom: string };
   actions: PodAction[];
   probeBusy: boolean;
+  /**
+   * A probe for a pod the context menu is open on, which is usually not the
+   * pod that is open.
+   *
+   * Kept apart from `actions` deliberately. Those describe the pod on screen
+   * and drive its Doctor tab; writing a menu's probe into them would swap the
+   * buttons under a pod being looked at, for a pod merely right-clicked.
+   */
+  menuProbe?: {
+    pod: string;
+    busy: boolean;
+    actions: PodAction[];
+    safety?: HeapDumpSafety;
+  };
+  /**
+   * A copy waiting on the text it will copy.
+   *
+   * `kubectl describe` is a round trip, so "Copy describe" cannot return a
+   * value the way copying a name does. The request is remembered and the
+   * clipboard written when the answer lands.
+   */
+  pendingCopy?: { pod: string; kind: 'describe' | 'yaml' };
   memory?: MemoryProfile;
   safety?: HeapDumpSafety;
   /**
@@ -473,6 +495,10 @@ interface K8sState {
   toggleSelectMode: () => void;
   togglePodSelected: (uid: string) => void;
   beginSelection: (uid: string) => void;
+  probePodForMenu: (pod: PodSummary) => void;
+  closePodMenu: () => void;
+  copyPodText: (pod: PodSummary, kind: 'describe' | 'yaml') => void;
+  openShellFor: (pod: PodSummary) => void;
   selectAllVisible: (uids: string[]) => void;
   clearSelection: () => void;
   openExport: () => void;
@@ -839,6 +865,49 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     selected: s.selected.includes(uid) ? s.selected : [...s.selected, uid],
   })),
 
+  /*
+    What this pod can actually be asked for, fetched when its menu opens.
+
+    The alternative was to offer every diagnostic on every pod and let the
+    ones that cannot work fail after being chosen — a menu that lies until
+    clicked. A probe is one round trip, and it is what lets a heap dump on a
+    pod with no headroom be greyed out with the numbers that grey it out.
+  */
+  probePodForMenu: (pod) => {
+    set({ menuProbe: { pod: pod.name, busy: true, actions: [] } });
+    postMsg({
+      type: 'dk8s:probePod',
+      context: pod.context, namespace: pod.namespace, pod: pod.name,
+    });
+  },
+
+  closePodMenu: () => set({ menuProbe: undefined }),
+
+  copyPodText: (pod, kind) => {
+    set({ pendingCopy: { pod: pod.name, kind } });
+    postMsg({
+      type: 'dk8s:describe',
+      context: pod.context, namespace: pod.namespace, pod: pod.name,
+    });
+  },
+
+  openShellFor: (pod) => {
+    set({ shellNotice: undefined });
+    // The same record the detail view writes: this is the most sensitive
+    // action in the tool wherever it is started from.
+    logUiEvent('dk8s.shell', {
+      context: pod.context, namespace: pod.namespace, pod: pod.name,
+      container: pod.containers?.[0]?.name,
+      containers: (pod.containers ?? []).map(c => c.name),
+      image: pod.image, node: pod.node, phase: pod.phase,
+      from: 'context-menu',
+    });
+    postMsg({
+      type: 'dk8s:shell',
+      context: pod.context, namespace: pod.namespace, pod: pod.name,
+    });
+  },
+
   selectAllVisible: (uids) => set(s => ({
     // Toggle: if everything visible is already ticked, this clears them.
     selected: uids.every(u => s.selected.includes(u))
@@ -1108,7 +1177,13 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         set(s => ({ logDropped: s.logDropped + (msg.count as number) }));
         break;
 
-      case 'dk8s:described':
+      case 'dk8s:described': {
+        const want = get().pendingCopy;
+        if (want && msg.pod === want.pod) {
+          const text = (want.kind === 'yaml' ? msg.yaml : msg.describe) as string | undefined;
+          if (text) void navigator.clipboard?.writeText(text);
+          set({ pendingCopy: undefined });
+        }
         if (msg.pod !== get().detail?.name) break;
         set({
           describeBusy: false,
@@ -1116,8 +1191,23 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           yamlText: msg.yaml as string,
         });
         break;
+      }
 
-      case 'dk8s:podProbed':
+      case 'dk8s:podProbed': {
+        // A menu's probe and the open pod's probe come back on one message
+        // type, so each is routed by the pod it names rather than by which
+        // was asked for last.
+        const menu = get().menuProbe;
+        if (menu && msg.pod === menu.pod) {
+          set({
+            menuProbe: {
+              ...menu,
+              busy: false,
+              actions: (msg.actions as PodAction[]) ?? [],
+              safety: msg.safety as HeapDumpSafety | undefined,
+            },
+          });
+        }
         if (msg.pod !== get().detail?.name) break;
         set({
           probeBusy: false,
@@ -1128,6 +1218,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
           safety: msg.safety as HeapDumpSafety | undefined,
         });
         break;
+      }
 
       case 'dk8s:shellUnavailable':
         set({ shellNotice: {

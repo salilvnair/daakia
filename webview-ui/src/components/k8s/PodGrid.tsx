@@ -16,6 +16,7 @@ import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
 } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
+import { PodContextMenu } from './PodContextMenu';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
 import {
   useFavoriteKeys, toggleFavorite, favoriteKey, favoritesFirst,
@@ -164,14 +165,26 @@ function FavoriteStar({ pod, size = 13 }: { pod: PodSummary; size?: number }) {
   );
 }
 
-function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
+function PodCard({ pod, onOpen, onMenu }: {
+  pod: PodSummary;
+  onOpen: () => void;
+  onMenu: (pod: PodSummary, at: { x: number; y: number }) => void;
+}) {
   const usage = useK8sStore(s => s.usage[pod.name]);
   const history = useK8sStore(s => s.usageHistory[pod.name]);
   const selectMode = useK8sStore(s => s.selectMode);
   const picked = useK8sStore(s => s.selected.includes(pod.uid));
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
-  const beginSelection = useK8sStore(s => s.beginSelection);
-  const { handlers, consumed } = useLongPress(() => beginSelection(pod.uid));
+  /*
+    Hold and right-click are the same gesture.
+
+    Holding used to enter selection directly, which was one action out of the
+    several a pod affords — and the only way to reach the rest was still to
+    open the pod. The hold opens the menu instead, and Select is the first
+    thing in it, so nothing got further away and everything else got closer.
+  */
+  const { handlers, consumed } = useLongPress(() => onMenu(pod, pressPoint.current));
+  const pressPoint = useRef({ x: 0, y: 0 });
   const severity = severityOf(pod);
   const color = severityColor(severity);
   const quiet = severity === 'quiet';
@@ -181,6 +194,15 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
     <button
       type="button"
       {...handlers}
+      onPointerDown={e => {
+        // Where to put the menu if this turns into a hold.
+        pressPoint.current = { x: e.clientX, y: e.clientY };
+        handlers.onPointerDown(e);
+      }}
+      onContextMenu={e => {
+        e.preventDefault();
+        onMenu(pod, { x: e.clientX, y: e.clientY });
+      }}
       onClick={() => {
         // The hold already acted; the click it ends with would otherwise open
         // the pod that was just selected.
@@ -266,12 +288,15 @@ function PodCard({ pod, onOpen }: { pod: PodSummary; onOpen: () => void }) {
  * line you find without reading, which is the entire point of a table you
  * scan three hundred rows of.
  */
-function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary) => void }) {
+function PodTable({ pods, onOpen, onMenu }: {
+  pods: PodSummary[];
+  onOpen: (p: PodSummary) => void;
+  onMenu: (pod: PodSummary, at: { x: number; y: number }) => void;
+}) {
   const usage = useK8sStore(s => s.usage);
   const metrics = useK8sStore(s => s.metricsAvailable);
   const selectMode = useK8sStore(s => s.selectMode);
   const selected = useK8sStore(s => s.selected);
-  const beginSelection = useK8sStore(s => s.beginSelection);
   /*
     One press timer for the table, and a ref saying which row armed it.
 
@@ -279,8 +304,11 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
     can be under the pointer at a time, which makes a single timer and the uid
     that started it exactly as much state as the gesture has.
   */
-  const held = useRef<string | null>(null);
-  const press = useLongPress(() => { if (held.current) beginSelection(held.current); });
+  const held = useRef<PodSummary | null>(null);
+  const pressPoint = useRef({ x: 0, y: 0 });
+  const press = useLongPress(() => {
+    if (held.current) onMenu(held.current, pressPoint.current);
+  });
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
 
   // No Namespace column: the group heading above the table already says which
@@ -334,9 +362,15 @@ function PodTable({ pods, onOpen }: { pods: PodSummary[]; onOpen: (p: PodSummary
             return (
               <tr key={pod.uid}
                   onPointerDown={e => {
-                    // Which row is under the finger, for the shared timer.
-                    held.current = pod.uid;
+                    // Which row is under the finger, and where, for the
+                    // shared timer.
+                    held.current = pod;
+                    pressPoint.current = { x: e.clientX, y: e.clientY };
                     press.handlers.onPointerDown(e);
+                  }}
+                  onContextMenu={e => {
+                    e.preventDefault();
+                    onMenu(pod, { x: e.clientX, y: e.clientY });
                   }}
                   onPointerMove={press.handlers.onPointerMove}
                   onPointerUp={press.handlers.onPointerUp}
@@ -492,9 +526,10 @@ function GroupHeader({ group, collapsed, onToggle }: {
 }
 
 /** The table view's equivalent of a card group: same heading, same tint. */
-function NamespaceTableGroup({ group, onOpen, collapsed, onToggle }: {
+function NamespaceTableGroup({ group, onOpen, onMenu, collapsed, onToggle }: {
   group: PodGroup;
   onOpen: (p: PodSummary) => void;
+  onMenu: (pod: PodSummary, at: { x: number; y: number }) => void;
   collapsed: boolean;
   onToggle: () => void;
 }) {
@@ -502,7 +537,7 @@ function NamespaceTableGroup({ group, onOpen, collapsed, onToggle }: {
     <div className="flex flex-col gap-2 rounded-lg p-3"
          style={{ border: `1px solid ${group.tint.border}`, background: group.tint.wash }}>
       <GroupHeader group={group} collapsed={collapsed} onToggle={onToggle} />
-      {!collapsed && <PodTable pods={group.pods} onOpen={onOpen} />}
+      {!collapsed && <PodTable pods={group.pods} onOpen={onOpen} onMenu={onMenu} />}
     </div>
   );
 }
@@ -516,9 +551,10 @@ function NamespaceTableGroup({ group, onOpen, collapsed, onToggle }: {
  * belongs to pod health, and a strong namespace colour would compete with the
  * one thing the grid must never make harder to find.
  */
-function NamespaceGroup({ group, onOpen, collapsed, onToggle }: {
+function NamespaceGroup({ group, onOpen, onMenu, collapsed, onToggle }: {
   group: PodGroup;
   onOpen: (p: PodSummary) => void;
+  onMenu: (pod: PodSummary, at: { x: number; y: number }) => void;
   collapsed: boolean;
   onToggle: () => void;
 }) {
@@ -531,7 +567,7 @@ function NamespaceGroup({ group, onOpen, collapsed, onToggle }: {
         <div className="grid gap-2.5"
              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
           {group.pods.map(p => (
-            <PodCard key={p.uid} pod={p} onOpen={() => onOpen(p)} />
+            <PodCard key={p.uid} pod={p} onOpen={() => onOpen(p)} onMenu={onMenu} />
           ))}
         </div>
       )}
@@ -542,8 +578,29 @@ function NamespaceGroup({ group, onOpen, collapsed, onToggle }: {
 // ── The grid ────────────────────────────────────────────────────────────────
 
 export function PodGrid() {
+  /*
+    One menu for the whole grid.
+
+    A menu per card would be thirty portals mounted to show at most one, and
+    the pod it is for is the only thing that varies — so the grid holds the
+    pod and the point, and the menu reads them.
+  */
+  const [menu, setMenu] = useState<{ pod: PodSummary; at: { x: number; y: number } }>();
+  const probePodForMenu = useK8sStore(s => s.probePodForMenu);
+  const closePodMenu = useK8sStore(s => s.closePodMenu);
+  const openMenu = useCallback((pod: PodSummary, at: { x: number; y: number }) => {
+    setMenu({ pod, at });
+    // Asked for on open rather than on hover: it is a round trip to the
+    // cluster, and hovering a grid of thirty would fire thirty of them.
+    probePodForMenu(pod);
+  }, [probePodForMenu]);
+  const closeMenu = useCallback(() => {
+    setMenu(undefined);
+    closePodMenu();
+  }, [closePodMenu]);
+
   const {
-    pods, filter, view, setFilter, setView, startWatch, openDetail, watchStatus,
+    pods, filter, view, setFilter, setView, startWatch, openDetail, setDetailTab, watchStatus,
     capped, selectMode, selected, exportOpen, exportState,
     toggleSelectMode, selectAllVisible, openExport, closeExport,
   } = useK8sStore();
@@ -858,9 +915,11 @@ export function PodGrid() {
             {groups.map(g => (
               view === 'table'
                 ? <NamespaceTableGroup key={g.key} group={g} onOpen={p => openDetail(p)}
+                                       onMenu={openMenu}
                                        collapsed={collapsed.has(groupKey(g))}
                                        onToggle={() => toggle(groupKey(g))} />
                 : <NamespaceGroup key={g.key} group={g} onOpen={p => openDetail(p)}
+                                  onMenu={openMenu}
                                   collapsed={collapsed.has(groupKey(g))}
                                   onToggle={() => toggle(groupKey(g))} />
             ))}
@@ -872,6 +931,18 @@ export function PodGrid() {
           </div>
         )}
       </div>
+
+      <PodContextMenu
+        pod={menu?.pod}
+        at={menu?.at}
+        onClose={closeMenu}
+        onOpen={(pod, tab) => {
+          openDetail(pod);
+          // The tab is set after opening, because opening resets it to
+          // whatever this pod was last looked at on.
+          if (tab) setDetailTab(tab);
+        }}
+      />
 
       {exportOpen && <ExportLogsModal onClose={closeExport} />}
       {searchOpen && <LogSearchModal onClose={closeSearch} />}
