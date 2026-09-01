@@ -115,6 +115,11 @@ interface PvState {
   apply: (msg: Record<string, unknown>) => void;
 }
 
+/** Value equality, so retyping the same path does not discard a good probe. */
+function same(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
 export const useDk8sPvStore = create<PvState>((set, get) => ({
   config: DEFAULT_PV,
   draft: DEFAULT_PV,
@@ -123,7 +128,29 @@ export const useDk8sPvStore = create<PvState>((set, get) => ({
 
   load: () => postMsg({ type: 'dk8s:probePv' }),
 
-  patch: (p) => set(s => ({ draft: { ...s.draft, ...p }, dirty: true })),
+  /*
+    Editing what the walk reads throws the last probe away.
+
+    The panel is a report on a specific set of mounts, and it outlived them:
+    clearing the mount path left the file listing, the byte total and the
+    resolved path from the previous walk on screen, describing a directory the
+    config no longer names. The most confusing possible moment to keep showing
+    an answer is right after the question changed.
+
+    Only the fields the walk actually consumes count. Editing the template
+    leaves the listing standing, which is the point of "check your template
+    against these" — you change the template and compare it to the files that
+    are still there.
+  */
+  patch: (p) => set(s => {
+    const walked: (keyof PvLogConfig)[] = ['mounts', 'root', 'extensions', 'maxAgeDays'];
+    const stale = walked.some(k => k in p && !same(p[k], s.draft[k]));
+    return {
+      draft: { ...s.draft, ...p },
+      dirty: true,
+      ...(stale ? { probe: undefined } : {}),
+    };
+  }),
 
   runProbe: () => {
     set({ probing: true });
