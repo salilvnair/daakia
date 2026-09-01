@@ -13,6 +13,15 @@ import { useEffect, useState } from 'react';
 import {
   layoutList, isDefaultLayouts, layoutIdFor, type PvLayout,
 } from '@daakia/pv-layouts';
+
+/*
+  The key the probe reports the in-force template under.
+
+  Mirrored rather than imported: the host module it lives in reaches the disk,
+  and pulling that into the webview bundle to share one string is a worse
+  trade than a constant in two places.
+*/
+const CURRENT_LAYOUT = '@current';
 import { ButtonView, TextInputView, CheckboxView, SpinnerIcon } from '@salilvnair/dui';
 import { Hint, Lit, Why } from './prose';
 import {
@@ -158,9 +167,11 @@ function Field({ label, hint, after, children }: {
  * layout correctly drops the highlight: what is shown then is a custom
  * template, which is what it has become.
  */
-function LayoutTable({ value, layouts, onChange }: {
+function LayoutTable({ value, layouts, found, onChange }: {
   value: string | undefined;
   layouts: PvLayout[] | undefined;
+  /** Per layout id: what it claims on the probed volume, once probed. */
+  found?: Record<string, { rel: string[]; count: number }>;
   onChange: (over: { layouts?: PvLayout[]; template?: string }) => void;
 }) {
   /*
@@ -185,7 +196,7 @@ function LayoutTable({ value, layouts, onChange }: {
   */
   const orphan = !!active && !saved.some(l => l.template.trim() === active);
   const rows: PvLayout[] = orphan
-    ? [{ id: 'current', name: '', template: active, custom: true }, ...saved]
+    ? [{ id: CURRENT_LAYOUT, name: '', template: active, custom: true }, ...saved]
     : saved;
 
   /*
@@ -266,7 +277,7 @@ function LayoutTable({ value, layouts, onChange }: {
             }}>
               <th style={cell}>Layout</th>
               <th style={cell}>Path template</th>
-              <th style={cell}>Files it finds</th>
+              <th style={cell}>{found ? 'Files it finds here' : 'Files it finds'}</th>
               <th style={cell} aria-label="Actions" />
             </tr>
           </thead>
@@ -274,6 +285,10 @@ function LayoutTable({ value, layouts, onChange }: {
             {rows.map((l, i) => {
               const on = !!l.template.trim() && l.template.trim() === active;
               const open_ = editing === l.id;
+              // Only for rows that were in the config when it was probed:
+              // a row added or edited since has no answer yet, and an
+              // absent one must read as unknown rather than as zero.
+              const hit = found?.[l.id];
               return (
                 <tr
                   key={l.id}
@@ -351,16 +366,39 @@ function LayoutTable({ value, layouts, onChange }: {
                     color: 'var(--color-text-muted)', wordBreak: 'break-all',
                   }}>
                     {/*
-                      The live file and a rotated one, which is the pair that
-                      says whether this is your volume's shape. A row you wrote
-                      has none — it came from a real mount, so its own template
-                      is the example.
+                      Your files once the mount has been probed, invented ones
+                      until then.
+
+                      Two made-up paths explain what a glob means; the files it
+                      claims on your own volume answer the question you are
+                      actually asking, which is which of these rows describes
+                      the disk in front of you. The counts rank them.
                     */}
-                    {(l.example ?? []).map(e => <div key={e}>{e}</div>)}
-                    {!l.example && (
-                      <span style={{ fontFamily: 'inherit', fontStyle: 'italic' }}>
-                        yours
-                      </span>
+                    {hit ? (
+                      hit.count ? (
+                        <>
+                          {hit.rel.map(e => <div key={e}>{e}</div>)}
+                          {hit.count > hit.rel.length && (
+                            <div style={{ fontFamily: 'inherit', opacity: 0.75 }}>
+                              +{(hit.count - hit.rel.length).toLocaleString()} more
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span style={{ fontFamily: 'inherit', fontStyle: 'italic',
+                                       opacity: 0.7 }}>
+                          nothing on this volume
+                        </span>
+                      )
+                    ) : (
+                      <>
+                        {(l.example ?? []).map(e => <div key={e}>{e}</div>)}
+                        {!l.example && (
+                          <span style={{ fontFamily: 'inherit', fontStyle: 'italic' }}>
+                            yours
+                          </span>
+                        )}
+                      </>
                     )}
                   </td>
                   <td style={{ ...cell, textAlign: 'center' }}>
@@ -606,6 +644,7 @@ export function PvLogSettings() {
           <LayoutTable
             value={draft.template}
             layouts={draft.layouts}
+            found={probe?.layouts}
             onChange={patch}
           />
         </Field>

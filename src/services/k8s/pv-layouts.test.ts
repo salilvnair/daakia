@@ -12,6 +12,7 @@ import { tmpdir } from 'os';
 import { join, dirname } from 'path';
 import {
   BUILTIN_LAYOUTS, layoutList, isDefaultLayouts, layoutFor, layoutIdFor,
+  shapeRegExp, filesForLayout,
 } from './pv-layouts';
 import { filesForPod, clearPvCache, type PvLogConfig } from './pv-logs';
 
@@ -201,5 +202,118 @@ describe('layoutIdFor', () => {
 
   it('falls back for a name with nothing usable in it', () => {
     expect(layoutIdFor('!!!')).toBe('custom.layout');
+  });
+});
+
+/*
+  Matching a template against paths, with no pod in hand.
+
+  This is what lets the settings table show the files on a real volume beside
+  each row instead of an invented example. It has to agree with the walker: a
+  row claiming files the search would not find is worse than no example at
+  all, because it reads as confirmation that the template is right.
+*/
+describe('shapeRegExp', () => {
+  it('matches every shipped layout against its own examples', () => {
+    // The same examples the disk-walking test uses, so the two ways of
+    // matching a template cannot drift apart.
+    for (const l of BUILTIN_LAYOUTS) {
+      const rx = shapeRegExp(l.template);
+      for (const ex of l.example!) {
+        expect([l.name, ex, rx.test(ex)]).toEqual([l.name, ex, true]);
+      }
+    }
+  });
+
+  it('treats a token as any one path segment', () => {
+    const rx = shapeRegExp('{app}-{env}-pvc/{app}.log');
+    expect(rx.test('checkout-prod-pvc/checkout.log')).toBe(true);
+    // A token cannot span a directory separator, or every row would claim
+    // every file and the column would be noise.
+    expect(rx.test('a/b-prod-pvc/checkout.log')).toBe(false);
+  });
+
+  it('spans no directories as well as many for **', () => {
+    const rx = shapeRegExp('{app}-{env}-pvc/**/{app}*.log*');
+    expect(rx.test('pv-checkout-prod-pvc/pv-checkout.log')).toBe(true);
+    expect(rx.test('pv-checkout-prod-pvc/archived/pv-checkout-2026-08-28.log.gz')).toBe(true);
+    expect(rx.test('pv-checkout-prod-pvc/a/b/c/pv-checkout.log')).toBe(true);
+  });
+
+  /*
+    A token repeated in a template names the same thing twice, and the match
+    has to hold it to that — the walker substitutes one app into both places.
+  */
+  it('holds a repeated token to one value', () => {
+    const rx = shapeRegExp('{app}-prod-pvc/**/{app}*.log*');
+    expect(rx.test('pv-checkout-prod-pvc/archived/pv-checkout-2026-08-30.log')).toBe(true);
+    expect(rx.test('pv-checkout-prod-pvc/archived/pv-billing-2026-08-30.log')).toBe(false);
+  });
+
+  /*
+    The limit of matching without a pod, stated rather than papered over.
+
+    Adjacent tokens have no unambiguous split: in `{app}-{env}-pvc`, app can be
+    `pv-checkout` and env `prod`, or app `pv` and env `checkout-prod`. Both are
+    real readings, and under the second the walker really would return
+    `pv-billing-*.log` from that directory. So the pattern accepts it. A search
+    never has this problem — it knows the pod, so it knows the app.
+  */
+  it('accepts any valid reading when two tokens are adjacent', () => {
+    const rx = shapeRegExp('{app}-{env}-pvc/**/{app}*.log*');
+    expect(rx.test('pv-checkout-prod-pvc/archived/pv-billing-2026-08-30.log')).toBe(true);
+    // Nothing can read this one: no split leaves an app the file starts with.
+    expect(rx.test('pv-checkout-prod-pvc/archived/zz-other-2026-08-30.log')).toBe(false);
+  });
+
+  it('keeps a dot literal', () => {
+    const rx = shapeRegExp('{app}/x.log');
+    expect(rx.test('a/x.log')).toBe(true);
+    expect(rx.test('a/xylog')).toBe(false);
+  });
+
+  it('is case insensitive, like the walker', () => {
+    expect(shapeRegExp('{app}/App.LOG').test('svc/app.log')).toBe(true);
+  });
+});
+
+describe('filesForLayout', () => {
+  const paths = [
+    'pv-checkout-prod-pvc/pv-checkout.log',
+    'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-30.log',
+    'pv-checkout-prod-pvc/archived/pv-checkout-2026-08-28.log.gz',
+    'pv-billing-prod-pvc/pv-billing.log',
+    'legacy/whatever.txt',
+  ];
+
+  it('reports what a template claims and how much of it', () => {
+    const r = filesForLayout('{app}-{env}-pvc/**/{app}*.log*', paths);
+    expect(r.count).toBe(4);
+    // Only a couple are kept — the column shows evidence, not a file browser.
+    expect(r.rel).toHaveLength(2);
+    expect(r.rel[0]).toBe('pv-checkout-prod-pvc/pv-checkout.log');
+  });
+
+  it('reports nothing for a shape that cannot describe these paths', () => {
+    // Three segments before the file, and nothing here is nested that deep.
+    expect(filesForLayout('{app}/logs/{app}/deep/*.log', paths).count).toBe(0);
+  });
+
+  /*
+    A looser template that happens to fit claims fewer files than the one that
+    describes the volume, and both counts are true: `{namespace}/{app}/**` does
+    match a two-deep path, for some namespace. Ranking by count is what makes
+    the right row obvious, so the counts have to be honest rather than
+    suppressed.
+  */
+  it('ranks the template that fits above one that merely could', () => {
+    const fits = filesForLayout('{app}-{env}-pvc/**/{app}*.log*', paths).count;
+    const loose = filesForLayout('{namespace}/{app}/**/*.log*', paths).count;
+    expect(fits).toBeGreaterThan(loose);
+  });
+
+  it('claims nothing for an empty or broken template', () => {
+    expect(filesForLayout('', paths).count).toBe(0);
+    expect(filesForLayout('   ', paths).count).toBe(0);
   });
 });

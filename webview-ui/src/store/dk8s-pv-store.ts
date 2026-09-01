@@ -64,6 +64,14 @@ export interface PvMountProbe {
   newest?: number;
   oldest?: number;
   sample: PvSampleFile[];
+  /**
+   * Per layout id: the real files that row claims on the probed volume.
+   *
+   * Computed host-side, where the walk already happened. An id missing from
+   * here was not in the config when the probe ran — a row added or edited
+   * since — and has to read as unknown rather than as nothing found.
+   */
+  layouts?: Record<string, { rel: string[]; count: number }>;
 }
 
 export interface PvProbe {
@@ -75,6 +83,14 @@ export interface PvProbe {
   newest?: number;
   oldest?: number;
   sample: PvSampleFile[];
+  /**
+   * Per layout id: the real files that row claims on the probed volume.
+   *
+   * Computed host-side, where the walk already happened. An id missing from
+   * here was not in the config when the probe ran — a row added or edited
+   * since — and has to read as unknown rather than as nothing found.
+   */
+  layouts?: Record<string, { rel: string[]; count: number }>;
 }
 
 export const DEFAULT_PV: PvLogConfig = {

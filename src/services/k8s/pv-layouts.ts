@@ -205,3 +205,92 @@ export function layoutFor(
   if (!t) return undefined;
   return layoutList(saved).find(l => l.template.trim() === t);
 }
+
+/*
+  Does a template describe this path, whoever the pod is?
+
+  Searching substitutes a real pod into a template and walks the disk for it.
+  A probe has no pod — it is asking the prior question, "is this the shape my
+  volume is laid out in", and the answer has to hold for every pod at once. So
+  every token is a wildcard here rather than a name, and the match runs against
+  paths already walked instead of touching the disk again.
+
+  That is what turns the layout table from documentation into evidence: rather
+  than an invented `my-app-prod-pvc/my-app.log` beside every row, each row
+  shows the files on your volume it actually claims — and the rows that claim
+  nothing say so, which is the fastest way to find the one that fits.
+*/
+
+/**
+ * A template as a pattern over mount-relative paths.
+ *
+ * Two properties make this agree with the walker rather than merely resemble
+ * it:
+ *
+ * `**` spans any number of directories including none, which is what lets one
+ * row cover a live file at a claim's root and the rotated ones under
+ * `archived/`.
+ *
+ * A token repeated in one template has to resolve to the same text every
+ * time. `{app}-{env}-pvc/**\/{app}*.log*` says the directory and the filename
+ * name the same application, because the walker substitutes one app into both.
+ * Matching each occurrence independently made that row claim
+ * `pv-checkout-prod-pvc/archived/pv-billing-2026-08-30.log` — a real file, a
+ * real template, and a pairing the search would never produce. So the first
+ * occurrence captures and the rest are backreferences.
+ */
+export function shapeRegExp(template: string): RegExp {
+  const segs = template.split(/[/\\]/).filter(Boolean);
+  /** Token name to capture-group number, for the backreferences. */
+  const group = new Map<string, number>();
+  let groups = 0;
+
+  /*
+    Escaped first, then the wildcards are re-opened. `*` and `?` survive
+    escaping untouched, and a token comes out the other side as `\{app\}` —
+    which is what the pattern below looks for, so no placeholder juggling is
+    needed to keep wildcards apart from the literal text around them.
+  */
+  const segment = (seg: string) => seg
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\\\{(namespace|pod|app|env|container|date)\\\}/g, (_m, name: string) => {
+      const seen = group.get(name);
+      if (seen !== undefined) return `\\${seen}`;
+      group.set(name, ++groups);
+      return '([^/]+)';
+    })
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '[^/]');
+
+  let out = '^';
+  segs.forEach((seg, i) => {
+    const last = i === segs.length - 1;
+    if (seg === '**') {
+      // Non-capturing, so `**` does not shift the backreference numbering.
+      // Trailing `**` means "anything below here", files included.
+      out += last ? '.+' : '(?:[^/]+/)*';
+      return;
+    }
+    out += segment(seg);
+    if (!last) out += '/';
+  });
+  return new RegExp(out + '$', 'i');
+}
+
+/** Which of `paths` a template claims, and how many there were in all. */
+export function filesForLayout(
+  template: string, paths: string[], keep = 2,
+): { rel: string[]; count: number } {
+  const t = template.trim();
+  if (!t) return { rel: [], count: 0 };
+  let rx: RegExp;
+  try {
+    rx = shapeRegExp(t);
+  } catch {
+    // A template can be half-typed; a bad pattern claims nothing rather than
+    // taking the probe down with it.
+    return { rel: [], count: 0 };
+  }
+  const hit = paths.filter(p => rx.test(p));
+  return { rel: hit.slice(0, keep), count: hit.length };
+}

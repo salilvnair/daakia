@@ -54,7 +54,7 @@ export interface PvMount {
   template?: string;
 }
 
-import type { PvLayout } from './pv-layouts';
+import { layoutList, filesForLayout, type PvLayout } from './pv-layouts';
 
 export interface PvLogConfig {
   enabled: boolean;
@@ -561,6 +561,15 @@ export interface PvMountProbe {
   oldest?: number;
   /** Real paths, so a template can be checked by eye. */
   sample: PvSampleFile[];
+  /**
+   * Every path found under this mount, for matching layouts against.
+   *
+   * Not rendered — `sample` is what the panel lists. This is the full set
+   * because a layout that only claims files below the sample cut-off still
+   * claims them, and a row reporting "nothing here" on that basis would be
+   * wrong.
+   */
+  all?: string[];
 }
 
 export interface PvProbe {
@@ -573,6 +582,49 @@ export interface PvProbe {
   newest?: number;
   oldest?: number;
   sample: PvSampleFile[];
+  /** Per layout id: real files it claims here, and how many in all. */
+  layouts?: Record<string, PvLayoutMatch>;
+}
+
+/** What one layout row claims on the probed volume. */
+export interface PvLayoutMatch {
+  /** A couple of real paths, to show beside the row. */
+  rel: string[];
+  /** How many it claims in total, which is what ranks the rows. */
+  count: number;
+}
+
+/**
+ * What each configured layout claims on this volume.
+ *
+ * Computed here rather than in the settings view because the walk already
+ * happened: the probe has every path, and matching strings against it costs
+ * nothing next to touching the disk a second time. The view gets an answer
+ * instead of the machinery to work one out.
+ *
+ * Matched against every path found, not against the handful the panel lists —
+ * a row that claims a file below the sample cut-off still claims it.
+ */
+function layoutMatches(
+  cfg: PvLogConfig, reports: PvMountProbe[],
+): Record<string, PvLayoutMatch> {
+  const paths = reports.flatMap(r => r.all ?? []);
+  const out: Record<string, PvLayoutMatch> = {};
+  for (const l of layoutList(cfg.layouts)) {
+    out[l.id] = filesForLayout(l.template, paths, LAYOUT_EXAMPLES);
+  }
+  /*
+    The template in force, whether or not a row happens to hold it.
+
+    A config whose template matches no row still searches with it, and the
+    settings view gives it a row of its own so it can be seen and edited. That
+    row is the one most worth an honest answer — it is what runs today — and it
+    would otherwise be the only one still showing an invented example.
+  */
+  if (cfg.template?.trim()) {
+    out[CURRENT_LAYOUT] = filesForLayout(cfg.template, paths, LAYOUT_EXAMPLES);
+  }
+  return out;
 }
 
 export async function probePv(cfg: PvLogConfig, now = Date.now()): Promise<PvProbe> {
@@ -600,6 +652,7 @@ export async function probePv(cfg: PvLogConfig, now = Date.now()): Promise<PvPro
     newest: reports.map(r => r.newest).filter((x): x is number => !!x).sort((a, b) => b - a)[0],
     oldest: reports.map(r => r.oldest).filter((x): x is number => !!x).sort((a, b) => a - b)[0],
     sample: all.slice(0, PROBE_SAMPLE_TOTAL),
+    layouts: layoutMatches(cfg, reports),
   };
 }
 
@@ -613,6 +666,12 @@ export async function probePv(cfg: PvLogConfig, now = Date.now()): Promise<PvPro
   a truncated list that does not admit it reads as the complete answer, and
   "my file is not there" then looks like a walker bug rather than a cap.
 */
+/** Key under which the in-force template reports, row or no row. */
+export const CURRENT_LAYOUT = '@current';
+
+/** Real paths shown against a layout row. Two is enough to recognise a shape. */
+export const LAYOUT_EXAMPLES = 2;
+
 export const PROBE_SAMPLE_PER_MOUNT = 8;
 export const PROBE_SAMPLE_TOTAL = 12;
 
@@ -648,5 +707,7 @@ async function probeMount(cfg: PvLogConfig, m: PvMount, now: number): Promise<Pv
     oldest: files[files.length - 1]?.mtime,
     sample: files.slice(0, PROBE_SAMPLE_PER_MOUNT)
       .map(f => ({ rel: f.rel, bytes: f.bytes, mtime: f.mtime })),
+    // Every path, for matching layouts against. Not rendered.
+    all: files.map(f => f.rel),
   };
 }
