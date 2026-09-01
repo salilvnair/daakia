@@ -17,6 +17,7 @@ import { ButtonView, TextInputView, CheckboxView, SpinnerIcon } from '@salilvnai
 import { Hint, Lit, Why } from './prose';
 import {
   FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon, TrashIcon, PlusIcon, PencilIcon,
+  CheckIcon,
 } from '../../icons';
 import { useDk8sPvStore } from '../../store/dk8s-pv-store';
 
@@ -372,7 +373,9 @@ function LayoutTable({ value, layouts, onChange }: {
                         active={open_}
                         onClick={() => setEditing(open_ ? null : l.id)}
                       >
-                        <PencilIcon size={11} />
+                        {/* The icon says what pressing it does, so an open row
+                            offers the way out rather than repeating the way in. */}
+                        {open_ ? <CheckIcon size={12} /> : <PencilIcon size={11} />}
                       </IconButton>
                       <DeleteButton
                         title={l.name ? `Delete "${l.name}"` : 'Delete this row'}
