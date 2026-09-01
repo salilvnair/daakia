@@ -821,7 +821,12 @@ function MountReport({ m }: { m: import('../../store/dk8s-pv-store').PvMountProb
         <div className="flex flex-col gap-0.5">
           <span className="text-[9.5px] uppercase tracking-wider"
                 style={{ color: 'var(--color-text-muted)' }}>
-            newest files — check your template against these
+            {/* Says how many of how many, because a list that stops at eight
+                and does not admit it reads as everything the walk found. */}
+            {m.sample.length < m.fileCount
+              ? `newest ${m.sample.length} of ${m.fileCount.toLocaleString()} files`
+              : 'newest files'}
+            {' '}— check your template against these
           </span>
           {m.sample.map(f => (
             <div key={f.rel} className="flex items-baseline gap-2 text-[10.5px] font-mono">

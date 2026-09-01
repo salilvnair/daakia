@@ -599,9 +599,22 @@ export async function probePv(cfg: PvLogConfig, now = Date.now()): Promise<PvPro
     totalBytes: reports.reduce((n, r) => n + r.totalBytes, 0),
     newest: reports.map(r => r.newest).filter((x): x is number => !!x).sort((a, b) => b - a)[0],
     oldest: reports.map(r => r.oldest).filter((x): x is number => !!x).sort((a, b) => a - b)[0],
-    sample: all.slice(0, 12),
+    sample: all.slice(0, PROBE_SAMPLE_TOTAL),
   };
 }
+
+/*
+  How much of a walk the probe reports back.
+
+  A probe exists to answer "is my template right", and the newest handful of
+  files answers it — the whole listing would be a file browser, and on a real
+  archive it is tens of thousands of rows. The caps are named rather than
+  written into the slice so the UI can say how many of how many it is showing:
+  a truncated list that does not admit it reads as the complete answer, and
+  "my file is not there" then looks like a walker bug rather than a cap.
+*/
+export const PROBE_SAMPLE_PER_MOUNT = 8;
+export const PROBE_SAMPLE_TOTAL = 12;
 
 async function probeMount(cfg: PvLogConfig, m: PvMount, now: number): Promise<PvMountProbe> {
   const root = path.resolve(m.path || '');
@@ -633,6 +646,7 @@ async function probeMount(cfg: PvLogConfig, m: PvMount, now: number): Promise<Pv
     totalBytes: files.reduce((n, f) => n + f.bytes, 0),
     newest: files[0]?.mtime,
     oldest: files[files.length - 1]?.mtime,
-    sample: files.slice(0, 8).map(f => ({ rel: f.rel, bytes: f.bytes, mtime: f.mtime })),
+    sample: files.slice(0, PROBE_SAMPLE_PER_MOUNT)
+      .map(f => ({ rel: f.rel, bytes: f.bytes, mtime: f.mtime })),
   };
 }
