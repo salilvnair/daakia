@@ -87,6 +87,15 @@ function FormatRow({ f, builtin }: { f: LogFormat; builtin: boolean }) {
            background: 'var(--color-surface)',
            border: `1px solid ${open ? `color-mix(in srgb, ${ACCENT} 45%, transparent)` : 'var(--color-surface-border)'}`,
            opacity: off ? 0.5 : 1,
+           /*
+             Open, the row and its editor are one card.
+
+             The editor already dropped its top border, but the row kept its
+             bottom one, so a rule still ran between the name and the form that
+             belongs to it — two stacked cards, which is exactly what the
+             squared-off corners were there to avoid.
+           */
+           ...(open ? { borderBottom: 'none' } : {}),
            borderBottomLeftRadius: open ? 0 : undefined,
            borderBottomRightRadius: open ? 0 : undefined,
          }}>
