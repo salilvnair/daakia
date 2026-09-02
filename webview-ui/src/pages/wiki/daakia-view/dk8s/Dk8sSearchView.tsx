@@ -22,7 +22,7 @@ const TOC_ITEMS: TocItem[] = [
   { id: 'dk-export', emoji: '📄', label: 'Export' },
 ];
 
-export function Dk8sView() {
+export function Dk8sSearchView() {
   return (
     <WikiScrollPage
       hero={

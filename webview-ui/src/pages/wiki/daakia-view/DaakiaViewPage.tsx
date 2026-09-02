@@ -10,16 +10,22 @@ import { MockServerView } from './mock-server/MockServerView';
 import { CollectionsEnvView } from './platform/CollectionsEnvView';
 import { AiAssistantView } from './platform/AiAssistantView';
 import { SettingsView } from './platform/SettingsView';
-import { Dk8sView } from './dk8s/Dk8sView';
+import { Dk8sOverviewView } from './dk8s/Dk8sOverviewView';
+import { Dk8sPodView } from './dk8s/Dk8sPodView';
+import { Dk8sSearchView } from './dk8s/Dk8sSearchView';
+import { Dk8sDoctorView } from './dk8s/Dk8sDoctorView';
+import { Dk8sArchiveView } from './dk8s/Dk8sArchiveView';
+import { Dk8sCommandsView } from './dk8s/Dk8sCommandsView';
 import {
   DocumentIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge,
   ProtocolGrpcBadge, ProtocolSoapBadge, ServerIcon, CollectionsFolderIcon,
-  GeneralAssistantIcon, SettingsIcon, Dk8sIcon,
+  GeneralAssistantIcon, SettingsIcon, Dk8sIcon, SearchIcon, StethoscopeIcon,
+  FolderOpenIcon, TerminalIcon, LayersIcon,
 } from '../../../icons';
 
 // ─── Wiki tabs ──────────────────────────────────────────────────────────────
 
-export type TabId = 'quick-start' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s';
+export type TabId = 'quick-start' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands';
 
 interface Tab {
   id: TabId;
@@ -39,7 +45,12 @@ const TABS: Tab[] = [
   { id: 'collections-env',   label: 'Collections & Env', color: 'var(--color-accent)',             icon: <CollectionsFolderIcon size={15} /> },
   { id: 'ai-assistant',      label: 'AI Assistant',      color: 'var(--color-protocol-ai)',        icon: <GeneralAssistantIcon size={15} /> },
   { id: 'settings',          label: 'Settings',          color: 'var(--color-accent)',             icon: <SettingsIcon size={15} /> },
-  { id: 'dk8s',              label: 'dk8s Log Search',   color: 'var(--color-dk8s)',               icon: <Dk8sIcon size={15} /> },
+  { id: 'dk8s',              label: 'Overview',          color: 'var(--color-dk8s)',               icon: <Dk8sIcon size={15} /> },
+  { id: 'dk8s-pod',          label: 'Pod Detail',        color: 'var(--color-dk8s)',               icon: <LayersIcon size={15} /> },
+  { id: 'dk8s-search',       label: 'Log Search',        color: 'var(--color-dk8s)',               icon: <SearchIcon size={15} /> },
+  { id: 'dk8s-doctor',       label: 'Doctor & Artifacts', color: 'var(--color-doctor)',            icon: <StethoscopeIcon size={15} /> },
+  { id: 'dk8s-archive',      label: 'Archived Logs',     color: 'var(--color-dk8s)',               icon: <FolderOpenIcon size={15} /> },
+  { id: 'dk8s-commands',     label: 'Behind the Scenes', color: 'var(--color-dk8s)',               icon: <TerminalIcon size={15} /> },
 ];
 
 const TAB_BY_ID = Object.fromEntries(TABS.map(t => [t.id, t]));
@@ -71,8 +82,13 @@ const NAV_ITEMS: SideNavItem[] = [
   // Its own group rather than a Platform child: dk8s is a different surface
   // from the request tabs, and filing it under "Platform" alongside Settings
   // would bury the one page that explains how a search decides what to read.
-  { id: 'g-dk8s', label: 'Kubernetes', isGroup: true, children: [
+  { id: 'g-dk8s', label: 'dk8s (Kubernetes)', isGroup: true, children: [
     { id: 'dk8s', label: TAB_BY_ID['dk8s'].label, icon: TAB_BY_ID['dk8s'].icon },
+    { id: 'dk8s-pod', label: TAB_BY_ID['dk8s-pod'].label, icon: TAB_BY_ID['dk8s-pod'].icon },
+    { id: 'dk8s-search', label: TAB_BY_ID['dk8s-search'].label, icon: TAB_BY_ID['dk8s-search'].icon },
+    { id: 'dk8s-doctor', label: TAB_BY_ID['dk8s-doctor'].label, icon: TAB_BY_ID['dk8s-doctor'].icon },
+    { id: 'dk8s-archive', label: TAB_BY_ID['dk8s-archive'].label, icon: TAB_BY_ID['dk8s-archive'].icon },
+    { id: 'dk8s-commands', label: TAB_BY_ID['dk8s-commands'].label, icon: TAB_BY_ID['dk8s-commands'].icon },
   ] },
 ];
 
@@ -127,7 +143,12 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
         {activeId === 'collections-env' && <CollectionsEnvView />}
         {activeId === 'ai-assistant'   && <AiAssistantView />}
         {activeId === 'settings'       && <SettingsView />}
-        {activeId === 'dk8s'           && <Dk8sView />}
+        {activeId === 'dk8s'           && <Dk8sOverviewView />}
+        {activeId === 'dk8s-pod'       && <Dk8sPodView />}
+        {activeId === 'dk8s-search'    && <Dk8sSearchView />}
+        {activeId === 'dk8s-doctor'    && <Dk8sDoctorView />}
+        {activeId === 'dk8s-archive'   && <Dk8sArchiveView />}
+        {activeId === 'dk8s-commands'  && <Dk8sCommandsView />}
       </div>
 
     </div>

@@ -1,48 +1,10 @@
 /**
- * The three drawings on the dk8s search page.
+ * The three drawings on the dk8s log-search page.
  *
- * Hand-authored SVG rather than an image, so they inherit the reader's theme
- * and stay legible at any zoom. Every stroke is a wiki token; the one
- * saturated colour in each drawing marks the thing that figure is about.
+ * Primitives live in `diagram-kit`, shared with the other dk8s diagrams so a
+ * change to the arrowhead or the neutral stroke lands everywhere at once.
  */
-
-const FG = 'var(--dw-fg)';
-const MUTED = 'var(--dw-muted)';
-const LINE = 'var(--dw-border)';
-const LIVE = 'var(--dw-grpc)';      // cyan — the live half
-const ARCH = 'var(--dw-mock)';      // amber — the archived half
-const HIT = 'var(--dw-ws)';         // green — a kept match
-
-/** Shared arrowhead. Ids are fragment-internal, so one defs block per svg. */
-function Defs({ id }: { id: string }) {
-  return (
-    <defs>
-      <marker id={id} viewBox="0 0 8 8" refX="7" refY="4"
-              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M0,0 L8,4 L0,8 z" fill={MUTED} />
-      </marker>
-    </defs>
-  );
-}
-
-function Box({ x, y, w, h, stroke = LINE, dash }: {
-  x: number; y: number; w: number; h: number; stroke?: string; dash?: string;
-}) {
-  return (
-    <rect x={x} y={y} width={w} height={h} rx="6"
-          fill="none" stroke={stroke} strokeWidth="1.2" strokeDasharray={dash} />
-  );
-}
-
-function T({ x, y, children, fill = FG, size = 11.5, anchor = 'middle', weight = 400 }: {
-  x: number; y: number; children: React.ReactNode;
-  fill?: string; size?: number; anchor?: 'start' | 'middle' | 'end'; weight?: number;
-}) {
-  return (
-    <text x={x} y={y} fontSize={size} fill={fill} textAnchor={anchor}
-          fontWeight={weight} fontFamily="inherit">{children}</text>
-  );
-}
+import { Defs, Box, T, MUTED, LIVE, ARCH, HIT } from './diagram-kit';
 
 /* ── 1. The pipeline ─────────────────────────────────────────────────────── */
 
