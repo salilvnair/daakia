@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon } from '../../../icons';
 import { getFilterMenu, type FilterMenu } from './filter-provider';
+import { jsonPathLevels, xPathLevels } from '@salilvnair/dui';
 
 type MenuContext = 'monaco' | 'input' | 'selection';
 
@@ -279,6 +280,62 @@ const MONACO_MENU_GROUPS_BASIC: MonacoMenuItem[][] = [
 /** Languages that support Go to Definition, Peek, Rename */
 const TS_LANGUAGES = new Set(['javascript', 'typescript']);
 
+/** Carries the path in the id, since actions are dispatched by id alone. */
+const COPY_PATH = 'copyPath:';
+
+/*
+  The path to whatever was right-clicked, as a submenu of every level.
+
+  Reading a value out of a response and then writing the expression that
+  selects it is a transcription job: you can see `id` on screen and still have
+  to count array indices and retype four ancestor names to say where it lives.
+
+  Every enclosing level is offered, innermost first — the thing you clicked is
+  the thing you asked about, and its ancestors follow outward. An assertion is
+  as often written against the array or the object above a leaf as against the
+  leaf itself, and each of those is a different path to derive by hand.
+
+  Built here rather than registered on the editor because this menu is the one
+  that opens: Daakia intercepts `contextmenu` globally and draws its own, so a
+  Monaco action — however correctly registered — is never rendered.
+*/
+function pathGroup(editor: any, at: { x: number; y: number }): MonacoMenuItem[][] {
+  const model = editor?.getModel?.();
+  if (!model) return [];
+
+  const language = model.getLanguageId?.();
+  if (language !== 'json' && language !== 'xml') return [];
+
+  // Which key or tag is under the pointer — the coordinates are the question,
+  // so the cursor position is no use here; it is wherever it was left.
+  const position = editor.getTargetAtClientPoint?.(at.x, at.y)?.position;
+  if (!position) return [];
+
+  const text = model.getValue();
+  const offset = model.getOffsetAt(position);
+  const levels = language === 'json'
+    ? jsonPathLevels(text, offset)
+    : xPathLevels(text, offset);
+  if (!levels.length) return [];
+
+  const deepest = levels[levels.length - 1]!;
+  return [[{
+    id: `${COPY_PATH}${deepest}`,
+    label: language === 'json' ? 'Copy JSON path' : 'Copy XPath',
+    icon: <CopyIcon size={14} />,
+    iconColor: 'var(--color-ctx-duplicate)',
+    /*
+      The parent copies the innermost path on its own, so the common case is
+      one click; the submenu is there for the ancestors. Reversed, so what you
+      clicked is first rather than last.
+    */
+    submenu: [...levels].reverse().map(path => ({
+      id: `${COPY_PATH}${path}`,
+      label: path,
+    })),
+  }]];
+}
+
 function MonacoContextMenu({ position, target, onClose }: { position: { x: number; y: number }; target: HTMLElement; onClose: () => void }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(position);
@@ -324,6 +381,16 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
   const executeAction = useCallback((id: string) => {
     const editor = editorInstanceRef.current;
     onClose();
+    /*
+      Handled before the editor is touched. Every other entry acts on the
+      editor and needs it focused first; a path is already a string by the
+      time it reaches the menu, and focusing to copy it would move the cursor
+      for no reason.
+    */
+    if (id.startsWith(COPY_PATH)) {
+      void navigator.clipboard?.writeText(id.slice(COPY_PATH.length));
+      return;
+    }
     if (!editor) return;
     // Use requestAnimationFrame to ensure DOM is updated (menu removed) before refocusing
     requestAnimationFrame(() => {
@@ -411,7 +478,11 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
 
   // Determine menu items based on editor language
   const editorLang = editor?.getModel()?.getLanguageId?.() || '';
-  const menuGroups = TS_LANGUAGES.has(editorLang) ? MONACO_MENU_GROUPS_FULL : MONACO_MENU_GROUPS_BASIC;
+  const baseGroups = TS_LANGUAGES.has(editorLang) ? MONACO_MENU_GROUPS_FULL : MONACO_MENU_GROUPS_BASIC;
+  // First, because it is the only entry that depends on where you clicked —
+  // everything below acts on the document or the selection and is the same
+  // wherever the pointer was.
+  const menuGroups = [...pathGroup(editor, position), ...baseGroups];
 
   return createPortal(
     <div
