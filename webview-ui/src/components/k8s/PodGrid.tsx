@@ -109,16 +109,22 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
         className="text-[11px] px-3 py-1 rounded-md cursor-pointer transition-colors
                    flex items-center gap-1.5 shrink-0 font-medium"
         style={{
-          // The same tinted, bordered shape as "Search N logs" below it —
-          // the two do the same job from different starting points, and one
-          // of them looking like a link made that hard to see.
-          background: `color-mix(in srgb, ${ACCENT} 18%, transparent)`,
-          color: ACCENT,
-          border: `1px solid color-mix(in srgb, ${ACCENT} 45%, transparent)`,
+          /*
+            The same tinted, bordered shape as "Search N logs" below it — the
+            two do the same job from different starting points, and one of them
+            looking like a link made that hard to see.
+
+            Green rather than the tab's cyan: everything else up here is cyan
+            because it belongs to dk8s, and the one control that goes and does
+            something should not read as more chrome.
+          */
+          background: 'color-mix(in srgb, var(--color-success) 18%, transparent)',
+          color: 'var(--color-success)',
+          border: '1px solid color-mix(in srgb, var(--color-success) 45%, transparent)',
         }}
       >
         <SearchIcon size={12} />
-        Search everywhere
+        Quick Search
       </button>
       {/* The watch state belongs with the counts, not in the toolbar: it says
           whether the numbers to its left are still true. */}
