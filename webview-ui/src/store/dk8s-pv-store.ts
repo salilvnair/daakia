@@ -37,6 +37,8 @@ export interface PvLogConfig {
   pattern?: string;
   extensions?: string[];
   maxAgeDays?: number;
+  /** The zone the log's own timestamps are written in. Defaults to UTC. */
+  logTimeZone?: string;
   /** Context substring → the token `{env}` expands to. */
   envByContext?: Record<string, string>;
   /** Pod-name substring → the token `{app}` expands to. Rarely needed. */
@@ -116,6 +118,7 @@ export const DEFAULT_PV: PvLogConfig = {
   pathByPod: {},
   extensions: ['.log'],
   maxAgeDays: 0,
+  logTimeZone: 'UTC',
 };
 
 interface PvState {
@@ -162,7 +165,7 @@ export const useDk8sPvStore = create<PvState>((set, get) => ({
     are still there.
   */
   patch: (p) => set(s => {
-    const walked: (keyof PvLogConfig)[] = ['mounts', 'root', 'extensions', 'maxAgeDays'];
+    const walked: (keyof PvLogConfig)[] = ['mounts', 'root', 'extensions', 'maxAgeDays', 'logTimeZone'];
     const stale = walked.some(k => k in p && !same(p[k], s.draft[k]));
     return {
       draft: { ...s.draft, ...p },

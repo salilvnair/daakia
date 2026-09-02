@@ -79,6 +79,21 @@ export interface PvLogConfig {
   layouts?: PvLayout[];
   /** Regex over the mount-relative path, for anything the template misses. */
   pattern?: string;
+  /**
+   * The zone the log's own timestamps are written in.
+   *
+   * A line like `2026-08-30 06:32:25` names no zone, so reading it requires
+   * assuming one, and the assumption was the reader's own. A pod writing UTC
+   * read by someone on CST then put every archived line five hours from where
+   * it belonged — quietly, because both the line and the window looked right
+   * on their own.
+   *
+   * This is a property of the log, not of a search, which is why it is
+   * configured once here beside the mounts rather than asked for every time.
+   * Lines that carry an explicit offset are already unambiguous and ignore it.
+   * Defaults to UTC, which is what a container writes unless told otherwise.
+   */
+  logTimeZone?: string;
   /** Only consider files matching these extensions. Empty means all. */
   extensions?: string[];
   /** Skip files older than this. 0 means no limit. */

@@ -22,7 +22,9 @@ import {
   trade than a constant in two places.
 */
 const CURRENT_LAYOUT = '@current';
-import { ButtonView, TextInputView, CheckboxView, SpinnerIcon } from '@salilvnair/dui';
+import {
+  ButtonView, TextInputView, CheckboxView, SpinnerIcon, TimeZoneSelectView, localTimeZone,
+} from '@salilvnair/dui';
 import { Hint, Lit, Why } from './prose';
 import {
   FolderOpenIcon, WarningTriangleIcon, CheckCircleIcon, TrashIcon, PlusIcon, PencilIcon,
@@ -785,6 +787,23 @@ export function PvLogSettings() {
             />
           </Field>
         </div>
+
+        <Field
+          label="these logs are written in"
+          hint={<Hint lead={<>The zone of the log's own timestamps, for lines
+            like{' '}<Lit>2026-08-30 06:32:25</Lit> that name none. Searching by time has to
+            turn those into instants, and without this it assumed yours
+            {localTimeZone() === 'UTC' ? '' : ` (${localTimeZone()})`} — so a pod
+            writing UTC read from anywhere else landed every line the offset away.
+            Lines that carry their own <Lit>Z</Lit> or <Lit>+05:30</Lit> are already
+            unambiguous and ignore this.</>} />}
+        >
+          <TimeZoneSelectView
+            value={draft.logTimeZone ?? 'UTC'}
+            onChange={z => patch({ logTimeZone: z })}
+            size="md" width={280} color={ACCENT}
+          />
+        </Field>
 
         {probe && <ProbeReport />}
       </div>

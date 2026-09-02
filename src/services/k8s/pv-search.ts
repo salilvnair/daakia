@@ -21,6 +21,7 @@ import {
   type SearchOptions, type SearchMatch, type Matcher,
 } from './k8s-log-search';
 import type { LogLevel } from './k8s-log-stream';
+import { parseLogTime } from './log-time';
 import { filesForPod, type PvLogConfig, type PvFile, type PodRef } from './pv-logs';
 import { openLog, findTimeOffset } from './log-window';
 
@@ -79,19 +80,13 @@ class Ring {
   values(): string[] { return [...this.buf]; }
 }
 
-/** RFC3339 or a bare `2026-08-30 06:32:25` at the head of a line. */
-const TS = /^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?)/;
 
-function timeOf(line: string): number | undefined {
-  const m = TS.exec(line);
-  if (!m) return undefined;
-  const t = Date.parse(m[1].replace(' ', 'T'));
-  return Number.isFinite(t) ? t : undefined;
-}
 
 async function scanFile(
   f: PvFile, match: Matcher, opts: SearchOptions, pod: string, namespace: string,
   budget: { left: number }, signal: { cancelled: boolean },
+  /** The zone this log's own timestamps are written in — see `parseLogTime`. */
+  logZone: string,
 ): Promise<{ result: PvFileResult; matches: PvMatch[] }> {
   const result: PvFileResult = {
     rel: f.rel, file: f.file, bytes: f.bytes, mtime: f.mtime, scanned: 0, matched: 0,
@@ -190,7 +185,7 @@ async function scanFile(
         frame is kept or dropped with the event that printed it, and a file
         whose format carries no timestamp at all is never filtered away.
       */
-      const lineTs = timeOf(line);
+      const lineTs = parseLogTime(line, logZone);
       if (lineTs !== undefined) seenTs = lineTs;
       // The window is closed at both ends now. The seek below still handles the
       // lower one by skipping bytes; this is what makes the upper one real,
@@ -297,12 +292,15 @@ export async function searchPvForPod(
     inside the window is opened and judged line by line.
   */
   const skipBefore = cutoffFor(opts);
+  // Configured once beside the mounts, because it describes the log rather
+  // than the search. UTC when unset: that is what a container writes.
+  const logZone = cfg.logTimeZone || 'UTC';
   const budget = { left: opts.maxMatchesPerPod };
   for (const f of files) {
     if (signal.cancelled) break;
     if (skipBefore !== undefined && f.mtime < skipBefore) continue;
     const { result: fr, matches: fm } = await scanFile(
-      f, match, opts, ref.pod, ref.namespace, budget, signal,
+      f, match, opts, ref.pod, ref.namespace, budget, signal, logZone,
     );
     // A file with nothing in it is noise in the file list.
     if (fr.matched > 0 || fr.error) result.files.push(fr);

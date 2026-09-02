@@ -11,29 +11,23 @@
  * They previously each owned a private copy of the range list, which is how the
  * export came to offer a choice the search did not.
  */
-import {
-  SegmentedControlView, DateTimeInputView, TimeZoneSelectView,
-  localTimeZone, zonedToUtcMs, offsetLabel,
-} from '@salilvnair/dui';
+import { SegmentedControlView, DateTimeInputView } from '@salilvnair/dui';
 
 export type WindowKind = 'all' | '30m' | '1h' | '2h' | '6h' | 'between';
 
 export interface TimeWindow {
   kind: WindowKind;
-  /** `YYYY-MM-DDTHH:mm`, read in `zone`. Only meaningful when kind is `between`. */
+  /**
+   * `YYYY-MM-DDTHH:mm` on the reader's own clock.
+   *
+   * No zone here on purpose. This is the time on the screen of the person
+   * choosing it, which their device already knows; the zone that has to be
+   * stated is the one the LOG is written in, and that is a property of the
+   * log rather than of each search — it lives in the archive settings, next
+   * to the mounts it describes.
+   */
   from: string;
   to: string;
-  /**
-   * The zone those two readings are in.
-   *
-   * A pod usually writes UTC and the person reading usually is not in it, so a
-   * wall-clock time means two different instants depending on who is asked.
-   * Copying a timestamp out of a log and typing it here would then select a
-   * window hours away from the one on screen — silently, since nothing about
-   * the number itself says which zone it belongs to. Naming the zone is what
-   * makes the two ends agree.
-   */
-  zone: string;
 }
 
 const RANGE_SECONDS: Record<string, number> = {
@@ -58,9 +52,6 @@ export function defaultWindow(): TimeWindow {
     kind: 'all',
     from: localInputValue(new Date(now.getTime() - 3600_000)),
     to: localInputValue(now),
-    // The browser's own zone, because that is what the two fields display; the
-    // control beside them is how it becomes UTC when the log is in UTC.
-    zone: localTimeZone(),
   };
 }
 
@@ -76,8 +67,10 @@ export function windowOptions(w: TimeWindow): {
 } {
   if (w.kind === 'all') return {};
   if (w.kind !== 'between') return { sinceSeconds: RANGE_SECONDS[w.kind] };
-  const fromMs = zonedToUtcMs(w.from, w.zone);
-  const toMs = zonedToUtcMs(w.to, w.zone);
+  // `Date.parse` of a zoneless reading uses the device's own zone, which is
+  // exactly what these two fields mean.
+  const fromMs = Date.parse(w.from);
+  const toMs = Date.parse(w.to);
   return {
     fromMs: Number.isNaN(fromMs) ? undefined : fromMs,
     // Through the end of the chosen minute, so picking 09:05 includes 09:05:59
@@ -89,8 +82,8 @@ export function windowOptions(w: TimeWindow): {
 /** Why this window cannot be searched, when it cannot. */
 export function windowError(w: TimeWindow): string | undefined {
   if (w.kind !== 'between') return undefined;
-  const from = zonedToUtcMs(w.from, w.zone);
-  const to = zonedToUtcMs(w.to, w.zone);
+  const from = Date.parse(w.from);
+  const to = Date.parse(w.to);
   if (Number.isNaN(from) || Number.isNaN(to)) return 'Both ends of the range need a date and time.';
   if (from > to) return 'The end of the range is before its start.';
   return undefined;
@@ -103,9 +96,7 @@ export function describeWindow(w: TimeWindow): string {
   }
   if (w.kind !== 'between') return `Only lines from the ${LABEL[w.kind].toLowerCase()}.`;
   return windowError(w)
-    // The resolved offset is stated, so a window typed from a UTC log can be
-    // checked against the log without doing the arithmetic in your head.
-    ?? `Only lines timestamped inside this window, both ends included, read as ${offsetLabel(w.zone)}.`;
+    ?? 'Only lines timestamped inside this window, at either end of it inclusive.';
 }
 
 export function TimeWindowPicker({ value, onChange, size = 'md', accent }: {
@@ -142,10 +133,6 @@ export function TimeWindowPicker({ value, onChange, size = 'md', accent }: {
           <DateTimeInputView
             value={value.to} onChange={v => onChange({ ...value, to: v })}
             size="sm" color={accent}
-          />
-          <TimeZoneSelectView
-            value={value.zone} onChange={z => onChange({ ...value, zone: z })}
-            size="sm" width={200} color={accent}
           />
         </div>
       )}

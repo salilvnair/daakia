@@ -3,8 +3,7 @@ import {
   windowOptions, windowError, localInputValue, defaultWindow, type TimeWindow,
 } from './TimeWindow';
 
-const between = (from: string, to: string, zone = 'UTC'): TimeWindow =>
-  ({ kind: 'between', from, to, zone });
+const between = (from: string, to: string): TimeWindow => ({ kind: 'between', from, to });
 
 describe('windowOptions', () => {
   it('leaves a preset relative, so it means the same tomorrow', () => {
@@ -16,54 +15,28 @@ describe('windowOptions', () => {
     expect(windowOptions({ ...defaultWindow(), kind: 'all' })).toEqual({});
   });
 
-  it('resolves a between to two absolute instants', () => {
-    const { fromMs, toMs } = windowOptions(between('2026-08-01T00:00', '2026-08-05T09:05'));
-    expect(fromMs).toBe(Date.parse('2026-08-01T00:00:00Z'));
-    expect(toMs).toBe(Date.parse('2026-08-05T09:05:00Z') + 59_999);
-  });
-
   /*
-    The reason the zone is on the window at all.
-
-    A pod writes UTC and the person reading it is somewhere else, so the same
-    wall-clock reading is two different instants. Before this it was always
-    taken as the browser's zone, which meant typing a timestamp copied out of
-    a UTC log selected a window hours away from the line it came from.
+    These two fields are the reader's own clock, so they resolve through the
+    device's zone. The zone the LOG is in is a separate thing entirely and is
+    configured beside the mounts — see `log-time.test.ts` on the host, which is
+    where a zoneless log line gets turned into an instant.
   */
-  it('reads the same wall clock as a different instant in a different zone', () => {
-    const utc = windowOptions(between('2026-08-01T00:00', '2026-08-01T01:00', 'UTC'));
-    const chi = windowOptions(
-      between('2026-08-01T00:00', '2026-08-01T01:00', 'America/Chicago'));
-    expect(chi.fromMs! - utc.fromMs!).toBe(5 * 3600_000);   // CDT is UTC-5
-  });
-
-  it('handles a zone that is not a whole number of hours from UTC', () => {
-    const { fromMs } = windowOptions(
-      between('2026-08-01T00:00', '2026-08-01T01:00', 'Asia/Kolkata'));
-    expect(fromMs).toBe(Date.parse('2026-07-31T18:30:00Z'));
-  });
-
-  it('uses the offset in force on the chosen day, not the one in force today', () => {
-    // Chicago is UTC-5 in August and UTC-6 in January.
-    const summer = windowOptions(
-      between('2026-08-01T00:00', '2026-08-01T01:00', 'America/Chicago'));
-    const winter = windowOptions(
-      between('2026-01-15T00:00', '2026-01-15T01:00', 'America/Chicago'));
-    expect(summer.fromMs).toBe(Date.parse('2026-08-01T05:00:00Z'));
-    expect(winter.fromMs).toBe(Date.parse('2026-01-15T06:00:00Z'));
+  it('resolves a between to two absolute instants on the device clock', () => {
+    const { fromMs, toMs } = windowOptions(between('2026-08-01T00:00', '2026-08-05T09:05'));
+    expect(fromMs).toBe(new Date(2026, 7, 1, 0, 0).getTime());
+    expect(toMs).toBe(new Date(2026, 7, 5, 9, 5).getTime() + 59_999);
   });
 
   it('includes the whole of the end minute', () => {
     // Picking 09:05 and losing 09:05:30 is the kind of gap that gets blamed on
     // the logs rather than on the filter.
     const { toMs } = windowOptions(between('2026-08-01T00:00', '2026-08-05T09:05'));
-    expect(toMs!).toBeGreaterThan(Date.parse('2026-08-05T09:05:30Z'));
-    expect(toMs!).toBeLessThan(Date.parse('2026-08-05T09:06:00Z'));
+    expect(toMs!).toBeGreaterThan(new Date(2026, 7, 5, 9, 5, 30).getTime());
+    expect(toMs!).toBeLessThan(new Date(2026, 7, 5, 9, 6).getTime());
   });
 
-  it('reads the fields in the browser zone when that is what is chosen', () => {
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const { fromMs } = windowOptions(between('2026-08-01T13:45', '2026-08-02T00:00', zone));
+  it('reads the fields as the device’s own time, the way they are displayed', () => {
+    const { fromMs } = windowOptions(between('2026-08-01T13:45', '2026-08-02T00:00'));
     const d = new Date(fromMs!);
     expect([d.getHours(), d.getMinutes()]).toEqual([13, 45]);
   });
