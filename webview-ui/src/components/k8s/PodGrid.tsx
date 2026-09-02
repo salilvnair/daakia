@@ -59,7 +59,7 @@ function Stat({ n, label, color }: { n: number; label: string; color?: string })
  * failure a live view can have — so the state is always on screen.
  */
 function WatchIndicator() {
-  const { watchStatus, watchDetail } = useK8sStore();
+  const { watchStatus, watchDetail, lastEventAt } = useK8sStore();
   const map: Record<string, { label: string; color: string }> = {
     idle: { label: 'starting', color: 'var(--color-text-muted)' },
     connected: { label: 'watching', color: 'var(--color-method-get)' },
@@ -67,9 +67,41 @@ function WatchIndicator() {
     stopped: { label: 'stopped', color: 'var(--color-text-muted)' },
   };
   const s = map[watchStatus] ?? map.idle;
+
+  /*
+    Re-read on a timer, because the age changes while nothing else does.
+
+    A minute is the right grain: the tooltip is read to answer "is this
+    stale", and no one needs that answered to the second — a second-by-second
+    re-render of the whole header to move a number nobody is looking at is a
+    worse trade.
+  */
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick(n => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  /*
+    How long since the watch last said anything.
+
+    "watching" means the stream is up. On a quiet namespace that is
+    indistinguishable from a stream that has heard nothing in an hour, and
+    those are very different situations to be reading a pod list in.
+  */
+  const since = lastEventAt === undefined ? undefined : Date.now() - lastEventAt;
+  const ago = since === undefined ? 'nothing yet'
+    : since < 60_000 ? 'just now'
+      : since < 3_600_000 ? `${Math.floor(since / 60_000)}m ago`
+        : `${Math.floor(since / 3_600_000)}h ago`;
+
+  const title = [
+    watchDetail || 'live watch on this namespace',
+    `last change: ${ago}`,
+  ].join(' — ');
+
   return (
-    <span className="flex items-center gap-1.5 flex-shrink-0"
-          title={watchDetail || 'live watch on this namespace'}>
+    <span className="flex items-center gap-1.5 flex-shrink-0" title={title}>
       <span style={{ width: 6, height: 6, borderRadius: 3, background: s.color }} />
       <span className="text-[10.5px]" style={{ color: s.color }}>{s.label}</span>
     </span>
@@ -114,13 +146,13 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
             two do the same job from different starting points, and one of them
             looking like a link made that hard to see.
 
-            Green rather than the tab's cyan: everything else up here is cyan
-            because it belongs to dk8s, and the one control that goes and does
-            something should not read as more chrome.
+            SOAP's accent rather than the tab's cyan: everything else up here
+            is cyan because it belongs to dk8s, and the one control that goes
+            and does something should not read as more chrome.
           */
-          background: 'color-mix(in srgb, var(--color-success) 18%, transparent)',
-          color: 'var(--color-success)',
-          border: '1px solid color-mix(in srgb, var(--color-success) 45%, transparent)',
+          background: 'color-mix(in srgb, var(--color-protocol-soap) 18%, transparent)',
+          color: 'var(--color-protocol-soap)',
+          border: '1px solid color-mix(in srgb, var(--color-protocol-soap) 45%, transparent)',
         }}
       >
         <SearchIcon size={12} />

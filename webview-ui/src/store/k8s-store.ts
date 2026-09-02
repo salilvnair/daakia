@@ -355,6 +355,15 @@ interface K8sState {
    * shows four is a picker for a different screen. Not persisted — opening
    * dk8s starts on starred, every time.
    */
+  /**
+   * When the watch last said anything, as epoch ms.
+   *
+   * "watching" reports that the stream is up, which on a quiet namespace looks
+   * identical to a stream that has heard nothing for an hour. The age of the
+   * last event is the difference between "nothing is happening" and "I am not
+   * being told what is happening".
+   */
+  lastEventAt?: number;
   podScope: 'fav' | 'all';
   setPodScope: (v: 'fav' | 'all') => void;
   selectMode: boolean;
@@ -1054,15 +1063,16 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       case 'dk8s:podEvent': {
         const pod = { ...(msg.pod as PodSummary), context: msg.context as string };
         const kind = msg.eventType as string;
+        const at = Date.now();
         set(s => {
           if (kind === 'DELETED') {
-            return { pods: s.pods.filter(p => p.uid !== pod.uid) };
+            return { pods: s.pods.filter(p => p.uid !== pod.uid), lastEventAt: at };
           }
           const i = s.pods.findIndex(p => p.uid === pod.uid);
-          if (i < 0) return { pods: [...s.pods, pod] };
+          if (i < 0) return { pods: [...s.pods, pod], lastEventAt: at };
           const next = s.pods.slice();
           next[i] = pod;
-          return { pods: next };
+          return { pods: next, lastEventAt: at };
         });
         break;
       }
