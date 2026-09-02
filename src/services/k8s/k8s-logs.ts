@@ -7,9 +7,10 @@
  * looks complete when it is not.
  */
 import { createWriteStream } from 'fs';
-import { mkdir } from 'fs/promises';
+import { mkdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { run } from './kubectl';
+import { filesForPod, type PvLogConfig } from './pv-logs';
 
 export type LogRange =
   | { kind: 'all' }
@@ -24,6 +25,15 @@ export type LogSlice =
 export interface ExportOptions {
   range: LogRange;
   slice: LogSlice;
+  /**
+   * The archive configuration, when one is set up.
+   *
+   * `kubectl logs` reaches the running container and the one before it. A pod
+   * whose logs are shipped to a volume has far more than that, the results
+   * list says so, and exporting the whole log while silently meaning "the
+   * live part of it" is the same half-answer the match export used to give.
+   */
+  pv?: PvLogConfig;
   /**
    * Also fetch the previous container's logs.
    *
@@ -43,6 +53,8 @@ export interface ExportTarget {
   pod: string;
   /** More than one means --all-containers, so lines stay attributable. */
   containers: string[];
+  /** The owning workload, for resolving `{app}` against an archive. */
+  workload?: string;
 }
 
 export interface ExportResult {
@@ -56,6 +68,8 @@ export interface ExportResult {
   error?: string;
   /** True when previous-container logs were appended. */
   includedPrevious?: boolean;
+  /** True for the archived half, which is written as its own file. */
+  archive?: boolean;
 }
 
 /**
@@ -164,11 +178,16 @@ async function fetchLog(
 }
 
 /** Filesystem-safe, and still recognisably the pod. */
-export function logFileName(pod: string, namespace: string, multiNamespace: boolean): string {
+export function logFileName(
+  pod: string, namespace: string, multiNamespace: boolean, archive = false,
+): string {
   const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '_');
   // Two clusters can hold a pod of the same name; prefix only when it matters,
   // so the common case stays a clean `<pod>.log`.
-  return multiNamespace ? `${safe(namespace)}__${safe(pod)}.log` : `${safe(pod)}.log`;
+  const base = multiNamespace ? `${safe(namespace)}__${safe(pod)}` : safe(pod);
+  // The archived half is a separate file. It is a different body of text, and
+  // one name for two of them means one does not exist.
+  return `${base}${archive ? '__archive' : ''}.log`;
 }
 
 /**
@@ -254,11 +273,76 @@ export async function exportPodLogs(
     }
 
     results.push(result);
+
+    /*
+      The archived half, as its own file.
+
+      Concatenated in rotation order — oldest first — because that is the order
+      the pod wrote them, and a log read out of order is worse than no log.
+      Each file is announced by name, so a line can be traced back to the
+      rotation it came from without diffing against the volume.
+
+      Streamed one file at a time rather than joined in memory: an archive is
+      the part that does not fit, which is the whole reason it is on a volume.
+    */
+    if (opts.pv?.enabled) {
+      const archived: ExportResult = { pod: t.pod, namespace: t.namespace };
+      try {
+        const files = await filesForPod(opts.pv, {
+          namespace: t.namespace, pod: t.pod, context: t.context, workload: t.workload,
+        });
+        if (files.length) {
+          const file = join(destDir, logFileName(t.pod, t.namespace, multiNamespace, true));
+          const oldest = [...files].sort((a, b) => a.mtime - b.mtime);
+          let lineCount = 0;
+          let byteCount = 0;
+          const parts: string[] = [];
+          for (const f of oldest) {
+            const text = await readArchivedFile(f.file);
+            parts.push(`===== ${f.rel} =====`);
+            parts.push(text);
+            lineCount += text.split('\n').filter(Boolean).length + 1;
+            byteCount += Buffer.byteLength(text, 'utf8');
+          }
+          const body = parts.join('\n');
+          await writeFileStream(file, body ? body + '\n' : '');
+          archived.file = file;
+          archived.lines = lineCount;
+          archived.bytes = byteCount;
+          archived.archive = true;
+          results.push(archived);
+        }
+      } catch (err) {
+        // One unreadable volume must not lose the live half already written.
+        archived.error = (err as Error).message;
+        archived.archive = true;
+        results.push(archived);
+      }
+    }
+
     done++;
     onProgress?.(done, targets.length, t.pod);
   }
 
   return results;
+}
+
+/** Reads one archived file, decompressing it when it is compressed. */
+async function readArchivedFile(path: string): Promise<string> {
+  if (!/\.gz$/i.test(path)) return readFile(path, 'utf8');
+  // Same reason the search decompresses: most of an archive is compressed,
+  // and reading those bytes as text produces a file of replacement characters.
+  const { createGunzip } = await import('zlib');
+  const { createReadStream } = await import('fs');
+  return new Promise((resolve, reject) => {
+    const chunks: string[] = [];
+    createReadStream(path)
+      .pipe(createGunzip())
+      .setEncoding('utf8')
+      .on('data', (c: string) => chunks.push(c))
+      .on('end', () => resolve(chunks.join('')))
+      .on('error', reject);
+  });
 }
 
 function writeFileStream(path: string, content: string): Promise<void> {

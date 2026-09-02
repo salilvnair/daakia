@@ -69,6 +69,21 @@ export interface PvFileResult {
   error?: string;
 }
 
+/**
+ * What identifies a result row.
+ *
+ * One pod produces two groups when it has archived logs as well as live ones,
+ * and every piece of per-row state — ticked for export, collapsed, file list
+ * open — was keyed on the pod name alone. So the two rows shared one state:
+ * ticking either ticked both, collapsing either collapsed both, and exporting
+ * "one" of them exported whichever the map happened to hold.
+ *
+ * The source is what tells them apart, so it belongs in the key.
+ */
+export function groupKey(g: { result: { pod: string }; source?: 'live' | 'archive' }): string {
+  return `${g.source ?? 'live'}:${g.result.pod}`;
+}
+
 export interface PodGroup {
   result: PodSearchResult;
   matches: SearchMatch[];

@@ -23,7 +23,7 @@ import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
 import { ExportSearchModal } from './ExportSearchModal';
 import { postMsg } from '../../vscode';
 import {
-  useDk8sSearchStore, type SearchMatch, type PodGroup, type PvFileResult,
+  useDk8sSearchStore, groupKey, type SearchMatch, type PodGroup, type PvFileResult,
 } from '../../store/dk8s-search-store';
 import { levelColor } from './log-view';
 import { severityOf, severityColor, shortAge } from './pod-view';
@@ -51,15 +51,16 @@ function buildRows(
 ): Row[] {
   const rows: Row[] = [];
   for (const group of groups) {
+    const key = groupKey(group);
     rows.push({ kind: 'header', group });
-    if (collapsed.includes(group.result.pod)) continue;
+    if (collapsed.includes(key)) continue;
 
     // Which archived files the hits came from. A pod's logs can be spread
     // across a week of rotated files, and "3 hits" says nothing about whether
     // they are from today or from the restart you are actually chasing.
-    if (group.source === 'archive' && filesOpen.includes(group.result.pod)) {
+    if (group.source === 'archive' && filesOpen.includes(key)) {
       for (const f of group.files ?? []) {
-        rows.push({ kind: 'file', file: f, pod: group.result.pod, key: `${group.result.pod}:${f.rel}` });
+        rows.push({ kind: 'file', file: f, pod: group.result.pod, key: `${key}:${f.rel}` });
       }
     }
     for (const m of group.matches) {
@@ -180,21 +181,28 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     is a file nobody wants, and having it tickable makes the count in the
     button wrong.
   */
-  const matchedPods = useMemo(
-    () => groups.filter(g => g.result.matched > 0 && !g.result.error).map(g => g.result.pod),
+  const matchedKeys = useMemo(
+    () => groups.filter(g => g.result.matched > 0 && !g.result.error).map(groupKey),
     [groups],
   );
-  const ticked = exportPicked ?? matchedPods;
-  const tickedPods = useMemo(
-    () => pods.filter(p => ticked.includes(p.name)),
-    [pods, ticked],
-  );
-  const allTicked = matchedPods.length > 0 && matchedPods.every(p => ticked.includes(p));
+  const ticked = exportPicked ?? matchedKeys;
+  /*
+    The pods behind the ticked rows, deduplicated.
 
-  const toggleTick = (pod: string) => setExportPicked(
-    ticked.includes(pod) ? ticked.filter(p => p !== pod) : [...ticked, pod],
+    A pod ticked in both its halves is still one pod to export — the exporter
+    writes each source it finds for the pods it is given, so handing it the
+    same pod twice would write the same pair of files twice.
+  */
+  const tickedPods = useMemo(() => {
+    const names = new Set(ticked.map((k: string) => k.slice(k.indexOf(':') + 1)));
+    return pods.filter(p => names.has(p.name));
+  }, [pods, ticked]);
+  const allTicked = matchedKeys.length > 0 && matchedKeys.every(k => ticked.includes(k));
+
+  const toggleTick = (key: string) => setExportPicked(
+    ticked.includes(key) ? ticked.filter(k => k !== key) : [...ticked, key],
   );
-  const toggleAllTicks = () => setExportPicked(allTicked ? [] : matchedPods);
+  const toggleAllTicks = () => setExportPicked(allTicked ? [] : matchedKeys);
 
   const first = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
   const last = Math.min(rows.length, Math.ceil((scrollTop + viewportH) / ROW_H) + OVERSCAN);
@@ -520,7 +528,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
               footer already has Search, which is the other, opposite thing you
               do from here.
             */}
-            {!running && matchedPods.length > 0 && (
+            {!running && matchedKeys.length > 0 && (
               <>
                 <div className="flex-1" />
                 <button
@@ -529,7 +537,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                   className="cursor-pointer border-none bg-transparent px-1 shrink-0"
                   style={{ color: ACCENT, fontSize: 11, fontFamily: 'inherit' }}
                 >
-                  {allTicked ? 'clear' : `select all ${matchedPods.length}`}
+                  {allTicked ? 'clear' : `select all ${matchedKeys.length}`}
                 </button>
                 <ButtonView
                   label={`Export ${ticked.length || ''}`.trim()}
@@ -601,11 +609,15 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 {slice.map((row, i) => {
                   if (row.kind === 'header') {
                     const r = row.group.result;
-                    const isCollapsed = collapsed.includes(r.pod);
+                    // Keyed by source as well as pod: the same pod's live and
+                    // archived rows are two rows, and shared state made them
+                    // behave as one.
+                    const gk = groupKey(row.group);
+                    const isCollapsed = collapsed.includes(gk);
                     return (
                       <div
-                        key={`h${r.pod}${i}`}
-                        onClick={() => toggleCollapsed(r.pod)}
+                        key={`h${gk}${i}`}
+                        onClick={() => toggleCollapsed(gk)}
                         className="flex items-center gap-2 px-2 cursor-pointer"
                         style={{
                           height: ROW_H,
@@ -617,9 +629,9 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                         {/* Ticking a pod must not also collapse it — the row
                             behind this is the expand/collapse target. */}
                         {r.matched > 0 && !r.error && (
-                          <span onClick={e => { e.stopPropagation(); toggleTick(r.pod); }}
+                          <span onClick={e => { e.stopPropagation(); toggleTick(gk); }}
                                 className="flex items-center shrink-0">
-                            <CheckboxView checked={ticked.includes(r.pod)} size="xs"
+                            <CheckboxView checked={ticked.includes(gk)} size="xs"
                                           accentColor={ACCENT} onChange={() => {}} />
                           </span>
                         )}
@@ -670,11 +682,23 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                             {row.group.source === 'archive' && (row.group.files?.length ?? 0) > 0 && (
                               <button
                                 type="button"
-                                onClick={e => { e.stopPropagation(); toggleFiles(r.pod); }}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  /*
+                                    Showing the files has to reveal them.
+
+                                    On a collapsed row the list was toggled
+                                    open underneath and nothing appeared —
+                                    the control reported success and showed
+                                    nothing, which reads as broken.
+                                  */
+                                  if (isCollapsed) toggleCollapsed(gk);
+                                  toggleFiles(gk);
+                                }}
                                 className="cursor-pointer border-none bg-transparent px-1"
                                 style={{ color: ACCENT, fontSize: 10.5, fontFamily: 'inherit' }}
                               >
-                                {filesOpen.includes(r.pod) ? 'hide' : 'show'}{' '}
+                                {filesOpen.includes(gk) ? 'hide' : 'show'}{' '}
                                 {row.group.files!.length} file{row.group.files!.length === 1 ? '' : 's'}
                               </button>
                             )}

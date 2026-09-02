@@ -568,9 +568,12 @@ export async function handleDk8sExportLogs(
   }
 
   try {
-    const results = await exportPodLogs(targets, options, destDir, (done, total, pod) => {
-      postMessage({ type: 'dk8s:exportProgress', done, total, pod });
-    });
+    // The archive travels with the options, same as the match export: a whole
+    // log that stops at what kubectl still holds is not the whole log.
+    const results = await exportPodLogs(
+      targets, { ...options, pv: pvConfig() }, destDir, (done, total, pod) => {
+        postMessage({ type: 'dk8s:exportProgress', done, total, pod });
+      });
     postMessage({
       type: 'dk8s:exportDone',
       destDir,
