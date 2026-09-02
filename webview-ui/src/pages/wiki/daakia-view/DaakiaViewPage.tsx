@@ -10,15 +10,16 @@ import { MockServerView } from './mock-server/MockServerView';
 import { CollectionsEnvView } from './platform/CollectionsEnvView';
 import { AiAssistantView } from './platform/AiAssistantView';
 import { SettingsView } from './platform/SettingsView';
+import { Dk8sView } from './dk8s/Dk8sView';
 import {
   DocumentIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge,
   ProtocolGrpcBadge, ProtocolSoapBadge, ServerIcon, CollectionsFolderIcon,
-  GeneralAssistantIcon, SettingsIcon,
+  GeneralAssistantIcon, SettingsIcon, Dk8sIcon,
 } from '../../../icons';
 
 // ─── Wiki tabs ──────────────────────────────────────────────────────────────
 
-export type TabId = 'quick-start' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings';
+export type TabId = 'quick-start' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s';
 
 interface Tab {
   id: TabId;
@@ -38,6 +39,7 @@ const TABS: Tab[] = [
   { id: 'collections-env',   label: 'Collections & Env', color: 'var(--color-accent)',             icon: <CollectionsFolderIcon size={15} /> },
   { id: 'ai-assistant',      label: 'AI Assistant',      color: 'var(--color-protocol-ai)',        icon: <GeneralAssistantIcon size={15} /> },
   { id: 'settings',          label: 'Settings',          color: 'var(--color-accent)',             icon: <SettingsIcon size={15} /> },
+  { id: 'dk8s',              label: 'dk8s Log Search',   color: 'var(--color-dk8s)',               icon: <Dk8sIcon size={15} /> },
 ];
 
 const TAB_BY_ID = Object.fromEntries(TABS.map(t => [t.id, t]));
@@ -66,6 +68,12 @@ const NAV_ITEMS: SideNavItem[] = [
     { id: 'ai-assistant', label: TAB_BY_ID['ai-assistant'].label, icon: TAB_BY_ID['ai-assistant'].icon },
     { id: 'settings', label: TAB_BY_ID['settings'].label, icon: TAB_BY_ID['settings'].icon },
   ] },
+  // Its own group rather than a Platform child: dk8s is a different surface
+  // from the request tabs, and filing it under "Platform" alongside Settings
+  // would bury the one page that explains how a search decides what to read.
+  { id: 'g-dk8s', label: 'Kubernetes', isGroup: true, children: [
+    { id: 'dk8s', label: TAB_BY_ID['dk8s'].label, icon: TAB_BY_ID['dk8s'].icon },
+  ] },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -92,7 +100,7 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
           items={NAV_ITEMS}
           activeId={activeId}
           onSelect={(id) => onSelect(id as TabId)}
-          defaultOpenIds={['g-start', 'g-protocols', 'g-platform']}
+          defaultOpenIds={['g-start', 'g-protocols', 'g-platform', 'g-dk8s']}
           width={196}
           accentColor={active.color}
           searchable
@@ -119,6 +127,7 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
         {activeId === 'collections-env' && <CollectionsEnvView />}
         {activeId === 'ai-assistant'   && <AiAssistantView />}
         {activeId === 'settings'       && <SettingsView />}
+        {activeId === 'dk8s'           && <Dk8sView />}
       </div>
 
     </div>

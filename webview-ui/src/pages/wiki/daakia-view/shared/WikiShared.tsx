@@ -460,6 +460,39 @@ export function WikiCard({ title, icon, children }: { title: string; icon?: stri
 }
 
 // ─── Divider ──────────────────────────────────────────────────────────────────
+/**
+ * A diagram with the claim it is making written underneath it.
+ *
+ * The caption is not decoration: a picture with no stated claim leaves the
+ * reader to guess which part of it is the point. `label` is the same claim for
+ * anyone who cannot see the drawing, which is why both are required rather
+ * than optional.
+ *
+ * Wide diagrams scroll inside this box rather than widening the page — a wiki
+ * that scrolls sideways as a whole is worse than one figure that does.
+ */
+export function WikiFigure({ label, caption, children }: {
+  label: string;
+  caption: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <figure className="my-1 flex flex-col gap-2">
+      <div
+        className="overflow-x-auto rounded-[var(--dw-card-radius)] px-4 py-4"
+        style={{ background: 'var(--dw-surface)', border: '1px solid var(--dw-border)' }}
+        role="img"
+        aria-label={label}
+      >
+        {children}
+      </div>
+      <figcaption className="text-[11px] leading-relaxed" style={{ color: 'var(--dw-muted)' }}>
+        {caption}
+      </figcaption>
+    </figure>
+  );
+}
+
 export function Divider() {
   return <div className="dw-divider" />;
 }
