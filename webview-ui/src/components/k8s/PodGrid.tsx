@@ -100,9 +100,26 @@ function WatchIndicator() {
     `last change: ${ago}`,
   ].join(' — ');
 
+  /*
+    The dot breathes only while the stream is live.
+
+    A still dot and a live one looked identical, so the row said "watching"
+    and left you to believe it. Motion is the one signal that cannot be
+    faked by a stale render — if the pane froze, the dot stops with it.
+
+    Deliberately not on the other states: a reconnecting or stopped watch is
+    not doing anything, and animating it would say it was.
+    `.breathing-connected` is the app's existing pulse, so this reads as the
+    same idea as everywhere else it appears.
+  */
+  const live = watchStatus === 'connected';
+
   return (
     <span className="flex items-center gap-1.5 flex-shrink-0" title={title}>
-      <span style={{ width: 6, height: 6, borderRadius: 3, background: s.color }} />
+      <span
+        className={live ? 'breathing-connected' : undefined}
+        style={{ width: 6, height: 6, borderRadius: 3, background: s.color, color: s.color }}
+      />
       <span className="text-[10.5px]" style={{ color: s.color }}>{s.label}</span>
     </span>
   );

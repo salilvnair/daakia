@@ -433,6 +433,17 @@ body {
   animation: breathing 2.5s ease-in-out infinite;
 }
 
+/*
+  Someone who has asked their system for less motion has asked for it here
+  too. The dot keeps its colour and its meaning — only the movement stops,
+  so the state is still readable without it.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .breathing-connected {
+    animation: none;
+  }
+}
+
 /* Mock server running — smooth, subtle scale-pulse (not the jarring glow) */
 @keyframes mockServerPulse {
   0%, 100% { transform: scale(1); opacity: 0.85; }
