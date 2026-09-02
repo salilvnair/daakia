@@ -179,9 +179,18 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
         if (!propertiesRequestedRef.current) return;
         propertiesRequestedRef.current = false;
         const props = msg.properties ?? {};
-        setPropertiesTarget({
+        /*
+          Functional, so the name survives.
+
+          `propertiesTarget` here came from the closure this listener was
+          registered in — null on first open — so the name the context menu
+          had just put there was overwritten with an empty string every time,
+          and the dialog said "Untitled collection" for a collection that
+          plainly had one.
+        */
+        setPropertiesTarget(prev => ({
           id: msg.id,
-          name: propertiesTarget?.name || '',
+          name: prev?.name || '',
           properties: {
             headers: props.headers ?? [],
             authType: props.authType ?? 'none',
@@ -193,7 +202,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
             // existed, which is the common case.
             settings: props.settings ?? {},
           },
-        });
+        }));
       }
     };
     window.addEventListener('message', handler);

@@ -86,7 +86,7 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
     <ModalView
       open={open}
       onClose={onClose}
-      title="Collection Properties"
+      title={collectionName ? `Collection Properties\u2003${collectionName}` : 'Collection Properties'}
       size="xl"
       noPadding
       footerRight={
@@ -96,40 +96,46 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
       }
     >
       {/*
-        Which collection this is, before anything you can change about it.
+        What the collection holds, under its name in the title.
 
-        The name was appended to the dialog's title, at title weight and title
-        colour, where it read as part of the phrase rather than as the subject
-        of it — and a long one was simply cut off. It gets its own line, and
-        the counts beside it answer the question the name raises: how much is
-        in here, and of what kind.
+        The counts answer the question the name raises — how much is in here,
+        and of what kind — and a chip per method in that method's own colour
+        makes the shape of the collection legible without reading any number:
+        a mostly-GET collection and a mostly-POST one look different at a
+        glance.
       */}
-      <div className="flex items-center gap-2.5 flex-wrap px-3 pt-3 pb-1">
-        <span className="text-[16px] font-semibold truncate"
-              style={{ color: 'var(--color-text-primary)', maxWidth: '46ch' }}>
-          {collectionName || 'Untitled collection'}
-        </span>
-        {!!total && (
-          <span className="text-[10.5px] font-semibold px-2 py-[3px] rounded-full shrink-0"
+      {!!total && (
+        <div className="flex items-center gap-1.5 flex-wrap px-3 pt-2.5 pb-0.5">
+          <span className="text-[10.5px] font-semibold px-2 py-[3px] shrink-0"
                 style={{
                   color: 'var(--color-accent)',
                   background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
-                  border: '1px solid color-mix(in srgb, var(--color-accent) 32%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--color-accent) 34%, transparent)',
+                  borderRadius: 5,
+                  /*
+                    Lit from above: a hairline of white along the top edge and
+                    a soft drop below. It is what gives a flat chip the slight
+                    raised feel of a key rather than a painted rectangle.
+                  */
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(0,0,0,.35)',
                 }}>
             {total} {total === 1 ? 'request' : 'requests'}
           </span>
-        )}
-        {methods.map(([method, count]) => (
-          <span key={method}
-                className="text-[10px] font-bold px-1.5 py-[3px] rounded shrink-0 tracking-wide"
-                style={{
-                  color: colorFor(method),
-                  background: `color-mix(in srgb, ${colorFor(method)} 15%, transparent)`,
-                }}>
-            {method} {count}
-          </span>
-        ))}
-      </div>
+          {methods.map(([method, count]) => (
+            <span key={method}
+                  className="text-[10px] font-bold px-1.5 py-[3px] shrink-0 tracking-wide"
+                  style={{
+                    color: colorFor(method),
+                    background: `color-mix(in srgb, ${colorFor(method)} 16%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${colorFor(method)} 40%, transparent)`,
+                    borderRadius: 5,
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(0,0,0,.35)',
+                  }}>
+              {method} {count}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Tab bar */}
       <div className="px-3 pt-2.5 pb-0" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
