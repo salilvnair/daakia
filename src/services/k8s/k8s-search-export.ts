@@ -57,16 +57,60 @@ export function searchFileName(pod: string, stamp: string, archive = false): str
  * check. Context lines are marked with a dash and the hit with a colon, the
  * shape `grep -C` produces, so existing habits and tooling still work.
  */
-function renderMatch(m: SearchMatch, contextLines: number): string {
-  const out: string[] = [];
-  const first = m.line - m.before.length;
-
-  if (contextLines > 0) {
-    m.before.forEach((t, i) => out.push(`${first + i}-${t}`));
+/**
+ * Every match in one pod, with overlapping context windows merged.
+ *
+ * Rendering each match with its own ±N lines re-emits any line that sits near
+ * more than one hit, once per hit. At ±2 that quietly tripled the file. At
+ * ±200 across 11,500 matches it asks for 4.6 million lines out of a log that
+ * only holds forty thousand — around 700MB of text, past the longest string V8
+ * will build, so the export threw `Invalid string length` and the dialog sat
+ * there looking busy.
+ *
+ * So the windows are merged the way `grep -C` merges them: each line is written
+ * once, runs that touch are joined, and a real gap between runs is marked `--`.
+ * The output is then bounded by the length of the log rather than by the number
+ * of hits, which is what makes the wider context choices usable at all.
+ *
+ * Archived matches are grouped by the rotation file they came from first —
+ * line 400 of yesterday's file and line 400 of today's are different lines, and
+ * merging them by number would interleave two logs into nonsense.
+ */
+export function renderMatches(matches: SearchMatch[], contextLines: number): string {
+  if (!matches.length) return '';
+  if (contextLines <= 0) {
+    return matches.map(m => `${m.line}:${m.text}`).join('\n');
   }
-  out.push(`${m.line}:${m.text}`);
-  if (contextLines > 0) {
-    m.after.forEach((t, i) => out.push(`${m.line + 1 + i}-${t}`));
+
+  const byFile = new Map<string, SearchMatch[]>();
+  for (const m of matches) {
+    const rel = (m as SearchMatch & { rel?: string }).rel ?? '';
+    const bucket = byFile.get(rel);
+    if (bucket) bucket.push(m);
+    else byFile.set(rel, [m]);
+  }
+
+  const out: string[] = [];
+  for (const [rel, group] of byFile) {
+    const text = new Map<number, string>();
+    const hit = new Set<number>();
+    for (const m of group) {
+      const first = m.line - m.before.length;
+      // A match line always wins over the same line seen as someone's context,
+      // so a hit is never demoted to a `-` by a neighbour that saw it first.
+      m.before.forEach((t, i) => { if (!text.has(first + i)) text.set(first + i, t); });
+      text.set(m.line, m.text);
+      hit.add(m.line);
+      m.after.forEach((t, i) => { if (!text.has(m.line + 1 + i)) text.set(m.line + 1 + i, t); });
+    }
+
+    if (rel) out.push(`===== ${rel} =====`);
+    let prev: number | undefined;
+    for (const n of [...text.keys()].sort((a, b) => a - b)) {
+      if (prev !== undefined && n > prev + 1) out.push('--');
+      out.push(`${n}${hit.has(n) ? ':' : '-'}${text.get(n)}`);
+      prev = n;
+    }
   }
   return out.join('\n');
 }
@@ -192,19 +236,35 @@ export async function exportSearchResults(
         const got = perPod.get(key);
         if (!got?.matches.length) continue;
         parts.push(header(t.pod, t.namespace, got, got.archive));
-        parts.push(got.matches.map(m => renderMatch(m, opts.contextLines)).join('\n--\n'));
+        parts.push(renderMatches(got.matches, opts.contextLines));
         parts.push('');
         lines += got.matches.length;
       }
     }
-    const body = parts.join('\n');
+    /*
+      A failure here has to come back as a failure.
+
+      This was the one write with nothing around it, so when the join threw the
+      rejection went past the handler and the dialog simply kept saying it was
+      exporting — the worst way to fail, because it looks like patience will fix
+      it. The per-pod path below has always reported its errors; this one now
+      does too.
+    */
     const file = join(destDir, `search__${stamp}.log`);
-    await writeFile(file, body ? body + '\n' : '', 'utf8');
-    results.push({
-      pod: `${targets.length} pods`, namespace: '',
-      file, lines, bytes: Buffer.byteLength(body, 'utf8'),
-      empty: lines === 0,
-    });
+    try {
+      const body = parts.join('\n');
+      await writeFile(file, body ? body + '\n' : '', 'utf8');
+      results.push({
+        pod: `${targets.length} pods`, namespace: '',
+        file, lines, bytes: Buffer.byteLength(body, 'utf8'),
+        empty: lines === 0,
+      });
+    } catch (err) {
+      results.push({
+        pod: `${targets.length} pods`, namespace: '',
+        error: (err as Error).message,
+      });
+    }
     return results;
   }
 
@@ -231,7 +291,7 @@ export async function exportSearchResults(
       const matches = got?.matches ?? [];
       const body = matches.length
         ? header(t.pod, t.namespace, got!, archive)
-          + matches.map(m => renderMatch(m, opts.contextLines)).join('\n--\n')
+          + renderMatches(matches, opts.contextLines)
         : '';
       const file = join(destDir, searchFileName(t.pod, stamp, archive));
       await writeFile(file, body ? body + '\n' : '', 'utf8');
