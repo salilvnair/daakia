@@ -9,7 +9,7 @@ import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ExportResponseOptionModal, ImportExportIcon, type CollectionProperties } from '../../shared';
 import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
-import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon } from '../../../icons';
+import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon } from '../../../icons';
 import { SidebarSkeleton } from '../../shared/display/SidebarSkeleton';
 import { AiEnvExtractModal } from '../../ai/AiEnvExtractModal';
 import { AiCollectionOrganizerModal } from '../../ai/AiCollectionOrganizerModal';
@@ -679,6 +679,40 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
 
   const sortedTree = sortMode === 'alpha' ? sortTreeAlpha(filteredTree) : filteredTree;
 
+  /*
+    Expand and collapse, whole or by subtree.
+
+    A collection of any size is unreadable fully expanded and useless fully
+    collapsed, and reaching either state meant clicking every folder. History
+    had these; collections, which nest deeper, did not.
+
+    Expansion is stored as the set of open ids, so "expand" is a union and
+    "collapse" is a difference — a subtree can be opened without disturbing
+    anything outside it, which is what makes the per-row buttons worth having
+    rather than only the two at the top.
+  */
+  const expandAll = useCallback(() => {
+    setExpandedIds(collectAllIds(sortedTree));
+  }, [sortedTree]);
+
+  const collapseAll = useCallback(() => setExpandedIds(new Set()), []);
+
+  const expandSubtree = useCallback((node: CollectionTreeNode) => {
+    const ids = collectAllIds([node]);
+    setExpandedIds(prev => new Set([...prev, ...ids]));
+  }, []);
+
+  const collapseSubtree = useCallback((node: CollectionTreeNode) => {
+    const ids = collectAllIds([node]);
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      // The node itself included: collapsing a folder's contents while
+      // leaving the folder open shows an empty folder, not a closed one.
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  }, []);
+
   // Auto-expand when searching
   useEffect(() => {
     if (search) {
@@ -771,6 +805,20 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
         </div>
 
         <div className="flex items-center gap-1.5 relative">
+          {/* Before the help and import controls: these act on what is on
+              screen, and those are about the panel itself. */}
+          <IconButtonView
+            icon={<ExpandAllIcon size={13} className="text-[var(--color-info)]" />}
+            size="sm"
+            tooltip="Expand all"
+            onClick={expandAll}
+          />
+          <IconButtonView
+            icon={<CollapseAllIcon size={13} className="text-[var(--color-warning)]" />}
+            size="sm"
+            tooltip="Collapse all"
+            onClick={collapseAll}
+          />
           <div ref={infoAnchorRef} style={{ display: 'inline-flex' }}>
             <IconButtonView
               icon={<HelpCircleIcon size={14} />}
@@ -906,6 +954,8 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
               onNewRequest={openNewRequest}
               onOpenRequest={handleOpenRequest}
               onRunCollection={(id, name) => { setRunnerCollectionId(id); setRunnerCollectionName(name); }}
+              onExpandSubtree={expandSubtree}
+              onCollapseSubtree={collapseSubtree}
               onCollectionContextMenu={openCollectionContextMenu}
               onRequestContextMenu={openRequestContextMenu}
               dragItem={dragItem}
@@ -1261,6 +1311,8 @@ interface TreeNodeProps {
   onNewRequest: (parentId: string) => void;
   onOpenRequest: (req: CollectionRequest) => void;
   onRunCollection: (id: string, name: string) => void;
+  onExpandSubtree: (node: CollectionTreeNode) => void;
+  onCollapseSubtree: (node: CollectionTreeNode) => void;
   onCollectionContextMenu: (e: React.MouseEvent, node: CollectionTreeNode) => void;
   onRequestContextMenu: (e: React.MouseEvent, req: CollectionRequest) => void;
   // DnD props
@@ -1277,6 +1329,7 @@ function TreeNode({
   node, depth, expandedIds, toggleExpand,
   renamingId, renameValue, setRenameValue, renameRef, handleRename, startRename, setRenamingId,
   onDelete, onDeleteRequest, onNewFolder, onNewRequest, onOpenRequest, onRunCollection,
+  onExpandSubtree, onCollapseSubtree,
   onCollectionContextMenu, onRequestContextMenu,
   dragItem, dropTarget, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd,
 }: TreeNodeProps) {
@@ -1348,6 +1401,22 @@ function TreeNode({
           <ActionBtn title="Run Collection" onClick={(e) => { e.stopPropagation(); onRunCollection(node.id, node.name); }} disabled={!hasAnyRequests(node)}>
             <PlayIcon size={13} />
           </ActionBtn>
+          {/* Only on a folder that contains folders. A leaf folder's chevron
+              already does the whole job, and a second control that does the
+              same thing reads as a different one. */}
+          {node.children.length > 0 && (
+            isExpanded ? (
+              <ActionBtn title="Collapse this folder and everything in it"
+                         onClick={(e) => { e.stopPropagation(); onCollapseSubtree(node); }}>
+                <CollapseAllIcon size={13} />
+              </ActionBtn>
+            ) : (
+              <ActionBtn title="Expand this folder and everything in it"
+                         onClick={(e) => { e.stopPropagation(); onExpandSubtree(node); }}>
+                <ExpandAllIcon size={13} />
+              </ActionBtn>
+            )
+          )}
           <ActionBtn title="More Options" onClick={(e) => onCollectionContextMenu(e, node)}>
             <MoreVerticalIcon size={13} />
           </ActionBtn>
@@ -1391,6 +1460,8 @@ function TreeNode({
               onNewRequest={onNewRequest}
               onOpenRequest={onOpenRequest}
               onRunCollection={onRunCollection}
+              onExpandSubtree={onExpandSubtree}
+              onCollapseSubtree={onCollapseSubtree}
               onCollectionContextMenu={onCollectionContextMenu}
               onRequestContextMenu={onRequestContextMenu}
               dragItem={dragItem}
