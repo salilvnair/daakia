@@ -625,7 +625,16 @@ export async function handleDk8sExportSearch(
     // A timestamp per export, not per file, so one run's files sort together
     // and a second run does not overwrite the first.
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
-    const results = await exportSearchResults(targets, options, destDir, stamp,
+    /*
+      The archive travels with the options.
+
+      Exporting used to run its own live-only search, so a result list showing
+      11,500 hits across a live half and an archived half wrote a file holding
+      the 5,000 live ones — and said nothing about the rest. The exporter can
+      only look at the volume if it is handed the configuration for it.
+    */
+    const results = await exportSearchResults(
+      targets, { ...options, pv: pvConfig() }, destDir, stamp,
       (done: number, total: number, pod: string) =>
         postMessage({ type: 'dk8s:exportProgress', done, total, pod }));
     postMessage({

@@ -341,3 +341,37 @@ describe('searching a mounted volume', () => {
     expect(result.error).toBeUndefined();
   });
 });
+
+/*
+  Exporting a search has to write what the search found.
+
+  A pod with both live and archived logs produces two result sets, and the
+  export ran its own live-only search — so a result list reporting 11,500 hits
+  wrote a file holding the 5,000 live ones, with nothing saying the rest had
+  been dropped. Confirmed on a real export: the file's own header said "5,000
+  matches" and contained no archived line at all.
+*/
+describe('exporting a search over an archive', () => {
+  it('names the archived half separately from the live one', async () => {
+    const { searchFileName } = await import('./k8s-search-export');
+    const live = searchFileName('pv-billing-54f6c8c494-29478', '2026-09-02');
+    const arch = searchFileName('pv-billing-54f6c8c494-29478', '2026-09-02', true);
+    // One name for two files means one of them does not exist.
+    expect(live).not.toBe(arch);
+    expect(arch).toContain('search-archive');
+  });
+
+  it('finds in the archive what the export would write', async () => {
+    // The same call the exporter makes, against the real fixture volume.
+    const { result, matches } = await searchPvForPod(
+      cfg(), ref('pv-checkout'),
+      { ...DEFAULT_SEARCH, query: 'ledger post failed',
+        maxMatchesPerPod: 5_000_000, maxMatchesTotal: 5_000_000 },
+      { cancelled: false },
+    );
+    expect(result.matched).toBe(truth['pv-checkout']!.failures);
+    // Every match carries the text an export writes out, not just a count.
+    expect(matches).toHaveLength(result.matched);
+    expect(matches.every(m => typeof m.text === 'string' && m.text.length > 0)).toBe(true);
+  });
+});

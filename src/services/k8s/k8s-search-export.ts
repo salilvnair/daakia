@@ -19,6 +19,8 @@
 import { join } from 'path';
 import { mkdir, writeFile } from 'fs/promises';
 import { searchLogs, type SearchTarget, type SearchOptions, type SearchMatch } from './k8s-log-search';
+import { searchPvForPod } from './pv-search';
+import type { PvLogConfig } from './pv-logs';
 import type { ExportResult } from './k8s-logs';
 
 /** The context sizes an export offers, in lines either side of a hit. */
@@ -37,9 +39,14 @@ function safe(s: string): string {
   return s.replace(/[^A-Za-z0-9._-]/g, '_');
 }
 
-/** `<pod>__search__<stamp>.log`, so it sorts beside the pod's other artifacts. */
-export function searchFileName(pod: string, stamp: string): string {
-  return `${safe(pod)}__search__${stamp}.log`;
+/**
+ * `<pod>__search__<stamp>.log`, so it sorts beside the pod's other artifacts.
+ *
+ * The archived half takes `__search-archive__`. A pod can have both, and one
+ * name for two files means one of them does not exist.
+ */
+export function searchFileName(pod: string, stamp: string, archive = false): string {
+  return `${safe(pod)}__search${archive ? '-archive' : ''}__${stamp}.log`;
 }
 
 /**
@@ -67,6 +74,15 @@ function renderMatch(m: SearchMatch, contextLines: number): string {
 export interface SearchExportOptions extends Omit<SearchOptions, 'maxMatchesPerPod' | 'maxMatchesTotal'> {
   /** One file per pod, or everything in one. */
   combine: boolean;
+  /**
+   * The archive configuration, when one is set up.
+   *
+   * Without it the export searched only what `kubectl logs` returns, while the
+   * results on screen included the archived half — so exporting a search that
+   * reported 11,500 hits wrote a file containing 5,000 of them, with nothing
+   * saying the rest had been dropped. The screen and the file have to agree.
+   */
+  pv?: PvLogConfig;
 }
 
 /**
@@ -91,14 +107,23 @@ export async function exportSearchResults(
     maxMatchesTotal: EXPORT_MAX_PER_POD,
   };
 
-  const perPod = new Map<string, { matches: SearchMatch[]; scanned: number; matched: number }>();
+  /*
+    Keyed by pod AND source.
+
+    A pod that has both live and archived logs produces two result sets, and a
+    map keyed on the pod name alone kept whichever arrived last. That was never
+    reached in practice only because the archive was not searched here at all;
+    now that it is, the key has to carry the difference.
+  */
+  type Group = { matches: SearchMatch[]; scanned: number; matched: number; archive: boolean };
+  const perPod = new Map<string, Group>();
 
   await new Promise<void>(resolve => {
     let done = 0;
     searchLogs(targets, search, {
       onPodDone: (result, matches) => {
-        perPod.set(result.pod, {
-          matches, scanned: result.scanned, matched: result.matched,
+        perPod.set(`live:${result.pod}`, {
+          matches, scanned: result.scanned, matched: result.matched, archive: false,
         });
         onProgress?.(++done, targets.length, result.pod);
       },
@@ -107,8 +132,37 @@ export async function exportSearchResults(
     });
   });
 
-  const header = (pod: string, ns: string, s: { scanned: number; matched: number }) => [
-    `# ${pod}  (${ns})`,
+  /*
+    The archived half, searched the same way the screen searches it.
+
+    Sequential rather than concurrent: these are file reads on one volume, and
+    a fan-out over a mounted share is slower than walking it in order, not
+    faster.
+  */
+  if (opts.pv?.enabled) {
+    const signal = { cancelled: false };
+    for (const t of targets) {
+      try {
+        const out = await searchPvForPod(
+          opts.pv,
+          { namespace: t.namespace, pod: t.pod, context: t.context, workload: t.workload },
+          search, signal,
+        );
+        if (out.matches.length) {
+          perPod.set(`archive:${t.pod}`, {
+            matches: out.matches as unknown as SearchMatch[],
+            scanned: out.result.scanned,
+            matched: out.result.matched,
+            archive: true,
+          });
+        }
+      } catch { /* one unreadable volume must not lose the rest of the export */ }
+    }
+  }
+
+  const header = (pod: string, ns: string, s: { scanned: number; matched: number },
+                  archive = false) => [
+    `# ${pod}  (${ns})${archive ? '  [archive]' : ''}`,
     `# query: ${opts.regex ? `/${opts.query}/` : opts.query}`
       + `${opts.caseSensitive ? '  case-sensitive' : ''}`
       + `${opts.regex ? '  regex' : ''}`,
@@ -132,12 +186,16 @@ export async function exportSearchResults(
     const parts: string[] = [];
     let lines = 0;
     for (const t of targets) {
-      const got = perPod.get(t.pod);
-      if (!got?.matches.length) continue;
-      parts.push(header(t.pod, t.namespace, got));
-      parts.push(got.matches.map(m => renderMatch(m, opts.contextLines)).join('\n--\n'));
-      parts.push('');
-      lines += got.matches.length;
+      // Live first, then the archive: reading forward in time is how the
+      // question is usually asked, and it matches the order on screen.
+      for (const key of [`live:${t.pod}`, `archive:${t.pod}`]) {
+        const got = perPod.get(key);
+        if (!got?.matches.length) continue;
+        parts.push(header(t.pod, t.namespace, got, got.archive));
+        parts.push(got.matches.map(m => renderMatch(m, opts.contextLines)).join('\n--\n'));
+        parts.push('');
+        lines += got.matches.length;
+      }
     }
     const body = parts.join('\n');
     const file = join(destDir, `search__${stamp}.log`);
@@ -150,16 +208,32 @@ export async function exportSearchResults(
     return results;
   }
 
+  /*
+    One file per pod, per source.
+
+    A pod with both halves gets two, because they are two different searches
+    over two different bodies of text — and writing them to one name meant the
+    second silently replaced the first. The archive file says so in its name,
+    so the pair is legible in a directory listing.
+  */
+  const wanted: { t: SearchTarget; key: string; archive: boolean }[] = [];
   for (const t of targets) {
-    const got = perPod.get(t.pod);
+    wanted.push({ t, key: `live:${t.pod}`, archive: false });
+    if (perPod.has(`archive:${t.pod}`)) {
+      wanted.push({ t, key: `archive:${t.pod}`, archive: true });
+    }
+  }
+
+  for (const { t, key, archive } of wanted) {
+    const got = perPod.get(key);
     const result: ExportResult = { pod: t.pod, namespace: t.namespace };
     try {
       const matches = got?.matches ?? [];
       const body = matches.length
-        ? header(t.pod, t.namespace, got!)
+        ? header(t.pod, t.namespace, got!, archive)
           + matches.map(m => renderMatch(m, opts.contextLines)).join('\n--\n')
         : '';
-      const file = join(destDir, searchFileName(t.pod, stamp));
+      const file = join(destDir, searchFileName(t.pod, stamp, archive));
       await writeFile(file, body ? body + '\n' : '', 'utf8');
       result.file = file;
       result.lines = matches.length;
