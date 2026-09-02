@@ -19,6 +19,7 @@ import {
   FolderExportIcon,
 } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
+import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
 import { ExportSearchModal } from './ExportSearchModal';
 import { postMsg } from '../../vscode';
 import {
@@ -144,10 +145,26 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     : pods.filter(p => picked.includes(p.uid));
 
   const [podFilter, setPodFilter] = useState('');
+  /*
+    The picker offers what the list behind it is showing.
+
+    On the starred tab it offered every pod in the cluster, so the choice on
+    screen had nothing to do with the four pods you had been looking at — and
+    picking from thirty to search four is the work starring was meant to save.
+    Falls back to everything when nothing is starred, which is the same rule
+    the list itself follows.
+  */
+  const podScope = useK8sStore(s => s.podScope);
+  const favKeys = useFavoriteKeys();
+  const scoped = useMemo(() => {
+    if (podScope !== 'fav' || favKeys.length === 0) return pods;
+    return pods.filter(p => favKeys.includes(favoriteKey(p)));
+  }, [pods, podScope, favKeys]);
+
   const pickable = useMemo(() => {
     const q = podFilter.trim().toLowerCase();
-    if (!q) return pods;
-    return pods.filter(p =>
+    if (!q) return scoped;
+    return scoped.filter(p =>
       p.name.toLowerCase().includes(q) || p.namespace.toLowerCase().includes(q));
   }, [pods, podFilter]);
 
@@ -314,8 +331,25 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
               color="var(--color-text-muted)"
               style={{ transform: pickerOpen ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }}
             />
-            <span className="text-[11.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-              {chosen.length} pod{chosen.length === 1 ? '' : 's'} selected
+            {/*
+              How many of how many.
+
+              "0 pods selected" said nothing about what there was to choose
+              from, so the one number that matters — is this 0 of 4 or 0 of
+              300 — was missing. The counts carry the colour and the size; the
+              words between them are scaffolding and recede.
+            */}
+            <span className="flex items-baseline gap-1 shrink-0">
+              <span className="text-[14px] font-bold tabular-nums"
+                    style={{ color: chosen.length ? ACCENT : 'var(--color-text-muted)' }}>
+                {chosen.length}
+              </span>
+              <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>of</span>
+              <span className="text-[14px] font-bold tabular-nums"
+                    style={{ color: 'var(--color-text-secondary)' }}>
+                {scoped.length}
+              </span>
+              <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>selected</span>
             </span>
             <span className="text-[10.5px] truncate" style={{ color: 'var(--color-text-muted)' }}>
               {chosen.length === 0

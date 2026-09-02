@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
+  ModalView, ButtonView,
 } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
 import { PodContextMenu } from './PodContextMenu';
@@ -92,6 +93,33 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
       )}
 
       <div className="flex-1" />
+      {/*
+        Searching across pods, where the pods are.
+
+        It lived only in the command palette and in a pod's own log view, so
+        the one screen that lists every pod — the place you are standing when
+        the question "which of these logged that" occurs — had no way to ask
+        it. Beside the watch state, because both are about the set of pods
+        rather than about any one of them.
+      */}
+      <button
+        type="button"
+        onClick={() => useDk8sSearchStore.getState().openSearch()}
+        title="Search logs across every watched pod, and archived volumes"
+        className="text-[11px] px-3 py-1 rounded-md cursor-pointer transition-colors
+                   flex items-center gap-1.5 shrink-0 font-medium"
+        style={{
+          // The same tinted, bordered shape as "Search N logs" below it —
+          // the two do the same job from different starting points, and one
+          // of them looking like a link made that hard to see.
+          background: `color-mix(in srgb, ${ACCENT} 18%, transparent)`,
+          color: ACCENT,
+          border: `1px solid color-mix(in srgb, ${ACCENT} 45%, transparent)`,
+        }}
+      >
+        <SearchIcon size={12} />
+        Search everywhere
+      </button>
       {/* The watch state belongs with the counts, not in the toolbar: it says
           whether the numbers to its left are still true. */}
       <WatchIndicator />
@@ -175,15 +203,16 @@ function PodCard({ pod, onOpen, onMenu }: {
   const picked = useK8sStore(s => s.selected.includes(pod.uid));
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
   /*
-    Hold and right-click are the same gesture.
+    Holding selects. Right-clicking opens the menu.
 
-    Holding used to enter selection directly, which was one action out of the
-    several a pod affords — and the only way to reach the rest was still to
-    open the pod. The hold opens the menu instead, and Select is the first
-    thing in it, so nothing got further away and everything else got closer.
+    They were briefly the same gesture, with Select as the menu's first entry,
+    and that was worse: holding a card is how you start picking several, and
+    routing it through a menu put a click between each pod and the next. Two
+    gestures, two jobs — the menu is still where everything else lives, and
+    Select is still in it for anyone who arrives that way.
   */
-  const { handlers, consumed } = useLongPress(() => onMenu(pod, pressPoint.current));
-  const pressPoint = useRef({ x: 0, y: 0 });
+  const beginSelection = useK8sStore(s => s.beginSelection);
+  const { handlers, consumed } = useLongPress(() => beginSelection(pod.uid));
   const severity = severityOf(pod);
   const color = severityColor(severity);
   const quiet = severity === 'quiet';
@@ -193,11 +222,6 @@ function PodCard({ pod, onOpen, onMenu }: {
     <button
       type="button"
       {...handlers}
-      onPointerDown={e => {
-        // Where to put the menu if this turns into a hold.
-        pressPoint.current = { x: e.clientX, y: e.clientY };
-        handlers.onPointerDown(e);
-      }}
       onContextMenu={e => {
         e.preventDefault();
         onMenu(pod, { x: e.clientX, y: e.clientY });
@@ -304,6 +328,7 @@ function PodTable({ pods, onOpen, onMenu }: {
   const metrics = useK8sStore(s => s.metricsAvailable);
   const selectMode = useK8sStore(s => s.selectMode);
   const selected = useK8sStore(s => s.selected);
+  const beginSelection = useK8sStore(s => s.beginSelection);
   /*
     One press timer for the table, and a ref saying which row armed it.
 
@@ -312,9 +337,8 @@ function PodTable({ pods, onOpen, onMenu }: {
     that started it exactly as much state as the gesture has.
   */
   const held = useRef<PodSummary | null>(null);
-  const pressPoint = useRef({ x: 0, y: 0 });
   const press = useLongPress(() => {
-    if (held.current) onMenu(held.current, pressPoint.current);
+    if (held.current) beginSelection(held.current.uid);
   });
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
 
@@ -377,10 +401,8 @@ function PodTable({ pods, onOpen, onMenu }: {
             return (
               <tr key={pod.uid}
                   onPointerDown={e => {
-                    // Which row is under the finger, and where, for the
-                    // shared timer.
+                    // Which row is under the finger, for the shared timer.
                     held.current = pod;
-                    pressPoint.current = { x: e.clientX, y: e.clientY };
                     press.handlers.onPointerDown(e);
                   }}
                   onContextMenu={e => {
@@ -601,6 +623,14 @@ export function PodGrid() {
     pod and the point, and the menu reads them.
   */
   const [menu, setMenu] = useState<{ pod: PodSummary; at: { x: number; y: number } }>();
+  /*
+    Un-starring is asked about; starring is not.
+
+    Starring is a list curated over weeks, and losing one entry is the kind of
+    small loss you notice long after the click that caused it — there is no
+    undo and nothing on screen changes enough to catch the eye.
+  */
+  const [unstar, setUnstar] = useState<PodSummary>();
   const probePodForMenu = useK8sStore(s => s.probePodForMenu);
   const closePodMenu = useK8sStore(s => s.closePodMenu);
   const openMenu = useCallback((pod: PodSummary, at: { x: number; y: number }) => {
@@ -674,7 +704,8 @@ export function PodGrid() {
     `all` is a thing you do to go and find something, not a setting you mean
     to change; it lasts as long as you are looking.
   */
-  const [favScope, setFavScope] = useState<'fav' | 'all'>('fav');
+  const favScope = useK8sStore(s => s.podScope);
+  const setFavScope = useK8sStore(s => s.setPodScope);
   const scope = favKeys.length === 0 ? 'all' : favScope;
 
   const visible = useMemo(() => {
@@ -958,6 +989,7 @@ export function PodGrid() {
         pod={menu?.pod}
         at={menu?.at}
         onClose={closeMenu}
+        onConfirmUnfavorite={setUnstar}
         onOpen={(pod, tab) => {
           openDetail(pod);
           // The tab is set after opening, because opening resets it to
@@ -965,6 +997,32 @@ export function PodGrid() {
           if (tab) setDetailTab(tab);
         }}
       />
+
+      <ModalView
+        open={!!unstar}
+        onClose={() => setUnstar(undefined)}
+        title="Remove from favourites?"
+        size="sm"
+        footerRight={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ButtonView variant="secondary" size="sm" onClick={() => setUnstar(undefined)}>
+              Cancel
+            </ButtonView>
+            <ButtonView variant="primary" size="sm" accentColor="var(--color-warning)"
+                        onClick={() => {
+                          if (unstar) toggleFavorite(favoriteKey(unstar));
+                          setUnstar(undefined);
+                        }}>
+              Remove
+            </ButtonView>
+          </div>
+        }
+      >
+        <span className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
+          <b style={{ color: 'var(--color-text-primary)' }}>{unstar?.name}</b> stops
+          sorting to the top and leaves the starred view.
+        </span>
+      </ModalView>
 
       {exportOpen && <ExportLogsModal onClose={closeExport} />}
       {searchOpen && <LogSearchModal onClose={closeSearch} />}

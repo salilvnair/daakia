@@ -70,10 +70,12 @@ function costColor(kind: ArtifactKind): string {
       : 'var(--color-success)';
 }
 
-export function PodContextMenu({ pod, at, onClose, onOpen }: {
+export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }: {
   pod: PodSummary | undefined;
   at: { x: number; y: number } | undefined;
   onClose: () => void;
+  /** Ask before un-starring — the grid owns the dialog. */
+  onConfirmUnfavorite: (pod: PodSummary) => void;
   /** Open the pod's detail view, for the items that are a way in. */
   onOpen: (pod: PodSummary, tab?: 'logs' | 'doctor') => void;
 }) {
@@ -165,13 +167,6 @@ export function PodContextMenu({ pod, at, onClose, onOpen }: {
 
     return [
       {
-        id: 'favorite',
-        label: starred ? 'Remove from favourites' : 'Add to favourites',
-        icon: <StarIcon size={13} filled={starred} />,
-        iconColor: starred ? 'var(--color-warning)' : undefined,
-        onClick: () => { toggleFavorite(key); onClose(); },
-      },
-      {
         id: 'select',
         /*
           The item says what pressing it does, which on an already-ticked pod
@@ -256,10 +251,29 @@ export function PodContextMenu({ pod, at, onClose, onOpen }: {
         iconColor: ACCENT,
         children: doctor,
       },
+      { id: 'sep-3', label: '', separator: true },
+      {
+        /*
+          Last, and asked about before it undoes anything.
+
+          It sat first, so the entry most likely to be hit by accident was the
+          one under the cursor when the menu opened — and starring is a list
+          you curate over time, where losing one is a small annoyance you only
+          notice later. Adding needs no ceremony; removing does.
+        */
+        id: 'favorite',
+        label: starred ? 'Remove from favourites' : 'Add to favourites',
+        icon: <StarIcon size={13} filled={starred} />,
+        iconColor: starred ? 'var(--color-warning)' : undefined,
+        onClick: () => {
+          if (starred) { onConfirmUnfavorite(pod); } else { toggleFavorite(key); }
+          onClose();
+        },
+      },
     ];
   }, [pod, favorites, selected, menuProbe, guardHeapDump, access, running,
     beginSelection, togglePodSelected, copyPodText, openShellFor, collect,
-    onClose, onOpen]);
+    onClose, onConfirmUnfavorite, onOpen]);
 
   return (
     <ContextMenuView

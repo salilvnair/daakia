@@ -347,6 +347,16 @@ interface K8sState {
   selectedPod?: string;
 
   /** Bulk-select mode for export. Off until the user asks for it. */
+  /**
+   * Whether the pod list is showing starred pods or all of them.
+   *
+   * In the store rather than in the grid because Search Everywhere's picker
+   * has to agree with it: offering every pod while the list in the background
+   * shows four is a picker for a different screen. Not persisted — opening
+   * dk8s starts on starred, every time.
+   */
+  podScope: 'fav' | 'all';
+  setPodScope: (v: 'fav' | 'all') => void;
   selectMode: boolean;
   /** Pod uids ticked for export. */
   selected: string[];
@@ -534,6 +544,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   watchStatus: 'idle',
   filter: '',
   view: 'cards',
+  podScope: 'fav',
+  setPodScope: (podScope) => set({ podScope }),
   selectMode: false,
   selected: [],
   exportOpen: false,
