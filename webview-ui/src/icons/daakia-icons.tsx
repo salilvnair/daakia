@@ -539,6 +539,28 @@ export function ClockIcon(props: IconProps) {
   );
 }
 
+export function LayoutGridIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  );
+}
+
+export function TableIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <line x1="3" y1="9" x2="21" y2="9" />
+      <line x1="3" y1="14" x2="21" y2="14" />
+      <line x1="9" y1="9" x2="9" y2="20" />
+    </svg>
+  );
+}
+
 export function LayersIcon(props: IconProps) {
   const { size = 20, ...rest } = props;
   return (

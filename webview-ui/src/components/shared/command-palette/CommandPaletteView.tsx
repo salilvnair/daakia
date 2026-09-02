@@ -15,11 +15,21 @@ import {
   SunIcon, CpuIcon, AgentIcon, CodeBracketsIcon, FolderImportIcon,
   ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge,
   ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, BookOpenIcon,
-  Dk8sIcon, StethoscopeIcon, RefreshIcon,
+  Dk8sIcon, StethoscopeIcon, RefreshIcon, LayoutGridIcon, TableIcon,
+  CheckCircleIcon, DownloadIcon,
 } from '../../../icons';
 import './CommandPaletteView.css';
 
 interface PaletteItem {
+  /**
+   * Colour for the icon.
+   *
+   * The wrapper paints every icon `--color-text-muted`, which is why a list of
+   * twenty commands read as twenty identical grey glyphs — the icon told you
+   * nothing the label had not already said. A colour per command makes the
+   * shape and the hue together enough to find a row without reading it.
+   */
+  iconColor?: string;
   id: string;
   icon: React.ReactNode;
   label: string;
@@ -182,6 +192,14 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
     useDevToolsStore.getState().setActiveTab(tab);
   };
 
+  /*
+    Every dk8s command needs the tab, and none of them mean anything without
+    it — so opening it is part of the command rather than a step you are left
+    to remember.
+  */
+  const dk8s = () => useTabsStore.getState().openDk8sTab();
+  const DK8S = 'var(--color-dk8s)';
+
   const baseGroups = useMemo<PaletteGroup[]>(() => [
     {
       heading: 'New Request',
@@ -196,14 +214,14 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
     {
       heading: 'Navigate',
       items: [
-        { id: 'nav-collections', icon: <FolderIcon size={15} />, label: 'Collections', keywords: ['tree', 'requests'], run: openSection('collections') },
-        { id: 'nav-history', icon: <ClockIcon size={15} />, label: 'History', keywords: ['past requests', 'log'], run: openSection('history') },
-        { id: 'nav-environments', icon: <LayersIcon size={15} />, label: 'Environments', keywords: ['env', 'variables'], run: openSection('collections') },
-        { id: 'nav-mock-server', icon: <ServerIcon size={15} />, label: 'Mock Server', keywords: ['mock', 'routes'], run: () => useTabsStore.getState().openMockServerTab() },
-        { id: 'nav-daakia-ai', icon: <SparkleIcon size={15} />, label: 'Daakia AI Assistant', keywords: ['ai', 'chat', 'tools'], run: () => useTabsStore.getState().openDaakiaAiTab() },
-        { id: 'nav-settings', icon: <SettingsIcon size={15} />, label: 'Settings', keywords: ['preferences', 'theme', 'llm'], run: () => useTabsStore.getState().openSettingsTab() },
-        { id: 'nav-wiki', icon: <BookOpenIcon size={15} />, label: 'Daakia Wiki', keywords: ['docs', 'documentation', 'help', 'guide'], run: () => useTabsStore.getState().openDaakiaWikiTab() },
-        { id: 'nav-ai-actions', icon: <SparkleIcon size={15} />, label: 'AI Actions…', keywords: ['inline', 'features', 'sparkle', 'ai tools'], to: 'ai-actions' },
+        { id: 'nav-collections', iconColor: 'var(--color-warning)', icon: <FolderIcon size={15} />, label: 'Collections', keywords: ['tree', 'requests'], run: openSection('collections') },
+        { id: 'nav-history', iconColor: 'var(--color-info)', icon: <ClockIcon size={15} />, label: 'History', keywords: ['past requests', 'log'], run: openSection('history') },
+        { id: 'nav-environments', iconColor: 'var(--color-success)', icon: <LayersIcon size={15} />, label: 'Environments', keywords: ['env', 'variables'], run: openSection('collections') },
+        { id: 'nav-mock-server', iconColor: 'var(--color-mock-server)', icon: <ServerIcon size={15} />, label: 'Mock Server', keywords: ['mock', 'routes'], run: () => useTabsStore.getState().openMockServerTab() },
+        { id: 'nav-daakia-ai', iconColor: 'var(--color-protocol-ai)', icon: <SparkleIcon size={15} />, label: 'Daakia AI Assistant', keywords: ['ai', 'chat', 'tools'], run: () => useTabsStore.getState().openDaakiaAiTab() },
+        { id: 'nav-settings', iconColor: 'var(--color-settings)', icon: <SettingsIcon size={15} />, label: 'Settings', keywords: ['preferences', 'theme', 'llm'], run: () => useTabsStore.getState().openSettingsTab() },
+        { id: 'nav-wiki', iconColor: 'var(--color-wiki)', icon: <BookOpenIcon size={15} />, label: 'Daakia Wiki', keywords: ['docs', 'documentation', 'help', 'guide'], run: () => useTabsStore.getState().openDaakiaWikiTab() },
+        { id: 'nav-ai-actions', iconColor: 'var(--color-protocol-ai)', icon: <SparkleIcon size={15} />, label: 'AI Actions…', keywords: ['inline', 'features', 'sparkle', 'ai tools'], to: 'ai-actions' },
       ],
     },
     {
@@ -211,49 +229,90 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
         dk8s, from wherever you are.
 
         Every one of these took a tab switch and then a click inside it, which
-        is the thing this palette exists to remove — and diagnosing a cluster
-        is when you are least inclined to go looking for the button. Each entry
-        opens the tab first, because none of them mean anything without it.
+        is what the palette exists to remove — and diagnosing a cluster is when
+        you are least inclined to go hunting for a control. Each opens the tab
+        first, since none of them mean anything without it.
+
+        Only actions that work from anywhere are here. Anything needing a pod
+        already open — a heap dump, a thread dump — belongs on that pod, not in
+        a list that cannot know which one you meant.
       */
       heading: 'dk8s — Kubernetes',
       items: [
         {
-          id: 'dk8s-open', icon: <Dk8sIcon size={15} />, label: 'Open dk8s',
+          id: 'dk8s-open', icon: <Dk8sIcon size={15} />, iconColor: DK8S,
+          label: 'Open dk8s',
           keywords: ['kubernetes', 'k8s', 'cluster', 'pods'],
-          run: () => useTabsStore.getState().openDk8sTab(),
+          run: () => dk8s(),
         },
         {
-          id: 'dk8s-pods', icon: <LayersIcon size={15} />, label: 'dk8s: Pods',
+          id: 'dk8s-pods', icon: <LayersIcon size={15} />, iconColor: 'var(--color-info)',
+          label: 'dk8s: Pods',
           keywords: ['kubernetes', 'k8s', 'workloads', 'containers', 'crashloop'],
-          run: () => {
-            useTabsStore.getState().openDk8sTab();
-            useK8sStore.getState().setPanel('pods');
-          },
+          run: () => { dk8s(); useK8sStore.getState().setPanel('pods'); },
         },
         {
-          id: 'dk8s-search', icon: <SearchIcon size={15} />, label: 'dk8s: Search logs everywhere',
-          keywords: ['kubernetes', 'k8s', 'grep', 'logs', 'across pods', 'find'],
+          id: 'dk8s-search', icon: <SearchIcon size={15} />, iconColor: 'var(--color-warning)',
+          label: 'dk8s: Search logs everywhere',
+          keywords: ['kubernetes', 'k8s', 'grep', 'logs', 'across pods', 'find', 'archive'],
           run: () => {
-            useTabsStore.getState().openDk8sTab();
+            dk8s();
             useK8sStore.getState().setPanel('pods');
             useDk8sSearchStore.getState().openSearch();
           },
         },
         {
-          id: 'dk8s-artifacts', icon: <StethoscopeIcon size={15} />, label: 'dk8s: Artifacts',
+          id: 'dk8s-artifacts', icon: <StethoscopeIcon size={15} />, iconColor: 'var(--color-protocol-ai)',
+          label: 'dk8s: Artifacts',
           keywords: ['heap dump', 'thread dump', 'hprof', 'jfr', 'collected', 'analyzer'],
+          run: () => { dk8s(); useK8sStore.getState().setPanel('artifacts'); },
+        },
+        {
+          id: 'dk8s-refresh', icon: <RefreshIcon size={15} />, iconColor: 'var(--color-success)',
+          label: 'dk8s: Refresh pods',
+          keywords: ['kubernetes', 'k8s', 'reload', 'rewatch', 'stale', 'watch'],
+          run: () => { dk8s(); useK8sStore.getState().startWatch(); },
+        },
+        {
+          id: 'dk8s-cards', icon: <LayoutGridIcon size={15} />, iconColor: 'var(--color-info)',
+          label: 'dk8s: Card view',
+          keywords: ['kubernetes', 'k8s', 'tiles', 'grid', 'pods'],
+          run: () => { dk8s(); useK8sStore.getState().setPanel('pods'); useK8sStore.getState().setView('cards'); },
+        },
+        {
+          id: 'dk8s-table', icon: <TableIcon size={15} />, iconColor: 'var(--color-info)',
+          label: 'dk8s: Table view',
+          keywords: ['kubernetes', 'k8s', 'rows', 'list', 'dense', 'pods'],
+          run: () => { dk8s(); useK8sStore.getState().setPanel('pods'); useK8sStore.getState().setView('table'); },
+        },
+        {
+          id: 'dk8s-select', icon: <CheckCircleIcon size={15} />, iconColor: DK8S,
+          label: 'dk8s: Pick pods',
+          keywords: ['kubernetes', 'k8s', 'select', 'multi', 'choose', 'favourite', 'export'],
           run: () => {
-            useTabsStore.getState().openDk8sTab();
-            useK8sStore.getState().setPanel('artifacts');
+            dk8s();
+            useK8sStore.getState().setPanel('pods');
+            const st = useK8sStore.getState();
+            if (!st.selectMode) st.toggleSelectMode();
           },
         },
         {
-          id: 'dk8s-refresh', icon: <RefreshIcon size={15} />, label: 'dk8s: Refresh pods',
-          keywords: ['kubernetes', 'k8s', 'reload', 'rewatch', 'stale'],
-          run: () => {
-            useTabsStore.getState().openDk8sTab();
-            useK8sStore.getState().startWatch();
-          },
+          id: 'dk8s-export', icon: <DownloadIcon size={15} />, iconColor: 'var(--color-success)',
+          label: 'dk8s: Export logs',
+          keywords: ['kubernetes', 'k8s', 'download', 'save', 'logs', 'file'],
+          run: () => { dk8s(); useK8sStore.getState().setPanel('pods'); useK8sStore.getState().openExport(); },
+        },
+        {
+          id: 'dk8s-back', icon: <ChevronLeftIcon size={15} />, iconColor: 'var(--color-text-muted)',
+          label: 'dk8s: Back to the pod list',
+          keywords: ['kubernetes', 'k8s', 'close', 'detail', 'leave pod'],
+          run: () => { dk8s(); useK8sStore.getState().closeDetail(); },
+        },
+        {
+          id: 'dk8s-settings', icon: <SettingsIcon size={15} />, iconColor: 'var(--color-settings)',
+          label: 'dk8s: Settings',
+          keywords: ['kubernetes', 'k8s', 'kubectl path', 'log formats', 'archived logs', 'pv', 'volume'],
+          run: openSettingsSection('dk8s'),
         },
       ],
     },
@@ -262,6 +321,7 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
       items: SETTINGS_SECTIONS.map(s => ({
         id: `settings-${s.id}`,
         icon: s.icon,
+        iconColor: 'var(--color-settings)',
         label: s.label,
         keywords: s.keywords,
         run: openSettingsSection(s.id),
@@ -430,7 +490,10 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
                     onMouseEnter={() => setActiveIndex(runningIndex)}
                     onClick={() => handleSelect(item)}
                   >
-                    <span className="dk_cmdk__item-icon">{item.icon}</span>
+                    <span className="dk_cmdk__item-icon"
+                          style={item.iconColor ? { color: item.iconColor } : undefined}>
+                      {item.icon}
+                    </span>
                     <span className="dk_cmdk__item-label">{item.label}</span>
                     {item.badge && <span className="dk_cmdk__item-badge">{item.badge}</span>}
                     {item.to && <ChevronRightIcon size={13} />}
