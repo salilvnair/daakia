@@ -14,7 +14,7 @@
 import { create } from 'zustand';
 import { useUiStateStore } from './ui-state-store';
 
-export type AnalyzerId = 'heap' | 'threads' | 'logs';
+export type AnalyzerId = 'heap' | 'threads' | 'logs' | 'cpu';
 
 /**
  * What the open analysis is, in words.

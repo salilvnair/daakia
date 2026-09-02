@@ -18,7 +18,7 @@ export interface StoredArtifact {
   pod?: string;
   collectedAt?: number;
   bytes: number;
-  analyzer: 'heap' | 'threads' | 'logs';
+  analyzer: 'heap' | 'threads' | 'logs' | 'cpu';
 }
 
 interface ArtifactState {

@@ -54,6 +54,7 @@ import { redact, describeRedactions } from '../../../services/k8s/redact';
 import { detectFormat, detectPattern } from '../../../services/k8s/log-format-detect';
 import { handleAiSend } from './ai-handler';
 import { handleHeapAnalyze, handleThreadsAnalyze, handleLogsAnalyze } from './heap-handler';
+import { handleJfrAnalyze } from './jfr-handler';
 import { streamLogs, type LogStreamHandle } from '../../../services/k8s/k8s-log-stream';
 import { run, kubectlBinary, resolveBinary } from '../../../services/k8s/kubectl';
 import { probeCapabilities, classifyFromSpec, availableActions, execFailureKind } from '../../../services/k8s/pod-classify';
@@ -1408,6 +1409,7 @@ export async function handleDk8sAnalyze(
   // collection kind to infer from.
   const analyzer = (msg.analyzer as string | undefined)
     ?? (kind === 'heapdump' ? 'heap'
+      : kind === 'jfr' ? 'cpu'
       : kind === 'threaddump' || kind === 'threaddump-sigquit' || kind === 'stackdump' ? 'threads'
       : 'logs');
 
@@ -1421,6 +1423,9 @@ export async function handleDk8sAnalyze(
       break;
     case 'threads':
       handleThreadsAnalyze({ path: file }, postMessage, extensionRoot);
+      break;
+    case 'cpu':
+      handleJfrAnalyze({ path: file }, postMessage);
       break;
     default:
       handleLogsAnalyze({ path: file }, postMessage, extensionRoot);

@@ -13,7 +13,7 @@
 import { useEffect, useRef } from 'react';
 import { ButtonView } from '@salilvnair/dui';
 import {
-  ChevronLeftIcon, SparkleIcon, MemoryIcon, LayersIcon, DocumentIcon, PlusIcon,
+  ChevronLeftIcon, SparkleIcon, MemoryIcon, LayersIcon, DocumentIcon, PlusIcon, CpuIcon,
   StethoscopeIcon,
 } from '../../icons';
 import { useDk8sAnalyzeStore, type AnalyzerId } from '../../store/dk8s-analyze-store';
@@ -22,6 +22,7 @@ import { HeapAnalyzerView } from '../doctor/HeapAnalyzerView';
 import { ThreadAnalyzerView } from '../doctor/ThreadAnalyzerView';
 import { LogAnalyzerView } from '../doctor/LogAnalyzerView';
 import { AnalyzerBoundary } from '../doctor/AnalyzerBoundary';
+import { CpuAnalyzerView } from '../doctor/CpuAnalyzerView';
 import { AiSplit } from './AiAnswerPanel';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 
@@ -43,6 +44,11 @@ const TABS: { id: AnalyzerId; label: string; icon: React.ReactNode; color: strin
     id: 'logs', label: 'Logs', icon: <DocumentIcon size={13} />,
     color: 'var(--color-warning)',
     tagline: 'Pattern extraction, bursts and anomaly detection',
+  },
+  {
+    id: 'cpu', label: 'Flight Recording', icon: <CpuIcon size={13} />,
+    color: 'var(--color-success)',
+    tagline: 'Where the CPU went, and how it got there, from a .jfr',
   },
 ];
 
@@ -320,7 +326,8 @@ export function ArtifactDetail() {
               <AnalyzerBoundary name={t.label} resetKey={`${t.id}:${header ?? ""}`}>
                 {t.id === 'heap' ? <HeapAnalyzerView />
                   : t.id === 'threads' ? <ThreadAnalyzerView />
-                    : <LogAnalyzerView />}
+                    : t.id === 'cpu' ? <CpuAnalyzerView />
+                      : <LogAnalyzerView />}
               </AnalyzerBoundary>
             </div>
           ))}

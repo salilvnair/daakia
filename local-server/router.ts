@@ -27,6 +27,7 @@ import {
   handleHeapOpen, handleHeapQuery, handleHeapSetBaseline, handleHeapCancel,
   handleHeapLocateClass, handleHeapOpenSource,
 } from '../src/panel/main/handlers/heap-handler';
+import { handleJfrOpen, handleJfrAnalyze } from '../src/panel/main/handlers/jfr-handler';
 import { cancelRestRequest } from '../src/http/request-executor';
 import {
   handleExecuteGraphQL, handleGraphQLConnect, handleGraphQLSubscribe, handleGraphQLUnsubscribe, cancelGraphQLRequest,
@@ -303,6 +304,20 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'heap:openSource':
       await handleHeapOpenSource(msg);
+      break;
+
+    /*
+      The recording analyzer, wired here as well as in the extension.
+
+      A message type this router does not name logs "no handler wired" and the
+      view sits empty forever — which is exactly how the heap screens above
+      came to be opened and never filled. Same handler, both paths.
+    */
+    case 'jfr:open':
+      await handleJfrOpen(post);
+      break;
+    case 'jfr:analyze':
+      handleJfrAnalyze(msg, post);
       break;
 
     // ── Request Execution ──

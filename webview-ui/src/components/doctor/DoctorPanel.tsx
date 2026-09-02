@@ -14,16 +14,17 @@
  * a redacted evidence pack ever reaches a model, and only when the user asks.
  */
 import { useState, useEffect } from 'react';
-import { StethoscopeIcon, MemoryIcon, LayersIcon, DocumentIcon } from '../../icons';
+import { StethoscopeIcon, MemoryIcon, LayersIcon, DocumentIcon, CpuIcon } from '../../icons';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { HeapAnalyzerView } from './HeapAnalyzerView';
 import { ThreadAnalyzerView } from './ThreadAnalyzerView';
 import { LogAnalyzerView } from './LogAnalyzerView';
 import { AnalyzerBoundary } from './AnalyzerBoundary';
+import { CpuAnalyzerView } from './CpuAnalyzerView';
 
 const ACCENT = 'var(--color-doctor)';
 
-type AnalyzerId = 'heap' | 'threads' | 'logs';
+type AnalyzerId = 'heap' | 'threads' | 'logs' | 'cpu';
 
 interface Analyzer {
   id: AnalyzerId;
@@ -37,6 +38,7 @@ const ANALYZERS: Analyzer[] = [
   { id: 'heap', label: 'Heap Dump', icon: <MemoryIcon size={14} />, tagline: 'Retained sizes, dominators and leak suspects from a .hprof', ready: true },
   { id: 'threads', label: 'Thread Dump', icon: <LayersIcon size={14} />, tagline: 'Deadlocks, lock contention and thread-state distribution', ready: true },
   { id: 'logs', label: 'Logs', icon: <DocumentIcon size={14} />, tagline: 'Pattern extraction, bursts and anomaly detection', ready: true },
+  { id: 'cpu', label: 'Flight Recording', icon: <CpuIcon size={14} />, tagline: 'Where the CPU went, and how it got there, from a .jfr', ready: true },
 ];
 
 export function DoctorPanel() {
@@ -114,6 +116,8 @@ export function DoctorPanel() {
           <AnalyzerBoundary name={active.label} resetKey={analyzer}><ThreadAnalyzerView /></AnalyzerBoundary>
         ) : analyzer === 'logs' ? (
           <AnalyzerBoundary name={active.label} resetKey={analyzer}><LogAnalyzerView /></AnalyzerBoundary>
+        ) : analyzer === 'cpu' ? (
+          <AnalyzerBoundary name={active.label} resetKey={analyzer}><CpuAnalyzerView /></AnalyzerBoundary>
         ) : (
         <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
           <StethoscopeIcon size={40} strokeWidth={1} style={{ color: ACCENT, opacity: 0.4 }} />

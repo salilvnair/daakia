@@ -143,7 +143,7 @@ function Row({ a, picked, onPick, onAskDelete }: {
 export function ArtifactsView() {
   const { artifacts, dir, error, load, importFile, reveal, remove } = useDk8sArtifactStore();
   const [filter, setFilter] = useState('');
-  const [kind, setKind] = useState<'all' | 'heap' | 'threads' | 'logs'>('all');
+  const [kind, setKind] = useState<'all' | 'heap' | 'threads' | 'logs' | 'cpu'>('all');
   const [picked, setPicked] = useState<string[]>([]);
 
   useEffect(() => { load(); }, [load]);
@@ -237,6 +237,7 @@ export function ArtifactsView() {
             { value: 'all', label: 'all' },
             { value: 'heap', label: 'heap' },
             { value: 'threads', label: 'threads' },
+            { value: 'cpu', label: 'recordings' },
             { value: 'logs', label: 'text' },
           ]}
           density="compact" accentColor={ACCENT}

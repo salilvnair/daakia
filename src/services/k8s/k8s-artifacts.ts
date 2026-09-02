@@ -497,13 +497,19 @@ export interface StoredArtifact {
   collectedAt?: number;
   bytes: number;
   /** Which analyzer opens this. */
-  analyzer: 'heap' | 'threads' | 'logs';
+  analyzer: AnalyzerId;
 }
 
+export type AnalyzerId = 'heap' | 'threads' | 'logs' | 'cpu';
+
 /** Which analyzer understands a file, by extension and by name. */
-export function analyzerFor(file: string): 'heap' | 'threads' | 'logs' {
+export function analyzerFor(file: string): AnalyzerId {
   const lower = file.toLowerCase();
   if (lower.endsWith('.hprof')) return 'heap';
+  // Before the thread check: a recording collected by dk8s is named
+  // `<pod>__jfr__<stamp>.jfr`, and `stackdump` in some other tool's filename
+  // must not claim a file whose extension already settles it.
+  if (lower.endsWith('.jfr')) return 'cpu';
   if (/threaddump|sigquit|stackdump|\.tdump$|\.jstack$/.test(lower)) return 'threads';
   return 'logs';
 }
