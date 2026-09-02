@@ -12,7 +12,7 @@
  * you get the whole request that produced the error, and the cost is disk
  * rather than a dialog you cannot scroll.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ModalView, ButtonView, SegmentedControlView, CheckboxView } from '@salilvnair/dui';
 import type { PodSummary } from '../../store/k8s-store';
 import { useK8sStore } from '../../store/k8s-store';
@@ -66,6 +66,16 @@ export function ExportSearchModal({ pods, onClose }: {
   const exportState = useK8sStore(s => s.exportState);
 
   const [contextLines, setContextLines] = useState(options.contextLines);
+  /*
+    The width the search ran at, pinned for the life of the dialog.
+
+    It gets a segment of its own because it is rarely one of the round
+    numbers — ±2 by default. Held in a ref rather than derived from the
+    current value: deriving it meant the extra segment moved every time you
+    picked another, so choosing ±10 erased ±2 and there was no way back to the
+    width you started from.
+  */
+  const inheritedContext = useRef(options.contextLines).current;
   const [combine, setCombine] = useState(true);
 
   /*
@@ -253,8 +263,13 @@ export function ExportSearchModal({ pods, onClose }: {
               list. Nothing highlighted, so the control looked unset while the
               export happily wrote ±2: the one state a segmented control must
               never be in is "the truth is not on screen".
+
+              It is the INHERITED width that earns the segment, not the current
+              one. Keyed to the current value, the extra segment moved as you
+              clicked, so picking ±10 deleted ±2 and stranded you away from
+              where you began.
             */
-            options={[...new Set([...CONTEXT_CHOICES, contextLines])]
+            options={[...new Set([...CONTEXT_CHOICES, inheritedContext])]
               .sort((a, b) => a - b)
               .map(n => ({
                 value: String(n),
