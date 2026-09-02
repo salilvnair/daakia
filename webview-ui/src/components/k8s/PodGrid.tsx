@@ -146,13 +146,13 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
             two do the same job from different starting points, and one of them
             looking like a link made that hard to see.
 
-            SOAP's accent rather than the tab's cyan: everything else up here
-            is cyan because it belongs to dk8s, and the one control that goes
-            and does something should not read as more chrome.
+            In the tab's own cyan. A warmer accent was tried and read as a
+            warning on a list where red and amber already mean a pod is in
+            trouble — the one colour a control here must not borrow.
           */
-          background: 'color-mix(in srgb, var(--color-protocol-soap) 18%, transparent)',
-          color: 'var(--color-protocol-soap)',
-          border: '1px solid color-mix(in srgb, var(--color-protocol-soap) 45%, transparent)',
+          background: `color-mix(in srgb, ${ACCENT} 18%, transparent)`,
+          color: ACCENT,
+          border: `1px solid color-mix(in srgb, ${ACCENT} 45%, transparent)`,
         }}
       >
         <SearchIcon size={12} />
