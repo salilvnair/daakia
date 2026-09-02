@@ -210,9 +210,22 @@ Available dk.* API:
 - dk.expect(actual).toContain(value)      — string/array contains
 - dk.expect(actual).toBeGreaterThan(n)    — numeric comparison
 - dk.expect(actual).toBeLessThan(n)
-- dk.expect(actual).toBeNull()
-- dk.expect(actual).toBeDefined()
+- dk.expect(actual).toBeGreaterThanOrEqual(n)
+- dk.expect(actual).toBeLessThanOrEqual(n)
+- dk.expect(actual).toBeWithin(min, max)  — inclusive range, e.g. status 200-299
+- dk.expect(actual).toBeOneOf([a, b, c])
+- dk.expect(actual).toBeTruthy() / .toBeFalsy()
+- dk.expect(actual).toBeNull() / .toBeDefined() / .toBeUndefined()
+- dk.expect(actual).toBeType("string" | "number" | "object" | "array" | "boolean")
+- dk.expect(actual).toHaveProperty("key")
+- dk.expect(actual).toHaveLength(n)
 - dk.expect(actual).toMatch(/regex/)
+- dk.expect(response).toHaveStatus(200)
+- dk.expect(actual).toMatchSchema({ ... })  — JSON Schema
+- dk.expect(actual).not.<any matcher above>(...)  — negation
+
+There is no Chai chain: .to.be.*, .to.have.* and .to.equal(...) are not part
+of this API and throw at runtime. Use the matchers above directly.
 - dk.response.status                      — HTTP status code (number)
 - dk.response.body                        — parsed response body (object)
 - dk.response.headers["header-name"]      — response header value

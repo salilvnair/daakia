@@ -5,6 +5,7 @@
  *
  * - dk.test(name, fn): Run a named test assertion block
  * - dk.expect(value): Chainable assertion API (toBe, toEqual, toContain, etc.)
+ * - dk.expect(value).not.<matcher>(...): every matcher, inverted
  */
 import type { ScriptProvider } from '../types';
 
@@ -27,75 +28,187 @@ export const testProvider: ScriptProvider = {
       }
     };
 
-    const expect = (actual: unknown) => ({
-      toBe: (expected: unknown) => {
-        if (actual !== expected) {
-          throw new Error(`Expected ${JSON.stringify(actual)} to be ${JSON.stringify(expected)}`);
+    /*
+      Matchers as predicates, so negation is real.
+
+      They were written as a flat object of functions that threw on failure,
+      which left no way to express `.not` — and the Postman converter, needing
+      one, emitted `toBe` with a "NOT" comment wedged inside the argument list:
+      an assertion that says the opposite of what the script asked for, and
+      passes silently when it should fail. A predicate plus its two messages
+      gives both directions from one definition, so they cannot drift apart.
+    */
+    interface Matcher {
+      pass: boolean;
+      /** Shown when the plain form fails. */
+      msg: string;
+      /** Shown when the negated form fails. */
+      not: string;
+    }
+
+    const show = (v: unknown) => {
+      try { return JSON.stringify(v) ?? String(v); } catch { return String(v); }
+    };
+
+    const typeOf = (v: unknown) =>
+      v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
+
+    const MATCHERS: Record<string, (actual: unknown, ...args: never[]) => Matcher> = {
+      toBe: (a, e?: unknown) => ({
+        pass: a === e,
+        msg: `Expected ${show(a)} to be ${show(e)}`,
+        not: `Expected ${show(a)} not to be ${show(e)}`,
+      }),
+      toEqual: (a, e?: unknown) => ({
+        pass: JSON.stringify(a) === JSON.stringify(e),
+        msg: `Expected ${show(a)} to equal ${show(e)}`,
+        not: `Expected ${show(a)} not to equal ${show(e)}`,
+      }),
+      toBeTruthy: (a) => ({
+        pass: !!a,
+        msg: `Expected ${show(a)} to be truthy`,
+        not: `Expected ${show(a)} not to be truthy`,
+      }),
+      toBeFalsy: (a) => ({
+        pass: !a,
+        msg: `Expected ${show(a)} to be falsy`,
+        not: `Expected ${show(a)} not to be falsy`,
+      }),
+      toBeNull: (a) => ({
+        pass: a === null,
+        msg: `Expected ${show(a)} to be null`,
+        not: `Expected value not to be null`,
+      }),
+      toBeUndefined: (a) => ({
+        pass: a === undefined,
+        msg: `Expected ${show(a)} to be undefined`,
+        not: `Expected value not to be undefined`,
+      }),
+      toBeDefined: (a) => ({
+        pass: a !== undefined,
+        msg: `Expected value to be defined`,
+        not: `Expected value to be undefined`,
+      }),
+      toContain: (a, e?: unknown) => {
+        if (typeof a === 'string' && typeof e === 'string') {
+          return {
+            pass: a.includes(e),
+            msg: `Expected "${a}" to contain "${e}"`,
+            not: `Expected "${a}" not to contain "${e}"`,
+          };
         }
-      },
-      toEqual: (expected: unknown) => {
-        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-          throw new Error(`Expected ${JSON.stringify(actual)} to equal ${JSON.stringify(expected)}`);
+        if (Array.isArray(a)) {
+          return {
+            pass: a.includes(e),
+            msg: `Expected array to contain ${show(e)}`,
+            not: `Expected array not to contain ${show(e)}`,
+          };
         }
+        // Not a failed assertion — the script asked something meaningless of
+        // this value, and saying so beats reporting it as a test failure.
+        throw new Error('toContain requires a string or array');
       },
-      toBeTruthy: () => {
-        if (!actual) throw new Error(`Expected ${JSON.stringify(actual)} to be truthy`);
-      },
-      toBeFalsy: () => {
-        if (actual) throw new Error(`Expected ${JSON.stringify(actual)} to be falsy`);
-      },
-      toContain: (expected: unknown) => {
-        if (typeof actual === 'string' && typeof expected === 'string') {
-          if (!actual.includes(expected)) throw new Error(`Expected "${actual}" to contain "${expected}"`);
-        } else if (Array.isArray(actual)) {
-          if (!actual.includes(expected)) throw new Error(`Expected array to contain ${JSON.stringify(expected)}`);
-        } else {
-          throw new Error(`toContain requires a string or array`);
-        }
-      },
-      toBeGreaterThan: (expected: number) => {
-        if (typeof actual !== 'number' || actual <= expected) {
-          throw new Error(`Expected ${actual} to be greater than ${expected}`);
-        }
-      },
-      toBeLessThan: (expected: number) => {
-        if (typeof actual !== 'number' || actual >= expected) {
-          throw new Error(`Expected ${actual} to be less than ${expected}`);
-        }
-      },
-      toHaveLength: (expected: number) => {
-        const val = actual as { length?: number };
+      toBeGreaterThan: (a, e?: number) => ({
+        pass: typeof a === 'number' && a > (e as number),
+        msg: `Expected ${show(a)} to be greater than ${show(e)}`,
+        not: `Expected ${show(a)} not to be greater than ${show(e)}`,
+      }),
+      toBeLessThan: (a, e?: number) => ({
+        pass: typeof a === 'number' && a < (e as number),
+        msg: `Expected ${show(a)} to be less than ${show(e)}`,
+        not: `Expected ${show(a)} not to be less than ${show(e)}`,
+      }),
+      /*
+        Inclusive, matching Chai's `within` — which is what nearly every
+        imported Postman script uses it for: `status within 200, 299`.
+      */
+      toBeGreaterThanOrEqual: (a, e?: number) => ({
+        pass: typeof a === 'number' && a >= (e as number),
+        msg: `Expected ${show(a)} to be at least ${show(e)}`,
+        not: `Expected ${show(a)} not to be at least ${show(e)}`,
+      }),
+      toBeLessThanOrEqual: (a, e?: number) => ({
+        pass: typeof a === 'number' && a <= (e as number),
+        msg: `Expected ${show(a)} to be at most ${show(e)}`,
+        not: `Expected ${show(a)} not to be at most ${show(e)}`,
+      }),
+      toBeWithin: (a, min?: number, max?: number) => ({
+        pass: typeof a === 'number' && a >= (min as number) && a <= (max as number),
+        msg: `Expected ${show(a)} to be within ${show(min)} and ${show(max)}`,
+        not: `Expected ${show(a)} not to be within ${show(min)} and ${show(max)}`,
+      }),
+      toBeOneOf: (a, list?: unknown[]) => ({
+        pass: Array.isArray(list) && list.includes(a),
+        msg: `Expected ${show(a)} to be one of ${show(list)}`,
+        not: `Expected ${show(a)} not to be one of ${show(list)}`,
+      }),
+      toBeType: (a, t?: string) => ({
+        pass: typeOf(a) === t,
+        msg: `Expected ${show(a)} to be of type ${String(t)}, got ${typeOf(a)}`,
+        not: `Expected value not to be of type ${String(t)}`,
+      }),
+      toHaveLength: (a, e?: number) => {
+        const val = a as { length?: number } | null;
         if (val == null || typeof val.length !== 'number') {
-          throw new Error(`Expected value to have a .length property, but got ${JSON.stringify(actual)}`);
+          throw new Error(`Expected value to have a .length property, but got ${show(a)}`);
         }
-        if (val.length !== expected) {
-          throw new Error(`Expected length ${expected} but got ${val.length}`);
-        }
+        return {
+          pass: val.length === e,
+          msg: `Expected length ${show(e)} but got ${val.length}`,
+          not: `Expected length not to be ${show(e)}`,
+        };
       },
-      toMatch: (pattern: string | RegExp) => {
-        if (typeof actual !== 'string') {
-          throw new Error(`toMatch requires a string value, got ${typeof actual}`);
+      toMatch: (a, pattern?: string | RegExp) => {
+        if (typeof a !== 'string') {
+          throw new Error(`toMatch requires a string value, got ${typeof a}`);
         }
-        const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
-        if (!re.test(actual)) {
-          throw new Error(`Expected "${actual}" to match ${re}`);
-        }
+        const re = pattern instanceof RegExp ? pattern : new RegExp(String(pattern));
+        return {
+          pass: re.test(a),
+          msg: `Expected "${a}" to match ${re}`,
+          not: `Expected "${a}" not to match ${re}`,
+        };
       },
-      toHaveProperty: (key: string) => {
-        if (actual == null || typeof actual !== 'object' || !(key in (actual as Record<string, unknown>))) {
-          throw new Error(`Expected object to have property "${key}"`);
-        }
+      toHaveProperty: (a, key?: string) => ({
+        pass: a != null && typeof a === 'object' && String(key) in (a as Record<string, unknown>),
+        msg: `Expected object to have property "${String(key)}"`,
+        not: `Expected object not to have property "${String(key)}"`,
+      }),
+      toHaveStatus: (a, status?: number) => {
+        const got = (a as { status?: number } | null)?.status;
+        return {
+          pass: got === status,
+          msg: `Expected status ${show(status)} but got ${show(got)}`,
+          not: `Expected status not to be ${show(status)}`,
+        };
       },
-      toHaveStatus: (status: number) => {
-        const s = (actual as { status?: number })?.status;
-        if (s !== status) throw new Error(`Expected status ${status} but got ${s}`);
+      toMatchSchema: (a, schema?: Record<string, unknown>) => {
+        const errors = validateJsonSchema(a, schema ?? {}, '');
+        return {
+          pass: errors.length === 0,
+          msg: `Schema validation failed:\n  - ${errors.slice(0, 10).join('\n  - ')}`
+            + `${errors.length > 10 ? `\n  ... and ${errors.length - 10} more` : ''}`,
+          not: `Expected value not to match the schema`,
+        };
       },
-      toMatchSchema: (schema: Record<string, unknown>) => {
-        const errors = validateJsonSchema(actual, schema, '');
-        if (errors.length > 0) {
-          throw new Error(`Schema validation failed:\n  - ${errors.slice(0, 10).join('\n  - ')}${errors.length > 10 ? `\n  ... and ${errors.length - 10} more` : ''}`);
-        }
-      },
+    };
+
+    /** One matcher, bound to a value and a direction. */
+    const bind = (actual: unknown, negated: boolean) => {
+      const out: Record<string, (...args: never[]) => void> = {};
+      for (const [name, fn] of Object.entries(MATCHERS)) {
+        out[name] = (...args: never[]) => {
+          const r = fn(actual, ...args);
+          if (r.pass === negated) throw new Error(negated ? r.not : r.msg);
+        };
+      }
+      return out;
+    };
+
+    const expect = (actual: unknown) => ({
+      ...bind(actual, false),
+      /** Every matcher above, inverted. `dk.expect(x).not.toBe(y)`. */
+      not: bind(actual, true),
     });
 
     return {

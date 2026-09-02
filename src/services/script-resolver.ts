@@ -306,37 +306,124 @@ function convertPostmanConfigToDk(configStr: string): string {
 function resolveChaiAssertions(script: string): string {
   let result = script;
 
-  // .to.equal(x) / .to.eql(x) / .to.deep.equal(x) → .toEqual(x)
+  /*
+    Negation first, and as a real thing.
+
+    `.to.not.equal(x)` used to become `toBe` with a "NOT" comment inside the
+    argument list — which asserts the opposite of what the script said and
+    passes exactly when it should fail. A converted suite that silently
+    inverts an assertion is worse than one that refuses to convert it.
+
+    Chai spells negation `.to.not.X` and `.to.not.be.X`; dk spells it `.not.X`.
+    Rewriting the prefix first lets every matcher below apply unchanged to both
+    forms, rather than needing a negated twin each.
+  */
+  result = result.replace(/\.to\.not\.be\./g, '.__NOT__.be.');
+  result = result.replace(/\.to\.not\.have\./g, '.__NOT__.have.');
+  result = result.replace(/\.to\.not\./g, '.__NOT__.');
+  // `.to.be.not.x` is the same statement with the words the other way round.
+  result = result.replace(/\.to\.be\.not\./g, '.__NOT__.be.');
+
+  // ── Equality ──
+  result = result.replace(/\.deep\.equal\(/g, '.toEqual(');
   result = result.replace(/\.to\.deep\.equal\(/g, '.toEqual(');
   result = result.replace(/\.to\.eql\(/g, '.toEqual(');
+  result = result.replace(/\.eql\(/g, '.toEqual(');
   result = result.replace(/\.to\.equal\(/g, '.toBe(');
+  result = result.replace(/\.equal\(/g, '.toBe(');
 
-  // .to.be.true → .toBeTruthy()  (no args)
+  // ── Booleans and emptiness ──
   result = result.replace(/\.to\.be\.true\b/g, '.toBeTruthy()');
+  result = result.replace(/\.be\.true\b/g, '.toBeTruthy()');
   result = result.replace(/\.to\.be\.false\b/g, '.toBeFalsy()');
+  result = result.replace(/\.be\.false\b/g, '.toBeFalsy()');
+  result = result.replace(/\.to\.be\.null\b/g, '.toBeNull()');
+  result = result.replace(/\.be\.null\b/g, '.toBeNull()');
+  result = result.replace(/\.to\.be\.undefined\b/g, '.toBeUndefined()');
+  result = result.replace(/\.be\.undefined\b/g, '.toBeUndefined()');
+  // Chai's `exist` means "not null and not undefined", which is `toBeDefined`
+  // plus a null check — `toBeTruthy` would be wrong for 0 and "".
+  result = result.replace(/\.to\.exist\b/g, '.toBeDefined()');
+  result = result.replace(/\.to\.be\.ok\b/g, '.toBeTruthy()');
 
-  // .to.be.above(x) → .toBeGreaterThan(x)
+  // ── Numeric comparison ──
   result = result.replace(/\.to\.be\.above\(/g, '.toBeGreaterThan(');
+  result = result.replace(/\.be\.above\(/g, '.toBeGreaterThan(');
   result = result.replace(/\.to\.be\.greaterThan\(/g, '.toBeGreaterThan(');
+  result = result.replace(/\.to\.be\.gt\(/g, '.toBeGreaterThan(');
   result = result.replace(/\.to\.be\.below\(/g, '.toBeLessThan(');
+  result = result.replace(/\.be\.below\(/g, '.toBeLessThan(');
   result = result.replace(/\.to\.be\.lessThan\(/g, '.toBeLessThan(');
+  result = result.replace(/\.to\.be\.lt\(/g, '.toBeLessThan(');
+  /*
+    `within` is the one that sent us looking.
 
-  // .to.have.property(x) → .toHaveProperty(x)
-  result = result.replace(/\.to\.have\.property\(/g, '.toHaveProperty(');
+    `pm.expect(pm.response.code).to.be.within(200, 299)` is the single most
+    common assertion in exported Postman collections, and it converted to
+    nothing at all — the text came through untouched and threw
+    "to is not defined" the first time the script ran.
+  */
+  result = result.replace(/\.to\.be\.within\(/g, '.toBeWithin(');
+  result = result.replace(/\.be\.within\(/g, '.toBeWithin(');
+  result = result.replace(/\.to\.be\.at\.least\(/g, '.toBeGreaterThanOrEqual(');
+  result = result.replace(/\.to\.be\.at\.most\(/g, '.toBeLessThanOrEqual(');
+  result = result.replace(/\.to\.be\.gte\(/g, '.toBeGreaterThanOrEqual(');
+  result = result.replace(/\.to\.be\.lte\(/g, '.toBeLessThanOrEqual(');
 
-  // .to.include(x) / .to.contain(x) → .toContain(x)
+  // ── Membership ──
+  result = result.replace(/\.to\.be\.oneOf\(/g, '.toBeOneOf(');
+  result = result.replace(/\.be\.oneOf\(/g, '.toBeOneOf(');
   result = result.replace(/\.to\.include\(/g, '.toContain(');
   result = result.replace(/\.to\.contain\(/g, '.toContain(');
+  result = result.replace(/\.to\.have\.string\(/g, '.toContain(');
+  result = result.replace(/\.include\(/g, '.toContain(');
 
-  // .to.have.status(x) → .toHaveStatus(x)
+  // ── Shape ──
+  result = result.replace(/\.to\.have\.property\(/g, '.toHaveProperty(');
+  result = result.replace(/\.have\.property\(/g, '.toHaveProperty(');
+  result = result.replace(/\.to\.have\.own\.property\(/g, '.toHaveProperty(');
+  result = result.replace(/\.to\.have\.lengthOf\(/g, '.toHaveLength(');
+  result = result.replace(/\.have\.lengthOf\(/g, '.toHaveLength(');
+  result = result.replace(/\.to\.have\.length\(/g, '.toHaveLength(');
   result = result.replace(/\.to\.have\.status\(/g, '.toHaveStatus(');
+  result = result.replace(/\.have\.status\(/g, '.toHaveStatus(');
+  result = result.replace(/\.to\.match\(/g, '.toMatch(');
+  // `.to.be.a('string')` and `.to.be.an('object')` — one matcher, two articles.
+  result = result.replace(/\.to\.be\.an?\(/g, '.toBeType(');
+  result = result.replace(/\.be\.an?\(/g, '.toBeType(');
+  result = result.replace(/\.to\.be\.jsonSchema\(/g, '.toMatchSchema(');
 
-  // .to.have.lengthOf(x) — no direct match, leave a comment
-  // .to.be.a('string') — no direct match, leave as-is
+  // ── Empty ──
+  // Chai's `.to.be.empty` covers strings, arrays and objects; length is the
+  // reading that holds for the first two, which is what it is used for.
+  result = result.replace(/\.to\.be\.empty\b/g, '.toHaveLength(0)');
 
-  // .to.be.oneOf([...]) — no direct match in dk, keep but note
-  // .to.not.* — negate (limited support)
-  result = result.replace(/\.to\.not\.equal\(/g, '.toBe(/* NOT */ ');
+  /*
+    Anything still carrying a Chai chain did not convert.
+
+    Left alone it throws "to is not defined" on the first line that reaches it,
+    which stops the whole script — every assertion after it included — and
+    names nothing useful. Commenting the line out keeps the rest of the suite
+    running and says exactly which assertion needs rewriting.
+
+    Line-based, and only for lines that are plainly an assertion. An earlier
+    version matched expressions anywhere, which would happily eat a URL
+    containing `.to.` or a property named `to`: rewriting code it did not
+    understand, in a converter whose whole job is to be trusted with code.
+  */
+  result = result.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (!/^(?:await\s+)?(?:dk|pm)\.(?:expect|response)\b/.test(trimmed)) return line;
+    if (!/\.to\.|\.__NOT__\./.test(line)) return line;
+    const indent = line.slice(0, line.length - line.trimStart().length);
+    return `${indent}// TODO: unsupported assertion — rewrite with dk.expect(...)\n`
+      + `${indent}// ${trimmed.replace(/\*\//g, '* /')}`;
+  }).join('\n');
+
+  // The placeholder becomes dk's own negation, now every matcher is in place.
+  result = result.replace(/\.__NOT__\.be\./g, '.not.');
+  result = result.replace(/\.__NOT__\.have\./g, '.not.');
+  result = result.replace(/\.__NOT__\./g, '.not.');
 
   return result;
 }
