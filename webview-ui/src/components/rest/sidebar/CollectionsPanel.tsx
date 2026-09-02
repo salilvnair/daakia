@@ -631,6 +631,27 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   };
 
   // When AI search is active, filter tree to show only matched request IDs
+  /*
+    What a collection holds, by method, counted down the whole subtree.
+
+    Folders nest, and a count that stopped at the top level would report a
+    number nobody recognises for any collection organised into folders — which
+    is most of them.
+  */
+  const countMethods = useCallback((collectionId: string): Record<string, number> => {
+    const node = findNodeById(tree, collectionId);
+    const out: Record<string, number> = {};
+    const walk = (n: CollectionTreeNode) => {
+      for (const r of n.requests ?? []) {
+        const m = (r.method ?? 'GET').toUpperCase();
+        out[m] = (out[m] ?? 0) + 1;
+      }
+      for (const child of n.children ?? []) walk(child);
+    };
+    if (node) walk(node);
+    return out;
+  }, [tree]);
+
   const filteredTree = aiSearchActive && aiSearchResultIds.length > 0
     ? (() => {
         const matchSet = new Set(aiSearchResultIds);
@@ -1009,6 +1030,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           open={true}
           collectionId={propertiesTarget.id}
           collectionName={propertiesTarget.name}
+          methodCounts={countMethods(propertiesTarget.id)}
           properties={propertiesTarget.properties}
           onSave={(props) => {
             postMsg({ type: 'updateCollectionProperties', id: propertiesTarget.id, properties: props });

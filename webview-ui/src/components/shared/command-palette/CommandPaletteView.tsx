@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TextInputView } from '@salilvnair/dui';
 import { useTabsStore, type Protocol } from '../../../store/tabs-store';
+import { useK8sStore } from '../../../store/k8s-store';
+import { useDk8sSearchStore } from '../../../store/dk8s-search-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { useDevToolsStore } from '../../../store/devtools-store';
 import { useEnvStore } from '../../../store/env-store';
@@ -13,6 +15,7 @@ import {
   SunIcon, CpuIcon, AgentIcon, CodeBracketsIcon, FolderImportIcon,
   ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge,
   ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, BookOpenIcon,
+  Dk8sIcon, StethoscopeIcon, RefreshIcon,
 } from '../../../icons';
 import './CommandPaletteView.css';
 
@@ -201,6 +204,57 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
         { id: 'nav-settings', icon: <SettingsIcon size={15} />, label: 'Settings', keywords: ['preferences', 'theme', 'llm'], run: () => useTabsStore.getState().openSettingsTab() },
         { id: 'nav-wiki', icon: <BookOpenIcon size={15} />, label: 'Daakia Wiki', keywords: ['docs', 'documentation', 'help', 'guide'], run: () => useTabsStore.getState().openDaakiaWikiTab() },
         { id: 'nav-ai-actions', icon: <SparkleIcon size={15} />, label: 'AI Actions…', keywords: ['inline', 'features', 'sparkle', 'ai tools'], to: 'ai-actions' },
+      ],
+    },
+    {
+      /*
+        dk8s, from wherever you are.
+
+        Every one of these took a tab switch and then a click inside it, which
+        is the thing this palette exists to remove — and diagnosing a cluster
+        is when you are least inclined to go looking for the button. Each entry
+        opens the tab first, because none of them mean anything without it.
+      */
+      heading: 'dk8s — Kubernetes',
+      items: [
+        {
+          id: 'dk8s-open', icon: <Dk8sIcon size={15} />, label: 'Open dk8s',
+          keywords: ['kubernetes', 'k8s', 'cluster', 'pods'],
+          run: () => useTabsStore.getState().openDk8sTab(),
+        },
+        {
+          id: 'dk8s-pods', icon: <LayersIcon size={15} />, label: 'dk8s: Pods',
+          keywords: ['kubernetes', 'k8s', 'workloads', 'containers', 'crashloop'],
+          run: () => {
+            useTabsStore.getState().openDk8sTab();
+            useK8sStore.getState().setPanel('pods');
+          },
+        },
+        {
+          id: 'dk8s-search', icon: <SearchIcon size={15} />, label: 'dk8s: Search logs everywhere',
+          keywords: ['kubernetes', 'k8s', 'grep', 'logs', 'across pods', 'find'],
+          run: () => {
+            useTabsStore.getState().openDk8sTab();
+            useK8sStore.getState().setPanel('pods');
+            useDk8sSearchStore.getState().openSearch();
+          },
+        },
+        {
+          id: 'dk8s-artifacts', icon: <StethoscopeIcon size={15} />, label: 'dk8s: Artifacts',
+          keywords: ['heap dump', 'thread dump', 'hprof', 'jfr', 'collected', 'analyzer'],
+          run: () => {
+            useTabsStore.getState().openDk8sTab();
+            useK8sStore.getState().setPanel('artifacts');
+          },
+        },
+        {
+          id: 'dk8s-refresh', icon: <RefreshIcon size={15} />, label: 'dk8s: Refresh pods',
+          keywords: ['kubernetes', 'k8s', 'reload', 'rewatch', 'stale'],
+          run: () => {
+            useTabsStore.getState().openDk8sTab();
+            useK8sStore.getState().startWatch();
+          },
+        },
       ],
     },
     {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AuthEditor, ScriptsEditor } from '..';
 import { InfoCircleIcon } from '../../../icons';
 import { ModalView, ButtonView, TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '@salilvnair/dui';
+import { getMethodColors } from '../../../colors/daakia-colors';
 import { ExecutionSettingsEditor } from '../settings/ExecutionSettingsEditor';
 import { useEffectiveSettings } from '../settings/use-effective-settings';
 import type { ExecutionSettings } from '../settings/execution-settings';
@@ -27,6 +28,14 @@ interface CollectionPropertiesModalProps {
   /** Needed to ask the host what this collection inherits. */
   collectionId?: string;
   collectionName: string;
+  /**
+   * How many requests it holds, by HTTP method.
+   *
+   * Passed in rather than derived here: the tree lives in the panel that owns
+   * it, and a modal that went looking for it would need the whole collections
+   * service to render a title.
+   */
+  methodCounts?: Record<string, number>;
   properties: CollectionProperties;
   onSave: (props: CollectionProperties) => void;
   onClose: () => void;
@@ -40,7 +49,7 @@ const TABS: TabItem[] = [
   { id: 'settings',      label: 'Settings' },
 ];
 
-export function CollectionPropertiesModal({ open, collectionId, collectionName, properties, onSave, onClose }: CollectionPropertiesModalProps) {
+export function CollectionPropertiesModal({ open, collectionId, collectionName, properties, methodCounts, onSave, onClose }: CollectionPropertiesModalProps) {
   const [activeTab, setActiveTab] = useState('headers');
   const [headers, setHeaders]                     = useState<KeyValueTableRow[]>(properties.headers as KeyValueTableRow[]);
   const [authType, setAuthType]                   = useState(properties.authType);
@@ -60,11 +69,24 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
     onClose();
   };
 
+  /*
+    Ordered by how many there are, so the shape of the collection reads off
+    the row — a mostly-GET collection looks different from a mostly-POST one
+    at a glance, which alphabetical order would hide.
+  */
+  const METHOD_COLORS = getMethodColors();
+  const colorFor = (m: string) =>
+    (METHOD_COLORS as Record<string, string>)[m] ?? 'var(--color-text-muted)';
+  const methods: [string, number][] = Object.entries(methodCounts ?? {})
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const total = methods.reduce((n, [, c]) => n + c, 0);
+
   return (
     <ModalView
       open={open}
       onClose={onClose}
-      title={collectionName ? `Collection Properties — ${collectionName}` : 'Collection Properties'}
+      title="Collection Properties"
       size="xl"
       noPadding
       footerRight={
@@ -73,6 +95,42 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
         </ButtonView>
       }
     >
+      {/*
+        Which collection this is, before anything you can change about it.
+
+        The name was appended to the dialog's title, at title weight and title
+        colour, where it read as part of the phrase rather than as the subject
+        of it — and a long one was simply cut off. It gets its own line, and
+        the counts beside it answer the question the name raises: how much is
+        in here, and of what kind.
+      */}
+      <div className="flex items-center gap-2.5 flex-wrap px-3 pt-3 pb-1">
+        <span className="text-[16px] font-semibold truncate"
+              style={{ color: 'var(--color-text-primary)', maxWidth: '46ch' }}>
+          {collectionName || 'Untitled collection'}
+        </span>
+        {!!total && (
+          <span className="text-[10.5px] font-semibold px-2 py-[3px] rounded-full shrink-0"
+                style={{
+                  color: 'var(--color-accent)',
+                  background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--color-accent) 32%, transparent)',
+                }}>
+            {total} {total === 1 ? 'request' : 'requests'}
+          </span>
+        )}
+        {methods.map(([method, count]) => (
+          <span key={method}
+                className="text-[10px] font-bold px-1.5 py-[3px] rounded shrink-0 tracking-wide"
+                style={{
+                  color: colorFor(method),
+                  background: `color-mix(in srgb, ${colorFor(method)} 15%, transparent)`,
+                }}>
+            {method} {count}
+          </span>
+        ))}
+      </div>
+
       {/* Tab bar */}
       <div className="px-3 pt-2.5 pb-0" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <TabView
