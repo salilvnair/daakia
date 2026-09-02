@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
-import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon } from '../../../icons';
+import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon, BracesIcon, XmlTagIcon } from '../../../icons';
 import { getFilterMenu, type FilterMenu } from './filter-provider';
 import { jsonPathLevels, xPathLevels } from '@salilvnair/dui';
 
@@ -284,6 +284,32 @@ const TS_LANGUAGES = new Set(['javascript', 'typescript']);
 const COPY_PATH = 'copyPath:';
 
 /*
+  How far up the submenu goes.
+
+  A path is as deep as the document, and a deeply nested body would hand you
+  twenty rows to read past — the menu stops being a shortcut somewhere around
+  the sixth. The near ancestors are the ones worth offering: the root and the
+  couple below it are short enough to type, and nobody scrolls a context menu
+  to find them.
+*/
+const MAX_LEVELS = 6;
+
+/** Past this a single row stretches the menu wider than the text it sits in. */
+const MAX_LABEL = 46;
+
+/*
+  Trimmed from the front, not the back.
+
+  The end of a path is what distinguishes it — `…items[1].id` says which one,
+  `$.data.orders.items…` says nothing the row above it did not. Only the label
+  is shortened; the id still carries the whole path, so what gets copied is
+  never what was displayed.
+*/
+function shortLabel(path: string): string {
+  return path.length <= MAX_LABEL ? path : '…' + path.slice(-(MAX_LABEL - 1));
+}
+
+/*
   The path to whatever was right-clicked, as a submenu of every level.
 
   Reading a value out of a response and then writing the expression that
@@ -305,6 +331,7 @@ function pathGroup(editor: any, at: { x: number; y: number }): MonacoMenuItem[][
 
   const language = model.getLanguageId?.();
   if (language !== 'json' && language !== 'xml') return [];
+  const isJson = language === 'json';
 
   // Which key or tag is under the pointer — the coordinates are the question,
   // so the cursor position is no use here; it is wherever it was left.
@@ -313,25 +340,43 @@ function pathGroup(editor: any, at: { x: number; y: number }): MonacoMenuItem[][
 
   const text = model.getValue();
   const offset = model.getOffsetAt(position);
-  const levels = language === 'json'
-    ? jsonPathLevels(text, offset)
-    : xPathLevels(text, offset);
+  const levels = isJson ? jsonPathLevels(text, offset) : xPathLevels(text, offset);
   if (!levels.length) return [];
 
   const deepest = levels[levels.length - 1]!;
+  const inner = [...levels].reverse();
+  const shownLevels = inner.slice(0, MAX_LEVELS);
+  const hiddenLevels = inner.length - shownLevels.length;
   return [[{
     id: `${COPY_PATH}${deepest}`,
-    label: language === 'json' ? 'Copy JSON path' : 'Copy XPath',
-    icon: <CopyIcon size={14} />,
-    iconColor: 'var(--color-ctx-duplicate)',
+    label: isJson ? 'Copy JSON path' : 'Copy XPath',
+    /*
+      The notation, not the verb.
+
+      A copy icon here would be the third one in the menu and say nothing
+      about which of the two entries this is. Braces and a tag say it at a
+      glance, in the colours the app already uses for those formats.
+    */
+    icon: isJson ? <BracesIcon size={14} /> : <XmlTagIcon size={14} />,
+    iconColor: isJson ? 'var(--color-warning)' : 'var(--color-protocol-soap)',
     /*
       The parent copies the innermost path on its own, so the common case is
       one click; the submenu is there for the ancestors. Reversed, so what you
       clicked is first rather than last.
     */
-    submenu: [...levels].reverse().map(path => ({
+    submenu: shownLevels.map((path, i) => ({
       id: `${COPY_PATH}${path}`,
-      label: path,
+      label: shortLabel(path),
+      /*
+        The cap admits itself on the last row it kept.
+
+        A list that stops at six and says nothing reads as the whole ancestry,
+        and someone looking for a level that is not there would conclude the
+        path was wrong rather than that the menu was short.
+      */
+      shortcut: i === shownLevels.length - 1 && hiddenLevels > 0
+        ? `+${hiddenLevels} above`
+        : undefined,
     })),
   }]];
 }
@@ -422,13 +467,31 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
             break;
           }
           case 'paste': {
+            /*
+              Two ways in, because the first one is often not allowed.
+
+              `navigator.clipboard.readText()` needs the `clipboard-read`
+              permission, which a webview frequently denies outright — and the
+              failure landed in an empty catch, so Paste did nothing and said
+              nothing, which is indistinguishable from an empty clipboard.
+
+              Monaco's own paste action goes through the browser's native
+              clipboard path instead, which is permitted by the click that
+              opened this menu. The native inputs above already did exactly
+              this; the editor branch had been left behind.
+            */
+            let pasted = false;
             try {
               const text = await navigator.clipboard.readText();
-              if (text) {
-                const sel = editor.getSelection();
-                if (sel) editor.executeEdits('contextmenu', [{ range: sel, text, forceMoveMarkers: true }]);
+              const sel = editor.getSelection();
+              if (text && sel) {
+                editor.executeEdits('contextmenu', [{ range: sel, text, forceMoveMarkers: true }]);
+                pasted = true;
               }
-            } catch { /* clipboard denied */ }
+            } catch { /* fall through to the editor's own paste */ }
+            if (!pasted) {
+              editor.trigger('contextmenu', 'editor.action.clipboardPasteAction', null);
+            }
             break;
           }
           case 'selectAll':
@@ -542,7 +605,17 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
                 type="button"
                 className="w-full flex items-center gap-2.5 px-3.5 py-[6px] text-[12.5px] text-left cursor-pointer transition-colors text-[var(--color-text-primary)] hover:bg-[var(--color-item-hover-bg)]"
               >
-                <span className="w-4 shrink-0" />
+                {/* A row with a submenu drew a blank spacer where its icon
+                    goes, so an icon set on it was silently dropped — every
+                    other row in this menu shows one. */}
+                {item.icon
+                  ? (
+                    <span className="w-4 shrink-0 flex items-center justify-center"
+                          style={{ color: item.iconColor ?? 'var(--color-text-muted)' }}>
+                      {item.icon}
+                    </span>
+                  )
+                  : <span className="w-4 shrink-0" />}
                 <span className="flex-1">{item.label}</span>
                 <ChevronRightIcon size={12} className="text-[var(--color-text-muted)]" />
               </button>

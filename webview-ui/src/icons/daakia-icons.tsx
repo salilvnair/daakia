@@ -1835,6 +1835,15 @@ export function XCircleIcon(props: IconProps) {
   );
 }
 
+export function BracesIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1" />
+      <path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1" />
+    </svg>
+  );
+}
+
 export function XmlTagIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

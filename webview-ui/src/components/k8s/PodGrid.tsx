@@ -39,7 +39,6 @@ const ACCENT = 'var(--color-dk8s)';
 /* Amber, not the dk8s accent: a star is a personal mark, not a status, and
    reusing the accent made starred rows look selected. */
 const FAV_COLOR = 'var(--color-warning)';
-const SCOPE_PREF = 'dk8s.pods.scope';
 
 // ── Cluster pulse ───────────────────────────────────────────────────────────
 
@@ -666,9 +665,16 @@ export function PodGrid() {
     filterable.
   */
   const favKeys = useFavoriteKeys();
-  const favScope = (useUiStateStore(s => s.prefs[SCOPE_PREF]) ?? 'fav') as 'fav' | 'all';
-  const setFavScope = (v: 'fav' | 'all') =>
-    useUiStateStore.getState().setPref(SCOPE_PREF, v);
+  /*
+    Not persisted. Opening dk8s starts on starred, every time.
+
+    It used to be a saved preference, so one look at everything left the tab
+    on `all` for good — and the pods you starred, which is the whole reason
+    you starred them, stopped being what you saw on arrival. Switching to
+    `all` is a thing you do to go and find something, not a setting you mean
+    to change; it lasts as long as you are looking.
+  */
+  const [favScope, setFavScope] = useState<'fav' | 'all'>('fav');
   const scope = favKeys.length === 0 ? 'all' : favScope;
 
   const visible = useMemo(() => {
