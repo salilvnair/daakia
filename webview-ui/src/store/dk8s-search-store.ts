@@ -167,8 +167,39 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   // clear any picks a previous Search Everywhere left behind, or they would
   // silently override it.
   openSearch: () => set({ open: true, picked: [], pickerOpen: false }),
-  // The way back is dropped on a deliberate close: you chose to leave.
-  closeSearch: () => set({ open: false, cameFromSearch: false }),
+  /*
+    A deliberate close leaves nothing behind.
+
+    Only `open` was cleared, so reopening showed the previous run entire — its
+    query, its counts, its result rows, and its ticked pods — while the header
+    said "0 pods selected", because the selection had been reset and the
+    results had not. A dialog that opens onto someone else's answer is worse
+    than an empty one: the numbers look current and are not.
+
+    The typed query and its results go; the preferences beside them stay.
+    `regex`, `match case`, the tail length and the context width are how you
+    like to search rather than what you searched for, and re-setting them
+    every time would be its own annoyance.
+
+    Not shared with `jumpedToPod`, which also closes the dialog. That is the
+    path where you open a pod from a hit and come back — the results are
+    exactly what you are coming back to.
+  */
+  closeSearch: () => set(s => ({
+    open: false,
+    cameFromSearch: false,
+    options: { ...s.options, query: '' },
+    groups: [],
+    collapsed: [],
+    filesOpen: [],
+    picked: [],
+    pickerOpen: false,
+    archiveSearched: false,
+    scanningArchive: false,
+    running: false,
+    progress: { done: 0, total: 0 },
+    resultScroll: 0,
+  })),
 
   setPicked: (picked) => set({ picked }),
   setPickerOpen: (pickerOpen) => set({ pickerOpen }),
