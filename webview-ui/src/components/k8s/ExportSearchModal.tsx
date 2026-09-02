@@ -245,10 +245,21 @@ export function ExportSearchModal({ pods, onClose }: {
           <SegmentedControlView
             value={String(contextLines)}
             onChange={v => setContextLines(Number(v))}
-            options={CONTEXT_CHOICES.map(n => ({
-              value: String(n),
-              label: n === 0 ? 'none' : `±${n >= 1000 ? `${n / 1000}k` : n}`,
-            }))}
+            /*
+              The inherited value earns a segment of its own.
+
+              The list is a set of round numbers, and the starting value comes
+              from the search you just ran — ±2 by default, which is in no
+              list. Nothing highlighted, so the control looked unset while the
+              export happily wrote ±2: the one state a segmented control must
+              never be in is "the truth is not on screen".
+            */
+            options={[...new Set([...CONTEXT_CHOICES, contextLines])]
+              .sort((a, b) => a - b)
+              .map(n => ({
+                value: String(n),
+                label: n === 0 ? 'none' : `±${n >= 1000 ? `${n / 1000}k` : n}`,
+              }))}
             size={SIZE}
             density="compact"
             accentColor={ACCENT}
