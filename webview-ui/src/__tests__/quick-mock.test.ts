@@ -1,6 +1,6 @@
 /** Smoke tests — sidebar "Mock Request" routes each protocol to its own Quick Mocks server. */
 import { describe, it, expect } from 'vitest';
-import { appendQuickMocks, createQuickMockServer, hostVariablesOf, quickMockServerName, resolveMockProtocol } from '../components/mock/quick-mock';
+import { appendQuickMocks, createQuickMockServer, dedupeRoutes, hostVariablesOf, quickMockServerName, resolveMockProtocol } from '../components/mock/quick-mock';
 
 describe('resolveMockProtocol', () => {
   it('defaults to REST', () => {
@@ -148,5 +148,77 @@ describe('which variable to repoint', () => {
 
   it('ignores a variable that is only in the path', () => {
     expect(hostVariablesOf(['/users/{{id}}'])).toEqual([]);
+  });
+});
+
+/*
+  One route per method and path.
+
+  A collection holds the same endpoint many times over — the same POST with
+  three different bodies, a GET saved twice under different folders — and each
+  became its own route, so 52 requests produced 52 routes with the same path
+  repeated down the list. Only the first could ever match.
+*/
+describe('deduplicating routes', () => {
+  const rest = () => createQuickMockServer('rest');
+  const req = (method: string, url: string) => ({ name: url, method, url });
+
+  it('collapses repeats of the same method and path', () => {
+    const s = appendQuickMocks(rest(), [
+      req('POST', '{{emailServer}}/email/inbound/excel'),
+      req('POST', '{{emailServer}}/email/inbound/excel'),
+      req('POST', '{{emailServer}}/email/inbound/excel'),
+    ]);
+    expect(s.routes).toHaveLength(1);
+    expect(s.routes[0]!.path).toBe('/email/inbound/excel');
+  });
+
+  it('keeps the same path under a different method', () => {
+    const s = appendQuickMocks(rest(), [
+      req('GET', '{{backend}}/orders'),
+      req('POST', '{{backend}}/orders'),
+    ]);
+    expect(s.routes.map(r => `${r.method} ${r.path}`)).toEqual(['GET /orders', 'POST /orders']);
+  });
+
+  /*
+    Inherent to pointing several variables at one mock: two services that were
+    distinct become one path. It is a merge worth reporting, which is what the
+    returned count is for.
+  */
+  it('merges two services that share a sub-path once the host is gone', () => {
+    const s = appendQuickMocks(rest(), [
+      req('GET', '{{emailServer}}/health'),
+      req('GET', '{{validationService}}/health'),
+    ]);
+    expect(s.routes).toHaveLength(1);
+  });
+
+  it('adds nothing when the routes are already there', () => {
+    const first = appendQuickMocks(rest(), [req('GET', '{{backend}}/a')]);
+    const second = appendQuickMocks(first, [req('GET', '{{backend}}/a')]);
+    expect(second.routes).toHaveLength(1);
+  });
+
+  /*
+    Re-running Mock must not overwrite work. A route that has been given a
+    body is worth more than the empty one that would replace it.
+  */
+  it('leaves an edited route alone rather than replacing it', () => {
+    const first = appendQuickMocks(rest(), [req('GET', '{{backend}}/a')]);
+    const edited = { ...first, routes: [{ ...first.routes[0]!, body: '{"real":true}' }] };
+    const again = appendQuickMocks(edited, [req('GET', '{{backend}}/a')]);
+    expect(again.routes[0]!.body).toBe('{"real":true}');
+  });
+
+  it('reports what it added and what it merged', () => {
+    const existing = appendQuickMocks(rest(), [req('GET', '{{backend}}/a')]);
+    const r = dedupeRoutes(existing.routes, [
+      { ...existing.routes[0]! },
+      { ...existing.routes[0]!, path: '/b' },
+    ]);
+    expect(r.added).toBe(1);
+    expect(r.merged).toBe(1);
+    expect(r.routes).toHaveLength(2);
   });
 });

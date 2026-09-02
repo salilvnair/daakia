@@ -295,6 +295,40 @@ export function quickMockStubNoun(protocol: MockServerProtocol, count: number): 
 }
 
 /**
+ * One route per method and path.
+ *
+ * A collection holds many requests against the same endpoint — the same POST
+ * with three different bodies, a GET saved twice under different folders — and
+ * each became its own route, so mocking a collection of 52 requests produced
+ * 52 routes with the same path repeated down the list. Only the first could
+ * ever match; the rest were noise that made the real ones hard to find.
+ *
+ * Stripping the host makes this sharper rather than milder: `{{emailServer}}/health`
+ * and `{{validationService}}/health` are different endpoints today and the same
+ * `/health` once a single mock stands in for both. That is inherent to
+ * pointing several variables at one mock, and it is a merge worth reporting
+ * rather than performing quietly — see the count returned here.
+ *
+ * Existing routes win. Re-running Mock on a collection should leave the
+ * responses already edited alone: a route that has been given a body is worth
+ * more than the empty one that would replace it.
+ */
+export function dedupeRoutes(
+  existing: MockRoute[], incoming: MockRoute[],
+): { routes: MockRoute[]; added: number; merged: number } {
+  const seen = new Set(existing.map(r => `${r.method} ${r.path}`));
+  const kept: MockRoute[] = [];
+  let merged = 0;
+  for (const route of incoming) {
+    const key = `${route.method} ${route.path}`;
+    if (seen.has(key)) { merged++; continue; }
+    seen.add(key);
+    kept.push(route);
+  }
+  return { routes: [...existing, ...kept], added: kept.length, merged };
+}
+
+/**
  * Append one stub per request to `server`, in whatever shape that server's protocol uses.
  * Returns a new server — the caller swaps it into its list.
  */
@@ -319,6 +353,6 @@ export function appendQuickMocks(server: MockServer, reqs: QuickMockRequest[]): 
     case 'ai':
       return { ...server, aiScenarios: [...(server.aiScenarios || []), ...reqs.map(toAiScenario)] };
     default:
-      return { ...server, routes: [...server.routes, ...reqs.map(toRoute)] };
+      return { ...server, routes: dedupeRoutes(server.routes, reqs.map(toRoute)).routes };
   }
 }

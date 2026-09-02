@@ -157,12 +157,28 @@ export function MockServerPanel() {
           for (const [proto, reqs] of byProtocol) {
             const name = quickMockServerName(proto);
             const existing = updated.find(s => s.protocol === proto && s.name === name);
-            const merged = appendQuickMocks(existing ?? createQuickMockServer(proto), reqs);
+            const before = existing ?? createQuickMockServer(proto);
+            const merged = appendQuickMocks(before, reqs);
             updated = existing
               ? updated.map(s => s.id === merged.id ? merged : s)
               : [...updated, merged];
             focusId = merged.id;
-            summary.push(`${reqs.length} ${quickMockStubNoun(proto, reqs.length)} to "${name}"`);
+            /*
+              What was actually added, not what was asked for.
+
+              Requests collapse into routes: a collection holds the same
+              endpoint several times over, and once the host is stripped two
+              services can share a path. Reporting the request count would
+              claim routes that are not there.
+            */
+            const added = proto === 'rest'
+              ? merged.routes.length - before.routes.length
+              : reqs.length;
+            const collapsed = reqs.length - added;
+            summary.push(
+              `${added} ${quickMockStubNoun(proto, added)} to "${name}"`
+              + (collapsed > 0 ? ` (${collapsed} merged by path)` : ''),
+            );
           }
 
           setServers(updated);
