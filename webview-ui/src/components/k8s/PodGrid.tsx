@@ -113,9 +113,18 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
   return (
     <div className="flex items-center gap-5 flex-wrap px-4 py-2.5 flex-shrink-0"
          style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-      <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)]">
-        Namespace
-      </span>
+      {/*
+        The watch state leads the row.
+
+        A "Namespace" label sat here with nothing after it — a field name whose
+        value was never rendered, so it read as a bug on every screen. The
+        namespaces are already named in the breadcrumb above and on each group
+        heading below, which is why nothing was ever put here.
+
+        What the row does need at its head is whether the numbers to its right
+        are still true, and that is what the watch state says.
+      */}
+      <WatchIndicator />
       <Stat n={counts.total} label="pods" />
       <Stat n={counts.ready} label="ready" color="var(--color-method-get)" />
       {counts.degraded > 0 && <Stat n={counts.degraded} label="degraded" color="var(--color-warning)" />}
@@ -158,9 +167,7 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
         <SearchIcon size={12} />
         Quick Search
       </button>
-      {/* The watch state belongs with the counts, not in the toolbar: it says
-          whether the numbers to its left are still true. */}
-      <WatchIndicator />
+
     </div>
   );
 }
