@@ -291,6 +291,59 @@ describe('searching a mounted volume', () => {
     expect(result.matched).toBe(0);
   });
 
+  /*
+    A window with two ends, over days that have already passed.
+
+    The presets can only reach backwards from now, so this — the ordinary
+    question after an incident — could not be asked at all. The fixture spans
+    2026-08-28 to 08-31, one file per day, which is exactly the shape that
+    makes a wrong boundary visible.
+  */
+  describe('an absolute window', () => {
+    const dayMs = (day: string, end = false) =>
+      Date.parse(`${day}T${end ? '23:59:59.999' : '00:00:00.000'}Z`);
+
+    it('returns only lines from inside the window', async () => {
+      const { matches } = await search('pv-checkout', {
+        query: 'ledger post failed',
+        fromMs: dayMs('2026-08-29'), toMs: dayMs('2026-08-30', true),
+        maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
+      });
+      expect(matches.length).toBeGreaterThan(0);
+      const days = new Set(matches.map(m => m.text.slice(0, 10)));
+      expect([...days].sort()).toEqual(['2026-08-29', '2026-08-30']);
+    });
+
+    it('excludes the day after the window, not just the days before it', async () => {
+      // The upper bound is the new half. Without it this returns 08-31 too,
+      // and a search for "the 29th to the 30th" quietly answers with the 31st.
+      const { matches } = await search('pv-checkout', {
+        query: 'ledger post failed',
+        fromMs: dayMs('2026-08-29'), toMs: dayMs('2026-08-30', true),
+        maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
+      });
+      expect(matches.some(m => m.text.startsWith('2026-08-31'))).toBe(false);
+    });
+
+    it('takes a single day, both ends inside the same file', async () => {
+      const { matches } = await search('pv-checkout', {
+        query: 'ledger post failed',
+        fromMs: dayMs('2026-08-30'), toMs: dayMs('2026-08-30', true),
+        maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,
+      });
+      expect(matches.length).toBeGreaterThan(0);
+      expect(matches.every(m => m.text.startsWith('2026-08-30'))).toBe(true);
+    });
+
+    it('finds nothing in a window that predates every file', async () => {
+      const { result } = await search('pv-checkout', {
+        query: 'ledger post failed',
+        fromMs: dayMs('2020-01-01'), toMs: dayMs('2020-01-02', true),
+      });
+      expect(result.matched).toBe(0);
+    });
+  });
+
   it('still finds everything when no range is set', async () => {
     const { result } = await search('pv-checkout', {
       query: 'ledger post failed', maxMatchesPerPod: 100_000, maxMatchesTotal: 100_000,

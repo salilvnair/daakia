@@ -20,6 +20,7 @@ import {
 } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
+import { TimeWindowPicker, describeWindow, windowError } from './TimeWindow';
 import { ExportSearchModal } from './ExportSearchModal';
 import { postMsg } from '../../vscode';
 import {
@@ -111,7 +112,13 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     picked, pickerOpen, setPicked, setPickerOpen,
     archiveSearched, scanningArchive, filesOpen, toggleFiles,
     setOptions, run, cancel, toggleCollapsed,
+    timeWindow, setTimeWindow,
   } = useDk8sSearchStore();
+
+  // A range whose end precedes its start cannot match anything. Better to say
+  // so and hold the button than to run a search that is guaranteed to be empty
+  // and let the empty result imply the logs are.
+  const windowProblem = windowError(timeWindow);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -266,7 +273,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const canSearch = !!options.query.trim() && chosen.length > 0;
+  const canSearch = !!options.query.trim() && chosen.length > 0 && !windowProblem;
   const totalHits = groups.reduce((n, g) => n + g.result.matched, 0);
   const anyCapped = groups.some(g => g.result.capped);
 
@@ -458,6 +465,21 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           size="md"
           width="100%"
         />
+
+        {/* Its own row: six choices and two date fields do not fit beside the
+            checkboxes, and this is the control most likely to be the reason a
+            search comes back empty. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] uppercase tracking-wider"
+                style={{ color: 'var(--color-text-muted)' }}>
+            how far back
+          </span>
+          <TimeWindowPicker value={timeWindow} onChange={setTimeWindow} accent={ACCENT} />
+          <span className="text-[10.5px]"
+                style={{ color: windowProblem ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
+            {describeWindow(timeWindow)}
+          </span>
+        </div>
 
         <div className="flex items-center gap-3 flex-wrap">
           <CheckboxView label="regex" checked={options.regex} size="md" accentColor={ACCENT}

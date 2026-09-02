@@ -1643,3 +1643,17 @@ input[type="number"] {
   background: color-mix(in srgb, var(--color-error) 18%, transparent);
   color: var(--color-error);
 }
+
+/*
+  The date fields in the search's time window, level with the pills beside them.
+
+  A `compact` segmented control is 26px tall at every size dui offers; the date
+  field is 24 at `sm` and 28 at `md`. Neither matches, so the two controls sat
+  two pixels apart whichever way round it was done. dui applies its `style` prop
+  to the wrapper rather than the trigger, so the height is set here instead.
+*/
+.dk8s-window-dates > div > button {
+  /* `!important` because dui sets the height inline on the trigger, and an
+     inline style beats a stylesheet rule without it. */
+  height: 26px !important;
+}

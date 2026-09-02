@@ -43,6 +43,20 @@ export interface SearchOptions {
   /** How much of each pod's log to scan. */
   tailLines: number;
   sinceSeconds?: number;
+  /**
+   * An absolute window, in epoch milliseconds. Either end may stand alone.
+   *
+   * The relative presets only ever reach backwards from now, so the question
+   * "what happened between the 1st and the 5th" could not be asked at all once
+   * the 5th had passed — the nearest answer was "last 6h" over and over until
+   * the window happened to line up. An incident has a start and an end, and a
+   * log search should be able to take both.
+   *
+   * `fromMs` wins over `sinceSeconds` when both are set; the presets are just
+   * a quicker way of naming a `fromMs`.
+   */
+  fromMs?: number;
+  toMs?: number;
   /** Also scan the previous container — where a crashlooper's failure is. */
   includePrevious: boolean;
   /** Stop storing matches for a pod past this many. Counting continues. */
@@ -189,13 +203,23 @@ class Ring {
   }
 }
 
-function searchArgs(t: SearchTarget, opts: SearchOptions, previous: boolean): string[] {
+export function searchArgs(t: SearchTarget, opts: SearchOptions, previous: boolean): string[] {
   return [
     '--context', t.context, '-n', t.namespace, 'logs', t.pod,
     ...(t.containers && t.containers.length > 1 ? ['--all-containers=true', '--prefix'] : []),
     ...(previous ? ['--previous'] : []),
     '--timestamps',
-    ...(opts.sinceSeconds ? [`--since=${opts.sinceSeconds}s`] : []),
+    /*
+      `kubectl logs` has a lower bound and no upper one.
+
+      `--since-time` is exact where `--since` is relative to when the command
+      happens to run, so an absolute window uses it. There is no `--until`, so
+      the end of the window is enforced per line below — the alternative is
+      pulling the log to now and calling a filter a filter.
+    */
+    ...(opts.fromMs !== undefined
+      ? [`--since-time=${new Date(opts.fromMs).toISOString()}`]
+      : opts.sinceSeconds ? [`--since=${opts.sinceSeconds}s`] : []),
     `--tail=${opts.tailLines}`,
   ];
 }
@@ -234,11 +258,29 @@ async function searchOnePod(
   let awaitingAfter: SearchMatch[] = [];
   let carry = '';
   let lineNo = 0;
+  /*
+    The last timestamp seen, so a line without one is judged by the event that
+    printed it.
+
+    A stack frame carries no time of its own. Judged alone it would be outside
+    every window and dropped, which would cut the exception away from the line
+    that announced it — the half of the log most worth having.
+  */
+  let seenTs: number | undefined;
+  const { fromMs, toMs } = opts;
+  const bounded = fromMs !== undefined || toMs !== undefined;
 
   const handleLine = (raw: string) => {
     lineNo++;
     result.scanned++;
     const parsed = parseLine(raw, lineNo, true);
+
+    if (parsed.ts !== undefined) seenTs = parsed.ts;
+    // kubectl enforces the lower bound itself; both are checked anyway, because
+    // `--since-time` is only as good as the timestamps the runtime wrote.
+    const inWindow = !bounded || seenTs === undefined
+      || ((fromMs === undefined || seenTs >= fromMs)
+        && (toMs === undefined || seenTs <= toMs));
 
     // Fill in trailing context for earlier hits before considering this line.
     if (awaitingAfter.length) {
@@ -248,7 +290,7 @@ async function searchOnePod(
       });
     }
 
-    const hits = match(parsed.text);
+    const hits = inWindow ? match(parsed.text) : null;
     if (hits) {
       result.matched++;
       if (matches.length < opts.maxMatchesPerPod && budget.remaining > 0) {

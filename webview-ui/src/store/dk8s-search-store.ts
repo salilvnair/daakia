@@ -39,6 +39,8 @@ export interface PodSearchResult {
   error?: string;
 }
 
+import { type TimeWindow, defaultWindow, windowOptions } from '../components/k8s/TimeWindow';
+
 export interface SearchOptions {
   query: string;
   regex: boolean;
@@ -46,6 +48,9 @@ export interface SearchOptions {
   contextLines: number;
   tailLines: number;
   sinceSeconds?: number;
+  /** An absolute window, epoch ms, when the range is a `Between…`. */
+  fromMs?: number;
+  toMs?: number;
   includePrevious: boolean;
 }
 
@@ -147,6 +152,15 @@ interface SearchState {
   /** Back from that pod: reopens the results where they were. */
   returnToSearch: () => void;
   setOptions: (patch: Partial<SearchOptions>) => void;
+  /**
+   * The range control's state, shared by the search and its export.
+   *
+   * Held here rather than in either dialog because the export inherits it:
+   * having searched the 1st to the 5th, the export of those results means the
+   * same window, and asking for it twice is how the two come to disagree.
+   */
+  timeWindow: TimeWindow;
+  setTimeWindow: (w: TimeWindow) => void;
   run: (targets: {
     context: string; namespace: string; pod: string;
     containers?: string[]; workload?: string;
@@ -233,6 +247,15 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   returnToSearch: () => set({ open: true, cameFromSearch: false }),
 
   setOptions: (patch) => set(s => ({ options: { ...s.options, ...patch } })),
+
+  timeWindow: defaultWindow(),
+  setTimeWindow: (timeWindow) => set(s => ({
+    timeWindow,
+    // Resolved straight onto the options, so whatever runs the search does not
+    // have to remember to convert it.
+    options: { ...s.options, sinceSeconds: undefined, fromMs: undefined, toMs: undefined,
+               ...windowOptions(timeWindow) },
+  })),
 
   run: (targets) => {
     const { options } = get();

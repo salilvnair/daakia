@@ -12,6 +12,7 @@ import {
   ModalView, ButtonView, TextInputView, DateTimeInputView, SegmentedControlView,
 } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
+import { localInputValue } from './TimeWindow';
 import { softPrimary } from './button-style';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -37,12 +38,6 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       {hint && <span className="text-[10.5px] text-[var(--color-text-muted)]">{hint}</span>}
     </div>
   );
-}
-
-/** `datetime-local` wants `YYYY-MM-DDTHH:mm`, in local time. */
-function localInputValue(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function ExportLogsModal({ onClose, visibleLines }: {

@@ -17,6 +17,9 @@ import { ModalView, ButtonView, SegmentedControlView, CheckboxView } from '@sali
 import type { PodSummary } from '../../store/k8s-store';
 import { useK8sStore } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
+import {
+  TimeWindowPicker, describeWindow, windowError, windowOptions, type TimeWindow,
+} from './TimeWindow';
 import { postMsg } from '../../vscode';
 import { logUiEvent } from '../../store/ui-audit-store';
 import { softPrimary } from './button-style';
@@ -33,16 +36,26 @@ const SIZE = 'md';
  */
 const CONTEXT_CHOICES = [0, 10, 100, 200, 1000, 5000, 10000];
 
-type RangeKind = 'all' | '30m' | '1h' | '2h' | '6h';
-
-/** Named to match the pod list's export, so the two dialogs agree. */
-const RANGE_SECONDS: Record<string, number> = {
-  '30m': 1800, '1h': 3600, '2h': 7200, '6h': 21600,
-};
-
-const RANGE_LABEL: Record<RangeKind, string> = {
-  all: 'All time', '30m': 'Last 30m', '1h': 'Last 1h', '2h': 'Last 2h', '6h': 'Last 6h',
-};
+/**
+ * The window as the whole-log exporter takes it.
+ *
+ * That path predates the search and speaks `LogRange`, which has carried a
+ * `between` since it was written — it was only ever the dialogs that could not
+ * express one.
+ */
+function rangeForWholeLog(w: TimeWindow) {
+  const { sinceSeconds, fromMs, toMs } = windowOptions(w);
+  if (fromMs !== undefined && toMs !== undefined) {
+    return {
+      kind: 'between' as const,
+      fromIso: new Date(fromMs).toISOString(),
+      toIso: new Date(toMs).toISOString(),
+    };
+  }
+  return sinceSeconds !== undefined
+    ? { kind: 'since' as const, seconds: sinceSeconds }
+    : { kind: 'all' as const };
+}
 
 function Field({ label, hint, children }: {
   label: string; hint?: string; children: React.ReactNode;
@@ -91,7 +104,16 @@ export function ExportSearchModal({ pods, onClose }: {
     the pods the search already narrowed down.
   */
   const [scope, setScope] = useState<'matches' | 'whole'>('matches');
-  const [range, setRange] = useState<RangeKind>('all');
+  /*
+    The window comes from the search, not from scratch.
+
+    Having searched the 1st to the 5th, exporting those results means that same
+    window — defaulting back to "All time" here would quietly widen what you
+    asked for, and the file would not match the screen it came from. Still
+    editable: narrowing the export of a wide search is a real thing to want.
+  */
+  const { timeWindow, setTimeWindow } = useDk8sSearchStore();
+  const windowProblem = windowError(timeWindow);
   const [includePrevious, setIncludePrevious] = useState(true);
 
   /*
@@ -132,9 +154,7 @@ export function ExportSearchModal({ pods, onClose }: {
         type: 'dk8s:exportLogs',
         targets: targets.map(t => ({ ...t, containers: t.containers })),
         options: {
-          range: range === 'all'
-            ? { kind: 'all' }
-            : { kind: 'since', seconds: RANGE_SECONDS[range] },
+          range: rangeForWholeLog(timeWindow),
           slice: { kind: 'all' },
           includePrevious,
           keepTimestamps: true,
@@ -151,9 +171,10 @@ export function ExportSearchModal({ pods, onClose }: {
         contextLines,
         combine,
         includePrevious,
-        // The search's own window, expressed the same way the range control
-        // above says it — so "Last 1h" means the same thing in both scopes.
-        sinceSeconds: range === 'all' ? undefined : RANGE_SECONDS[range],
+        // The window as the engine takes it: a preset stays relative, a
+        // `Between…` resolves to two absolute instants.
+        sinceSeconds: undefined, fromMs: undefined, toMs: undefined,
+        ...windowOptions(timeWindow),
       },
     });
   };
@@ -172,7 +193,7 @@ export function ExportSearchModal({ pods, onClose }: {
           <ButtonView
             label={running ? 'Exporting…' : 'Choose folder and export'}
             size="sm" variant="secondary"
-            disabled={running || !pods.length}
+            disabled={running || !pods.length || !!windowProblem}
             onClick={start}
             style={softPrimary(ACCENT)}
           />
@@ -227,18 +248,9 @@ export function ExportSearchModal({ pods, onClose }: {
           />
         </Field>
 
-        <Field
-          label="How far back"
-          hint={range === 'all'
-            ? 'Everything the pod still holds. Kubernetes rotates this, so it is not forever.'
-            : `Only lines from the ${RANGE_LABEL[range].toLowerCase().replace('last ', 'last ')}.`}
-        >
-          <SegmentedControlView
-            value={range}
-            onChange={v => setRange(v as RangeKind)}
-            options={(Object.keys(RANGE_LABEL) as RangeKind[])
-              .map(k => ({ value: k, label: RANGE_LABEL[k] }))}
-            size={SIZE} density="compact" accentColor={ACCENT}
+        <Field label="How far back" hint={describeWindow(timeWindow)}>
+          <TimeWindowPicker
+            value={timeWindow} onChange={setTimeWindow} size={SIZE} accent={ACCENT}
           />
         </Field>
 
@@ -275,9 +287,7 @@ export function ExportSearchModal({ pods, onClose }: {
                 value: String(n),
                 label: n === 0 ? 'none' : `±${n >= 1000 ? `${n / 1000}k` : n}`,
               }))}
-            size={SIZE}
-            density="compact"
-            accentColor={ACCENT}
+            size={SIZE} density="compact" accentColor={ACCENT}
           />
         </Field>
         )}

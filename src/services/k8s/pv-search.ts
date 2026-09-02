@@ -24,6 +24,19 @@ import type { LogLevel } from './k8s-log-stream';
 import { filesForPod, type PvLogConfig, type PvFile, type PodRef } from './pv-logs';
 import { openLog, findTimeOffset } from './log-window';
 
+/**
+ * Where the window starts, in epoch ms, however it was asked for.
+ *
+ * An absolute start beats a relative one — the presets are only a quicker way
+ * of naming a `fromMs`, so if both arrive the explicit one is the answer.
+ */
+function cutoffFor(opts: SearchOptions): number | undefined {
+  if (opts.fromMs !== undefined) return opts.fromMs;
+  return opts.sinceSeconds && opts.sinceSeconds > 0
+    ? Date.now() - opts.sinceSeconds * 1000
+    : undefined;
+}
+
 /** One archived file that matched, for the per-pod file list in the results. */
 export interface PvFileResult {
   rel: string;
@@ -100,9 +113,8 @@ async function scanFile(
     A failure here is not fatal: the offset falls back to 0 and the file is
     scanned in full, which is exactly the old behaviour.
   */
-  const cutoffMs = opts.sinceSeconds && opts.sinceSeconds > 0
-    ? Date.now() - opts.sinceSeconds * 1000
-    : undefined;
+  const cutoffMs = cutoffFor(opts);
+  const untilMs = opts.toMs;
 
   const gz = /\.gz$/i.test(f.file);
 
@@ -180,7 +192,12 @@ async function scanFile(
       */
       const lineTs = timeOf(line);
       if (lineTs !== undefined) seenTs = lineTs;
-      const inRange = cutoffMs === undefined || seenTs === undefined || seenTs >= cutoffMs;
+      // The window is closed at both ends now. The seek below still handles the
+      // lower one by skipping bytes; this is what makes the upper one real,
+      // and what covers a compressed file, which cannot be seeked at all.
+      const inRange = seenTs === undefined
+        || ((cutoffMs === undefined || seenTs >= cutoffMs)
+          && (untilMs === undefined || seenTs <= untilMs));
 
       const own = levelOf(line);
       const level: LogLevel = own !== 'other'
@@ -265,9 +282,25 @@ export async function searchPvForPod(
     return { result, matches };
   }
 
+  /*
+    A file whose last write predates the window holds nothing inside it.
+
+    Its newest line is older than the oldest line asked for, so the whole file
+    can be skipped without opening it. This is what makes a narrow window over
+    a long archive quick rather than merely accurate: searching the 1st to the
+    5th across a year of rotations should not read the other three hundred and
+    sixty days to decide they do not apply.
+
+    Only the lower bound is safe to judge from the file's own timestamp. `mtime`
+    says when the file stopped being written, which bounds its contents from
+    above; nothing in the listing says when it STARTED, so a file that may end
+    inside the window is opened and judged line by line.
+  */
+  const skipBefore = cutoffFor(opts);
   const budget = { left: opts.maxMatchesPerPod };
   for (const f of files) {
     if (signal.cancelled) break;
+    if (skipBefore !== undefined && f.mtime < skipBefore) continue;
     const { result: fr, matches: fm } = await scanFile(
       f, match, opts, ref.pod, ref.namespace, budget, signal,
     );
