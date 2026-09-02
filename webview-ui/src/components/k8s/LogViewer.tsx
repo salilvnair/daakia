@@ -22,6 +22,7 @@ import {
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
+  ChevronLeftIcon,
 } from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
@@ -128,6 +129,108 @@ function FieldFilterChip({ filter, onFlip, onRemove }: {
     </span>
   );
 }
+
+/**
+ * The applied filters, on a row of their own.
+ *
+ * They used to sit inline with the search box, so each one added pushed the
+ * box further right until it was a sliver against the toolbar — the control
+ * you type in kept moving because of things you had already applied. Filters
+ * get their own row above it now, and the box stays where it was.
+ *
+ * The row scrolls rather than wraps. Wrapping would grow the header downward
+ * without limit and shove the log itself off screen, and the log is the thing
+ * being read; the arrows are the same ones the tab bar uses, for the same
+ * reason and with the same behaviour.
+ */
+function FieldFilterStrip({ filters, onFlip, onRemove, onClearAll }: {
+  filters: FieldFilter[];
+  onFlip: (f: FieldFilter) => void;
+  onRemove: (f: FieldFilter) => void;
+  onClearAll: () => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const check = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 0);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }, []);
+
+  useEffect(() => {
+    check();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', check);
+    // The arrows depend on the width available, not only on how many chips
+    // there are — collapsing the AI panel changes one without the other.
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', check); ro.disconnect(); };
+  }, [check, filters.length]);
+
+  const scroll = (dir: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -180 : 180, behavior: 'smooth' });
+  };
+
+  if (!filters.length) return null;
+
+  const arrow = (dir: 'left' | 'right', enabled: boolean) => (
+    <button
+      type="button"
+      onClick={() => scroll(dir)}
+      disabled={!enabled}
+      title={`Scroll filters ${dir}`}
+      aria-label={`Scroll filters ${dir}`}
+      className="flex items-center justify-center w-5 h-5 shrink-0 rounded cursor-pointer
+                 border-none bg-transparent transition-colors disabled:cursor-default"
+      style={{ color: enabled ? 'var(--color-text-secondary)' : 'var(--color-text-muted)',
+               opacity: enabled ? 1 : 0.35 }}
+    >
+      {dir === 'left' ? <ChevronLeftIcon size={11} /> : <ChevronRightIcon size={11} />}
+    </button>
+  );
+
+  return (
+    <div className="flex items-center gap-1.5 px-4 pt-2 pb-1.5 shrink-0">
+      {/* Present only once there is somewhere to scroll, so a single chip does
+          not sit between two dead controls. */}
+      {(canLeft || canRight) && arrow('left', canLeft)}
+
+      <div ref={scrollRef}
+           className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1 min-w-0">
+        {filters.map(f => (
+          <FieldFilterChip
+            key={`${f.field}:${f.value}`}
+            filter={f}
+            onFlip={() => onFlip(f)}
+            onRemove={() => onRemove(f)}
+          />
+        ))}
+      </div>
+
+      {(canLeft || canRight) && arrow('right', canRight)}
+
+      {/* Outside the scroller: the way to undo all of this should not be the
+          one thing you have to scroll to reach. */}
+      <button
+        type="button"
+        onClick={onClearAll}
+        title="Remove every filter"
+        className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded cursor-pointer
+                   border-none bg-transparent text-[10.5px] transition-opacity"
+        style={{ color: 'var(--color-error)', opacity: 0.85 }}
+      >
+        <FilterClearIcon size={11} />
+        Clear all
+      </button>
+    </div>
+  );
+}
+
 
 // ── Density ribbon: vertical, on the right ──────────────────────────────────
 
@@ -917,19 +1020,19 @@ export function LogViewer() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* ── Controls: every strip lives up here ── */}
-      <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0"
+      <div className="flex flex-col shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <LevelChips />
+        {/* Applied filters get the first row, so the controls below them keep
+            their positions however many are applied. */}
+        <FieldFilterStrip
+          filters={logFieldFilters}
+          onFlip={f => addFieldFilter(f)}
+          onRemove={f => removeFieldFilter(f.field, f.value)}
+          onClearAll={() => useK8sStore.getState().clearFieldFilters()}
+        />
 
-        {/* Applied field filters, where they can be seen and undone. */}
-        {logFieldFilters.map(f => (
-          <FieldFilterChip
-            key={`${f.field}:${f.value}`}
-            filter={f}
-            onFlip={() => addFieldFilter(f)}
-            onRemove={() => removeFieldFilter(f.field, f.value)}
-          />
-        ))}
+      <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0">
+        <LevelChips />
 
         {/* Takes whatever is left between the chips and the controls, rather
             than a fixed width with dead space after it. */}
@@ -1140,6 +1243,7 @@ export function LogViewer() {
           <span className="text-[11px]" style={{ color: 'var(--color-error)' }}>error</span>
         )}
         </div>
+      </div>
       </div>
 
       {/* ── Notices, also on top ── */}

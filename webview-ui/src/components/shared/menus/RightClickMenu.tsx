@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
-import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon, BracesIcon, XmlTagIcon } from '../../../icons';
+import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, ChevronDownIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon, BracesIcon, XmlTagIcon } from '../../../icons';
 import { getFilterMenu, type FilterMenu } from './filter-provider';
 import { jsonPathLevels, xPathLevels } from '@salilvnair/dui';
 
@@ -233,6 +233,20 @@ const PEEK_SUBMENU: MonacoMenuItem[] = [
 ];
 
 // Full menu for JS/TS editors (supports Go to Definition, Peek, etc.)
+/*
+  Folding, which every structured body wants and neither menu offered.
+
+  A view operation, not an edit — collapsing a response to its top level is as
+  useful in a read-only viewer as in a body being written, so these survive the
+  read-only filter that strips Format and Change All Occurrences.
+*/
+const FOLD_ITEMS: MonacoMenuItem[] = [
+  { id: 'foldAll', label: 'Fold all', shortcut: 'Ctrl+K Ctrl+0',
+    icon: <ChevronRightIcon size={14} />, iconColor: 'var(--color-ctx-close-batch)' },
+  { id: 'unfoldAll', label: 'Unfold all', shortcut: 'Ctrl+K Ctrl+J',
+    icon: <ChevronDownIcon size={14} />, iconColor: 'var(--color-ctx-close-batch)' },
+];
+
 const MONACO_MENU_GROUPS_FULL: MonacoMenuItem[][] = [
   // Group 1: Edit actions
   [
@@ -249,6 +263,7 @@ const MONACO_MENU_GROUPS_FULL: MonacoMenuItem[][] = [
     { id: 'comment', label: 'Toggle Comment', shortcut: 'Ctrl+/' },
     { id: 'format', label: 'Format Document', shortcut: 'Shift+Alt+F', icon: <WrapLinesIcon size={14} />, iconColor: 'var(--color-ctx-close-saved)' },
   ],
+  FOLD_ITEMS,
   // Group 4: Navigation
   [
     { id: 'goto', label: 'Go to...', submenu: GOTO_SUBMENU },
@@ -267,6 +282,7 @@ const MONACO_MENU_GROUPS_BASIC: MonacoMenuItem[][] = [
   [
     { id: 'goToSymbol', label: 'Go to Symbol...', shortcut: 'Ctrl+Shift+O' },
   ],
+  FOLD_ITEMS,
   [
     { id: 'changeAll', label: 'Change All Occurrences', shortcut: 'Ctrl+F2' },
     { id: 'format', label: 'Format Document', shortcut: 'Shift+Alt+F', icon: <WrapLinesIcon size={14} />, iconColor: 'var(--color-ctx-close-saved)' },
@@ -279,6 +295,21 @@ const MONACO_MENU_GROUPS_BASIC: MonacoMenuItem[][] = [
 
 /** Languages that support Go to Definition, Peek, Rename */
 const TS_LANGUAGES = new Set(['javascript', 'typescript']);
+
+/**
+ * Whether the editor refuses edits.
+ *
+ * `getRawOptions()` reports what was passed in, which for this option comes
+ * back false even on an editor Monaco is treating as read-only — the resolved
+ * value is the one that decides behaviour, and it lives behind a numeric enum
+ * id. Read through the enum where it is available, with the raw options as a
+ * fallback for hosts that expose no monaco global.
+ */
+function isReadOnly(editor: any): boolean {
+  const id = (window as any).monaco?.editor?.EditorOption?.readOnly;
+  if (typeof id === 'number' && editor?.getOption) return !!editor.getOption(id);
+  return !!editor?.getRawOptions?.().readOnly;
+}
 
 /** Carries the path in the id, since actions are dispatched by id alone. */
 const COPY_PATH = 'copyPath:';
@@ -497,6 +528,12 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
           case 'selectAll':
             editor.trigger('contextmenu', 'editor.action.selectAll', null);
             break;
+          case 'foldAll':
+            editor.trigger('contextmenu', 'editor.foldAll', null);
+            break;
+          case 'unfoldAll':
+            editor.trigger('contextmenu', 'editor.unfoldAll', null);
+            break;
           case 'format':
             editor.trigger('contextmenu', 'editor.action.formatDocument', null);
             break;
@@ -541,7 +578,20 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
 
   // Determine menu items based on editor language
   const editorLang = editor?.getModel()?.getLanguageId?.() || '';
-  const baseGroups = TS_LANGUAGES.has(editorLang) ? MONACO_MENU_GROUPS_FULL : MONACO_MENU_GROUPS_BASIC;
+  /*
+    A read-only editor is offered only what it can do.
+
+    Change All Occurrences puts a cursor on every match so that typing rewrites
+    them all — which in a response viewer looks like it merely highlighted
+    them, because there is nothing you can type. Format Document and Toggle
+    Comment are edits too, and equally inert. An entry that cannot work is
+    worse than a missing one: it reads as broken rather than absent.
+  */
+  const readOnly = isReadOnly(editor);
+  const EDITS = new Set(['changeAll', 'format', 'comment', 'rename']);
+  const baseGroups = (TS_LANGUAGES.has(editorLang) ? MONACO_MENU_GROUPS_FULL : MONACO_MENU_GROUPS_BASIC)
+    .map(group => (readOnly ? group.filter(i => !EDITS.has(i.id)) : group))
+    .filter(group => group.length > 0);
   // First, because it is the only entry that depends on where you clicked —
   // everything below acts on the document or the selection and is the same
   // wherever the pointer was.
@@ -557,7 +607,7 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
       <div className="flex items-center gap-0.5 px-2 py-1">
         <button
           type="button"
-          disabled={!hasSelection}
+          disabled={!hasSelection || readOnly}
           onClick={() => executeAction('cut')}
           className="w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--color-item-hover-bg)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ color: 'var(--color-ctx-close)' }}
@@ -577,10 +627,11 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
         </button>
         <button
           type="button"
+          disabled={readOnly}
           onClick={() => executeAction('paste')}
-          className="w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--color-item-hover-bg)]"
+          className="w-8 h-7 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--color-item-hover-bg)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ color: 'var(--color-ctx-pin)' }}
-          title="Paste (Ctrl+V)"
+          title={readOnly ? 'This view is read-only' : 'Paste (Ctrl+V)'}
         >
           <PasteIcon size={15} />
         </button>
