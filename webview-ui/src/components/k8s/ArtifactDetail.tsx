@@ -21,6 +21,7 @@ import { useDk8sArtifactStore } from '../../store/dk8s-artifact-store';
 import { HeapAnalyzerView } from '../doctor/HeapAnalyzerView';
 import { ThreadAnalyzerView } from '../doctor/ThreadAnalyzerView';
 import { LogAnalyzerView } from '../doctor/LogAnalyzerView';
+import { AnalyzerBoundary } from '../doctor/AnalyzerBoundary';
 import { AiSplit } from './AiAnswerPanel';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 
@@ -314,9 +315,13 @@ export function ArtifactDetail() {
           {TABS.map(t => seen.has(t.id) && (
             <div key={t.id} className="flex-1 min-h-0 overflow-hidden"
                  style={{ display: t.id === analyzer ? 'flex' : 'none', flexDirection: 'column' }}>
-              {t.id === 'heap' ? <HeapAnalyzerView />
-                : t.id === 'threads' ? <ThreadAnalyzerView />
-                  : <LogAnalyzerView />}
+              {/* Keyed by the artifact: a dump that breaks a view must not
+                  leave that view broken for the next dump opened into it. */}
+              <AnalyzerBoundary name={t.label} resetKey={`${t.id}:${header ?? ""}`}>
+                {t.id === 'heap' ? <HeapAnalyzerView />
+                  : t.id === 'threads' ? <ThreadAnalyzerView />
+                    : <LogAnalyzerView />}
+              </AnalyzerBoundary>
             </div>
           ))}
         </div>

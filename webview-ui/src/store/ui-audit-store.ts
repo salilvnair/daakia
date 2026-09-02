@@ -285,6 +285,10 @@ export const AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'dk8s.pv_layout_delete', module: 'dk8s', button: 'Delete layout', action: 'delete', description: 'Delete a path layout, and what it was finding', color: 'var(--color-dk8s)', defaultEnabled: true },
   { id: 'dk8s.format_save',      module: 'dk8s', button: 'Save format',   action: 'update', description: 'Save a custom log format',                  color: 'var(--color-dk8s)', defaultEnabled: true },
   { id: 'dk8s.kubectl_path',     module: 'dk8s', button: 'kubectl path',  action: 'update', description: 'Point dk8s at a different kubectl binary',  color: 'var(--color-dk8s)', defaultEnabled: true },
+  // On by default, unlike most of this list: a view that crashed is not a
+  // preference someone opted into recording, it is the one event you want
+  // already captured by the time you go looking for it.
+  { id: 'dk8s.analyzer_error',   module: 'dk8s', button: 'Analyzer',      action: 'error',  description: 'An analyzer view threw while rendering',    color: 'var(--color-error)', defaultEnabled: true },
 ];
 
 // ─── Config (localStorage) ────────────────────────────────────────────────────

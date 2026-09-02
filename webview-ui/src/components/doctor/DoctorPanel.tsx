@@ -19,6 +19,7 @@ import { useUiStateStore } from '../../store/ui-state-store';
 import { HeapAnalyzerView } from './HeapAnalyzerView';
 import { ThreadAnalyzerView } from './ThreadAnalyzerView';
 import { LogAnalyzerView } from './LogAnalyzerView';
+import { AnalyzerBoundary } from './AnalyzerBoundary';
 
 const ACCENT = 'var(--color-doctor)';
 
@@ -105,10 +106,15 @@ export function DoctorPanel() {
 
       {/* Body */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {analyzer === 'heap' ? <HeapAnalyzerView />
-         : analyzer === 'threads' ? <ThreadAnalyzerView />
-         : analyzer === 'logs' ? <LogAnalyzerView />
-         : (
+        {/* Keyed by analyzer as well as wrapped: switching to a different one
+            is a fresh start, not the previous failure carried across. */}
+        {analyzer === 'heap' ? (
+          <AnalyzerBoundary name={active.label} resetKey={analyzer}><HeapAnalyzerView /></AnalyzerBoundary>
+        ) : analyzer === 'threads' ? (
+          <AnalyzerBoundary name={active.label} resetKey={analyzer}><ThreadAnalyzerView /></AnalyzerBoundary>
+        ) : analyzer === 'logs' ? (
+          <AnalyzerBoundary name={active.label} resetKey={analyzer}><LogAnalyzerView /></AnalyzerBoundary>
+        ) : (
         <div className="flex flex-col items-center justify-center h-full px-6 text-center gap-3">
           <StethoscopeIcon size={40} strokeWidth={1} style={{ color: ACCENT, opacity: 0.4 }} />
           <p className="text-[13px] text-[var(--color-text-primary)] m-0">{active.label} analyzer</p>

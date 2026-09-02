@@ -23,6 +23,7 @@ import { HeapHistogramView } from './HeapHistogramView';
 import { HeapTreemapView } from './HeapTreemapView';
 import { HeapGraphView } from './HeapGraphView';
 import { HeapExplainView } from './HeapExplainView';
+import { AnalyzerBoundary } from './AnalyzerBoundary';
 import { HeapGrowthView } from './HeapGrowthView';
 
 const ACCENT = 'var(--color-doctor)';
@@ -354,6 +355,9 @@ export function HeapAnalyzerView() {
   // ── Loaded ──
   const { summary, name } = phase;
   const v = summary.verdict;
+  // Which dump is being read. A sub-view that broke on one dump gets another
+  // chance on the next, rather than staying broken for the session.
+  const dumpKey = name;
   /*
     Sorted here, because the section claims to be sorted.
 
@@ -429,11 +433,40 @@ export function HeapAnalyzerView() {
         */}
       </div>
 
-      {view === 'histogram' && <HeapHistogramView liveBytes={liveBytes} packageFilter={packageFilter} />}
-      {view === 'treemap' && <HeapTreemapView packageFilter={packageFilter} />}
-      {view === 'graph' && <HeapGraphView liveBytes={liveBytes} />}
-      {view === 'growth' && <HeapGrowthView hasBaseline={!!baseline} baselineName={baseline?.name ?? null} packageFilter={packageFilter} />}
-      {view === 'explain' && <HeapExplainView />}
+      {/*
+        A boundary per sub-view, not one around the analyzer.
+
+        These six read different fields off the same parse, and they fail
+        independently — a class name the decoder chokes on breaks the histogram
+        while the treemap of the same dump is fine. Wrapping the analyzer as a
+        whole would take all six down for one, and take the verdict with them:
+        the one view that had already told you what was wrong.
+      */}
+      {view === 'histogram' && (
+        <AnalyzerBoundary name="Histogram" resetKey={dumpKey}>
+          <HeapHistogramView liveBytes={liveBytes} packageFilter={packageFilter} />
+        </AnalyzerBoundary>
+      )}
+      {view === 'treemap' && (
+        <AnalyzerBoundary name="Treemap" resetKey={dumpKey}>
+          <HeapTreemapView packageFilter={packageFilter} />
+        </AnalyzerBoundary>
+      )}
+      {view === 'graph' && (
+        <AnalyzerBoundary name="Retention" resetKey={dumpKey}>
+          <HeapGraphView liveBytes={liveBytes} />
+        </AnalyzerBoundary>
+      )}
+      {view === 'growth' && (
+        <AnalyzerBoundary name="Growth" resetKey={dumpKey}>
+          <HeapGrowthView hasBaseline={!!baseline} baselineName={baseline?.name ?? null} packageFilter={packageFilter} />
+        </AnalyzerBoundary>
+      )}
+      {view === 'explain' && (
+        <AnalyzerBoundary name="Explain" resetKey={dumpKey}>
+          <HeapExplainView />
+        </AnalyzerBoundary>
+      )}
       {view === 'verdict' && (
       <div className="flex flex-col gap-4 px-4 py-4 overflow-y-auto flex-1 min-h-0">
 
