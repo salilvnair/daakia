@@ -18,7 +18,7 @@ import { ServerDetail } from './ServerDetail';
 import { MockLogPanel } from './MockLogPanel';
 import type { MockServer, MockRoute, MockServerProtocol } from './mock-types';
 import { createDefaultRoute, createDefaultServer, createOAuthSampleServer, createCrudSampleServer } from './mock-types';
-import { appendQuickMocks, createQuickMockServer, quickMockServerName, quickMockStubNoun, resolveMockProtocol, type QuickMockRequest } from './quick-mock';
+import { hostVariablesOf, appendQuickMocks, createQuickMockServer, quickMockServerName, quickMockStubNoun, resolveMockProtocol, type QuickMockRequest } from './quick-mock';
 
 export { type MockServer, type MockRoute } from './mock-types';
 
@@ -168,7 +168,24 @@ export function MockServerPanel() {
           setServers(updated);
           if (focusId) setActiveServerId(focusId);
           useTabsStore.getState().openMockServerTab();
-          useToastStore.getState().addToast({ type: 'success', message: `Added ${summary.join(', ')}` });
+          /*
+            Say which variable to repoint.
+
+            The routes are stripped of the host on purpose — a mock replaces
+            it — which leaves one step nobody can infer from the result: the
+            environment variable that used to be the host now has to be the
+            mock's address. The routes cannot say that, so the toast does.
+          */
+          const hostVars = hostVariablesOf(reqList.map(r => r.url));
+          const focused = focusId ? updated.find(s => s.id === focusId) : undefined;
+          const where = focused?.port ? `http://localhost:${focused.port}` : 'the mock server';
+          useToastStore.getState().addToast({
+            type: 'success',
+            message: hostVars.length
+              ? `Added ${summary.join(', ')} — point `
+                + `${hostVars.map(v => `{{${v}}}`).join(', ')} at ${where}`
+              : `Added ${summary.join(', ')}`,
+          });
           setTimeout(persistConfigs, 50);
           break;
         }
