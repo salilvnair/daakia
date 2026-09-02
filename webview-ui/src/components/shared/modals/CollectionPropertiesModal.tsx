@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AuthEditor, ScriptsEditor } from '..';
 import { InfoCircleIcon } from '../../../icons';
-import { ModalView, ButtonView, TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '@salilvnair/dui';
+import { ModalView, ButtonView, ChipView, TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '@salilvnair/dui';
 import { getMethodColors } from '../../../colors/daakia-colors';
 import { ExecutionSettingsEditor } from '../settings/ExecutionSettingsEditor';
 import { useEffectiveSettings } from '../settings/use-effective-settings';
@@ -86,8 +86,47 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
     <ModalView
       open={open}
       onClose={onClose}
-      title={collectionName ? `Collection Properties\u2003${collectionName}` : 'Collection Properties'}
+      /*
+        The collection first, then what you are doing to it.
+
+        "Collection Properties" was the heading and the name was appended to
+        it, so the dialog announced its own function louder than the thing it
+        was about — and every properties dialog looked identical at a glance.
+        The name is the subject; "Properties" is the quieter word that says
+        which dialog this is.
+      */
+      title={
+        <span className="flex items-baseline gap-2 min-w-0">
+          <span className="truncate">{collectionName || 'Collection'}</span>
+          <span className="shrink-0 font-normal"
+                style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
+            Properties
+          </span>
+        </span>
+      }
+      /*
+        Capped below the default 85vh. The body is a handful of rows on most
+        tabs, and a dialog that always stood nearly the full height of the
+        window made an empty headers table look like a page.
+      */
+      maxHeight="68vh"
       size="xl"
+      /*
+        DUI's chip, not a hand-rolled span. The app already has one look for a
+        small labelled count, and a second one invented here would be a near
+        miss of it — `rounded={false}` is the squared variant the rest of the
+        product uses for these.
+      */
+      subtitle={total ? (
+        <span className="flex items-center gap-1.5 flex-wrap pt-1">
+          <ChipView label={`${total} ${total === 1 ? 'request' : 'requests'}`}
+                    size="xs" rounded={false} color="var(--color-accent)" />
+          {methods.map(([method, count]) => (
+            <ChipView key={method} label={`${method} ${count}`}
+                      size="xs" rounded={false} color={colorFor(method)} />
+          ))}
+        </span>
+      ) : undefined}
       noPadding
       footerRight={
         <ButtonView variant="primary" size="md" onClick={handleSave}>
@@ -95,48 +134,6 @@ export function CollectionPropertiesModal({ open, collectionId, collectionName, 
         </ButtonView>
       }
     >
-      {/*
-        What the collection holds, under its name in the title.
-
-        The counts answer the question the name raises — how much is in here,
-        and of what kind — and a chip per method in that method's own colour
-        makes the shape of the collection legible without reading any number:
-        a mostly-GET collection and a mostly-POST one look different at a
-        glance.
-      */}
-      {!!total && (
-        <div className="flex items-center gap-1.5 flex-wrap px-3 pt-2.5 pb-0.5">
-          <span className="text-[10.5px] font-semibold px-2 py-[3px] shrink-0"
-                style={{
-                  color: 'var(--color-accent)',
-                  background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
-                  border: '1px solid color-mix(in srgb, var(--color-accent) 34%, transparent)',
-                  borderRadius: 5,
-                  /*
-                    Lit from above: a hairline of white along the top edge and
-                    a soft drop below. It is what gives a flat chip the slight
-                    raised feel of a key rather than a painted rectangle.
-                  */
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(0,0,0,.35)',
-                }}>
-            {total} {total === 1 ? 'request' : 'requests'}
-          </span>
-          {methods.map(([method, count]) => (
-            <span key={method}
-                  className="text-[10px] font-bold px-1.5 py-[3px] shrink-0 tracking-wide"
-                  style={{
-                    color: colorFor(method),
-                    background: `color-mix(in srgb, ${colorFor(method)} 16%, transparent)`,
-                    border: `1px solid color-mix(in srgb, ${colorFor(method)} 40%, transparent)`,
-                    borderRadius: 5,
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16), 0 1px 2px rgba(0,0,0,.35)',
-                  }}>
-              {method} {count}
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* Tab bar */}
       <div className="px-3 pt-2.5 pb-0" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <TabView
