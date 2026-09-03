@@ -87,7 +87,21 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
       allocation names the line that made the garbage, which is the one thing a
       heap dump structurally cannot tell you.
     */
-    const waits = readWaits(chunks, { minMs: 1 });
+    /*
+      Two reads, because Blocking and Probes ask different questions.
+
+      Blocking asks what cost time, so a sub-millisecond park is noise and the
+      1 ms floor is right. Probes asks what this process talked to, where a
+      fast call is still a real dependency and the floor is wrong — a service
+      whose database is on loopback did not stop having a database.
+
+      One call cannot serve both: the floor either hides the endpoints or fills
+      the Blocking list with hundreds of 0.3 ms reads, and `waits.count` on the
+      Blocking tab counts whatever was let through. Two calls, two honest
+      answers.
+    */
+    const waits = readWaits(chunks, { minMs: 1, ioMinMs: Infinity });
+    const probes = readWaits(chunks, { minMs: Infinity, ioMinMs: 0 });
     /*
       The same waits, kept individually for the timeline.
 
@@ -133,6 +147,9 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
         totalMs: waits.totalMs, count: waits.count, wallMs: waits.wallMs,
         sites: waits.sites.slice(0, MAX_ROWS),
         truncated: Math.max(0, waits.sites.length - MAX_ROWS),
+        // Socket and file sites, kept apart from the blocking ones so each
+        // view's totals describe only what that view shows.
+        probes: probes.sites.slice(0, MAX_ROWS),
       },
       allocation: {
         totalBytes: allocation.totalBytes,

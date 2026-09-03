@@ -449,6 +449,11 @@ export function ThreadAnalyzerView() {
           is queueing behind it; until now that was a list, and a list cannot
           show that seven threads are behind ONE lock rather than seven.
         */}
+        {/*
+          The owner's top frames, for the AI evidence. Trimmed to eight because
+          the question is what the owner is doing, and the answer is always in
+          the first few.
+        */}
         {(v.contention ?? []).length > 0 && (
           <div className="flex flex-col gap-2">
             <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
@@ -456,6 +461,27 @@ export function ThreadAnalyzerView() {
             </span>
             <LocksGraph
               deadlocks={(v.deadlocks ?? []).length}
+              onAsk={g => ask({
+                promptKey: 'dk8s.threads.explainLock',
+                title: `Why ${g.waiters.length} thread${g.waiters.length === 1 ? ' is' : 's are'} behind ${g.className ?? 'this monitor'}`,
+                evidence: [
+                  `monitor: ${g.className ?? 'unknown class'} @ ${g.address}`,
+                  g.owner
+                    ? `owner: ${g.owner.name} (${g.owner.state}${g.owner.blockedOn ? `, ${g.owner.blockedOn}` : ''})`
+                    : 'owner: not present in this dump',
+                  `waiting: ${g.waiters.length} — ${g.waiters.map(w => w.name).join(', ')}`,
+                  /*
+                    The owner's stack is the answer to "why is it still
+                    holding", so it goes in rather than being described.
+                  */
+                  g.owner
+                    ? `owner stack:\n${(loaded.threads.find(t => t.name === g.owner!.name)?.frames ?? [])
+                        .slice(0, 8).map(f => `  ${f.raw}`).join('\n')}`
+                    : '',
+                ].filter(Boolean).join('\n'),
+                evidenceLabel: 'CONTENDED MONITOR',
+                podContext: {},
+              })}
               groups={(v.contention ?? []).map((c): LockGroup => {
                 const owner = loaded.threads.find(t => t.name === c.ownerThread);
                 /*

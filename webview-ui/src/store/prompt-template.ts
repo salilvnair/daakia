@@ -366,6 +366,8 @@ export type AiPromptTemplateKey =
   | 'dk8s.threads.explain.system'
   | 'dk8s.threads.explainOne'
   | 'dk8s.threads.explainOne.system'
+  | 'dk8s.threads.explainLock'
+  | 'dk8s.threads.explainLock.system'
   | 'dk8s.heap.explain'
   | 'dk8s.heap.explain.system'
   | 'dk8s.heap.explainOne'
@@ -406,6 +408,8 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
   'dk8s.threads.explain.system': DK8S_SYSTEM['dk8s.threads.explain'] ?? '',
   'dk8s.threads.explainOne': DK8S_USER['dk8s.threads.explainOne'] ?? '',
   'dk8s.threads.explainOne.system': DK8S_SYSTEM['dk8s.threads.explainOne'] ?? '',
+  'dk8s.threads.explainLock': DK8S_USER['dk8s.threads.explainLock'] ?? '',
+  'dk8s.threads.explainLock.system': DK8S_SYSTEM['dk8s.threads.explainLock'] ?? '',
   'dk8s.heap.explain': DK8S_USER['dk8s.heap.explain'] ?? '',
   'dk8s.heap.explain.system': DK8S_SYSTEM['dk8s.heap.explain'] ?? '',
   'dk8s.heap.explainOne': DK8S_USER['dk8s.heap.explainOne'] ?? '',
@@ -788,6 +792,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'dk8s.threads.explain.system': { label: 'Explain a thread dump — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.threads.explainOne': { label: 'Explain one thread', description: 'A single stack: what it is blocked on and what that costs' },
   'dk8s.threads.explainOne.system': { label: 'Explain one thread — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.threads.explainLock': { label: 'Explain a contended lock', description: 'One monitor, its owner and its queue: whether the lock is hot or the owner is stuck' },
+  'dk8s.threads.explainLock.system': { label: 'Explain a contended lock — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.heap.explain': { label: 'Explain a heap dump', description: 'Retained sizes and leak suspects, read as a whole' },
   'dk8s.heap.explain.system': { label: 'Explain a heap dump — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.heap.explainOne': { label: 'Explain one leak suspect', description: 'A single class: what it accumulates and what holds it' },
@@ -967,6 +973,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'dk8s.threads.explain.system': [],
   'dk8s.threads.explainOne': [...DK8S_USER_VARIABLES],
   'dk8s.threads.explainOne.system': [],
+  'dk8s.threads.explainLock': [...DK8S_USER_VARIABLES],
+  'dk8s.threads.explainLock.system': [],
   'dk8s.heap.explain': [...DK8S_USER_VARIABLES],
   'dk8s.heap.explain.system': [],
   'dk8s.heap.explainOne': [...DK8S_USER_VARIABLES],
@@ -1228,6 +1236,7 @@ export const AI_TEMPLATE_CATEGORIES: {
       'dk8s.pod.crashloop',
       'dk8s.threads.explain',
       'dk8s.threads.explainOne',
+      'dk8s.threads.explainLock',
       'dk8s.heap.explain',
       'dk8s.heap.explainOne',
       'dk8s.heap.investigate',
@@ -1264,7 +1273,9 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'dk8s.threads.explain': '#22d3ee',
   'dk8s.threads.explain.system': '#22d3ee',
   'dk8s.threads.explainOne': '#22d3ee',
+  'dk8s.threads.explainLock': '#22d3ee',
   'dk8s.threads.explainOne.system': '#22d3ee',
+  'dk8s.threads.explainLock.system': '#22d3ee',
   'dk8s.heap.explain': '#ec4899',
   'dk8s.heap.explain.system': '#ec4899',
   'dk8s.heap.explainOne': '#ec4899',

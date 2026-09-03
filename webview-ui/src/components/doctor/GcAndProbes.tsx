@@ -40,6 +40,7 @@ export interface ProbeSite {
   count: number;
   totalMs: number;
   maxMs: number;
+  bytes?: number;
   threads: { name: string; count: number; totalMs: number }[];
 }
 
@@ -47,7 +48,9 @@ function bytes(v?: number): string {
   if (v === undefined) return '—';
   if (v < 1024) return `${Math.round(v)} B`;
   if (v < 1024 ** 2) return `${(v / 1024).toFixed(0)} KB`;
-  if (v < 1024 ** 3) return `${(v / 1024 ** 2).toFixed(0)} MB`;
+  // One decimal at MB and above: "4 MB" and "4.4 MB" are the same cell width
+  // and the second one is the measurement.
+  if (v < 1024 ** 3) return `${(v / 1024 ** 2).toFixed(1)} MB`;
   return `${(v / 1024 ** 3).toFixed(1)} GB`;
 }
 
@@ -124,8 +127,15 @@ export function GcView({ gc }: { gc: GcSummary }) {
                     onClick={() => setOpen(isOpen ? null : r.gcId)}>
               <span className="text-[11px] font-mono tabular-nums shrink-0"
                     style={{ width: 60, color: 'var(--color-text-muted)' }}>{clock(r.atMs)}</span>
+              {/*
+                Colour separates a young collection from a full one, because
+                the two mean opposite things: young collections are the JVM
+                working, a full one is the JVM in trouble.
+              */}
               <span className="text-[11.5px] font-mono shrink-0"
-                    style={{ width: 96, color: 'var(--color-dk8s)' }}>{r.name}</span>
+                    style={{ width: 96,
+                             color: /full|major|serialold|psmarksweep|g1full/i.test(r.name)
+                               ? 'var(--color-warning)' : 'var(--color-dk8s)' }}>{r.name}</span>
               <span className="text-[11.5px] font-mono tabular-nums shrink-0"
                     style={{ width: 74, color: slow ? 'var(--color-error)' : 'var(--color-text-primary)' }}>
                 {ms(r.pauseMs)}
@@ -215,9 +225,10 @@ export function ProbesView({ sites, hasRecording }: {
            style={{ color: 'var(--color-text-muted)' }}>
         <span className="flex-1">endpoint</span>
         <span style={{ width: 70, textAlign: 'right' }}>events</span>
+        <span style={{ width: 78, textAlign: 'right' }}>bytes</span>
         <span style={{ width: 80, textAlign: 'right' }}>total wait</span>
         <span style={{ width: 74, textAlign: 'right' }}>max</span>
-        <span style={{ width: 110 }} />
+        <span style={{ width: 110 }}>lifetime</span>
       </div>
 
       {io.map(s => (
@@ -231,6 +242,16 @@ export function ProbesView({ sites, hasRecording }: {
           <span className="text-[11.5px] font-mono tabular-nums"
                 style={{ width: 70, textAlign: 'right', color: 'var(--color-text-secondary)' }}>
             {s.count.toLocaleString()}
+          </span>
+          {/*
+            Bytes moved. An em dash rather than "0 B" where the events carried
+            no count — a socket that transferred nothing and a socket whose
+            payload JFR did not record are different facts.
+          */}
+          <span className="text-[11.5px] font-mono tabular-nums"
+                style={{ width: 78, textAlign: 'right',
+                         color: s.bytes === undefined ? 'var(--color-text-muted)' : 'var(--color-text-secondary)' }}>
+            {s.bytes === undefined ? '—' : bytes(s.bytes)}
           </span>
           <span className="text-[11.5px] font-mono tabular-nums"
                 style={{ width: 80, textAlign: 'right', color: 'var(--color-text-secondary)' }}>

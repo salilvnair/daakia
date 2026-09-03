@@ -216,3 +216,63 @@ describe('text', () => {
     expect(text([])).toBe('');
   });
 });
+
+/*
+  Socket and file I/O, recorded on purpose.
+
+  Neither `under-load.jfr` nor `leaky.jfr` contains a single socket or file
+  event — both workloads are pure CPU and lock contention — so the probe path
+  had no fixture at all and the byte counts were asserted by nobody.
+
+  `sockets.jfr` is 30 seconds of a JVM writing a 64 KB payload over loopback
+  sixty times and reading each one back, from `SockLoad.java` beside it. The
+  payload is the point: 60 x 64 KB is 3,932,160 bytes exactly, so the total is
+  ground truth from the program rather than a number this parser produced once
+  and then adopted as correct.
+*/
+describe('probes — socket I/O', () => {
+  const io = readWaits(
+    JfrChunk.parseAll(readFileSync(join(__dirname, '../../../test/fixtures/jfr/sockets.jfr'))),
+  ).sites.filter(s => s.kind === 'socket' || s.kind === 'file');
+
+  it('finds the loopback endpoint', () => {
+    expect(io.length).toBeGreaterThan(0);
+    expect(io.some(s => /127\.0\.0\.1:\d+/.test(s.target))).toBe(true);
+  });
+
+  it('counts exactly the bytes the program sent', () => {
+    const read = io.filter(s => s.target.endsWith('read'));
+    const total = read.reduce((a, s) => a + (s.bytes ?? 0), 0);
+    // 60 iterations x 64 KB, from SockLoad.java.
+    expect(total).toBe(60 * 64 * 1024);
+  });
+
+  it('leaves bytes undefined on waits that move no payload', () => {
+    /*
+      A monitor is not a byte count. Zero would render as "0 B" and read as a
+      measurement of nothing transferred, which is a different claim from "this
+      kind of wait has no payload".
+    */
+    const waits = readWaits(chunks).sites.filter(s => s.kind === 'monitor' || s.kind === 'park');
+    expect(waits.length).toBeGreaterThan(0);
+    expect(waits.every(s => s.bytes === undefined)).toBe(true);
+  });
+
+  it('does not apply the lock floor to I/O', () => {
+    /*
+      The bug this pins: the handler passes minMs 1 to keep sub-millisecond
+      parks out of the Blocking view, and that floor used to apply to sockets
+      too. Every read in this recording is on loopback and finishes in well
+      under a millisecond, so the Probes view rendered "this application did no
+      socket or file I/O" over a recording containing 480 of them.
+    */
+    const chunks2 = JfrChunk.parseAll(
+      readFileSync(join(__dirname, '../../../test/fixtures/jfr/sockets.jfr')));
+    const io = (o: object) => readWaits(chunks2, o)
+      .sites.filter(s => s.kind === 'socket' || s.kind === 'file');
+
+    expect(io({ minMs: 1 }).length).toBeGreaterThan(0);
+    // ...and the floor still works when asked for explicitly.
+    expect(io({ minMs: 1, ioMinMs: 1000 })).toHaveLength(0);
+  });
+});

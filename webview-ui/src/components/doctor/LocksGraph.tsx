@@ -16,6 +16,7 @@
  * Drawn as SVG rather than a graph library because it is one fixed shape, and
  * a layout engine would be free to arrange it in ways that say less.
  */
+import { AskChip } from './AskChip';
 
 export interface LockGroup {
   /** The monitor's identity from the dump, e.g. `0x00000007c1a0`. */
@@ -23,7 +24,20 @@ export interface LockGroup {
   /** The declared type, when the dump gives one. */
   className?: string;
   owner?: { name: string; state: string; blockedOn?: string };
-  waiters: { name: string; state: string }[];
+  /**
+   * `blockedMs` is present only when the source can measure it.
+   *
+   * A SIGQUIT dump is one instant and carries no clock, so "blocked 4.1 s"
+   * is not a number it can produce; a JFR recording carries every wait with a
+   * duration and can. Showing the state alone where the duration is unknown is
+   * the honest form — an invented elapsed time would be the worst kind of
+   * plausible.
+   */
+  waiters: { name: string; state: string; blockedMs?: number }[];
+}
+
+function waitedFor(v: number): string {
+  return v < 1000 ? `${Math.round(v)} ms` : `${(v / 1000).toFixed(1)} s`;
 }
 
 const OWNER = 'var(--color-success)';
@@ -34,10 +48,15 @@ const MUTED = 'var(--color-text-muted)';
 const ROW_H = 62;
 const W = 900;
 
-export function LocksGraph({ groups, deadlocks }: {
+export function LocksGraph({ groups, deadlocks, onAsk }: {
   groups: LockGroup[];
   /** Cycles the JVM itself reported. */
   deadlocks?: number;
+  /**
+   * Explain one monitor. Omitted where no AI surface is wired, and the chip
+   * simply does not render — a dead sparkle is worse than none.
+   */
+  onAsk?: (g: LockGroup) => void;
 }) {
   const contended = groups.filter(g => g.waiters.length > 0);
 
@@ -77,6 +96,16 @@ export function LocksGraph({ groups, deadlocks }: {
         return (
           <div key={g.address} className="rounded-lg overflow-x-auto"
                style={{ border: '1px solid var(--color-surface-border)', background: 'var(--color-surface)' }}>
+            {onAsk && (
+              <div className="flex items-center gap-2 px-3 py-1.5"
+                   style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+                <span className="text-[10.5px] font-mono truncate min-w-0 flex-1"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                  {g.className ?? g.address}
+                </span>
+                <AskChip onClick={() => onAsk(g)} />
+              </div>
+            )}
             <svg viewBox={`0 0 ${W} ${h}`} style={{ width: '100%', minWidth: 620, height: 'auto', display: 'block' }}
                  role="img"
                  aria-label={`${g.waiters.length} threads waiting to enter ${g.className ?? g.address}`
@@ -144,8 +173,17 @@ export function LocksGraph({ groups, deadlocks }: {
                           fill="var(--color-panel)" stroke={WAITER} strokeWidth={1.3} />
                     <text x={waitX + 16} y={y - 3} fontSize={11.5} fontFamily="ui-monospace, monospace"
                           fill="var(--color-text-primary)">{w.name.slice(0, 26)}</text>
+                    {/*
+                      The thread's own state, not a hardcoded "blocked". A
+                      waiter queued on a monitor via a timed entry is
+                      TIMED_WAITING, and printing "blocked" for it states
+                      something the dump does not say.
+                    */}
                     <text x={waitX + 16} y={y + 13} fontSize={10} fontFamily="ui-monospace, monospace"
-                          fill={WAITER}>blocked</text>
+                          fill={WAITER}>
+                      {w.state.toLowerCase().replace(/_/g, ' ')}
+                      {w.blockedMs !== undefined && ` ${waitedFor(w.blockedMs)}`}
+                    </text>
                   </g>
                 );
               })}

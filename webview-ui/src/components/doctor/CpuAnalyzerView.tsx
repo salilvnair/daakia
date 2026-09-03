@@ -49,7 +49,11 @@ interface Loaded {
     threads: string[];
   };
   telemetry: { fromMs: number; toMs: number; groups: TelemetryGroup[] };
-  waits: { sites: WaitSite[]; totalMs: number; count: number; wallMs: number; truncated: number };
+  waits: {
+    sites: WaitSite[]; totalMs: number; count: number; wallMs: number; truncated: number;
+    /** Socket and file sites, read without the blocking floor. */
+    probes: WaitSite[];
+  };
   allocation: {
     sites: AllocSite[]; totalBytes: number; samples: number;
     weighted: boolean; truncated: number;
@@ -275,7 +279,12 @@ export function CpuAnalyzerView() {
 
       {view === 'probes' && (
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1">
-          <ProbesView sites={loaded.waits?.sites ?? []} hasRecording />
+          {/*
+            `probes`, not `sites`. The blocking list is filtered to waits that
+            cost time; this view wants every endpoint the process touched,
+            however briefly.
+          */}
+          <ProbesView sites={loaded.waits?.probes ?? []} hasRecording />
         </div>
       )}
 

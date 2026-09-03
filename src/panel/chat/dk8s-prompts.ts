@@ -206,6 +206,37 @@ Answer, in this order:
 
 Do not generalise to the rest of the dump — you cannot see it.`;
 
+/**
+ * Explain one contended monitor.
+ *
+ * Distinct from the per-thread prompt because the question is about the
+ * RELATIONSHIP, not any one thread: the fix for "the owner is slow" and the fix
+ * for "the owner is blocked on something else" are opposite, and only the group
+ * shows which one it is.
+ */
+export const DK8S_THREAD_EXPLAIN_LOCK = `${DK8S_PREAMBLE}
+
+━━━ THIS TASK ━━━
+You have ONE contended monitor from a JVM thread dump: the lock, the thread
+that owns it, what that owner is doing, and the threads queued behind it.
+
+Answer, in this order:
+- What the waiting threads are trying to do, read from the monitor's class.
+- Why the owner still holds it. This is the whole question. If the owner is
+  itself blocked — on a socket, a database call, another lock — then the lock
+  is not the problem and widening it will not help; the owner's wait is the
+  problem and every queued thread is paying for it.
+- Whether the queue is evidence of a hot lock (owner running, many short
+  waits) or of a slow critical section (owner blocked, few long waits). Say
+  which, and say what in the dump told you.
+- What to change, concretely: move work out of the synchronized block, replace
+  the monitor with a concurrent structure, or make the owner's blocking call
+  time-bounded.
+
+If the dump names no owner, say so plainly — it usually means the holder is a
+thread the dump did not capture, and that is a fact about the dump, not a
+finding about the application.`;
+
 /** Explain a heap histogram or dump summary. */
 export const DK8S_HEAP_EXPLAIN = `${DK8S_PREAMBLE}
 
@@ -404,6 +435,7 @@ export const DK8S_PROMPTS: Record<string, string> = {
   // answered to it — an unregistered key returns undefined and the handler
   // posts "Unknown prompt", so every sparkle on every thread row failed.
   'dk8s.threads.explainOne': DK8S_THREAD_EXPLAIN_ONE,
+  'dk8s.threads.explainLock': DK8S_THREAD_EXPLAIN_LOCK,
   'dk8s.heap.explain': DK8S_HEAP_EXPLAIN,
   'dk8s.heap.explainOne': DK8S_HEAP_EXPLAIN_ONE,
   'dk8s.heap.investigate': DK8S_HEAP_INVESTIGATE,
