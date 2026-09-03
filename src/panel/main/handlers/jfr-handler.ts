@@ -12,6 +12,8 @@ import { readFileSync } from 'fs';
 import { JfrChunk } from '../../../services/jfr/jfr-chunk';
 import { readCpuSamples, hotSpots, sampleCount, idleCount } from '../../../services/jfr/jfr-cpu';
 import { readTelemetry, groupsOf } from '../../../services/jfr/jfr-telemetry';
+import { readWaits, readGc } from '../../../services/jfr/jfr-waits';
+import { readAllocation } from '../../../services/jfr/jfr-allocation';
 
 type PostMessage = (msg: Record<string, unknown>) => void;
 
@@ -77,6 +79,18 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
     */
     const telemetry = readTelemetry(chunks);
 
+    /*
+      The two views the CPU profile cannot provide.
+
+      An application that spends its life blocked produces almost no execution
+      samples — true, and useless. Waits explain where that time went, and
+      allocation names the line that made the garbage, which is the one thing a
+      heap dump structurally cannot tell you.
+    */
+    const waits = readWaits(chunks, { minMs: 1 });
+    const allocation = readAllocation(chunks);
+    const gc = readGc(chunks);
+
     const rows = hotSpots(samples);
     postMessage({
       type: 'jfr:done',
@@ -106,6 +120,19 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
         toMs: telemetry.toMs,
         groups: groupsOf(telemetry),
       },
+      waits: {
+        totalMs: waits.totalMs, count: waits.count, wallMs: waits.wallMs,
+        sites: waits.sites.slice(0, MAX_ROWS),
+        truncated: Math.max(0, waits.sites.length - MAX_ROWS),
+      },
+      allocation: {
+        totalBytes: allocation.totalBytes,
+        samples: allocation.samples,
+        weighted: allocation.weighted,
+        sites: allocation.sites.slice(0, MAX_ROWS),
+        truncated: Math.max(0, allocation.sites.length - MAX_ROWS),
+      },
+      gc,
       hotSpots: rows.slice(0, MAX_ROWS),
       truncated: Math.max(0, rows.length - MAX_ROWS),
     });

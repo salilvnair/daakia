@@ -18,6 +18,7 @@ import { postMsg } from '../../vscode';
 import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
 import { CpuIcon, CloseCircleIcon, ChevronRightIcon } from '../../icons';
 import { TelemetryCharts, type TelemetryGroup } from './TelemetryCharts';
+import { WaitsView, AllocationView, type WaitSite, type AllocSite } from './WaitsAndAllocation';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -46,6 +47,11 @@ interface Loaded {
     threads: string[];
   };
   telemetry: { fromMs: number; toMs: number; groups: TelemetryGroup[] };
+  waits: { sites: WaitSite[]; totalMs: number; count: number; wallMs: number; truncated: number };
+  allocation: {
+    sites: AllocSite[]; totalBytes: number; samples: number;
+    weighted: boolean; truncated: number;
+  };
   hotSpots: HotSpot[];
   truncated: number;
 }
@@ -58,7 +64,7 @@ interface Loaded {
  * table would answer the second question before the reader has asked the
  * first.
  */
-type SubView = 'telemetry' | 'hotspots';
+type SubView = 'telemetry' | 'hotspots' | 'blocking' | 'allocation';
 
 /** `com.acme.order.OrderService` → `c.a.o.OrderService`, keeping the class. */
 function shortClass(name: string): string {
@@ -209,9 +215,17 @@ export function CpuAnalyzerView() {
           <SegmentedControlView
             value={view}
             onChange={v => setView(v as SubView)}
+            /*
+              Blocking sits beside hot spots, not under it. On a service that
+              contends rather than computes, the CPU tab is nearly empty and
+              this one holds the whole answer — burying it a level down would
+              hide the finding behind the view that could not find it.
+            */
             options={[
               { value: 'telemetry', label: 'Telemetry' },
               { value: 'hotspots', label: `Hot spots${loaded.hotSpots.length ? ` (${loaded.hotSpots.length})` : ''}` },
+              { value: 'blocking', label: `Blocking${loaded.waits?.count ? ` (${loaded.waits.count.toLocaleString()})` : ''}` },
+              { value: 'allocation', label: 'Allocation' },
             ]}
             size="sm" density="compact" accentColor={ACCENT}
           />
@@ -235,6 +249,18 @@ export function CpuAnalyzerView() {
           </ButtonView>
         </div>
       </div>
+
+      {view === 'blocking' && (
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+          <WaitsView waits={loaded.waits} />
+        </div>
+      )}
+
+      {view === 'allocation' && (
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+          <AllocationView allocation={loaded.allocation} />
+        </div>
+      )}
 
       {view === 'telemetry' && (
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
