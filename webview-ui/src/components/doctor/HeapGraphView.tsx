@@ -10,12 +10,23 @@
  * 100× more memory reads as clearly larger without becoming 100× wider.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ReactFlow, Background, Controls, type Node, type Edge } from '@xyflow/react';
+import { ReactFlow, Background, Controls, MarkerType, type Node, type Edge } from '@xyflow/react';
+import { RetentionNode, type RetentionNodeData } from './RetentionNode';
+import { decodeClassName } from './class-name';
 import '@xyflow/react/dist/style.css';
 import { heapQuery, bytes, hueFor, type DominatorChild } from './heap-query';
 
-const COL_W = 260;
-const ROW_H = 54;
+/*
+  Sized for the node, which is now a card rather than a line of text.
+
+  These were 260×54, from when a node was one line high. The card is ~250 wide
+  and ~92 tall with its header strip, badge row, detail row and bar — so every
+  node overlapped the one below it and the columns ran into each other. A
+  layout that overlaps is worse than no layout: it hides the very structure the
+  view exists to show.
+*/
+const COL_W = 320;
+const ROW_H = 116;
 
 interface Loaded {
   row: number;
@@ -27,6 +38,9 @@ interface Loaded {
 }
 
 /** Plain, and matching the other analyzer toolbars. */
+/** One custom node type, defined once so React Flow does not remount them. */
+const NODE_TYPES = { retention: RetentionNode };
+
 const TOOL_BTN: React.CSSProperties = {
   font: 'inherit', fontSize: 10.5, padding: '2px 8px', borderRadius: 5,
   cursor: 'pointer', background: 'var(--color-surface)',
@@ -34,7 +48,11 @@ const TOOL_BTN: React.CSSProperties = {
   color: 'var(--color-text-muted)',
 };
 
-export function HeapGraphView({ liveBytes }: { liveBytes: number }) {
+export function HeapGraphView({ liveBytes, onAsk }: {
+  liveBytes: number;
+  /** Asking about one node, the same gesture the suspects list has. */
+  onAsk?: (className: string, retainedBytes: number, sharePercent: number) => void;
+}) {
   const [nodesData, setNodesData] = useState<Loaded[]>([]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState<number | null>(null);
@@ -103,39 +121,59 @@ export function HeapGraphView({ liveBytes }: { liveBytes: number }) {
         const width = 150 + Math.sqrt(share) * 110;
         const collapsed = n.childCount > 0 && !expanded.has(n.row);
         const id = String(n.row);
+        /*
+          Decoded, not split on dots.
+
+          `[Ljava.lang.Object;` split on '.' gives a name of `Object;` and a
+          package of `[Ljava.lang` — both wrong, and both were on screen. The
+          shared decoder turns it into `java.lang.Object[]`, which is what the
+          histogram has always shown.
+        */
+        const decodedName = decodeClassName(n.className);
+        const simpleName = decodedName.simpleName;
+        const decoded = decodedName.packageName ? decodedName.packageName.split('.') : [];
+        const data: RetentionNodeData = {
+          className: n.className,
+          simpleName,
+          packageName: decoded.join('.'),
+          bytesLabel: bytes(n.retainedBytes),
+          sharePercent: share * 100,
+          childCount: n.childCount,
+          hue: hueFor(n.className),
+          // The root of the tree is the suspect the view opened on, and it is
+          // drawn as the subject: bigger, bolder, with the retained bar.
+          isRoot: n.parent === null,
+          /*
+            The bar is drawn only where it can be read.
+
+            Every top-level dominator has no parent, so keying the bar on
+            "is a root" put a 0.1% sliver under eight nodes — eight lines of
+            chrome carrying nothing. At 1% it is a mark you can actually
+            compare against the one above it.
+          */
+          showBar: share * 100 >= 1,
+          busy: busy === n.row,
+          onAsk: () => onAsk?.(n.className, n.retainedBytes, share * 100),
+        };
         nodes.push({
           id,
+          type: 'retention',
           // A position the reader chose wins over the computed one.
           position: moved[id] ?? { x: depth * COL_W, y: i * ROW_H },
-          data: {
-            label: (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
-                <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {n.className.split('.').pop()}
-                </div>
-                <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 9.5, opacity: 0.75 }}>
-                  {bytes(n.retainedBytes)} · {(share * 100).toFixed(1)}%
-                  {collapsed ? `  ▸ ${n.childCount}` : ''}
-                </div>
-              </div>
-            ),
-          },
-          style: {
-            width, padding: '6px 9px', borderRadius: 7, fontSize: 11,
-            background: 'var(--color-surface)',
-            color: 'var(--color-text-primary)',
-            border: `1px solid ${hueFor(n.className)}`,
-            borderLeft: `3px solid ${hueFor(n.className)}`,
-            opacity: busy === n.row ? 0.5 : 1,
-            cursor: n.childCount > 0 ? 'pointer' : 'default',
-          },
+          data: data as unknown as Record<string, unknown>,
+          // Sizing is the node's own business now; React Flow measures it.
+          style: { width: undefined },
         });
         if (n.parent !== null) {
           edges.push({
             id: `${n.parent}-${n.row}`,
             source: String(n.parent),
             target: String(n.row),
-            style: { stroke: 'var(--color-surface-border)' },
+            // Curved and arrowed: the direction is "holds", and a plain line
+            // leaves the reader to work out which end is which.
+            type: 'bezier',
+            markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--color-text-muted)', width: 14, height: 14 },
+            style: { stroke: 'var(--color-text-muted)', strokeWidth: 1.4, opacity: 0.55 },
           });
         }
       });
@@ -176,8 +214,10 @@ export function HeapGraphView({ liveBytes }: { liveBytes: number }) {
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-3 px-3 py-2 flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <span className="text-[11.5px] text-[var(--color-text-secondary)]">
-          Dominator tree from the GC roots — click a node to expand what it holds
+        <span className="text-[12px] font-semibold font-mono"
+              style={{ color: 'var(--color-text-primary)' }}>Retention</span>
+        <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+          dominator tree — click a node to open what it holds
         </span>
         <div className="flex-1" />
         {error && <span className="text-[11.5px] text-[var(--color-error)]">{error}</span>}
@@ -206,6 +246,7 @@ export function HeapGraphView({ liveBytes }: { liveBytes: number }) {
       </div>
       <div className="flex-1 min-h-0">
         <ReactFlow
+          nodeTypes={NODE_TYPES}
           nodes={nodes}
           edges={edges}
           onNodeClick={onNodeClick}

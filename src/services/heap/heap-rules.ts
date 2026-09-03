@@ -14,6 +14,7 @@
  * Every rule is deterministic. Nothing here consults a model.
  */
 import { displayClassName, type HeapIndex } from './heap-index';
+import { readableClassName } from '../jvm-class-name';
 import { computeClassStats, type ClassStat, type Dominators, type HeapVerdict } from './heap-analysis';
 import type { StringScan } from './heap-redaction';
 
@@ -79,7 +80,7 @@ const unboundedCache: Rule = {
       title: 'Unbounded collection holding most of the heap',
       severity: s.retainedPercent >= 50 ? 'critical' : 'warning',
       category: this.category,
-      detail: `${holder} retains ${mb(s.retainedBytes)} (${s.retainedPercent.toFixed(1)}% of live heap) across ${s.retainedObjects.toLocaleString()} objects${s.accumulates ? `, mostly ${s.accumulates.count.toLocaleString()} × ${s.accumulates.className}` : ''}.`,
+      detail: `${holder} retains ${mb(s.retainedBytes)} (${s.retainedPercent.toFixed(1)}% of live heap) across ${s.retainedObjects.toLocaleString()} objects${s.accumulates ? `, mostly ${s.accumulates.count.toLocaleString()} × ${readableClassName(s.accumulates.className)}` : ''}.`,
       remediation: `Give this collection a bound and an eviction policy. If it is a cache, use one with a size or time limit (Caffeine, Guava) rather than a plain ${holder.split('.').pop()}. If it is a registry, make sure entries are removed on the matching lifecycle event.`,
       bytes: s.retainedBytes,
     };

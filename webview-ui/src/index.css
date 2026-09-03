@@ -1657,3 +1657,22 @@ input[type="number"] {
      inline style beats a stylesheet rule without it. */
   height: 26px !important;
 }
+
+/*
+  Node actions appear on hover.
+
+  A graph with two buttons on every node is a graph of buttons — the shapes
+  and their sizes are the information, and permanent controls compete with
+  them. Kept in CSS rather than React state so the pointer never waits on a
+  re-render, and focus-within so the keyboard reaches them too.
+*/
+.dk8s-retention-node .dk8s-node-actions {
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+.dk8s-retention-node:hover .dk8s-node-actions,
+.dk8s-retention-node:focus-within .dk8s-node-actions {
+  opacity: 1;
+  pointer-events: auto;
+}

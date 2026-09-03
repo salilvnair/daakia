@@ -481,7 +481,14 @@ export function HeapAnalyzerView() {
       )}
       {view === 'graph' && (
         <AnalyzerBoundary name="Retention" resetKey={dumpKey}>
-          <HeapGraphView liveBytes={liveBytes} />
+          <HeapGraphView
+            liveBytes={liveBytes}
+            onAsk={(className, retainedBytes, sharePercent) => askSuspect({
+              className, retainedBytes,
+              retainedPercent: sharePercent,
+              retainedObjects: 0, pathToRoot: [],
+            })}
+          />
         </AnalyzerBoundary>
       )}
       {view === 'growth' && (
@@ -627,7 +634,14 @@ export function HeapAnalyzerView() {
               title={f.title}
               meta={f.ruleId}
               detail={f.detail}
-              remediation={f.remediation}
+              /*
+                The card stops carrying the remediation when the chain below it
+                will show one. It is the chain's last step — "what to change" —
+                and rendering the same paragraph twice, once as a step and once
+                as a trailing line, reads as two different instructions until
+                you notice they are identical.
+              */
+              remediation={v?.suspects[0] ? undefined : f.remediation}
               actions={
                 <AskChip onClick={() => askFinding(f)} />
               }
@@ -641,7 +655,13 @@ export function HeapAnalyzerView() {
                 it lives in your code, and only then what to change, which the
                 card already renders underneath.
               */}
-              {v?.suspects[0] && <LeakChain suspect={v.suspects[0]} />}
+              {v?.suspects[0] && (
+                <LeakChain
+                  suspect={v.suspects[0]}
+                  remediation={f.remediation}
+                  onShowDiff={() => askSuspect(v.suspects[0])}
+                />
+              )}
             </FindingCardView>
           ))}
         </div>

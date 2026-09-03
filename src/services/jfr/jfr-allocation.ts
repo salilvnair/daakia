@@ -16,6 +16,7 @@
  */
 import type { JfrChunk, JfrValue } from './jfr-chunk';
 import { text as str } from './jfr-text';
+import { readableClassName as readableClass } from '../jvm-class-name';
 
 export interface AllocSite {
   /** The type being allocated, e.g. `byte[]`. */
@@ -45,25 +46,6 @@ function num(v: JfrValue | undefined): number {
   return 0;
 }
 
-/**
- * `[B` → `byte[]`, `[Ljava/lang/String;` → `java.lang.String[]`.
- *
- * JFR writes the JVM's internal descriptor, and `[B` at the top of an
- * allocation profile is the single least readable thing this view could show.
- */
-export function readableClass(raw: string): string {
-  let dims = 0;
-  let s = raw;
-  while (s.startsWith('[')) { dims++; s = s.slice(1); }
-  const primitives: Record<string, string> = {
-    B: 'byte', C: 'char', D: 'double', F: 'float',
-    I: 'int', J: 'long', S: 'short', Z: 'boolean',
-  };
-  if (dims && s.length === 1 && primitives[s]) s = primitives[s];
-  else if (s.startsWith('L') && s.endsWith(';')) s = s.slice(1, -1);
-  return s.replace(/\//g, '.') + '[]'.repeat(dims);
-}
-
 function framesOf(e: Record<string, JfrValue>): string[] {
   const trace = e.stackTrace as Record<string, JfrValue> | null;
   const raw = (trace?.frames as JfrValue[] | undefined) ?? [];
@@ -81,6 +63,8 @@ function framesOf(e: Record<string, JfrValue>): string[] {
 }
 
 const ALLOC_TYPES = ['jdk.ObjectAllocationSample', 'jdk.ObjectAllocationInNewTLAB', 'jdk.ObjectAllocationOutsideTLAB'];
+
+export { readableClass };
 
 export function readAllocation(chunks: JfrChunk[], maxStacks = 3): Allocation {
   interface Acc {
