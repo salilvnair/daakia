@@ -63,6 +63,18 @@ export function baseTypeOf(className: string): string {
  */
 export function matchesPackages(className: string, prefixes: string[]): boolean {
   if (prefixes.length === 0) return true;
+
+  /*
+    An exact name matches itself, whatever shape it is.
+
+    Checked before `baseTypeOf`, which returns nothing for a primitive array —
+    correct for package filtering, since `byte[]` has no package, but it also
+    meant no filter could ever select one. Narrowing the object set to the
+    `[B` row, which is the biggest row in most heaps, silently produced an
+    empty list.
+  */
+  if (prefixes.includes(className)) return true;
+
   const name = baseTypeOf(className);
   if (!name) return false;
 

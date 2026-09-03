@@ -122,3 +122,25 @@ describe('filterByPackages', () => {
     expect(filterByPackages(rows, [], r => r.className)).toBe(rows);
   });
 });
+
+describe('narrowing to one class', () => {
+  it('matches a primitive array by its exact name', () => {
+    /*
+      `baseTypeOf('[B')` is empty — a byte array has no package, which is right
+      for package filtering and wrong for "narrow to this class". The biggest
+      row in most heaps is `[B`, and clicking it produced an empty list.
+    */
+    expect(matchesPackages('[B', ['[B'])).toBe(true);
+    expect(matchesPackages('[I', ['[B'])).toBe(false);
+  });
+
+  it('still refuses a primitive array under a package filter', () => {
+    // A byte array is not in com.acme, and saying it is would be worse.
+    expect(matchesPackages('[B', ['com.acme'])).toBe(false);
+  });
+
+  it('leaves ordinary package matching alone', () => {
+    expect(matchesPackages('com.acme.Order', ['com.acme'])).toBe(true);
+    expect(matchesPackages('com.acmex.Order', ['com.acme'])).toBe(false);
+  });
+});

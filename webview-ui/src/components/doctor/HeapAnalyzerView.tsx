@@ -24,6 +24,10 @@ import { HeapTreemapView } from './HeapTreemapView';
 import { HeapGraphView } from './HeapGraphView';
 import { HeapExplainView } from './HeapExplainView';
 import { AnalyzerBoundary } from './AnalyzerBoundary';
+import { Breadcrumb } from './Breadcrumb';
+import {
+  emptySet, filterOf, narrow, backTo, packageStep, classStep, type ObjectSet,
+} from './object-set';
 import { HeapGrowthView } from './HeapGrowthView';
 
 const ACCENT = 'var(--color-doctor)';
@@ -144,7 +148,17 @@ export function HeapAnalyzerView() {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [view, setView] = useState<SubView>('verdict');
   /** Shared by every filterable sub-view — see FILTERABLE. */
-  const [packageFilter, setPackageFilter] = useState('');
+  /*
+    One object set, shared by every view that can narrow.
+
+    This was a flat string per render, which meant narrowing in the histogram
+    and switching to the treemap silently widened back out, and nothing on
+    screen said what the numbers being shown were about. The set is the
+    navigation model now: each narrowing is a step, and the steps are the way
+    back.
+  */
+  const [objectSet, setObjectSet] = useState<ObjectSet>(emptySet);
+  const packageFilter = filterOf(objectSet);
   // Baseline survives loading another dump — comparing is the whole point.
   const [baseline, setBaseline] = useState<{ name: string | null } | null>(null);
 
@@ -407,7 +421,11 @@ export function HeapAnalyzerView() {
         {FILTERABLE.includes(view) && (
           <input
             value={packageFilter}
-            onChange={e => setPackageFilter(e.target.value)}
+            // Typing replaces the last step rather than stacking one per
+            // keystroke — a breadcrumb with thirty entries spelling out
+            // `c`, `co`, `com` is not a history of anything.
+            onChange={e => setObjectSet(
+              narrow(backTo(objectSet, 0), packageStep(e.target.value)))}
             placeholder="Package filter — com.zapper, org.hibernate"
             spellCheck={false}
             title="Comma-separated package prefixes. Matches sub-packages, inner classes and arrays of a filtered type."
@@ -442,9 +460,18 @@ export function HeapAnalyzerView() {
         whole would take all six down for one, and take the verdict with them:
         the one view that had already told you what was wrong.
       */}
+      {/* Above the views rather than inside one: it describes what all of them
+          are showing, and it is the way back out of any of them. */}
+      {FILTERABLE.includes(view) && (
+        <Breadcrumb set={objectSet} onBack={i => setObjectSet(backTo(objectSet, i))} />
+      )}
+
       {view === 'histogram' && (
         <AnalyzerBoundary name="Histogram" resetKey={dumpKey}>
-          <HeapHistogramView liveBytes={liveBytes} packageFilter={packageFilter} />
+          <HeapHistogramView
+            liveBytes={liveBytes} packageFilter={packageFilter}
+            onNarrow={cls => setObjectSet(narrow(objectSet, classStep(cls)))}
+          />
         </AnalyzerBoundary>
       )}
       {view === 'treemap' && (

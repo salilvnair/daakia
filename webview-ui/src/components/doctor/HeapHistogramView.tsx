@@ -21,7 +21,12 @@ const COLUMNS: { id: Sort; label: string; title: string }[] = [
   { id: 'instances', label: 'Instances', title: 'Live instance count.' },
 ];
 
-export function HeapHistogramView({ liveBytes, packageFilter }: { liveBytes: number; packageFilter?: string }) {
+export function HeapHistogramView({ liveBytes, packageFilter, onNarrow }: {
+  liveBytes: number;
+  packageFilter?: string;
+  /** Clicking a class narrows the shared object set to it. */
+  onNarrow?: (className: string) => void;
+}) {
   const [rows, setRows] = useState<ClassStat[]>([]);
   const [total, setTotal] = useState(0);
   const [sort, setSort] = useState<Sort>('shallow');
@@ -114,7 +119,14 @@ export function HeapHistogramView({ liveBytes, packageFilter }: { liveBytes: num
         {error && <p className="text-[12px] text-[var(--color-error)] px-3 py-3 m-0">{error}</p>}
         {!error && !loading && rows.length === 0 && (
           <p className="text-[12px] text-[var(--color-text-muted)] px-3 py-3 m-0">
-            No classes match “{search}”.
+            {/* Name whichever one is actually in force. Reporting the search
+                box when the object set was what emptied the list sends the
+                reader to clear a box that was already empty. */}
+            {search
+              ? <>No classes match “{search}”{packageFilter ? <> inside {packageFilter}</> : null}.</>
+              : packageFilter
+                ? <>Nothing in the current set — {packageFilter} matched no classes.</>
+                : <>This dump has no classes to show.</>}
           </p>
         )}
         <div style={{ height: first * ROW_H }} />
@@ -123,8 +135,14 @@ export function HeapHistogramView({ liveBytes, packageFilter }: { liveBytes: num
           // than hiding — it means instances of this class dominate each other.
           const overlaps = r.retainedSumBytes > liveBytes;
           return (
-            <div key={r.classRow} className="flex items-center gap-3 px-3 text-[11.5px] font-mono"
-                 style={{ height: ROW_H }}>
+            <div key={r.classRow}
+                 className="flex items-center gap-3 px-3 text-[11.5px] font-mono"
+                 style={{ height: ROW_H, cursor: onNarrow ? 'pointer' : undefined }}
+                 // Narrowing on the row rather than a separate control: the
+                 // class name IS the thing being clicked, and a row that reads
+                 // as clickable and does nothing is worse than a plain one.
+                 onClick={onNarrow ? () => onNarrow(r.className) : undefined}
+                 title={onNarrow ? `Narrow to ${r.className}` : undefined}>
               <span className="text-right tabular-nums text-[var(--color-text-primary)]" style={{ width: 78 }}>
                 {bytes(r.shallowBytes)}
               </span>
