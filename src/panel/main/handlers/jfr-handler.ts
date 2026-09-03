@@ -11,6 +11,7 @@ import * as path from 'path';
 import { readFileSync } from 'fs';
 import { JfrChunk } from '../../../services/jfr/jfr-chunk';
 import { readCpuSamples, hotSpots, sampleCount } from '../../../services/jfr/jfr-cpu';
+import { readTelemetry, groupsOf } from '../../../services/jfr/jfr-telemetry';
 
 type PostMessage = (msg: Record<string, unknown>) => void;
 
@@ -69,6 +70,13 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
     const durationMs = chunks.reduce(
       (a, c) => a + Number(c.header.durationNanos / 1_000_000n), 0);
 
+    /*
+      The telemetry travels with the hot spots rather than being fetched
+      separately: it is the axis the samples sit on, and a view that has one
+      without the other cannot say when the CPU it is showing was being spent.
+    */
+    const telemetry = readTelemetry(chunks);
+
     const rows = hotSpots(samples);
     postMessage({
       type: 'jfr:done',
@@ -89,6 +97,11 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
         states: [...states].map(([state, count]) => ({ state, count }))
           .sort((a, b) => b.count - a.count),
         threads: [...new Set(samples.map(s => s.threadName))].sort(),
+      },
+      telemetry: {
+        fromMs: telemetry.fromMs,
+        toMs: telemetry.toMs,
+        groups: groupsOf(telemetry),
       },
       hotSpots: rows.slice(0, MAX_ROWS),
       truncated: Math.max(0, rows.length - MAX_ROWS),

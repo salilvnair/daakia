@@ -17,6 +17,7 @@ import { ButtonView, SearchInputView, SegmentedControlView } from '@salilvnair/d
 import { postMsg } from '../../vscode';
 import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
 import { CpuIcon, CloseCircleIcon, ChevronRightIcon } from '../../icons';
+import { TelemetryCharts, type TelemetryGroup } from './TelemetryCharts';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -44,9 +45,20 @@ interface Loaded {
     states: { state: string; count: number }[];
     threads: string[];
   };
+  telemetry: { fromMs: number; toMs: number; groups: TelemetryGroup[] };
   hotSpots: HotSpot[];
   truncated: number;
 }
+
+/**
+ * Telemetry first.
+ *
+ * It is the axis the samples sit on: it says WHEN the recording was
+ * interesting, and the hot spots say what was running. Opening on the ranked
+ * table would answer the second question before the reader has asked the
+ * first.
+ */
+type SubView = 'telemetry' | 'hotspots';
 
 /** `com.acme.order.OrderService` → `c.a.o.OrderService`, keeping the class. */
 function shortClass(name: string): string {
@@ -71,6 +83,7 @@ export function CpuAnalyzerView() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = useState<SubView>('telemetry');
   /** Which frames to hide. JDK internals are most of a stack and rarely the bug. */
   const [hideJdk, setHideJdk] = useState(false);
 
@@ -187,16 +200,29 @@ export function CpuAnalyzerView() {
         )}
 
         <div className="flex items-center gap-2 flex-wrap">
-          <SearchInputView
-            value={filter} onChange={setFilter}
-            placeholder="Filter methods" size="sm" width={260}
-          />
           <SegmentedControlView
-            value={hideJdk ? 'app' : 'all'}
-            onChange={v => setHideJdk(v === 'app')}
-            options={[{ value: 'all', label: 'All frames' }, { value: 'app', label: 'Yours only' }]}
+            value={view}
+            onChange={v => setView(v as SubView)}
+            options={[
+              { value: 'telemetry', label: 'Telemetry' },
+              { value: 'hotspots', label: `Hot spots${loaded.hotSpots.length ? ` (${loaded.hotSpots.length})` : ''}` },
+            ]}
             size="sm" density="compact" accentColor={ACCENT}
           />
+          {view === 'hotspots' && (
+            <SearchInputView
+              value={filter} onChange={setFilter}
+              placeholder="Filter methods" size="sm" width={220}
+            />
+          )}
+          {view === 'hotspots' && (
+            <SegmentedControlView
+              value={hideJdk ? 'app' : 'all'}
+              onChange={v => setHideJdk(v === 'app')}
+              options={[{ value: 'all', label: 'All frames' }, { value: 'app', label: 'Yours only' }]}
+              size="sm" density="compact" accentColor={ACCENT}
+            />
+          )}
           <div className="flex-1" />
           <ButtonView variant="ghost" size="sm" onClick={() => postMsg({ type: 'jfr:open' })}>
             Open another
@@ -204,7 +230,18 @@ export function CpuAnalyzerView() {
         </div>
       </div>
 
+      {view === 'telemetry' && (
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+          <TelemetryCharts
+            groups={loaded.telemetry?.groups ?? []}
+            fromMs={loaded.telemetry?.fromMs ?? 0}
+            toMs={loaded.telemetry?.toMs ?? 0}
+          />
+        </div>
+      )}
+
       {/* ── Hot spots ── */}
+      {view === 'hotspots' && (
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
         <div className="flex items-center gap-3 px-2 py-1.5 text-[9.5px] uppercase tracking-wider"
              style={{ color: 'var(--color-text-muted)' }}>
@@ -322,6 +359,7 @@ export function CpuAnalyzerView() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
