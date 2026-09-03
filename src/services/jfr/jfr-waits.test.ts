@@ -31,7 +31,12 @@ describe('readWaits', () => {
     // `Object.wait` is where every monitor wait happens and says nothing. The
     // frame below it is the line someone can actually go and change.
     const top = waits.sites[0];
-    expect(top.site).toBe('OrderLoad$LedgerCache.post');
+    /*
+      Checked against the source, which is in this repo beside the fixture.
+      `OrderLoad.java:151` is the `Thread.sleep(12)` inside the synchronized
+      block — the planted fault, named exactly.
+    */
+    expect(top.site).toBe('OrderLoad$LedgerCache.post:151');
     expect(top.site).not.toMatch(/^(java|jdk|sun)\./);
   });
 
@@ -140,13 +145,23 @@ describe('readAllocation', () => {
       recording allocation sites means recording every `new`.
     */
     const top = alloc.sites[0];
-    expect(top.site).toBe('OrderLoad.validateSlow:46');
+    /*
+      Ground truth, not a recorded expectation: line 92 of OrderLoad.java is
+      the `report +=` inside validateSlow, and line 105 is the `new byte[]` in
+      enrich. Both are in this repo, so a regression in line decoding fails
+      here rather than being adopted as the new answer.
+
+      They read 46 and (none) until the int decoding was fixed — every line
+      number the profiler produced was exactly half the real one.
+    */
+    expect(top.site).toBe('OrderLoad.validateSlow:92');
     expect(top.objectClass).toBe('byte[]');
   });
 
   it('finds the second allocation site too, by weight not by count', () => {
     const enrich = alloc.sites.find(s => s.site.startsWith('OrderLoad.enrich'))!;
     expect(enrich).toBeDefined();
+    expect(enrich.site).toBe('OrderLoad.enrich:105');
     expect(enrich.bytes).toBeGreaterThan(100 * 1024 * 1024);
   });
 

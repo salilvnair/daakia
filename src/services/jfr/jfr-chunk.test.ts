@@ -158,3 +158,45 @@ describe('JfrReader', () => {
     expect(new JfrReader(Buffer.from([2, 7])).string(i => `pooled-${i}`)).toBe('pooled-7');
   });
 });
+
+describe('integer decoding', () => {
+  /*
+    JFR uses two encodings and they are easy to confuse.
+
+    Its `int` and `short` fields are plain varints read as signed 32-bit
+    values. Zig-zag decoding them produces numbers that look plausible and are
+    all wrong — the failure is silent, which is why this is pinned against
+    values the recording itself constrains.
+  */
+  // The loaded recording, because the idle one never collected anything and
+  // an encoding test needs values to read.
+  const chunk = JfrChunk.parseAll(
+    readFileSync(join(__dirname, '../../../test/fixtures/jfr/under-load.jfr')))[0];
+
+  it('reads a tenuring threshold that a JVM could actually have', () => {
+    // Legally 1..15. Zig-zag decoded it read -8.
+    const [young] = [...chunk.events('jdk.YoungGarbageCollection')];
+    const v = chunk.resolve(young) as Record<string, number>;
+    expect(v.tenuringThreshold).toBeGreaterThanOrEqual(1);
+    expect(v.tenuringThreshold).toBeLessThanOrEqual(15);
+  });
+
+  it('reads gc ids as a run of consecutive positive numbers', () => {
+    // They are a counter. Zig-zag decoding gave 345, -346, -345 — alternating
+    // signs, which is the shape that gives the mistake away.
+    const ids = [...chunk.events('jdk.GarbageCollection')]
+      .map(e => (chunk.resolve(e) as Record<string, number>).gcId);
+    expect(ids.every(id => id > 0)).toBe(true);
+    const sorted = [...ids].sort((a, b) => a - b);
+    expect(sorted[sorted.length - 1] - sorted[0]).toBe(ids.length - 1);
+  });
+
+  it('still reads long fields as exact unsigned values', () => {
+    // Longs go through a different path and were always right; this is here so
+    // fixing one encoding cannot quietly break the other.
+    const [stats] = [...chunk.events('jdk.JavaThreadStatistics')];
+    const v = chunk.resolve(stats) as Record<string, bigint>;
+    expect(typeof v.activeCount).toBe('bigint');
+    expect(Number(v.activeCount)).toBeGreaterThan(0);
+  });
+});

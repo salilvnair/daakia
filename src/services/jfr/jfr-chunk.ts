@@ -191,7 +191,20 @@ export class JfrChunk {
       case 'boolean': return r.u1() !== 0;
       case 'byte': return r.u1();
       case 'char': return r.varint();
-      case 'short': case 'int': return r.svarint();
+      /*
+        A plain varint, read as a signed 32-bit value — NOT zig-zag.
+
+        These were decoded with zig-zag, which is what JFR uses for its
+        `startTime` deltas but not for `int` fields. The result looked
+        plausible enough to ship: gc ids came out as 345, -346, -345 instead of
+        690, 691, 689, and a JVM tenuring threshold — legally 1 to 15 — was
+        reported as -8 when the recording said 15. Nothing threw, and every
+        number was wrong.
+
+        `| 0` is JavaScript's ToInt32: it takes the low 32 bits and interprets
+        them signed, which is exactly what an `int` field means.
+      */
+      case 'short': case 'int': return r.varint() | 0;
       case 'long': return r.varlong();
       case 'float': { const v = this.buf.readFloatBE(r.pos); r.pos += 4; return v; }
       case 'double': { const v = this.buf.readDoubleBE(r.pos); r.pos += 8; return v; }

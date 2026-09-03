@@ -15,7 +15,12 @@
 import type { JfrValue } from './jfr-chunk';
 
 /** The fields that carry a label, in the order they should be preferred. */
-const LABEL_FIELDS = ['string', 'name', 'javaName', 'cause', 'description', 'osName'];
+const LABEL_FIELDS = [
+  'string', 'name', 'javaName', 'cause', 'description', 'osName',
+  // `jdk.GCHeapSummary.when` is "Before GC" / "After GC" — the field that
+  // pairs two summaries into one collection's before and after.
+  'when',
+];
 
 /**
  * The label, unwrapping nested holders up to `depth`.

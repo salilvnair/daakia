@@ -60,7 +60,7 @@ describe('dk8s_analyze_recording', () => {
 
   it('returns the line that allocated', async () => {
     const out = await handleDk8sRecording({ path: FIXTURE, view: 'allocation' });
-    expect(out).toContain('OrderLoad.validateSlow:46');
+    expect(out).toContain('OrderLoad.validateSlow:92');   // the `report +=` line
     expect(out).toContain('heap dump cannot give you this');
   });
 
