@@ -19,6 +19,8 @@ import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
 import { CpuIcon, CloseCircleIcon, ChevronRightIcon } from '../../icons';
 import { TelemetryCharts, type TelemetryGroup } from './TelemetryCharts';
 import { WaitsView, AllocationView, type WaitSite, type AllocSite } from './WaitsAndAllocation';
+import { GcView, ProbesView, type GcSummary } from './GcAndProbes';
+import { ThreadHistory, type WaitSpan } from './ThreadHistory';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -52,6 +54,8 @@ interface Loaded {
     sites: AllocSite[]; totalBytes: number; samples: number;
     weighted: boolean; truncated: number;
   };
+  gc: GcSummary;
+  timeline: { spans: WaitSpan[]; dropped: number; fromMs: number; toMs: number };
   hotSpots: HotSpot[];
   truncated: number;
 }
@@ -64,7 +68,7 @@ interface Loaded {
  * table would answer the second question before the reader has asked the
  * first.
  */
-type SubView = 'telemetry' | 'hotspots' | 'blocking' | 'allocation';
+type SubView = 'telemetry' | 'hotspots' | 'blocking' | 'allocation' | 'threads' | 'gc' | 'probes';
 
 /** `com.acme.order.OrderService` → `c.a.o.OrderService`, keeping the class. */
 function shortClass(name: string): string {
@@ -226,6 +230,9 @@ export function CpuAnalyzerView() {
               { value: 'hotspots', label: `Hot spots${loaded.hotSpots.length ? ` (${loaded.hotSpots.length})` : ''}` },
               { value: 'blocking', label: `Blocking${loaded.waits?.count ? ` (${loaded.waits.count.toLocaleString()})` : ''}` },
               { value: 'allocation', label: 'Allocation' },
+              { value: 'threads', label: 'Thread history' },
+              { value: 'gc', label: `GC${loaded.gc?.count ? ` (${loaded.gc.count})` : ''}` },
+              { value: 'probes', label: 'Probes' },
             ]}
             size="sm" density="compact" accentColor={ACCENT}
           />
@@ -249,6 +256,28 @@ export function CpuAnalyzerView() {
           </ButtonView>
         </div>
       </div>
+
+      {view === 'threads' && (
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1">
+          <ThreadHistory
+            spans={loaded.timeline?.spans ?? []}
+            fromMs={loaded.timeline?.fromMs ?? 0}
+            toMs={loaded.timeline?.toMs ?? 0}
+          />
+        </div>
+      )}
+
+      {view === 'gc' && (
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1">
+          <GcView gc={loaded.gc} />
+        </div>
+      )}
+
+      {view === 'probes' && (
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1">
+          <ProbesView sites={loaded.waits?.sites ?? []} hasRecording />
+        </div>
+      )}
 
       {view === 'blocking' && (
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">

@@ -12,7 +12,7 @@ import { readFileSync } from 'fs';
 import { JfrChunk } from '../../../services/jfr/jfr-chunk';
 import { readCpuSamples, hotSpots, sampleCount, idleCount } from '../../../services/jfr/jfr-cpu';
 import { readTelemetry, groupsOf } from '../../../services/jfr/jfr-telemetry';
-import { readWaits, readGc } from '../../../services/jfr/jfr-waits';
+import { readWaits, readGc, readWaitSpans } from '../../../services/jfr/jfr-waits';
 import { readAllocation } from '../../../services/jfr/jfr-allocation';
 
 type PostMessage = (msg: Record<string, unknown>) => void;
@@ -88,6 +88,15 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
       heap dump structurally cannot tell you.
     */
     const waits = readWaits(chunks, { minMs: 1 });
+    /*
+      The same waits, kept individually for the timeline.
+
+      A second pass rather than a second shape out of the first: the totals and
+      the lanes want opposite things, and computing both in one function would
+      mean the aggregation carrying every event around for a view that may
+      never be opened.
+    */
+    const timeline = readWaitSpans(chunks, { minMs: 1, limit: 4000 });
     const allocation = readAllocation(chunks);
     const gc = readGc(chunks);
 
@@ -133,6 +142,7 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
         truncated: Math.max(0, allocation.sites.length - MAX_ROWS),
       },
       gc,
+      timeline,
       hotSpots: rows.slice(0, MAX_ROWS),
       truncated: Math.max(0, rows.length - MAX_ROWS),
     });

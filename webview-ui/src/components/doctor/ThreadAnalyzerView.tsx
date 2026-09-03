@@ -17,6 +17,7 @@ import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
 import { AnalyzeModal, planAnalyzeText, type AnalyzePlan } from '../k8s/AnalyzeModal';
 import { parseFrame, summariseStack, mergeStacks, type FrameOrigin } from './thread-frame';
 import { StackShapeView, type ShapeFinding } from './StackShapeView';
+import { LocksGraph, type LockGroup } from './LocksGraph';
 import { postMsg } from '../../vscode';
 import { LayersIcon, CloseCircleIcon, StethoscopeIcon } from '../../icons';
 
@@ -438,6 +439,51 @@ export function ThreadAnalyzerView() {
             {(v.shapes ?? []).map(f => (
               <StackShapeView key={f.ruleId} finding={f} />
             ))}
+          </div>
+        )}
+
+        {/*
+          Locks.
+
+          The verdict already works out who owns each contended monitor and who
+          is queueing behind it; until now that was a list, and a list cannot
+          show that seven threads are behind ONE lock rather than seven.
+        */}
+        {(v.contention ?? []).length > 0 && (
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+              Locks
+            </span>
+            <LocksGraph
+              deadlocks={(v.deadlocks ?? []).length}
+              groups={(v.contention ?? []).map((c): LockGroup => {
+                const owner = loaded.threads.find(t => t.name === c.ownerThread);
+                /*
+                  Why the owner is not running, when it is not.
+
+                  "Blocked on a socket while holding a lock" is the whole
+                  finding — the lock is not slow, the thing holding it is
+                  waiting on the network. Read off the owner's own top frame
+                  rather than asserted, and left unsaid when it does not apply.
+                */
+                const top = owner?.frames?.[0]?.raw ?? '';
+                const blockedOn =
+                  /SocketImpl\.(read|connect)|socketRead|Http2Stream\.read/.test(top) ? 'blocked on a socket'
+                  : /\.park|Object\.wait/.test(top) ? 'parked'
+                  : undefined;
+                return {
+                  address: c.lockId,
+                  className: c.className,
+                  owner: c.ownerThread
+                    ? { name: c.ownerThread, state: owner?.state ?? 'UNKNOWN', blockedOn }
+                    : undefined,
+                  waiters: c.blockedThreads.map(name => ({
+                    name,
+                    state: loaded.threads.find(t => t.name === name)?.state ?? 'BLOCKED',
+                  })),
+                };
+              })}
+            />
           </div>
         )}
 

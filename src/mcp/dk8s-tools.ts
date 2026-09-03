@@ -29,6 +29,7 @@ import { readCpuSamples, hotSpots, sampleCount, idleCount } from '../services/jf
 import { readTelemetry } from '../services/jfr/jfr-telemetry';
 import { readWaits, readGc } from '../services/jfr/jfr-waits';
 import { readAllocation } from '../services/jfr/jfr-allocation';
+import { openSource } from './open-source';
 
 export const DK8S_TOOLS = [
   {
@@ -108,6 +109,24 @@ export const DK8S_TOOLS = [
         limit: { type: 'number', description: 'Rows to return. Default 15.' },
       },
       required: ['path'],
+    },
+  },
+  {
+    name: 'dk8s_open_source',
+    description: [
+      'Resolve a class or a stack frame to a file and a line in this workspace.',
+      'Accepts `com.acme.Order`, `com.acme.Order.submit`, `Order.submit:42` and the',
+      'parenthesised stack form. Where only a method is given, it finds the declaration.',
+      'Use this after a hot spot, an allocation site or a lock finding to get from a',
+      'name to the line you can actually change.',
+    ].join(' '),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        symbol: { type: 'string', description: 'Class name, or a frame from any dk8s view.' },
+        workspace: { type: 'string', description: 'Absolute path to search. Defaults to the working directory.' },
+      },
+      required: ['symbol'],
     },
   },
 ];
@@ -324,6 +343,21 @@ export async function handleDk8sRecording(a: Args): Promise<string> {
   ].filter(Boolean).join('\n');
 }
 
+export async function handleDk8sOpenSource(a: Args): Promise<string> {
+  const symbol = str(a, 'symbol');
+  if (!symbol) return 'A symbol is required — a class name or a stack frame.';
+  const root = str(a, 'workspace') ?? process.cwd();
+
+  const { hits, note } = openSource(root, symbol);
+  if (!hits.length) return note ?? `Could not resolve ${symbol}.`;
+
+  return [
+    ...hits.map(h => `${h.relative}${h.line ? `:${h.line}` : ''}`
+      + (h.preview ? `\n    ${h.preview}` : '')),
+    ...(note ? ['', note] : []),
+  ].join('\n');
+}
+
 /** Dispatch, or `undefined` when the name is not one of ours. */
 export function dk8sTool(name: string): ((a: Args) => Promise<string>) | undefined {
   switch (name) {
@@ -331,6 +365,7 @@ export function dk8sTool(name: string): ((a: Args) => Promise<string>) | undefin
     case 'dk8s_logs': return handleDk8sLogs;
     case 'dk8s_describe_pod': return handleDk8sDescribe;
     case 'dk8s_analyze_recording': return handleDk8sRecording;
+    case 'dk8s_open_source': return handleDk8sOpenSource;
     default: return undefined;
   }
 }
