@@ -8,6 +8,9 @@
  *   - send_request     Execute any HTTP request and return the response
  *   - get_collections  List saved Daakia collections and their requests
  *   - run_collection   Execute all requests in a collection, return results
+ *   - dk8s_*           Read a Kubernetes cluster, and analyze recordings taken
+ *                      off it. Read-only by design — see dk8s-tools.ts on why
+ *                      nothing here collects a heap dump.
  *
  * Standalone Node.js STDIO server — does NOT run inside VS Code.
  * External AI clients spawn this process and communicate via stdin/stdout.
@@ -23,6 +26,7 @@
  *   }
  */
 import * as readline from 'readline';
+import { DK8S_TOOLS, dk8sTool } from './dk8s-tools';
 import * as http from 'http';
 import * as https from 'https';
 import * as fs from 'fs';
@@ -542,7 +546,7 @@ async function handleRpcMessage(msg: JsonRpcMessage): Promise<void> {
 
     case 'tools/list':
       if (!isNotification) {
-        sendResult(id!, { tools: DAAKIA_TOOLS });
+        sendResult(id!, { tools: [...DAAKIA_TOOLS, ...DK8S_TOOLS] });
       }
       break;
 
@@ -559,6 +563,8 @@ async function handleRpcMessage(msg: JsonRpcMessage): Promise<void> {
           text = await handleGetCollections(toolArgs);
         } else if (toolName === 'run_collection') {
           text = await handleRunCollection(toolArgs);
+        } else if (dk8sTool(toolName)) {
+          text = await dk8sTool(toolName)!(toolArgs);
         } else {
           sendError(id!, -32601, `Unknown tool: ${toolName}`);
           return;
