@@ -270,9 +270,24 @@ export function handleThreadsAnalyze(msg: Record<string, unknown>, postMessage: 
     const text = readFileSync(dumpPath, 'utf8');
     const dump = worker.parseThreadDump(text);
     if (!dump.threads.length) {
+      /*
+        Say which kind of file this is before saying it is the wrong kind.
+
+        dk8s collects Python stacks itself — `py-spy dump` is an option in the
+        Doctor tab — and routes them to this analyzer, which understands only
+        JVM dumps. Telling someone their file "should look like jstack output"
+        when the tool handed it to them is the kind of message that makes
+        people doubt the collection rather than the reader.
+      */
+      const looksPython = /^Process \d+: |^Python v\d|\(\w+\.py:\d+\)/m.test(text);
       postMessage({
         type: 'threads:error',
-        message: 'No threads were found in that file. A thread dump looks like the output of `jstack <pid>` or `jcmd <pid> Thread.print`.',
+        message: looksPython
+          ? 'This is a py-spy dump of a Python process. dk8s can collect these, but the '
+            + 'thread analyzer reads JVM dumps only — Python stacks are not parsed yet. '
+            + 'The file itself is plain text and readable from the artifacts folder.'
+          : 'No threads were found in that file. A thread dump looks like the output of '
+            + '`jstack <pid>` or `jcmd <pid> Thread.print`.',
       });
       return;
     }
