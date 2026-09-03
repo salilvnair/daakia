@@ -41,7 +41,7 @@ interface Loaded {
     topEvents: { name: string; count: number }[];
   };
   samples: {
-    total: number; runnable: number;
+    total: number; runnable: number; idle: number;
     states: { state: string; count: number }[];
     threads: string[];
   };
@@ -157,7 +157,7 @@ export function CpuAnalyzerView() {
   }
 
   const { samples, recording } = loaded;
-  const parked = samples.total - samples.runnable;
+  const parked = samples.total - samples.runnable - (samples.idle ?? 0);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -171,15 +171,21 @@ export function CpuAnalyzerView() {
           <span className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
             samples of running code, over {Math.round(recording.durationMs / 1000)}s
           </span>
+          {/*
+            Stated rather than silently dropped, both of them. A parked thread
+            and a selector sitting in `EPoll.wait` are both sampled like any
+            other, and counting either as CPU makes an idle server the busiest
+            thing you have ever seen. Naming them is what stops the total
+            looking wrong.
+          */}
           {parked > 0 && (
-            /*
-              Stated rather than silently dropped. A parked thread is sampled
-              like any other, and counting it as CPU makes an idle pool the
-              hottest thing in the process — so it is excluded, and saying so
-              is what stops the total looking wrong.
-            */
             <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-              · {parked.toLocaleString()} more were parked or waiting, and are not CPU
+              · {parked.toLocaleString()} parked or waiting
+            </span>
+          )}
+          {(samples.idle ?? 0) > 0 && (
+            <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+              · {samples.idle.toLocaleString()} sitting in a wait syscall — runnable, but not working
             </span>
           )}
         </div>

@@ -134,6 +134,41 @@ export function readCpuSamples(chunks: JfrChunk[]): CpuSample[] {
 
 // ── Aggregating ─────────────────────────────────────────────────────────────
 
+/**
+ * Frames that mean "waiting", even though the thread is RUNNABLE.
+ *
+ * A selector thread sitting in `EPoll.wait` has an OS thread scheduled, so JFR
+ * records its state as runnable and the sampler catches it every time. On a
+ * real server that is most of the profile: PetClinic under load came back 78%
+ * `EPoll.wait` and 9% `Net.accept` — nearly nine tenths of the answer spent
+ * describing idle acceptor threads.
+ *
+ * Matched on the INNERMOST frame only. A stack that merely passes through
+ * networking on its way to real work is real work; a stack that ends in the
+ * wait syscall is a thread with nothing to do.
+ *
+ * Deliberately narrow: only calls whose whole purpose is to block. A blocking
+ * `read` is left in, because a thread stuck reading a socket is a finding
+ * rather than noise, and hiding it would bury the very problem the thread
+ * rules exist to catch.
+ */
+const IDLE_FRAMES = [
+  /^sun\.nio\.ch\.(EPoll|KQueue|DevPoll)\w*\.(wait|poll)$/,
+  /^sun\.nio\.ch\.WindowsSelectorImpl.*\.poll$/,
+  /^sun\.nio\.ch\.Net\.accept$/,
+  /^sun\.nio\.ch\.\w*SocketImpl\.accept0?$/,
+  /^java\.net\.\w*SocketImpl\.socketAccept$/,
+  /^jdk\.internal\.misc\.Unsafe\.park$/,
+  /^java\.lang\.Object\.wait0?$/,
+  /^java\.lang\.Thread\.(sleep0?|onSpinWait)$/,
+];
+
+/** Whether this sample caught a thread waiting rather than working. */
+export function isIdleSample(s: CpuSample): boolean {
+  const top = s.frames[0];
+  return !!top && IDLE_FRAMES.some(re => re.test(top.method));
+}
+
 export interface HotSpotOptions {
   /**
    * Only samples in this state.
@@ -145,13 +180,21 @@ export interface HotSpotOptions {
   state?: string | null;
   /** Backtraces kept per method. The tail is a long list of one-offs. */
   maxBacktraces?: number;
+  /**
+   * Keep samples whose innermost frame is a wait syscall.
+   *
+   * Off by default. They are not CPU, and left in they are most of the list on
+   * any server that has sockets.
+   */
+  includeIdle?: boolean;
 }
 
 const RUNNABLE = 'STATE_RUNNABLE';
 
 export function hotSpots(samples: CpuSample[], opts: HotSpotOptions = {}): HotSpot[] {
   const wanted = opts.state === undefined ? RUNNABLE : opts.state;
-  const used = wanted ? samples.filter(s => s.state === wanted) : samples;
+  const byState = wanted ? samples.filter(s => s.state === wanted) : samples;
+  const used = opts.includeIdle ? byState : byState.filter(s => !isIdleSample(s));
   const total = used.length;
   if (!total) return [];
 
@@ -227,8 +270,16 @@ export function hotSpots(samples: CpuSample[], opts: HotSpotOptions = {}): HotSp
   return out.sort((x, y) => y.self - x.self || y.total - x.total);
 }
 
-/** The sample total the percentages are against, after the state filter. */
+/** The sample total the percentages are against, after every filter. */
 export function sampleCount(samples: CpuSample[], opts: HotSpotOptions = {}): number {
   const wanted = opts.state === undefined ? RUNNABLE : opts.state;
-  return wanted ? samples.filter(s => s.state === wanted).length : samples.length;
+  const byState = wanted ? samples.filter(s => s.state === wanted) : samples;
+  return opts.includeIdle ? byState.length : byState.filter(s => !isIdleSample(s)).length;
+}
+
+/** How many runnable samples were threads waiting on I/O rather than working. */
+export function idleCount(samples: CpuSample[], opts: HotSpotOptions = {}): number {
+  const wanted = opts.state === undefined ? RUNNABLE : opts.state;
+  const byState = wanted ? samples.filter(s => s.state === wanted) : samples;
+  return byState.filter(isIdleSample).length;
 }

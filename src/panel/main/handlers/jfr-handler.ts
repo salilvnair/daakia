@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { readFileSync } from 'fs';
 import { JfrChunk } from '../../../services/jfr/jfr-chunk';
-import { readCpuSamples, hotSpots, sampleCount } from '../../../services/jfr/jfr-cpu';
+import { readCpuSamples, hotSpots, sampleCount, idleCount } from '../../../services/jfr/jfr-cpu';
 import { readTelemetry, groupsOf } from '../../../services/jfr/jfr-telemetry';
 
 type PostMessage = (msg: Record<string, unknown>) => void;
@@ -94,6 +94,9 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
       samples: {
         total: samples.length,
         runnable: sampleCount(samples),
+        // Runnable, but caught in a wait syscall. Excluded from CPU and said
+        // so, because on any server with sockets this is most of the samples.
+        idle: idleCount(samples),
         states: [...states].map(([state, count]) => ({ state, count }))
           .sort((a, b) => b.count - a.count),
         threads: [...new Set(samples.map(s => s.threadName))].sort(),

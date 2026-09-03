@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { JfrChunk } from './jfr-chunk';
-import { readCpuSamples, hotSpots, sampleCount, type CpuSample } from './jfr-cpu';
+import { readCpuSamples, hotSpots, sampleCount, idleCount, isIdleSample, type CpuSample } from './jfr-cpu';
 
 /*
   Two kinds of test, deliberately separated.
@@ -181,13 +181,58 @@ describe('hotSpots', () => {
     expect(hotSpots([sample(['a.b.c'], { state: 'STATE_PARKED' })])).toEqual([]);
   });
 
+  /*
+    Found by profiling a real Spring application rather than by reasoning.
+
+    PetClinic under load came back 78% `sun.nio.ch.EPoll.wait` and 9%
+    `Net.accept` — nearly nine tenths of the answer describing acceptor threads
+    with nothing to do. JFR calls them RUNNABLE because the OS thread is
+    scheduled, and the sampler catches them every single time.
+  */
+  it('does not call a thread parked in a wait syscall CPU', () => {
+    const samples = [
+      sample(['a.Work.crunch', 'a.Main.run']),
+      sample(['sun.nio.ch.EPoll.wait', 'a.Jetty.select']),
+      sample(['sun.nio.ch.Net.accept', 'a.Jetty.acceptor']),
+      sample(['jdk.internal.misc.Unsafe.park', 'a.Pool.take']),
+    ];
+    const ranked = hotSpots(samples);
+    expect(ranked[0].method).toBe('a.Work.crunch');
+    expect(ranked[0].selfPercent).toBe(100);
+    expect(sampleCount(samples)).toBe(1);
+    expect(idleCount(samples)).toBe(3);
+  });
+
+  it('judges the innermost frame only', () => {
+    // A stack that PASSES THROUGH networking on its way to real work is real
+    // work. Only a stack that ends in the wait is a thread with nothing to do.
+    const working = sample(['a.Parser.decode', 'sun.nio.ch.EPoll.wait', 'a.Main.run']);
+    expect(isIdleSample(working)).toBe(false);
+    expect(isIdleSample(sample(['sun.nio.ch.EPoll.wait', 'a.Main.run']))).toBe(true);
+  });
+
+  it('leaves a blocking read in, because that is a finding not noise', () => {
+    // A thread stuck reading a socket is the transaction-across-a-network bug.
+    // Filtering it would bury the very thing the thread rules look for.
+    expect(isIdleSample(sample(['sun.nio.ch.SocketDispatcher.read0', 'a.Client.post']))).toBe(false);
+  });
+
+  it('can be asked for the idle ones anyway', () => {
+    const samples = [
+      sample(['a.Work.crunch']),
+      sample(['sun.nio.ch.EPoll.wait', 'a.Jetty.select']),
+    ];
+    expect(hotSpots(samples, { includeIdle: true })).toHaveLength(3);
+    expect(sampleCount(samples, { includeIdle: true })).toBe(2);
+  });
+
   it('works end to end on the real recording', () => {
     const samples = readCpuSamples(JfrChunk.parseAll(readFileSync(FIXTURE)));
-    const ranked = hotSpots(samples, { state: null });
+    const ranked = hotSpots(samples, { state: null, includeIdle: true });
     expect(ranked.length).toBeGreaterThan(0);
     // Percentages are shares of the sample total, so self can never exceed it.
     const totalSelf = ranked.reduce((a, h) => a + h.self, 0);
-    expect(totalSelf).toBe(sampleCount(samples, { state: null }));
+    expect(totalSelf).toBe(sampleCount(samples, { state: null, includeIdle: true }));
     for (const h of ranked) expect(h.totalPercent).toBeLessThanOrEqual(100);
   });
 });

@@ -384,7 +384,18 @@ async function copyFromPod(t: CollectTarget, remote: string, local: string): Pro
   await mkdir(dirname(local), { recursive: true });
   const args = [
     '--context', t.context,
-    'cp', `${t.namespace}/${t.pod}:${remote.replace(/^\//, '')}`, basename(local),
+    /*
+      The remote path stays absolute.
+
+      Stripping the leading slash makes it relative to the container's working
+      directory, which is only `/` in the plainest images. A Jetty image sits
+      in `/var/lib/jetty`, Tomcat in its own, most Spring Boot images in `/app`
+      — and in every one of those, a dump written to `/tmp` was then looked for
+      under the workdir and the copy failed with "Cannot stat", naming a path
+      the user never asked for. tar prints a harmless warning about the leading
+      slash and does the right thing.
+    */
+    'cp', `${t.namespace}/${t.pod}:${remote}`, basename(local),
     ...(t.container ? ['-c', t.container] : []),
     '--retries=3',
   ];
