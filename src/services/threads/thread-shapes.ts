@@ -18,6 +18,7 @@
  * dump can, because both frames are on the same stack at the same instant.
  */
 import type { ThreadInfo, StackFrame, ThreadState } from './jstack-parser';
+import { vocabulary, matchesCategory } from '../rules/vocabulary';
 
 export type ShapeSeverity = 'critical' | 'warning' | 'info';
 
@@ -44,72 +45,25 @@ export interface ShapeFinding {
 }
 
 /*
-  The frame vocabularies.
+  The frame vocabulary lives in `services/rules/vocabulary`, as data.
 
-  Deliberately conservative. A false positive here tells someone their
-  transaction boundary is wrong when it is not, and they will go and move code
-  around to fix a thing that was never broken — which is worse than staying
-  quiet. Every pattern below is a frame that means one specific thing.
+  The logic here is small and stable — a transaction frame above a blocking-IO
+  frame is a transaction held across a network call — while the list of frames
+  that MEAN those things grows every time somebody uses a framework nobody had
+  thought of. Keeping the list in this file made every new framework a release,
+  and gave the person running Vert.x or an in-house RPC client silence with no
+  way to fix it.
 */
 
-/** A transaction is open below this frame. */
-const TX_OPEN = [
-  // Spring: the interceptor is on the stack for the whole transactional call.
-  /^org\.springframework\.transaction\.interceptor\.TransactionInterceptor\.invoke/,
-  /^org\.springframework\.transaction\.interceptor\.TransactionAspectSupport\.invokeWithinTransaction/,
-  /^org\.springframework\.orm\.jpa\.JpaTransactionManager\./,
-  // Jakarta/JEE and Quarkus interceptors.
-  /^jakarta\.transaction\./,
-  /^io\.quarkus\.narayana\.jta\./,
-  /^com\.arjuna\.ats\.jta\./,
-  // Hibernate's own transaction driver.
-  /^org\.hibernate\.resource\.transaction\.backend\.jdbc\.internal\.JdbcResourceLocalTransactionCoordinator/,
-  /^org\.hibernate\.engine\.transaction\.internal\.TransactionImpl/,
-];
 
-/** The thread is waiting on the network, and cannot bound how long for. */
-const BLOCKING_IO = [
-  // JDK 13+. The pre-13 name is below; both are matched because a dump from
-  // an older JVM is still a dump someone will open.
-  /^java\.base\/sun\.nio\.ch\.NioSocketImpl\.(read|connect)/,
-  /^sun\.nio\.ch\.NioSocketImpl\.(read|connect)/,
-  /^java\.net\.SocketInputStream\.socketRead/,
-  /^java\.net\.PlainSocketImpl\.socketConnect/,
-  // Common clients, which sit above the socket frame and name the intent.
-  /^okhttp3\./,
-  /^org\.apache\.http\.impl\.io\./,
-  /^org\.apache\.hc\.core5\./,
-  /^java\.net\.http\/jdk\.internal\.net\.http\./,
-  /^feign\./,
-  /^org\.springframework\.web\.client\.RestTemplate\./,
-  /^org\.springframework\.web\.reactive\.function\.client\./,
-];
-
-/** A JDBC statement is executing — the connection is definitely in use. */
-const DB_CALL = [
-  /^com\.mysql\.cj\.jdbc\./,
-  /^org\.postgresql\.jdbc\./,
-  /^oracle\.jdbc\./,
-  /^com\.microsoft\.sqlserver\.jdbc\./,
-  /^com\.zaxxer\.hikari\.pool\.ProxyStatement/,
-  /^com\.zaxxer\.hikari\.pool\.ProxyPreparedStatement/,
-];
-
-/** Blocked entering a monitor. */
-const LOCK_WAIT = [
-  /^java\.lang\.Object\.wait/,
-  /^jdk\.internal\.misc\.Unsafe\.park/,
-  /^sun\.misc\.Unsafe\.park/,
-];
-
-const matches = (method: string, pats: RegExp[]) => pats.some(p => p.test(method));
 
 /** What this frame is, for a badge. Order matters — the most specific wins. */
 export function roleOf(frame: StackFrame): FrameRole {
-  if (matches(frame.method, TX_OPEN)) return 'tx-open';
-  if (matches(frame.method, DB_CALL)) return 'db-call';
-  if (matches(frame.method, BLOCKING_IO)) return 'blocking-io';
-  if (matches(frame.method, LOCK_WAIT)) return 'lock-wait';
+  const v = vocabulary();
+  if (matchesCategory(v, 'txOpen', frame.method)) return 'tx-open';
+  if (matchesCategory(v, 'dbCall', frame.method)) return 'db-call';
+  if (matchesCategory(v, 'blockingIo', frame.method)) return 'blocking-io';
+  if (matchesCategory(v, 'lockWait', frame.method)) return 'lock-wait';
   return frame.jdk ? 'plain' : 'app';
 }
 
@@ -129,9 +83,9 @@ export function annotate(frames: StackFrame[]): AnnotatedFrame[] {
  * the correct way to write it.
  */
 function txAcrossIo(t: ThreadInfo): { io: number; tx: number } | null {
-  const io = t.frames.findIndex(f => matches(f.method, BLOCKING_IO));
+  const io = t.frames.findIndex(f => matchesCategory(vocabulary(), 'blockingIo', f.method));
   if (io === -1) return null;
-  const tx = t.frames.findIndex((f, i) => i > io && matches(f.method, TX_OPEN));
+  const tx = t.frames.findIndex((f, i) => i > io && matchesCategory(vocabulary(), 'txOpen', f.method));
   if (tx === -1) return null;
   return { io, tx };
 }
@@ -145,17 +99,10 @@ function txAcrossIo(t: ThreadInfo): { io: number; tx: number } | null {
  * change. Naming it as the culprit sends someone to read the source of their
  * HTTP client.
  */
-const LIBRARY = [
-  /^okhttp3?\./, /^retrofit2?\./, /^feign\./,
-  /^org\.apache\./, /^org\.springframework\./, /^org\.hibernate\./,
-  /^io\.netty\./, /^reactor\./, /^com\.zaxxer\./, /^com\.fasterxml\./,
-  /^org\.postgresql\./, /^com\.mysql\./, /^oracle\./,
-  /^ch\.qos\./, /^org\.slf4j\./, /^kotlin(x)?\./, /^scala\./,
-];
 
 /** Is this the caller's own code, rather than the runtime or a dependency? */
 export function isApplicationFrame(frame: StackFrame): boolean {
-  return !frame.jdk && !matches(frame.method, LIBRARY);
+  return !frame.jdk && !matchesCategory(vocabulary(), 'library', frame.method);
 }
 
 /**
@@ -214,7 +161,7 @@ export function findStackShapes(threads: ThreadInfo[]): ShapeFinding[] {
   // fix is different — nothing to move, the lock is the problem.
   const onLock = threads.filter(t => {
     if (t.state !== 'BLOCKED') return false;
-    return t.frames.some(f => matches(f.method, TX_OPEN));
+    return t.frames.some(f => matchesCategory(vocabulary(), 'txOpen', f.method));
   });
 
   if (onLock.length) {
@@ -234,7 +181,7 @@ export function findStackShapes(threads: ThreadInfo[]): ShapeFinding[] {
   // ── A JDBC statement running under no transaction is fine; running while
   //    another thread holds the pool empty is not. Reported only when both
   //    halves are visible, or it is just a busy database.
-  const executing = threads.filter(t => t.frames.some(f => matches(f.method, DB_CALL)));
+  const executing = threads.filter(t => t.frames.some(f => matchesCategory(vocabulary(), 'dbCall', f.method)));
   const waitingForPool = threads.filter(t =>
     t.frames.some(f => /^com\.zaxxer\.hikari\.pool\.HikariPool\.getConnection/.test(f.method)
       || /^org\.apache\.commons\.dbcp2?\./.test(f.method)));
@@ -250,6 +197,46 @@ export function findStackShapes(threads: ThreadInfo[]): ShapeFinding[] {
       remediation: 'Find what the holders are doing — if any of them are on the network '
         + 'inside a transaction, that is the cause and not the pool size.',
       threads: waitingForPool.map(t => ({ name: t.name, state: t.state, frames: annotate(t.frames) })),
+    });
+  }
+
+  /*
+    ── Blocking on an event loop ──
+
+    The pitfall the reactive stacks make easy and expensive. An event loop
+    serves many connections from one thread, so a blocking call on it does not
+    slow one request — it stalls every request that thread is carrying, and the
+    symptom is latency on endpoints that have nothing to do with the slow one.
+
+    The thread NAME is what makes this findable. The same `RestTemplate` call
+    on `http-nio-exec-3` is ordinary; on `reactor-http-nio-2` it is a bug. No
+    amount of reading the stack can tell those apart.
+  */
+  const onLoop = threads.filter(t => matchesCategory(vocabulary(), 'eventLoop', t.name));
+  const blockedLoops = onLoop.filter(t => t.frames.some(f =>
+    matchesCategory(vocabulary(), 'blockingIo', f.method)
+    || matchesCategory(vocabulary(), 'dbCall', f.method)));
+
+  if (blockedLoops.length) {
+    const where = new Set<string>();
+    for (const t of blockedLoops) {
+      const c = t.frames.find(isApplicationFrame);
+      if (c) where.add(c.file && c.line ? `${c.method} (${c.file}:${c.line})` : c.method);
+    }
+    out.push({
+      ruleId: 'reactive.blocked-event-loop',
+      severity: 'critical',
+      title: 'Blocking call on an event loop',
+      detail: `${blockedLoops.length} of ${onLoop.length} event-loop thread`
+        + `${onLoop.length === 1 ? ' is' : 's are'} blocked on I/O`
+        + `${where.size ? ` in ${[...where].slice(0, 3).join(', ')}` : ''}. `
+        + 'An event loop carries many connections, so this stalls every request on '
+        + 'that thread — including ones that never touched the slow dependency.',
+      remediation: 'Move the call off the loop: subscribeOn(Schedulers.boundedElastic()) '
+        + 'in Reactor, executeBlocking in Vert.x, or a reactive driver (R2DBC rather '
+        + 'than JDBC). A blocking call on an event loop is a bug even when it is fast, '
+        + 'because it stops being fast under load.',
+      threads: blockedLoops.map(t => ({ name: t.name, state: t.state, frames: annotate(t.frames) })),
     });
   }
 

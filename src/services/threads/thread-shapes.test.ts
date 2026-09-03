@@ -221,3 +221,61 @@ describe('findStackShapes overall', () => {
     expect(findStackShapes([])).toEqual([]);
   });
 });
+
+describe('reactive.blocked-event-loop', () => {
+  const find = (ts: ThreadInfo[]) =>
+    findStackShapes(ts).find(x => x.ruleId === 'reactive.blocked-event-loop');
+
+  /** A blocking HTTP call, innermost first. */
+  const BLOCKING = [
+    f('java.base/sun.nio.ch.NioSocketImpl.read'),
+    f('okhttp3.internal.http2.Http2Stream.read'),
+    f('com.zapper.zp.catalog.PriceClient.fetch', 'PriceClient.java', 24),
+  ];
+
+  it('fires when an event-loop thread is blocked on the network', () => {
+    const out = find([thread('reactor-http-nio-2', 'RUNNABLE', BLOCKING)]);
+    expect(out).toBeDefined();
+    expect(out!.severity).toBe('critical');
+    // The line to change, not the HTTP client's internals.
+    expect(out!.detail).toContain('PriceClient.java:24');
+  });
+
+  it('stays quiet for the same call on a worker thread', () => {
+    /*
+      The whole point of the rule. `http-nio-exec-3` making a blocking call is
+      an ordinary request thread doing ordinary work; the identical stack on
+      `reactor-http-nio-2` stalls every connection that loop is carrying. No
+      amount of reading the stack tells those apart — only the name does.
+    */
+    expect(find([thread('http-nio-exec-3', 'RUNNABLE', BLOCKING)])).toBeUndefined();
+  });
+
+  it('stays quiet for an event loop that is doing its job', () => {
+    const idle = [
+      f('java.base/sun.nio.ch.EPoll.wait'),
+      f('io.netty.channel.nio.NioEventLoop.select'),
+    ];
+    expect(find([thread('nioEventLoopGroup-3-1', 'RUNNABLE', idle)])).toBeUndefined();
+  });
+
+  it('fires on a database call too, not just HTTP', () => {
+    const jdbc = [
+      f('org.postgresql.jdbc.PgStatement.execute'),
+      f('com.zapper.zp.catalog.PriceRepo.load', 'PriceRepo.java', 31),
+    ];
+    const out = find([thread('vert.x-eventloop-thread-0', 'RUNNABLE', jdbc)]);
+    expect(out).toBeDefined();
+    expect(out!.detail).toContain('PriceRepo.java:31');
+  });
+
+  it('counts how many loops are blocked out of how many there are', () => {
+    const idle = [f('java.base/sun.nio.ch.EPoll.wait')];
+    const out = find([
+      thread('reactor-http-nio-1', 'RUNNABLE', BLOCKING),
+      thread('reactor-http-nio-2', 'RUNNABLE', idle),
+      thread('reactor-http-nio-3', 'RUNNABLE', idle),
+    ]);
+    expect(out!.detail).toMatch(/1 of 3 event-loop threads/);
+  });
+});
