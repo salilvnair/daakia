@@ -33,6 +33,12 @@ export { runRules, RULE_PACK_VERSION } from './heap-rules';
 // Thread analysis rides in the same bundle: it shares the fork, the redaction
 // discipline and the CI gate, and a second worker process would buy nothing.
 export { parseThreadDump } from '../threads/jstack-parser';
+/*
+  The dispatching reader. `parseThreadDump` stays exported because the JVM
+  tests and rules name it directly; anything reading a FILE should come
+  through here, since a file's runtime is a property of its contents.
+*/
+export { parseAnyThreadDump } from '../threads/thread-dump';
 export { analyzeThreadDump, findDeadlocks, findContention, groupThreads } from '../threads/thread-analysis';
 export { parseLog } from '../logs/log-parser';
 export { LogAccumulator, templateOf } from '../logs/log-analysis';

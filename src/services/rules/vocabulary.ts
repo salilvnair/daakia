@@ -20,7 +20,8 @@
  * explicit and by id.
  */
 
-export type FrameCategory = 'txOpen' | 'blockingIo' | 'dbCall' | 'lockWait' | 'library' | 'eventLoop';
+export type FrameCategory =
+  'txOpen' | 'blockingIo' | 'dbCall' | 'lockWait' | 'library' | 'eventLoop' | 'eventLoopFrame';
 
 export interface VocabularyEntry {
   /** Stable, so a pack can disable one built-in without restating the rest. */
@@ -139,6 +140,30 @@ export const BUILTIN_PACK: RulePack = {
       { id: 'loop.grpc', pattern: '^grpc-nio-worker-' },
       { id: 'loop.armeria', pattern: '^armeria-common-worker-' },
     ],
+
+    /*
+      Event loops identified by their STACK rather than their name.
+
+      `eventLoop` above matches thread names, which is the only thing that
+      works on the JVM: the same call is ordinary on `http-nio-exec-3` and a
+      bug on `reactor-http-nio-2`, and no reading of the stack tells them
+      apart.
+
+      asyncio inverts that. Its loop usually runs on `MainThread` — a name
+      that identifies nothing — while the stack says exactly what it is,
+      because every task the loop runs sits on top of `_run_once`. So the
+      loop is found by the frame, and the name is ignored.
+
+      Matched against the dotted form the py-spy parser produces, which is why
+      `^asyncio\.` reads like `^org\.springframework\.` and needs no
+      Python-specific handling anywhere else.
+    */
+    eventLoopFrame: [
+      { id: 'loop.asyncio.runOnce', pattern: '^asyncio\.base_events\._run_once$' },
+      { id: 'loop.asyncio.forever', pattern: '^asyncio\.base_events\.run_forever$' },
+      { id: 'loop.tornado', pattern: '^tornado\.ioloop\..*start$' },
+      { id: 'loop.uvloop', pattern: '^uvloop\..*run_forever$' },
+    ],
   },
 };
 
@@ -152,7 +177,9 @@ export interface CompiledVocabulary {
   problems: { id: string; pattern: string; message: string }[];
 }
 
-const CATEGORIES: FrameCategory[] = ['txOpen', 'blockingIo', 'dbCall', 'lockWait', 'library', 'eventLoop'];
+const CATEGORIES: FrameCategory[] = [
+  'txOpen', 'blockingIo', 'dbCall', 'lockWait', 'library', 'eventLoop', 'eventLoopFrame',
+];
 
 /**
  * Merges packs and compiles them once.

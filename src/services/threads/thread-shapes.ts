@@ -240,5 +240,66 @@ export function findStackShapes(threads: ThreadInfo[]): ShapeFinding[] {
     });
   }
 
+  /*
+    The same bug on a loop the thread NAME cannot identify.
+
+    asyncio runs its loop on `MainThread` more often than not, so the rule
+    above — which finds a loop by its name — sees nothing on a Python
+    service. The stack is the identifier instead: everything the loop runs
+    sits on top of `_run_once`.
+
+    Two conditions, and both are needed:
+
+      1. Application code ABOVE the loop frame. A loop waiting for work sits
+         in `selectors.select`, which is stdlib, so an application frame there
+         means the loop is inside a task rather than in the selector.
+
+      2. The thread is not executing bytecode. py-spy reports `idle` for a
+         thread that has released the GIL inside a C call — `time.sleep`, a
+         synchronous socket read, a blocking driver. A loop legitimately
+         running a task reads `active`.
+
+    Either alone is normal. A loop is always running tasks, and a loop is
+    often idle. Together they say the loop is stopped inside a task, which is
+    the whole bug: one thread carries every connection, so it is not one slow
+    request, it is all of them.
+  */
+  const loops = threads.filter(t =>
+    t.frames.some(f => matchesCategory(vocabulary(), 'eventLoopFrame', f.method)));
+
+  const stalled = loops.filter(t => {
+    // py-spy prints innermost first, so the loop frame is BELOW the task.
+    const at = t.frames.findIndex(f =>
+      matchesCategory(vocabulary(), 'eventLoopFrame', f.method));
+    if (at <= 0) return false;
+    return t.state !== 'RUNNABLE'
+      && t.frames.slice(0, at).some(isApplicationFrame);
+  });
+
+  if (stalled.length) {
+    const where = new Set<string>();
+    for (const t of stalled) {
+      const c = t.frames.find(isApplicationFrame);
+      if (c) where.add(c.file && c.line ? `${c.method} (${c.file}:${c.line})` : c.method);
+    }
+    out.push({
+      ruleId: 'asyncio.blocked-event-loop',
+      severity: 'critical',
+      title: 'Blocking call on the asyncio event loop',
+      detail: `${stalled.length} event loop${stalled.length === 1 ? ' is' : 's are'} `
+        + `stopped inside a task rather than waiting for work`
+        + `${where.size ? `, at ${[...where].slice(0, 3).join(', ')}` : ''}. `
+        + 'The loop has released the GIL in a C call, which means a synchronous '
+        + 'one — time.sleep, a blocking driver, requests — not an await. Every '
+        + 'other task on this loop is stopped for the duration, including the ones '
+        + 'that never touch the slow dependency.',
+      remediation: 'Await an async equivalent (asyncio.sleep, aiohttp/httpx, asyncpg) '
+        + 'or push the synchronous call off the loop with '
+        + 'asyncio.to_thread / run_in_executor. A blocking call on a loop is a bug '
+        + 'even when it is fast, because it stops being fast under load.',
+      threads: stalled.map(t => ({ name: t.name, state: t.state, frames: annotate(t.frames) })),
+    });
+  }
+
   return out;
 }

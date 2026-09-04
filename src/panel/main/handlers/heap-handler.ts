@@ -268,33 +268,38 @@ export function handleThreadsAnalyze(msg: Record<string, unknown>, postMessage: 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const worker = require(path.join(extensionRoot, 'dist', 'heap-worker.js'));
     const text = readFileSync(dumpPath, 'utf8');
-    const dump = worker.parseThreadDump(text);
+    /*
+      The dispatching reader: a py-spy dump becomes the same `ThreadInfo` shape
+      a jstack dump does, so the thread list, the state ribbon, the merged
+      flame graph and every rule work on a Python process without knowing one
+      exists.
+    */
+    const dump = worker.parseAnyThreadDump(text);
     if (!dump.threads.length) {
       /*
-        Say which kind of file this is before saying it is the wrong kind.
-
-        dk8s collects Python stacks itself — `py-spy dump` is an option in the
-        Doctor tab — and routes them to this analyzer, which understands only
-        JVM dumps. Telling someone their file "should look like jstack output"
-        when the tool handed it to them is the kind of message that makes
-        people doubt the collection rather than the reader.
+        Both runtimes are read now, so an empty result means the file is
+        genuinely unreadable rather than the wrong kind. Naming the runtime we
+        recognised still matters: "no threads in this py-spy dump" points at
+        the collection, and "this is neither" points at the file.
       */
-      const looksPython = /^Process \d+: |^Python v\d|\(\w+\.py:\d+\)/m.test(text);
       postMessage({
         type: 'threads:error',
-        message: looksPython
-          ? 'This is a py-spy dump of a Python process. dk8s can collect these, but the '
-            + 'thread analyzer reads JVM dumps only — Python stacks are not parsed yet. '
-            + 'The file itself is plain text and readable from the artifacts folder.'
+        message: dump.runtime === 'python'
+          ? 'This looks like a py-spy dump, but no threads were found in it. A dump taken '
+            + 'while the process was starting or exiting can come out empty.'
           : 'No threads were found in that file. A thread dump looks like the output of '
-            + '`jstack <pid>` or `jcmd <pid> Thread.print`.',
+            + '`jstack <pid>`, `jcmd <pid> Thread.print`, or `py-spy dump --pid <pid>`.',
       });
       return;
     }
     postMessage({
       type: 'threads:done',
       name: path.basename(dumpPath),
-      dump: { timestamp: dump.timestamp, jvm: dump.jvm, unparsedLines: dump.unparsedLines },
+      dump: {
+        timestamp: dump.timestamp, jvm: dump.jvm, unparsedLines: dump.unparsedLines,
+        // So the UI can say "Python 3.11" rather than implying a JVM.
+        runtime: dump.runtime,
+      },
       verdict: worker.analyzeThreadDump(dump),
       threads: dump.threads.map((t: Record<string, unknown>) => ({
         name: t.name, state: t.state, daemon: t.daemon, cpuMs: t.cpuMs,
