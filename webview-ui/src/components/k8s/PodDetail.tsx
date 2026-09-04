@@ -220,7 +220,7 @@ function TerminalTab() {
 
 export function PodDetail() {
   const {
-    detail, detailTab, setDetailTab, closeDetail,
+    detail, detailTab, setDetailTab, closeDetail, explorerPath,
     describeText, yamlText, describeBusy, runtime,
     openShell, shellNotice, dismissShellNotice,
   } = useK8sStore();
@@ -432,6 +432,7 @@ export function PodDetail() {
                     context={detail.context}
                     namespace={detail.namespace}
                     pod={detail.name}
+                    initialPath={explorerPath}
                   />
                 )}
               </>

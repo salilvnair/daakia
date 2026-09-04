@@ -163,7 +163,7 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
       <button
         type="button"
         onClick={() => useDk8sSearchStore.getState().openSearch()}
-        title="Search logs across every watched pod, and archived volumes"
+        title="Quick Search — files and logs across every watched pod"
         className="text-[11px] px-3 py-1 rounded-md cursor-pointer transition-colors
                    flex items-center gap-1.5 shrink-0 font-medium"
         style={{

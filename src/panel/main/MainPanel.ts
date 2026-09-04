@@ -110,6 +110,7 @@ import {
 import {
   handleFilesList, handleFilesSearch, handleFilesRead,
   handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
+  handleFilesSearchMany,
 } from './handlers/files-handler';
 import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from './handlers/jfr-handler';
 import { handleDk8sHeapInvestigate } from './handlers/heap-investigate';
@@ -713,6 +714,9 @@ export class MainPanel {
         break;
       case 'jfr:open':
         void handleJfrOpen(this._post);
+        break;
+      case 'files:searchMany':
+        void handleFilesSearchMany(msg, this._post);
         break;
       case 'files:revealFolder':
         void handleFilesReveal(msg, this._post);

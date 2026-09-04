@@ -375,6 +375,14 @@ interface K8sState {
   /** The pod whose detail panel is open, if any. */
   detail?: PodSummary;
   detailTab: DetailTab;
+  /**
+   * Where the Explorer should open, when something already knows.
+   *
+   * A file search hit is a place, not just a pod — landing on the default
+   * root and making somebody navigate back to the directory they just
+   * searched is the whole value of the hit thrown away.
+   */
+  explorerPath?: string;
   logs: LogLine[];
   logStatus: LogStatus;
   /**
@@ -488,6 +496,7 @@ interface K8sState {
   openDetail: (pod: PodSummary) => void;
   closeDetail: () => void;
   setDetailTab: (tab: DetailTab) => void;
+  setExplorerPath: (path?: string) => void;
   setLogFilter: (v: string) => void;
   /** Add a field filter, or flip its mode if that field/value is already on. */
   addFieldFilter: (f: FieldFilter) => void;
@@ -676,6 +685,8 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   setFilter: (filter) => set({ filter }),
   setView: (view) => set({ view }),
   selectPod: (selectedPod) => set({ selectedPod }),
+
+  setExplorerPath: (explorerPath) => set({ explorerPath }),
 
   openDetail: (pod) => {
     // Reset every per-pod field. Carrying the last pod's logs into this one's

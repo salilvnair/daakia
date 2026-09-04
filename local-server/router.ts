@@ -30,6 +30,7 @@ import {
 import {
   handleFilesList, handleFilesSearch, handleFilesRead,
   handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
+  handleFilesSearchMany,
 } from '../src/panel/main/handlers/files-handler';
 import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from '../src/panel/main/handlers/jfr-handler';
 import { cancelRestRequest } from '../src/http/request-executor';
@@ -319,6 +320,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     */
     case 'jfr:open':
       await handleJfrOpen(post);
+      break;
+    case 'files:searchMany':
+      void handleFilesSearchMany(msg, post);
       break;
     case 'files:revealFolder':
       void handleFilesReveal(msg, post);

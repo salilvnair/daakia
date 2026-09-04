@@ -63,8 +63,16 @@ const ACCENT = 'var(--color-dk8s)';
 */
 const LIKELY_ROOTS = ['/data', '/var/lib', '/mnt', '/opt', '/app', '/'];
 
-export function ExplorerTab({ context, namespace, pod, container }: {
+export function ExplorerTab({ context, namespace, pod, container, initialPath }: {
   context: string; namespace: string; pod: string; container?: string;
+  /**
+   * Open here instead of probing for a volume.
+   *
+   * Set when something already knows where to go — a file-search hit is a
+   * place, and making the reader navigate back to the directory they just
+   * searched throws away the entire value of finding it.
+   */
+  initialPath?: string;
 }) {
   const [mode, setMode] = useState<'files' | 'search' | 'downloads' | 'access'>('files');
   const [path, setPath] = useState<string>('');
@@ -127,6 +135,16 @@ export function ExplorerTab({ context, namespace, pod, container }: {
     let cancelled = false;
     (async () => {
       setBusy(true);
+      if (initialPath) {
+        // Somebody already knows the answer; probing would only be slower and
+        // could land somewhere else.
+        const r = await request<Listing>('files:list', { path: initialPath });
+        if (cancelled) return;
+        setPath(initialPath);
+        setListing(r);
+        setBusy(false);
+        return;
+      }
       for (const candidate of LIKELY_ROOTS) {
         const r = await request<Listing>('files:list', { path: candidate });
         if (cancelled) return;
@@ -152,7 +170,7 @@ export function ExplorerTab({ context, namespace, pod, container }: {
       }
     })();
     return () => { cancelled = true; };
-  }, [request]);
+  }, [request, initialPath]);
 
   const runSearch = useCallback(async () => {
     if (!pattern.trim()) { setHits(null); return; }

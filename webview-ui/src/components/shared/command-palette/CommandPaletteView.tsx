@@ -253,7 +253,7 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
         },
         {
           id: 'dk8s-search', icon: <SearchIcon size={15} />, iconColor: 'var(--color-warning)',
-          label: 'dk8s: Search logs everywhere',
+          label: 'dk8s: Quick Search — logs and files',
           keywords: ['kubernetes', 'k8s', 'grep', 'logs', 'across pods', 'find', 'archive'],
           run: () => {
             dk8s();

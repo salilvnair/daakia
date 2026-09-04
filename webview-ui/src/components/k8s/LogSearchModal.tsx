@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ModalView, ButtonView, SearchInputView, CheckboxView, SelectInputView,
+  SegmentedControlView,
 } from '@salilvnair/dui';
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
@@ -20,6 +21,7 @@ import {
 } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
+import { useFileSearch, FileSearchResults } from './FileSearchPane';
 import { TimeWindowPicker, describeWindow, windowError } from './TimeWindow';
 import { ExportSearchModal } from './ExportSearchModal';
 import { postMsg } from '../../vscode';
@@ -106,7 +108,7 @@ function time(ts?: number): string {
 }
 
 export function LogSearchModal({ onClose }: { onClose: () => void }) {
-  const { pods, selected, openDetail } = useK8sStore();
+  const { pods, selected, openDetail, setDetailTab, setExplorerPath } = useK8sStore();
   const {
     options, running, progress, groups, summary, collapsed,
     picked, pickerOpen, setPicked, setPickerOpen,
@@ -153,6 +155,16 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     : pods.filter(p => picked.includes(p.uid));
 
   const [podFilter, setPodFilter] = useState('');
+
+  /*
+    Logs or files, over the same pod selection.
+
+    One panel rather than two: the pod picking, the pattern and the
+    regex/case switches are identical either way, and the question people
+    arrive with is "where is this", not "which subsystem should I ask".
+  */
+  const [searchIn, setSearchIn] = useState<'logs' | 'files'>('logs');
+  const fileSearch = useFileSearch();
   /*
     The picker offers what the list behind it is showing.
 
@@ -225,6 +237,22 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   }, []);
 
   const submit = useCallback(() => {
+    if (searchIn === 'files') {
+      /*
+        Files search from `/`, not from a remembered path.
+
+        Quick Search is opened without a pod in mind, so there is no current
+        directory to inherit — and the depth cap in `find` is what keeps that
+        honest rather than expensive.
+      */
+      fileSearch.run(
+        chosen.map(p => ({
+          uid: p.uid, name: p.name, namespace: p.namespace, context: p.context!,
+        })),
+        options.query, '/', options.caseSensitive,
+      );
+      return;
+    }
     run(chosen.map(p => ({
       context: p.context!, namespace: p.namespace, pod: p.name,
       containers: p.containers.map(c => c.name),
@@ -232,7 +260,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
       // search does not have to guess it back out of the pod name.
       workload: p.workload?.name,
     })));
-  }, [chosen, run]);
+  }, [chosen, run, searchIn, fileSearch, options.query, options.caseSensitive]);
 
   // Enter searches. Anyone who has typed a query expects it to.
   const onKey = (e: React.KeyboardEvent) => {
@@ -273,7 +301,10 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const canSearch = !!options.query.trim() && chosen.length > 0 && !windowProblem;
+  const canSearch = !!options.query.trim() && chosen.length > 0
+    // The time window only constrains a log search; a bad one must not disable
+    // a file search that never reads it.
+    && (searchIn === 'files' || !windowProblem);
   const totalHits = groups.reduce((n, g) => n + g.result.matched, 0);
   const anyCapped = groups.some(g => g.result.capped);
 
@@ -302,13 +333,13 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
       open
       mode="inline"
       onClose={onClose}
-      title="Search logs"
+      title="Quick Search"
       subtitle={`${chosen.length} pod${chosen.length === 1 ? '' : 's'} selected`}
       headerColor={ACCENT}
       footerRight={
         <div className="flex items-center gap-2">
           <ButtonView label="Close" size="sm" variant="secondary" onClick={onClose} />
-          {running
+          {(searchIn === 'logs' ? running : fileSearch.running)
             ? <ButtonView label="Stop" size="sm" variant="secondary"
                           accentColor="var(--color-error)" color="var(--color-error)"
                           onClick={cancel} />
@@ -457,18 +488,34 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        {/* ── Query and options ── */}
-        <SearchInputView
-          value={options.query}
-          onChange={(v: string) => setOptions({ query: v })}
-          placeholder="Search across the selected pods’ logs"
-          size="md"
-          width="100%"
-        />
+        {/* ── What to search, then the query ── */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <SegmentedControlView
+            options={[
+              { value: 'logs', label: 'Logs' },
+              { value: 'files', label: 'Files' },
+            ]}
+            value={searchIn}
+            onChange={v => setSearchIn(v as 'logs' | 'files')}
+            size="sm" density="compact" accentColor={ACCENT}
+          />
+          <span className="flex-1" style={{ minWidth: 220 }}>
+            <SearchInputView
+              value={options.query}
+              onChange={(v: string) => setOptions({ query: v })}
+              placeholder={searchIn === 'logs'
+                ? 'Search across the selected pods’ logs'
+                : 'File name or glob — *invoice*, application.properties'}
+              size="md"
+              width="100%"
+            />
+          </span>
+        </div>
 
         {/* Its own row: six choices and two date fields do not fit beside the
             checkboxes, and this is the control most likely to be the reason a
             search comes back empty. */}
+        {searchIn === 'logs' && (
         <div className="flex flex-col gap-1.5">
           <span className="text-[10px] uppercase tracking-wider"
                 style={{ color: 'var(--color-text-muted)' }}>
@@ -480,16 +527,27 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             {describeWindow(timeWindow)}
           </span>
         </div>
+        )}
 
         <div className="flex items-center gap-3 flex-wrap">
           <CheckboxView label="regex" checked={options.regex} size="md" accentColor={ACCENT}
                         onChange={v => setOptions({ regex: v })} />
           <CheckboxView label="match case" checked={options.caseSensitive} size="md" accentColor={ACCENT}
                         onChange={v => setOptions({ caseSensitive: v })} />
+          {/*
+            Log-only switches, and the reason they disappear rather than grey
+            out: a disabled control on a Files search still asks the reader to
+            work out why it is there. `previous runs`, a tail length and
+            surrounding lines are all properties of a log stream, and a
+            filesystem has none of them.
+          */}
+          {searchIn === 'logs' && (
           <CheckboxView label="previous runs" checked={options.includePrevious} size="md"
                         accentColor="var(--color-warning)"
                         onChange={v => setOptions({ includePrevious: v })} />
+          )}
           <div className="flex-1" />
+          {searchIn === 'logs' && (
           <SelectInputView
             value={String(options.tailLines)}
             onChange={v => setOptions({ tailLines: Number(v) })}
@@ -498,6 +556,8 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             }))}
             size="md" width={148} accentColor={ACCENT}
           />
+          )}
+          {searchIn === 'logs' && (
           <SelectInputView
             value={String(options.contextLines)}
             onChange={v => setOptions({ contextLines: Number(v) })}
@@ -509,10 +569,38 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             ]}
             size="md" width={192} accentColor={ACCENT}
           />
+          )}
         </div>
 
         {/* ── Progress and summary ── */}
-        {(running || summary) && (
+        {searchIn === 'files' && (fileSearch.running || fileSearch.ran) && (
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[11.5px]"
+               style={{ background: 'var(--color-surface-hover)' }}>
+            {fileSearch.running && <SpinnerIcon size={12} color={ACCENT} />}
+            <span style={{ color: fileSearch.running ? ACCENT : 'var(--color-text-secondary)' }}>
+              {fileSearch.running
+                ? `Scanning ${fileSearch.scanned} of ${fileSearch.total} pods`
+                : `${fileSearch.matched.toLocaleString()} match${fileSearch.matched === 1 ? '' : 'es'} `
+                  + `in ${fileSearch.podsWithHits} of ${fileSearch.scanned} pods`}
+            </span>
+            {!fileSearch.running && (
+              <span style={{ color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                · {fileSearch.results.reduce((a, r) => a + r.hits.length, 0).toLocaleString()} files listed
+              </span>
+            )}
+            {fileSearch.running && (
+              <div className="flex-1" style={{ height: 3, borderRadius: 2, background: 'var(--color-surface)' }}>
+                <div style={{
+                  height: '100%', borderRadius: 2, background: ACCENT,
+                  width: `${fileSearch.total ? (fileSearch.scanned / fileSearch.total) * 100 : 0}%`,
+                  transition: 'width .2s ease',
+                }} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {searchIn === 'logs' && (running || summary) && (
           <div className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[11.5px]"
                style={{ background: 'var(--color-surface-hover)' }}>
             {running && <SpinnerIcon size={12} color={ACCENT} />}
@@ -601,6 +689,52 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         )}
 
         {/* ── Results ── */}
+        {searchIn === 'files' ? (
+          <div className="flex-1 flex flex-col rounded-md overflow-hidden"
+               style={{
+                 minHeight: 340, maxHeight: 520,
+                 background: 'var(--color-surface)',
+                 border: '1px solid var(--color-surface-border)',
+               }}>
+            <FileSearchResults
+              state={fileSearch}
+              onOpenExplorer={r => {
+                /*
+                  A hit is a place, not just a pod. Handing the Explorer the
+                  file's directory means it opens where the reader already is,
+                  rather than making them navigate back to the folder they just
+                  searched — which was the whole point of finding it.
+                */
+                const pod = pods.find(p => p.name === r.pod && p.namespace === r.namespace);
+                if (!pod) return;
+                setExplorerPath(r.path ? dirOf(r.path) : undefined);
+                openDetail(pod);
+                // openDetail restores the tab last read on that pod, so the
+                // Explorer has to be asked for after it, not instead.
+                setDetailTab('explorer');
+                onClose();
+              }}
+              onView={r => {
+                const pod = pods.find(p => p.name === r.pod && p.namespace === r.namespace);
+                if (!pod || !r.path) return;
+                setExplorerPath(dirOf(r.path));
+                openDetail(pod);
+                setDetailTab('explorer');
+                onClose();
+              }}
+              onDownload={r => {
+                // Straight to disk, without leaving the search — the common
+                // case is grabbing the same file off several pods in a row.
+                if (!r.path) return;
+                postMsg({
+                  type: 'files:download',
+                  context: r.context, namespace: r.namespace, pod: r.pod,
+                  path: r.path, name: r.path.slice(r.path.lastIndexOf('/') + 1),
+                });
+              }}
+            />
+          </div>
+        ) : (
         <div
           ref={scrollRef}
           onScroll={() => setScrollTop(scrollRef.current?.scrollTop ?? 0)}
@@ -791,12 +925,24 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
         </div>
+        )}
 
         <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
-          Logs are read and matched on this machine, a line at a time — nothing is buffered
-          whole and nothing leaves. Click a live hit to open that pod&rsquo;s log
-          {archiveSearched && ', or an archived one to open the file it came from'}.
-          {archiveSearched && ' Archived logs on the mounted volume are searched too.'}
+          {searchIn === 'files' ? (
+            <>
+              Each pod walks its own filesystem — there is no filesystem API to query, so this
+              is one <code>find</code> per pod, capped by depth and result count. A pod with no
+              shell says so and the rest still search. Click a hit to open that pod&rsquo;s
+              Explorer.
+            </>
+          ) : (
+            <>
+              Logs are read and matched on this machine, a line at a time — nothing is buffered
+              whole and nothing leaves. Click a live hit to open that pod&rsquo;s log
+              {archiveSearched && ', or an archived one to open the file it came from'}.
+              {archiveSearched && ' Archived logs on the mounted volume are searched too.'}
+            </>
+          )}
         </span>
       </div>
     </ModalView>
@@ -811,4 +957,10 @@ function fileSize(n: number): string {
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(0)} KB`;
   if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
   return `${(n / 1024 ** 3).toFixed(2)} GB`;
+}
+
+/** The directory a file lives in — where the Explorer should open. */
+function dirOf(p: string): string {
+  const cut = p.replace(/\/+$/, '').lastIndexOf('/');
+  return cut <= 0 ? '/' : p.slice(0, cut);
 }

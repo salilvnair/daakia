@@ -203,3 +203,67 @@ export async function handleFilesReveal(msg: Record<string, unknown>, post: Post
     post({ type: 'files:revealUnavailable', path: dir });
   }
 }
+
+/**
+ * Search many pods' filesystems at once, for the Quick Search panel.
+ *
+ * The log search reads streams on this machine; this one asks each pod to walk
+ * its own filesystem, which is the only way it can be done — there is no
+ * filesystem API to query. So the shape is different from log search in one
+ * way that matters: a pod that cannot answer is a RESULT, not a failure. A
+ * distroless sidecar in a list of twelve should report "no shell" beside the
+ * eleven that worked, rather than taking the search down with it.
+ */
+export async function handleFilesSearchMany(msg: Record<string, unknown>, post: PostMessage) {
+  const requestId = msg.requestId as string;
+  const pattern = String(msg.pattern ?? '');
+  const root = String(msg.root ?? '/');
+  const pods = Array.isArray(msg.pods) ? msg.pods as Record<string, unknown>[] : [];
+
+  let scanned = 0;
+  let matched = 0;
+  const podsWithHits = new Set<string>();
+
+  post({ type: 'files:searchMany:start', requestId, total: pods.length });
+
+  for (const raw of pods) {
+    const t = targetOf(raw);
+    try {
+      const r = await searchFiles(t, {
+        root,
+        pattern,
+        limit: typeof msg.limit === 'number' ? msg.limit : 200,
+        caseSensitive: !!msg.caseSensitive,
+      });
+      scanned++;
+      if (r.hits.length) {
+        matched += r.hits.length;
+        podsWithHits.add(t.pod);
+      }
+      post({
+        type: 'files:searchMany:pod',
+        requestId,
+        pod: t.pod,
+        namespace: t.namespace,
+        context: t.context,
+        hits: r.hits,
+        capped: r.capped,
+        command: r.command,
+        error: r.error,
+      });
+    } catch (err) {
+      scanned++;
+      post({
+        type: 'files:searchMany:pod', requestId,
+        pod: t.pod, namespace: t.namespace, context: t.context,
+        hits: [], capped: false, command: '',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  post({
+    type: 'files:searchMany:done', requestId,
+    scanned, matched, podsWithHits: podsWithHits.size,
+  });
+}
