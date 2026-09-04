@@ -162,6 +162,20 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
     same failure the jump itself was fixing, only in the other direction.
   */
   const [returnFlash, setReturnFlash] = useState<string | undefined>(state.selected);
+  /*
+    A hit is a pod AND a path, never a path.
+
+    `/var/lib/dpkg/info/libsemanage2:amd64.md5sums` exists in every Debian-based
+    image in the namespace, so a selection remembered as the path alone marked
+    the same row in nineteen pods at once — nineteen rows lit, none of them
+    telling you which one you had actually opened. The row keeps the bare path
+    as its id, because that is what gets handed back as the file to fetch; what
+    gets remembered is namespace/pod plus the path, and each group unwraps that
+    pair only for itself.
+  */
+  const hitKey = (pod: string, path: string) => `${pod}|${path}`;
+  const hitFor = (pod: string, mark?: string) =>
+    mark && mark.startsWith(`${pod}|`) ? mark.slice(pod.length + 1) : undefined;
   useEffect(() => {
     if (!state.selected) return;
     setReturnFlash(state.selected);
@@ -311,15 +325,15 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
               size="sm"
               accentColor={ACCENT}
               actions={actions}
-              selectedId={state.selected}
-              highlightId={returnFlash}
-              onSelect={e => setFS({ selected: e.id })}
-              onOpen={e => { setFS({ selected: e.id }); onView({ ...r, path: e.id }); }}
+              selectedId={hitFor(key, state.selected)}
+              highlightId={hitFor(key, returnFlash)}
+              onSelect={e => setFS({ selected: hitKey(key, e.id) })}
+              onOpen={e => { setFS({ selected: hitKey(key, e.id) }); onView({ ...r, path: e.id }); }}
               onAction={(id, e) => {
                 const t = { ...r, path: e.id };
                 // Acting on a row selects it, so the one you left is the one
                 // you come back to.
-                setFS({ selected: e.id });
+                setFS({ selected: hitKey(key, e.id) });
                 if (id === 'open') onView(t);
                 else if (id === 'save') onDownload(t);
                 else onOpenExplorer(t);
