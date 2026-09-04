@@ -54,7 +54,8 @@ function Row({ k, v, mono = true }: { k: string; v: React.ReactNode; mono?: bool
 export function RetentionDetail({ subject, onOpenSource, onAsk }: {
   subject: DetailSubject | null;
   onOpenSource?: (className: string) => void;
-  onAsk?: (className: string, retainedBytes: number, sharePercent: number) => void;
+  /** Ask about the selected node; the graph reads what it holds first. */
+  onAsk?: (row: number) => void;
 }) {
   const [held, setHeld] = useState<RetainedClasses | null>(null);
   const [busy, setBusy] = useState(false);
@@ -120,7 +121,7 @@ export function RetentionDetail({ subject, onOpenSource, onAsk }: {
           {onAsk && (
             <AskChip label=""
                      title="Explain this class and what it is holding"
-                     onClick={() => onAsk(subject.className, subject.retainedBytes, subject.sharePercent)} />
+                     onClick={() => onAsk(subject.row)} />
           )}
         </div>
 

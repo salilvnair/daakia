@@ -39,6 +39,8 @@ interface Suspect {
   retainedObjects: number;
   accumulates?: { className: string; count: number };
   heldIn?: { className: string; retainedBytes: number };
+  /** What this object keeps alive, by class — the answer to "holding what". */
+  holds?: { className: string; instances: number; bytes: number }[];
   pathToRoot: { className: string; retainedBytes: number }[];
 }
 
@@ -483,10 +485,24 @@ export function HeapAnalyzerView() {
         <AnalyzerBoundary name="Retention" resetKey={dumpKey}>
           <HeapGraphView
             liveBytes={liveBytes}
-            onAsk={(className, retainedBytes, sharePercent) => askSuspect({
-              className, retainedBytes,
-              retainedPercent: sharePercent,
-              retainedObjects: 0, pathToRoot: [],
+            /*
+              Real numbers, read from the dump when the question is asked.
+
+              This used to fabricate a suspect with `retainedObjects: 0` and an
+              empty path, so the model was told a class held 98% of the heap
+              and kept alive nothing — with the two lines that would have named
+              what it held dropped by the `.filter(Boolean)` for being absent.
+            */
+            onAsk={a => askSuspect({
+              className: a.className,
+              retainedBytes: a.retainedBytes,
+              retainedPercent: a.sharePercent,
+              retainedObjects: a.retainedObjects,
+              holds: a.holds,
+              accumulates: a.holds.length
+                ? { className: a.holds[0].className, count: a.holds[0].instances }
+                : undefined,
+              pathToRoot: a.path.map(className => ({ className, retainedBytes: 0 })),
             })}
           />
         </AnalyzerBoundary>

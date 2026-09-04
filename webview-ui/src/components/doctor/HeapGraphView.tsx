@@ -9,14 +9,29 @@
  * Node width encodes retained bytes on a square-root scale, so a node holding
  * 100× more memory reads as clearly larger without becoming 100× wider.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ReactFlow, Background, Controls, MarkerType, type Node, type Edge } from '@xyflow/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ReactFlow, Background, Controls, MarkerType, applyNodeChanges,
+  type Node, type Edge, type NodeChange,
+} from '@xyflow/react';
 import { RetentionNode, type RetentionNodeData } from './RetentionNode';
 import { decodeClassName } from './class-name';
 import '@xyflow/react/dist/style.css';
 import { heapQuery, bytes, hueForShare, type DominatorChild } from './heap-query';
 import { RetentionDetail, type DetailSubject } from './RetentionDetail';
 import { descendantsOf } from './retention-tree';
+import type { RetainedClasses } from './heap-query';
+
+export interface HeapAsk {
+  className: string;
+  retainedBytes: number;
+  sharePercent: number;
+  /** Real counts, read from the dump at ask time. */
+  retainedObjects: number;
+  holds: { className: string; instances: number; bytes: number }[];
+  /** Root ... parent ... this, by class. */
+  path: string[];
+}
 
 /*
   Sized for the node, which is now a card rather than a line of text.
@@ -53,7 +68,15 @@ const TOOL_BTN: React.CSSProperties = {
 export function HeapGraphView({ liveBytes, onAsk }: {
   liveBytes: number;
   /** Asking about one node, the same gesture the suspects list has. */
-  onAsk?: (className: string, retainedBytes: number, sharePercent: number) => void;
+  /**
+   * Ask about one node, with what it actually holds.
+   *
+   * This used to hand up three scalars, and the caller filled the rest of the
+   * evidence with zeros — so a class retaining 98% of the heap was described
+   * to the model as keeping alive "0 objects", with nothing named. The whole
+   * question is WHAT it holds, so the answer has to be in the evidence.
+   */
+  onAsk?: (a: HeapAsk) => void;
 }) {
   const [nodesData, setNodesData] = useState<Loaded[]>([]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -78,6 +101,43 @@ export function HeapGraphView({ liveBytes, onAsk }: {
   const [locked, setLocked] = useState(false);
   /** The node the detail panel is describing. */
   const [selected, setSelected] = useState<number | null>(null);
+
+  /*
+    The detail panel's width, and whether it is there at all.
+
+    248px fits the numbers and truncates every class name, which on a heap is
+    the half that matters — `DateTimeFormatterBuilder.Nu…` identifies nothing.
+    Dragging it wider is the fix, and the same splitter the sidebar uses is the
+    one people already know: drag to resize, click to collapse.
+  */
+  const [panelW, setPanelW] = useState(248);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [dragW, setDragW] = useState(false);
+  const dragFrom = useRef<{ x: number; w: number } | null>(null);
+
+  const onSplitDown = useCallback((e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragFrom.current = { x: e.clientX, w: panelW };
+    setDragW(true);
+  }, [panelW]);
+
+  const onSplitMove = useCallback((e: React.PointerEvent) => {
+    const from = dragFrom.current;
+    if (!from) return;
+    // Dragging LEFT widens: the panel is on the right edge.
+    const next = from.w + (from.x - e.clientX);
+    setPanelW(Math.max(200, Math.min(720, next)));
+    if (!panelOpen) setPanelOpen(true);
+  }, [panelOpen]);
+
+  const onSplitUp = useCallback((e: React.PointerEvent) => {
+    const from = dragFrom.current;
+    dragFrom.current = null;
+    setDragW(false);
+    // A drag that never moved is a click, and a click collapses — the same
+    // gesture the sidebar splitter uses.
+    if (from && Math.abs(from.x - e.clientX) < 4) setPanelOpen(o => !o);
+  }, []);
 
   const load = useCallback(async (parentRow: number, depth: number) => {
     setBusy(parentRow);
@@ -106,7 +166,53 @@ export function HeapGraphView({ liveBytes, onAsk }: {
 
   useEffect(() => { load(-1, 0); }, [load]);
 
-  const { nodes, edges } = useMemo(() => {
+  /** Root → … → this, by class name. */
+  const pathOf = useCallback((row: number): string[] => {
+    const out: string[] = [];
+    const guard = new Set<number>();
+    let cur = nodesData.find(x => x.row === row);
+    while (cur && !guard.has(cur.row)) {
+      guard.add(cur.row);
+      out.unshift(cur.className);
+      const p: number | null = cur.parent;
+      cur = p === null ? undefined : nodesData.find(x => x.row === p);
+    }
+    return out;
+  }, [nodesData]);
+
+  /**
+   * Ask about a node, having first read what it holds.
+   *
+   * The query is made HERE rather than by the caller because the row id is a
+   * handle into this view's data and means nothing outside it. Failing to read
+   * the breakdown is not a reason to refuse the question — the ask still goes
+   * with what is certain, and the absence is simply not claimed.
+   */
+  const askNode = useCallback(async (row: number) => {
+    const n = nodesData.find(x => x.row === row);
+    if (!n || !onAsk) return;
+    let held: RetainedClasses | undefined;
+    try {
+      held = await heapQuery<RetainedClasses>({ type: 'retainedClasses', row, limit: 8 });
+    } catch { /* answered without it */ }
+    onAsk({
+      className: n.className,
+      retainedBytes: n.retainedBytes,
+      sharePercent: liveBytes ? (n.retainedBytes / liveBytes) * 100 : 0,
+      retainedObjects: held?.totalObjects ?? 0,
+      holds: held?.rows ?? [],
+      path: pathOf(row),
+    });
+  }, [nodesData, onAsk, liveBytes, pathOf]);
+
+  /*
+    What the graph SHOULD contain, given the data — not what is on screen.
+
+    Positions in here are the computed layout. Once a node exists, React Flow
+    owns where it is (see `rfNodes` below), because during a drag it is the
+    only thing that knows where the pointer went.
+  */
+  const { nodes: desired, edges } = useMemo(() => {
     // Simple layered layout: depth is the column, order within depth the row.
     const byDepth = new Map<number, Loaded[]>();
     for (const n of nodesData) {
@@ -159,7 +265,7 @@ export function HeapGraphView({ liveBytes, onAsk }: {
           */
           showBar: share * 100 >= 1,
           busy: busy === n.row,
-          onAsk: () => onAsk?.(n.className, n.retainedBytes, share * 100),
+          onAsk: onAsk ? () => { void askNode(n.row); } : undefined,
         };
         nodes.push({
           id,
@@ -188,7 +294,52 @@ export function HeapGraphView({ liveBytes, onAsk }: {
       });
     }
     return { nodes, edges };
-  }, [nodesData, expanded, busy, liveBytes, moved, selected]);
+  }, [nodesData, expanded, busy, liveBytes, moved, selected, onAsk, askNode]);
+
+  /*
+    The nodes React Flow is actually rendering.
+
+    This used to be `desired` passed straight in, with no `onNodesChange`. A
+    controlled `nodes` prop and no change handler means every position React
+    Flow computes during a drag is thrown away and replaced by the layout on
+    the next render — so the node did not follow the pointer at all. It sat
+    still while you dragged and then jumped to the drop point when the gesture
+    ended, which is the flick.
+
+    Now React Flow applies its own position changes, and this state is
+    reconciled with `desired` only when the DATA changes: a node that already
+    exists keeps wherever it currently is, new ones arrive at their computed
+    spot, and removed ones go. Nothing recomputes a position for a node that is
+    already on screen, so nothing can fight the pointer.
+  */
+  const [rfNodes, setRfNodes] = useState<Node[]>([]);
+  /** Bumped by re-layout, the one case where computed positions must win. */
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
+
+  useEffect(() => {
+    setRfNodes(prev => {
+      const live = new Map(prev.map(n => [n.id, n]));
+      return desired.map(d => {
+        const existing = live.get(d.id);
+        return existing
+          ? { ...d, position: existing.position, dragging: existing.dragging }
+          : d;
+      });
+    });
+  }, [desired]);
+
+  // Re-layout is the deliberate exception: take the computed positions.
+  useEffect(() => {
+    if (layoutEpoch === 0) return;
+    setRfNodes(desired.map(d => ({ ...d })));
+    // `desired` is intentionally not a dependency — this must run when the
+    // reader asks for a re-layout, not every time the data changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutEpoch]);
+
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setRfNodes(ns => applyNodeChanges(changes, ns));
+  }, []);
 
   const collapse = useCallback((row: number) => {
     setNodesData(prev => {
@@ -252,7 +403,11 @@ export function HeapGraphView({ liveBytes, onAsk }: {
     };
   }, [selected, nodesData, liveBytes]);
 
-  const relayout = useCallback(() => { setMoved({}); setLocked(false); }, []);
+  const relayout = useCallback(() => {
+    setMoved({});
+    setLocked(false);
+    setLayoutEpoch(e => e + 1);
+  }, []);
 
   /*
     Locking pins where everything is NOW, not just what was dragged.
@@ -264,10 +419,10 @@ export function HeapGraphView({ liveBytes, onAsk }: {
   */
   const toggleLock = useCallback(() => {
     setLocked(was => {
-      if (!was) setMoved(Object.fromEntries(nodes.map(n => [n.id, { ...n.position }])));
+      if (!was) setMoved(Object.fromEntries(rfNodes.map(n => [n.id, { ...n.position }])));
       return !was;
     });
-  }, [nodes]);
+  }, [rfNodes]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -307,8 +462,9 @@ export function HeapGraphView({ liveBytes, onAsk }: {
         <div className="flex-1 min-w-0">
         <ReactFlow
           nodeTypes={NODE_TYPES}
-          nodes={nodes}
+          nodes={rfNodes}
           edges={edges}
+          onNodesChange={onNodesChange}
           onNodeClick={onNodeClick}
           onNodeDragStop={onNodeDragStop}
           // Only on the first layout: re-fitting after every expand undoes the
@@ -350,13 +506,37 @@ export function HeapGraphView({ liveBytes, onAsk }: {
           is describing. A fixed column costs the same width whether or not
           anything is selected, and in exchange nothing ever moves.
         */}
+        <div
+          className="w-[6px] flex-shrink-0 cursor-col-resize relative select-none group"
+          onPointerDown={onSplitDown}
+          onPointerMove={onSplitMove}
+          onPointerUp={onSplitUp}
+          title="Drag to resize · click to collapse"
+          aria-label="Resize or collapse the detail panel"
+        >
+          <div
+            className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[3px] rounded-full transition-all duration-150 ${
+              dragW ? 'h-[80px]' : panelOpen ? 'h-[44px] group-hover:h-[80px]' : 'h-[48px] group-hover:h-[80px]'
+            }`}
+            style={{
+              backgroundColor: dragW
+                ? 'var(--color-dk8s)'
+                : panelOpen
+                  ? 'var(--color-surface-border)'
+                  : 'color-mix(in srgb, var(--color-dk8s) 30%, transparent)',
+            }}
+          />
+        </div>
+
         <div className="flex flex-col overflow-hidden flex-shrink-0"
              style={{
-               width: 248,
-               borderLeft: '1px solid var(--color-surface-border)',
+               width: panelOpen ? panelW : 0,
+               borderLeft: panelOpen ? '1px solid var(--color-surface-border)' : 'none',
                background: 'var(--color-panel)',
+               // No transition while dragging, or the panel lags the pointer.
+               transition: dragW ? undefined : 'width .14s ease',
              }}>
-          <RetentionDetail subject={subject} onAsk={onAsk} />
+          <RetentionDetail subject={subject} onAsk={onAsk ? askNode : undefined} />
         </div>
       </div>
     </div>
