@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parsePackageFilter, baseTypeOf, matchesPackages, filterByPackages,
+  parsePackageFilter, baseTypeOf, matchesPackages, filterByPackages, toDescriptor,
 } from './heap-filter';
 
 describe('parsePackageFilter', () => {
@@ -142,5 +142,37 @@ describe('narrowing to one class', () => {
   it('leaves ordinary package matching alone', () => {
     expect(matchesPackages('com.acme.Order', ['com.acme'])).toBe(true);
     expect(matchesPackages('com.acmex.Order', ['com.acme'])).toBe(false);
+  });
+});
+
+describe('the readable array form', () => {
+  /*
+    Narrowing to a class puts its name in the filter box, which is a box a
+    person is expected to read and type in. It used to receive the engine's
+    spelling — `[B`, or `[Ljava.lang.Object;` — so the breadcrumb said
+    `class [B` and the box agreed with it.
+  */
+  it('matches a primitive array written the way it is displayed', () => {
+    expect(matchesPackages('[B', ['byte[]'])).toBe(true);
+    expect(matchesPackages('[[I', ['int[][]'])).toBe(true);
+  });
+
+  it('matches an object array written the way it is displayed', () => {
+    expect(matchesPackages('[Ljava.lang.Object;', ['java.lang.Object[]'])).toBe(true);
+  });
+
+  it('still matches the raw descriptor', () => {
+    // The stored filters of anyone mid-session, and the engine's own spelling.
+    expect(matchesPackages('[B', ['[B'])).toBe(true);
+  });
+
+  it('does not turn a plain class name into an array', () => {
+    expect(toDescriptor('com.acme.Order')).toBe('com.acme.Order');
+    expect(matchesPackages('com.acme.Order', ['com.acme'])).toBe(true);
+  });
+
+  it('does not match a different type that ends the same way', () => {
+    expect(matchesPackages('[B', ['short[]'])).toBe(false);
+    expect(matchesPackages('[Lcom.acme.Order;', ['com.other.Order[]'])).toBe(false);
   });
 });

@@ -99,7 +99,7 @@ export function HeapHistogramView({ liveBytes, packageFilter, onNarrow }: {
         </div>
         <div className="flex-1" />
         <span className="text-[11px] text-[var(--color-text-muted)] font-mono tabular-nums">
-          {loading ? 'loading…' : `${total.toLocaleString()} classes`}
+          {loading ? 'loading…' : `${total.toLocaleString()} ${total === 1 ? 'class' : 'classes'}`}
         </span>
       </div>
 

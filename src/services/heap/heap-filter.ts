@@ -61,6 +61,33 @@ export function baseTypeOf(className: string): string {
  * An empty prefix list matches everything, so an empty box is not a filter that
  * hides the entire heap.
  */
+/**
+ * The JVM descriptor for a name someone can actually read.
+ *
+ * `byte[]` is what the UI shows and `[B` is what the heap calls it, and until
+ * now only the second one could be typed or stored. Narrowing to a class put
+ * the raw descriptor into the filter box — so the breadcrumb read `class [B`
+ * and the box read `[B`, which is the engine's spelling leaking into the one
+ * place a person is expected to type.
+ *
+ * Accepting both means the friendly form can be the stored filter, and the
+ * display and the value stay the same string. Anything without a trailing
+ * `[]` is returned unchanged: a plain class name is already its own filter.
+ */
+export function toDescriptor(name: string): string {
+  let s = name.trim();
+  let depth = 0;
+  while (s.endsWith('[]')) { s = s.slice(0, -2); depth++; }
+  if (depth === 0) return name;
+
+  const prim: Record<string, string> = {
+    byte: 'B', char: 'C', double: 'D', float: 'F',
+    int: 'I', long: 'J', short: 'S', boolean: 'Z',
+  };
+  const el = prim[s] ? prim[s] : `L${s};`;
+  return '['.repeat(depth) + el;
+}
+
 export function matchesPackages(className: string, prefixes: string[]): boolean {
   if (prefixes.length === 0) return true;
 
@@ -74,6 +101,8 @@ export function matchesPackages(className: string, prefixes: string[]): boolean 
     empty list.
   */
   if (prefixes.includes(className)) return true;
+  // ...and the same name written the way a person reads it.
+  if (prefixes.some(p => toDescriptor(p) === className)) return true;
 
   const name = baseTypeOf(className);
   if (!name) return false;

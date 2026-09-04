@@ -16,6 +16,8 @@
  * whether the last step was the right one.
  */
 
+import { decodeClassName, fullClassName } from './class-name';
+
 export type StepKind = 'all' | 'package' | 'class' | 'search';
 
 export interface SetStep {
@@ -31,6 +33,7 @@ export interface SetStep {
    */
   filter: string;
 }
+
 
 export const ROOT: SetStep = { kind: 'all', label: 'all objects', filter: '' };
 
@@ -80,8 +83,24 @@ export function packageStep(pkg: string): SetStep {
  * someone means when they click `Leak` and expect `Leak$Entry` to come with it.
  */
 export function classStep(className: string): SetStep {
-  const simple = className.split('.').pop() ?? className;
-  return { kind: 'class', label: `class ${simple}`, filter: className };
+  /*
+    Decoded, not split on dots.
+
+    `[B` has no dot, so splitting returned `[B` and the breadcrumb read
+    `class [B` — the engine's spelling of `byte[]`, in the one place meant to
+    tell a person where they are. `[Ljava.lang.Object;` was worse: it split to
+    `Object;`, a name of nothing.
+
+    The FILTER is the readable form too, not just the label, so the box the
+    reader can type in shows the same string it is matching on. The engine
+    accepts it — see `toDescriptor` in heap-filter.
+  */
+  const readable = fullClassName(className);
+  return {
+    kind: 'class',
+    label: `class ${decodeClassName(className).simpleName}`,
+    filter: readable,
+  };
 }
 
 /** A free-text search, as a step. */
