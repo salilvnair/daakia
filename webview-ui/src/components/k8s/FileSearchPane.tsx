@@ -151,8 +151,11 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
   const collapsedList = useDk8sSearchStore(s => s.fileSearch.collapsed);
   const setFileSearch = useDk8sSearchStore(s => s.setFileSearch);
   const collapsed = new Set(collapsedList);
-  const setCollapsed = (fn: (prev: Set<string>) => Set<string>) =>
-    setFileSearch({ collapsed: [...fn(new Set(collapsedList))] });
+  const toggle = (key: string) => {
+    const next = new Set(collapsedList);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setFileSearch({ collapsed: [...next] });
+  };
 
   if (!state.ran) {
     return (
@@ -218,8 +221,19 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
 
         return (
           <div key={key} style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+            {/*
+              The whole strip toggles, not just the chevron.
+
+              A 12px target at the far left of a full-width row is a chore to
+              hit repeatedly, and the row is doing nothing else. The pod NAME
+              is the exception — it is the one thing here somebody wants to
+              select and copy, and a click that collapses the section instead
+              of placing a caret is the kind of small betrayal that makes
+              people stop trying.
+            */}
             <div className="flex items-center gap-2 px-2 py-1 flex-wrap sticky top-0 z-10"
-                 style={{ background: 'var(--color-panel)' }}>
+                 onClick={() => toggle(key)}
+                 style={{ background: 'var(--color-panel)', cursor: 'pointer' }}>
               {/*
                 A pod is a section, and forty hits across twelve pods is a
                 scroll nobody finishes. Collapsing one is how you put a pod
@@ -227,11 +241,7 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
               */}
               <button
                 type="button"
-                onClick={() => setCollapsed(prev => {
-                  const next = new Set(prev);
-                  if (next.has(key)) next.delete(key); else next.add(key);
-                  return next;
-                })}
+                onClick={e => { e.stopPropagation(); toggle(key); }}
                 aria-label={open ? `Collapse ${r.pod}` : `Expand ${r.pod}`}
                 aria-expanded={open}
                 style={{
@@ -243,29 +253,31 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
                 {open ? <ChevronDownIcon size={11} /> : <ChevronRightIcon size={11} />}
               </button>
               <span className="text-[10.5px] font-mono font-semibold"
-                    style={{ color: 'var(--color-text-primary)' }}>{r.pod}</span>
+                    onClick={e => e.stopPropagation()}
+                    style={{ color: 'var(--color-text-primary)', cursor: 'text', userSelect: 'text' }}
+              >{r.pod}</span>
               <span className="text-[9px]" style={{ color: 'var(--color-text-muted)' }}>
                 {r.namespace}
               </span>
-              <span className="text-[8.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+              <span className="font-bold uppercase rounded"
                     style={{
+                      fontSize: 7, letterSpacing: '.03em', padding: '0.5px 3.5px',
                       color: ACCENT,
                       background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-                      border: `1px solid color-mix(in srgb, ${ACCENT} 28%, transparent)`,
+                      border: `1px solid color-mix(in srgb, ${ACCENT} 26%, transparent)`,
                     }}>
                 {r.hits.length}{r.capped ? '+' : ''} {r.hits.length === 1 ? 'file' : 'files'}
               </span>
               <span className="flex-1" />
               <button
                 type="button"
-                onClick={() => onOpenExplorer(r)}
+                onClick={e => { e.stopPropagation(); onOpenExplorer(r); }}
                 title={`Browse ${r.pod} in the Explorer`}
                 aria-label={`Browse ${r.pod} in the Explorer`}
                 style={{
-                  display: 'grid', placeItems: 'center', width: 25, height: 20,
-                  borderRadius: 5, cursor: 'pointer', color: ACCENT,
-                  background: `color-mix(in srgb, ${ACCENT} 13%, transparent)`,
-                  border: `1px solid color-mix(in srgb, ${ACCENT} 34%, transparent)`,
+                  display: 'grid', placeItems: 'center', width: 18, height: 16,
+                  borderRadius: 3, cursor: 'pointer', color: ACCENT,
+                  background: 'transparent', border: 'none', opacity: 0.85,
                 }}
               >
                 <FolderOpenIcon size={12} />
