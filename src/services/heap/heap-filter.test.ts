@@ -175,4 +175,22 @@ describe('the readable array form', () => {
     expect(matchesPackages('[B', ['short[]'])).toBe(false);
     expect(matchesPackages('[Lcom.acme.Order;', ['com.other.Order[]'])).toBe(false);
   });
+
+  it('matches an inner-class array as it is displayed', () => {
+    /*
+      The case that broke in the field. The heap calls it
+      `[L…ConcurrentHashMap$Node;`, every view shows `ConcurrentHashMap.Node[]`,
+      and narrowing to it produced an empty view — 0 B, no classes, no hint why.
+      Nothing can recover the `$` from the displayed name, so matching stops
+      depending on it.
+    */
+    expect(matchesPackages(
+      '[Ljava.util.concurrent.ConcurrentHashMap$Node;',
+      ['java.util.concurrent.ConcurrentHashMap.Node[]'],
+    )).toBe(true);
+  });
+
+  it('matches a non-array inner class the same way', () => {
+    expect(matchesPackages('com.acme.Outer$Inner', ['com.acme.Outer.Inner'])).toBe(true);
+  });
 });

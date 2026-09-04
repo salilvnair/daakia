@@ -11,11 +11,16 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SegmentedControlView, SunburstView } from '@salilvnair/dui';
+import { HeapClassBars } from './HeapClassBars';
 import { decodeClassName, fullClassName } from './class-name';
 import { heapQuery, bytes, hueFor, type TreemapData } from './heap-query';
 import { squarify, type Tile } from './treemap-layout';
 
-export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
+export function HeapTreemapView({ packageFilter, onNarrow }: {
+  packageFilter?: string;
+  /** Clicking a class narrows the object set, same as the histogram. */
+  onNarrow?: (className: string) => void;
+}) {
   /*
     Two geometries over one dataset.
 
@@ -26,7 +31,7 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
     Neither is a substitute for the other, and neither is new information, so
     this is a toggle rather than a seventh tab.
   */
-  const [shape, setShape] = useState<'treemap' | 'sunburst'>('treemap');
+  const [shape, setShape] = useState<'bars' | 'treemap' | 'sunburst'>('bars');
   const [data, setData] = useState<TreemapData | null>(null);
   const [error, setError] = useState('');
   const [hover, setHover] = useState<Tile | null>(null);
@@ -180,18 +185,24 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
       <div className="flex items-center gap-3 px-3 py-2 flex-shrink-0 flex-wrap"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <span className="text-[11.5px] text-[var(--color-text-secondary)]">
-          Live heap by package — {shape === 'treemap' ? 'area' : 'arc'} is shallow bytes
+          Live heap by package — {
+            shape === 'bars' ? 'length' : shape === 'treemap' ? 'area' : 'arc'
+          } is shallow bytes
         </span>
-        {tileCount > 1 && dominantPct >= 60 && (
+        {shape !== 'bars' && tileCount > 1 && dominantPct >= 60 && (
           <span className="text-[11px]" style={{ color: 'var(--color-warning)' }}>
             · {fullClassName(biggest!.name)} is {dominantPct.toFixed(0)}% of it, which is
             why this is one shape
           </span>
         )}
         <SegmentedControlView
-          options={[{ label: 'Treemap', value: 'treemap' }, { label: 'Sunburst', value: 'sunburst' }]}
+          options={[
+            { label: 'Bars', value: 'bars' },
+            { label: 'Treemap', value: 'treemap' },
+            { label: 'Sunburst', value: 'sunburst' },
+          ]}
           value={shape}
-          onChange={(v) => setShape(v as 'treemap' | 'sunburst')}
+          onChange={(v) => setShape(v as 'bars' | 'treemap' | 'sunburst')}
           density="compact"
           accentColor="var(--color-doctor)"
         />
@@ -209,7 +220,9 @@ export function HeapTreemapView({ packageFilter }: { packageFilter?: string }) {
           </span>
         )}
       </div>
-      {tileCount <= 1 ? (
+      {shape === 'bars' ? (
+        <HeapClassBars groups={data.groups} totalBytes={data.totalBytes} onNarrow={onNarrow} />
+      ) : tileCount <= 1 ? (
         <div className="flex-1 min-h-0 grid place-items-center px-6">
           <div style={{ maxWidth: 380, textAlign: 'center' }}>
             <p className="text-[12px] m-0 mb-2" style={{ color: 'var(--color-text-primary)' }}>

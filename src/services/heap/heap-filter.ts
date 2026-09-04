@@ -101,8 +101,24 @@ export function matchesPackages(className: string, prefixes: string[]): boolean 
     empty list.
   */
   if (prefixes.includes(className)) return true;
-  // ...and the same name written the way a person reads it.
-  if (prefixes.some(p => toDescriptor(p) === className)) return true;
+  /*
+    ...and the same name written the way a person reads it.
+
+    Inner classes are why this compares with `$` folded to `.` rather than
+    literally. The heap calls it `[Ljava.util.concurrent.ConcurrentHashMap$Node;`
+    and every view displays `ConcurrentHashMap.Node[]`, because a reader does
+    not care which separator the compiler chose. Nothing can recover the `$`
+    from that, so the comparison stops depending on it — which also means
+    someone typing `Outer.Inner` finds `Outer$Inner`, as they would expect.
+
+    The cost is that a package `com.acme.Outer` containing `Inner` collides
+    with the inner class `com.acme.Outer$Inner`. They are the same words in the
+    same order, the prefix matcher below already treats `$` and `.` as the same
+    kind of boundary, and no heap has ever needed to tell them apart.
+  */
+  const flat = (n: string) => n.replace(/\$/g, '.');
+  const flatName = flat(className);
+  if (prefixes.some(p => flat(toDescriptor(p)) === flatName)) return true;
 
   const name = baseTypeOf(className);
   if (!name) return false;

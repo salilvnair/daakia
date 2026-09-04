@@ -478,7 +478,10 @@ export function HeapAnalyzerView() {
       )}
       {view === 'treemap' && (
         <AnalyzerBoundary name="Treemap" resetKey={dumpKey}>
-          <HeapTreemapView packageFilter={packageFilter} />
+          <HeapTreemapView
+            packageFilter={packageFilter}
+            onNarrow={cls => setObjectSet(narrow(objectSet, classStep(cls)))}
+          />
         </AnalyzerBoundary>
       )}
       {view === 'graph' && (
