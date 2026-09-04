@@ -216,6 +216,23 @@ describe('explainExecFailure', () => {
       .toMatch(/No such directory/);
   });
 
+  it('names a container that is not running', () => {
+    /*
+      Seen live on a crash-looping pod. kubectl phrases it as a connection
+      upgrade failure, which reads like a network fault and sends people to
+      look at the cluster rather than at the pod that is restarting.
+    */
+    const m = explainExecFailure(
+      'error: unable to upgrade connection: container not found ("checkout")', '/');
+    expect(m).toMatch(/"checkout" is not running/);
+    expect(m).toMatch(/crash-looping|starting/);
+  });
+
+  it('still explains an upgrade failure with no container named', () => {
+    const m = explainExecFailure('error: unable to upgrade connection: pod does not exist', '/');
+    expect(m).toMatch(/Could not open an exec session/);
+  });
+
   it('says RBAC when it is RBAC', () => {
     const m = explainExecFailure('Error from server (Forbidden): pods "x" is forbidden', '/');
     expect(m).toMatch(/RBAC/);

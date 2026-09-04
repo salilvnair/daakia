@@ -1676,3 +1676,15 @@ input[type="number"] {
   opacity: 1;
   pointer-events: auto;
 }
+
+
+/* The indeterminate bar on a running download. `cat` over exec reports no
+   total, so there is no percentage to show — this says "still going" without
+   inventing one. */
+@keyframes dk8s-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="dk8s-slide"] { animation: none !important; opacity: .6; }
+}

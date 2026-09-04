@@ -187,6 +187,24 @@ export function explainExecFailure(stderr: string, path: string): string {
     return `Permission denied reading ${path}. The container runs as a user that cannot see it — `
       + 'a root-owned volume under a non-root container looks exactly like this.';
   }
+  /*
+    The container is not running.
+
+    `unable to upgrade connection: container not found` is what kubectl says
+    when the pod exists but the container is starting, crash-looping or already
+    gone — and it reads like a networking fault, which sends people to look at
+    the wrong thing entirely.
+  */
+  const missing = /container not found \("([^"]+)"\)/.exec(s);
+  if (missing) {
+    return `The container "${missing[1]}" is not running, so there is nothing to exec into. `
+      + 'A pod that is starting, crash-looping or terminating looks like this — '
+      + 'check the pod status before the filesystem.';
+  }
+  if (/unable to upgrade connection/i.test(s)) {
+    return 'Could not open an exec session to this pod. It is usually a container that is '
+      + 'not running yet, or a node that has stopped answering.';
+  }
   if (/no such file or directory/i.test(s)) return `No such directory: ${path}`;
   if (/not found/i.test(s) && /pods?\s/i.test(s)) return 'That pod is gone.';
   if (/forbidden/i.test(s)) {

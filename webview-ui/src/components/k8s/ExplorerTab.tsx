@@ -15,13 +15,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   PathBreadcrumbView, FileBrowserView, SearchInputView, SegmentedControlView,
+  EmptyStateView,
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
 import {
-  EyeIcon, DownloadIcon, RefreshIcon, SearchIcon, FolderIcon,
+  EyeIcon, DownloadIcon, RefreshIcon, SearchIcon, LockIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
 import { FileViewer } from './FileViewer';
+import { DownloadsPanel } from './DownloadsPanel';
+import { CapabilityPanel, capabilitiesFrom } from './CapabilityPanel';
+import { useDk8sFilesStore, listenForDownloads } from '../../store/dk8s-files-store';
 
 export interface ExplorerEntry {
   name: string;
@@ -62,7 +66,7 @@ const LIKELY_ROOTS = ['/data', '/var/lib', '/mnt', '/opt', '/app', '/'];
 export function ExplorerTab({ context, namespace, pod, container }: {
   context: string; namespace: string; pod: string; container?: string;
 }) {
-  const [mode, setMode] = useState<'files' | 'search'>('files');
+  const [mode, setMode] = useState<'files' | 'search' | 'downloads' | 'access'>('files');
   const [path, setPath] = useState<string>('');
   const [listing, setListing] = useState<Listing | null>(null);
   const [hits, setHits] = useState<Hits | null>(null);
@@ -70,6 +74,11 @@ export function ExplorerTab({ context, namespace, pod, container }: {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<{ path: string; name: string; size?: number } | null>(null);
   const seq = useRef(0);
+  const unseen = useDk8sFilesStore(s => s.unseen);
+
+  // Registered once, at module scope inside the store, so a copy that is still
+  // running survives navigating away from this tab.
+  useEffect(() => { listenForDownloads(); }, []);
 
   const target = { context, namespace, pod, container };
 
@@ -218,9 +227,11 @@ export function ExplorerTab({ context, namespace, pod, container }: {
           options={[
             { value: 'files', label: 'Files' },
             { value: 'search', label: 'Search' },
+            { value: 'downloads', label: unseen ? `Downloads (${unseen})` : 'Downloads' },
+            { value: 'access', label: 'Access' },
           ]}
           value={mode}
-          onChange={v => setMode(v as 'files' | 'search')}
+          onChange={v => setMode(v as typeof mode)}
           size="sm" density="compact" accentColor={ACCENT}
         />
         <button
@@ -247,6 +258,7 @@ export function ExplorerTab({ context, namespace, pod, container }: {
       </div>
 
       {/* ── path, and the query when searching ── */}
+      {(mode === 'files' || mode === 'search') && (
       <div className="flex items-center gap-3 px-3 py-1.5 flex-shrink-0 flex-wrap"
            style={{
              gap: '9px 14px',
@@ -289,18 +301,45 @@ export function ExplorerTab({ context, namespace, pod, container }: {
           </span>
         )}
       </div>
+      )}
 
       {/* ── body ── */}
-      {error ? (
-        <div className="flex-1 grid place-items-center px-8">
-          <div style={{ maxWidth: 460, textAlign: 'center' }}>
-            <FolderIcon size={22} color="var(--color-text-muted)" />
-            <p className="text-[12px] leading-relaxed m-0 mt-2.5"
-               style={{ color: 'var(--color-text-primary)' }}>{error}</p>
-            {listing?.command && (
-              <p className="text-[10px] font-mono m-0 mt-3"
-                 style={{ color: 'var(--color-text-muted)', overflowWrap: 'anywhere' }}>
-                {listing.command}
+      {mode === 'downloads' ? (
+        <DownloadsPanel />
+      ) : mode === 'access' ? (
+        <CapabilityPanel
+          capabilities={capabilitiesFrom({
+            listed: !!listing && !listing.error,
+            listError: listing?.error,
+          })}
+          onRecheck={() => go(path || '/')}
+        />
+      ) : error ? (
+        <div className="flex-1 min-h-0 grid place-items-center px-8">
+          <div style={{ maxWidth: 520 }}>
+            <EmptyStateView
+              variant="medallion"
+              icon={<LockIcon size={22} />}
+              title="This pod will not open its filesystem"
+              message={error}
+              accentColor="var(--color-warning)"
+              action={{ label: 'Try again', onClick: () => go(path || '/') }}
+            />
+            {(listing?.command || hits?.command) && (
+              /*
+                The command that failed, kept.
+
+                Every other dk8s view shows what it ran, and an error is
+                exactly when that matters most — half of these are fixed by
+                noticing the namespace or the container is wrong.
+              */
+              <p className="text-[9.5px] font-mono text-center m-0 mt-4 px-4 py-2 rounded-md"
+                 style={{
+                   color: 'var(--color-text-muted)', overflowWrap: 'anywhere',
+                   background: 'var(--color-surface)',
+                   border: '1px solid var(--color-surface-border)',
+                 }}>
+                {listing?.command || hits?.command}
               </p>
             )}
           </div>

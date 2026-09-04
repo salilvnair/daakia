@@ -19,7 +19,7 @@
 import { useMemo } from 'react';
 import { ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
 import {
-  StarIcon, CopyIcon, TerminalIcon, FileTextIcon, StethoscopeIcon,
+  StarIcon, CopyIcon, TerminalIcon, FileTextIcon, StethoscopeIcon, FolderOpenIcon,
   CheckCircleIcon, XCircleIcon, CpuIcon, MemoryIcon, NetworkIcon, TimelineIcon,
 } from '../../icons';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
@@ -77,7 +77,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
   /** Ask before un-starring — the grid owns the dialog. */
   onConfirmUnfavorite: (pod: PodSummary) => void;
   /** Open the pod's detail view, for the items that are a way in. */
-  onOpen: (pod: PodSummary, tab?: 'logs' | 'doctor') => void;
+  onOpen: (pod: PodSummary, tab?: 'logs' | 'doctor' | 'explorer') => void;
 }) {
   const beginSelection = useK8sStore(s => s.beginSelection);
   const togglePodSelected = useK8sStore(s => s.togglePodSelected);
@@ -250,6 +250,17 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         icon: <StethoscopeIcon size={13} />,
         iconColor: ACCENT,
         children: doctor,
+      },
+      {
+        /*
+          Browsing is one exec, so it is offered exactly where the shell is —
+          an Explorer that opens onto a 403 is a worse answer than an entry
+          that is not there.
+        */
+        id: 'explorer',
+        label: 'Browse files',
+        icon: <FolderOpenIcon size={13} />,
+        onClick: () => { onOpen(pod, 'explorer'); onClose(); },
       },
       { id: 'sep-3', label: '', separator: true },
       {

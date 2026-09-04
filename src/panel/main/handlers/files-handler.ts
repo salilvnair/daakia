@@ -153,7 +153,7 @@ export async function handleFilesDownloadDir(msg: Record<string, unknown>, post:
     ...(t.container ? ['-c', t.container] : []),
   ];
 
-  post({ type: 'files:downloadStarted', name, dest, command: showCommand(args) });
+  post({ type: 'files:downloadStarted', name, dest, directory: true, command: showCommand(args) });
 
   try {
     const r = await run(args, { timeoutMs: 10 * 60_000 });
@@ -182,5 +182,24 @@ export async function handleFilesDownloadDir(msg: Record<string, unknown>, post:
       type: 'files:downloadFailed', name,
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+}
+
+/**
+ * Open the downloads folder in the system file manager.
+ *
+ * The panel prints the path too, because a reveal that silently does nothing —
+ * a headless host, a folder the shell will not open — leaves the reader with
+ * no way to find the file at all.
+ */
+export async function handleFilesReveal(msg: Record<string, unknown>, post: PostMessage) {
+  const dir = String(msg.path ?? '');
+  if (!dir) return;
+  try {
+    const vscode = await import('vscode');
+    await vscode.env.openExternal(vscode.Uri.file(dir));
+  } catch {
+    // The browser path has no VS Code API. Saying so beats a dead button.
+    post({ type: 'files:revealUnavailable', path: dir });
   }
 }

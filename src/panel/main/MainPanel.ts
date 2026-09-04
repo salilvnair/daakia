@@ -109,7 +109,7 @@ import {
 } from './handlers/heap-handler';
 import {
   handleFilesList, handleFilesSearch, handleFilesRead,
-  handleFilesDownload, handleFilesDownloadDir,
+  handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
 } from './handlers/files-handler';
 import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from './handlers/jfr-handler';
 import { handleDk8sHeapInvestigate } from './handlers/heap-investigate';
@@ -713,6 +713,9 @@ export class MainPanel {
         break;
       case 'jfr:open':
         void handleJfrOpen(this._post);
+        break;
+      case 'files:revealFolder':
+        void handleFilesReveal(msg, this._post);
         break;
       case 'files:list':
         void handleFilesList(msg, this._post);
