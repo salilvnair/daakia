@@ -9,7 +9,7 @@
  */
 import { useEffect } from 'react';
 import { EmptyStateView } from '@salilvnair/dui';
-import { DownloadIcon, FolderOpenIcon, CloseIcon } from '../../icons';
+import { DownloadIcon, FolderOpenIcon, CloseIcon, EyeIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sFilesStore, type Download } from '../../store/dk8s-files-store';
 
@@ -49,9 +49,12 @@ export function DownloadsPanel() {
           message="Anything you save from Files or Search lands here, with the folder it went to."
           accentColor={ACCENT}
           hints={[
-            { key: 'eye', text: 'opens a file in the viewer without downloading it' },
-            { key: 'arrow', text: 'saves it to disk — streamed, so size is not a problem' },
-            { key: 'folder', text: 'a whole directory, which is the one action needing tar' },
+            { key: <EyeIcon size={12} />,
+              text: 'opens a file in the viewer, without downloading it' },
+            { key: <DownloadIcon size={12} />,
+              text: 'saves it to disk — streamed, so size is not a problem' },
+            { key: <FolderOpenIcon size={12} />,
+              text: 'takes a whole directory, the one action that needs tar' },
           ]}
         />
       </div>
