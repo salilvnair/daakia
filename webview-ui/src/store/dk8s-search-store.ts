@@ -142,6 +142,13 @@ interface SearchState {
     matched: number;
     podsWithHits: number;
     collapsed: string[];
+    /**
+     * The hit last opened, kept so returning lands on it.
+     *
+     * A pixel offset would not survive the list re-rendering; a path does, and
+     * it is also what the row needs to show itself as selected.
+     */
+    selected?: string;
   };
   setFileSearch: (patch: Partial<SearchState['fileSearch']>) => void;
   addFileSearchPod: (r: SearchState['fileSearch']['results'][number]) => void;

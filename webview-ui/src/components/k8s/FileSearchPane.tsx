@@ -41,6 +41,8 @@ interface PodResult {
 
 export interface FileSearchState {
   running: boolean;
+  /** The hit last opened — selected, and scrolled back to on return. */
+  selected?: string;
   results: PodResult[];
   scanned: number;
   total: number;
@@ -151,6 +153,21 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
   const collapsedList = useDk8sSearchStore(s => s.fileSearch.collapsed);
   const setFileSearch = useDk8sSearchStore(s => s.setFileSearch);
   const collapsed = new Set(collapsedList);
+  const setFS = useDk8sSearchStore(s => s.setFileSearch);
+  /*
+    Returning from a hit puts you back on it.
+
+    `highlight` scrolls the row into view and fades; `selected` stays. Coming
+    back to a list of two hundred and having to find your place again is the
+    same failure the jump itself was fixing, only in the other direction.
+  */
+  const [returnFlash, setReturnFlash] = useState<string | undefined>(state.selected);
+  useEffect(() => {
+    if (!state.selected) return;
+    setReturnFlash(state.selected);
+    const t = setTimeout(() => setReturnFlash(undefined), 2200);
+    return () => clearTimeout(t);
+  }, [state.selected]);
   const toggle = (key: string) => {
     const next = new Set(collapsedList);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -294,9 +311,15 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
               size="sm"
               accentColor={ACCENT}
               actions={actions}
-              onOpen={e => onView({ ...r, path: e.id })}
+              selectedId={state.selected}
+              highlightId={returnFlash}
+              onSelect={e => setFS({ selected: e.id })}
+              onOpen={e => { setFS({ selected: e.id }); onView({ ...r, path: e.id }); }}
               onAction={(id, e) => {
                 const t = { ...r, path: e.id };
+                // Acting on a row selects it, so the one you left is the one
+                // you come back to.
+                setFS({ selected: e.id });
                 if (id === 'open') onView(t);
                 else if (id === 'save') onDownload(t);
                 else onOpenExplorer(t);

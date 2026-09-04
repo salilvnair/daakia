@@ -98,6 +98,14 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   useEffect(() => {
     setFlash(highlight);
     if (!highlight) return;
+    /*
+      The flash fades; the selection does not.
+
+      Arriving on a row and having it go quiet after two seconds leaves you
+      exactly where you started — knowing a file is somewhere on this screen
+      and not which one. The flash finds it, the selection keeps it found.
+    */
+    setSelected(highlight);
     const t = setTimeout(() => setFlash(undefined), 2600);
     return () => clearTimeout(t);
   }, [highlight]);
