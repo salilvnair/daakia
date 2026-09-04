@@ -135,17 +135,6 @@ export function parentOf(path: string): string {
   return cut <= 0 ? '/' : clean.slice(0, cut);
 }
 
-/** `/var/lib/app` becomes the crumb segments the UI walks back through. */
-export function crumbsOf(path: string): { name: string; path: string }[] {
-  const out = [{ name: '/', path: '/' }];
-  let at = '';
-  for (const part of path.split('/').filter(Boolean)) {
-    at += `/${part}`;
-    out.push({ name: part, path: at });
-  }
-  return out;
-}
-
 export interface ListResult {
   path: string;
   entries: FileEntry[];

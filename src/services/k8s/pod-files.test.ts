@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  parseLsLine, joinPath, parentOf, crumbsOf, kindOf, looksBinary,
+  parseLsLine, joinPath, parentOf, kindOf, looksBinary,
   shellQuote, explainExecFailure, VIEW_LIMIT_BYTES,
 } from './pod-files';
 
@@ -113,18 +113,6 @@ describe('paths are always absolute', () => {
     expect(parentOf('/')).toBe('/');
   });
 
-  it('builds crumbs that each address a real directory', () => {
-    expect(crumbsOf('/var/lib/app')).toEqual([
-      { name: '/', path: '/' },
-      { name: 'var', path: '/var' },
-      { name: 'lib', path: '/var/lib' },
-      { name: 'app', path: '/var/lib/app' },
-    ]);
-  });
-
-  it('gives the root a single crumb', () => {
-    expect(crumbsOf('/')).toEqual([{ name: '/', path: '/' }]);
-  });
 });
 
 describe('kindOf', () => {
