@@ -159,7 +159,8 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
 
     `highlight` scrolls the row into view and fades; `selected` stays. Coming
     back to a list of two hundred and having to find your place again is the
-    same failure the jump itself was fixing, only in the other direction.
+    same failure the jump itself was fixing, only in the other direction — so
+    the flash fires on the way back in, and never on a click.
   */
   const [returnFlash, setReturnFlash] = useState<string | undefined>(state.selected);
   /*
@@ -177,11 +178,21 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
   const hitFor = (pod: string, mark?: string) =>
     mark && mark.startsWith(`${pod}|`) ? mark.slice(pod.length + 1) : undefined;
   useEffect(() => {
-    if (!state.selected) return;
-    setReturnFlash(state.selected);
+    if (!returnFlash) return;
     const t = setTimeout(() => setReturnFlash(undefined), 2200);
     return () => clearTimeout(t);
-  }, [state.selected]);
+    /*
+      Mount only, deliberately.
+
+      Keyed on `state.selected`, this flashed on every click — and a click is
+      the one time the amber has nothing to say, because you are already
+      looking at the row you just hit. The colour is for arriving: the pane
+      unmounts when you leave for the Explorer, so remounting with a selection
+      already in the store IS the return, and that is the only moment worth
+      announcing.
+    */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const toggle = (key: string) => {
     const next = new Set(collapsedList);
     if (next.has(key)) next.delete(key); else next.add(key);
