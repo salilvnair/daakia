@@ -20,6 +20,10 @@ import { CpuIcon, CloseCircleIcon, ChevronRightIcon } from '../../icons';
 import { TelemetryCharts, type TelemetryGroup } from './TelemetryCharts';
 import { WaitsView, AllocationView, type WaitSite, type AllocSite } from './WaitsAndAllocation';
 import { GcView, ProbesView, type GcSummary } from './GcAndProbes';
+import { CallTreeView, type CallNode } from './CallTreeView';
+import { CallGraphView, type GraphNode } from './CallGraphView';
+import { ClassTrackerView, type ClassCensus } from './ClassTrackerView';
+import { EventBrowserView, type EventTypeSummary } from './EventBrowserView';
 import { ThreadHistory, type WaitSpan } from './ThreadHistory';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -39,6 +43,12 @@ interface HotSpot {
 
 interface Loaded {
   name: string;
+  /** The file on disk, so the event browser can re-read rows on demand. */
+  path?: string;
+  callTree?: CallNode[];
+  callGraph?: GraphNode[];
+  classes?: ClassCensus;
+  eventTypes?: EventTypeSummary[];
   recording: {
     startMs: number; durationMs: number; chunks: number; events: number;
     topEvents: { name: string; count: number }[];
@@ -72,7 +82,8 @@ interface Loaded {
  * table would answer the second question before the reader has asked the
  * first.
  */
-type SubView = 'telemetry' | 'hotspots' | 'blocking' | 'allocation' | 'threads' | 'gc' | 'probes';
+type SubView = 'telemetry' | 'hotspots' | 'calltree' | 'callgraph' | 'blocking' | 'allocation'
+  | 'threads' | 'classes' | 'gc' | 'probes' | 'events';
 
 /** `com.acme.order.OrderService` → `c.a.o.OrderService`, keeping the class. */
 function shortClass(name: string): string {
@@ -232,11 +243,17 @@ export function CpuAnalyzerView() {
             options={[
               { value: 'telemetry', label: 'Telemetry' },
               { value: 'hotspots', label: `Hot spots${loaded.hotSpots.length ? ` (${loaded.hotSpots.length})` : ''}` },
+              { value: 'calltree', label: 'Call tree' },
+              { value: 'callgraph', label: 'Call graph' },
               { value: 'blocking', label: `Blocking${loaded.waits?.count ? ` (${loaded.waits.count.toLocaleString()})` : ''}` },
               { value: 'allocation', label: 'Allocation' },
               { value: 'threads', label: 'Thread history' },
+              { value: 'classes', label: 'Classes' },
               { value: 'gc', label: `GC${loaded.gc?.count ? ` (${loaded.gc.count})` : ''}` },
               { value: 'probes', label: 'Probes' },
+              // Last, because it is the fallback rather than an answer: what
+              // the JVM wrote, for the questions the other tabs do not ask.
+              { value: 'events', label: `Events${loaded.eventTypes?.length ? ` (${loaded.eventTypes.length})` : ''}` },
             ]}
             size="sm" density="compact" accentColor={ACCENT}
           />
@@ -269,6 +286,22 @@ export function CpuAnalyzerView() {
             toMs={loaded.timeline?.toMs ?? 0}
           />
         </div>
+      )}
+
+      {view === 'calltree' && (
+        <CallTreeView roots={loaded.callTree ?? []} />
+      )}
+
+      {view === 'callgraph' && (
+        <CallGraphView nodes={loaded.callGraph ?? []} />
+      )}
+
+      {view === 'classes' && (
+        <ClassTrackerView census={loaded.classes} />
+      )}
+
+      {view === 'events' && (
+        <EventBrowserView types={loaded.eventTypes} path={loaded.path} />
       )}
 
       {view === 'gc' && (

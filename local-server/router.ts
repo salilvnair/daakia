@@ -27,7 +27,7 @@ import {
   handleHeapOpen, handleHeapQuery, handleHeapSetBaseline, handleHeapCancel,
   handleHeapLocateClass, handleHeapOpenSource,
 } from '../src/panel/main/handlers/heap-handler';
-import { handleJfrOpen, handleJfrAnalyze } from '../src/panel/main/handlers/jfr-handler';
+import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from '../src/panel/main/handlers/jfr-handler';
 import { cancelRestRequest } from '../src/http/request-executor';
 import {
   handleExecuteGraphQL, handleGraphQLConnect, handleGraphQLSubscribe, handleGraphQLUnsubscribe, cancelGraphQLRequest,
@@ -318,6 +318,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'jfr:analyze':
       handleJfrAnalyze(msg, post);
+      break;
+    case 'jfr:events':
+      handleJfrEvents(msg, post);
       break;
 
     // ── Request Execution ──

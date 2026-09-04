@@ -13,6 +13,9 @@ import { JfrChunk } from '../../../services/jfr/jfr-chunk';
 import { readCpuSamples, hotSpots, sampleCount, idleCount } from '../../../services/jfr/jfr-cpu';
 import { readTelemetry, groupsOf } from '../../../services/jfr/jfr-telemetry';
 import { readWaits, readGc, readWaitSpans } from '../../../services/jfr/jfr-waits';
+import { callTree, callGraph, type CallNode } from '../../../services/jfr/jfr-calltree';
+import { readClassCensus } from '../../../services/jfr/jfr-classes';
+import { readEventTypes, readEventRows } from '../../../services/jfr/jfr-events';
 import { readAllocation } from '../../../services/jfr/jfr-allocation';
 
 type PostMessage = (msg: Record<string, unknown>) => void;
@@ -35,6 +38,30 @@ export async function handleJfrOpen(postMessage: PostMessage) {
   });
   if (!picked?.[0]) return;
   handleJfrAnalyze({ path: picked[0].fsPath }, postMessage);
+}
+
+/**
+ * The call tree, cut down to what a view can actually show.
+ *
+ * A recording of 20,000 samples produces a tree with thousands of nodes, and
+ * almost all of them are single-sample paths through JDK internals that nobody
+ * expands. Both cuts are applied on the host so the whole thing never crosses
+ * the wire.
+ *
+ * The cuts are stated rather than silent: a node that lost children keeps its
+ * own `total`, so the numbers still add up and a parent whose children do not
+ * sum to it is visibly truncated rather than quietly wrong.
+ */
+const TREE_MAX_DEPTH = 40;
+const TREE_MIN_SAMPLES = 2;
+
+function prune(nodes: CallNode[], depth: number): CallNode[] {
+  if (depth >= TREE_MAX_DEPTH) return [];
+  return nodes
+    // A path seen once is noise on any recording long enough to matter, and
+    // there are thousands of them.
+    .filter(n => n.total >= TREE_MIN_SAMPLES || depth === 0)
+    .map(n => ({ ...n, children: prune(n.children, depth + 1) }));
 }
 
 export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: PostMessage) {
@@ -114,10 +141,26 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
     const allocation = readAllocation(chunks);
     const gc = readGc(chunks);
 
+    /*
+      Three more folds of the same samples, and the class census.
+
+      All bounded before they leave the host: a call tree over 20,000 samples
+      has thousands of nodes and the view shows a screenful, so the depth cap
+      is applied here rather than shipping the whole thing and slicing it in
+      the webview.
+    */
+    const tree = callTree(samples);
+    const graph = callGraph(samples, { limit: 60 });
+    const classes = readClassCensus(chunks, { limit: 40 });
+    const eventTypes = readEventTypes(chunks);
+
     const rows = hotSpots(samples);
     postMessage({
       type: 'jfr:done',
       name: path.basename(file),
+      // The full path, so the event browser can ask for rows later. The
+      // basename is what the header shows; it is not enough to re-open with.
+      path: file,
       recording: {
         startMs: first.startMs,
         durationMs,
@@ -160,6 +203,12 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
       },
       gc,
       timeline,
+      callTree: prune(tree, 0),
+      callGraph: graph,
+      classes,
+      // Names and counts only; the rows come back through jfr:query when
+      // somebody actually opens one.
+      eventTypes,
       hotSpots: rows.slice(0, MAX_ROWS),
       truncated: Math.max(0, rows.length - MAX_ROWS),
     });
@@ -175,6 +224,40 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
     postMessage({
       type: 'jfr:error',
       message: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+
+/**
+ * Raw rows for one event type.
+ *
+ * A separate round trip rather than part of `jfr:done`, because the browser is
+ * a fallback that most sessions never open and the rows for every type in a
+ * profile recording are far larger than everything else combined.
+ *
+ * The file is re-read per request instead of holding parsed chunks in memory.
+ * A recording is a few hundred KB and parses in milliseconds; a cache would
+ * have to be invalidated when the file changes on disk, and getting that wrong
+ * shows stale rows with no indication they are stale.
+ */
+export function handleJfrEvents(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const file = msg.path as string;
+  const typeName = msg.eventType as string;
+  const requestId = msg.requestId as string;
+  try {
+    const chunks = JfrChunk.parseAll(readFileSync(file));
+    const result = readEventRows(chunks, typeName, {
+      limit: typeof msg.limit === 'number' ? msg.limit : 100,
+      offset: typeof msg.offset === 'number' ? msg.offset : 0,
+    });
+    postMessage({ type: 'jfr:events', requestId, ...result });
+  } catch (err) {
+    postMessage({
+      type: 'jfr:events',
+      requestId,
+      error: err instanceof Error ? err.message : String(err),
+      fields: [], rows: [], total: 0,
     });
   }
 }

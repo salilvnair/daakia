@@ -107,7 +107,7 @@ import {
   handleHeapSetBaseline, handleHeapLocateClass, handleHeapOpenSource,
   handleThreadsOpen, handleThreadsAnalyze, handleLogsOpen, handleLogsAnalyze,
 } from './handlers/heap-handler';
-import { handleJfrOpen, handleJfrAnalyze } from './handlers/jfr-handler';
+import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from './handlers/jfr-handler';
 import { handleDk8sHeapInvestigate } from './handlers/heap-investigate';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
@@ -712,6 +712,9 @@ export class MainPanel {
         break;
       case 'jfr:analyze':
         handleJfrAnalyze(msg, this._post);
+        break;
+      case 'jfr:events':
+        handleJfrEvents(msg, this._post);
         break;
       case 'threads:open':
         handleThreadsOpen(this._post, this._extensionUri.fsPath);

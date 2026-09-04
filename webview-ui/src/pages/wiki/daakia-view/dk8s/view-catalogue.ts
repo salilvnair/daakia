@@ -59,6 +59,14 @@ export const CATALOGUE: CatalogueEntry[] = [
     answers: 'Which methods the CPU was actually inside, with the stacks that got there. Idle syscall frames are excluded and counted, so a parked pool does not read as 88% busy.',
   },
   {
+    id: 'calltree', label: 'Call tree', needs: 'recording',
+    answers: 'The same samples kept as PATHS rather than flattened. A utility called from six places is six rows here and one row in Hot spots, and only one of those says which caller is responsible.',
+  },
+  {
+    id: 'callgraph', label: 'Call graph', needs: 'recording',
+    answers: 'One node per method with every caller and callee attached. The question a tree answers badly, because the callers of a shared method are scattered across branches that never meet.',
+  },
+  {
     id: 'blocking', label: 'Blocking', needs: 'recording',
     answers: 'Where threads went when they were not running, totalled per lock and per site. The answer for an application that spends its life waiting, which produces almost no CPU samples.',
   },
@@ -73,12 +81,21 @@ export const CATALOGUE: CatalogueEntry[] = [
     only: true,
   },
   {
+    id: 'classes', label: 'Classes', needs: 'recording',
+    answers: 'Instances per class across the recording’s censuses — which class is not coming back down. A heap dump cannot answer this: one photograph has no direction. Needs jdk.ObjectCount, which is off even at settings=profile.',
+  },
+  {
     id: 'gc', label: 'GC', needs: 'recording',
     answers: 'Every collection with its cause, the heap either side and the phases inside the pause. A full GC that takes 1.2s and frees 2 MB is a whole diagnosis in one row.',
   },
   {
     id: 'probes', label: 'Probes', needs: 'recording',
     answers: 'What the process talked to — sockets and files grouped by endpoint, with bytes and the slowest call. A four-second read on postgres:5432 answers most of what a JDBC probe would.',
+  },
+
+  {
+    id: 'events', label: 'Events', needs: 'recording',
+    answers: 'Every event type the JVM wrote, with the raw rows behind any of them. The other tabs read nine types and summarise; this is the rest, uninterpreted — and the honest answer to whether a given event is supported.',
   },
 
   // ── Heap dump ─────────────────────────────────────────────────────────────
