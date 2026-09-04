@@ -107,6 +107,10 @@ import {
   handleHeapSetBaseline, handleHeapLocateClass, handleHeapOpenSource,
   handleThreadsOpen, handleThreadsAnalyze, handleLogsOpen, handleLogsAnalyze,
 } from './handlers/heap-handler';
+import {
+  handleFilesList, handleFilesSearch, handleFilesRead,
+  handleFilesDownload, handleFilesDownloadDir,
+} from './handlers/files-handler';
 import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from './handlers/jfr-handler';
 import { handleDk8sHeapInvestigate } from './handlers/heap-investigate';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
@@ -709,6 +713,21 @@ export class MainPanel {
         break;
       case 'jfr:open':
         void handleJfrOpen(this._post);
+        break;
+      case 'files:list':
+        void handleFilesList(msg, this._post);
+        break;
+      case 'files:search':
+        void handleFilesSearch(msg, this._post);
+        break;
+      case 'files:read':
+        void handleFilesRead(msg, this._post);
+        break;
+      case 'files:download':
+        void handleFilesDownload(msg, this._post);
+        break;
+      case 'files:downloadDir':
+        void handleFilesDownloadDir(msg, this._post);
         break;
       case 'jfr:analyze':
         handleJfrAnalyze(msg, this._post);

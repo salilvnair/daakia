@@ -180,11 +180,31 @@ describe('shellQuote', () => {
 
 describe('explainExecFailure', () => {
   it('names the cause for a distroless image', () => {
-    const m = explainExecFailure(
-      'OCI runtime exec failed: exec failed: unable to start container process: '
-      + 'exec: "ls": executable file not found in $PATH', '/data');
+    /*
+      The literal message a real distroless pod returns, captured from
+      `no-shell` in dk8s-test rather than written from memory. The synthetic
+      version I first tested against was the tail of this one, and it is the
+      `Internal error occurred:` prefixes and the exec id in the middle that
+      make the real thing worth pinning — a matcher tuned to the short form
+      can easily miss the long one.
+    */
+    const real = 'error: Internal error occurred: Internal error occurred: error executing '
+      + 'command in container: failed to exec in container: failed to start exec '
+      + '"79c4efa6f3c392a42f8f7ce5cca8104e2c0681b8f067a89b1fecd3332319b7a4": OCI runtime '
+      + 'exec failed: exec failed: unable to start container process: exec: "ls": '
+      + 'executable file not found in $PATH';
+    const m = explainExecFailure(real, '/data');
     expect(m).toMatch(/no shell or coreutils/i);
     expect(m).toMatch(/distroless/i);
+  });
+
+  it('recognises a missing shell as the same thing, not a new one', () => {
+    // `sh -c` is how search runs, so a distroless pod fails this way too and
+    // the reader must get the same explanation rather than a raw OCI dump.
+    const real = 'error: Internal error occurred: error executing command in container: '
+      + 'OCI runtime exec failed: exec failed: unable to start container process: '
+      + 'exec: "sh": executable file not found in $PATH';
+    expect(explainExecFailure(real, '/')).toMatch(/no shell or coreutils/i);
   });
 
   it('separates "cannot read" from "is not there"', () => {

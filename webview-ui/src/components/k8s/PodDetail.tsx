@@ -8,7 +8,7 @@
 import { useCallback, useEffect } from 'react';
 import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
-  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon,
+  SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon,
 } from '../../icons';
 import { CopyButtonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
@@ -18,6 +18,7 @@ import { severityOf, severityColor, shortAge, restartLabel } from './pod-view';
 import { LogViewer } from './LogViewer';
 import { AiSplit } from './AiAnswerPanel';
 import { DoctorTab } from './DoctorTab';
+import { ExplorerTab } from './ExplorerTab';
 import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highlight';
 import { CodeEditor } from '../shared/editors/CodeEditor';
 import { OverviewTab } from './OverviewTab';
@@ -53,6 +54,9 @@ const TABS: {
   { id: 'logs', label: 'Logs', Icon: FileTextIcon, needs: 'logs' },
   { id: 'terminal', label: 'Terminal', Icon: TerminalIcon, needs: 'exec' },
   { id: 'doctor', label: 'Doctor', Icon: StethoscopeIcon, needs: 'exec' },
+  // Everything the explorer does is one exec, so it gates on exactly the same
+  // access the terminal does.
+  { id: 'explorer', label: 'Explorer', Icon: FolderOpenIcon, needs: 'exec' },
   { id: 'describe', label: 'Describe', Icon: CodeIcon, needs: 'get' },
   { id: 'yaml', label: 'YAML', Icon: CodeIcon, needs: 'get' },
 ];
@@ -423,6 +427,13 @@ export function PodDetail() {
                 {detailTab === 'describe' && <DescribePane text={describeText} busy={describeBusy} />}
                 {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}
                 {detailTab === 'doctor' && <DoctorTab />}
+                {detailTab === 'explorer' && detail?.context && (
+                  <ExplorerTab
+                    context={detail.context}
+                    namespace={detail.namespace}
+                    pod={detail.name}
+                  />
+                )}
               </>
             )}
           </div>

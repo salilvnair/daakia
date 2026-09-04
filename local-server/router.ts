@@ -27,6 +27,10 @@ import {
   handleHeapOpen, handleHeapQuery, handleHeapSetBaseline, handleHeapCancel,
   handleHeapLocateClass, handleHeapOpenSource,
 } from '../src/panel/main/handlers/heap-handler';
+import {
+  handleFilesList, handleFilesSearch, handleFilesRead,
+  handleFilesDownload, handleFilesDownloadDir,
+} from '../src/panel/main/handlers/files-handler';
 import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from '../src/panel/main/handlers/jfr-handler';
 import { cancelRestRequest } from '../src/http/request-executor';
 import {
@@ -315,6 +319,21 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     */
     case 'jfr:open':
       await handleJfrOpen(post);
+      break;
+    case 'files:list':
+      void handleFilesList(msg, post);
+      break;
+    case 'files:search':
+      void handleFilesSearch(msg, post);
+      break;
+    case 'files:read':
+      void handleFilesRead(msg, post);
+      break;
+    case 'files:download':
+      void handleFilesDownload(msg, post);
+      break;
+    case 'files:downloadDir':
+      void handleFilesDownloadDir(msg, post);
       break;
     case 'jfr:analyze':
       handleJfrAnalyze(msg, post);

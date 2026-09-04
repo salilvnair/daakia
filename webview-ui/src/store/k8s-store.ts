@@ -186,7 +186,7 @@ export interface PodAction {
   mutatesPod?: boolean;
 }
 
-export type DetailTab = 'overview' | 'logs' | 'terminal' | 'doctor' | 'yaml' | 'describe';
+export type DetailTab = 'overview' | 'logs' | 'terminal' | 'doctor' | 'explorer' | 'yaml' | 'describe';
 
 export interface MemoryProfile {
   limitBytes?: number;
