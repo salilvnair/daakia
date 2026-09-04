@@ -25,6 +25,7 @@ import { CallGraphView, type GraphNode } from './CallGraphView';
 import { ClassTrackerView, type ClassCensus } from './ClassTrackerView';
 import { EventBrowserView, type EventTypeSummary } from './EventBrowserView';
 import { ThreadHistory, type WaitSpan } from './ThreadHistory';
+import { ProbeTimeline } from './ProbeTimeline';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -109,6 +110,8 @@ export function CpuAnalyzerView() {
   const [filter, setFilter] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const [view, setView] = useState<SubView>('telemetry');
+  /** Probes reads the same events two ways: totalled, or over time. */
+  const [probeView, setProbeView] = useState<'endpoints' | 'timeline'>('endpoints');
   /** Which frames to hide. JDK internals are most of a stack and rarely the bug. */
   const [hideJdk, setHideJdk] = useState(false);
 
@@ -311,13 +314,36 @@ export function CpuAnalyzerView() {
       )}
 
       {view === 'probes' && (
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1 flex flex-col gap-3">
           {/*
-            `probes`, not `sites`. The blocking list is filtered to waits that
-            cost time; this view wants every endpoint the process touched,
-            however briefly.
+            Two readings of the same events, and both are needed.
+
+            The table totals each endpoint, which answers "which dependency is
+            expensive". The timeline shows WHEN each call happened, which is the
+            difference between steady work and a retry storm — same total, same
+            average, opposite bug.
           */}
-          <ProbesView sites={loaded.waits?.probes ?? []} hasRecording />
+          <SegmentedControlView
+            options={[
+              { value: 'endpoints', label: 'Control objects' },
+              { value: 'timeline', label: 'Timeline' },
+            ]}
+            value={probeView}
+            onChange={v => setProbeView(v as 'endpoints' | 'timeline')}
+            size="sm" density="compact" accentColor={ACCENT}
+          />
+          {probeView === 'endpoints' ? (
+            // `probes`, not `sites`. The blocking list is filtered to waits
+            // that cost time; this view wants every endpoint the process
+            // touched, however briefly.
+            <ProbesView sites={loaded.waits?.probes ?? []} hasRecording />
+          ) : (
+            <ProbeTimeline
+              spans={loaded.timeline?.spans ?? []}
+              fromMs={loaded.timeline?.fromMs ?? 0}
+              toMs={loaded.timeline?.toMs ?? 0}
+            />
+          )}
         </div>
       )}
 

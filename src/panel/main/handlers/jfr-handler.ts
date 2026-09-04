@@ -137,7 +137,7 @@ export function handleJfrAnalyze(msg: Record<string, unknown>, postMessage: Post
       mean the aggregation carrying every event around for a view that may
       never be opened.
     */
-    const timeline = readWaitSpans(chunks, { minMs: 1, limit: 4000 });
+    const timeline = readWaitSpans(chunks, { minMs: 1, ioMinMs: 0, limit: 4000 });
     const allocation = readAllocation(chunks);
     const gc = readGc(chunks);
 

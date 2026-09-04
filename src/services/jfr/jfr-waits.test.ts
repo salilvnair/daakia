@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { JfrChunk } from './jfr-chunk';
-import { readWaits, readGc } from './jfr-waits';
+import { readWaits, readGc, readWaitSpans } from './jfr-waits';
 import { readAllocation, readableClass } from './jfr-allocation';
 import { text, dotted } from './jfr-text';
 
@@ -273,6 +273,22 @@ describe('probes — socket I/O', () => {
 
     expect(io({ minMs: 1 }).length).toBeGreaterThan(0);
     // ...and the floor still works when asked for explicitly.
+    expect(io({ minMs: 1, ioMinMs: 1000 })).toHaveLength(0);
+  });
+
+  it('does not apply the lock floor to I/O in the timeline either', () => {
+    /*
+      The aggregate was fixed and the SPANS were not, so the probe timeline
+      would have repeated the bug exactly: empty over a recording holding 480
+      socket reads, every one of them under a millisecond because the server
+      was on loopback.
+    */
+    const chunks3 = JfrChunk.parseAll(
+      readFileSync(join(__dirname, '../../../test/fixtures/jfr/sockets.jfr')));
+    const io = (o: object) => readWaitSpans(chunks3, o)
+      .spans.filter(s => s.kind === 'socket' || s.kind === 'file');
+
+    expect(io({ minMs: 1 }).length).toBeGreaterThan(0);
     expect(io({ minMs: 1, ioMinMs: 1000 })).toHaveLength(0);
   });
 });

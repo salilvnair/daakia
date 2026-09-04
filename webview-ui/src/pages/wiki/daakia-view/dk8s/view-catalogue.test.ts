@@ -47,10 +47,19 @@ describe('against the recording analyzer', () => {
       Pulled out of the segmented-control options rather than hand-copied, so
       adding an eighth tab without a catalogue entry fails right here.
     */
+    /*
+      Segmented controls that are settings ON a view rather than views.
+
+      `all`/`app` filters frames in Hot spots; `endpoints`/`timeline` picks how
+      Probes reads the same events. Both use the same control as the tab bar,
+      so they have to be named rather than detected — and naming them is right:
+      if one ever becomes a real tab, this list is where someone has to think
+      about it.
+    */
+    const NOT_TABS = ['all', 'app', 'endpoints', 'timeline'];
     const rendered = [...src.matchAll(/\{ value: '([a-z]+)', label: [`']/g)]
       .map(m => m[1])
-      // The frame filter is a control on the view, not a view.
-      .filter(v => !['all', 'app'].includes(v));
+      .filter(v => !NOT_TABS.includes(v));
 
     expect(new Set(byArtifact('recording').map(e => e.id))).toEqual(new Set(rendered));
   });
