@@ -383,6 +383,17 @@ interface K8sState {
    * searched is the whole value of the hit thrown away.
    */
   explorerPath?: string;
+  /**
+   * The row to flash on arrival, and the way back.
+   *
+   * Landing in a directory of forty files having asked for one of them still
+   * leaves the eye to find it, so the file is named and briefly marked. The
+   * return flag is the other half: someone who came from a search is midway
+   * through reading it, and closing the Explorer should put them back there
+   * rather than at the top of a list they have already scrolled.
+   */
+  explorerHighlight?: string;
+  explorerCameFromSearch?: boolean;
   logs: LogLine[];
   logStatus: LogStatus;
   /**
@@ -497,6 +508,8 @@ interface K8sState {
   closeDetail: () => void;
   setDetailTab: (tab: DetailTab) => void;
   setExplorerPath: (path?: string) => void;
+  openExplorerAt: (a: { path?: string; highlight?: string; fromSearch?: boolean }) => void;
+  clearExplorerHighlight: () => void;
   setLogFilter: (v: string) => void;
   /** Add a field filter, or flip its mode if that field/value is already on. */
   addFieldFilter: (f: FieldFilter) => void;
@@ -687,6 +700,14 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   selectPod: (selectedPod) => set({ selectedPod }),
 
   setExplorerPath: (explorerPath) => set({ explorerPath }),
+
+  openExplorerAt: ({ path, highlight, fromSearch }) => set({
+    explorerPath: path,
+    explorerHighlight: highlight,
+    explorerCameFromSearch: !!fromSearch,
+  }),
+
+  clearExplorerHighlight: () => set({ explorerHighlight: undefined }),
 
   openDetail: (pod) => {
     // Reset every per-pod field. Carrying the last pod's logs into this one's

@@ -19,7 +19,7 @@ import {
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
 import {
-  EyeIcon, DownloadIcon, RefreshIcon, SearchIcon, LockIcon,
+  EyeIcon, DownloadIcon, RefreshIcon, SearchIcon, LockIcon, ArrowToLeftIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
 import { FileViewer } from './FileViewer';
@@ -63,7 +63,8 @@ const ACCENT = 'var(--color-dk8s)';
 */
 const LIKELY_ROOTS = ['/data', '/var/lib', '/mnt', '/opt', '/app', '/'];
 
-export function ExplorerTab({ context, namespace, pod, container, initialPath }: {
+export function ExplorerTab({ context, namespace, pod, container, initialPath,
+  highlight, onBackToSearch }: {
   context: string; namespace: string; pod: string; container?: string;
   /**
    * Open here instead of probing for a volume.
@@ -73,6 +74,10 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath }:
    * searched throws away the entire value of finding it.
    */
   initialPath?: string;
+  /** The file to flash once the listing arrives. */
+  highlight?: string;
+  /** Offer a way back to the search this came from. */
+  onBackToSearch?: () => void;
 }) {
   const [mode, setMode] = useState<'files' | 'search' | 'downloads' | 'access'>('files');
   const [path, setPath] = useState<string>('');
@@ -81,6 +86,21 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath }:
   const [pattern, setPattern] = useState('');
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<{ path: string; name: string; size?: number } | null>(null);
+  const [selected, setSelected] = useState<string | undefined>();
+  /*
+    The arriving flash, cleared on a timer.
+
+    Long enough to find with the eye, short enough that it stops competing
+    with whatever the reader selects next — a highlight that never fades is
+    just a second selection nobody asked for.
+  */
+  const [flash, setFlash] = useState<string | undefined>(highlight);
+  useEffect(() => {
+    setFlash(highlight);
+    if (!highlight) return;
+    const t = setTimeout(() => setFlash(undefined), 2600);
+    return () => clearTimeout(t);
+  }, [highlight]);
   const seq = useRef(0);
   const unseen = useDk8sFilesStore(s => s.unseen);
 
@@ -252,6 +272,21 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath }:
           onChange={v => setMode(v as typeof mode)}
           size="sm" density="compact" accentColor={ACCENT}
         />
+        {onBackToSearch && (
+          <button
+            type="button"
+            onClick={onBackToSearch}
+            title="Back to the search you came from"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1"
+            style={{
+              fontSize: 10, cursor: 'pointer', whiteSpace: 'nowrap', color: ACCENT,
+              background: `color-mix(in srgb, ${ACCENT} 13%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${ACCENT} 34%, transparent)`,
+            }}
+          >
+            <ArrowToLeftIcon size={11} /> Back to search
+          </button>
+        )}
         <button
           type="button"
           onClick={() => (mode === 'files' ? go(path) : runSearch())}
@@ -373,6 +408,9 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath }:
           }}
           actions={actions}
           onAction={onAction}
+          onSelect={e => setSelected(e.id)}
+          selectedId={selected}
+          highlightId={flash}
           accentColor={ACCENT}
           size="sm"
           emptyText={busy ? 'asking the pod…' : 'This directory is empty.'}

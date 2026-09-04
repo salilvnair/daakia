@@ -108,7 +108,7 @@ function time(ts?: number): string {
 }
 
 export function LogSearchModal({ onClose }: { onClose: () => void }) {
-  const { pods, selected, openDetail, setDetailTab, setExplorerPath } = useK8sStore();
+  const { pods, selected, openDetail, setDetailTab, openExplorerAt } = useK8sStore();
   const {
     options, running, progress, groups, summary, collapsed,
     picked, pickerOpen, setPicked, setPickerOpen,
@@ -163,7 +163,8 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     regex/case switches are identical either way, and the question people
     arrive with is "where is this", not "which subsystem should I ask".
   */
-  const [searchIn, setSearchIn] = useState<'logs' | 'files'>('logs');
+  const searchIn = useDk8sSearchStore(s => s.searchIn);
+  const setSearchIn = useDk8sSearchStore(s => s.setSearchIn);
   const fileSearch = useFileSearch();
   /*
     The picker offers what the list behind it is showing.
@@ -707,20 +708,25 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 */
                 const pod = pods.find(p => p.name === r.pod && p.namespace === r.namespace);
                 if (!pod) return;
-                setExplorerPath(r.path ? dirOf(r.path) : undefined);
+                openExplorerAt({
+                  path: r.path ? dirOf(r.path) : undefined,
+                  highlight: r.path,
+                });
+                // The same way back the log hits use: this records the scroll
+                // so returning lands on the row you left.
+                useDk8sSearchStore.getState().jumpedToPod(scrollRef.current?.scrollTop ?? 0);
                 openDetail(pod);
                 // openDetail restores the tab last read on that pod, so the
                 // Explorer has to be asked for after it, not instead.
                 setDetailTab('explorer');
-                onClose();
               }}
               onView={r => {
                 const pod = pods.find(p => p.name === r.pod && p.namespace === r.namespace);
                 if (!pod || !r.path) return;
-                setExplorerPath(dirOf(r.path));
+                openExplorerAt({ path: dirOf(r.path), highlight: r.path });
+                useDk8sSearchStore.getState().jumpedToPod(scrollRef.current?.scrollTop ?? 0);
                 openDetail(pod);
                 setDetailTab('explorer');
-                onClose();
               }}
               onDownload={r => {
                 // Straight to disk, without leaving the search — the common

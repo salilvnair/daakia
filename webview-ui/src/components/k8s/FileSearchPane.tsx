@@ -15,8 +15,10 @@ import {
   EmptyStateView, FileBrowserView,
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
-import { SearchIcon, FolderOpenIcon, LockIcon, EyeIcon, DownloadIcon } from '../../icons';
+import { SearchIcon, FolderOpenIcon, LockIcon, EyeIcon, DownloadIcon,
+  ChevronRightIcon, ChevronDownIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -63,7 +65,17 @@ export function useFileSearch(): FileSearchState & {
   run(pods: FileSearchPod[], pattern: string, root: string, caseSensitive: boolean): void;
   reset(): void;
 } {
-  const [state, setState] = useState<FileSearchState>(EMPTY_FILE_SEARCH);
+  /*
+    State lives in the store, not here.
+
+    It started as component state, which meant opening a hit — the entire
+    point of the results — unmounted the dialog and destroyed them, so "back
+    to search" arrived at an empty panel. Anything you can navigate away from
+    and come back to has to outlive the component that drew it.
+  */
+  const state = useDk8sSearchStore(s => s.fileSearch);
+  const setFileSearch = useDk8sSearchStore(s => s.setFileSearch);
+  const addPod = useDk8sSearchStore(s => s.addFileSearchPod);
   const active = useRef<string | null>(null);
 
   useEffect(() => {
@@ -72,41 +84,44 @@ export function useFileSearch(): FileSearchState & {
       if (!m?.requestId || m.requestId !== active.current) return;
 
       if (m.type === 'files:searchMany:start') {
-        setState(s => ({ ...s, running: true, total: m.total ?? 0, ran: true }));
+        setFileSearch({ running: true, total: m.total ?? 0, ran: true });
       } else if (m.type === 'files:searchMany:pod') {
-        setState(s => ({
-          ...s,
-          scanned: s.scanned + 1,
-          results: [...s.results, {
-            pod: m.pod, namespace: m.namespace, context: m.context,
-            hits: m.hits ?? [], capped: !!m.capped,
-            command: m.command ?? '', error: m.error,
-          }],
-        }));
+        addPod({
+          pod: m.pod, namespace: m.namespace, context: m.context,
+          hits: m.hits ?? [], capped: !!m.capped,
+          command: m.command ?? '', error: m.error,
+        });
       } else if (m.type === 'files:searchMany:done') {
-        setState(s => ({
-          ...s, running: false,
-          matched: m.matched ?? 0, podsWithHits: m.podsWithHits ?? 0,
-        }));
+        setFileSearch({
+          running: false,
+          matched: m.matched ?? 0,
+          podsWithHits: m.podsWithHits ?? 0,
+        });
         active.current = null;
       }
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, []);
+  }, [setFileSearch, addPod]);
 
   return {
     ...state,
     run(pods, pattern, root, caseSensitive) {
       const requestId = `fsm-${Date.now()}`;
       active.current = requestId;
-      setState({ ...EMPTY_FILE_SEARCH, running: true, total: pods.length, ran: true });
+      setFileSearch({
+        running: true, ran: true, results: [], scanned: 0,
+        total: pods.length, matched: 0, podsWithHits: 0,
+      });
       postMsg({
         type: 'files:searchMany', requestId, pattern, root, caseSensitive,
         pods: pods.map(p => ({ context: p.context, namespace: p.namespace, pod: p.name })),
       });
     },
-    reset() { active.current = null; setState(EMPTY_FILE_SEARCH); },
+    reset() {
+      active.current = null;
+      setFileSearch({ ...EMPTY_FILE_SEARCH, collapsed: [] });
+    },
   };
 }
 
@@ -133,6 +148,12 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
   onView: (r: HitTarget) => void;
   onDownload: (r: HitTarget) => void;
 }) {
+  const collapsedList = useDk8sSearchStore(s => s.fileSearch.collapsed);
+  const setFileSearch = useDk8sSearchStore(s => s.setFileSearch);
+  const collapsed = new Set(collapsedList);
+  const setCollapsed = (fn: (prev: Set<string>) => Set<string>) =>
+    setFileSearch({ collapsed: [...fn(new Set(collapsedList))] });
+
   if (!state.ran) {
     return (
       <div className="flex-1 min-h-0 grid place-items-center px-8">
@@ -192,20 +213,45 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
           },
         ];
 
+        const key = `${r.namespace}/${r.pod}`;
+        const open = !collapsed.has(key);
+
         return (
-          <div key={`${r.namespace}/${r.pod}`}
-               style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-            <div className="flex items-center gap-2.5 px-3 py-2 flex-wrap sticky top-0 z-10"
+          <div key={key} style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+            <div className="flex items-center gap-2 px-2 py-1 flex-wrap sticky top-0 z-10"
                  style={{ background: 'var(--color-panel)' }}>
-              <span className="text-[11.5px] font-mono font-semibold"
+              {/*
+                A pod is a section, and forty hits across twelve pods is a
+                scroll nobody finishes. Collapsing one is how you put a pod
+                aside without losing the count that made you look.
+              */}
+              <button
+                type="button"
+                onClick={() => setCollapsed(prev => {
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key); else next.add(key);
+                  return next;
+                })}
+                aria-label={open ? `Collapse ${r.pod}` : `Expand ${r.pod}`}
+                aria-expanded={open}
+                style={{
+                  display: 'grid', placeItems: 'center', width: 16, height: 16,
+                  border: 'none', background: 'transparent', cursor: 'pointer',
+                  color: 'var(--color-text-muted)', flexShrink: 0, padding: 0,
+                }}
+              >
+                {open ? <ChevronDownIcon size={11} /> : <ChevronRightIcon size={11} />}
+              </button>
+              <span className="text-[10.5px] font-mono font-semibold"
                     style={{ color: 'var(--color-text-primary)' }}>{r.pod}</span>
-              <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+              <span className="text-[9px]" style={{ color: 'var(--color-text-muted)' }}>
                 {r.namespace}
               </span>
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+              <span className="text-[8.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
                     style={{
                       color: ACCENT,
                       background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
+                      border: `1px solid color-mix(in srgb, ${ACCENT} 28%, transparent)`,
                     }}>
                 {r.hits.length}{r.capped ? '+' : ''} {r.hits.length === 1 ? 'file' : 'files'}
               </span>
@@ -226,9 +272,13 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
               </button>
             </div>
 
+            {open && (
             <FileBrowserView
               entries={entries}
               showHeader={false}
+              showSize={false}
+              showModified={false}
+              dense
               size="sm"
               accentColor={ACCENT}
               actions={actions}
@@ -240,8 +290,9 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
                 else onOpenExplorer(t);
               }}
             />
+            )}
 
-            {r.capped && (
+            {open && r.capped && (
               <div className="px-3 py-1.5 text-[10px]" style={{ color: 'var(--color-warning)' }}>
                 capped — narrow the name or the start path to see the rest
               </div>

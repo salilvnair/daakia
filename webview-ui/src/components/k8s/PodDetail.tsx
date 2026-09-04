@@ -220,7 +220,7 @@ function TerminalTab() {
 
 export function PodDetail() {
   const {
-    detail, detailTab, setDetailTab, closeDetail, explorerPath,
+    detail, detailTab, setDetailTab, closeDetail, explorerPath, explorerHighlight,
     describeText, yamlText, describeBusy, runtime,
     openShell, shellNotice, dismissShellNotice,
   } = useK8sStore();
@@ -433,6 +433,14 @@ export function PodDetail() {
                     namespace={detail.namespace}
                     pod={detail.name}
                     initialPath={explorerPath}
+                    highlight={explorerHighlight}
+                    /*
+                      The same way back the log hits already use. `jumpedToPod`
+                      recorded the scroll on the way out, so this lands on the
+                      row you left rather than the top of a list you had
+                      already scrolled through.
+                    */
+                    onBackToSearch={cameFromSearch ? goBack : undefined}
                   />
                 )}
               </>

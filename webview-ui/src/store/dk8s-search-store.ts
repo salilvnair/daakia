@@ -111,6 +111,40 @@ interface SearchState {
   progress: { done: number; total: number; pod?: string };
   /** Results in completion order, so the list fills in as pods finish. */
   groups: PodGroup[];
+  /**
+   * Logs or files.
+   *
+   * In the store for the same reason the results are: opening a hit unmounts
+   * the dialog, and coming back to a Files search that had silently reverted
+   * to Logs — with the file results still held but not shown — is worse than
+   * losing them outright, because it looks like the search found nothing.
+   */
+  searchIn: 'logs' | 'files';
+  setSearchIn: (v: 'logs' | 'files') => void;
+  /**
+   * File-search results, held here for the same reason the log ones are.
+   *
+   * They started in the modal's own state, which meant opening a hit — the
+   * whole point of the results — unmounted the dialog and threw them away, so
+   * "back to search" returned to an empty panel. Anything you can navigate
+   * away from and come back to has to outlive the component.
+   */
+  fileSearch: {
+    running: boolean;
+    ran: boolean;
+    results: {
+      pod: string; namespace: string; context: string;
+      hits: { path: string; name: string }[];
+      capped: boolean; command: string; error?: string;
+    }[];
+    scanned: number;
+    total: number;
+    matched: number;
+    podsWithHits: number;
+    collapsed: string[];
+  };
+  setFileSearch: (patch: Partial<SearchState['fileSearch']>) => void;
+  addFileSearchPod: (r: SearchState['fileSearch']['results'][number]) => void;
   summary?: { pods: number; matched: number; scanned: number; stopped: boolean };
   /** Pods the user has collapsed in the result list. */
   collapsed: string[];
@@ -190,6 +224,20 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   running: false,
   progress: { done: 0, total: 0 },
   groups: [],
+  searchIn: 'logs',
+  setSearchIn: (searchIn) => set({ searchIn }),
+  fileSearch: {
+    running: false, ran: false, results: [], scanned: 0,
+    total: 0, matched: 0, podsWithHits: 0, collapsed: [],
+  },
+  setFileSearch: (patch) => set(s => ({ fileSearch: { ...s.fileSearch, ...patch } })),
+  addFileSearchPod: (r) => set(s => ({
+    fileSearch: {
+      ...s.fileSearch,
+      scanned: s.fileSearch.scanned + 1,
+      results: [...s.fileSearch.results, r],
+    },
+  })),
   collapsed: [],
 
   // Opened from the pod grid, so the grid's selection is what you meant —
