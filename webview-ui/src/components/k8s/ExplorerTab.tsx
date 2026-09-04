@@ -400,6 +400,10 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       ) : mode === 'files' ? (
         <FileBrowserView
           className="flex-1 min-h-0"
+          // Tight rows, small chips, bare glyphs. A directory of 400 entries
+          // is a list you scan, and a box around every icon on every row is
+          // more border than content.
+          dense
           entries={rows}
           onParent={path && path !== '/' ? () => go(parentOf(path)) : undefined}
           onOpen={e => {
@@ -425,6 +429,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       ) : (
         <FileBrowserView
           className="flex-1 min-h-0"
+          dense
           entries={hitRows}
           actions={actions.filter(a => a.id !== 'saveDir')}
           onAction={onAction}
