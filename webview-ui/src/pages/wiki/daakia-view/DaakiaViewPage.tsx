@@ -16,6 +16,7 @@ import { Dk8sSearchView } from './dk8s/Dk8sSearchView';
 import { Dk8sDoctorView } from './dk8s/Dk8sDoctorView';
 import { Dk8sArchiveView } from './dk8s/Dk8sArchiveView';
 import { Dk8sCommandsView } from './dk8s/Dk8sCommandsView';
+import { Dk8sViewsView } from './dk8s/Dk8sViewsView';
 import {
   DocumentIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge,
   ProtocolGrpcBadge, ProtocolSoapBadge, ServerIcon, CollectionsFolderIcon,
@@ -25,7 +26,7 @@ import {
 
 // ─── Wiki tabs ──────────────────────────────────────────────────────────────
 
-export type TabId = 'quick-start' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands';
+export type TabId = 'quick-start' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views';
 
 interface Tab {
   id: TabId;
@@ -49,6 +50,7 @@ const TABS: Tab[] = [
   { id: 'dk8s-pod',          label: 'Pod Detail',        color: 'var(--color-dk8s)',               icon: <LayersIcon size={15} /> },
   { id: 'dk8s-search',       label: 'Log Search',        color: 'var(--color-dk8s)',               icon: <SearchIcon size={15} /> },
   { id: 'dk8s-doctor',       label: 'Doctor & Artifacts', color: 'var(--color-doctor)',            icon: <StethoscopeIcon size={15} /> },
+  { id: 'dk8s-views',        label: 'Every View',        color: 'var(--color-doctor)',             icon: <LayersIcon size={15} /> },
   { id: 'dk8s-archive',      label: 'Archived Logs',     color: 'var(--color-dk8s)',               icon: <FolderOpenIcon size={15} /> },
   { id: 'dk8s-commands',     label: 'Behind the Scenes', color: 'var(--color-dk8s)',               icon: <TerminalIcon size={15} /> },
 ];
@@ -87,6 +89,7 @@ const NAV_ITEMS: SideNavItem[] = [
     { id: 'dk8s-pod', label: TAB_BY_ID['dk8s-pod'].label, icon: TAB_BY_ID['dk8s-pod'].icon },
     { id: 'dk8s-search', label: TAB_BY_ID['dk8s-search'].label, icon: TAB_BY_ID['dk8s-search'].icon },
     { id: 'dk8s-doctor', label: TAB_BY_ID['dk8s-doctor'].label, icon: TAB_BY_ID['dk8s-doctor'].icon },
+    { id: 'dk8s-views', label: TAB_BY_ID['dk8s-views'].label, icon: TAB_BY_ID['dk8s-views'].icon },
     { id: 'dk8s-archive', label: TAB_BY_ID['dk8s-archive'].label, icon: TAB_BY_ID['dk8s-archive'].icon },
     { id: 'dk8s-commands', label: TAB_BY_ID['dk8s-commands'].label, icon: TAB_BY_ID['dk8s-commands'].icon },
   ] },
@@ -147,6 +150,7 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
         {activeId === 'dk8s-pod'       && <Dk8sPodView />}
         {activeId === 'dk8s-search'    && <Dk8sSearchView />}
         {activeId === 'dk8s-doctor'    && <Dk8sDoctorView />}
+        {activeId === 'dk8s-views'     && <Dk8sViewsView />}
         {activeId === 'dk8s-archive'   && <Dk8sArchiveView />}
         {activeId === 'dk8s-commands'  && <Dk8sCommandsView />}
       </div>
