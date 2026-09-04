@@ -14,7 +14,9 @@ import { ReactFlow, Background, Controls, MarkerType, type Node, type Edge } fro
 import { RetentionNode, type RetentionNodeData } from './RetentionNode';
 import { decodeClassName } from './class-name';
 import '@xyflow/react/dist/style.css';
-import { heapQuery, bytes, hueFor, type DominatorChild } from './heap-query';
+import { heapQuery, bytes, hueForShare, type DominatorChild } from './heap-query';
+import { RetentionDetail, type DetailSubject } from './RetentionDetail';
+import { descendantsOf } from './retention-tree';
 
 /*
   Sized for the node, which is now a card rather than a line of text.
@@ -74,6 +76,8 @@ export function HeapGraphView({ liveBytes, onAsk }: {
     positions — and nothing that already exists moves.
   */
   const [locked, setLocked] = useState(false);
+  /** The node the detail panel is describing. */
+  const [selected, setSelected] = useState<number | null>(null);
 
   const load = useCallback(async (parentRow: number, depth: number) => {
     setBusy(parentRow);
@@ -139,7 +143,9 @@ export function HeapGraphView({ liveBytes, onAsk }: {
           bytesLabel: bytes(n.retainedBytes),
           sharePercent: share * 100,
           childCount: n.childCount,
-          hue: hueFor(n.className),
+          // Colour by share, not by name — see hueForShare.
+          hue: hueForShare(share * 100),
+          isExpanded: expanded.has(n.row),
           // The root of the tree is the suspect the view opened on, and it is
           // drawn as the subject: bigger, bolder, with the retained bar.
           isRoot: n.parent === null,
@@ -161,6 +167,9 @@ export function HeapGraphView({ liveBytes, onAsk }: {
           // A position the reader chose wins over the computed one.
           position: moved[id] ?? { x: depth * COL_W, y: i * ROW_H },
           data: data as unknown as Record<string, unknown>,
+          // Driven by our own state rather than React Flow's, so the node's
+          // highlight and the detail panel can never describe different nodes.
+          selected: n.row === selected,
           // Sizing is the node's own business now; React Flow measures it.
           style: { width: undefined },
         });
@@ -179,19 +188,69 @@ export function HeapGraphView({ liveBytes, onAsk }: {
       });
     }
     return { nodes, edges };
-  }, [nodesData, expanded, busy, liveBytes, moved]);
+  }, [nodesData, expanded, busy, liveBytes, moved, selected]);
+
+  const collapse = useCallback((row: number) => {
+    setNodesData(prev => {
+      const doomed = descendantsOf(row, prev);
+      return prev.filter(n => !doomed.has(n.row));
+    });
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.delete(row);
+      // A collapsed subtree's own expansion state goes with it, so reopening
+      // starts closed rather than re-exploding to wherever it was left.
+      for (const r of descendantsOf(row, nodesData)) next.delete(r);
+      return next;
+    });
+  }, [nodesData]);
 
   const onNodeClick = useCallback((_: unknown, node: Node) => {
     const row = Number(node.id);
     const data = nodesData.find(n => n.row === row);
-    if (!data || data.childCount === 0 || expanded.has(row)) return;
-    load(row, data.depth + 1);
-  }, [nodesData, expanded, load]);
+    if (!data) return;
+    // Selecting is what a click always does; opening or closing is what it
+    // does IN ADDITION, when there is something under the node.
+    setSelected(row);
+    if (data.childCount === 0) return;
+    if (expanded.has(row)) collapse(row);
+    else load(row, data.depth + 1);
+  }, [nodesData, expanded, load, collapse]);
 
   /** Remembers where a node was dropped, so the next render keeps it there. */
   const onNodeDragStop = useCallback((_: unknown, node: Node) => {
     setMoved(m => ({ ...m, [node.id]: { x: node.position.x, y: node.position.y } }));
   }, []);
+
+  /**
+   * The selected node, with the chain back to the root.
+   *
+   * The path is walked here rather than stored on the node because it changes
+   * whenever an ancestor is collapsed, and a stale parent in the panel would
+   * name an object no longer on the canvas.
+   */
+  const subject = useMemo<DetailSubject | null>(() => {
+    if (selected === null) return null;
+    const n = nodesData.find(x => x.row === selected);
+    if (!n) return null;
+
+    const path: { row: number; className: string }[] = [];
+    let cur: Loaded | undefined = n;
+    const guard = new Set<number>();
+    while (cur && !guard.has(cur.row)) {
+      guard.add(cur.row);
+      path.unshift({ row: cur.row, className: cur.className });
+      const parentRow: number | null = cur.parent;
+      cur = parentRow === null ? undefined : nodesData.find(x => x.row === parentRow);
+    }
+
+    return {
+      row: n.row, className: n.className, retainedBytes: n.retainedBytes,
+      childCount: n.childCount, depth: n.depth,
+      sharePercent: liveBytes ? (n.retainedBytes / liveBytes) * 100 : 0,
+      path,
+    };
+  }, [selected, nodesData, liveBytes]);
 
   const relayout = useCallback(() => { setMoved({}); setLocked(false); }, []);
 
@@ -244,7 +303,8 @@ export function HeapGraphView({ liveBytes, onAsk }: {
           {nodesData.length} shown
         </span>
       </div>
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 flex">
+        <div className="flex-1 min-w-0">
         <ReactFlow
           nodeTypes={NODE_TYPES}
           nodes={nodes}
@@ -255,13 +315,49 @@ export function HeapGraphView({ liveBytes, onAsk }: {
           // reader's zoom as well as their arrangement.
           fitView={!locked && Object.keys(moved).length === 0}
           minZoom={0.2}
+          maxZoom={1.75}
           proOptions={{ hideAttribution: true }}
           nodesDraggable={!locked}
           nodesConnectable={false}
+          /*
+            Scroll pans, it does not zoom.
+
+            React Flow's default puts zoom on the wheel, so a two-finger scroll
+            jumps the whole canvas toward the cursor and the graph feels like it
+            is fighting you. Panning on scroll is what every other canvas in the
+            app does and what the hand expects; zoom stays available on ctrl or
+            pinch, which is the same gesture a map uses.
+          */
+          panOnScroll
+          panOnScrollSpeed={0.8}
+          zoomOnScroll={false}
+          zoomOnPinch
+          zoomOnDoubleClick={false}
+          selectionOnDrag={false}
+          panOnDrag
+          onPaneClick={() => setSelected(null)}
         >
           <Background color="var(--color-surface-border)" gap={18} />
           <Controls showInteractive={false} />
         </ReactFlow>
+        </div>
+
+        {/*
+          The properties panel, always present.
+
+          Not a popover on the node: a panel that appears and disappears makes
+          the canvas jump, and one that overlaps the graph hides the thing it
+          is describing. A fixed column costs the same width whether or not
+          anything is selected, and in exchange nothing ever moves.
+        */}
+        <div className="flex flex-col overflow-hidden flex-shrink-0"
+             style={{
+               width: 248,
+               borderLeft: '1px solid var(--color-surface-border)',
+               background: 'var(--color-panel)',
+             }}>
+          <RetentionDetail subject={subject} onAsk={onAsk} />
+        </div>
       </div>
     </div>
   );

@@ -35,6 +35,8 @@ export interface RetentionNodeData {
   objects?: number;
   sharePercent: number;
   childCount: number;
+  /** Whether this node's children are currently on the canvas. */
+  isExpanded?: boolean;
   hue: string;
   /** The dominator root — opened on, and drawn as the subject. */
   isRoot: boolean;
@@ -75,24 +77,42 @@ export function RetentionNode({ data, selected }: NodeProps) {
         // width of every other and the columns stop lining up.
         maxWidth: 320,
         borderRadius: 10,
-        border: `${root ? 2 : 1.4}px solid ${hue}`,
-        // A gradient body rather than a flat fill: it separates the node from
-        // the canvas at any zoom without a drop shadow, which React Flow
-        // re-rasterises on every frame.
-        background: `linear-gradient(180deg,
-          color-mix(in srgb, ${hue} 13%, var(--color-panel)) 0%,
-          var(--color-panel) 100%)`,
-        boxShadow: selected ? `0 0 0 2px color-mix(in srgb, ${hue} 40%, transparent)` : undefined,
+        /*
+          The state machine editor's restraint, and for its reason.
+
+          A full-saturation border on every node makes ten nodes shout equally
+          and the graph read as decoration. Mixing the hue most of the way into
+          the surface leaves the node clearly bounded and quiet; the selected
+          one gets the undiluted colour, so at any moment exactly one thing on
+          the canvas is at full strength.
+        */
+        border: `${selected || root ? 1.6 : 1}px solid ${
+          selected
+            ? hue
+            : `color-mix(in srgb, ${hue} ${root ? 55 : 28}%, var(--color-surface-border))`}`,
+        background: selected
+          ? `color-mix(in srgb, ${hue} 16%, var(--color-surface))`
+          : `color-mix(in srgb, ${hue} 7%, var(--color-input-bg))`,
+        boxShadow: selected ? `0 0 0 2px color-mix(in srgb, ${hue} 22%, transparent)` : undefined,
+        transition: 'border-color .12s ease, background .12s ease, box-shadow .12s ease',
         opacity: d.busy ? 0.5 : 1,
         overflow: 'hidden',
       }}
     >
-      {/* The strip. Identifies the node when the text is too small to read. */}
-      <div style={{ height: 6, background: hue, opacity: 0.85 }} />
+      {/* The strip, at the same strength as the border rather than full: it
+          marks the node at a zoom where the text is unreadable without turning
+          the canvas into stripes. */}
+      <div style={{
+        height: 4,
+        background: selected ? hue : `color-mix(in srgb, ${hue} 45%, transparent)`,
+      }} />
 
       <div style={{ padding: '8px 11px 10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: hue, flexShrink: 0 }} />
+          <span style={{
+            width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+            background: hue, opacity: selected ? 1 : 0.75,
+          }} />
           <span style={{
             fontFamily: 'ui-monospace, monospace',
             fontSize: root ? 14 : 12.5, fontWeight: 700,
@@ -101,9 +121,18 @@ export function RetentionNode({ data, selected }: NodeProps) {
           }}>{d.simpleName}</span>
           <span style={{ flex: 1 }} />
           <Pill colour={hue} strong>{d.sharePercent.toFixed(1)}%</Pill>
-          {/* Only when there IS something under it — the absence of this badge
-              is what says "nothing to expand" before anyone clicks. */}
-          {d.childCount > 0 && <Pill colour={hue}>▸ {d.childCount}</Pill>}
+          {/*
+            Only when there IS something under it — the absence of this badge is
+            what says "nothing to expand" before anyone clicks. The chevron
+            points the way the next click goes: right to open, down to close.
+            Without it an expanded node looked identical to an unexpanded one
+            and there was no way to tell what a click would do.
+          */}
+          {d.childCount > 0 && (
+            <Pill colour={hue} strong={d.isExpanded}>
+              {d.isExpanded ? '▾' : '▸'} {d.childCount}
+            </Pill>
+          )}
         </div>
 
         <div style={{

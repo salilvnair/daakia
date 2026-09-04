@@ -31,6 +31,13 @@ export interface TreemapData {
   groups: { name: string; bytes: number; children: { name: string; bytes: number; instances: number }[] }[];
 }
 
+/** What one object keeps alive, grouped by class. */
+export interface RetainedClasses {
+  totalBytes: number;
+  totalObjects: number;
+  rows: { className: string; instances: number; bytes: number }[];
+}
+
 export interface DominatorChild {
   row: number;
   className: string;
@@ -83,6 +90,26 @@ export function bytes(n: number): string {
   let v = n / 1024, i = 0;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return `${v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
+
+/**
+ * Colour that means something, for the retention graph.
+ *
+ * `hueFor` below hashes a name to one of 360 hues. That is right for a treemap
+ * or a histogram bar, where the job is telling ADJACENT regions apart and the
+ * specific colour carries nothing. It is wrong for a node graph: ten nodes in
+ * ten unrelated bright colours read as ten kinds of important, when the whole
+ * question the view answers is which one holds the heap.
+ *
+ * So the graph colours by share instead. Most of a dominator tree is ordinary
+ * and stays in the product's own accent; the node actually holding the heap is
+ * the only red thing on screen, and it is red because it is big rather than
+ * because of how its name happened to hash.
+ */
+export function hueForShare(percent: number): string {
+  if (percent >= 20) return 'var(--color-error)';
+  if (percent >= 5) return 'var(--color-warning)';
+  return 'var(--color-dk8s)';
 }
 
 /** Stable colour per package/class so the same type keeps its hue across views. */
