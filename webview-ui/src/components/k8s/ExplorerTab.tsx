@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  PathBreadcrumbView, FileBrowserView, SearchInputView, SegmentedControlView,
+  PathBreadcrumbView, FileBrowserView, SearchFieldView, SegmentedControlView,
   EmptyStateView, SelectInputView,
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
@@ -581,13 +581,21 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
               searches — it just stopped being two things.
             */}
             <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-              <SearchInputView
+              <SearchFieldView
                 value={pattern}
                 onChange={setPattern}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
-                prefix={<SearchIcon size={12} color={ACCENT} />}
-                placeholder="Name, glob or regex — *invoice*, inv.*\.pdf — Enter to search"
+                onSearch={runSearch}
+                /*
+                  Clearing drops the results too.
+
+                  An empty box above a full result list is a screen describing
+                  a search whose terms are no longer on it — and the next
+                  question is always "what did I search for".
+                */
+                onClear={() => { setPattern(''); setHits(null); }}
+                placeholder="Name, glob or regex — *invoice*, \.ya?ml$ — Enter to search"
                 size="sm"
+                accentColor={ACCENT}
               />
             </span>
             {/*

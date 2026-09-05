@@ -17,7 +17,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
-  SearchInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
+  FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
 } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
@@ -1037,12 +1037,13 @@ export function LogViewer() {
         {/* Takes whatever is left between the chips and the controls, rather
             than a fixed width with dead space after it. */}
         <div className="flex-1" style={{ minWidth: 180, paddingRight: 8 }}>
-          <SearchInputView
+          <FilterInputView
             value={logFilter}
             onChange={(v: string) => setLogFilter(v)}
             placeholder="Filter — text, or /regex/"
             size="sm"
             width="100%"
+            accentColor={ACCENT}
             /*
               A way out of the filter, inside the filter.
 

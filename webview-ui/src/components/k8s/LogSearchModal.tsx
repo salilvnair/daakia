@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ModalView, ButtonView, SearchInputView, CheckboxView, SelectInputView,
-  SegmentedControlView, FilterInputView,
+  SegmentedControlView, FilterInputView, SearchFieldView, EmptyStateView,
 } from '@salilvnair/dui';
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
@@ -531,14 +531,15 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             size="sm" density="compact" accentColor={ACCENT}
           />
           <span className="flex-1" style={{ minWidth: 220 }}>
-            <SearchInputView
+            <SearchFieldView
               value={options.query}
               onChange={(v: string) => setOptions({ query: v })}
+              onSearch={() => { if (canSearch) submit(); }}
               placeholder={searchIn === 'logs'
-                ? 'Search across the selected pods’ logs'
-                : 'File name or glob — *invoice*, application.properties'}
+                ? 'Search across the selected pods’ logs — Enter to search'
+                : 'File name, glob or regex — *invoice*, \.ya?ml$ — Enter to search'}
               size="md"
-              width="100%"
+              accentColor={ACCENT}
             />
           </span>
         </div>
@@ -822,17 +823,60 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           }}
         >
           {rows.length === 0 ? (
-            <div className="flex items-center justify-center h-full px-8 text-center"
-                 style={{ minHeight: 280 }}>
-              <span className="text-[12px]" style={{ color: 'var(--color-text-muted)', fontFamily: 'inherit' }}>
-                {running
-                  ? 'Scanning…'
-                  : summary
-                    ? 'No pod matched. The search reads each log on the host and only sends hits back, so nothing was transferred.'
-                    : chosen.length
-                      ? `Type a string and search. ${chosen.length} pod${chosen.length === 1 ? '' : 's'} will be scanned on the host — only the matching lines come back.`
-                      : 'Select some pods first.'}
-              </span>
+            /*
+              Four states, and they are not the same message.
+
+              "nothing selected", "nothing typed", "still scanning" and
+              "searched and found nothing" were one grey sentence apiece in the
+              middle of a large empty box, which made the panel read as broken
+              in three of the four. The medallion gives each one a shape and
+              room to say what to do next — and the last one room to say that
+              nothing was transferred, which is the part people actually want
+              to know about a search that reads their production logs.
+            */
+            <div className="flex-1 grid place-items-center px-8" style={{ minHeight: 280 }}>
+              {running ? (
+                <EmptyStateView
+                  variant="medallion"
+                  icon={<SpinnerIcon size={22} />}
+                  title="Scanning"
+                  message={`Reading ${chosen.length} pod${chosen.length === 1 ? '' : 's'} on this machine, a line at a time.`}
+                  accentColor={ACCENT}
+                />
+              ) : summary ? (
+                <EmptyStateView
+                  variant="medallion"
+                  icon={<SearchIcon size={22} />}
+                  title="No pod matched"
+                  message="Nothing left this machine — the logs were read and matched here, and only hits would have come back."
+                  accentColor={ACCENT}
+                  hints={[
+                    { key: 'window', text: 'the time window is the commonest reason a search comes back empty' },
+                    { key: 'regex', text: 'off by default — a pattern typed as one is matched literally' },
+                    { key: 'runs', text: 'previous runs looks in the log a crash left behind' },
+                  ]}
+                />
+              ) : chosen.length ? (
+                <EmptyStateView
+                  variant="medallion"
+                  icon={<SearchIcon size={22} />}
+                  title="Search these pods' logs"
+                  message={`${chosen.length} pod${chosen.length === 1 ? '' : 's'} selected. Type a string and search — the logs are read here and only the matching lines come back.`}
+                  accentColor={ACCENT}
+                />
+              ) : (
+                <EmptyStateView
+                  variant="medallion"
+                  icon={<SearchIcon size={22} />}
+                  title="Pick the pods to search"
+                  message="Nothing is selected yet. Open the list above and choose, or take the lot."
+                  accentColor={ACCENT}
+                  hints={[
+                    { key: 'checkbox', text: 'the one at the head of the column selects every pod listed' },
+                    { key: 'filter', text: 'filter first, then select all, to take a subset' },
+                  ]}
+                />
+              )}
             </div>
           ) : (
             <div style={{ height: rows.length * ROW_H, position: 'relative' }}>

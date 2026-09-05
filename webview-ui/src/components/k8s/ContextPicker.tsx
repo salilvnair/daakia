@@ -6,7 +6,7 @@
  * a control in the breadcrumb that can be changed at any time.
  */
 import { useState } from 'react';
-import { ButtonView, TextInputView, SearchInputView, FilterInputView,
+import { ButtonView, TextInputView, FilterInputView,
 } from '@salilvnair/dui';
 import { useK8sStore, type KubeContext } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
