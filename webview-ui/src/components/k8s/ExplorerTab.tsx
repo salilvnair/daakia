@@ -830,7 +830,8 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           highlightId={flash}
           accentColor={ACCENT}
           size="sm"
-          emptyText={busy ? <ListSkeleton /> : 'This directory is empty.'}
+          loading={busy}
+          emptyText="This directory is empty."
           footer={listing && (
             <>
               {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
@@ -1137,7 +1138,8 @@ function ScopedSearch({
             onSelect={onSelect}
             selectedId={selectedId}
             onContextMenu={onContextMenu}
-            emptyText={busy ? <ListSkeleton rows={5} /> : hits ? (
+            loading={busy}
+            emptyText={hits ? (
               <div className="px-6 py-4">
                 <EmptyStateView
                   variant="medallion"
@@ -1179,40 +1181,6 @@ function ScopedSearch({
         </div>
       </div>
     </ModalView>
-  );
-}
-
-/**
- * The shape of the answer, while the answer is on its way.
- *
- * Rows rather than a spinner, because a spinner says "something is happening"
- * and this says "a file list is coming" — the panel does not change shape when
- * the real rows arrive, which is what stops the eye being pulled back to a
- * region it had already finished reading.
- *
- * Deliberately not the LAST directory's row count: a guess that is usually
- * wrong makes the list jump twice. Eight is enough to read as a list and short
- * enough that no directory looks emptier than it is.
- */
-function ListSkeleton({ rows = 8 }: { rows?: number }) {
-  return (
-    <div className="flex flex-col gap-1.5 px-3 py-2" aria-label="loading" aria-busy="true">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex items-center gap-3" style={{ height: 20 }}>
-          <SkeletonView variant="block" width={13} height={13} />
-          {/*
-            Names vary in length and the widths here vary with them, because a
-            column of identical bars reads as a progress meter rather than as
-            a list. The sizes shrink down the list so it does not look like a
-            table of one repeated value.
-          */}
-          <SkeletonView variant="text" width={`${34 - (i % 4) * 6}%`} height={9} />
-          <span style={{ flex: 1 }} />
-          <SkeletonView variant="text" width={44} height={9} />
-          <SkeletonView variant="text" width={78} height={9} />
-        </div>
-      ))}
-    </div>
   );
 }
 
