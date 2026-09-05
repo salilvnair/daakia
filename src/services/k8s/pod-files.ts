@@ -298,6 +298,45 @@ export async function listDirectory(t: PodTarget, path: string): Promise<ListRes
 }
 
 /**
+ * What a directory actually holds, when somebody asks.
+ *
+ * `ls` reports 4096 for a directory — the size of the directory ENTRY, not of
+ * its contents — which is true of every Unix and has nothing to do with
+ * Kubernetes. The real number needs `du`, and `du` walks the whole subtree.
+ *
+ * So it is never part of a listing. A directory of forty folders would be
+ * forty subtree walks to draw one column, and on a PersistentVolume that is
+ * the same runaway the search caps exist to prevent. It is offered per
+ * directory, on request, by someone who has decided this one is worth it.
+ *
+ * `-k` rather than `-h`: kilobytes parse, "6.1M" has to be un-rounded first.
+ */
+export interface DirSizeResult {
+  path: string;
+  bytes?: number;
+  command: string;
+  error?: string;
+}
+
+export async function directorySize(t: PodTarget, path: string): Promise<DirSizeResult> {
+  const args = execArgs(t, ['du', '-sk', path]);
+  const command = showCommand(args);
+  const r = await run(args);
+
+  if (r.code !== 0 && !r.stdout.trim()) {
+    return { path, command, error: explainExecFailure(r.stderr, path) };
+  }
+
+  // `du -sk` prints "6184\t/var/lib/dpkg", and on a subtree with unreadable
+  // corners it prints the total it COULD reach plus warnings on stderr. The
+  // number is still the honest answer to "how much of this can I see".
+  const first = r.stdout.split('\n')[0] ?? '';
+  const kb = /^(\d+)/.exec(first.trim());
+  if (!kb) return { path, command, error: 'du did not answer with a size.' };
+  return { path, bytes: Number(kb[1]) * 1024, command };
+}
+
+/**
  * Follow every symlink far enough to know what it IS.
  *
  * `ls -l` reports a symlink's own size, which is the length of the target

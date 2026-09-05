@@ -20,6 +20,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CopyIcon, DownloadIcon, EyeIcon, CloseIcon, SparkleIcon } from '../../icons';
+import { ContextMenuView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useK8sStore } from '../../store/k8s-store';
@@ -41,6 +42,16 @@ export function FileViewer({
   const [binary, setBinary] = useState(false);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
+  /*
+    The viewer's own menu, because the browser's is wrong here.
+
+    Right-clicking a read-only file offered Copy and Select All — and Copy was
+    the dangerous one: it takes the raw selection, which on a masked line is
+    the bullets, and on a REVEALED line is a secret the panel is careful about
+    everywhere else. The menu below routes through `copyText`, which is the
+    rule the copy button already follows.
+  */
+  const [menu, setMenu] = useState<{ x: number; y: number; selection: string } | null>(null);
   const seq = useRef(0);
   const askAi = useDk8sAiStore(s => s.ask);
   const detail = useK8sStore(s => s.detail);
@@ -67,6 +78,41 @@ export function FileViewer({
 
   const lines: Line[] = useMemo(
     () => (text === null ? [] : redactLines(text)), [text]);
+
+  /*
+    Shell files get the shell renderer.
+
+    By extension, plus the shebang — a container is full of executable scripts
+    with no extension at all, and `#!/bin/sh` is a better statement of what a
+    file is than its name ever was.
+  */
+  const isShell = /\.(sh|bash|zsh|ksh)$/i.test(name)
+    || /^#!.*(sh|bash|zsh|ksh)/.test(text?.slice(0, 80) ?? '');
+
+  /*
+    Escape closes the file, and stops there.
+
+    Without it the key reached the pod detail's own Escape handler, which goes
+    back to the grid — so dismissing a file you had just opened threw away the
+    pod as well.
+
+    `stopImmediatePropagation`, not `stopPropagation`. Both handlers listen on
+    `window`; the pod's is a bubble listener and this is a capture one, so this
+    runs first, but `stopPropagation` only stops the event reaching the NEXT
+    object in the path and window is already the last. Listeners on the same
+    object keep running unless the immediate form is used — which is exactly
+    the case here, and why the first attempt still closed the pod.
+  */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
 
   const maskedCount = lines.filter(
     l => l.secretFrom !== undefined && !revealed.has(l.n)).length;
@@ -114,18 +160,32 @@ export function FileViewer({
       style={{ background: 'var(--color-bg)' }}
       role="dialog"
       aria-label={`${name} — read only`}
+      onContextMenu={e => {
+        e.preventDefault();
+        setMenu({
+          x: e.clientX, y: e.clientY,
+          selection: String(window.getSelection() ?? ''),
+        });
+      }}
     >
       {/* ── bar ── */}
-      <div className="flex items-center gap-3 px-3 py-2 flex-shrink-0 flex-wrap"
+      {/*
+        A thin strip, because it is a caption and not a toolbar.
+
+        It carries a filename, three facts about it and three optional actions,
+        and at full padding with bordered buttons it was as tall as four lines
+        of the file underneath — which is the thing anyone opened this to read.
+      */}
+      <div className="flex items-center gap-2 px-2.5 py-1 flex-shrink-0 flex-wrap"
            style={{ borderBottom: '1px solid var(--color-surface-border)',
                     background: 'var(--color-panel)' }}>
-        <span className="text-[12px] font-mono font-semibold"
+        <span className="text-[11px] font-mono font-semibold"
               style={{ color: 'var(--color-text-primary)' }}>{name}</span>
-        <span className="text-[10px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
+        <span className="text-[9.5px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
           {parentOf(path)} · {size !== undefined ? bytes(size) : '—'} · read-only
         </span>
         {maskedCount > 0 && (
-          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+          <span className="text-[8px] font-bold uppercase tracking-wider px-1 py-0.5 rounded"
                 style={{
                   color: 'var(--color-error)',
                   background: 'color-mix(in srgb, var(--color-error) 14%, transparent)',
@@ -150,10 +210,11 @@ export function FileViewer({
           onClick={ask}
           disabled={text === null}
           title="Ask AI what this file configures and whether anything looks wrong"
-          className="flex items-center gap-1 rounded-md px-2 py-0.5"
+          className="flex items-center gap-1 rounded px-1.5"
           style={{
-            fontSize: 9.5, fontWeight: 700, letterSpacing: '.05em',
-            textTransform: 'uppercase', whiteSpace: 'nowrap',
+            fontSize: 8.5, fontWeight: 700, letterSpacing: '.05em',
+            textTransform: 'uppercase', whiteSpace: 'nowrap', lineHeight: 1,
+            height: 18,
             cursor: text === null ? 'default' : 'pointer',
             opacity: text === null ? 0.45 : 1,
             color: 'var(--color-primary-light)',
@@ -161,19 +222,19 @@ export function FileViewer({
             border: '1px solid color-mix(in srgb, var(--color-primary) 40%, transparent)',
           }}
         >
-          <SparkleIcon size={10} /> Ask AI
+          <SparkleIcon size={9} /> Ask AI
         </button>
         {copied && (
           <span className="text-[10px]" style={{ color: 'var(--color-success)' }}>copied</span>
         )}
         <IconBtn label="Copy what is shown" onClick={copy} disabled={text === null}>
-          <CopyIcon size={12} />
+          <CopyIcon size={11} />
         </IconBtn>
         <IconBtn label="Save to disk" onClick={save}>
-          <DownloadIcon size={12} />
+          <DownloadIcon size={11} />
         </IconBtn>
         <IconBtn label="Close" onClick={onClose}>
-          <CloseIcon size={12} />
+          <CloseIcon size={11} />
         </IconBtn>
       </div>
 
@@ -231,6 +292,7 @@ export function FileViewer({
                 <LineRow
                   key={l.n}
                   line={l}
+                  sh={isShell}
                   revealed={revealed.has(l.n)}
                   onReveal={() => setRevealed(prev => new Set(prev).add(l.n))}
                 />
@@ -243,6 +305,71 @@ export function FileViewer({
           <Note>reading the file…</Note>
         )}
       </div>
+
+      <ContextMenuView
+        open={!!menu}
+        anchorEl={null}
+        position={menu ? { x: menu.x, y: menu.y } : undefined}
+        onClose={() => setMenu(null)}
+        items={!menu ? [] : [
+          /*
+            The selection first, when there is one — that is what a right-click
+            on highlighted text is asking about. It copies verbatim because it
+            is what the screen shows: a masked line selects as bullets.
+          */
+          ...(menu.selection.trim() ? [{
+            id: 'copySel', label: 'Copy selection',
+            icon: <CopyIcon size={12} />, iconColor: ACCENT,
+            onClick: () => {
+              setMenu(null);
+              void navigator.clipboard?.writeText(menu.selection);
+            },
+          }] : []),
+          {
+            id: 'copyAll', label: 'Copy what is shown',
+            icon: <CopyIcon size={12} />, iconColor: ACCENT,
+            onClick: () => { setMenu(null); copy(); },
+          },
+          {
+            id: 'copyPath', label: 'Copy path',
+            icon: <CopyIcon size={12} />, iconColor: 'var(--color-text-secondary)',
+            onClick: () => { setMenu(null); void navigator.clipboard?.writeText(path); },
+          },
+          { id: 'sep', label: '', separator: true },
+          {
+            id: 'ask', label: 'Ask AI about this file',
+            icon: <SparkleIcon size={12} />, iconColor: 'var(--color-primary-light)',
+            disabled: text === null,
+            onClick: () => { setMenu(null); ask(); },
+          },
+          {
+            id: 'save', label: 'Save to disk',
+            icon: <DownloadIcon size={12} />, iconColor: 'var(--color-success)',
+            onClick: () => { setMenu(null); save(); },
+          },
+          ...(maskedCount ? [
+            { id: 'sep2', label: '', separator: true },
+            {
+              id: 'reveal',
+              label: revealed.size >= maskedCount
+                ? 'All values revealed'
+                : `Reveal all ${maskedCount} masked value${maskedCount === 1 ? '' : 's'}`,
+              icon: <EyeIcon size={12} />, iconColor: 'var(--color-error)',
+              disabled: revealed.size >= maskedCount,
+              /*
+                Offered because hunting six eye icons down a properties file to
+                read the one you needed is worse than one deliberate act — and
+                it is still deliberate: nothing here is revealed until asked,
+                and copy keeps following what is on screen.
+              */
+              onClick: () => {
+                setMenu(null);
+                setRevealed(new Set(lines.filter(l => l.secretFrom !== undefined).map(l => l.n)));
+              },
+            },
+          ] : []),
+        ]}
+      />
     </div>
   );
 }
@@ -259,17 +386,17 @@ export function FileViewer({
 */
 const ROW = { minHeight: '1.75em' } as const;
 
-function LineRow({ line, revealed, onReveal }: {
-  line: Line; revealed: boolean; onReveal: () => void;
+function LineRow({ line, revealed, onReveal, sh }: {
+  line: Line; revealed: boolean; onReveal: () => void; sh?: boolean;
 }) {
   if (line.secretFrom === undefined) {
-    return <div style={{ whiteSpace: 'pre', ...ROW, ...colourFor(line.text) }}>{render(line.text)}</div>;
+    return <div style={{ whiteSpace: 'pre', ...ROW, ...colourFor(line.text) }}>{render(line.text, sh)}</div>;
   }
   const head = line.text.slice(0, line.secretFrom);
   const value = line.text.slice(line.secretFrom);
   return (
     <div style={{ whiteSpace: 'pre', ...ROW }}>
-      {render(head)}
+      {render(head, sh)}
       {revealed ? (
         <span style={{ color: 'var(--color-success)' }}>{value}</span>
       ) : (
@@ -309,10 +436,53 @@ function LineRow({ line, revealed, onReveal }: {
  * between a wall of one colour and a file you can find a key in, and the
  * formats that turn up on a pod are nearly all `key = value` or a comment.
  */
-function render(s: string): React.ReactNode {
+/*
+  Shell keywords, and the reason this list is short.
+
+  There is no highlight.js here and there was never meant to be — the plan
+  chose a small tokenizer for the formats a container actually holds over a
+  second syntax engine with its own theme, keybindings and worker. What that
+  bought in weight it owed in coverage, and a shell script was the gap: three
+  rules (comment, key=value, everything else) left `if`, `echo`, `export` and
+  every quoted string reading as plain text, which is most of a .sh file.
+
+  These are the words that change what a line DOES. Command names are
+  deliberately absent: there is no list of them, `trust` and `keytool` and
+  `csplit` are as much commands as `cp` is, and colouring a guessed subset
+  would say the unguessed ones are something else.
+*/
+const SH_WORD_LIST = [
+  'if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'until', 'do', 'done',
+  'case', 'esac', 'in', 'function', 'return', 'exit', 'continue', 'break',
+  'local', 'export', 'readonly', 'declare', 'shift', 'source', 'eval', 'set', 'trap',
+];
+
+/*
+  Built from the list rather than written as a literal.
+
+  The first version spelled the boundary as '\b' inside a STRING, where it is a
+  backspace character rather than a word boundary — so the pattern hunted for
+  a control code and matched nothing, and every keyword rendered plain while
+  the strings around it coloured correctly. Deriving both the splitter and the
+  test from one array means there is no second place for that to go wrong.
+*/
+const SH_WORDS = new RegExp(String.raw`\b(${SH_WORD_LIST.join('|')})\b`, 'g');
+const SH_IS_WORD = new Set(SH_WORD_LIST);
+
+/**
+ * A line, in as many colours as we can honestly claim.
+ *
+ * Ordered by confidence: a comment is unambiguous, a quoted run is nearly so,
+ * a `$VAR` is, and a keyword is once the quotes are already accounted for.
+ * Everything left stays in the plain colour rather than being guessed at.
+ */
+function render(s: string, sh = false): React.ReactNode {
   if (/^\s*[#;]/.test(s) || /^\s*\/\//.test(s)) {
     return <span style={{ color: 'var(--color-text-muted)', opacity: 0.8 }}>{s}</span>;
   }
+
+  if (sh) return renderShell(s);
+
   const eq = s.search(/[=:]/);
   if (eq > 0 && !/^\s/.test(s)) {
     return (
@@ -326,6 +496,67 @@ function render(s: string): React.ReactNode {
   return <span style={{ color: 'var(--color-text-secondary)' }}>{s}</span>;
 }
 
+/**
+ * One pass, quotes first.
+ *
+ * Quoted text wins over everything inside it — a keyword in a message is not a
+ * keyword, and `"$JRE_CACERTS_PATH"` is one string rather than a string
+ * wrapped round a variable. Doing it in a single scan is what keeps that true;
+ * three independent regex passes would each colour the others' output.
+ */
+function renderShell(s: string): React.ReactNode {
+  const out: React.ReactNode[] = [];
+  let i = 0;
+  let plain = '';
+  const flush = () => {
+    if (!plain) return;
+    // Keywords and variables, inside the run that is not quoted.
+    const parts = plain.split(/(\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*)/g);
+    parts.forEach((p, k) => {
+      if (!p) return;
+      if (p.startsWith('$')) {
+        out.push(<span key={`v${i}-${k}`} style={{ color: 'var(--color-warning)' }}>{p}</span>);
+        return;
+      }
+      const words = p.split(SH_WORDS);
+      words.forEach((w, j) => {
+        if (!w) return;
+        out.push(SH_IS_WORD.has(w)
+          ? <span key={`k${i}-${k}-${j}`} style={{ color: 'var(--color-primary-light)' }}>{w}</span>
+          : <span key={`p${i}-${k}-${j}`} style={{ color: 'var(--color-text-secondary)' }}>{w}</span>);
+      });
+    });
+    plain = '';
+  };
+
+  while (i < s.length) {
+    const c = s[i];
+    if (c === '"' || c === "'") {
+      flush();
+      let j = i + 1;
+      while (j < s.length && s[j] !== c) j += s[j] === '\\' ? 2 : 1;
+      out.push(
+        <span key={`s${i}`} style={{ color: 'var(--color-success)' }}>{s.slice(i, j + 1)}</span>,
+      );
+      i = j + 1;
+      continue;
+    }
+    if (c === '#' && (i === 0 || /\s/.test(s[i - 1]))) {
+      flush();
+      out.push(
+        <span key={`c${i}`} style={{ color: 'var(--color-text-muted)', opacity: 0.8 }}>
+          {s.slice(i)}
+        </span>,
+      );
+      return <>{out}</>;
+    }
+    plain += c;
+    i++;
+  }
+  flush();
+  return <>{out}</>;
+}
+
 function colourFor(s: string): React.CSSProperties {
   return /^\s*[#;]/.test(s) ? { opacity: 0.85 } : {};
 }
@@ -336,13 +567,21 @@ function IconBtn({ label, onClick, disabled, children }: {
   return (
     <button
       type="button" title={label} aria-label={label} onClick={onClick} disabled={disabled}
-      className="flex items-center justify-center rounded-md"
+      className="flex items-center justify-center rounded"
+      /*
+        The glyph, and nothing around it.
+
+        Three bordered boxes in a row read as a toolbar, which is more
+        structure than three optional actions on a header deserve — and the
+        boxes were most of what made the strip look heavy. The shapes are
+        distinct enough to find without a frame drawn round each one.
+      */
       style={{
-        width: 25, height: 20, cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.45 : 1,
+        width: 20, height: 18, cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.4 : 1,
         color: 'var(--color-text-muted)',
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-surface-border)',
+        background: 'transparent',
+        border: 'none',
       }}
     >{children}</button>
   );

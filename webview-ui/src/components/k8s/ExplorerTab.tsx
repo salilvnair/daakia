@@ -987,8 +987,11 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           root={scopedSearch}
           target={target}
           onClose={() => setScopedSearch(null)}
-          onOpenFile={(p, name, size) => { setScopedSearch(null); setOpen({ path: p, name, size }); }}
-          onReveal={p => { setScopedSearch(null); setMode('files'); go(parentOf(p)); setSelected(p); }}
+          actions={actions.filter(a => a.id !== 'saveDir')}
+          onAction={onAction}
+          onContextMenu={(e, ev) => setMenu({ entry: e, x: ev.clientX, y: ev.clientY })}
+          selectedId={selected}
+          onSelect={e => setSelected(e.id)}
         />
       )}
 
@@ -1031,12 +1034,25 @@ function dirLike(e: FileBrowserEntry): boolean {
  * So this is the same `find`, scoped to the folder that was right-clicked,
  * in a dialog you close to find the listing exactly where you left it.
  */
-function ScopedSearch({ root, target, onClose, onOpenFile, onReveal }: {
+function ScopedSearch({
+  root, target, onClose, actions, onAction, onContextMenu, selectedId, onSelect,
+}: {
   root: string;
   target: { context: string; namespace: string; pod: string; container?: string };
   onClose: () => void;
-  onOpenFile: (path: string, name: string, size?: number) => void;
-  onReveal: (path: string) => void;
+  /*
+    The Search tab's own actions and menu, handed in rather than rebuilt.
+
+    A second set written for the dialog is a second set to keep in step, and
+    the first thing to drift is exactly what makes a row usable: which actions
+    a binary gets, what the menu offers on a symlink, whether a click selects.
+    Passing them means this list IS the Search list, rooted somewhere else.
+  */
+  actions: FileBrowserAction[];
+  onAction: (id: string, e: FileBrowserEntry) => void;
+  onContextMenu: (e: FileBrowserEntry, ev: React.MouseEvent) => void;
+  selectedId?: string;
+  onSelect: (e: FileBrowserEntry) => void;
 }) {
   const [pattern, setPattern] = useState('');
   const [depth, setDepth] = useState(SEARCH_DEPTH);
@@ -1068,17 +1084,18 @@ function ScopedSearch({ root, target, onClose, onOpenFile, onReveal }: {
 
   return (
     /*
-      Sized like Quick Search, because it is the same kind of screen.
+      A popup, and a wide one.
 
-      A 560px popout gave a hundred and forty full paths a column narrow enough
-      to truncate most of them, over an empty half-screen of dialog. `inline`
-      takes the panel's width the way Quick Search does, and the body carries
-      the same 520px floor so a result list has somewhere to be before it needs
-      to scroll.
+      560px gave a hundred and forty absolute paths a column narrow enough to
+      truncate most of them; `inline` fixed the width and lost the popup, which
+      pushed the dialog into the page under the listing it was supposed to
+      float over. `xxl` is the width, and an explicit height so the result list
+      has real space to fill rather than shrink-wrapping to its content.
     */
     <ModalView
       open
-      mode="inline"
+      size="xxl"
+      height="62vh"
       onClose={onClose}
       title="Search in this folder"
       subtitle={root}
@@ -1095,7 +1112,7 @@ function ScopedSearch({ root, target, onClose, onOpenFile, onReveal }: {
         </div>
       }
     >
-      <div className="flex flex-col gap-3" style={{ minHeight: 520 }}>
+      <div className="flex flex-col gap-3 h-full">
         {/* The scope is the dialog's subtitle now — it belongs to the whole
             screen rather than to the query row, and repeating it beside the
             box cost the box width on the one screen that wants it. */}
@@ -1118,7 +1135,6 @@ function ScopedSearch({ root, target, onClose, onOpenFile, onReveal }: {
              style={{
                border: '1px solid var(--color-surface-border)',
                background: 'var(--color-surface)',
-               minHeight: 440, maxHeight: 560,
              }}>
           <FileBrowserView
             className="h-full"
@@ -1130,22 +1146,12 @@ function ScopedSearch({ root, target, onClose, onOpenFile, onReveal }: {
             size="sm"
             accentColor={ACCENT}
             match={literalOf(pattern)}
-            actions={[
-              {
-                id: 'open', label: 'Open as text', tone: 'accent',
-                icon: <ExternalLinkIcon size={12} />,
-                show: e => e.badge !== 'binary' && e.badge !== 'too large',
-              },
-              {
-                id: 'reveal', label: 'Show in the file list', tone: 'success',
-                icon: <FolderOpenIcon size={12} />,
-              },
-            ]}
-            onAction={(id, e) => {
-              const full = fullOf(e);
-              if (id === 'open') onOpenFile(full, e.name.slice(e.name.lastIndexOf('/') + 1), e.size);
-              else onReveal(full);
-            }}
+            actions={actions}
+            onAction={onAction}
+            onOpen={e => onAction('open', e)}
+            onSelect={onSelect}
+            selectedId={selectedId}
+            onContextMenu={onContextMenu}
             emptyText={busy ? 'searching…' : hits ? (
               <div className="px-6 py-4">
                 <EmptyStateView

@@ -109,7 +109,8 @@ import {
 } from './handlers/heap-handler';
 import {
   handleFilesList,
-  handleFilesMounts, handleFilesSearch, handleFilesRead,
+  handleFilesMounts,
+  handleFilesDirSize, handleFilesSearch, handleFilesRead,
   handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
   handleFilesSearchMany,
 } from './handlers/files-handler';
@@ -721,6 +722,9 @@ export class MainPanel {
         break;
       case 'files:revealFolder':
         void handleFilesReveal(msg, this._post);
+        break;
+      case 'files:dirSize':
+        void handleFilesDirSize(msg, this._post);
         break;
       case 'files:mounts':
         void handleFilesMounts(msg, this._post);

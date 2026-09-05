@@ -29,7 +29,8 @@ import {
 } from '../src/panel/main/handlers/heap-handler';
 import {
   handleFilesList,
-  handleFilesMounts, handleFilesSearch, handleFilesRead,
+  handleFilesMounts,
+  handleFilesDirSize, handleFilesSearch, handleFilesRead,
   handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
   handleFilesSearchMany,
 } from '../src/panel/main/handlers/files-handler';
@@ -327,6 +328,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'files:revealFolder':
       void handleFilesReveal(msg, post);
+      break;
+    case 'files:dirSize':
+      void handleFilesDirSize(msg, post);
       break;
     case 'files:mounts':
       void handleFilesMounts(msg, post);

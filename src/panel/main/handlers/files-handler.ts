@@ -8,7 +8,7 @@
 import * as path from 'path';
 import { createWriteStream, mkdirSync } from 'fs';
 import {
-  listDirectory, searchFiles, readFile, showCommand,
+  listDirectory, searchFiles, readFile, showCommand, directorySize,
   explainExecFailure, type PodTarget,
 } from '../../../services/k8s/pod-files';
 import { podMounts } from '../../../services/k8s/pod-mounts';
@@ -42,6 +42,20 @@ export async function handleFilesMounts(msg: Record<string, unknown>, post: Post
   } catch (err) {
     post({
       type: 'files:mounts', requestId, mounts: [], command: '',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/** How big a directory really is — one `du`, asked for deliberately. */
+export async function handleFilesDirSize(msg: Record<string, unknown>, post: PostMessage) {
+  const requestId = msg.requestId as string;
+  try {
+    const r = await directorySize(targetOf(msg), String(msg.path ?? '/'));
+    post({ type: 'files:dirSize', requestId, ...r });
+  } catch (err) {
+    post({
+      type: 'files:dirSize', requestId, path: msg.path, command: '',
       error: err instanceof Error ? err.message : String(err),
     });
   }
@@ -168,18 +182,36 @@ export async function handleFilesDownloadDir(msg: Record<string, unknown>, post:
   const t = targetOf(msg);
   const remote = String(msg.path ?? '');
   const name = String(msg.name ?? (path.basename(remote) || 'directory'));
-  const dest = path.join(downloadDir(t.pod), name);
+  const folder = downloadDir(t.pod);
+  const dest = path.join(folder, name);
+
+  /*
+    The destination goes in RELATIVE, from a working directory.
+
+    `kubectl cp` decides which side is remote by splitting each argument on
+    `:` and reading what is before it as `[namespace/]pod`. A Windows path
+    begins `C:\`, so it reads `C` as a pod, concludes both arguments are
+    remote and fails with "one of src or dest must be a local file
+    specification" — a message that names neither the colon nor the drive
+    letter, on a path the user can see is plainly local.
+
+    Passing the bare name from a cwd of the download folder removes the colon
+    entirely. It costs nothing on platforms that never had the problem, and it
+    is the only fix that does not involve parsing kubectl's argument grammar
+    ourselves.
+  */
+  mkdirSync(folder, { recursive: true });
 
   const args = [
     '--context', t.context, '-n', t.namespace,
-    'cp', `${t.namespace}/${t.pod}:${remote}`, dest,
+    'cp', `${t.namespace}/${t.pod}:${remote}`, name,
     ...(t.container ? ['-c', t.container] : []),
   ];
 
   post({ type: 'files:downloadStarted', name, dest, directory: true, command: showCommand(args) });
 
   try {
-    const r = await run(args, { timeoutMs: 10 * 60_000 });
+    const r = await run(args, { timeoutMs: 10 * 60_000, cwd: folder });
     if (r.code === 0) {
       post({ type: 'files:downloadDone', name, dest, bytes: 0 });
       return;
