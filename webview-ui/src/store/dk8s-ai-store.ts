@@ -27,6 +27,21 @@ export interface AskRequest {
   question?: string;
 }
 
+/**
+ * One follow-up on an answer.
+ *
+ * Kept on the answer rather than in a flat list because a follow-up is only
+ * meaningful beside the evidence that started the thread — "and the restarts?"
+ * is a different question against a heap histogram than against a log, and a
+ * panel of loose questions could not tell you which one it meant.
+ */
+export interface Dk8sTurn {
+  question: string;
+  text: string;
+  streaming: boolean;
+  error?: string;
+}
+
 export interface Dk8sAnswer {
   id: string;
   title: string;
@@ -45,6 +60,8 @@ export interface Dk8sAnswer {
   streaming: boolean;
   error?: string;
   startedAt: number;
+  /** Follow-up questions on this thread, oldest first. */
+  turns: Dk8sTurn[];
 }
 
 interface Dk8sAiState {
@@ -52,8 +69,19 @@ interface Dk8sAiState {
   answers: Dk8sAnswer[];
   /** The answer currently being streamed, if any. */
   activeId?: string;
+  /**
+   * Which turn of it the stream belongs to.
+   *
+   * Absent means the answer's own body. Present means a follow-up, and the
+   * chunks go there instead — without this a follow-up appended itself to the
+   * first answer, which is the same bug as a reply overwriting the message it
+   * was replying to.
+   */
+  activeTurn?: number;
 
   ask: (req: AskRequest) => void;
+  /** Ask again on an existing thread, carrying what was already said. */
+  followUp: (answerId: string, question: string, historyTurns: number) => void;
   openPanel: () => void;
   closePanel: () => void;
   clear: () => void;
@@ -84,7 +112,9 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
         text: '',
         streaming: true,
         startedAt: Date.now(),
+        turns: [],
       }, ...s.answers].slice(0, 20),
+      activeTurn: undefined,
     }));
 
     /*
@@ -116,6 +146,67 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
     });
   },
 
+  /**
+   * A follow-up on a thread that already has an answer.
+   *
+   * The evidence is NOT re-sent — the host has it, and a heap histogram or a
+   * two-hundred-line log would double the cost of every turn to say something
+   * the model was already told. What goes instead is the conversation: the
+   * last few question/answer pairs, capped by the setting, so a question that
+   * only makes sense as a reply has something to be a reply to.
+   */
+  followUp: (answerId, question, historyTurns) => {
+    const answer = get().answers.find(a => a.id === answerId);
+    if (!answer || !question.trim()) return;
+
+    const turnIndex = answer.turns.length;
+    set(s => ({
+      open: true,
+      activeId: answerId,
+      activeTurn: turnIndex,
+      answers: s.answers.map(a => a.id === answerId
+        ? { ...a, turns: [...a.turns, { question, text: '', streaming: true }] }
+        : a),
+    }));
+
+    /*
+      Oldest first, and the opening answer counts as the first pair.
+
+      Trimmed from the FRONT, so what survives is the most recent exchange
+      rather than the beginning of a conversation that has moved on. The
+      opening answer is kept as the first pair regardless of the cap, because
+      it is the one that names the evidence — drop it and the model is reading
+      replies to a question nobody restated.
+    */
+    const prior = [
+      { q: answer.title, a: answer.text },
+      ...answer.turns.map(t => ({ q: t.question, a: t.text })),
+    ].filter(p => p.a);
+    const history = prior.length > historyTurns
+      ? [prior[0], ...prior.slice(-(historyTurns - 1))]
+      : prior;
+
+    logUiEvent('dk8s.ai_followup', {
+      promptKey: answer.promptKey,
+      title: answer.title,
+      question,
+      historyPairs: history.length,
+      pod: answer.podName,
+    });
+
+    postMsg({
+      type: 'dk8s:ask',
+      promptKey: answer.promptKey,
+      // The evidence line the host echoes back is per-request, so it is sent
+      // again as a label only; the body stays where it was.
+      evidence: '',
+      evidenceLabel: 'FOLLOW-UP',
+      podContext: { pod: answer.podName },
+      question,
+      history,
+    });
+  },
+
   openPanel: () => set({ open: true }),
   closePanel: () => set({ open: false }),
   clear: () => set({ answers: [], activeId: undefined }),
@@ -124,7 +215,12 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
     postMsg({ type: 'ai:cancel', tabId: DK8S_AI_TAB });
     set(s => ({
       activeId: undefined,
-      answers: s.answers.map(a => a.id === s.activeId ? { ...a, streaming: false } : a),
+      activeTurn: undefined,
+      answers: s.answers.map(a => a.id === s.activeId
+        ? (s.activeTurn === undefined
+          ? { ...a, streaming: false }
+          : { ...a, turns: a.turns.map((t, i) => i === s.activeTurn ? { ...t, streaming: false } : t) })
+        : a),
     }));
   },
 
@@ -135,8 +231,28 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
     const activeId = get().activeId;
     if (!activeId) return;
 
+    const turn = get().activeTurn;
+    /*
+      One patcher, two destinations.
+
+      A follow-up's chunks belong to its own turn; the answer's belong to the
+      answer. Routing that here rather than at each call site is what keeps
+      `ai:chunk` from having to know which kind of thing it is appending to.
+    */
     const patch = (fn: (a: Dk8sAnswer) => Dk8sAnswer) =>
       set(s => ({ answers: s.answers.map(a => a.id === activeId ? fn(a) : a) }));
+
+    const patchTarget = (fn: (t: { text: string; streaming: boolean; error?: string }) =>
+      { text: string; streaming: boolean; error?: string }) => patch(a => {
+      if (turn === undefined) {
+        const next = fn({ text: a.text, streaming: a.streaming, error: a.error });
+        return { ...a, ...next };
+      }
+      return {
+        ...a,
+        turns: a.turns.map((t, i) => i === turn ? { ...t, ...fn(t) } : t),
+      };
+    });
 
     switch (msg.type) {
       // What the host actually sent, which is not always what was handed to
@@ -152,28 +268,28 @@ export const useDk8sAiStore = create<Dk8sAiState>((set, get) => ({
         break;
 
       case 'ai:chunk':
-        patch(a => ({ ...a, text: a.text + String(msg.delta ?? '') }));
+        patchTarget(t => ({ ...t, text: t.text + String(msg.delta ?? '') }));
         break;
 
       case 'ai:complete':
-        patch(a => ({
-          ...a,
+        patchTarget(t => ({
+          ...t,
           streaming: false,
           // Non-streaming providers send the whole body on complete rather than
           // as chunks; without this fallback their answers arrive empty.
-          text: a.text || String((msg.message as { content?: string } | undefined)?.content ?? ''),
+          text: t.text || String((msg.message as { content?: string } | undefined)?.content ?? ''),
         }));
-        set({ activeId: undefined });
+        set({ activeId: undefined, activeTurn: undefined });
         break;
 
       case 'ai:error':
-        patch(a => ({ ...a, streaming: false, error: String(msg.message ?? 'The request failed.') }));
-        set({ activeId: undefined });
+        patchTarget(t => ({ ...t, streaming: false, error: String(msg.message ?? 'The request failed.') }));
+        set({ activeId: undefined, activeTurn: undefined });
         break;
 
       case 'ai:cancelled':
-        patch(a => ({ ...a, streaming: false }));
-        set({ activeId: undefined });
+        patchTarget(t => ({ ...t, streaming: false }));
+        set({ activeId: undefined, activeTurn: undefined });
         break;
     }
   },

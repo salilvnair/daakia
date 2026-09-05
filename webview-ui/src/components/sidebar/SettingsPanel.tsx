@@ -265,6 +265,28 @@ function GeneralGeneralContent() {
         />
       </div>
 
+      {/* dk8s AI follow-up history */}
+      <div>
+        <p className="text-[13px] font-medium text-[var(--color-text-primary)]">dk8s AI Conversation History</p>
+        <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-2">
+          How many previous question/answer pairs a dk8s follow-up carries. Higher keeps
+          more of the thread in view for the model; lower re-sends less on every turn,
+          which matters because the evidence is already the large part of the request.
+        </p>
+        <TextInputView
+          type="number"
+          value={String(settings.dk8sAiHistoryTurns)}
+          onChange={(e) => save({
+            // Clamped rather than validated: 0 makes a follow-up a question
+            // about nothing, and there is no useful reading of a negative one.
+            dk8sAiHistoryTurns: Math.min(20, Math.max(1, parseInt(e.target.value) || 5)),
+          })}
+          size="md"
+          accentColor="var(--color-settings)"
+          style={{ width: 120 }}
+        />
+      </div>
+
       {/* Database Location (read-only) */}
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Database Location</p>

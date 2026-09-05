@@ -23,6 +23,17 @@ export interface GeneralAppSettings {
   saveResponseInHistory: boolean;
   maxHistoryEntries: number;
   maxAiChatMessages: number;
+  /**
+   * How many previous question/answer pairs a dk8s follow-up carries with it.
+   *
+   * Not unlimited, and not zero. Zero makes every follow-up a fresh question
+   * about evidence the model has already been shown, so "and the restarts?"
+   * arrives with nothing to attach itself to. Unlimited re-sends a growing
+   * transcript on every turn, which on a log analysis is the expensive half of
+   * the request — the evidence is already large before any of the conversation
+   * is added to it.
+   */
+  dk8sAiHistoryTurns: number;
   encoding: 'enable' | 'disable' | 'auto';
   proxy: ProxySettings;
   /** User keyboard-shortcut rebinds, applied over each feature's registered default. */
@@ -36,6 +47,7 @@ const DEFAULTS: GeneralAppSettings = {
   saveResponseInHistory: true,
   maxHistoryEntries: 500,
   maxAiChatMessages: 200,
+  dk8sAiHistoryTurns: 5,
   encoding: 'enable',
   proxy: { mode: 'none' },
   keymap: {},

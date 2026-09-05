@@ -1208,7 +1208,20 @@ export async function handleDk8sAsk(
     evidence = connEvidence(evidence);
   }
 
-  if (!evidence.trim()) {
+  /*
+    A follow-up carries no evidence, and that is not the same as nothing.
+
+    The first question sends the artifact; the ones after it send a question
+    and the conversation so far, because the model has already been shown the
+    log. Rejecting an empty body here — which is what happened — made every
+    follow-up fail with "Nothing selected to ask about" on a thread that
+    plainly had something to ask about.
+  */
+  const history = Array.isArray(msg.history)
+    ? msg.history as { q?: string; a?: string }[]
+    : [];
+
+  if (!evidence.trim() && !history.length) {
     postMessage({ type: 'dk8s:aiError', error: 'Nothing selected to ask about.' });
     return;
   }
@@ -1286,7 +1299,20 @@ export async function handleDk8sAsk(
     tabId: DK8S_AI_TAB,
     systemPrompts: [system],
     userPrompt,
-    conversation: msg.conversation ?? [],
+    /*
+      The thread so far, as the turns it actually was.
+
+      Flattening it into the user prompt would work and would be wrong: a
+      model reads its own previous answers differently from text quoted at it,
+      and a follow-up like "and the restarts?" needs the last answer to be an
+      ANSWER rather than a paragraph inside the new question.
+    */
+    conversation: history.length
+      ? history.flatMap(h => [
+        { role: 'user' as const, content: String(h.q ?? '') },
+        { role: 'assistant' as const, content: String(h.a ?? '') },
+      ]).filter(m => m.content)
+      : (msg.conversation ?? []),
     stage: key,
     provider: msg.provider,
     model: msg.model,

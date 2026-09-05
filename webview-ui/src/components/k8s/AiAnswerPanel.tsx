@@ -6,13 +6,15 @@
  * reader to choose between the explanation and the thing being explained.
  */
 import { useState } from 'react';
-import { CopyButtonView, SplitPanelView } from '@salilvnair/dui';
+import { CopyButtonView, SplitPanelView, MultilineInputView } from '@salilvnair/dui';
 import {
   SparkleIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon, ShieldIcon,
+  SendIcon,
 } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { useDk8sAiStore, type Dk8sAnswer } from '../../store/dk8s-ai-store';
 import { useUiStateStore } from '../../store/ui-state-store';
+import { useAppSettingsStore } from '../../store/app-settings-store';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -78,6 +80,50 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
         </div>
       )}
 
+      {/*
+        The thread, under the answer it belongs to.
+
+        Follow-ups sit inside the card rather than becoming cards of their own,
+        because they are not separate answers — "and the restarts?" is
+        meaningless away from the log it was asked about, and a flat list of
+        loose questions could not tell you which evidence each one meant.
+      */}
+      {answer.turns.map((t, i) => (
+        <div key={i} style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+          <div className="px-3 py-2 text-[11.5px] flex items-start gap-2"
+               style={{ background: 'var(--color-surface-hover)' }}>
+            <span style={{ color: ACCENT, flexShrink: 0, lineHeight: '17px' }}>›</span>
+            <span style={{ color: 'var(--color-text-primary)', overflowWrap: 'anywhere' }}>
+              {t.question}
+            </span>
+          </div>
+          {t.error ? (
+            <div className="px-3 py-2.5 text-[11.5px]" style={{ color: 'var(--color-error)' }}>
+              {t.error}
+            </div>
+          ) : (
+            <div className="px-3 py-2.5 text-[12px]" style={{ color: 'var(--color-text-primary)' }}>
+              {t.text
+                ? <MdViewer content={t.text} />
+                : <span className="text-[11.5px] text-[var(--color-text-muted)]">Thinking…</span>}
+              {t.streaming && t.text && (
+                <span style={{
+                  display: 'inline-block', width: 6, height: 13, marginLeft: 2,
+                  background: ACCENT, verticalAlign: 'text-bottom', opacity: 0.8,
+                }} />
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Only once there is something to follow up ON. A composer under a
+          card that is still producing its first answer invites a question
+          about an answer nobody has read. */}
+      {!answer.streaming && !answer.error && answer.text && (
+        <FollowUpBox answerId={answer.id} busy={answer.turns.some(t => t.streaming)} />
+      )}
+
       <button
         type="button"
         onClick={() => setShowEvidence(v => !v)}
@@ -136,6 +182,72 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
           {answer.evidence}
         </pre>
       )}
+    </div>
+  );
+}
+
+/**
+ * Ask again, on this thread.
+ *
+ * Enter sends and Shift+Enter breaks the line, which is the arrangement every
+ * chat box has trained people into — the opposite pairing makes the common
+ * case need a mouse.
+ *
+ * The history depth is a setting rather than a constant because the right
+ * answer depends on what is being discussed: a short exchange about one stack
+ * trace wants everything, and a long session over a two-hundred-line log
+ * cannot afford to re-send itself on every turn.
+ */
+function FollowUpBox({ answerId, busy }: { answerId: string; busy: boolean }) {
+  const [text, setText] = useState('');
+  const followUp = useDk8sAiStore(s => s.followUp);
+  const historyTurns = useAppSettingsStore(s => s.settings.dk8sAiHistoryTurns);
+
+  const send = () => {
+    const q = text.trim();
+    if (!q || busy) return;
+    setText('');
+    followUp(answerId, q, historyTurns);
+  };
+
+  return (
+    <div className="flex items-end gap-1.5 px-2 py-2"
+         style={{ borderTop: '1px solid var(--color-surface-border)' }}>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <MultilineInputView
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder={busy ? 'waiting for the answer…' : 'Ask a follow-up — Enter to send'}
+          rows={2}
+          size="sm"
+          width="fw"
+          accentColor={ACCENT}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+          }}
+        />
+      </span>
+      <button
+        type="button"
+        onClick={send}
+        disabled={!text.trim() || busy}
+        title="Send — carries the last few turns with it"
+        aria-label="Send the follow-up"
+        className="flex items-center justify-center rounded-md shrink-0"
+        style={{
+          width: 26, height: 26,
+          cursor: text.trim() && !busy ? 'pointer' : 'default',
+          color: text.trim() && !busy ? ACCENT : 'var(--color-text-muted)',
+          background: text.trim() && !busy
+            ? `color-mix(in srgb, ${ACCENT} 15%, transparent)`
+            : 'transparent',
+          border: `1px solid ${text.trim() && !busy
+            ? `color-mix(in srgb, ${ACCENT} 34%, transparent)`
+            : 'var(--color-surface-border)'}`,
+        }}
+      >
+        <SendIcon size={12} />
+      </button>
     </div>
   );
 }
