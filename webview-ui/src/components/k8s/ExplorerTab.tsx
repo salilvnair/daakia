@@ -21,6 +21,7 @@ import {
 } from '@salilvnair/dui';
 import {
   ExternalLinkIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon, FolderOpenIcon,
+  RefreshIcon,
   CopyIcon, InfoCircleIcon, FileSearchIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
@@ -257,7 +258,10 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     under an open menu, and a menu that acted on "whatever is selected now"
     would act on the wrong file the moment it did.
   */
-  const [menu, setMenu] = useState<{ entry: FileBrowserEntry; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<
+    { entry: FileBrowserEntry | null; x: number; y: number } | null>(null);
+  /** The folder a scoped search was opened on, or none. */
+  const [scopedSearch, setScopedSearch] = useState<string | null>(null);
   const [info, setInfo] = useState<FileBrowserEntry | null>(null);
   const [path, setPath] = useState<string>('');
   const [listing, setListing] = useState<Listing | null>(null);
@@ -450,28 +454,93 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       const a = actions.find(x => x.id === id);
       return !!a && (!a.show || a.show(e));
     };
+    /*
+      Every icon carries its verb's colour.
+
+      A column of grey glyphs is a column of shapes to decode; the same set in
+      the colours the rest of the panel already uses for those actions — the
+      accent for reading, green for downloading, amber for navigating — is
+      scannable without reading the labels at all, and matches what the row
+      icons beside it are already doing.
+    */
     return [
       ...(can('open') ? [{
-        id: 'open', label: 'Open as text', icon: <ExternalLinkIcon size={12} />,
+        id: 'open', label: 'Open as text',
+        icon: <ExternalLinkIcon size={12} />, iconColor: ACCENT,
       }] : []),
       ...(dirLike(e) ? [{
-        id: 'go', label: 'Open folder', icon: <FolderOpenIcon size={12} />,
+        id: 'go', label: 'Open folder',
+        icon: <FolderOpenIcon size={12} />, iconColor: 'var(--color-warning)',
+      }] : []),
+      ...(dirLike(e) ? [{
+        id: 'searchHere', label: 'Search in this folder',
+        icon: <SearchIcon size={12} />, iconColor: 'var(--color-info, #3fb9cc)',
       }] : []),
       ...(can('save') ? [{
-        id: 'save', label: 'Download', icon: <DownloadIcon size={12} />,
+        id: 'save', label: 'Download',
+        icon: <DownloadIcon size={12} />, iconColor: 'var(--color-success)',
       }] : []),
       ...(can('saveDir') ? [{
-        id: 'saveDir', label: 'Download this directory', icon: <DownloadIcon size={12} />,
+        id: 'saveDir', label: 'Download this directory',
+        icon: <DownloadIcon size={12} />, iconColor: 'var(--color-success)',
       }] : []),
       { id: 'sep', label: '', separator: true },
-      { id: 'copy', label: 'Copy path', icon: <CopyIcon size={12} /> },
-      { id: 'info', label: 'Get Info', icon: <InfoCircleIcon size={12} /> },
+      {
+        id: 'copy', label: 'Copy path',
+        icon: <CopyIcon size={12} />, iconColor: 'var(--color-text-secondary)',
+      },
+      {
+        id: 'info', label: 'Get Info',
+        icon: <InfoCircleIcon size={12} />, iconColor: 'var(--color-primary-light)',
+      },
     ];
   };
+
+  /*
+    The directory itself, right-clicked where there is no row.
+
+    The empty space below the last entry is still this directory, and acting on
+    it there is what a file manager has always allowed. Without this the
+    browser's own menu appeared, offering Copy and Select All over a list that
+    has neither.
+  */
+  const emptyMenu = (): ContextMenuItem[] => [
+    {
+      id: 'searchHere', label: 'Search in this folder',
+      icon: <SearchIcon size={12} />, iconColor: 'var(--color-info, #3fb9cc)',
+      onClick: () => { setMenu(null); setScopedSearch(path || '/'); },
+    },
+    {
+      id: 'refresh', label: 'Refresh',
+      icon: <RefreshIcon size={12} />, iconColor: ACCENT,
+      onClick: () => { setMenu(null); go(path || '/'); },
+    },
+    {
+      id: 'up', label: 'Go up one',
+      icon: <ArrowToLeftIcon size={12} />, iconColor: 'var(--color-warning)',
+      disabled: !path || path === '/',
+      onClick: () => { setMenu(null); go(parentOf(path)); },
+    },
+    { id: 'sep', label: '', separator: true },
+    {
+      id: 'saveDir', label: 'Download this directory',
+      icon: <DownloadIcon size={12} />, iconColor: 'var(--color-success)',
+      onClick: () => {
+        setMenu(null);
+        postMsg({ type: 'files:downloadDir', ...target, path: path || '/', name: (path || '/').split('/').pop() || 'root' });
+      },
+    },
+    {
+      id: 'copy', label: 'Copy this path',
+      icon: <CopyIcon size={12} />, iconColor: 'var(--color-text-secondary)',
+      onClick: () => { setMenu(null); void navigator.clipboard?.writeText(path || '/'); },
+    },
+  ];
 
   const onMenuPick = (id: string, e: FileBrowserEntry) => {
     setMenu(null);
     if (id === 'go') { setMode('files'); go(fullOf(e)); return; }
+    if (id === 'searchHere') { setScopedSearch(fullOf(e)); return; }
     if (id === 'copy') { void navigator.clipboard?.writeText(fullOf(e)); return; }
     if (id === 'info') { setInfo(e); return; }
     onAction(id, e);
@@ -617,8 +686,18 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
         }}>
           <PathBreadcrumbView
             path={path || '/'}
-            onNavigate={p => { setMode('files'); go(p); }}
-            onSubmit={p => { setMode('files'); go(p.startsWith('/') ? p : `/${p}`); }}
+            /*
+              The path changes where you are, not which screen you are on.
+
+              Both handlers used to force the Files tab, so clicking a crumb on
+              the Search screen threw away the search to show a directory
+              listing — the one thing the reader was not asking for. The path
+              is shared by both screens precisely because it means the same
+              thing on each: on Files it is the directory being listed, on
+              Search it is where the walk starts.
+            */
+            onNavigate={p => go(p)}
+            onSubmit={p => go(p.startsWith('/') ? p : `/${p}`)}
             editing={pathEditing}
             onEditingChange={setPathEditing}
             size="sm"
@@ -764,6 +843,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           onAction={onAction}
           onSelect={e => setSelected(e.id)}
           onContextMenu={(e, ev) => setMenu({ entry: e, x: ev.clientX, y: ev.clientY })}
+          onEmptyContextMenu={ev => setMenu({ entry: null, x: ev.clientX, y: ev.clientY })}
           selectedId={selected}
           highlightId={flash}
           accentColor={ACCENT}
@@ -787,6 +867,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           onOpen={e => onAction('open', e)}
           onSelect={e => setSelected(e.id)}
           onContextMenu={(e, ev) => setMenu({ entry: e, x: ev.clientX, y: ev.clientY })}
+          onEmptyContextMenu={ev => setMenu({ entry: null, x: ev.clientX, y: ev.clientY })}
           selectedId={selected}
           /*
             The literal behind the pattern, for the eye only.
@@ -894,10 +975,22 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
         anchorEl={null}
         position={menu ? { x: menu.x, y: menu.y } : undefined}
         onClose={() => setMenu(null)}
-        items={menu ? menuFor(menu.entry).map(i => (i.separator ? i : {
-          ...i, onClick: () => onMenuPick(i.id, menu.entry),
-        })) : []}
+        items={!menu ? [] : menu.entry
+          ? menuFor(menu.entry).map(i => (i.separator ? i : {
+            ...i, onClick: () => onMenuPick(i.id, menu.entry!),
+          }))
+          : emptyMenu()}
       />
+
+      {scopedSearch !== null && (
+        <ScopedSearch
+          root={scopedSearch}
+          target={target}
+          onClose={() => setScopedSearch(null)}
+          onOpenFile={(p, name, size) => { setScopedSearch(null); setOpen({ path: p, name, size }); }}
+          onReveal={p => { setScopedSearch(null); setMode('files'); go(parentOf(p)); setSelected(p); }}
+        />
+      )}
 
       {info && <InfoPanel entry={info} mount={mountFor(mounts, fullOf(info))} onClose={() => setInfo(null)} />}
     </div>
@@ -924,6 +1017,151 @@ function fileLike(e: FileBrowserEntry): boolean {
 
 function dirLike(e: FileBrowserEntry): boolean {
   return resolvedKind(e) === 'dir';
+}
+
+/**
+ * Search one folder, without leaving the one you are looking at.
+ *
+ * The Search tab re-roots the whole screen: it takes over the path, replaces
+ * the listing with results, and getting back means navigating again. That is
+ * right when searching IS the task and wrong when it is a question about one
+ * directory you happened to be standing in — "is there a properties file
+ * anywhere under /opt" should not cost you /opt.
+ *
+ * So this is the same `find`, scoped to the folder that was right-clicked,
+ * in a dialog you close to find the listing exactly where you left it.
+ */
+function ScopedSearch({ root, target, onClose, onOpenFile, onReveal }: {
+  root: string;
+  target: { context: string; namespace: string; pod: string; container?: string };
+  onClose: () => void;
+  onOpenFile: (path: string, name: string, size?: number) => void;
+  onReveal: (path: string) => void;
+}) {
+  const [pattern, setPattern] = useState('');
+  const [depth, setDepth] = useState(SEARCH_DEPTH);
+  const [hits, setHits] = useState<Hits | null>(null);
+  const [busy, setBusy] = useState(false);
+  const seq = useRef(0);
+
+  const run = () => {
+    if (!pattern.trim()) return;
+    const requestId = `sx-${++seq.current}`;
+    setBusy(true);
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type !== 'files:search' || e.data?.requestId !== requestId) return;
+      window.removeEventListener('message', onMsg);
+      setHits(e.data as Hits);
+      setBusy(false);
+    };
+    window.addEventListener('message', onMsg);
+    postMsg({ type: 'files:search', requestId, ...target, root, pattern, maxDepth: depth });
+  };
+
+  const rows: FileBrowserEntry[] = (hits?.hits ?? []).map(h => {
+    const k = kindBadge({ name: h.name, kind: 'file', size: h.size });
+    return {
+      id: h.path, name: h.path, kind: 'file', size: h.size,
+      badge: k.badge, badgeTone: k.tone, fullPath: h.path,
+    } as FileBrowserEntry & { fullPath: string };
+  });
+
+  return (
+    <ModalView open onClose={onClose} title="Search in this folder" size="md">
+      <div className="flex flex-col gap-2" style={{ minHeight: 380 }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* The scope, stated. This searches ONE folder and it has to say
+              which, or the results read as coming from the whole pod. */}
+          <span className="text-[10.5px] font-mono px-2 py-1 rounded"
+                style={{
+                  background: 'var(--color-surface-hover)',
+                  color: ACCENT, overflowWrap: 'anywhere',
+                }}>
+            {root}
+          </span>
+          <span className="flex-1" style={{ minWidth: 200 }}>
+            <SearchFieldView
+              value={pattern}
+              onChange={setPattern}
+              onSearch={run}
+              onClear={() => { setPattern(''); setHits(null); }}
+              placeholder="Name, glob or regex — Enter to search"
+              size="sm"
+              accentColor={ACCENT}
+            />
+          </span>
+          <DepthPicker value={depth} onChange={setDepth} />
+        </div>
+
+        <div className="flex-1 min-h-0 rounded-md overflow-hidden"
+             style={{ border: '1px solid var(--color-surface-border)', minHeight: 300 }}>
+          <FileBrowserView
+            className="h-full"
+            style={{ ['--dui-file-badge' as string]: ACCENT } as React.CSSProperties}
+            dense
+            entries={rows}
+            showHeader={false}
+            showModified={false}
+            size="sm"
+            accentColor={ACCENT}
+            match={literalOf(pattern)}
+            actions={[
+              {
+                id: 'open', label: 'Open as text', tone: 'accent',
+                icon: <ExternalLinkIcon size={12} />,
+                show: e => e.badge !== 'binary' && e.badge !== 'too large',
+              },
+              {
+                id: 'reveal', label: 'Show in the file list', tone: 'success',
+                icon: <FolderOpenIcon size={12} />,
+              },
+            ]}
+            onAction={(id, e) => {
+              const full = fullOf(e);
+              if (id === 'open') onOpenFile(full, e.name.slice(e.name.lastIndexOf('/') + 1), e.size);
+              else onReveal(full);
+            }}
+            emptyText={busy ? 'searching…' : hits ? (
+              <div className="px-6 py-4">
+                <EmptyStateView
+                  variant="medallion"
+                  icon={<FileSearchIcon size={22} />}
+                  title="Nothing matched"
+                  message={`No file under ${root} matched that name.`}
+                  accentColor="var(--color-warning)"
+                  hints={[
+                    { key: 'depth', text: 'the walk stops at the depth beside the box' },
+                    { key: 'scope', text: 'only this folder and what is under it is searched' },
+                  ]}
+                />
+              </div>
+            ) : (
+              <div className="px-6 py-4">
+                <EmptyStateView
+                  variant="medallion"
+                  icon={<SearchIcon size={22} />}
+                  title="Search under this folder"
+                  message="One `find`, rooted here rather than at the pod. The file list behind stays where it is."
+                  accentColor={ACCENT}
+                  hints={[
+                    { key: 'glob', text: '*invoice*, *.pdf — matched against the filename' },
+                    { key: 'regex', text: 'anything else — matched against the path' },
+                    { key: 'recursive', text: 'every directory under this one, to the depth beside the box' },
+                  ]}
+                />
+              </div>
+            )}
+            footer={hits && (
+              <>
+                {hits.hits.length} {hits.hits.length === 1 ? 'match' : 'matches'} under {root}
+                {hits.capped && ' · capped — narrow the pattern or lower the depth'}
+              </>
+            )}
+          />
+        </div>
+      </div>
+    </ModalView>
+  );
 }
 
 /** The absolute path a row carries, whichever list it came from. */
