@@ -35,7 +35,9 @@ import {
 import {
   useDk8sTerminalStore, MAX_SELECTED, DEFAULT_PREFS,
 } from '../../../store/dk8s-terminal-store';
-import { ACCENT, OK, WARN, MUTED, BAD } from '../../k8s/tone';
+import { ACCENT, OK, WARN, MUTED, BAD, INFO } from '../../k8s/tone';
+import { softPrimary } from '../../k8s/button-style';
+import { ConfirmDialog } from '../../shared/modals/ConfirmDialog';
 import { ThemePreview } from './ThemePreview';
 import { ThemeImportModal } from './ThemeImportModal';
 
@@ -123,6 +125,15 @@ export function TerminalSettings() {
   const [importing, setImporting] = useState(false);
   const [refused, setRefused] = useState<string>();
   const [copied, setCopied] = useState<string>();
+  /*
+    Both destructive actions ask first, and neither asks in the abstract.
+
+    A theme lives in this browser's storage and nowhere else, so deleting one
+    is the only copy unless it was exported — which is worth saying in the
+    dialog rather than leaving the reader to remember.
+  */
+  const [deleting, setDeleting] = useState<string>();
+  const [resetting, setResetting] = useState(false);
 
   const themes = s.themes();
   const ground = getComputedStyle(document.documentElement)
@@ -201,7 +212,7 @@ export function TerminalSettings() {
               back — everything else about them is adjustable. */}
           {!builtIn && (
             <IconBtn label={`Delete ${t.label}`} tone={BAD}
-                     onClick={() => s.removeTheme(t.id)}>
+                     onClick={() => setDeleting(t.id)}>
               <TrashIcon size={IconSize.item} />
             </IconBtn>
           )}
@@ -210,7 +221,10 @@ export function TerminalSettings() {
     };
   });
 
-  const pristine = JSON.stringify(s.prefs) === JSON.stringify(DEFAULT_PREFS);
+  const customCount = s.custom.length;
+  // Named, not counted: "2 themes will be deleted" does not tell you whether
+  // the one you care about is among them.
+  const customNames = s.custom.map(t => t.label).join(', ');
 
   return (
     <div className="flex flex-col gap-5 px-6 py-5">
@@ -249,15 +263,24 @@ export function TerminalSettings() {
 
             <span className="flex-1" />
 
+            {/* Coloured by what each one does to the collection, not
+                decoratively: green makes something, cyan brings something in,
+                blue sends something out. Three grey buttons in a row made the
+                reader read all three to find the one they wanted. */}
             <ButtonView label="Add" size="xs" variant="secondary"
+                        accentColor={OK} color={OK} style={softPrimary(OK, true)}
                         iconLeft={<PlusIcon size={IconSize.chip} />}
                         onClick={() => setImporting(true)} />
             <ButtonView label="Import" size="xs" variant="secondary"
+                        accentColor={ACCENT} color={ACCENT} style={softPrimary(ACCENT, true)}
                         iconLeft={<UploadIcon size={IconSize.chip} />}
                         onClick={() => setImporting(true)} />
             <ButtonView
               label={copied === 'all' ? 'Copied' : 'Export all'}
               size="xs" variant="secondary"
+              accentColor={copied === 'all' ? OK : INFO}
+              color={copied === 'all' ? OK : INFO}
+              style={softPrimary(copied === 'all' ? OK : INFO, true)}
               iconLeft={copied === 'all'
                 ? <CheckIcon size={IconSize.chip} />
                 : <DownloadIcon size={IconSize.chip} />}
@@ -409,16 +432,63 @@ export function TerminalSettings() {
         />
       </Group>
 
-      <div className="flex">
+      {/*
+        Right, red, and larger than the controls it undoes.
+
+        It is the only action on this page that throws work away — every other
+        control here changes one thing and can be changed back by hand. Sitting
+        at the left in the same weight as a font-size slider, it read as one
+        more setting; on the right in the destructive colour it reads as what
+        it is. It still asks before doing anything.
+      */}
+      <div className="flex justify-end pt-1">
         <ButtonView
-          label="Reset these to defaults" size="xs" variant="secondary"
-          iconLeft={<RefreshIcon size={IconSize.chip} />}
-          disabled={pristine}
-          onClick={() => s.resetPrefs()}
+          label="Reset everything to defaults" size="sm" variant="secondary"
+          iconLeft={<RefreshIcon size={IconSize.inline} />}
+          accentColor={BAD} color={BAD} style={softPrimary(BAD, true)}
+          onClick={() => setResetting(true)}
         />
       </div>
 
       {importing && <ThemeImportModal onClose={() => setImporting(false)} />}
+
+      {deleting && (
+        <ConfirmDialog
+          danger
+          title={`Delete ${s.theme(deleting).label}?`}
+          message={
+            `${s.theme(deleting).label} is stored in this browser and nowhere else, so `
+            + 'this is the only copy unless you exported it. Deleting it cannot be undone.'
+            + (s.active === deleting
+              ? ' It is also the theme in use — the terminal will fall back to another one.'
+              : '')
+          }
+          confirmLabel="Delete"
+          onConfirm={() => { s.removeTheme(deleting); setDeleting(undefined); }}
+          onCancel={() => setDeleting(undefined)}
+        />
+      )}
+
+      {resetting && (
+        <ConfirmDialog
+          danger
+          title="Reset the terminal to defaults?"
+          message={
+            'Font, cursor, scrollback and behaviour all go back to their defaults, the six '
+            + 'built-in themes return to their original order, and Tokyo Night becomes the '
+            + 'one in use.'
+            + (customCount
+              ? ` ${customCount} imported theme${customCount === 1 ? '' : 's'} `
+                + `(${customNames}) will be deleted — they live in this browser and nowhere `
+                + 'else, so this is the only copy unless you exported them. Export them first '
+                + 'if you want them back.'
+              : ' The built-in themes cannot be lost, so nothing here is unrecoverable.')
+          }
+          confirmLabel={customCount ? `Reset and delete ${customCount}` : 'Reset'}
+          onConfirm={() => { s.resetAll(); setResetting(false); }}
+          onCancel={() => setResetting(false)}
+        />
+      )}
     </div>
   );
 }

@@ -70,7 +70,7 @@ export function PodTerminal() {
   const detail = useK8sStore(s => s.detail);
   const logContainer = useK8sStore(s => s.logContainer);
   const capabilities = useK8sStore(s => s.capabilities);
-  const openVsCodeShell = useK8sStore(s => s.openShell);
+  const openVsCodeShell = useK8sStore(s => s.openVsCodeShell);
   const ask = useDk8sAiStore(s => s.ask);
 
   const hostRef = useRef<HTMLDivElement>(null);

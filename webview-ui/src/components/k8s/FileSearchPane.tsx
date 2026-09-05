@@ -14,12 +14,12 @@ import { useEffect, useRef, useState } from 'react';
 import {
   EmptyStateView, FileBrowserView,
   type FileBrowserEntry, type FileBrowserAction, IconSize } from '@salilvnair/dui';
-import { SearchIcon, FolderOpenIcon, LockIcon, ExternalLinkIcon, DownloadIcon,
+import { FileSearchIcon, SearchIcon, FolderOpenIcon, LockIcon, ExternalLinkIcon, DownloadIcon,
   ChevronRightIcon, ChevronDownIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 
-import { ACCENT } from './tone';
+import { ACCENT, MATCH, MUTED } from './tone';
 
 export interface FileSearchPod {
   uid: string;
@@ -391,10 +391,41 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload, m
         </div>
       )}
 
+      {/* Nothing found gets the same weight as nothing searched yet.
+
+          A line of grey text in the middle of an empty pane reads as a view
+          that failed rather than as an answer, and this IS an answer — the
+          search ran, every pod replied, and none of them had it. So it says
+          which term found nothing, in the colour a hit would have been
+          written in, and offers the two things that usually fix it. */}
       {!state.running && withHits.length === 0 && failed.length === 0 && (
-        <div className="px-4 py-8 text-center text-[11.5px]"
-             style={{ color: 'var(--color-text-muted)' }}>
-          No file matched that name in any of these pods.
+        <div className="flex-1 min-h-0 grid place-items-center px-8 py-6">
+          <EmptyStateView
+            variant="medallion"
+            icon={<FileSearchIcon size={IconSize.medallion} />}
+            title="Nothing matched"
+            message={match
+              ? `No file named like this was found in any of these pods.`
+              : 'No file matched that name in any of these pods.'}
+            accentColor={MUTED}
+            hints={[
+              ...(match ? [{
+                key: <SearchIcon size={IconSize.action} />,
+                text: (
+                  <span>
+                    searched for{' '}
+                    <span className="font-mono" style={{ color: MATCH, fontWeight: 600 }}>
+                      {match}
+                    </span>
+                  </span>
+                ) as unknown as string,
+              }] : []),
+              { key: <FolderOpenIcon size={IconSize.action} />,
+                text: 'a deeper start path or a higher depth reaches further in' },
+              { key: <LockIcon size={IconSize.action} />,
+                text: 'wrap it in * to match anywhere in the name — *invoice*' },
+            ]}
+          />
         </div>
       )}
     </div>

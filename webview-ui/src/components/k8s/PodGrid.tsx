@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
-  ModalView, ButtonView, FilterInputView, IconSize } from '@salilvnair/dui';
+  ModalView, ButtonView, FilterInputView, IconSize, EmptyStateView } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
 import { PodContextMenu } from './PodContextMenu';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
@@ -26,7 +26,7 @@ import { ExportLogsModal } from './ExportLogsModal';
 import { LogSearchModal } from './LogSearchModal';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import {
-  FolderExportIcon, CloseIcon, SearchIcon, ChevronDownIcon, ChevronRightIcon,
+  FolderExportIcon, CloseIcon, SearchIcon, LayersIcon, ChevronDownIcon, ChevronRightIcon,
   StarIcon,
 } from '../../icons';
 import {
@@ -35,7 +35,7 @@ import {
   type Severity, type PodGroup,
 } from './pod-view';
 
-import { ACCENT, OK } from './tone';
+import { ACCENT, OK, MUTED, MATCH } from './tone';
 /* Amber, not the dk8s accent: a star is a personal mark, not a status, and
    reusing the accent made starred rows look selected. */
 const FAV_COLOR = 'var(--color-warning)';
@@ -1042,9 +1042,30 @@ export function PodGrid() {
                                   onToggle={() => toggle(groupKey(g))} />
             ))}
             {!visible.length && (
-              <span className="text-[12px] text-[var(--color-text-muted)] py-6 text-center">
-                No pod matches &ldquo;{filter}&rdquo;.
-              </span>
+              /* The filter is echoed in the match colour, so the reader can
+                 see the typo without looking back up at the box. */
+              <div className="grid place-items-center px-8 py-10">
+                <EmptyStateView
+                  variant="medallion"
+                  icon={<SearchIcon size={IconSize.medallion} />}
+                  title="No pod matches"
+                  message="Nothing in the namespaces being watched has that in its name."
+                  accentColor={MUTED}
+                  hints={[
+                    { key: <SearchIcon size={IconSize.action} />,
+                      text: (
+                        <span>
+                          filtering on{' '}
+                          <span className="font-mono" style={{ color: MATCH, fontWeight: 600 }}>
+                            {filter}
+                          </span>
+                        </span>
+                      ) as unknown as string },
+                    { key: <LayersIcon size={IconSize.action} />,
+                      text: 'a pod in another namespace needs that namespace watched' },
+                  ]}
+                />
+              </div>
             )}
           </div>
         )}

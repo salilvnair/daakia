@@ -539,6 +539,7 @@ interface K8sState {
   reloadLogs: () => void;
   setLogSelection: (sel?: LogSelection) => void;
   openShell: () => void;
+  openVsCodeShell: () => void;
   dismissShellNotice: () => void;
   setGuardHeapDump: (on: boolean) => void;
   setLogLineNumbers: (on: boolean) => void;
@@ -873,16 +874,42 @@ export const useK8sStore = create<K8sState>((set, get) => ({
 
   setLogSelection: (logSelection) => set({ logSelection }),
 
+  /*
+    Opens the Terminal tab, not a VS Code terminal.
+
+    dk8s has its own PTY now, in the panel, with the theme and scrollback the
+    reader configured — so sending them out to a separate terminal window was
+    handing them a worse version of a thing this tool already does. The VS Code
+    route is still there, as a chip in the terminal's own footer, for anyone
+    who wants their own shell integration.
+
+    The audit record is unchanged and still written here: opening a shell is
+    the most sensitive action in the tool, and where the shell is drawn does
+    not change that.
+  */
   openShell: () => {
     const { detail, logContainer } = get();
     if (!detail) return;
-    set({ shellNotice: undefined, shellPending: true });
+    set({ shellNotice: undefined, detailTab: 'terminal' });
     // The most sensitive action in the tool, so the record is the fullest.
     logUiEvent('dk8s.shell', {
       context: detail.context, namespace: detail.namespace, pod: detail.name,
       container: logContainer ?? detail.containers[0]?.name,
       containers: detail.containers.map(c => c.name),
       image: detail.image, node: detail.node, phase: detail.phase,
+      into: 'panel',
+    });
+  },
+
+  /** The VS Code terminal, kept for anyone who wants their own shell setup. */
+  openVsCodeShell: () => {
+    const { detail, logContainer } = get();
+    if (!detail) return;
+    set({ shellNotice: undefined, shellPending: true });
+    logUiEvent('dk8s.shell', {
+      context: detail.context, namespace: detail.namespace, pod: detail.name,
+      container: logContainer ?? detail.containers[0]?.name,
+      into: 'vscode',
     });
     postMsg({
       type: 'dk8s:shell',
@@ -953,8 +980,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
     });
   },
 
+  /*
+    From the pod list, the same thing: open the pod on its Terminal tab.
+
+    `openDetail` resets the tab to whatever this pod was last read on, so the
+    tab is set after it rather than before — the same ordering the context
+    menu's other destinations use.
+  */
   openShellFor: (pod) => {
     set({ shellNotice: undefined });
+    get().openDetail(pod);
+    set({ detailTab: 'terminal' });
     // The same record the detail view writes: this is the most sensitive
     // action in the tool wherever it is started from.
     logUiEvent('dk8s.shell', {
@@ -962,11 +998,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       container: pod.containers?.[0]?.name,
       containers: (pod.containers ?? []).map(c => c.name),
       image: pod.image, node: pod.node, phase: pod.phase,
-      from: 'context-menu',
-    });
-    postMsg({
-      type: 'dk8s:shell',
-      context: pod.context, namespace: pod.namespace, pod: pod.name,
+      from: 'context-menu', into: 'panel',
     });
   },
 

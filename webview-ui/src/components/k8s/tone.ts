@@ -76,3 +76,13 @@ export const SYNTAX = {
   comment: 'var(--color-text-muted)',
   plain: 'var(--color-text-secondary)',
 } as const;
+
+/**
+ * The colour a search hit is written in.
+ *
+ * The same `--dui-row-flash` the file list highlights a matched run with, so
+ * "the thing you searched for" is one colour everywhere in dk8s — in a row, in
+ * a heading, and in the empty state that says it found nothing. A second
+ * yellow would read as a second meaning.
+ */
+export const MATCH = 'var(--dui-row-flash, #ffc400)';

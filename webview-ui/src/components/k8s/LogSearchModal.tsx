@@ -34,7 +34,7 @@ import { levelColor } from './log-view';
 import { severityOf, severityColor, shortAge } from './pod-view';
 import { softPrimary } from './button-style';
 
-import { ACCENT } from './tone';
+import { ACCENT, MUTED } from './tone';
 const ROW_H = 19;
 const OVERSCAN = 20;
 
@@ -450,12 +450,12 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                     <tr style={{ background: 'var(--color-surface)' }}>
                       {['', 'pod', 'namespace', 'status', 'restarts', 'age'].map((h, i) => (
                         <th key={i}
-                            className="text-left text-[9.5px] uppercase tracking-wider px-2 py-1.5 sticky top-0"
+                            className={`text-left text-[9.5px] uppercase tracking-wider py-1.5 sticky top-0 ${i === 0 ? '' : 'px-2'}`}
                             style={{
                               color: 'var(--color-text-muted)', fontWeight: 500,
                               background: 'var(--color-surface)',
                               borderBottom: '1px solid var(--color-surface-border)',
-                              width: i === 0 ? 28 : undefined,
+                              width: i === 0 ? 34 : undefined,
                             }}>
                           {/*
                             The header cell gets the same square the pod grid
@@ -465,11 +465,23 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                             like a nineteenth pod.
                           */}
                           {i === 0 ? (
+                            /*
+                              Centred in the cell, not floated at its left
+                              padding.
+
+                              The header glyph and dui's checkbox are different
+                              widths, so two cells with the same left padding
+                              still put their marks on different vertical
+                              lines — which is exactly what a column of
+                              checkboxes makes obvious. Centring both in a cell
+                              of one width lines them up whatever either glyph
+                              measures.
+                            */
                             <button
                               type="button"
                               title={allPicked ? 'Clear all' : 'Select all'}
                               aria-label={allPicked ? 'Clear all' : 'Select all'}
-                              className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0"
+                              className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0 mx-auto"
                               style={{ width: 18, height: 18 }}
                               onClick={() => setPicked(
                                 allPicked
@@ -498,8 +510,11 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                             background: on ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'transparent',
                           }}
                         >
-                          <td className="px-2 py-1.5" style={{ width: 28 }}>
-                            <CheckboxView checked={on} size="xs" accentColor={ACCENT} onChange={() => {}} />
+                          <td className="py-1.5" style={{ width: 34 }}>
+                            <span className="flex items-center justify-center"
+                                  style={{ width: 18, height: 18, margin: '0 auto' }}>
+                              <CheckboxView checked={on} size="xs" accentColor={ACCENT} onChange={() => {}} />
+                            </span>
                           </td>
                           <td className="px-2 py-1.5 text-[11px] font-mono"
                               style={{ color: 'var(--color-text-primary)' }}>{p.name}</td>
@@ -519,9 +534,15 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                   </tbody>
                 </table>
                 {pickable.length === 0 && (
-                  <div className="px-3 py-4 text-[11px] text-center"
-                       style={{ color: 'var(--color-text-muted)' }}>
-                    No pod matches that filter.
+                  <div className="grid place-items-center px-6 py-7">
+                    <EmptyStateView
+                      compact
+                      variant="medallion"
+                      icon={<SearchIcon size={IconSize.medallion} />}
+                      title="No pod matches"
+                      message="Every pod in the watched namespaces was checked."
+                      accentColor={MUTED}
+                    />
                   </div>
                 )}
               </div>

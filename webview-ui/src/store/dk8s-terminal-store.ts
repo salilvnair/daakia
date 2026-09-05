@@ -202,7 +202,16 @@ export interface Dk8sTerminalState {
   importThemes: (input: unknown) => { ok: boolean; added: number; replaced: number; error?: string };
   removeTheme: (id: string) => void;
   setPref: <K extends keyof TerminalPrefs>(key: K, value: TerminalPrefs[K]) => void;
+  /** Preferences only — themes are left alone. */
   resetPrefs: () => void;
+  /**
+   * Everything, including imported themes.
+   *
+   * The destructive one, and the reason the button that calls it is red and
+   * asks first. There is no undo: a custom theme lives here and nowhere else,
+   * so this is the only copy unless someone exported it.
+   */
+  resetAll: () => void;
 }
 
 function persist(s: Dk8sTerminalState) {
@@ -359,6 +368,19 @@ export const useDk8sTerminalStore = create<Dk8sTerminalState>((set, get) => ({
 
   resetPrefs: () => set(s => {
     const next = { ...s, prefs: { ...DEFAULT_PREFS } };
+    persist(next);
+    return next;
+  }),
+
+  resetAll: () => set(s => {
+    const next = {
+      ...s,
+      custom: [],
+      order: [...BUILT_IN_IDS],
+      selected: [...BUILT_IN_IDS].slice(0, MAX_SELECTED),
+      active: BUILT_IN_IDS[0],
+      prefs: { ...DEFAULT_PREFS },
+    };
     persist(next);
     return next;
   }),
