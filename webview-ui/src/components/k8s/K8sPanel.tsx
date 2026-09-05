@@ -27,9 +27,9 @@ import { ArtifactDetail } from './ArtifactDetail';
 import { openArtifactIn, type AnalyzerId } from '../../store/dk8s-analyze-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT, ACCENT_MUTED as ACCENT_FILL } from './tone';
 /** Dimmer tone for anything filled or bordered — see MultiPicker. */
-const ACCENT_FILL = 'var(--color-dk8s-muted)';
+
 
 /**
  * Context and namespace, always visible and always changeable.

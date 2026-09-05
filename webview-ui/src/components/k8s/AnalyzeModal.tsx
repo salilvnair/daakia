@@ -16,7 +16,7 @@ import { WarningTriangleIcon, SparkleIcon } from '../../icons';
 import type { LogLine } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
-const ACCENT = 'var(--color-protocol-ai)';
+import { AI as ACCENT } from './tone';
 
 /**
  * How much of the buffer actually reaches the model.

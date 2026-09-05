@@ -33,7 +33,7 @@ import { levelColor } from './log-view';
 import { severityOf, severityColor, shortAge } from './pod-view';
 import { softPrimary } from './button-style';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 const ROW_H = 19;
 const OVERSCAN = 20;
 

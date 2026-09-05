@@ -85,7 +85,7 @@ interface Hits {
   error?: string;
 }
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT, AI, INFO } from './tone';
 
 /**
  * The longest plain run in a pattern, for highlighting.
@@ -107,7 +107,7 @@ const SEARCH_DEPTH = 8;
 
 const MOUNT_TONE: Record<PodMount['kind'], string> = {
   pvc: 'var(--color-success)',
-  config: 'var(--color-info, #3fb9cc)',
+  config: INFO,
   secret: 'var(--color-warning)',
   ephemeral: 'var(--color-text-muted)',
   host: 'var(--color-warning)',
@@ -445,7 +445,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       }] : []),
       ...(dirLike(e) ? [{
         id: 'searchHere', label: 'Search in this folder',
-        icon: <SearchIcon size={IconSize.action} />, iconColor: 'var(--color-info, #3fb9cc)',
+        icon: <SearchIcon size={IconSize.action} />, iconColor: INFO,
       }] : []),
       ...(can('save') ? [{
         id: 'save', label: 'Download',
@@ -462,7 +462,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       },
       {
         id: 'info', label: 'Get Info',
-        icon: <InfoCircleIcon size={IconSize.action} />, iconColor: 'var(--color-primary-light)',
+        icon: <InfoCircleIcon size={IconSize.action} />, iconColor: AI,
       },
     ];
   };
@@ -478,7 +478,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   const emptyMenu = (): ContextMenuItem[] => [
     {
       id: 'searchHere', label: 'Search in this folder',
-      icon: <SearchIcon size={IconSize.action} />, iconColor: 'var(--color-info, #3fb9cc)',
+      icon: <SearchIcon size={IconSize.action} />, iconColor: INFO,
       onClick: () => { setMenu(null); setScopedSearch(path || '/'); },
     },
     {
@@ -1243,7 +1243,7 @@ function InfoPanel({ entry, mount, onClose }: {
             {base}
           </span>
           <Pill tone={isDir ? 'var(--color-warning)'
-            : entry.kind === 'link' ? 'var(--color-info, #3fb9cc)'
+            : entry.kind === 'link' ? INFO
               : 'var(--color-text-muted)'}>
             {isDir ? 'directory' : entry.kind === 'link' ? 'symlink' : 'file'}
           </Pill>

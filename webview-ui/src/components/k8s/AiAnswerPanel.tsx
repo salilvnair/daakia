@@ -16,7 +16,7 @@ import { useDk8sAiStore, type Dk8sAnswer } from '../../store/dk8s-ai-store';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 
-const ACCENT = 'var(--color-protocol-ai)';
+import { AI as ACCENT } from './tone';
 
 function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
   const [showEvidence, setShowEvidence] = useState(false);

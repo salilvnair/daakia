@@ -26,13 +26,15 @@ import { CpuAnalyzerView } from '../doctor/CpuAnalyzerView';
 import { AiSplit } from './AiAnswerPanel';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 
-const AI_ACCENT = 'var(--color-protocol-ai)';
+import { AI as AI_ACCENT } from './tone';
 
 /** A colour per analyzer, kept even when its tab is not the active one. */
 const TABS: { id: AnalyzerId; label: string; icon: React.ReactNode; color: string; tagline: string }[] = [
   {
     id: 'heap', label: 'Heap Dump', icon: <MemoryIcon size={IconSize.item} />,
-    color: 'var(--color-protocol-graphql, #e535ab)',
+    // A recording is not GraphQL; it borrowed that pink for being the
+    // one colour left. Named for what it is instead.
+    color: 'var(--color-protocol-graphql)',
     tagline: 'Retained sizes, dominators and leak suspects from a .hprof',
   },
   {

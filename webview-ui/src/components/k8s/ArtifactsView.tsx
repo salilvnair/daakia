@@ -25,7 +25,7 @@ import { openArtifactIn } from '../../store/dk8s-analyze-store';
 import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
 import { shortAge } from './pod-view';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 
 /**
  * One height for every control in the toolbar.

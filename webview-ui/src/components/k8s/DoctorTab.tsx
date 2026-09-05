@@ -19,7 +19,7 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { type CollectResult, useDk8sDoctorStore, ARTIFACT_META, type ArtifactKind } from '../../store/dk8s-doctor-store';
 import { MemoryPanel } from './MemoryPanel';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 
 const ICONS: Record<string, typeof CpuIcon> = {
   threaddump: CpuIcon,

@@ -42,7 +42,7 @@ import {
 } from './AnalyzeModal';
 import { ExportLogsModal } from './ExportLogsModal';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 /**
  * One size for every control in the toolbar.
  *
@@ -58,11 +58,11 @@ const CTL_SIZE = 'md';
  * here tells you what a control will DO, which is worth more than making the
  * row pretty.
  */
-const AI_ACCENT = 'var(--color-protocol-ai)';
+import { AI as AI_ACCENT } from './tone';
 const LIVE_ACCENT = 'var(--color-success)';
-const ACCENT_SOFT = 'color-mix(in srgb, var(--color-dk8s) 16%, transparent)';
-const ACCENT_FILL = 'color-mix(in srgb, var(--color-dk8s) 20%, transparent)';
-const ACCENT_EDGE = 'color-mix(in srgb, var(--color-dk8s) 55%, transparent)';
+
+
+
 const ROW_HEIGHT = 19;
 const OVERSCAN = 25;
 /** Width of the ribbon column, including its gutter. */
@@ -1262,10 +1262,10 @@ export function LogViewer() {
           iconLeft={<SparkleIcon size={IconSize.inline} color={logs.length ? AI_ACCENT : 'var(--color-text-muted)'} />}
           style={{
             background: logs.length
-              ? 'color-mix(in srgb, var(--color-protocol-ai) 16%, transparent)'
+              ? `color-mix(in srgb, ${AI_ACCENT} 16%, transparent)`
               : 'transparent',
             borderColor: logs.length
-              ? 'color-mix(in srgb, var(--color-protocol-ai) 45%, transparent)'
+              ? `color-mix(in srgb, ${AI_ACCENT} 45%, transparent)`
               : 'var(--color-surface-border)',
             fontWeight: 600,
           }}
@@ -1491,8 +1491,11 @@ export function LogViewer() {
                           title="Ask AI what this exception means"
                           className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
                           style={{
-                            background: 'color-mix(in srgb, var(--color-primary) 16%, transparent)',
-                            color: 'var(--color-primary-light)',
+                            /* The same tone as the panel this opens. It was
+                               `--color-primary`, so the chip that asks and the
+                               answer it produces were different colours. */
+                            background: `color-mix(in srgb, ${AI_ACCENT} 16%, transparent)`,
+                            color: AI_ACCENT,
                             fontSize: 10, lineHeight: '15px',
                           }}
                         >

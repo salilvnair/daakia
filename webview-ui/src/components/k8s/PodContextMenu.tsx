@@ -28,7 +28,7 @@ import {
 } from '../../store/dk8s-doctor-store';
 import { favoriteKey, useFavoriteKeys, toggleFavorite } from '../../store/dk8s-favorites-store';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 
 /*
   The diagnostics offered here, in the order the Doctor tab lists them, with

@@ -15,7 +15,7 @@ import { useK8sStore } from '../../store/k8s-store';
 import { localInputValue } from './TimeWindow';
 import { softPrimary } from './button-style';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 /**
  * Every control in this dialog uses the same dui size, so they line up.
  *

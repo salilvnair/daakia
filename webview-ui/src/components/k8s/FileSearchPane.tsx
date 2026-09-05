@@ -19,7 +19,7 @@ import { SearchIcon, FolderOpenIcon, LockIcon, ExternalLinkIcon, DownloadIcon,
 import { postMsg } from '../../vscode';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 
 export interface FileSearchPod {
   uid: string;

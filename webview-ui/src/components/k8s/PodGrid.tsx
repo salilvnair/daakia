@@ -35,7 +35,7 @@ import {
   type Severity, type PodGroup,
 } from './pod-view';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT, OK } from './tone';
 /* Amber, not the dk8s accent: a star is a personal mark, not a status, and
    reusing the accent made starred rows look selected. */
 const FAV_COLOR = 'var(--color-warning)';
@@ -61,7 +61,10 @@ function WatchIndicator() {
   const { watchStatus, watchDetail, lastEventAt } = useK8sStore();
   const map: Record<string, { label: string; color: string }> = {
     idle: { label: 'starting', color: 'var(--color-text-muted)' },
-    connected: { label: 'watching', color: 'var(--color-method-get)' },
+    // Health, not a REST verb. This took the GET colour because it was
+    // the right green, which tied the cluster's status to the REST
+    // palette — change one and the other moves with it.
+    connected: { label: 'watching', color: OK },
     reconnecting: { label: 'reconnecting', color: 'var(--color-warning)' },
     stopped: { label: 'stopped', color: 'var(--color-text-muted)' },
   };
@@ -142,7 +145,7 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
       */}
       <WatchIndicator />
       <Stat n={counts.total} label="pods" />
-      <Stat n={counts.ready} label="ready" color="var(--color-method-get)" />
+      <Stat n={counts.ready} label="ready" color={OK} />
       {counts.degraded > 0 && <Stat n={counts.degraded} label="degraded" color="var(--color-warning)" />}
       {counts.critical > 0 && <Stat n={counts.critical} label="failing" color="var(--color-error)" />}
       {counts.restartsLastHour > 0 && (
@@ -979,9 +982,9 @@ export function PodGrid() {
       {exportState?.phase === 'done' && (
         <div className="flex items-center gap-3 mx-4 mt-3 px-4 py-3 rounded-lg flex-shrink-0 text-[11.5px]"
              style={{
-               background: 'color-mix(in srgb, var(--color-method-get) 10%, var(--color-surface))',
-               border: '1px solid color-mix(in srgb, var(--color-method-get) 30%, transparent)',
-               color: 'var(--color-method-get)',
+               background: `color-mix(in srgb, ${OK} 10%, var(--color-surface))`,
+               border: `1px solid color-mix(in srgb, ${OK} 30%, transparent)`,
+               color: OK,
              }}>
           <FolderExportIcon size={IconSize.item} strokeWidth={1.8} />
           <span className="font-medium">{exportState.summary}</span>

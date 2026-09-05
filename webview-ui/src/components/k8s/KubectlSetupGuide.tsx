@@ -16,7 +16,7 @@ import { CopyButtonView } from '@salilvnair/dui';
 import { useK8sStore } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 
 interface Install {
   label: string;

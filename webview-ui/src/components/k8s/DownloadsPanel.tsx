@@ -13,7 +13,7 @@ import { DownloadIcon, FolderOpenIcon, CloseIcon, ExternalLinkIcon, CopyIcon } f
 import { postMsg } from '../../vscode';
 import { useDk8sFilesStore, type Download } from '../../store/dk8s-files-store';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 
 function bytes(v?: number): string {
   if (v === undefined) return '—';

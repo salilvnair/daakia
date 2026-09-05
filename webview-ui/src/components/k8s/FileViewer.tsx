@@ -26,9 +26,7 @@ import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useK8sStore } from '../../store/k8s-store';
 import { redactLines, copyText, type RedactedLine } from './file-redact';
 
-const ACCENT = 'var(--color-dk8s)';
-/** The one control here that sends the file somewhere, so it keeps its violet. */
-const AI_TONE = 'var(--color-primary-light)';
+import { ACCENT, AI, BAD, SYNTAX } from './tone';
 
 type Line = RedactedLine;
 
@@ -223,7 +221,7 @@ export function FileViewer({
           {/* A chip that happens to be clickable, so it matches the two beside
               it rather than inventing a third shape for the same row. */}
           <BadgeChipView
-            tone={AI_TONE}
+            tone={AI}
             style={{ opacity: text === null ? 0.4 : 1, gap: 3 }}
           >
             <SparkleIcon size={IconSize.chip} /> Ask AI
@@ -343,7 +341,7 @@ export function FileViewer({
           { id: 'sep', label: '', separator: true },
           {
             id: 'ask', label: 'Ask AI about this file',
-            icon: <SparkleIcon size={IconSize.action} />, iconColor: 'var(--color-primary-light)',
+            icon: <SparkleIcon size={IconSize.action} />, iconColor: AI,
             disabled: text === null,
             onClick: () => { setMenu(null); ask(); },
           },
@@ -517,15 +515,15 @@ function renderShell(s: string): React.ReactNode {
     parts.forEach((p, k) => {
       if (!p) return;
       if (p.startsWith('$')) {
-        out.push(<span key={`v${i}-${k}`} style={{ color: 'var(--color-warning)' }}>{p}</span>);
+        out.push(<span key={`v${i}-${k}`} style={{ color: SYNTAX.variable }}>{p}</span>);
         return;
       }
       const words = p.split(SH_WORDS);
       words.forEach((w, j) => {
         if (!w) return;
         out.push(SH_IS_WORD.has(w)
-          ? <span key={`k${i}-${k}-${j}`} style={{ color: 'var(--color-primary-light)' }}>{w}</span>
-          : <span key={`p${i}-${k}-${j}`} style={{ color: 'var(--color-text-secondary)' }}>{w}</span>);
+          ? <span key={`k${i}-${k}-${j}`} style={{ color: SYNTAX.keyword }}>{w}</span>
+          : <span key={`p${i}-${k}-${j}`} style={{ color: SYNTAX.plain }}>{w}</span>);
       });
     });
     plain = '';
@@ -538,7 +536,7 @@ function renderShell(s: string): React.ReactNode {
       let j = i + 1;
       while (j < s.length && s[j] !== c) j += s[j] === '\\' ? 2 : 1;
       out.push(
-        <span key={`s${i}`} style={{ color: 'var(--color-success)' }}>{s.slice(i, j + 1)}</span>,
+        <span key={`s${i}`} style={{ color: SYNTAX.string }}>{s.slice(i, j + 1)}</span>,
       );
       i = j + 1;
       continue;

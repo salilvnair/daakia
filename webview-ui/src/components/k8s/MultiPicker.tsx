@@ -16,11 +16,11 @@ import { ButtonView, SearchInputView, TextInputView, FilterInputView,
 import { useK8sStore, type WatchTarget, type NamespaceOffer } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT, ACCENT_MUTED as ACCENT_FILL } from './tone';
 /** For filled areas. The same cyan that reads well as a small glyph is
  *  glaring across a whole button, so anything with a solid fill uses the
  *  muted tone and keeps the bright one for strokes and text. */
-const ACCENT_FILL = 'var(--color-dk8s-muted)';
+
 
 function Shell({ title, subtitle, children, footer }: {
   title: string; subtitle?: string; children: React.ReactNode; footer?: React.ReactNode;

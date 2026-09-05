@@ -11,7 +11,7 @@ import { ButtonView, TextInputView, FilterInputView,
 import { useK8sStore, type KubeContext } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 
 function Shell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (

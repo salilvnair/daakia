@@ -11,7 +11,7 @@ import { useK8sStore } from '../../store/k8s-store';
 import { severityOf, severityColor, shortAge, restartLabel, formatBytes } from './pod-view';
 import { MemoryPanel } from './MemoryPanel';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (

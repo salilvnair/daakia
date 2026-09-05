@@ -23,8 +23,8 @@ import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highli
 import { CodeEditor } from '../shared/editors/CodeEditor';
 import { OverviewTab } from './OverviewTab';
 
-const ACCENT = 'var(--color-dk8s)';
-const AI_ACCENT = 'var(--color-protocol-ai)';
+import { ACCENT } from './tone';
+import { AI as AI_ACCENT } from './tone';
 
 // Order from the mock: Overview, Logs, Terminal, Doctor, YAML — with Describe
 // alongside YAML, since they answer the same kind of question.
@@ -333,10 +333,10 @@ export function PodDetail() {
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] cursor-pointer"
           style={{
             background: aiOpen
-              ? 'color-mix(in srgb, var(--color-protocol-ai) 22%, transparent)'
+              ? `color-mix(in srgb, ${AI_ACCENT} 22%, transparent)`
               : 'transparent',
             border: `1px solid ${aiOpen
-              ? 'color-mix(in srgb, var(--color-protocol-ai) 55%, transparent)'
+              ? `color-mix(in srgb, ${AI_ACCENT} 55%, transparent)`
               : 'var(--color-surface-border)'}`,
             color: aiOpen ? '#fff' : 'var(--color-text-secondary)',
             fontWeight: aiOpen ? 600 : 400,

@@ -24,7 +24,7 @@ import { postMsg } from '../../vscode';
 import { logUiEvent } from '../../store/ui-audit-store';
 import { softPrimary } from './button-style';
 
-const ACCENT = 'var(--color-dk8s)';
+import { ACCENT } from './tone';
 const SIZE = 'md';
 
 /**
