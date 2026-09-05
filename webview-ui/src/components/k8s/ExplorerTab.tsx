@@ -87,21 +87,8 @@ interface Hits {
 }
 
 import { ACCENT, AI, INFO } from './tone';
+import { literalOf } from './search-pattern';
 
-/**
- * The longest plain run in a pattern, for highlighting.
- *
- * A search pattern is a glob or a regex; a highlight needs literal text. This
- * takes the longest stretch with no metacharacter in it, which for `*invoice*`
- * is `invoice`, for `inv[0-9]+\.pdf` is `inv`, and for a bare word is the
- * word. Longest rather than first because the informative part of a pattern is
- * usually its longest literal — `.*application` should mark `application`,
- * not nothing.
- */
-export function literalOf(pattern: string): string {
-  const runs = pattern.split(/[*?\[\]().+^$|{}\\]+/).filter(Boolean);
-  return runs.reduce((best, r) => (r.length > best.length ? r : best), '');
-}
 
 /** Mirrors the host's `maxDepth` default in pod-files.ts — shown, not guessed. */
 const SEARCH_DEPTH = 8;
@@ -831,7 +818,35 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           accentColor={ACCENT}
           size="sm"
           loading={busy}
-          emptyText="This directory is empty."
+          emptyText={
+            /*
+              An empty directory is an answer, and worth saying properly.
+
+              "This directory is empty." in grey, alone in a panel the size of
+              a screen, reads as a view that failed to load — which is the one
+              thing it is not. It looked and there is nothing here, and the
+              hints say the two reasons a directory can look empty when it is
+              not: a mount that has not been written to, and a subtree this
+              user cannot see into.
+            */
+            <div className="px-8 py-6">
+              <EmptyStateView
+                variant="medallion"
+                icon={<FolderOpenIcon size={IconSize.medallion} />}
+                title="Nothing in this directory"
+                message={`${path || '/'} exists and holds no entries.`}
+                accentColor={ACCENT}
+                hints={[
+                  { key: <LayersIcon size={IconSize.action} />,
+                    text: 'a volume mounted here would look like this until something writes to it' },
+                  { key: <LockIcon size={IconSize.action} />,
+                    text: 'a subtree this container cannot read reports nothing rather than refusing' },
+                  { key: <ArrowToLeftIcon size={IconSize.action} />,
+                    text: 'the row above goes back up' },
+                ]}
+              />
+            </div>
+          }
           footer={listing && (
             <>
               {rows.length} {rows.length === 1 ? 'entry' : 'entries'}

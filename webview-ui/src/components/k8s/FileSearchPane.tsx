@@ -144,11 +144,20 @@ function badgeFor(name: string): { badge: string; tone: FileBrowserEntry['badgeT
   return { badge: ext, tone: 'info' };
 }
 
-export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }: {
+export function FileSearchResults({ state, onOpenExplorer, onView, onDownload, match }: {
   state: FileSearchState;
   onOpenExplorer: (r: HitTarget) => void;
   onView: (r: HitTarget) => void;
   onDownload: (r: HitTarget) => void;
+  /*
+    The literal behind the pattern, so a hit says WHY it is a hit.
+
+    The Explorer's two searches already did this and Quick Search did not —
+    which is the search most in need of it, because its rows are full absolute
+    paths across a dozen pods and the matched run is the only part that
+    differs between them.
+  */
+  match?: string;
 }) {
   const collapsedList = useDk8sSearchStore(s => s.fileSearch.collapsed);
   const setFileSearch = useDk8sSearchStore(s => s.setFileSearch);
@@ -337,6 +346,7 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
               size="sm"
               accentColor={ACCENT}
               actions={actions}
+              match={match}
               selectedId={hitFor(key, state.selected)}
               highlightId={hitFor(key, returnFlash)}
               onSelect={e => setFS({ selected: hitKey(key, e.id) })}

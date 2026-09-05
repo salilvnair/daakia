@@ -22,6 +22,7 @@ import {
 import { useK8sStore } from '../../store/k8s-store';
 import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
 import { useFileSearch, FileSearchResults, type HitTarget } from './FileSearchPane';
+import { literalOf } from './search-pattern';
 import { FileViewer } from './FileViewer';
 import { TimeWindowPicker, describeWindow, windowError } from './TimeWindow';
 import { ExportSearchModal } from './ExportSearchModal';
@@ -769,6 +770,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             )}
             <FileSearchResults
               state={fileSearch}
+              match={literalOf(options.query)}
               onOpenExplorer={r => {
                 /*
                   A hit is a place, not just a pod. Handing the Explorer the
