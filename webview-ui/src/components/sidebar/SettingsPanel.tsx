@@ -4,8 +4,9 @@ import { useDbStatusStore } from '../../store/db-status-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon } from '../../icons';
-import { Dk8sSettings } from '../settings/Dk8sSettings';
+import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon } from '../../icons';
+import { Dk8sClusterSettings } from '../settings/Dk8sSettings';
+import { TerminalSettings } from '../settings/dk8s/TerminalSettings';
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { GitSyncSettings } from './GitSyncSettings';
 import { VaultSettings } from './VaultSettings';
@@ -31,7 +32,7 @@ import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-cluster' | 'dk8s-terminal';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load';
 
@@ -50,7 +51,8 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'prompt-library':  { label: 'Prompt Library',  icon: <AgentIcon size={14} /> },
   'ai-audit':        { label: 'AI Audit',        icon: <SparkleIcon size={14} /> },
   'devtools':        { label: 'Developer Tools', icon: <CodeBracketsIcon size={14} /> },
-  'dk8s':            { label: 'Dk8s',            icon: <Dk8sIcon size={14} /> },
+  'dk8s-cluster':    { label: 'Cluster',         icon: <Dk8sIcon size={14} /> },
+  'dk8s-terminal':   { label: 'Terminal',        icon: <TerminalIcon size={14} /> },
   'power-features':  { label: 'Power Features',  icon: <CodeBracketsIcon size={14} /> },
 };
 
@@ -72,8 +74,20 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
     { id: 'prompt-library', label: SETTINGS_SECTION_META['prompt-library'].label, icon: SETTINGS_SECTION_META['prompt-library'].icon },
     { id: 'ai-audit', label: SETTINGS_SECTION_META['ai-audit'].label, icon: SETTINGS_SECTION_META['ai-audit'].icon },
   ] },
+  /*
+    Its own group, not an entry under Advanced.
+
+    dk8s has two settings screens that have nothing in common — what it
+    does to a cluster, and how a shell looks — and a single Advanced entry
+    could only ever lead to one of them with the other buried behind a tab.
+    A group puts both in the nav, where every other pair of screens in this
+    panel already is.
+  */
+  { id: 'g-dk8s', label: 'DK8S', isGroup: true, children: [
+    { id: 'dk8s-cluster', label: SETTINGS_SECTION_META['dk8s-cluster'].label, icon: SETTINGS_SECTION_META['dk8s-cluster'].icon },
+    { id: 'dk8s-terminal', label: SETTINGS_SECTION_META['dk8s-terminal'].label, icon: SETTINGS_SECTION_META['dk8s-terminal'].icon },
+  ] },
   { id: 'g-advanced', label: 'Advanced', isGroup: true, children: [
-    { id: 'dk8s', label: SETTINGS_SECTION_META.dk8s.label, icon: SETTINGS_SECTION_META.dk8s.icon },
     { id: 'devtools', label: SETTINGS_SECTION_META.devtools.label, icon: SETTINGS_SECTION_META.devtools.icon },
     { id: 'power-features', label: SETTINGS_SECTION_META['power-features'].label, icon: SETTINGS_SECTION_META['power-features'].icon },
   ] },
@@ -109,7 +123,7 @@ export function SettingsPanel() {
             items={SETTINGS_NAV_ITEMS}
             activeId={activeSection}
             onSelect={(id) => setActiveSection(id as ActiveNavId)}
-            defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-advanced']}
+            defaultOpenIds={['g-general', 'g-server', 'g-ai', 'g-dk8s', 'g-advanced']}
             fillContainer
             collapsible={false}
             accentColor="var(--color-settings)"
@@ -145,8 +159,10 @@ export function SettingsPanel() {
               <AiAuditPanel />
             ) : activeSection === 'power-features' ? (
               <PowerFeaturesPanel />
-            ) : activeSection === 'dk8s' ? (
-              <Dk8sSettings />
+            ) : activeSection === 'dk8s-cluster' ? (
+              <Dk8sClusterSettings />
+            ) : activeSection === 'dk8s-terminal' ? (
+              <TerminalSettings />
             ) : activeSection === 'devtools' ? (
               <DevToolsSettingsPage />
             ) : activeSection === 'theme' ? (

@@ -49,8 +49,16 @@ const FONTS = [
   { label: 'Courier', value: "'Courier New', Courier, monospace" },
 ];
 
-/** The page's own measure. Wider than this and a description stops being read. */
-const PROSE = '92ch';
+/**
+ * A measure on the PROSE, not on the page.
+ *
+ * The cards span the panel, the way every other settings screen's do — a
+ * column of cards floating in the left two thirds of a wide window reads as a
+ * layout that gave up. What does need a limit is the reading: a description
+ * set the full width of a maximised window is a line nobody finishes, so the
+ * sentence gets a measure and the card does not.
+ */
+const PROSE = '86ch';
 
 function Group({ icon, label, hint, children }: {
   icon?: React.ReactNode; label: string; hint?: string; children: React.ReactNode;
@@ -88,11 +96,10 @@ function Row({ label, description, control }: {
 }) {
   return (
     <div
-      className="flex items-start gap-4 px-4 py-3.5 rounded-lg"
+      className="flex items-start gap-6 px-4 py-3.5 rounded-lg"
       style={{
         background: 'var(--color-surface)',
         border: '1px solid var(--color-surface-border)',
-        maxWidth: PROSE,
       }}
     >
       <span className="flex flex-col gap-1.5 flex-1 min-w-0">
@@ -101,7 +108,7 @@ function Row({ label, description, control }: {
         </span>
         {description && (
           <span className="text-[11.5px] leading-relaxed"
-                style={{ color: 'var(--color-text-secondary)' }}>
+                style={{ color: 'var(--color-text-secondary)', maxWidth: PROSE }}>
             {description}
           </span>
         )}
@@ -158,7 +165,7 @@ export function TerminalSettings() {
             onClick={() => s.setActive(t.id)}
             title={`Use ${t.label}`}
             className="flex items-center gap-2.5 border-none bg-transparent p-0 cursor-pointer text-left"
-            style={{ width: 250, flexShrink: 0 }}
+            style={{ width: 260, flexShrink: 0 }}
           >
             <span style={{
               width: 14, height: 14, borderRadius: 4, background: t.swatch, flexShrink: 0,
@@ -232,7 +239,7 @@ export function TerminalSettings() {
         hint={`Drag to reorder. Check up to ${MAX_SELECTED} to put on the terminal's swatch `
           + 'strip; the rest stay stored here. Click a name to use it.'}
       >
-        <div className="flex flex-col gap-3" style={{ maxWidth: PROSE }}>
+        <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11.5px]" style={{ color: 'var(--color-text-secondary)' }}>
               <b style={{ color: 'var(--color-text-primary)' }}>{s.selected.length}</b>
@@ -402,7 +409,7 @@ export function TerminalSettings() {
         />
       </Group>
 
-      <div className="flex" style={{ maxWidth: PROSE }}>
+      <div className="flex">
         <ButtonView
           label="Reset these to defaults" size="xs" variant="secondary"
           iconLeft={<RefreshIcon size={IconSize.chip} />}

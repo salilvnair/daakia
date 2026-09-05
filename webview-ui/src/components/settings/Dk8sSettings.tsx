@@ -11,13 +11,11 @@
  * person making it should be able to read what that consequence is without
  * leaving the page.
  */
-import { useEffect, useState } from 'react';
-import { TabView, type TabItem } from '@salilvnair/dui';
+import { useEffect } from 'react';
 import { Dk8sIcon, MemoryIcon, WarningTriangleIcon, StethoscopeIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { LogFormatSettings } from './LogFormatSettings';
 import { PvLogSettings } from './PvLogSettings';
-import { TerminalSettings } from './dk8s/TerminalSettings';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -55,40 +53,18 @@ function Toggle({ on, onChange, label, description, children }: {
 }
 
 /**
- * The page, and the tabs it grew.
+ * Settings → DK8S → Cluster.
  *
- * Cluster behaviour and terminal appearance are both dk8s settings and have
- * nothing else in common — one is about what dk8s does to a pod and the other
- * about how a shell looks. Stacking them on one scroll made a reader page past
- * heap-dump guards to change a font size, so they are two tabs, the way
- * General already splits Encoding and Proxy.
+ * How dk8s behaves against a live cluster, including the diagnostics that used
+ * to live under a separate "Doctor" heading — they are dk8s features collected
+ * from dk8s pods, and splitting them across two settings pages made the reader
+ * hunt for which page owned a switch.
+ *
+ * Terminal appearance is the sibling screen in the nav rather than a section
+ * here: it has nothing in common with any of this, and stacking the two made a
+ * reader page past heap-dump guards to change a font size.
  */
-export function Dk8sSettings() {
-  const [tab, setTab] = useState<'cluster' | 'terminal'>('cluster');
-
-  return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="px-3 pt-2 pb-0 border-b border-[var(--color-surface-border)] shrink-0">
-        <TabView
-          tabs={[
-            { id: 'cluster', label: 'Cluster' },
-            { id: 'terminal', label: 'Terminal' },
-          ] as TabItem[]}
-          activeTab={tab}
-          onChange={t => setTab(t as 'cluster' | 'terminal')}
-          variant="underline"
-          size="sm"
-          accentColor="var(--color-settings)"
-        />
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {tab === 'cluster' ? <ClusterSettings /> : <TerminalSettings />}
-      </div>
-    </div>
-  );
-}
-
-function ClusterSettings() {
+export function Dk8sClusterSettings() {
   const guardHeapDump = useK8sStore(s => s.guardHeapDump);
   const setGuardHeapDump = useK8sStore(s => s.setGuardHeapDump);
   const logLineNumbers = useK8sStore(s => s.logLineNumbers);
@@ -118,7 +94,7 @@ function ClusterSettings() {
       <div className="flex items-center gap-2">
         <Dk8sIcon size={16} color={ACCENT} />
         <span className="text-[14px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
-          Dk8s
+          Cluster
         </span>
       </div>
       <span className="text-[11.5px] leading-relaxed"
