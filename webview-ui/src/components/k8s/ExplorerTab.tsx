@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   PathBreadcrumbView, FileBrowserView, SearchFieldView, SegmentedControlView,
-  EmptyStateView, SelectInputView, ContextMenuView, ModalView, ButtonView,
+  EmptyStateView, SelectInputView, ContextMenuView, ModalView, ButtonView, BadgeChipView,
   type ContextMenuItem,
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
@@ -117,22 +117,12 @@ const MOUNT_TONE: Record<PodMount['kind'], string> = {
 
 /** What is behind this directory, named rather than described. */
 function MountChip({ mount }: { mount: PodMount }) {
-  const c = MOUNT_TONE[mount.kind];
   return (
-    <span
+    <BadgeChipView
+      tone={MOUNT_TONE[mount.kind]}
+      size="xs"
       title={`${mount.path} is ${mount.source}${mount.readOnly ? ', mounted read-only' : ''}`}
-      style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        lineHeight: 1, height: 17,
-        fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
-        padding: '0 5px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0,
-        fontFamily: 'ui-monospace, monospace',
-        color: c,
-        background: `color-mix(in srgb, ${c} 15%, transparent)`,
-        border: `1px solid color-mix(in srgb, ${c} 32%, transparent)`,
-        boxShadow: `inset 0 1px 0 color-mix(in srgb, ${c} 22%, transparent)`,
-      }}
-    >{mount.source}</span>
+    >{mount.source}</BadgeChipView>
   );
 }
 
@@ -169,25 +159,7 @@ function DepthPicker({ value, onChange }: { value: number; onChange: (v: number)
 
 /** One of the query's bounds, worn beside the box that sets the rest of it. */
 function Cap({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{
-      /*
-        A raised dark pill, the way the plan draws it — not a tinted wash.
-        These are bounds on the query, not findings, so they take no hue at
-        all; the lift comes from a lighter surface than the row behind it plus
-        one hairline along the top edge.
-      */
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      lineHeight: 1, height: 17,
-      fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
-      padding: '0 5px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0,
-      fontFamily: 'ui-monospace, monospace',
-      color: 'var(--color-text-muted)',
-      background: 'var(--color-surface-hover)',
-      border: '1px solid var(--color-surface-border)',
-      boxShadow: 'inset 0 1px 0 rgba(255,255,255,.045)',
-    }}>{children}</span>
-  );
+  return <BadgeChipView size="xs">{children}</BadgeChipView>;
 }
 
 /*
@@ -1311,19 +1283,7 @@ function InfoPanel({ entry, mount, onClose }: {
 
 /** A value that is one of a small set, so it reads as a label rather than text. */
 function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      lineHeight: 1, height: 17,
-      fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
-      padding: '0 6px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0,
-      fontFamily: 'ui-monospace, monospace',
-      color: tone,
-      background: `color-mix(in srgb, ${tone} 15%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${tone} 32%, transparent)`,
-      boxShadow: `inset 0 1px 0 color-mix(in srgb, ${tone} 22%, transparent)`,
-    }}>{children}</span>
-  );
+  return <BadgeChipView tone={tone} size="xs">{children}</BadgeChipView>;
 }
 
 /** Secondary text beside a value — a unit, a caveat, an absence. */

@@ -20,7 +20,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CopyIcon, DownloadIcon, EyeIcon, CloseIcon, SparkleIcon } from '../../icons';
-import { ContextMenuView } from '@salilvnair/dui';
+import { ContextMenuView, BadgeChipView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useK8sStore } from '../../store/k8s-store';
@@ -187,24 +187,9 @@ export function FileViewer({
           {parentOf(path)} · {size !== undefined ? bytes(size) : '—'} · read-only
         </span>
         {maskedCount > 0 && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            lineHeight: 1, height: 17,
-            fontSize: 8, fontWeight: 700, letterSpacing: '.08em',
-            textTransform: 'uppercase', whiteSpace: 'nowrap',
-            padding: '0 6px', borderRadius: 4,
-            fontFamily: 'ui-monospace, monospace',
-            color: 'var(--color-error)',
-            background: 'color-mix(in srgb, var(--color-error) 20%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--color-error) 42%, transparent)',
-            boxShadow: [
-              'inset 0 1px 0 color-mix(in srgb, var(--color-error) 45%, transparent)',
-              'inset 0 -1px 0 rgba(0,0,0,.28)',
-              '0 1px 2px rgba(0,0,0,.35)',
-            ].join(', '),
-          }}>
+          <BadgeChipView tone="var(--color-error)">
             {maskedCount} masked
-          </span>
+          </BadgeChipView>
         )}
         <span className="flex-1" />
         {/*
@@ -232,26 +217,17 @@ export function FileViewer({
             violet: it is still the one control here that sends the file
             somewhere, and that is worth a colour of its own.
           */
-          className="flex items-center justify-center gap-1"
-          style={{
-            display: 'inline-flex', lineHeight: 1, height: 17,
-            fontSize: 8, fontWeight: 700, letterSpacing: '.08em',
-            textTransform: 'uppercase', whiteSpace: 'nowrap',
-            padding: '0 6px', borderRadius: 4,
-            fontFamily: 'ui-monospace, monospace',
-            cursor: text === null ? 'default' : 'pointer',
-            opacity: text === null ? 0.4 : 1,
-            color: AI_TONE,
-            background: `color-mix(in srgb, ${AI_TONE} 20%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${AI_TONE} 42%, transparent)`,
-            boxShadow: [
-              `inset 0 1px 0 color-mix(in srgb, ${AI_TONE} 45%, transparent)`,
-              'inset 0 -1px 0 rgba(0,0,0,.28)',
-              '0 1px 2px rgba(0,0,0,.35)',
-            ].join(', '),
-          }}
+          className="border-none bg-transparent p-0"
+          style={{ cursor: text === null ? 'default' : 'pointer' }}
         >
-          <SparkleIcon size={8} /> Ask AI
+          {/* A chip that happens to be clickable, so it matches the two beside
+              it rather than inventing a third shape for the same row. */}
+          <BadgeChipView
+            tone={AI_TONE}
+            style={{ opacity: text === null ? 0.4 : 1, gap: 3 }}
+          >
+            <SparkleIcon size={8} /> Ask AI
+          </BadgeChipView>
         </button>
         {copied && (
           <span className="text-[10px]" style={{ color: 'var(--color-success)' }}>copied</span>
@@ -431,12 +407,9 @@ function LineRow({ line, revealed, onReveal, sh }: {
       ) : (
         <>
           <span style={{ color: 'var(--color-error)' }}>{'•'.repeat(8)}</span>
-          <span style={{
-            marginLeft: 8, fontSize: 8.5, fontWeight: 700, letterSpacing: '.05em',
-            textTransform: 'uppercase', padding: '1px 5px', borderRadius: 4,
-            color: 'var(--color-error)',
-            background: 'color-mix(in srgb, var(--color-error) 14%, transparent)',
-          }}>redacted</span>
+          <BadgeChipView tone="var(--color-error)" size="xs" style={{ marginLeft: 8 }}>
+            redacted
+          </BadgeChipView>
           <button
             type="button"
             onClick={onReveal}

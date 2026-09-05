@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
+  BadgeChipView,
 } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
@@ -1421,22 +1422,12 @@ export function LogViewer() {
                           it could have been there.
                         */}
                         {line.truncated && (
-                          <span
+                          <BadgeChipView
+                            tone="var(--color-warning)"
+                            size="xs"
                             title="This line was longer than 32 KB and has been cut here."
-                            className="ml-1.5 px-1 rounded shrink-0"
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 700,
-                              letterSpacing: '.05em',
-                              textTransform: 'uppercase',
-                              color: 'var(--color-warning)',
-                              background: 'color-mix(in srgb, var(--color-warning) 16%, transparent)',
-                              border: '1px solid color-mix(in srgb, var(--color-warning) 38%, transparent)',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            cut
-                          </span>
+                            style={{ marginLeft: 6 }}
+                          >cut</BadgeChipView>
                         )}
                       </span>
 

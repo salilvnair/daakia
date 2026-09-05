@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ModalView, ButtonView, SearchInputView, CheckboxView, SelectInputView,
   SegmentedControlView, FilterInputView, SearchFieldView, EmptyStateView,
-  CheckSquareIcon, EmptySquareIcon,
+  CheckSquareIcon, EmptySquareIcon, BadgeChipView,
 } from '@salilvnair/dui';
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
@@ -928,23 +928,13 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                             week means something different from one in a pod
                             that is running now. */}
                         {row.group.source === 'archive' && (
-                          <span className="px-1 rounded shrink-0"
-                                style={{
-                                  // Sized to sit inside the row rather than
-                                  // set its height: the row is a 19px line of
-                                  // monospace, and a badge with the default
-                                  // line-height was taller than the text it
-                                  // was labelling.
-                                  fontSize: 8,
-                                  lineHeight: '13px',
-                                  fontWeight: 600,
-                                  background: 'color-mix(in srgb, var(--color-warning) 18%, transparent)',
-                                  color: 'var(--color-warning)',
-                                  textTransform: 'uppercase',
-                                  letterSpacing: '.04em',
-                                }}>
+                          /* `xs` because it has to sit INSIDE the row rather
+                             than set its height: the row is a 19px line of
+                             monospace, and the 15px chip clears it where the
+                             17px one would not. */
+                          <BadgeChipView tone="var(--color-warning)" size="xs">
                             archive
-                          </span>
+                          </BadgeChipView>
                         )}
                         {r.error ? (
                           <span className="flex items-center gap-1" style={{ color: 'var(--color-error)' }}>

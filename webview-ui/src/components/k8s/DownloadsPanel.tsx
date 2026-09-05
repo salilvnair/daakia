@@ -8,7 +8,7 @@
  * seconds while somebody is looking at the file list.
  */
 import { useEffect, useState } from 'react';
-import { EmptyStateView, ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
+import { EmptyStateView, ContextMenuView, BadgeChipView, type ContextMenuItem } from '@salilvnair/dui';
 import { DownloadIcon, FolderOpenIcon, CloseIcon, ExternalLinkIcon, CopyIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sFilesStore, type Download } from '../../store/dk8s-files-store';
@@ -232,13 +232,5 @@ function Row({ d, onMenu }: { d: Download; onMenu: (d: Download, e: React.MouseE
 }
 
 function Chip({ tone, children }: { tone: string; children: React.ReactNode }) {
-  return (
-    <span style={{
-      fontSize: 8.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase',
-      padding: '1.5px 6px', borderRadius: 4, whiteSpace: 'nowrap',
-      color: tone,
-      background: `color-mix(in srgb, ${tone} 14%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${tone} 30%, transparent)`,
-    }}>{children}</span>
-  );
+  return <BadgeChipView tone={tone} size="xs">{children}</BadgeChipView>;
 }

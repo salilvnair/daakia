@@ -10,6 +10,7 @@
  * directory — no tar in this image" rather than `tar: false`, because the
  * reader came here to find out what they can do, not to read a probe's output.
  */
+import { BadgeChipView } from '@salilvnair/dui';
 import { LockIcon, RefreshIcon } from '../../icons';
 
 export interface Capability {
@@ -131,14 +132,11 @@ export function CapabilityPanel({ capabilities, onRecheck }: {
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 flex flex-col gap-1.5">
         {capabilities.map(c => (
           <div key={c.feature} className="flex items-start gap-3 py-1.5">
-            <span style={{
-              flexShrink: 0, width: 40, textAlign: 'center',
-              fontSize: 8.5, fontWeight: 700, letterSpacing: '.05em',
-              textTransform: 'uppercase', padding: '2px 0', borderRadius: 4,
-              color: TONE[c.state],
-              background: `color-mix(in srgb, ${TONE[c.state]} 14%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${TONE[c.state]} 30%, transparent)`,
-            }}>{LABEL[c.state]}</span>
+            {/* A fixed width so three verdicts down the column line up; the
+                chip centres its own text inside that. */}
+            <BadgeChipView tone={TONE[c.state]} style={{ width: 40, marginTop: 1 }}>
+              {LABEL[c.state]}
+            </BadgeChipView>
 
             <span style={{ minWidth: 0, flex: 1 }}>
               <div className="text-[11.5px]" style={{ color: 'var(--color-text-primary)' }}>
