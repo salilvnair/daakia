@@ -10,7 +10,7 @@ import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
   SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon,
 } from '../../icons';
-import { CopyButtonView, IconSize } from '@salilvnair/dui';
+import { CopyButtonView, IconSize, TableSkeletonView } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
@@ -19,6 +19,7 @@ import { LogViewer } from './LogViewer';
 import { AiSplit } from './AiAnswerPanel';
 import { DoctorTab } from './DoctorTab';
 import { ExplorerTab } from './ExplorerTab';
+import { PodTerminal } from './PodTerminal';
 import { tokenizeDescribeLine, tokenColor, tokenWeight } from './describe-highlight';
 import { CodeEditor } from '../shared/editors/CodeEditor';
 import { OverviewTab } from './OverviewTab';
@@ -100,10 +101,20 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 function PaneShell({ text, busy, empty, children }: {
   text?: string; busy: boolean; empty: string; children: React.ReactNode;
 }) {
+  /*
+    A document in outline, not the word "Loading".
+
+    Describe and YAML both take a round trip to kubectl, and a centred word for
+    that trip puts a message in the middle of a pane whose text then appears at
+    the top — the eye is sent to one place and the content lands in another.
+  */
   if (busy) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <span className="text-[12px] text-[var(--color-text-muted)]">Loading…</span>
+      <div className="h-full min-h-0 px-5 py-3">
+        <TableSkeletonView
+          rowHeight={19} fill={0.75}
+          columns={[{ width: '22%', fill: 0.8 }, { width: 'flex', fill: 0.6 }]}
+        />
       </div>
     );
   }
@@ -176,48 +187,6 @@ function YamlPane({ text, busy }: { text?: string; busy: boolean }) {
  * Ctrl-C does nothing and vim hangs. Handing the user their own terminal, with
  * their font and their scrollback, is both simpler and strictly more capable.
  */
-function TerminalTab() {
-  const { detail, capabilities, openShell, shellPending } = useK8sStore();
-  if (!detail) return null;
-
-  const distroless = capabilities && !capabilities.shell && !capabilities.unreachable;
-
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 px-8 text-center">
-      <TerminalIcon size={IconSize.medallion} color={ACCENT} />
-      <span className="text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
-        Open a shell in this pod
-      </span>
-      <span className="text-[11.5px] max-w-[440px] leading-relaxed"
-            style={{ color: 'var(--color-text-muted)' }}>
-        {distroless
-          ? 'This container looks distroless — there is no shell in it to exec. dk8s will '
-            + 'offer the debug-container command instead.'
-          : 'This opens a VS Code terminal running kubectl exec against '
-            + detail.name + '. Your own terminal, with your font, scrollback and copy-paste.'}
-      </span>
-      <button
-        type="button"
-        onClick={openShell}
-        disabled={shellPending}
-        className="flex items-center gap-2 px-4 py-2 rounded-md text-[12px] cursor-pointer"
-        style={{
-          background: 'color-mix(in srgb, var(--color-dk8s) 18%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--color-dk8s) 45%, transparent)',
-          color: '#fff', fontWeight: 600,
-        }}
-      >
-        <TerminalIcon size={IconSize.item} color={ACCENT} />
-        Open terminal
-      </button>
-      {capabilities?.shell && (
-        <span className="text-[10.5px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
-          shell: {capabilities.shell}
-        </span>
-      )}
-    </div>
-  );
-}
 
 export function PodDetail() {
   const {
@@ -427,7 +396,7 @@ export function PodDetail() {
             ) : (
               <>
                 {detailTab === 'logs' && <LogViewer />}
-                {detailTab === 'terminal' && <TerminalTab />}
+                {detailTab === 'terminal' && <PodTerminal />}
                 {detailTab === 'describe' && <DescribePane text={describeText} busy={describeBusy} />}
                 {detailTab === 'yaml' && <YamlPane text={yamlText} busy={describeBusy} />}
                 {detailTab === 'doctor' && <DoctorTab />}

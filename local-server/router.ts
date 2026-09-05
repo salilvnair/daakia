@@ -95,6 +95,11 @@ import { handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/pane
 import { window as vscodeWindow, Uri } from './vscode-shim';
 import * as fs from 'fs';
 
+import {
+  handleTerminalOpen, handleTerminalInput, handleTerminalResize,
+  handleTerminalClose, closeAllTerminals,
+} from '../src/panel/main/handlers/terminal-handler';
+
 export type PostMessage = (msg: unknown) => void;
 
 function sendHistory(post: PostMessage, protocol?: string) {
@@ -265,6 +270,18 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dk8s:describe':
       await handleDk8sDescribe(msg, post);
+      break;
+    case 'term:open':
+      void handleTerminalOpen(msg, post);
+      break;
+    case 'term:input':
+      handleTerminalInput(msg);
+      break;
+    case 'term:resize':
+      handleTerminalResize(msg);
+      break;
+    case 'term:close':
+      handleTerminalClose(msg);
       break;
     case 'dk8s:shell':
       await handleDk8sShell(msg, post);

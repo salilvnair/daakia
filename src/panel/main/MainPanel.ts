@@ -3,6 +3,10 @@
  * All domain logic is delegated to handler modules in ./handlers/.
  */
 import * as vscode from 'vscode';
+import {
+  handleTerminalOpen, handleTerminalInput, handleTerminalResize,
+  handleTerminalClose, closeAllTerminals,
+} from './handlers/terminal-handler';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getSqliteStatus, getDbPath, getHistory, getSetting, setSetting, getCookies, setAiKey, deleteAiKey, getAllAiKeys, saveAiChatSession, loadAiChatSessions, deleteAiChatSession, searchAiChatSessions, getAiFeatures, setAiFeatures, getAllPrompts, upsertPrompt, resetPrompt, getAiPromptTemplates, setAiPromptTemplates, saveAiConversation, loadAiConversation, clearAiConversation, type AiConversationMessage, getAuditEntries, deleteAuditEntry, deleteAuditEntries, clearAuditEntries, insertUiAudit, getUiAuditEntries, clearUiAuditEntries, getDbTables, getDbTableRows, deleteDbRow } from '../../storage/db';
@@ -472,6 +476,18 @@ export class MainPanel {
         break;
       case 'dk8s:describe':
         handleDk8sDescribe(msg, this._post);
+        break;
+      case 'term:open':
+        void handleTerminalOpen(msg, this._post);
+        break;
+      case 'term:input':
+        handleTerminalInput(msg);
+        break;
+      case 'term:resize':
+        handleTerminalResize(msg);
+        break;
+      case 'term:close':
+        handleTerminalClose(msg);
         break;
       case 'dk8s:shell':
         void handleDk8sShell(msg, this._post);
