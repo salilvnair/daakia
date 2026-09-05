@@ -7,9 +7,9 @@
  * is the whole diagnosis, and it is worth nothing if it appears for four
  * seconds while somebody is looking at the file list.
  */
-import { useEffect } from 'react';
-import { EmptyStateView } from '@salilvnair/dui';
-import { DownloadIcon, FolderOpenIcon, CloseIcon, EyeIcon } from '../../icons';
+import { useEffect, useState } from 'react';
+import { EmptyStateView, ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
+import { DownloadIcon, FolderOpenIcon, CloseIcon, EyeIcon, CopyIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sFilesStore, type Download } from '../../store/dk8s-files-store';
 
@@ -29,6 +29,16 @@ function folderOf(dest: string): string {
 }
 
 export function DownloadsPanel() {
+  /*
+    Right-click a download for the things a row has no room to offer.
+
+    The row shows what happened and where it went; what people then want is to
+    get to the file, and every route to it — the folder, the path on the
+    clipboard — was previously a single button at the top of the panel that
+    only knew about the newest download. A menu on the row knows which one you
+    meant.
+  */
+  const [menu, setMenu] = useState<{ d: Download; x: number; y: number } | null>(null);
   const downloads = useDk8sFilesStore(s => s.downloads);
   const markSeen = useDk8sFilesStore(s => s.markSeen);
   const clearFinished = useDk8sFilesStore(s => s.clearFinished);
@@ -101,8 +111,19 @@ export function DownloadsPanel() {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {downloads.map(d => <Row key={d.id} d={d} />)}
+        {downloads.map(d => (
+          <Row key={d.id} d={d}
+               onMenu={(dd, e) => setMenu({ d: dd, x: e.clientX, y: e.clientY })} />
+        ))}
       </div>
+
+      <ContextMenuView
+        open={!!menu}
+        anchorEl={null}
+        position={menu ? { x: menu.x, y: menu.y } : undefined}
+        onClose={() => setMenu(null)}
+        items={menu ? itemsFor(menu.d, () => setMenu(null)) : []}
+      />
 
       {folder && (
         <div className="px-3 py-2 flex-shrink-0 text-[10px] font-mono"
@@ -117,13 +138,49 @@ export function DownloadsPanel() {
   );
 }
 
-function Row({ d }: { d: Download }) {
+/**
+ * What a finished download offers, and what a running one does not.
+ *
+ * A copy still in flight has no file to reveal and no final path to hand out,
+ * so those entries are absent rather than present-and-disabled: a menu of
+ * greyed-out verbs asks the reader to work out why each one is unavailable,
+ * which is a puzzle to solve rather than an answer.
+ */
+function itemsFor(d: Download, close: () => void): ContextMenuItem[] {
+  const done = d.state === 'done';
+  const folder = folderOf(d.dest);
+  return [
+    ...(done ? [{
+      id: 'reveal', label: 'Show in folder', icon: <FolderOpenIcon size={12} />,
+      onClick: () => { close(); postMsg({ type: 'files:revealFolder', path: folder }); },
+    }] : []),
+    {
+      id: 'copyPath', label: 'Copy path', icon: <CopyIcon size={12} />,
+      onClick: () => { close(); void navigator.clipboard?.writeText(d.dest); },
+    },
+    {
+      id: 'copyFolder', label: 'Copy folder', icon: <CopyIcon size={12} />,
+      onClick: () => { close(); void navigator.clipboard?.writeText(folder); },
+    },
+    ...(d.error ? [
+      { id: 'sep', label: '', separator: true },
+      {
+        id: 'copyError', label: 'Copy the reason it failed', icon: <CopyIcon size={12} />,
+        onClick: () => { close(); void navigator.clipboard?.writeText(d.error ?? ''); },
+      },
+    ] : []),
+  ];
+}
+
+function Row({ d, onMenu }: { d: Download; onMenu: (d: Download, e: React.MouseEvent) => void }) {
   const tone = d.state === 'failed' ? 'var(--color-error)'
     : d.state === 'done' ? 'var(--color-success)'
       : ACCENT;
 
   return (
-    <div className="px-3 py-2" style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+    <div className="px-3 py-2"
+         onContextMenu={e => { e.preventDefault(); onMenu(d, e); }}
+         style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
       <div className="flex items-center gap-2.5 flex-wrap">
         <span className="text-[11.5px] font-mono" style={{ color: 'var(--color-text-primary)' }}>
           {d.name}

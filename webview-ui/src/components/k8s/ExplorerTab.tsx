@@ -15,11 +15,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   PathBreadcrumbView, FileBrowserView, SearchFieldView, SegmentedControlView,
-  EmptyStateView, SelectInputView,
+  EmptyStateView, SelectInputView, ContextMenuView, ModalView,
+  type ContextMenuItem,
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
 import {
-  EyeIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon,
+  EyeIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon, FolderOpenIcon,
+  CopyIcon, InfoCircleIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
 import { FileViewer } from './FileViewer';
@@ -38,6 +40,7 @@ export interface ExplorerEntry {
   denied?: boolean;
   mode?: string;
   owner?: string;
+  group?: string;
 }
 
 interface Listing {
@@ -235,6 +238,17 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     the deeper walk is real enough that it should be a choice.
   */
   const [depth, setDepth] = useState(SEARCH_DEPTH);
+  /*
+    The menu, and the row it was opened over.
+
+    Two icons fit on a row before it turns into a toolbar, so the row carries
+    the verbs people use every time — read it, save it — and everything else
+    lives here. The entry is captured with the position: the list can re-render
+    under an open menu, and a menu that acted on "whatever is selected now"
+    would act on the wrong file the moment it did.
+  */
+  const [menu, setMenu] = useState<{ entry: FileBrowserEntry; x: number; y: number } | null>(null);
+  const [info, setInfo] = useState<FileBrowserEntry | null>(null);
   const [path, setPath] = useState<string>('');
   const [listing, setListing] = useState<Listing | null>(null);
   const [hits, setHits] = useState<Hits | null>(null);
@@ -410,6 +424,46 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     else if (id === 'saveDir') postMsg({ type: 'files:downloadDir', ...target, path: full, name: e.name });
   };
 
+  /*
+    The menu is built from the same predicates the row icons use.
+
+    A menu offering "Open in the viewer" on a binary, or a directory download
+    on a file, would be a second answer to a question the row has already
+    answered by NOT showing the icon — and the two disagreeing is how a menu
+    stops being trusted.
+  */
+  const menuFor = (e: FileBrowserEntry): ContextMenuItem[] => {
+    const can = (id: string) => {
+      const a = actions.find(x => x.id === id);
+      return !!a && (!a.show || a.show(e));
+    };
+    return [
+      ...(can('open') ? [{
+        id: 'open', label: 'View', icon: <EyeIcon size={12} />,
+      }] : []),
+      ...(e.kind === 'dir' ? [{
+        id: 'go', label: 'Open folder', icon: <FolderOpenIcon size={12} />,
+      }] : []),
+      ...(can('save') ? [{
+        id: 'save', label: 'Download', icon: <DownloadIcon size={12} />,
+      }] : []),
+      ...(can('saveDir') ? [{
+        id: 'saveDir', label: 'Download this directory', icon: <DownloadIcon size={12} />,
+      }] : []),
+      { id: 'sep', label: '', separator: true },
+      { id: 'copy', label: 'Copy path', icon: <CopyIcon size={12} /> },
+      { id: 'info', label: 'Get Info', icon: <InfoCircleIcon size={12} /> },
+    ];
+  };
+
+  const onMenuPick = (id: string, e: FileBrowserEntry) => {
+    setMenu(null);
+    if (id === 'go') { setMode('files'); go(fullOf(e)); return; }
+    if (id === 'copy') { void navigator.clipboard?.writeText(fullOf(e)); return; }
+    if (id === 'info') { setInfo(e); return; }
+    onAction(id, e);
+  };
+
   const here = mountFor(mounts, path || '/');
 
   const rows: FileBrowserEntry[] = (listing?.entries ?? []).map(e => {
@@ -436,6 +490,12 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       badge: k.badge,
       badgeTone: k.tone,
       fullPath: e.path,
+      // Carried for Get Info, which is the only thing that shows them: a
+      // column of modes would be noise on every row to answer a question
+      // asked about one.
+      mode: e.mode,
+      owner: e.owner,
+      group: e.group,
     } as FileBrowserEntry & { fullPath: string };
   });
 
@@ -577,8 +637,8 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
               A Search button beside a search field is a second way to do what
               Enter already does, and it was taking width from the field on
               every screen. The icon moves inside and keeps the accent the
-              button had, so the field reads as the thing that searches even
-              before you reach the button beside it.
+              button had, so the field reads as the thing that searches — it
+              just stopped being two things. Enter runs it.
             */}
             <span style={{ flex: '1 1 auto', minWidth: 0 }}>
               <SearchFieldView
@@ -599,36 +659,6 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
               />
             </span>
             {/*
-              Enter runs it and so does this.
-
-              Two ways to start the same search, which is the one duplication
-              worth keeping: Enter is what a keyboard reaches for and a button
-              is what a mouse looks for, and a search box with no visible
-              trigger leaves anyone who did not guess Enter with a field that
-              appears to do nothing. It greys out with nothing to run, so it
-              also answers "why did that do nothing" before it is asked.
-            */}
-            <button
-              type="button"
-              onClick={runSearch}
-              disabled={!pattern.trim()}
-              title="Run the search — Enter does the same"
-              className="flex items-center gap-1.5 rounded-md px-2 py-1"
-              style={{
-                fontSize: 10.5, whiteSpace: 'nowrap', flexShrink: 0,
-                cursor: pattern.trim() ? 'pointer' : 'default',
-                color: pattern.trim() ? ACCENT : 'var(--color-text-muted)',
-                background: pattern.trim()
-                  ? `color-mix(in srgb, ${ACCENT} 13%, transparent)`
-                  : 'transparent',
-                border: `1px solid ${pattern.trim()
-                  ? `color-mix(in srgb, ${ACCENT} 34%, transparent)`
-                  : 'var(--color-surface-border)'}`,
-              }}
-            >
-              <SearchIcon size={11} /> Search
-            </button>
-            {/*
               The caps are part of the query, so they are shown next to it.
 
               A short result list has two very different explanations — there
@@ -643,7 +673,20 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       </div>
       )}
 
-      {/* ── body ── */}
+      {/*
+        ── body ──
+
+        Its own positioning context, because the viewer opens INSIDE it.
+
+        A file opened from the Explorer used to cover the whole tab — the mode
+        strip, the path, the query and the results all disappeared behind it,
+        so reading one hit meant losing the search that found it and the only
+        way back was a close button. Scoped here, the viewer fills the results
+        area and nothing above it moves: the path you are in and the query that
+        produced the list stay on screen, and closing it puts you back on a
+        list that never went anywhere.
+      */}
+      <div className="flex-1 min-h-0 flex flex-col relative">
       {mode === 'downloads' ? (
         <DownloadsPanel />
       ) : mode === 'access' ? (
@@ -700,6 +743,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           actions={actions}
           onAction={onAction}
           onSelect={e => setSelected(e.id)}
+          onContextMenu={(e, ev) => setMenu({ entry: e, x: ev.clientX, y: ev.clientY })}
           selectedId={selected}
           highlightId={flash}
           accentColor={ACCENT}
@@ -722,6 +766,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           onAction={onAction}
           onOpen={e => onAction('open', e)}
           onSelect={e => setSelected(e.id)}
+          onContextMenu={(e, ev) => setMenu({ entry: e, x: ev.clientX, y: ev.clientY })}
           selectedId={selected}
           /*
             The literal behind the pattern, for the eye only.
@@ -799,8 +844,168 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           onClose={() => setOpen(null)}
         />
       )}
+      </div>
+
+      <ContextMenuView
+        open={!!menu}
+        anchorEl={null}
+        position={menu ? { x: menu.x, y: menu.y } : undefined}
+        onClose={() => setMenu(null)}
+        items={menu ? menuFor(menu.entry).map(i => (i.separator ? i : {
+          ...i, onClick: () => onMenuPick(i.id, menu.entry),
+        })) : []}
+      />
+
+      {info && <InfoPanel entry={info} mount={mountFor(mounts, fullOf(info))} onClose={() => setInfo(null)} />}
     </div>
   );
+}
+
+/** The absolute path a row carries, whichever list it came from. */
+function fullOf(e: FileBrowserEntry): string {
+  return (e as FileBrowserEntry & { fullPath?: string }).fullPath ?? e.name;
+}
+
+/**
+ * What a row will tell you about itself, beyond its two icons.
+ *
+ * Everything here is already on screen or already fetched — Get Info opens no
+ * exec. It exists because a listing row has room for a name, a size and a date
+ * and a file has more than that: the mode that explains why it will not open,
+ * the volume it came from, where a symlink actually points. Those are the
+ * questions asked once per file and never worth a permanent column.
+ */
+function InfoPanel({ entry, mount, onClose }: {
+  entry: FileBrowserEntry;
+  mount?: PodMount;
+  onClose: () => void;
+}) {
+  const e = entry as FileBrowserEntry & {
+    fullPath?: string; mode?: string; owner?: string; group?: string;
+  };
+  const base = entry.name.slice(entry.name.lastIndexOf('/') + 1);
+  const isDir = entry.kind === 'dir';
+
+  /*
+    Values that are facts get chips; values that are text stay text.
+
+    A chip says "this is one of a small set" — a kind, a volume, a mode class.
+    A path is not one of a set, and putting it in a chip would make a
+    forty-character string look like a label. So the chips are the things worth
+    recognising at a glance and the rest reads as what it is.
+  */
+  const rows: [string, React.ReactNode][] = [
+    ['location', <span key="p" style={{ overflowWrap: 'anywhere' }}>{parentOf(fullOf(entry))}</span>],
+    ['size', isDir ? <Dim key="s">not counted for a directory</Dim> : formatBytes(entry.size)],
+    ['modified', entry.modified ?? <Dim key="m">unknown</Dim>],
+  ];
+  if (entry.linkTarget) {
+    rows.push(['points at', <span key="l" style={{ overflowWrap: 'anywhere' }}>{entry.linkTarget}</span>]);
+  }
+  if (e.mode) {
+    rows.push(['mode', (
+      <span key="mo" className="flex items-center gap-2 flex-wrap">
+        <Pill tone="var(--color-text-secondary)">{e.mode}</Pill>
+        {e.owner && <Dim>uid {e.owner}{e.group ? ` · gid ${e.group}` : ''}</Dim>}
+      </span>
+    )]);
+  }
+  rows.push(['volume', mount ? (
+    <span key="v" className="flex items-center gap-2 flex-wrap">
+      <MountChip mount={mount} />
+      {mount.readOnly && <Pill tone="var(--color-warning)">read-only</Pill>}
+      <Dim>at {mount.path}</Dim>
+    </span>
+  ) : (
+    <Dim key="v">none — part of the image, and gone when the pod is</Dim>
+  )]);
+
+  return (
+    <ModalView open onClose={onClose} title="Get Info" size="sm">
+      <div className="flex flex-col gap-3 px-1 pb-1">
+        {/*
+          The name gets a line of its own with its icon and type.
+
+          It was the first row of a label/value table, which made the thing the
+          panel is ABOUT look like one more attribute of itself.
+        */}
+        <div className="flex items-center gap-2.5 pb-3 flex-wrap"
+             style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+          <span style={{ display: 'flex', flexShrink: 0, color: isDir ? 'var(--color-warning)' : ACCENT }}>
+            {entry.disabledReason ? <LockIcon size={15} />
+              : isDir ? <FolderOpenIcon size={15} />
+                : <EyeIcon size={15} />}
+          </span>
+          <span className="text-[12.5px] font-mono font-semibold"
+                style={{ color: 'var(--color-text-primary)', overflowWrap: 'anywhere' }}>
+            {base}
+          </span>
+          <Pill tone={isDir ? 'var(--color-warning)'
+            : entry.kind === 'link' ? 'var(--color-info, #3fb9cc)'
+              : 'var(--color-text-muted)'}>
+            {isDir ? 'directory' : entry.kind === 'link' ? 'symlink' : 'file'}
+          </Pill>
+          {entry.badge && !isDir && <Pill tone={ACCENT}>{entry.badge}</Pill>}
+        </div>
+
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex items-start gap-3">
+            <span style={{
+              flexShrink: 0, width: 96, fontSize: 9, fontWeight: 600,
+              letterSpacing: '.09em', textTransform: 'uppercase',
+              color: 'var(--color-text-muted)', paddingTop: 3,
+            }}>{k}</span>
+            <span className="text-[11.5px] font-mono"
+                  style={{ color: 'var(--color-text-primary)', minWidth: 0, flex: 1 }}>
+              {v}
+            </span>
+          </div>
+        ))}
+
+        {entry.disabledReason && (
+          <div className="flex items-start gap-2 px-2.5 py-2 rounded-md mt-1"
+               style={{
+                 background: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
+                 border: '1px solid color-mix(in srgb, var(--color-error) 26%, transparent)',
+               }}>
+            <LockIcon size={12} color="var(--color-error)" />
+            <span className="text-[10.5px] leading-relaxed"
+                  style={{ color: 'var(--color-error)' }}>{entry.disabledReason}</span>
+          </div>
+        )}
+      </div>
+    </ModalView>
+  );
+}
+
+/** A value that is one of a small set, so it reads as a label rather than text. */
+function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      lineHeight: 1, height: 17,
+      fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
+      padding: '0 6px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0,
+      fontFamily: 'ui-monospace, monospace',
+      color: tone,
+      background: `color-mix(in srgb, ${tone} 15%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${tone} 32%, transparent)`,
+      boxShadow: `inset 0 1px 0 color-mix(in srgb, ${tone} 22%, transparent)`,
+    }}>{children}</span>
+  );
+}
+
+/** Secondary text beside a value — a unit, a caveat, an absence. */
+function Dim({ children }: { children: React.ReactNode }) {
+  return <span style={{ color: 'var(--color-text-muted)' }}>{children}</span>;
+}
+
+function formatBytes(v?: number): string {
+  if (v === undefined) return '—';
+  if (v < 1024) return `${v} B`;
+  if (v < 1024 ** 2) return `${(v / 1024).toFixed(1)} KB`;
+  if (v < 1024 ** 3) return `${(v / 1024 ** 2).toFixed(1)} MB`;
+  return `${(v / 1024 ** 3).toFixed(2)} GB`;
 }
 
 /** The badge a row wears, and how loudly. */
