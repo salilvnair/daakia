@@ -14,7 +14,7 @@ function reset() {
   localStorage.clear();
   const ids = TERMINAL_PALETTES.map(t => t.id);
   useDk8sTerminalStore.setState({
-    custom: [], order: [...ids], selected: ids.slice(0, MAX_SELECTED),
+    custom: [], hidden: [], order: [...ids], selected: ids.slice(0, MAX_SELECTED),
     active: ids[0], prefs: { ...DEFAULT_PREFS },
   });
 }
@@ -93,9 +93,32 @@ describe('importing', () => {
 describe('removing', () => {
   beforeEach(reset);
 
-  it('leaves built-ins alone', () => {
-    S().removeTheme(TERMINAL_PALETTES[0].id);
-    expect(S().themes().map(t => t.id)).toContain(TERMINAL_PALETTES[0].id);
+  it('hides a built-in rather than losing it', () => {
+    // Removing one takes it out of the list...
+    const id = TERMINAL_PALETTES[1].id;
+    S().removeTheme(id);
+    expect(S().themes().map(t => t.id)).not.toContain(id);
+    expect(S().hidden).toContain(id);
+    // ...but it ships with the build, so Reset is enough to get it back.
+    S().resetAll();
+    expect(S().themes().map(t => t.id)).toContain(id);
+    expect(S().hidden).toHaveLength(0);
+  });
+
+  it('moves off a built-in that was in use when it is hidden', () => {
+    const id = S().active;
+    S().removeTheme(id);
+    expect(S().active).not.toBe(id);
+    expect(S().themes().map(t => t.id)).not.toContain(id);
+  });
+
+  it('refuses to remove the last one, so the list cannot be emptied', () => {
+    for (const t of [...S().themes()]) S().removeTheme(t.id);
+    // One theme survives, it is on the strip, and it is the one in use — the
+    // three things that have to stay true for the picker to still work.
+    expect(S().themes()).toHaveLength(1);
+    expect(S().selected.length).toBeGreaterThan(0);
+    expect(S().themes().map(t => t.id)).toContain(S().active);
   });
 
   it('moves off a custom theme that was in use', () => {

@@ -29,19 +29,35 @@ import {
   serializeTerminalThemes, type SortableRow,
 } from '@salilvnair/dui';
 import {
-  PaletteIcon, PlusIcon, UploadIcon, DownloadIcon, TrashIcon, CopyIcon,
+  PaletteIcon, FolderImportIcon, FolderExportIcon, TrashIcon, CopyIcon,
   CheckIcon, RefreshIcon, TerminalIcon, TypeIcon,
 } from '../../../icons';
 import {
   useDk8sTerminalStore, MAX_SELECTED, DEFAULT_PREFS,
 } from '../../../store/dk8s-terminal-store';
-import { ACCENT, OK, WARN, MUTED, BAD, INFO } from '../../k8s/tone';
+import { ACCENT, OK, WARN, MUTED, BAD } from '../../k8s/tone';
+
+/** The two verbs, in the colours collections already gives them. */
+const IMPORT = 'var(--color-accent)';
+const EXPORT = 'var(--color-warning)';
 import { softPrimary } from '../../k8s/button-style';
 import { ConfirmDialog } from '../../shared/modals/ConfirmDialog';
 import { ThemePreview } from './ThemePreview';
 import { ThemeImportModal } from './ThemeImportModal';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+
+/*
+  Two grounds to preview against, neither of them the panel's.
+
+  The terminal takes the panel's own background, so on a dark panel the preview
+  could only ever show the dark half — which is exactly the half nobody needs
+  convincing about. These are stand-ins for "a dark panel" and "a light panel",
+  so both halves of a theme can be looked at without changing the app's theme
+  to check.
+*/
+const GROUND = { dark: '#16161c', light: '#f7f7f5' } as const;
+type Ground = keyof typeof GROUND;
 
 /** Stacks that exist on an ordinary machine, each falling back to the next. */
 const FONTS = [
@@ -134,10 +150,17 @@ export function TerminalSettings() {
   */
   const [deleting, setDeleting] = useState<string>();
   const [resetting, setResetting] = useState(false);
+  /*
+    Which ground the previews are drawn on.
+
+    A preview only against the panel's own background can never answer "what
+    does this look like in light mode", which is the question a theme with a
+    derived light half most needs answered.
+  */
+  const [ground, setGround] = useState<Ground>('dark');
 
   const themes = s.themes();
-  const ground = getComputedStyle(document.documentElement)
-    .getPropertyValue('--color-surface').trim() || '#1e1e1e';
+  const bg = GROUND[ground];
 
   const copy = (text: string, what: string) => {
     void navigator.clipboard?.writeText(text);
@@ -190,15 +213,23 @@ export function TerminalSettings() {
               {t.label}
             </span>
             {active && <BadgeChipView tone={ACCENT} size="xs">in use</BadgeChipView>}
-            {!builtIn && <BadgeChipView tone={OK} size="xs">custom</BadgeChipView>}
-            {/* Said rather than hidden: a theme with no light variant is used
-                on a light ground anyway, and that is worth knowing before the
-                panel is switched to light. */}
-            {t.light === t.dark && <BadgeChipView tone={MUTED} size="xs">dark only</BadgeChipView>}
+            {/* Where the theme came from. "custom" only made sense against an
+                unlabelled majority; naming both halves is what makes either
+                label mean anything. */}
+            <BadgeChipView tone={builtIn ? MUTED : OK} size="xs">
+              {builtIn ? 'system' : 'custom'}
+            </BadgeChipView>
+            {/* Every theme now has both halves. This says which of them was
+                designed and which was computed — "dark only" used to mean the
+                dark colours were being used on a light panel, which was a bug
+                rather than a property worth labelling. */}
+            {t.lightDerived && (
+              <BadgeChipView tone={WARN} size="xs">light auto</BadgeChipView>
+            )}
           </button>
 
           <ThemePreview
-            palette={t} background={ground} rows={2}
+            palette={t} background={bg} rows={2}
             style={{ flex: 1, minWidth: 0, padding: '5px 8px' }}
           />
 
@@ -208,14 +239,13 @@ export function TerminalSettings() {
               ? <CheckIcon size={IconSize.item} color={OK} />
               : <CopyIcon size={IconSize.item} />}
           </IconBtn>
-          {/* Built-ins have no delete, because there is no way to get one
-              back — everything else about them is adjustable. */}
-          {!builtIn && (
-            <IconBtn label={`Delete ${t.label}`} tone={BAD}
-                     onClick={() => setDeleting(t.id)}>
-              <TrashIcon size={IconSize.item} />
-            </IconBtn>
-          )}
+          {/* Offered for built-ins too. Six palettes nobody uses are still six
+              rows to read past — what differs is that a built-in comes back
+              with Reset, which the confirmation says. */}
+          <IconBtn label={builtIn ? `Hide ${t.label}` : `Delete ${t.label}`} tone={BAD}
+                   onClick={() => setDeleting(t.id)}>
+            <TrashIcon size={IconSize.item} />
+          </IconBtn>
         </div>
       ),
     };
@@ -267,23 +297,24 @@ export function TerminalSettings() {
                 decoratively: green makes something, cyan brings something in,
                 blue sends something out. Three grey buttons in a row made the
                 reader read all three to find the one they wanted. */}
-            <ButtonView label="Add" size="xs" variant="secondary"
-                        accentColor={OK} color={OK} style={softPrimary(OK, true)}
-                        iconLeft={<PlusIcon size={IconSize.chip} />}
-                        onClick={() => setImporting(true)} />
-            <ButtonView label="Import" size="xs" variant="secondary"
-                        accentColor={ACCENT} color={ACCENT} style={softPrimary(ACCENT, true)}
-                        iconLeft={<UploadIcon size={IconSize.chip} />}
+            {/* Import and Export only — Add was a second door into the same
+                dialog, and the dialog already says "paste it, drop a file, or
+                describe one". The colours are the ones collections use for the
+                same two verbs, so import means the same thing in both places. */}
+            <ButtonView label="Import" size="sm" variant="secondary"
+                        accentColor={IMPORT} color={IMPORT}
+                        style={softPrimary(IMPORT, true)}
+                        iconLeft={<FolderImportIcon size={IconSize.action} />}
                         onClick={() => setImporting(true)} />
             <ButtonView
               label={copied === 'all' ? 'Copied' : 'Export all'}
-              size="xs" variant="secondary"
-              accentColor={copied === 'all' ? OK : INFO}
-              color={copied === 'all' ? OK : INFO}
-              style={softPrimary(copied === 'all' ? OK : INFO, true)}
+              size="sm" variant="secondary"
+              accentColor={copied === 'all' ? OK : EXPORT}
+              color={copied === 'all' ? OK : EXPORT}
+              style={softPrimary(copied === 'all' ? OK : EXPORT, true)}
               iconLeft={copied === 'all'
-                ? <CheckIcon size={IconSize.chip} />
-                : <DownloadIcon size={IconSize.chip} />}
+                ? <CheckIcon size={IconSize.action} />
+                : <FolderExportIcon size={IconSize.action} />}
               onClick={() => copy(serializeTerminalThemes(themes), 'all')}
             />
           </div>
@@ -303,11 +334,31 @@ export function TerminalSettings() {
           </div>
 
           <div className="flex flex-col gap-2 mt-1">
-            <span className="text-[9.5px] uppercase tracking-wider"
-                  style={{ color: 'var(--color-text-muted)' }}>
-              {s.theme().label}, on this panel's background
-            </span>
-            <ThemePreview palette={s.theme()} background={ground} />
+            <div className="flex items-center gap-2">
+              <span className="text-[9.5px] uppercase tracking-wider"
+                    style={{ color: 'var(--color-text-muted)' }}>
+                {s.theme().label}, on a {ground} panel
+              </span>
+              <span className="flex-1" />
+              {/* The toggle drives every preview on the page, including the
+                  small ones in the rows — comparing six themes on one ground
+                  is the comparison worth making. */}
+              <SegmentedControlView
+                size="xs" accentColor={ACCENT}
+                options={[{ label: 'Dark', value: 'dark' }, { label: 'Light', value: 'light' }]}
+                value={ground}
+                onChange={v => setGround(v as Ground)}
+              />
+            </div>
+            <ThemePreview palette={s.theme()} background={bg} />
+            {s.theme().lightDerived && ground === 'light' && (
+              <span className="text-[10.5px] leading-relaxed"
+                    style={{ color: WARN, maxWidth: PROSE }}>
+                This theme did not ship a light variant, so this one was computed from its
+                dark colours — legible rather than designed. Import a theme with a
+                <code className="font-mono"> light </code> block to replace it.
+              </span>
+            )}
           </div>
         </div>
       </Group>
@@ -455,15 +506,21 @@ export function TerminalSettings() {
       {deleting && (
         <ConfirmDialog
           danger
-          title={`Delete ${s.theme(deleting).label}?`}
+          title={s.isBuiltIn(deleting)
+            ? `Hide ${s.theme(deleting).label}?`
+            : `Delete ${s.theme(deleting).label}?`}
           message={
-            `${s.theme(deleting).label} is stored in this browser and nowhere else, so `
-            + 'this is the only copy unless you exported it. Deleting it cannot be undone.'
+            (s.isBuiltIn(deleting)
+              ? `${s.theme(deleting).label} ships with dk8s, so hiding it takes it out of `
+                + 'this list without losing it — "Reset everything to defaults" brings every '
+                + 'built-in back.'
+              : `${s.theme(deleting).label} is stored in this browser and nowhere else, so `
+                + 'this is the only copy unless you exported it. Deleting it cannot be undone.')
             + (s.active === deleting
               ? ' It is also the theme in use — the terminal will fall back to another one.'
               : '')
           }
-          confirmLabel="Delete"
+          confirmLabel={s.isBuiltIn(deleting) ? 'Hide' : 'Delete'}
           onConfirm={() => { s.removeTheme(deleting); setDeleting(undefined); }}
           onCancel={() => setDeleting(undefined)}
         />
@@ -474,9 +531,9 @@ export function TerminalSettings() {
           danger
           title="Reset the terminal to defaults?"
           message={
-            'Font, cursor, scrollback and behaviour all go back to their defaults, the six '
-            + 'built-in themes return to their original order, and Tokyo Night becomes the '
-            + 'one in use.'
+            'Font, cursor, scrollback and behaviour all go back to their defaults, every '
+            + 'built-in theme comes back in its original order — including any you have '
+            + 'hidden — and Tokyo Night becomes the one in use.'
             + (customCount
               ? ` ${customCount} imported theme${customCount === 1 ? '' : 's'} `
                 + `(${customNames}) will be deleted — they live in this browser and nowhere `

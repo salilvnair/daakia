@@ -133,17 +133,18 @@ interface Stored {
   selected?: unknown;
   active?: unknown;
   prefs?: unknown;
+  hidden?: unknown;
 }
 
 const BUILT_IN_IDS = TERMINAL_PALETTES.map(t => t.id);
 
 function read(): {
   custom: TerminalPalette[]; order: string[]; selected: string[];
-  active: string; prefs: TerminalPrefs;
+  active: string; prefs: TerminalPrefs; hidden: string[];
 } {
   const blank = {
     custom: [], order: [...BUILT_IN_IDS], selected: [...BUILT_IN_IDS].slice(0, MAX_SELECTED),
-    active: BUILT_IN_IDS[0], prefs: { ...DEFAULT_PREFS },
+    active: BUILT_IN_IDS[0], prefs: { ...DEFAULT_PREFS }, hidden: [] as string[],
   };
   let s: Stored;
   try {
@@ -176,11 +177,25 @@ function read(): {
 
   const active = typeof s.active === 'string' && known.has(s.active) ? s.active : selected[0];
 
-  return { custom, order, selected, active, prefs: prefsOf(s.prefs) };
+  /*
+    A hidden built-in is hidden, not deleted.
+
+    The six ship with the build, so "delete" cannot mean gone — it means out of
+    the way, and Reset brings them back. Keeping it as a list of ids rather than
+    a copy of the palettes means a built-in that changes in a future version is
+    not frozen at whatever it looked like when someone hid it.
+  */
+  const hidden = Array.isArray(s.hidden)
+    ? s.hidden.filter((x): x is string => typeof x === 'string' && BUILT_IN_IDS.includes(x))
+    : [];
+
+  return { custom, order, selected, active, prefs: prefsOf(s.prefs), hidden };
 }
 
 export interface Dk8sTerminalState {
   custom: TerminalPalette[];
+  /** Built-ins the user has put away. Reset brings them back. */
+  hidden: string[];
   /** Display order across built-ins and custom themes alike. */
   order: string[];
   /** The ids on the swatch strip, at most `MAX_SELECTED`. */
@@ -218,7 +233,7 @@ function persist(s: Dk8sTerminalState) {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       custom: s.custom, order: s.order, selected: s.selected,
-      active: s.active, prefs: s.prefs,
+      active: s.active, prefs: s.prefs, hidden: s.hidden,
     }));
   } catch {
     /*
@@ -236,9 +251,12 @@ export const useDk8sTerminalStore = create<Dk8sTerminalState>((set, get) => ({
   ...read(),
 
   themes: () => {
-    const { order, custom } = get();
+    const { order, custom, hidden } = get();
     const all = [...TERMINAL_PALETTES, ...custom];
-    return order.map(id => all.find(t => t.id === id)).filter((t): t is TerminalPalette => !!t);
+    return order
+      .filter(id => !hidden.includes(id))
+      .map(id => all.find(t => t.id === id))
+      .filter((t): t is TerminalPalette => !!t);
   },
 
   strip: () => get().themes().filter(t => get().selected.includes(t.id)),
@@ -346,14 +364,37 @@ export const useDk8sTerminalStore = create<Dk8sTerminalState>((set, get) => ({
     return { ok: true, added, replaced };
   },
 
+  /*
+    Removing works on built-ins too, by hiding them.
+
+    Six palettes nobody uses are still six rows to read past, and a list you
+    cannot prune stops being a collection. What differs is only whether it can
+    come back: a custom theme is gone for good and a built-in is one Reset
+    away, which is why the confirmation says different things for each.
+  */
   removeTheme: (id) => set(s => {
-    if (BUILT_IN_IDS.includes(id)) return s;
-    const custom = s.custom.filter(t => t.id !== id);
-    const order = s.order.filter(x => x !== id);
+    /*
+      The last one standing cannot be removed.
+
+      Hiding every built-in left no themes at all — an empty swatch strip, an
+      empty list, and no control anywhere to get one back short of Reset, which
+      by then is the only thing on the page that does anything. A collection
+      you can empty is a collection you can lock yourself out of.
+    */
+    if (s.themes().length <= 1) return s;
+    const builtIn = BUILT_IN_IDS.includes(id);
+    const custom = builtIn ? s.custom : s.custom.filter(t => t.id !== id);
+    const hidden = builtIn ? [...new Set([...s.hidden, id])] : s.hidden;
+    const order = builtIn ? s.order : s.order.filter(x => x !== id);
+
     let selected = s.selected.filter(x => x !== id);
-    if (!selected.length) selected = order.slice(0, 1);
+    const remaining = order.filter(x => !hidden.includes(x));
+    // Never leave the strip empty: the swatch row is the only way to change
+    // theme, so a list with nothing on it is a control with no exit.
+    if (!selected.length) selected = remaining.slice(0, 1);
     const active = s.active === id ? selected[0] : s.active;
-    const next = { ...s, custom, order, selected, active };
+
+    const next = { ...s, custom, hidden, order, selected, active };
     persist(next);
     return next;
   }),
@@ -376,6 +417,7 @@ export const useDk8sTerminalStore = create<Dk8sTerminalState>((set, get) => ({
     const next = {
       ...s,
       custom: [],
+      hidden: [],
       order: [...BUILT_IN_IDS],
       selected: [...BUILT_IN_IDS].slice(0, MAX_SELECTED),
       active: BUILT_IN_IDS[0],

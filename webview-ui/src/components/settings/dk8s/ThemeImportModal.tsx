@@ -23,7 +23,7 @@ import { UploadIcon, SparkleIcon, WarningTriangleIcon, CheckCircleIcon } from '.
 import { useDk8sTerminalStore } from '../../../store/dk8s-terminal-store';
 import { useDk8sAiStore } from '../../../store/dk8s-ai-store';
 import { softPrimary } from '../../k8s/button-style';
-import { ACCENT, AI, BAD, OK, MUTED } from '../../k8s/tone';
+import { ACCENT, AI, BAD, OK, WARN } from '../../k8s/tone';
 import { ThemePreview } from './ThemePreview';
 
 /**
@@ -130,9 +130,6 @@ export function ThemeImportModal({ onClose }: { onClose: () => void }) {
     setText('');
   };
 
-  const ground = getComputedStyle(document.documentElement)
-    .getPropertyValue('--color-surface').trim() || '#1e1e1e';
-
   return (
     <ModalView
       open
@@ -234,11 +231,30 @@ export function ThemeImportModal({ onClose }: { onClose: () => void }) {
               {parsed.themes.map(t => (
                 <BadgeChipView key={t.id} tone={OK} size="xs">{t.label}</BadgeChipView>
               ))}
-              {parsed.themes.some(t => t.light === t.dark) && (
-                <BadgeChipView tone={MUTED} size="xs">dark only</BadgeChipView>
+              {parsed.themes.some(t => t.lightDerived) && (
+                <BadgeChipView tone={WARN} size="xs">light auto</BadgeChipView>
               )}
             </div>
-            <ThemePreview palette={parsed.themes[0]} background={ground} rows={6} />
+            {/* Both halves, side by side.
+
+                A theme is imported once and lived with on whatever ground the
+                panel happens to be, so the moment to see the light variant is
+                before it applies — especially when it was computed rather than
+                authored. */}
+            <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] uppercase tracking-wider"
+                      style={{ color: 'var(--color-text-muted)' }}>on dark</span>
+                <ThemePreview palette={parsed.themes[0]} background="#16161c" rows={6} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[9px] uppercase tracking-wider"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                  on light{parsed.themes[0].lightDerived ? ' · computed' : ''}
+                </span>
+                <ThemePreview palette={parsed.themes[0]} background="#f7f7f5" rows={6} />
+              </div>
+            </div>
           </div>
         )}
 
