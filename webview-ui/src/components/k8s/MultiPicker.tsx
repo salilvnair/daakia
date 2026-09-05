@@ -11,7 +11,8 @@
  * gives the reader. Over the cap dk8s watches what it can and says so.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ButtonView, SearchInputView, TextInputView } from '@salilvnair/dui';
+import { ButtonView, SearchInputView, TextInputView, FilterInputView,
+} from '@salilvnair/dui';
 import { useK8sStore, type WatchTarget, type NamespaceOffer } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
@@ -105,7 +106,8 @@ export function ClusterPicker() {
       }
     >
       {contexts.length > 6 && (
-        <SearchInputView value={filter} onChange={setFilter} placeholder="Filter clusters" size="sm" />
+        <FilterInputView value={filter} onChange={setFilter} placeholder="Filter clusters" size="sm"
+            accentColor={ACCENT} />
       )}
 
       <div className="flex flex-col rounded-md overflow-hidden"

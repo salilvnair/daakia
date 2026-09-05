@@ -34,6 +34,9 @@ export interface FileEntry {
   linkTarget?: string;
   /** The mode string, kept so the UI can explain an unreadable entry. */
   mode?: string;
+  /** Owner and group as `ls` printed them — a name, or a number if unresolved. */
+  owner?: string;
+  group?: string;
   /**
    * We can see it in the listing but cannot read it.
    *
@@ -86,7 +89,7 @@ export function parseLsLine(line: string, dir: string): FileEntry | undefined {
     .exec(trimmed);
   if (!m) return undefined;
 
-  const [, mode, , , , sizeText, modified, rest] = m;
+  const [, mode, , owner, group, sizeText, modified, rest] = m;
   let name = rest;
   let linkTarget: string | undefined;
   if (mode.startsWith('l')) {
@@ -112,6 +115,8 @@ export function parseLsLine(line: string, dir: string): FileEntry | undefined {
     modified,
     linkTarget,
     mode,
+    owner,
+    group,
   };
 }
 
@@ -142,8 +147,108 @@ export interface ListResult {
   error?: string;
 }
 
+/**
+ * Who the container runs as.
+ *
+ * Needed because "cannot read this" is a fact about a mode AND an identity,
+ * and a listing only carries the mode. `ls` will happily show a root-owned
+ * `0600` keystore to a process running as uid 1000, which then cannot open it
+ * — and a volume mounted root-owned under a non-root container looks exactly
+ * like an empty one until somebody says otherwise.
+ *
+ * `id` is in coreutils and busybox alike. An image without it simply gets no
+ * permission marking, which is the right failure: an unmarked row is a row we
+ * are not claiming anything about.
+ */
+export interface PodIdentity {
+  uid: number;
+  gid: number;
+  groups: number[];
+}
+
+const identityCache = new Map<string, PodIdentity | null>();
+
+export function clearIdentityCache(): void {
+  identityCache.clear();
+}
+
+export async function podIdentity(t: PodTarget): Promise<PodIdentity | null> {
+  const key = `${t.context}/${t.namespace}/${t.pod}/${t.container ?? ''}`;
+  const hit = identityCache.get(key);
+  if (hit !== undefined) return hit;
+
+  // One exec for all three, and no shell needed — `id` prints them itself.
+  const r = await run(execArgs(t, ['id']));
+  const parsed = r.code === 0 ? parseId(r.stdout) : null;
+  identityCache.set(key, parsed);
+  return parsed;
+}
+
+/**
+ * `uid=1000(app) gid=1000(app) groups=1000(app),27(sudo)`
+ *
+ * Parsed rather than run three times, because `id` prints all of it in one
+ * line on every implementation this will meet.
+ */
+export function parseId(out: string): PodIdentity | null {
+  const uid = /uid=(\d+)/.exec(out);
+  const gid = /gid=(\d+)/.exec(out);
+  if (!uid || !gid) return null;
+  const groupsText = /groups=([^\n]*)/.exec(out)?.[1] ?? '';
+  const groups = [...groupsText.matchAll(/(\d+)/g)].map(m => Number(m[1]));
+  return {
+    uid: Number(uid[1]),
+    gid: Number(gid[1]),
+    groups: groups.length ? groups : [Number(gid[1])],
+  };
+}
+
+/**
+ * Can this identity read this entry, going by the mode alone?
+ *
+ * Unix picks ONE class and stops: owner, else group, else other. It does not
+ * fall through, so a `0067` file is genuinely unreadable by its owner and
+ * readable by everyone else — which is why this cannot be written as three
+ * ORed checks, however much it looks like it should be.
+ *
+ * root reads everything regardless, which is not a special case so much as the
+ * reason most containers never see this at all.
+ *
+ * `ls` prints names when it can resolve them and numbers when it cannot, so a
+ * numeric owner is compared numerically and a named one is not compared at all
+ * — we cannot map a name to a uid from here, and guessing would produce
+ * exactly the confident-and-wrong marking this is meant to avoid.
+ */
+export function readableBy(
+  e: { mode?: string; owner?: string; group?: string }, id: PodIdentity | null,
+): boolean {
+  const mode = e.mode;
+  if (!mode || mode.length < 10 || !id) return true;
+  if (id.uid === 0) return true;
+
+  const ownerNum = /^\d+$/.test(e.owner ?? '') ? Number(e.owner) : undefined;
+  const groupNum = /^\d+$/.test(e.group ?? '') ? Number(e.group) : undefined;
+  if (ownerNum === undefined && groupNum === undefined) return true;
+
+  if (ownerNum !== undefined && ownerNum === id.uid) return mode[1] === 'r';
+  if (groupNum !== undefined && id.groups.includes(groupNum)) return mode[4] === 'r';
+  // Not the owner and not in the group — but only if we could tell.
+  if (ownerNum === undefined || groupNum === undefined) return true;
+  return mode[7] === 'r';
+}
+
 export async function listDirectory(t: PodTarget, path: string): Promise<ListResult> {
-  const args = execArgs(t, ['ls', '-lA', path]);
+  /*
+    `-n` for numeric owner and group.
+
+    Names are what `ls` prints by default and are exactly the thing we cannot
+    use: "can this identity read this file" is a comparison against a uid, and
+    `root` is not a uid. Resolving a name to a number from out here is not
+    possible, so the marking simply never fired on any image whose /etc/passwd
+    could resolve its own owners — which is all of them except the slimmest.
+    `-n` is in busybox and coreutils alike, and the names were never displayed.
+  */
+  const args = execArgs(t, ['ls', '-lAn', path]);
   const command = showCommand(args);
   const r = await run(args);
 
@@ -168,6 +273,17 @@ export async function listDirectory(t: PodTarget, path: string): Promise<ListRes
   });
 
   await fillLinkSizes(t, path, entries);
+
+  /*
+    Mark what we can see but cannot open.
+
+    Kept in the list rather than dropped, because a volume that silently shows
+    one fewer file than it holds is worse than one that shows a locked row: the
+    first is a wrong answer, the second is an answer with a reason attached.
+  */
+  const id = await podIdentity(t);
+  if (id) for (const e of entries) if (!readableBy(e, id)) e.denied = true;
+
   return { path, entries, command };
 }
 
@@ -198,7 +314,7 @@ async function fillLinkSizes(
 ): Promise<void> {
   if (!entries.some(e => e.kind === 'link')) return;
 
-  const r = await run(execArgs(t, ['ls', '-lLA', path]));
+  const r = await run(execArgs(t, ['ls', '-lLAn', path]));
   if (r.code !== 0 && !r.stdout.trim()) return;
 
   const sizes = new Map<string, number>();

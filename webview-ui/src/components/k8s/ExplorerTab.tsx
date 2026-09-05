@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   PathBreadcrumbView, FileBrowserView, SearchInputView, SegmentedControlView,
-  EmptyStateView,
+  EmptyStateView, SelectInputView,
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
 import {
@@ -34,6 +34,10 @@ export interface ExplorerEntry {
   size?: number;
   modified?: string;
   linkTarget?: string;
+  /** Visible in the listing, unreadable by the user this container runs as. */
+  denied?: boolean;
+  mode?: string;
+  owner?: string;
 }
 
 interface Listing {
@@ -41,6 +45,32 @@ interface Listing {
   entries: ExplorerEntry[];
   command: string;
   error?: string;
+}
+
+interface PodMount {
+  path: string;
+  source: string;
+  kind: 'pvc' | 'config' | 'secret' | 'ephemeral' | 'host' | 'other';
+  readOnly: boolean;
+  container: string;
+}
+
+/**
+ * The deepest mount containing this path.
+ *
+ * Deepest because mounts nest — a claim on `/data` and a ConfigMap on
+ * `/data/conf` both contain `/data/conf/app.yaml`, and the ConfigMap is what
+ * actually provides it. The boundary check keeps `/data` from claiming
+ * `/database`, which a bare `startsWith` would do.
+ */
+export function mountFor(mounts: PodMount[], path: string): PodMount | undefined {
+  let best: PodMount | undefined;
+  for (const m of mounts) {
+    const pre = m.path.endsWith('/') ? m.path : `${m.path}/`;
+    if (path !== m.path && !path.startsWith(pre)) continue;
+    if (!best || m.path.length > best.path.length) best = m;
+  }
+  return best;
 }
 
 interface Hits {
@@ -70,6 +100,59 @@ export function literalOf(pattern: string): string {
 /** Mirrors the host's `maxDepth` default in pod-files.ts — shown, not guessed. */
 const SEARCH_DEPTH = 8;
 
+const MOUNT_TONE: Record<PodMount['kind'], string> = {
+  pvc: 'var(--color-success)',
+  config: 'var(--color-info, #3fb9cc)',
+  secret: 'var(--color-warning)',
+  ephemeral: 'var(--color-text-muted)',
+  host: 'var(--color-warning)',
+  other: 'var(--color-text-muted)',
+};
+
+/** What is behind this directory, named rather than described. */
+function MountChip({ mount }: { mount: PodMount }) {
+  const c = MOUNT_TONE[mount.kind];
+  return (
+    <span
+      title={`${mount.path} is ${mount.source}${mount.readOnly ? ', mounted read-only' : ''}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        lineHeight: 1, height: 17,
+        fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
+        padding: '0 5px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0,
+        fontFamily: 'ui-monospace, monospace',
+        color: c,
+        background: `color-mix(in srgb, ${c} 15%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${c} 32%, transparent)`,
+        boxShadow: `inset 0 1px 0 color-mix(in srgb, ${c} 22%, transparent)`,
+      }}
+    >{mount.source}</span>
+  );
+}
+
+/**
+ * How deep to walk, as a control rather than a statement.
+ *
+ * The values stop at 12 rather than offering "unlimited". A PersistentVolume
+ * can hold millions of files and an uncapped walk on a pod that is already
+ * struggling is a real way to make an incident worse — so the deepest choice
+ * is still a cap, and the UI never offers to remove it.
+ */
+function DepthPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <span title="How many directories deep the walk goes">
+      <SelectInputView
+        value={String(value)}
+        onChange={v => onChange(Number(v))}
+        options={[2, 4, 6, 8, 12].map(d => ({ value: String(d), label: `depth ${d}` }))}
+        size="xs"
+        width={104}
+        accentColor={ACCENT}
+      />
+    </span>
+  );
+}
+
 /** One of the query's bounds, worn beside the box that sets the rest of it. */
 function Cap({ children }: { children: React.ReactNode }) {
   return (
@@ -81,9 +164,9 @@ function Cap({ children }: { children: React.ReactNode }) {
         one hairline along the top edge.
       */
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      lineHeight: 1, height: 20,
-      fontSize: 8.5, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase',
-      padding: '0 8px', borderRadius: 5, whiteSpace: 'nowrap', flexShrink: 0,
+      lineHeight: 1, height: 17,
+      fontSize: 8, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase',
+      padding: '0 5px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0,
       fontFamily: 'ui-monospace, monospace',
       color: 'var(--color-text-muted)',
       background: 'var(--color-surface-hover)',
@@ -132,6 +215,26 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     lasts.
   */
   const [pathEditing, setPathEditing] = useState(false);
+  /*
+    What is mounted where, asked once per pod.
+
+    A path inside a container tells you nothing about where its contents come
+    from, and that is the difference between a directory baked into the image
+    — gone on restart — and one backed by a claim, which is usually the reason
+    anyone opened this tab. It comes from the pod spec rather than an exec, so
+    it also answers on images where nothing else here can.
+  */
+  const [mounts, setMounts] = useState<PodMount[]>([]);
+  /*
+    The depth cap, adjustable rather than announced.
+
+    It was printed beside the query as a fact, which told you why a result
+    might be short and gave you nothing to do about it. Depth is the one cap
+    worth reaching for: a file six levels down in a volume whose shape you know
+    is a different search from a blind walk of the whole tree, and the cost of
+    the deeper walk is real enough that it should be a choice.
+  */
+  const [depth, setDepth] = useState(SEARCH_DEPTH);
   const [path, setPath] = useState<string>('');
   const [listing, setListing] = useState<Listing | null>(null);
   const [hits, setHits] = useState<Hits | null>(null);
@@ -204,6 +307,15 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     setBusy(false);
   }, [request]);
 
+  // Asked once per pod: the spec does not change while the tab is open.
+  useEffect(() => {
+    let live = true;
+    void request<{ mounts?: PodMount[] }>('files:mounts', {})
+      .then(r => { if (live) setMounts(r.mounts ?? []); })
+      .catch(() => { /* a pod we cannot describe simply has no chips */ });
+    return () => { live = false; };
+  }, [request]);
+
   /*
     Find somewhere worth opening on, once.
 
@@ -255,7 +367,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   const runSearch = useCallback(async () => {
     if (!pattern.trim()) { setHits(null); return; }
     setBusy(true);
-    const r = await request<Hits>('files:search', { root: path || '/', pattern });
+    const r = await request<Hits>('files:search', { root: path || '/', pattern, maxDepth: depth });
     setHits(r);
     setBusy(false);
   }, [request, pattern, path]);
@@ -298,12 +410,26 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     else if (id === 'saveDir') postMsg({ type: 'files:downloadDir', ...target, path: full, name: e.name });
   };
 
+  const here = mountFor(mounts, path || '/');
+
   const rows: FileBrowserEntry[] = (listing?.entries ?? []).map(e => {
-    const k = kindBadge(e);
+    const k = e.denied
+      ? { badge: 'no permission', tone: 'danger' as const }
+      : kindBadge(e);
     return {
       id: e.path,
       name: e.name,
       kind: e.kind,
+      /*
+        A row we can see and cannot open keeps its place with its reason.
+        FileBrowserView draws a `disabledReason` as a locked, dimmed row and
+        withholds the actions, which is the honest shape: the file is there,
+        and this is why nothing will open it.
+      */
+      disabledReason: e.denied
+        ? `Owned by uid ${e.owner ?? '?'}, mode ${e.mode ?? '?'} — the user this`
+          + ' container runs as cannot read it. It is here; it will not open.'
+        : undefined,
       size: e.size,
       modified: e.modified,
       linkTarget: e.linkTarget,
@@ -326,7 +452,16 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     } as FileBrowserEntry & { fullPath: string };
   });
 
-  const error = mode === 'files' ? listing?.error : hits?.error;
+  /*
+    A pod that will not list will not search either.
+
+    The search screen has its own error, but only after a search has been run
+    — so a pod that is down, distroless or refusing exec showed the cheerful
+    "here is how to write a glob" placeholder, which is advice for a screen
+    that cannot do anything. The listing already knows; falling back to it
+    means the reason arrives before the first attempt rather than after.
+  */
+  const error = mode === 'files' ? listing?.error : (hits?.error ?? listing?.error);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -379,6 +514,18 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       {/* ── path, and the query when searching ── */}
       {(mode === 'files' || mode === 'search') && (
       <div className="flex items-center gap-3 px-3 py-1.5 flex-shrink-0 flex-wrap"
+           /*
+             The whole strip arms the path editor, not just the text.
+
+             The chain is as wide as its segments, so on a shallow path most of
+             this bar was dead to a double-click and you had to hit `/ > root`
+             exactly. The bar is the path's row; double-clicking any of it is
+             the same gesture.
+           */
+           onDoubleClick={e => {
+             if ((e.target as HTMLElement).closest('input,button')) return;
+             setPathEditing(true);
+           }}
            style={{
              gap: '9px 14px',
              borderBottom: '1px solid var(--color-surface-border)',
@@ -392,11 +539,32 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
             path={path || '/'}
             onNavigate={p => { setMode('files'); go(p); }}
             onSubmit={p => { setMode('files'); go(p.startsWith('/') ? p : `/${p}`); }}
+            editing={pathEditing}
             onEditingChange={setPathEditing}
             size="sm"
             color={ACCENT}
           />
         </span>
+
+        {/*
+          What this directory actually is, at the right of the path.
+
+          It sits opposite the breadcrumb rather than beside it because it
+          answers a different question: the path says where you are, the chip
+          says what you are standing on. A claim is worth noticing and takes
+          the success colour; a ConfigMap or Secret is context and stays quiet.
+          No chip means no mount, which is its own answer — whatever is here
+          came with the image and goes when the pod does.
+        */}
+        {mode === 'files' && here && (
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            marginLeft: 'auto', flexShrink: 0,
+          }}>
+            <MountChip mount={here} />
+            {here.readOnly && <Cap>read-only</Cap>}
+          </span>
+        )}
 
         {mode === 'search' && (
           <span style={{
@@ -430,7 +598,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
               bounds on screen they look identical. Reading pattern, depth and
               type as one line is how you tell a real answer from a narrow one.
             */}
-            <Cap>depth {SEARCH_DEPTH}</Cap>
+            <DepthPicker value={depth} onChange={setDepth} />
             <Cap>files only</Cap>
           </span>
         )}
@@ -535,7 +703,40 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           emptyText={
             busy ? 'searching…'
               : pattern ? 'Nothing matched that name.'
-                : 'Type a name to look for. The search starts at the path above.'
+                : (
+                  /*
+                    The same medallion the Downloads tab uses. A bare line of
+                    grey text in the middle of an empty panel reads as a
+                    failure; this reads as a screen waiting to be used, and it
+                    has room to say what the box actually accepts — which
+                    matters more now that the box takes a regex.
+                  */
+                  <div className="px-8 py-6">
+                    <EmptyStateView
+                      variant="medallion"
+                      icon={<SearchIcon size={22} />}
+                      title="Find a file in this pod"
+                      message="One `find`, starting at the path above. Enter runs it."
+                      accentColor={ACCENT}
+                      /*
+                        Plain words as keys, not chips.
+
+                        EmptyStateView draws the key its own box; putting a
+                        bordered chip inside a bordered box gave every hint two
+                        frames, and the wider ones ran under the text.
+                      */
+                      hints={[
+                        { key: 'glob',
+                          text: '*invoice*, *.pdf — matched against the filename' },
+                        { key: 'regex',
+                          text: 'anything else: \.ya?ml$, inv[0-9]+ — matched against the path' },
+                        { key: 'cap',
+                          text: 'the depth beside the box, and a result cap — a large volume '
+                            + 'cannot be walked forever' },
+                      ]}
+                    />
+                  </div>
+                )
           }
           footer={hits && (
             <>

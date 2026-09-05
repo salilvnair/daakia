@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ButtonView, SearchInputView, SegmentedControlView, CheckboxView, HudView,
-  CheckSquareIcon, EmptySquareIcon,
+  CheckSquareIcon, EmptySquareIcon, FilterInputView,
 } from '@salilvnair/dui';
 import { CopyButtonView } from '@salilvnair/dui';
 import {
@@ -225,9 +225,9 @@ export function ArtifactsView() {
         </button>
 
         <div className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
-          <SearchInputView value={filter} onChange={setFilter}
+          <FilterInputView value={filter} onChange={setFilter}
                            placeholder="Filter artifacts" size="sm" width="100%"
-                           style={{ height: CTRL_H }} />
+                           accentColor={ACCENT} />
         </div>
 
         <SegmentedControlView

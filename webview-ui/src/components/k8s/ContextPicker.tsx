@@ -6,7 +6,8 @@
  * a control in the breadcrumb that can be changed at any time.
  */
 import { useState } from 'react';
-import { ButtonView, TextInputView, SearchInputView } from '@salilvnair/dui';
+import { ButtonView, TextInputView, SearchInputView, FilterInputView,
+} from '@salilvnair/dui';
 import { useK8sStore, type KubeContext } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
 
@@ -71,7 +72,8 @@ export function ContextPicker() {
       subtitle="Dk8s passes this on every command and leaves your kubeconfig alone, so picking here will not repoint terminals you have open elsewhere."
     >
       {contexts.length > 6 && (
-        <SearchInputView value={filter} onChange={setFilter} placeholder="Filter contexts" size="sm" />
+        <FilterInputView value={filter} onChange={setFilter} placeholder="Filter contexts" size="sm"
+            accentColor={ACCENT} />
       )}
       <div
         className="flex flex-col rounded-md overflow-hidden"
@@ -251,7 +253,8 @@ export function NamespacePicker() {
             </span>
           </div>
           {namespaces.length > 8 && (
-            <SearchInputView value={filter} onChange={setFilter} placeholder="Filter namespaces" size="sm" />
+            <FilterInputView value={filter} onChange={setFilter} placeholder="Filter namespaces" size="sm"
+            accentColor={ACCENT} />
           )}
           <div
             className="flex flex-col rounded-md overflow-hidden"

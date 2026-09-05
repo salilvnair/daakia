@@ -192,6 +192,16 @@ function ViewSwitch({ view, onChange }: {
   onChange: (v: Dk8sView) => void;
 }) {
   const count = useDk8sArtifactStore(s => s.artifacts.length);
+  const loadArtifacts = useDk8sArtifactStore(s => s.load);
+  /*
+    Ask for the list here, not when the Artifacts view first mounts.
+
+    The view is only mounted once the tab has been clicked, so the count it
+    feeds arrived only after the click — the badge was blank until you opened
+    the thing it was describing, which is precisely backwards for a badge. It
+    is one message and the store already owns the reply.
+  */
+  useEffect(() => { loadArtifacts(); }, [loadArtifacts]);
   // Artifacts carried a count and Pods did not, which read as though only one
   // of them held anything.
   const podCount = useK8sStore(s => s.pods.length);

@@ -834,7 +834,14 @@ function ProbeReport() {
       {/* One block per mount. A working prod volume beside a mistyped dev one
           has to say exactly that, rather than a single verdict that hides
           half of what was asked for. */}
-      {probe.mounts.map((m, i) => <MountReport key={i} m={m} />)}
+      {/*
+        A probe that came back with neither mounts nor an error still has to
+        render. This one took the whole panel down with it — there is no error
+        boundary above here, so `undefined.map` on a reply shaped slightly
+        differently than expected blanked the entire webview, and nothing on
+        screen connected that to a stale probe result sitting in the store.
+      */}
+      {(probe.mounts ?? []).map((m, i) => <MountReport key={i} m={m} />)}
     </div>
   );
 }

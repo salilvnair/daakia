@@ -13,11 +13,12 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ModalView, ButtonView, SearchInputView, CheckboxView, SelectInputView,
-  SegmentedControlView,
+  SegmentedControlView, FilterInputView,
 } from '@salilvnair/dui';
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
   FolderExportIcon,
+  FilterIcon, FilterClearIcon,
 } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
@@ -158,6 +159,15 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
   const [podFilter, setPodFilter] = useState('');
   /** The hit being read in place, over the results. */
   const [preview, setPreview] = useState<HitTarget | null>(null);
+  /*
+    How deep each pod walks, adjustable here too.
+
+    Quick Search starts at `/` because it is opened without a pod in mind, so
+    depth is the only thing standing between a name and a walk of every
+    filesystem in the namespace. Announcing the cap and not offering it was the
+    worst of both: you could see why a result was short and do nothing about it.
+  */
+  const [fileDepth, setFileDepth] = useState(8);
 
   /*
     Logs or files, over the same pod selection.
@@ -253,7 +263,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         chosen.map(p => ({
           uid: p.uid, name: p.name, namespace: p.namespace, context: p.context!,
         })),
-        options.query, '/', options.caseSensitive,
+        options.query, '/', options.caseSensitive, fileDepth,
       );
       return;
     }
@@ -305,6 +315,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
+  const allPicked = pickable.length > 0 && pickable.every(p => picked.includes(p.uid));
   const canSearch = !!options.query.trim() && chosen.length > 0
     // The time window only constrains a log search; a bad one must not disable
     // a file search that never reads it.
@@ -416,20 +427,21 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           {pickerOpen && (
             <div className="flex flex-col" style={{ borderTop: '1px solid var(--color-surface-border)' }}>
               <div className="flex items-center gap-2 px-3 py-2">
+                {/*
+                  Select-all moved into the table, as the header checkbox.
+
+                  It was a button beside the filter, which put the control that
+                  ticks every row a long way from the rows it ticks and made the
+                  filter bar taller than it needed to be. A checkbox at the head
+                  of the column of checkboxes is where people already look for
+                  it, and it can show a third state the button could not: some
+                  picked, not all.
+                */}
                 <div className="flex-1">
-                  <SearchInputView value={podFilter} onChange={setPodFilter}
-                                   placeholder="Filter pods" size="md" width="100%" />
+                  <FilterInputView value={podFilter} onChange={setPodFilter}
+                                   placeholder="Filter pods" size="sm"
+                                   accentColor={ACCENT} />
                 </div>
-                <ButtonView
-                  label={pickable.every(p => picked.includes(p.uid)) ? 'Clear all' : 'Select all'}
-                  size="sm" variant="secondary"
-                  onClick={() => setPicked(
-                    pickable.every(p => picked.includes(p.uid))
-                      ? picked.filter(u => !pickable.some(p => p.uid === u))
-                      : [...new Set([...picked, ...pickable.map(p => p.uid)])],
-                  )}
-                  style={{ background: 'transparent' }}
-                />
               </div>
 
               <div className="overflow-auto" style={{ maxHeight: 260 }}>
@@ -443,8 +455,23 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                               color: 'var(--color-text-muted)', fontWeight: 500,
                               background: 'var(--color-surface)',
                               borderBottom: '1px solid var(--color-surface-border)',
+                              width: i === 0 ? 28 : undefined,
                             }}>
-                          {h}
+                          {i === 0 ? (
+                            <span title={allPicked ? 'Clear all' : 'Select all'}
+                                  style={{ display: 'inline-flex' }}>
+                            <CheckboxView
+                              checked={allPicked}
+                              size="xs"
+                              accentColor={ACCENT}
+                              onChange={() => setPicked(
+                                allPicked
+                                  ? picked.filter(u => !pickable.some(p => p.uid === u))
+                                  : [...new Set([...picked, ...pickable.map(p => p.uid)])],
+                              )}
+                            />
+                            </span>
+                          ) : h}
                         </th>
                       ))}
                     </tr>
@@ -516,28 +543,21 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           </span>
         </div>
 
-        {/* Its own row: six choices and two date fields do not fit beside the
-            checkboxes, and this is the control most likely to be the reason a
-            search comes back empty. */}
-        {searchIn === 'logs' && (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] uppercase tracking-wider"
-                style={{ color: 'var(--color-text-muted)' }}>
-            how far back
-          </span>
-          <TimeWindowPicker value={timeWindow} onChange={setTimeWindow} accent={ACCENT} />
-          <span className="text-[10.5px]"
-                style={{ color: windowProblem ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
-            {describeWindow(timeWindow)}
-          </span>
-        </div>
-        )}
-
         <div className="flex items-center gap-3 flex-wrap">
           <CheckboxView label="regex" checked={options.regex} size="md" accentColor={ACCENT}
                         onChange={v => setOptions({ regex: v })} />
           <CheckboxView label="match case" checked={options.caseSensitive} size="md" accentColor={ACCENT}
                         onChange={v => setOptions({ caseSensitive: v })} />
+          {searchIn === 'files' && (
+            <span title="How many directories deep each pod walks">
+              <SelectInputView
+                value={String(fileDepth)}
+                onChange={v => setFileDepth(Number(v))}
+                options={[2, 4, 6, 8, 12].map(d => ({ value: String(d), label: `depth ${d}` }))}
+                size="xs" width={104} accentColor={ACCENT}
+              />
+            </span>
+          )}
           {/*
             Log-only switches, and the reason they disappear rather than grey
             out: a disabled control on a Files search still asks the reader to
@@ -575,6 +595,33 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
           />
           )}
         </div>
+
+        {/*
+          The window sits below the switches, not above them.
+
+          Files puts its two switches directly under the Logs|Files toggle, and
+          Logs put six time choices and two date fields there instead — so the
+          same gesture landed on a different control depending on which half of
+          the toggle was lit. The switches are the shared row and they go
+          first; the window is what Logs adds, and additions go after.
+
+          It stays on its own line regardless: six choices and two date fields
+          do not fit beside the checkboxes, and this is the control most likely
+          to be the reason a search comes back empty.
+        */}
+        {searchIn === 'logs' && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] uppercase tracking-wider"
+                style={{ color: 'var(--color-text-muted)' }}>
+            how far back
+          </span>
+          <TimeWindowPicker value={timeWindow} onChange={setTimeWindow} accent={ACCENT} />
+          <span className="text-[10.5px]"
+                style={{ color: windowProblem ? 'var(--color-error)' : 'var(--color-text-muted)' }}>
+            {describeWindow(timeWindow)}
+          </span>
+        </div>
+        )}
 
         {/* ── Progress and summary ── */}
         {searchIn === 'files' && (fileSearch.running || fileSearch.ran) && (

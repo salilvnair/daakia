@@ -28,7 +28,8 @@ import {
   handleHeapLocateClass, handleHeapOpenSource,
 } from '../src/panel/main/handlers/heap-handler';
 import {
-  handleFilesList, handleFilesSearch, handleFilesRead,
+  handleFilesList,
+  handleFilesMounts, handleFilesSearch, handleFilesRead,
   handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
   handleFilesSearchMany,
 } from '../src/panel/main/handlers/files-handler';
@@ -326,6 +327,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'files:revealFolder':
       void handleFilesReveal(msg, post);
+      break;
+    case 'files:mounts':
+      void handleFilesMounts(msg, post);
       break;
     case 'files:list':
       void handleFilesList(msg, post);

@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
-  ModalView, ButtonView,
+  ModalView, ButtonView, FilterInputView,
 } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
 import { PodContextMenu } from './PodContextMenu';
@@ -825,8 +825,9 @@ export function PodGrid() {
         {/* Takes the row rather than capping at 560px — on a wide window the
             cap left a long dead gap between the filter and the buttons. */}
         <div ref={searchRef} className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
-          <SearchInputView value={filter} onChange={setFilter}
-                           placeholder="Filter pods  ( / )" size="sm" width="100%" />
+          <FilterInputView value={filter} onChange={setFilter}
+                           placeholder="Filter pods  ( / )" size="sm"
+                           accentColor={ACCENT} />
         </div>
 
 

@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseLsLine, joinPath, parentOf, kindOf, looksBinary,
-  shellQuote, explainExecFailure, VIEW_LIMIT_BYTES, REGEX_ONLY
+  shellQuote, explainExecFailure, VIEW_LIMIT_BYTES, REGEX_ONLY, parseId, readableBy
 } from './pod-files';
 
 describe('parseLsLine — busybox / Alpine', () => {
@@ -271,5 +271,50 @@ describe('glob or regex, decided by the pattern', () => {
 
   it('does not count a dot, which is in almost every filename', () => {
     expect(isGlob('*.tar.gz')).toBe(true);
+  });
+});
+
+describe('who can read what', () => {
+  it('reads an id line into a uid, a gid and every group', () => {
+    expect(parseId('uid=1000(app) gid=1000(app) groups=1000(app),27(sudo)')).toEqual({
+      uid: 1000, gid: 1000, groups: [1000, 27],
+    });
+  });
+
+  it('falls back to the gid when groups is absent, as busybox sometimes prints', () => {
+    expect(parseId('uid=0(root) gid=0(root)')).toEqual({ uid: 0, gid: 0, groups: [0] });
+  });
+
+  it('gives up rather than guessing on output it does not recognise', () => {
+    expect(parseId('something else entirely')).toBeNull();
+  });
+
+  const id = { uid: 1000, gid: 1000, groups: [1000] };
+
+  it('picks one class and stops, the way Unix actually resolves it', () => {
+    // Owner has no read bit; other does. Unix says no — it does not fall
+    // through to the more permissive class, however much it looks like it
+    // should. This is the case three ORed checks would get wrong.
+    expect(readableBy({ mode: '----rw-rw-', owner: '1000', group: '99' }, id)).toBe(false);
+    expect(readableBy({ mode: '-rw-------', owner: '1000', group: '99' }, id)).toBe(true);
+  });
+
+  it('marks the root-owned 0600 file a non-root container cannot open', () => {
+    expect(readableBy({ mode: '-rw-------', owner: '0', group: '0' }, id)).toBe(false);
+  });
+
+  it('lets root read anything', () => {
+    expect(readableBy({ mode: '----------', owner: '0', group: '0' },
+      { uid: 0, gid: 0, groups: [0] })).toBe(true);
+  });
+
+  it('claims nothing when ls printed names it cannot resolve to numbers', () => {
+    // A wrong "no permission" chip is worse than no chip, so an owner we
+    // cannot compare numerically is not compared at all.
+    expect(readableBy({ mode: '-rw-------', owner: 'root', group: 'root' }, id)).toBe(true);
+  });
+
+  it('claims nothing without an identity to compare against', () => {
+    expect(readableBy({ mode: '-rw-------', owner: '0', group: '0' }, null)).toBe(true);
   });
 });

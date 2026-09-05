@@ -64,7 +64,8 @@ export const EMPTY_FILE_SEARCH: FileSearchState = {
  * panel that shows nothing until the last one finishes reads as hung.
  */
 export function useFileSearch(): FileSearchState & {
-  run(pods: FileSearchPod[], pattern: string, root: string, caseSensitive: boolean): void;
+  run(pods: FileSearchPod[], pattern: string, root: string, caseSensitive: boolean,
+      maxDepth?: number): void;
   reset(): void;
 } {
   /*
@@ -108,7 +109,7 @@ export function useFileSearch(): FileSearchState & {
 
   return {
     ...state,
-    run(pods, pattern, root, caseSensitive) {
+    run(pods, pattern, root, caseSensitive, maxDepth) {
       const requestId = `fsm-${Date.now()}`;
       active.current = requestId;
       setFileSearch({
@@ -116,7 +117,7 @@ export function useFileSearch(): FileSearchState & {
         total: pods.length, matched: 0, podsWithHits: 0,
       });
       postMsg({
-        type: 'files:searchMany', requestId, pattern, root, caseSensitive,
+        type: 'files:searchMany', requestId, pattern, root, caseSensitive, maxDepth,
         pods: pods.map(p => ({ context: p.context, namespace: p.namespace, pod: p.name })),
       });
     },

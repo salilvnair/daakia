@@ -108,7 +108,8 @@ import {
   handleThreadsOpen, handleThreadsAnalyze, handleLogsOpen, handleLogsAnalyze,
 } from './handlers/heap-handler';
 import {
-  handleFilesList, handleFilesSearch, handleFilesRead,
+  handleFilesList,
+  handleFilesMounts, handleFilesSearch, handleFilesRead,
   handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
   handleFilesSearchMany,
 } from './handlers/files-handler';
@@ -720,6 +721,9 @@ export class MainPanel {
         break;
       case 'files:revealFolder':
         void handleFilesReveal(msg, this._post);
+        break;
+      case 'files:mounts':
+        void handleFilesMounts(msg, this._post);
         break;
       case 'files:list':
         void handleFilesList(msg, this._post);

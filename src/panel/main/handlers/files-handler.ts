@@ -11,6 +11,7 @@ import {
   listDirectory, searchFiles, readFile, showCommand,
   explainExecFailure, type PodTarget,
 } from '../../../services/k8s/pod-files';
+import { podMounts } from '../../../services/k8s/pod-mounts';
 import { run, spawnKubectl } from '../../../services/k8s/kubectl';
 
 type PostMessage = (msg: Record<string, unknown>) => void;
@@ -22,6 +23,28 @@ function targetOf(msg: Record<string, unknown>): PodTarget {
     pod: String(msg.pod ?? ''),
     container: msg.container ? String(msg.container) : undefined,
   };
+}
+
+/**
+ * What is mounted where, from the pod spec rather than from inside it.
+ *
+ * A `get pod`, not an exec, so it answers on images where nothing else in the
+ * Explorer does — on a distroless pod the mount list is the only thing this
+ * tab can tell you, and that is better than an empty screen.
+ */
+export async function handleFilesMounts(msg: Record<string, unknown>, post: PostMessage) {
+  const requestId = msg.requestId as string;
+  try {
+    const r = await podMounts(
+      String(msg.context ?? ''), String(msg.namespace ?? ''), String(msg.pod ?? ''),
+    );
+    post({ type: 'files:mounts', requestId, ...r });
+  } catch (err) {
+    post({
+      type: 'files:mounts', requestId, mounts: [], command: '',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 export async function handleFilesList(msg: Record<string, unknown>, post: PostMessage) {
@@ -233,6 +256,7 @@ export async function handleFilesSearchMany(msg: Record<string, unknown>, post: 
         root,
         pattern,
         limit: typeof msg.limit === 'number' ? msg.limit : 200,
+        maxDepth: typeof msg.maxDepth === 'number' ? msg.maxDepth : undefined,
         caseSensitive: !!msg.caseSensitive,
       });
       scanned++;
