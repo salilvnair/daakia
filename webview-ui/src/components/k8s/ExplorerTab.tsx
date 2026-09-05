@@ -577,8 +577,8 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
               A Search button beside a search field is a second way to do what
               Enter already does, and it was taking width from the field on
               every screen. The icon moves inside and keeps the accent the
-              button had, so the control still reads as the thing that
-              searches — it just stopped being two things.
+              button had, so the field reads as the thing that searches even
+              before you reach the button beside it.
             */}
             <span style={{ flex: '1 1 auto', minWidth: 0 }}>
               <SearchFieldView
@@ -598,6 +598,36 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
                 accentColor={ACCENT}
               />
             </span>
+            {/*
+              Enter runs it and so does this.
+
+              Two ways to start the same search, which is the one duplication
+              worth keeping: Enter is what a keyboard reaches for and a button
+              is what a mouse looks for, and a search box with no visible
+              trigger leaves anyone who did not guess Enter with a field that
+              appears to do nothing. It greys out with nothing to run, so it
+              also answers "why did that do nothing" before it is asked.
+            */}
+            <button
+              type="button"
+              onClick={runSearch}
+              disabled={!pattern.trim()}
+              title="Run the search — Enter does the same"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1"
+              style={{
+                fontSize: 10.5, whiteSpace: 'nowrap', flexShrink: 0,
+                cursor: pattern.trim() ? 'pointer' : 'default',
+                color: pattern.trim() ? ACCENT : 'var(--color-text-muted)',
+                background: pattern.trim()
+                  ? `color-mix(in srgb, ${ACCENT} 13%, transparent)`
+                  : 'transparent',
+                border: `1px solid ${pattern.trim()
+                  ? `color-mix(in srgb, ${ACCENT} 34%, transparent)`
+                  : 'var(--color-surface-border)'}`,
+              }}
+            >
+              <SearchIcon size={11} /> Search
+            </button>
             {/*
               The caps are part of the query, so they are shown next to it.
 
