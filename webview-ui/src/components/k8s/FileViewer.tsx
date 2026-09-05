@@ -129,8 +129,17 @@ export function FileViewer({
       </div>
 
       {/* ── body ── */}
+      {/*
+        The reading surface is the darker grey, not the input grey.
+
+        `--color-input-bg` is the fill for a form field — lighter, because a
+        field has to look like somewhere you can type. A file you cannot edit
+        should not: this is a page of read-only text, and it sits better on the
+        same dark surface the file list uses, with the header panel a shade
+        darker still so the two read as one panel rather than three.
+      */}
       <div className="flex-1 min-h-0 overflow-auto"
-           style={{ background: 'var(--color-input-bg, var(--color-surface))' }}>
+           style={{ background: 'var(--color-surface)' }}>
         {error && <Note tone="error">{error}</Note>}
 
         {tooLarge && (

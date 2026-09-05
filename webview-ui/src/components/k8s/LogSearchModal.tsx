@@ -21,7 +21,8 @@ import {
 } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
-import { useFileSearch, FileSearchResults } from './FileSearchPane';
+import { useFileSearch, FileSearchResults, type HitTarget } from './FileSearchPane';
+import { FileViewer } from './FileViewer';
 import { TimeWindowPicker, describeWindow, windowError } from './TimeWindow';
 import { ExportSearchModal } from './ExportSearchModal';
 import { postMsg } from '../../vscode';
@@ -155,6 +156,8 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     : pods.filter(p => picked.includes(p.uid));
 
   const [podFilter, setPodFilter] = useState('');
+  /** The hit being read in place, over the results. */
+  const [preview, setPreview] = useState<HitTarget | null>(null);
 
   /*
     Logs or files, over the same pod selection.
@@ -691,12 +694,22 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
 
         {/* ── Results ── */}
         {searchIn === 'files' ? (
-          <div className="flex-1 flex flex-col rounded-md overflow-hidden"
+          <div className="flex-1 flex flex-col rounded-md overflow-hidden relative"
                style={{
                  minHeight: 340, maxHeight: 520,
                  background: 'var(--color-surface)',
                  border: '1px solid var(--color-surface-border)',
                }}>
+            {preview?.path && (
+              <FileViewer
+                context={preview.context}
+                namespace={preview.namespace}
+                pod={preview.pod}
+                path={preview.path}
+                name={preview.path.slice(preview.path.lastIndexOf('/') + 1)}
+                onClose={() => setPreview(null)}
+              />
+            )}
             <FileSearchResults
               state={fileSearch}
               onOpenExplorer={r => {
@@ -721,12 +734,21 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 setDetailTab('explorer');
               }}
               onView={r => {
-                const pod = pods.find(p => p.name === r.pod && p.namespace === r.namespace);
-                if (!pod || !r.path) return;
-                openExplorerAt({ path: dirOf(r.path), highlight: r.path });
-                useDk8sSearchStore.getState().jumpedToPod(scrollRef.current?.scrollTop ?? 0);
-                openDetail(pod);
-                setDetailTab('explorer');
+                /*
+                  The eye opens the file. It does not go anywhere.
+
+                  This was a copy of `onOpenExplorer` and behaved like one:
+                  clicking it left the search, opened the pod, switched to the
+                  Explorer and highlighted the row — every part of a journey
+                  nobody asked for. Reading one file is the cheapest thing in
+                  the panel and the most common reason to click a hit, and it
+                  has no business costing you your place in 2,275 results.
+
+                  The viewer is its own overlay over the results, so closing it
+                  puts the list back exactly as it was.
+                */
+                if (!r.path) return;
+                setPreview(r);
               }}
               onDownload={r => {
                 // Straight to disk, without leaving the search — the common

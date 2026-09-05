@@ -212,6 +212,19 @@ interface SearchState {
   apply: (msg: Record<string, unknown>) => void;
 }
 
+/**
+ * A file search that has not run.
+ *
+ * Named rather than written out at each site: it is set from three places —
+ * the initial state, opening the dialog fresh, and closing it — and the bug
+ * that made this worth extracting was one of those three quietly not clearing.
+ */
+const NO_FILE_SEARCH = {
+  running: false, ran: false, results: [] as SearchState['fileSearch']['results'],
+  scanned: 0, total: 0, matched: 0, podsWithHits: 0,
+  collapsed: [] as string[], selected: undefined as string | undefined,
+};
+
 export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   open: false,
   resultScroll: 0,
@@ -233,10 +246,7 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   groups: [],
   searchIn: 'logs',
   setSearchIn: (searchIn) => set({ searchIn }),
-  fileSearch: {
-    running: false, ran: false, results: [], scanned: 0,
-    total: 0, matched: 0, podsWithHits: 0, collapsed: [],
-  },
+  fileSearch: { ...NO_FILE_SEARCH },
   setFileSearch: (patch) => set(s => ({ fileSearch: { ...s.fileSearch, ...patch } })),
   addFileSearchPod: (r) => set(s => ({
     fileSearch: {
@@ -250,7 +260,14 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
   // Opened from the pod grid, so the grid's selection is what you meant —
   // clear any picks a previous Search Everywhere left behind, or they would
   // silently override it.
-  openSearch: () => set({ open: true, picked: [], pickerOpen: false }),
+  openSearch: () => set({
+    open: true, picked: [], pickerOpen: false,
+    // A dialog opened from the grid is a fresh question. Leaving the previous
+    // run's file hits behind made reopening look exactly like coming back from
+    // the Explorer — same rows, same selected row, and a header reading "0 pods
+    // selected" over results from a search nobody just ran.
+    fileSearch: { ...NO_FILE_SEARCH },
+  }),
   /*
     A deliberate close leaves nothing behind.
 
@@ -269,9 +286,25 @@ export const useDk8sSearchStore = create<SearchState>((set, get) => ({
     path where you open a pod from a hit and come back — the results are
     exactly what you are coming back to.
   */
-  closeSearch: () => set(s => ({
+  closeSearch: () => set(s => (s.cameFromSearch ? {
+    /*
+      Not every close is a close.
+
+      Opening a hit's Explorer takes the dialog off screen, and the modal
+      reports that as `onClose` — indistinguishable, from here, from someone
+      pressing the button. Wiping state on it left the way back holding results
+      with no query and no pods: the header said "0 pods selected" over 2,275
+      matches. `jumpedToPod` has already flagged this one as a jump, so it only
+      hides the dialog and keeps every part of what you are coming back to.
+    */
+    open: false,
+  } : {
     open: false,
     cameFromSearch: false,
+    // Cleared for the same reason the log results are: a dialog that opens
+    // onto the previous run's answer is worse than an empty one, because the
+    // numbers look current and are not.
+    fileSearch: { ...NO_FILE_SEARCH },
     options: { ...s.options, query: '' },
     groups: [],
     collapsed: [],

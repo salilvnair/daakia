@@ -214,12 +214,23 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       icon: <EyeIcon size={12} />,
       // A folder opens by clicking its name; the eye is for files that can be
       // rendered, and its absence is how a row says nothing here can show it.
-      show: e => e.kind === 'file' && e.badge !== 'binary' && e.badge !== 'too large',
+      /*
+        Symlinks count as files here.
+
+        `cat` follows a link without being asked, so reading one has always
+        worked — the actions were just never offered. That mattered more than
+        it sounds: a ConfigMap mount is the ordinary way a Spring Boot pod gets
+        its application.properties, and Kubernetes projects every key in one as
+        a symlink into a timestamped directory. The whole of /config was
+        therefore unopenable in the one place people most want to look.
+      */
+      show: e => (e.kind === 'file' || e.kind === 'link')
+        && e.badge !== 'binary' && e.badge !== 'too large',
     },
     {
       id: 'save', label: 'Save to disk',
       icon: <DownloadIcon size={12} />,
-      show: e => e.kind === 'file',
+      show: e => e.kind === 'file' || e.kind === 'link',
     },
     {
       id: 'saveDir', label: 'Download this directory', tone: 'success',

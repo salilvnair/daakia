@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zp-config-app
+  namespace: dk8s-test
+data:
+  application.properties: |
+    spring.application.name=zp-config
+    server.port=8080
+
+    # Datasource. The password is rotated weekly by the platform team.
+    spring.datasource.url=jdbc:postgresql://postgres.dk8s-test:5432/zp
+    spring.datasource.username=zpuser
+    spring.datasource.password=Hunter2-Prod-Xy9
+    spring.datasource.hikari.maximum-pool-size=20
+
+    spring.mail.host=email-server.dk8s-test
+    spring.mail.username=noreply@zp.local
+    spring.mail.password=
+
+    app.api-key=AKIAQ7F2L9ZZTESTONLY
+    app.jwt.secret=b3JhbmdlLXNsaWNlLW5vdC1hLXJlYWwtc2VjcmV0
+    app.oauth.client-id=zp-web
+    app.oauth.client-secret=vT8s-notreal-9QwE
+    app.password-rotation-days=30
+
+    management.endpoints.web.exposure.include=health,metrics
+    logging.level.org.springframework=INFO
+  application.yml: |
+    spring:
+      datasource:
+        url: jdbc:postgresql://postgres.dk8s-test:5432/zp
+        username: zpuser
+        password: Hunter2-Prod-Xy9
+      redis:
+        host: redis.dk8s-test
+        token: rdis-notreal-4471
+    app:
+      credential: svc-account-notreal
+      timeout: 30s
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zp-config
+  namespace: dk8s-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zp-config
+  template:
+    metadata:
+      labels:
+        app: zp-config
+    spec:
+      containers:
+        - name: app
+          image: eclipse-temurin:21-jre
+          command: ["sleep", "infinity"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: zp-config-app
