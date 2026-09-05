@@ -27,6 +27,8 @@ import { useK8sStore } from '../../store/k8s-store';
 import { redactLines, copyText, type RedactedLine } from './file-redact';
 
 const ACCENT = 'var(--color-dk8s)';
+/** The one control here that sends the file somewhere, so it keeps its violet. */
+const AI_TONE = 'var(--color-primary-light)';
 
 type Line = RedactedLine;
 
@@ -185,12 +187,22 @@ export function FileViewer({
           {parentOf(path)} · {size !== undefined ? bytes(size) : '—'} · read-only
         </span>
         {maskedCount > 0 && (
-          <span className="text-[8px] font-bold uppercase tracking-wider px-1 py-0.5 rounded"
-                style={{
-                  color: 'var(--color-error)',
-                  background: 'color-mix(in srgb, var(--color-error) 14%, transparent)',
-                  border: '1px solid color-mix(in srgb, var(--color-error) 30%, transparent)',
-                }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            lineHeight: 1, height: 17,
+            fontSize: 8, fontWeight: 700, letterSpacing: '.08em',
+            textTransform: 'uppercase', whiteSpace: 'nowrap',
+            padding: '0 6px', borderRadius: 4,
+            fontFamily: 'ui-monospace, monospace',
+            color: 'var(--color-error)',
+            background: 'color-mix(in srgb, var(--color-error) 20%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--color-error) 42%, transparent)',
+            boxShadow: [
+              'inset 0 1px 0 color-mix(in srgb, var(--color-error) 45%, transparent)',
+              'inset 0 -1px 0 rgba(0,0,0,.28)',
+              '0 1px 2px rgba(0,0,0,.35)',
+            ].join(', '),
+          }}>
             {maskedCount} masked
           </span>
         )}
@@ -210,19 +222,36 @@ export function FileViewer({
           onClick={ask}
           disabled={text === null}
           title="Ask AI what this file configures and whether anything looks wrong"
-          className="flex items-center gap-1 rounded px-1.5"
+          /*
+            The badge recipe, in this button's own colour.
+
+            It sat between two chips — the masked count on one side, the mount
+            chip in Get Info on the other — wearing a flatter version of the
+            same idea, which read as an odd one out rather than as a button.
+            Same geometry and the same three shadows as those, keeping the
+            violet: it is still the one control here that sends the file
+            somewhere, and that is worth a colour of its own.
+          */
+          className="flex items-center justify-center gap-1"
           style={{
-            fontSize: 8.5, fontWeight: 700, letterSpacing: '.05em',
-            textTransform: 'uppercase', whiteSpace: 'nowrap', lineHeight: 1,
-            height: 18,
+            display: 'inline-flex', lineHeight: 1, height: 17,
+            fontSize: 8, fontWeight: 700, letterSpacing: '.08em',
+            textTransform: 'uppercase', whiteSpace: 'nowrap',
+            padding: '0 6px', borderRadius: 4,
+            fontFamily: 'ui-monospace, monospace',
             cursor: text === null ? 'default' : 'pointer',
-            opacity: text === null ? 0.45 : 1,
-            color: 'var(--color-primary-light)',
-            background: 'color-mix(in srgb, var(--color-primary) 16%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--color-primary) 40%, transparent)',
+            opacity: text === null ? 0.4 : 1,
+            color: AI_TONE,
+            background: `color-mix(in srgb, ${AI_TONE} 20%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${AI_TONE} 42%, transparent)`,
+            boxShadow: [
+              `inset 0 1px 0 color-mix(in srgb, ${AI_TONE} 45%, transparent)`,
+              'inset 0 -1px 0 rgba(0,0,0,.28)',
+              '0 1px 2px rgba(0,0,0,.35)',
+            ].join(', '),
           }}
         >
-          <SparkleIcon size={9} /> Ask AI
+          <SparkleIcon size={8} /> Ask AI
         </button>
         {copied && (
           <span className="text-[10px]" style={{ color: 'var(--color-success)' }}>copied</span>
