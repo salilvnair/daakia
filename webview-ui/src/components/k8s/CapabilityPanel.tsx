@@ -44,6 +44,8 @@ export function capabilitiesFrom(o: {
   searched?: boolean;
   read?: boolean;
   tar?: boolean;
+  /** From `id` in the container, when the listing got that far. */
+  identity?: { uid: number; gid: number; groups: number[] };
 }): Capability[] {
   const noShell = /no shell or coreutils/i.test(o.listError ?? '');
   const denied = /Permission denied/i.test(o.listError ?? '');
@@ -85,6 +87,34 @@ export function capabilitiesFrom(o: {
     : { feature: 'Open and download a file', state: 'ok',
         reason: 'Streams over `cat` — no tar involved, so this works on images '
           + 'where a directory copy cannot.' });
+
+  /*
+    Who the container runs as, said out loud.
+
+    Every other rung here is about what dk8s can do; this one is the fact the
+    others are decided BY. Unix picks one permission class and stops — owner,
+    then group, then other — so a 0640 file owned by root is unreadable to uid
+    1000 no matter how permissive it looks, and the uid is the missing half of
+    that sentence. Root gets its own wording because for root the answer to
+    every permission question is yes, which is worth knowing before someone
+    concludes a volume is empty.
+  */
+  out.push(!o.identity
+    ? { feature: 'Runs as', state: 'warn',
+        reason: '`id` has not answered yet — open a directory and this fills in.' }
+    : o.identity.uid === 0
+      ? { feature: 'Runs as', state: 'warn',
+          reason: 'root (uid 0). Every file in this container is readable and writable, '
+            + 'so nothing here will be marked unreadable — and anything you change '
+            + 'through a shell is change made as root.' }
+      : { feature: 'Runs as', state: 'ok',
+          reason: `uid ${o.identity.uid}, gid ${o.identity.gid}`
+            + (o.identity.groups.length > 1
+              ? `, in groups ${o.identity.groups.join(', ')}. `
+              : '. ')
+            + 'A file is readable when its owner, group or other bits allow it for '
+            + 'this identity — Unix picks the first class that matches and stops, so '
+            + 'group permissions do not rescue a file whose owner bits deny it.' });
 
   out.push(o.tar === false
     ? { feature: 'Download a whole directory', state: 'no',

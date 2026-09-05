@@ -7,6 +7,7 @@
  */
 import * as path from 'path';
 import { createWriteStream, mkdirSync } from 'fs';
+import { rm } from 'fs/promises';
 import { begin, end, cancel } from '../../../services/k8s/cancel';
 import {
   listDirectory, searchFiles, readFile, showCommand, directorySize,
@@ -137,6 +138,14 @@ export async function handleFilesDownload(msg: Record<string, unknown>, post: Po
   const remote = String(msg.path ?? '');
   const name = String(msg.name ?? (path.basename(remote) || 'download'));
   const dest = path.join(downloadDir(t.pod), name);
+  /*
+    Keyed by destination, which is what the webview already has.
+
+    A download's id has to be something both sides can name without a round
+    trip, and the destination path is unique per download and already on every
+    row. The same registry the searches use, so Stop means one thing.
+  */
+  const op = begin(`dl:${dest}`, 'files:download');
 
   const args = [
     '--context', t.context, '-n', t.namespace, 'exec', t.pod,
@@ -144,7 +153,11 @@ export async function handleFilesDownload(msg: Record<string, unknown>, post: Po
     '--', 'cat', remote,
   ];
 
-  post({ type: 'files:downloadStarted', name, dest, command: showCommand(args) });
+  post({
+    type: 'files:downloadStarted', name, dest, command: showCommand(args),
+    // Echoed so the row can start it again without the Explorer that opened it.
+    source: { context: t.context, namespace: t.namespace, pod: t.pod, container: t.container, path: remote },
+  });
 
   try {
     const child = await spawnKubectl(args);
@@ -152,16 +165,35 @@ export async function handleFilesDownload(msg: Record<string, unknown>, post: Po
     let bytes = 0;
     let stderr = '';
 
+    /*
+      Cancelling kills the copy rather than only forgetting about it.
+
+      `cat` on a multi-gigabyte file keeps streaming whatever the panel thinks,
+      and a download nobody wants is still a download filling a disk. The
+      partial file goes too: half a tarball on disk under the name of a whole
+      one is worse than no file, because the next person to open it has no way
+      to tell.
+    */
+    op.signal.addEventListener('abort', () => {
+      child.kill();
+      out.destroy();
+      void rm(dest, { force: true }).catch(() => {});
+      post({ type: 'files:downloadFailed', name, error: 'Cancelled.', cancelled: true });
+    }, { once: true });
+
     child.stdout?.on('data', (c: Buffer) => { bytes += c.length; });
     child.stdout?.pipe(out);
     child.stderr?.on('data', (c: Buffer) => { stderr += c.toString(); });
 
     child.on('close', code => {
       out.end();
+      end(`dl:${dest}`);
+      if (op.cancelled()) return;
       if (code === 0) post({ type: 'files:downloadDone', name, dest, bytes });
       else post({ type: 'files:downloadFailed', name, error: explainExecFailure(stderr, remote) });
     });
   } catch (err) {
+    end(`dl:${dest}`);
     post({
       type: 'files:downloadFailed', name,
       error: err instanceof Error ? err.message : String(err),
@@ -209,7 +241,10 @@ export async function handleFilesDownloadDir(msg: Record<string, unknown>, post:
     ...(t.container ? ['-c', t.container] : []),
   ];
 
-  post({ type: 'files:downloadStarted', name, dest, directory: true, command: showCommand(args) });
+  post({
+    type: 'files:downloadStarted', name, dest, directory: true, command: showCommand(args),
+    source: { context: t.context, namespace: t.namespace, pod: t.pod, container: t.container, path: remote },
+  });
 
   try {
     const r = await run(args, { timeoutMs: 10 * 60_000, cwd: folder });

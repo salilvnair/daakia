@@ -193,6 +193,7 @@ export function PodDetail() {
     detail, detailTab, setDetailTab, closeDetail, explorerPath, explorerHighlight,
     describeText, yamlText, describeBusy, runtime,
     openShell, shellNotice, dismissShellNotice,
+    logContainer, setLogContainer,
   } = useK8sStore();
 
   /**
@@ -405,6 +406,18 @@ export function PodDetail() {
                     context={detail.context}
                     namespace={detail.namespace}
                     pod={detail.name}
+                    /*
+                      Which container is being browsed.
+
+                      `logContainer` is the pod detail's one answer to "which
+                      container are we talking about", already used by Logs and
+                      the terminal — so the Explorer sharing it means picking a
+                      sidecar in one place does not leave the others looking at
+                      a different one.
+                    */
+                    container={logContainer}
+                    containers={detail.containers.map(c => c.name)}
+                    onContainer={setLogContainer}
                     initialPath={explorerPath}
                     highlight={explorerHighlight}
                     /*

@@ -509,9 +509,34 @@ export interface StoredArtifact {
   bytes: number;
   /** Which analyzer opens this. */
   analyzer: AnalyzerId;
+  /** Set when nothing here can read it, with the reason to show instead. */
+  unsupported?: string;
 }
 
 export type AnalyzerId = 'heap' | 'threads' | 'logs' | 'cpu';
+
+/**
+ * Files no analyzer can read, and the reason, in words.
+ *
+ * `analyzerFor` falls back to the log analyzer for anything it does not
+ * recognise, which is right for an unfamiliar TEXT file — a log with an odd
+ * extension is still a log. It is wrong for a PNG: the log analyzer opens it,
+ * finds no lines, and shows an empty view that looks like a file with nothing
+ * in it rather than one it was never going to understand.
+ *
+ * Listed by extension rather than sniffed, because the list is short, the
+ * failure of a sniff is silent, and being wrong in the permissive direction
+ * here only costs an empty log view — which is what happens today anyway.
+ */
+const BINARY = /\.(png|jpe?g|gif|bmp|webp|ico|pdf|zip|gz|tgz|bz2|xz|7z|rar|tar|class|jar|war|ear|so|dll|dylib|exe|bin|o|a|db|sqlite3?|mp4|mov|avi|wav|mp3|ttf|woff2?|pyc|wasm)$/i;
+
+export function analysisRefusal(file: string): string | undefined {
+  const m = BINARY.exec(file.toLowerCase());
+  if (!m) return undefined;
+  return `dk8s has no analyzer for a ${m[1].toUpperCase()} file. It reads heap dumps, `
+    + 'thread dumps, flight recordings and logs; anything else it would only be able '
+    + 'to show you as text.';
+}
 
 /** Which analyzer understands a file, by extension and by name. */
 export function analyzerFor(file: string): AnalyzerId {
@@ -600,6 +625,7 @@ export async function listArtifacts(dir: string): Promise<StoredArtifact[]> {
       collectedAt: parsed.collectedAt,
       bytes: size,
       analyzer: analyzerFor(name),
+      unsupported: analysisRefusal(name),
     });
   }
   // Newest first — during an incident the one you want is the one you just took.

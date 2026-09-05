@@ -52,6 +52,8 @@ interface Listing {
   entries: ExplorerEntry[];
   command: string;
   error?: string;
+  /** Who the container runs as, from the same probe that marks unreadable rows. */
+  identity?: { uid: number; gid: number; groups: number[] };
 }
 
 interface PodMount {
@@ -161,9 +163,17 @@ function Cap({ children }: { children: React.ReactNode }) {
 */
 const LIKELY_ROOTS = ['/data', '/var/lib', '/mnt', '/opt', '/app', '/'];
 
-export function ExplorerTab({ context, namespace, pod, container, initialPath,
+/** The four fields every exec in this view needs, named once. */
+export interface ExplorerTarget {
+  context: string; namespace: string; pod: string; container?: string;
+}
+
+export function ExplorerTab({ context, namespace, pod, container, containers, onContainer, initialPath,
   highlight, onBackToSearch }: {
   context: string; namespace: string; pod: string; container?: string;
+  /** Every container in the pod, so the picker only appears when there is a choice. */
+  containers?: string[];
+  onContainer?: (name: string) => void;
   /**
    * Open here instead of probing for a volume.
    *
@@ -260,7 +270,16 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   // running survives navigating away from this tab.
   useEffect(() => { listenForDownloads(); }, []);
 
-  const target = { context, namespace, pod, container };
+  const target: ExplorerTarget = { context, namespace, pod, container };
+
+  /*
+    A different container is a different filesystem, so the listing goes.
+
+    Without this, switching showed the previous container's entries until
+    something else triggered a load — a list that is confidently wrong, which
+    is worse than an empty one.
+  */
+  useEffect(() => { go(path || '/'); /* eslint-disable-next-line */ }, [container]);
 
   const request = useCallback(<T,>(type: string, body: Record<string, unknown>): Promise<T> => {
     const requestId = `fx-${++seq.current}`;
@@ -709,10 +728,36 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           No chip means no mount, which is its own answer — whatever is here
           came with the image and goes when the pod does.
         */}
-        {mode === 'files' && here && (
+        {/*
+          Which container's filesystem this is.
+
+          Shown only when the pod has more than one, because on the common
+          single-container pod it would be a control with one option — and a
+          sidecar's filesystem is a genuinely different place, so browsing one
+          while believing you are in the other is the kind of wrong answer that
+          looks right.
+        */}
+        {(containers?.length ?? 0) > 1 && (
           <span style={{
             display: 'flex', alignItems: 'center', gap: 6,
             marginLeft: 'auto', flexShrink: 0,
+          }}>
+            <LayersIcon size={IconSize.action} color="var(--color-text-muted)" />
+            <SelectInputView
+              size="sm"
+              accentColor={ACCENT}
+              value={container ?? containers![0]}
+              onChange={v => onContainer?.(v)}
+              options={containers!.map((c: string) => ({ label: c, value: c }))}
+              width={160}
+            />
+          </span>
+        )}
+
+        {mode === 'files' && here && (
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            marginLeft: (containers?.length ?? 0) > 1 ? 0 : 'auto', flexShrink: 0,
           }}>
             <MountChip mount={here} />
             {here.readOnly && <Cap>read-only</Cap>}
@@ -787,6 +832,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           capabilities={capabilitiesFrom({
             listed: !!listing && !listing.error,
             listError: listing?.error,
+            identity: listing?.identity,
           })}
           onRecheck={() => go(path || '/')}
         />
@@ -1021,7 +1067,14 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
         />
       )}
 
-      {info && <InfoPanel entry={info} mount={mountFor(mounts, fullOf(info))} onClose={() => setInfo(null)} />}
+      {info && (
+        <InfoPanel
+          entry={info}
+          mount={mountFor(mounts, fullOf(info))}
+          target={target}
+          onClose={() => setInfo(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1064,7 +1117,7 @@ function ScopedSearch({
   root, target, onClose, actions, onAction, onContextMenu, selectedId, onSelect,
 }: {
   root: string;
-  target: { context: string; namespace: string; pod: string; container?: string };
+  target: ExplorerTarget;
   onClose: () => void;
   /*
     The Search tab's own actions and menu, handed in rather than rebuilt.
@@ -1238,9 +1291,74 @@ function fullOf(e: FileBrowserEntry): string {
  * the volume it came from, where a symlink actually points. Those are the
  * questions asked once per file and never worth a permanent column.
  */
-function InfoPanel({ entry, mount, onClose }: {
+/**
+ * How big a directory really is, asked for rather than assumed.
+ *
+ * `ls` reports 4096 for a directory because that is the size of the directory
+ * ENTRY — the block holding its list of names — not of anything inside it. The
+ * only thing that answers the question people are actually asking is `du`, and
+ * `du -sk /` in a container walks the whole filesystem. So it is a button: one
+ * exec, when someone wants the number, on the directory they are looking at.
+ */
+function DirSize({ target, path }: { target: ExplorerTarget; path: string }) {
+  const [state, setState] = useState<
+    { phase: 'idle' } | { phase: 'busy' } | { phase: 'done'; bytes?: number; error?: string }
+  >({ phase: 'idle' });
+  const req = useRef<string>('');
+
+  useEffect(() => {
+    const onMsg = (ev: MessageEvent) => {
+      const m = ev.data as Record<string, unknown>;
+      if (m?.type !== 'files:dirSize' || m.requestId !== req.current) return;
+      setState({
+        phase: 'done',
+        bytes: typeof m.bytes === 'number' ? m.bytes : undefined,
+        error: typeof m.error === 'string' ? m.error : undefined,
+      });
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  // A new directory is a new question; the old answer is not about this one.
+  useEffect(() => { setState({ phase: 'idle' }); req.current = ''; }, [path]);
+
+  if (state.phase === 'done') {
+    if (state.error) return <Dim>{state.error}</Dim>;
+    return (
+      <span className="flex items-center gap-2 flex-wrap">
+        <span>{formatBytes(state.bytes)}</span>
+        <Dim>counted with du, following nothing it cannot read</Dim>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-2 flex-wrap">
+      <Dim>{state.phase === 'busy' ? 'counting…' : 'not counted for a directory'}</Dim>
+      <button
+        type="button"
+        disabled={state.phase === 'busy'}
+        onClick={() => {
+          const id = `ds-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+          req.current = id;
+          setState({ phase: 'busy' });
+          postMsg({ type: 'files:dirSize', requestId: id, ...target, path });
+        }}
+        className="border-none bg-transparent p-0 cursor-pointer"
+      >
+        <BadgeChipView tone={ACCENT} size="xs">
+          {state.phase === 'busy' ? 'counting' : 'calculate'}
+        </BadgeChipView>
+      </button>
+    </span>
+  );
+}
+
+function InfoPanel({ entry, mount, target, onClose }: {
   entry: FileBrowserEntry;
   mount?: PodMount;
+  target: ExplorerTarget;
   onClose: () => void;
 }) {
   const e = entry as FileBrowserEntry & {
@@ -1259,7 +1377,9 @@ function InfoPanel({ entry, mount, onClose }: {
   */
   const rows: [string, React.ReactNode][] = [
     ['location', <span key="p" style={{ overflowWrap: 'anywhere' }}>{parentOf(fullOf(entry))}</span>],
-    ['size', isDir ? <Dim key="s">not counted for a directory</Dim> : formatBytes(entry.size)],
+    ['size', isDir
+      ? <DirSize key="s" target={target} path={fullOf(entry)} />
+      : formatBytes(entry.size)],
     ['modified', entry.modified ?? <Dim key="m">unknown</Dim>],
   ];
   if (entry.linkTarget) {

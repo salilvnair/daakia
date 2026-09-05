@@ -13,6 +13,7 @@
  * result has to outlive the moment, be findable later, and carry the path.
  */
 import { create } from 'zustand';
+import { postMsg } from '../vscode';
 
 export type DownloadState = 'running' | 'done' | 'failed';
 
@@ -33,15 +34,36 @@ export interface Download {
   finishedAt?: number;
   /** True for a directory copy — it needs tar and can fail where a file will not. */
   directory?: boolean;
+  /**
+   * Enough to run it again.
+   *
+   * A failed download is almost always worth retrying — a container that was
+   * mid-restart, a `tar` that was not there yet, a connection that dropped —
+   * and without this the only way back was to find the file in the Explorer
+   * again. Kept per download rather than derived, because the row outlives the
+   * view that started it.
+   */
+  source?: { context: string; namespace: string; pod: string; container?: string; path: string };
+  /** Cancelled by the user rather than failed on its own. */
+  cancelled?: boolean;
 }
 
 interface FilesStore {
   downloads: Download[];
   /** Unread completions, for the badge on the tab. */
   unseen: number;
-  started(d: { name: string; dest: string; command?: string; directory?: boolean }): void;
+  started(d: {
+    name: string; dest: string; command?: string; directory?: boolean;
+    source?: Download['source'];
+  }): void;
   finished(d: { name: string; dest?: string; bytes?: number }): void;
-  failed(d: { name: string; error: string }): void;
+  failed(d: { name: string; error: string; cancelled?: boolean }): void;
+  /** Stop one that is still running. The host kills the copy and removes the part-file. */
+  cancel(id: string): void;
+  /** Run a failed one again, from what it was started with. */
+  retry(id: string): void;
+  /** Forget one row. */
+  dismiss(id: string): void;
   markSeen(): void;
   clearFinished(): void;
 }
@@ -74,6 +96,7 @@ export const useDk8sFilesStore = create<FilesStore>((set) => ({
         state: 'running' as const,
         command: d.command,
         directory: d.directory,
+        source: d.source,
         startedAt: Date.now(),
       },
       ...s.downloads,
@@ -98,7 +121,10 @@ export const useDk8sFilesStore = create<FilesStore>((set) => ({
     const i = resolve(s.downloads, d.name);
     if (i < 0) return s;
     const next = [...s.downloads];
-    next[i] = { ...next[i], state: 'failed', error: d.error, finishedAt: Date.now() };
+    next[i] = {
+      ...next[i], state: 'failed', error: d.error,
+      cancelled: d.cancelled, finishedAt: Date.now(),
+    };
     /*
       A failure counts as unseen too.
 
@@ -107,6 +133,37 @@ export const useDk8sFilesStore = create<FilesStore>((set) => ({
     */
     return { downloads: next, unseen: s.unseen + 1 };
   }),
+
+  cancel: id => set(s => {
+    const d = s.downloads.find(x => x.id === id);
+    if (!d || d.state !== 'running') return s;
+    // Keyed on the destination, which is what the host registered it under.
+    postMsg({ type: 'dk8s:cancel', requestId: `dl:${d.dest}` });
+    return s;
+  }),
+
+  retry: id => set(s => {
+    const d = s.downloads.find(x => x.id === id);
+    if (!d?.source) return s;
+    /*
+      The same message the Explorer sends, from what the row remembers.
+
+      Retrying by replaying the original request rather than by a dedicated
+      host path means a retry cannot drift from a first attempt — there is one
+      way to start a download and this is it.
+    */
+    postMsg({
+      type: d.directory ? 'files:downloadDir' : 'files:download',
+      context: d.source.context, namespace: d.source.namespace,
+      pod: d.source.pod, container: d.source.container,
+      path: d.source.path, name: d.name,
+    });
+    // The old row goes: the new one is about to arrive, and two rows for one
+    // file with different outcomes is a list that cannot be read.
+    return { downloads: s.downloads.filter(x => x.id !== id) };
+  }),
+
+  dismiss: id => set(s => ({ downloads: s.downloads.filter(x => x.id !== id) })),
 
   markSeen: () => set({ unseen: 0 }),
 
@@ -135,6 +192,10 @@ export function listenForDownloads(): void {
         name: String(m.name), dest: String(m.dest ?? ''),
         command: m.command ? String(m.command) : undefined,
         directory: !!m.directory,
+        // Trusted only as far as it goes: it is echoed straight back to the
+        // host on a retry, where every field is validated again.
+        source: m.source && typeof m.source === 'object'
+          ? m.source as NonNullable<Download['source']> : undefined,
       });
     } else if (m?.type === 'files:downloadDone') {
       s.finished({
@@ -143,7 +204,10 @@ export function listenForDownloads(): void {
         bytes: typeof m.bytes === 'number' ? m.bytes : undefined,
       });
     } else if (m?.type === 'files:downloadFailed') {
-      s.failed({ name: String(m.name), error: String(m.error ?? 'The download failed.') });
+      s.failed({
+        name: String(m.name), error: String(m.error ?? 'The download failed.'),
+        cancelled: !!m.cancelled,
+      });
     }
   });
 }

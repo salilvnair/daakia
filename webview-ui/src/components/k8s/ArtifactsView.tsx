@@ -14,12 +14,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ButtonView, SearchInputView, SegmentedControlView, CheckboxView, HudView,
-  CheckSquareIcon, EmptySquareIcon, FilterInputView, IconSize } from '@salilvnair/dui';
+  CheckSquareIcon, EmptySquareIcon, FilterInputView, IconSize,
+  ModalView, BadgeChipView } from '@salilvnair/dui';
 import { CopyButtonView } from '@salilvnair/dui';
 import {
   MemoryIcon, CpuIcon, FileTextIcon, TimelineIcon, NetworkIcon,
   FolderOpenIcon, TrashIcon, PlusIcon, StethoscopeIcon, CloseIcon,
 } from '../../icons';
+import { postMsg } from '../../vscode';
 import { useDk8sArtifactStore, type StoredArtifact } from '../../store/dk8s-artifact-store';
 import { openArtifactIn } from '../../store/dk8s-analyze-store';
 import { ConfirmDialog } from '../shared/modals/ConfirmDialog';
@@ -140,7 +142,8 @@ function Row({ a, picked, onPick, onAskDelete }: {
 }
 
 export function ArtifactsView() {
-  const { artifacts, dir, error, load, importFile, reveal, remove } = useDk8sArtifactStore();
+  const { artifacts, dir, error, load, importFile, reveal, remove,
+    unsupported, dismissUnsupported } = useDk8sArtifactStore();
   const [filter, setFilter] = useState('');
   const [kind, setKind] = useState<'all' | 'heap' | 'threads' | 'logs' | 'cpu'>('all');
   const [picked, setPicked] = useState<string[]>([]);
@@ -391,6 +394,54 @@ export function ArtifactsView() {
           onConfirm={confirmDelete}
           onCancel={() => setPendingDelete(undefined)}
         />
+      )}
+
+      {/*
+        A file no analyzer can read says so, rather than opening an empty one.
+
+        This used to fall through to the log analyzer — the fallback for any
+        unrecognised extension — and a PNG there renders as a list with no
+        lines in it, which reads as an empty file rather than as the wrong
+        tool. The two things still worth offering are the two that do not need
+        an analyzer: find it on disk, or hand its path to something that can.
+      */}
+      {unsupported && (
+        <ModalView
+          open
+          onClose={dismissUnsupported}
+          title="Nothing here can read that"
+          subtitle={unsupported.name}
+          size="sm"
+          headerColor="var(--color-warning)"
+          footerRight={
+            <div className="flex items-center gap-2">
+              <ButtonView label="Close" size="sm" variant="secondary" onClick={dismissUnsupported} />
+              <ButtonView
+                label="Show in folder" size="sm" variant="secondary"
+                accentColor={ACCENT} color={ACCENT}
+                iconLeft={<FolderOpenIcon size={IconSize.action} />}
+                onClick={() => { postMsg({ type: 'dk8s:revealArtifacts' }); dismissUnsupported(); }}
+              />
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-3" style={{ minWidth: 380 }}>
+            <span className="text-[11.5px] leading-relaxed"
+                  style={{ color: 'var(--color-text-secondary)' }}>
+              {unsupported.unsupported}
+            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <BadgeChipView tone="var(--color-text-muted)" size="xs">
+                {bytes(unsupported.bytes)}
+              </BadgeChipView>
+              <button type="button"
+                      onClick={() => void navigator.clipboard?.writeText(unsupported.file)}
+                      className="border-none bg-transparent p-0 cursor-pointer">
+                <BadgeChipView tone={ACCENT} size="xs">copy its path</BadgeChipView>
+              </button>
+            </div>
+          </div>
+        </ModalView>
       )}
 
       <div className="flex items-center gap-3 px-4 py-1.5 text-[10.5px] shrink-0"

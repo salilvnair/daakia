@@ -15,6 +15,8 @@ export interface StoredArtifact {
   file: string;
   name: string;
   kind: string;
+  /** Set when nothing here can read it, carrying the reason to show. */
+  unsupported?: string;
   pod?: string;
   collectedAt?: number;
   bytes: number;
@@ -25,6 +27,9 @@ interface ArtifactState {
   artifacts: StoredArtifact[];
   dir?: string;
   error?: string;
+  /** The one someone opened that nothing here can read. */
+  unsupported?: StoredArtifact;
+  dismissUnsupported: () => void;
 
   load: () => void;
   importFile: () => void;
@@ -48,12 +53,26 @@ export const useDk8sArtifactStore = create<ArtifactState>((set) => ({
     logUiEvent('dk8s.artifact_delete', { file });
     postMsg({ type: 'dk8s:deleteArtifact', file });
   },
+  dismissUnsupported: () => set({ unsupported: undefined }),
+
   reveal: () => {
     logUiEvent('dk8s.artifact_reveal', {});
     postMsg({ type: 'dk8s:revealArtifacts' });
   },
 
   open: (a) => {
+    /*
+      A file no analyzer understands opens a card, not an analyzer.
+
+      Routing it to the log view — which is what happened, because that is the
+      fallback — produced an empty list that reads as "this file has nothing in
+      it" rather than "this is a PNG".
+    */
+    if (a.unsupported) {
+      logUiEvent('dk8s.artifact_unsupported', { name: a.name, kind: a.kind, file: a.file });
+      set({ unsupported: a });
+      return;
+    }
     // Over the list rather than off to a tab: this is the same gesture as
     // opening a pod, and the analyzer is chosen before the view mounts so a
     // thread dump does not land on the heap analyzer's empty state.

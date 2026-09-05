@@ -9,7 +9,8 @@
  */
 import { useEffect, useState } from 'react';
 import { EmptyStateView, ContextMenuView, BadgeChipView, type ContextMenuItem, IconSize } from '@salilvnair/dui';
-import { DownloadIcon, FolderOpenIcon, CloseIcon, ExternalLinkIcon, CopyIcon } from '../../icons';
+import { DownloadIcon, FolderOpenIcon, CloseIcon, ExternalLinkIcon, CopyIcon,
+  StopSquareIcon, RefreshIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sFilesStore, type Download } from '../../store/dk8s-files-store';
 
@@ -29,6 +30,11 @@ function folderOf(dest: string): string {
 }
 
 export function DownloadsPanel() {
+  const act = {
+    cancel: useDk8sFilesStore(st => st.cancel),
+    retry: useDk8sFilesStore(st => st.retry),
+    dismiss: useDk8sFilesStore(st => st.dismiss),
+  };
   /*
     Right-click a download for the things a row has no room to offer.
 
@@ -122,7 +128,7 @@ export function DownloadsPanel() {
         anchorEl={null}
         position={menu ? { x: menu.x, y: menu.y } : undefined}
         onClose={() => setMenu(null)}
-        items={menu ? itemsFor(menu.d, () => setMenu(null)) : []}
+        items={menu ? itemsFor(menu.d, () => setMenu(null), act) : []}
       />
 
       {folder && (
@@ -146,10 +152,34 @@ export function DownloadsPanel() {
  * greyed-out verbs asks the reader to work out why each one is unavailable,
  * which is a puzzle to solve rather than an answer.
  */
-function itemsFor(d: Download, close: () => void): ContextMenuItem[] {
+function itemsFor(
+  d: Download, close: () => void,
+  act: { cancel: (id: string) => void; retry: (id: string) => void; dismiss: (id: string) => void },
+): ContextMenuItem[] {
   const done = d.state === 'done';
   const folder = folderOf(d.dest);
   return [
+    /*
+      Stop and retry come first, because they are the only two items that act
+      on the download rather than on where it landed — and the moment someone
+      opens this menu on a running or failed row, they are one of the two.
+    */
+    ...(d.state === 'running' ? [{
+      id: 'cancel', label: 'Stop this download',
+      icon: <StopSquareIcon size={IconSize.action} />, iconColor: 'var(--color-error)',
+      onClick: () => { close(); act.cancel(d.id); },
+    }] : []),
+    ...(d.state === 'failed' && d.source ? [{
+      id: 'retry', label: 'Try again',
+      icon: <RefreshIcon size={IconSize.action} />, iconColor: ACCENT,
+      onClick: () => { close(); act.retry(d.id); },
+    }] : []),
+    ...(d.state !== 'running' ? [{
+      id: 'dismiss', label: 'Remove from this list',
+      icon: <CloseIcon size={IconSize.action} />, iconColor: 'var(--color-text-muted)',
+      onClick: () => { close(); act.dismiss(d.id); },
+    }] : []),
+    ...(d.state !== 'running' ? [{ id: 'sep0', label: '', separator: true }] : []),
     ...(done ? [{
       id: 'reveal', label: 'Show in folder', icon: <FolderOpenIcon size={IconSize.action} />,
       onClick: () => { close(); postMsg({ type: 'files:revealFolder', path: folder }); },

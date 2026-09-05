@@ -155,6 +155,15 @@ export interface ListResult {
   entries: FileEntry[];
   command: string;
   error?: string;
+  /**
+   * Who the container runs as, when `id` answered.
+   *
+   * Already probed to decide which rows are unreadable, so carrying it out
+   * costs nothing and turns "you cannot read this" from an assertion into
+   * something the reader can check: a 0600 root-owned file under uid 1000 is
+   * only surprising until you know the uid.
+   */
+  identity?: PodIdentity;
 }
 
 /**
@@ -294,7 +303,7 @@ export async function listDirectory(t: PodTarget, path: string): Promise<ListRes
   const id = await podIdentity(t);
   if (id) for (const e of entries) if (!readableBy(e, id)) e.denied = true;
 
-  return { path, entries, command };
+  return { path, entries, command, identity: id ?? undefined };
 }
 
 /**
