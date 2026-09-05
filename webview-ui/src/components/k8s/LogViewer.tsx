@@ -927,6 +927,37 @@ export function LogViewer() {
   };
 
   /**
+   * Ask about one exception, without anyone having to select it.
+   *
+   * A trace's extent is already known — the message line and the frames folded
+   * under it — so the evidence is assembled rather than harvested from a
+   * selection. It is capped at the frames that carry the diagnosis: the top of
+   * a Java stack is where the cause is, and forty lines of framework beneath
+   * it are tokens spent to say "and then Spring called Spring".
+   */
+  const askAboutTrace = (line: MatchedLine, frames: MatchedLine[]) => {
+    if (!detail) return;
+    const HEAD = 40;
+    const kept = frames.slice(0, HEAD);
+    const body = [line.text, ...kept.map(f => f.text)];
+    if (frames.length > kept.length) {
+      body.push(`… ${frames.length - kept.length} further frames not sent`);
+    }
+    ask({
+      promptKey: 'dk8s.log.explainError',
+      title: 'Explain this error',
+      evidence: body.join('\n'),
+      evidenceLabel: `STACK TRACE (${frames.length + 1} line${frames.length ? 's' : ''}`
+        + `${frames.length > kept.length ? `, first ${kept.length + 1} sent` : ''})`,
+      podContext: {
+        pod: detail.name, namespace: detail.namespace, phase: detail.phase,
+        restarts: detail.restarts, reason: detail.reason,
+        runtime: runtime?.runtime, image: detail.containers[0]?.image,
+      },
+    });
+  };
+
+  /**
    * Analyze asks first.
    *
    * This is the only control in dk8s that takes text off the machine, and at
@@ -1445,6 +1476,37 @@ export function LogViewer() {
                               ? `… ${row.folded!.length} more frames · ${lib} framework`
                               : `… ${row.folded!.length} more frames`;
                           })()}
+                        </button>
+                      )}
+
+                      {/*
+                        Ask AI, on the row that has something to ask about.
+
+                        The existing Ask AI acts on a SELECTION, which means
+                        reading an exception, dragging across forty frames and
+                        then finding the menu — for the one thing in a log
+                        anybody actually wants explained. A stack trace already
+                        knows its own extent: the message line plus the frames
+                        folded under it. So the chip goes where the fold is and
+                        sends exactly that, no selecting.
+
+                        Same height as the fold beside it, because two chips on
+                        one line at two heights is the first thing the eye
+                        notices about a row it was meant to read.
+                      */}
+                      {row.folded && row.folded.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => askAboutTrace(line, row.folded!)}
+                          title="Ask AI what this exception means"
+                          className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
+                          style={{
+                            background: 'color-mix(in srgb, var(--color-primary) 16%, transparent)',
+                            color: 'var(--color-primary-light)',
+                            fontSize: 10, lineHeight: '15px',
+                          }}
+                        >
+                          <SparkleIcon size={9} /> Ask AI
                         </button>
                       )}
                     </div>
