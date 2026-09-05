@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView, IconSize } from '@salilvnair/dui';
+  BadgeChipView, IconSize, TableSkeletonView } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
@@ -1329,13 +1329,21 @@ export function LogViewer() {
           className="flex-1 overflow-auto pl-4 pr-1 py-2 font-mono min-h-0 dk8s-no-scrollbar"
           style={{ fontSize: 11.5, lineHeight: `${ROW_HEIGHT}px` }}
         >
-          {total === 0 ? (
+          {total === 0 && settling && logs.length === 0 ? (
+            /* Log lines, in outline: timestamp, level, message — the three
+               columns that are about to arrive, in the places they arrive in.
+               A centred "Reading logs…" moved the eye to the middle of a pane
+               whose first line then appeared at the top. */
+            <TableSkeletonView
+              rowHeight={ROW_HEIGHT} fill={0.72}
+              columns={[{ width: 92, fill: 0.85 }, { width: 44 }, { width: 'flex', fill: 0.7 }]}
+            />
+          ) : total === 0 ? (
             <div className="flex items-center justify-center h-full">
               <span className="text-[12px] text-[var(--color-text-muted)]" style={{ fontFamily: 'inherit' }}>
                 {logs.length === 0
-                  ? settling ? 'Reading logs…'
-                    : logStatus === 'streaming' ? 'Connected — waiting for the pod to say something.'
-                      : 'No output yet.'
+                  ? logStatus === 'streaming' ? 'Connected — waiting for the pod to say something.'
+                    : 'No output yet.'
                   : `No line matches. ${logs.length.toLocaleString()} hidden by the filter.`}
               </span>
             </div>

@@ -5,7 +5,7 @@
  * doing, what it is made of, and what Kubernetes has been saying about it —
  * on one screen, in the order you would actually ask.
  */
-import { CopyButtonView, IconSize } from '@salilvnair/dui';
+import { CopyButtonView, IconSize, TableSkeletonView } from '@salilvnair/dui';
 import { LayersIcon, ServerIcon, ClockIcon, NetworkIcon, WarningTriangleIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { severityOf, severityColor, shortAge, restartLabel, formatBytes } from './pod-view';
@@ -67,7 +67,28 @@ function events(describe?: string): string[] {
 
 export function OverviewTab() {
   const { detail, describeText, runtime, usage } = useK8sStore();
-  if (!detail) return null;
+
+  /*
+    The pod's own fields arrive a beat after the tab does, and rendering
+    nothing for that beat is what makes switching pods flicker. The cards are
+    a grid of label/value rows, so that is what stands in for them.
+  */
+  if (!detail) {
+    return (
+      <div className="grid gap-3 px-4 py-3 h-full min-h-0"
+           style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignContent: 'start' }}>
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="rounded p-3"
+               style={{ border: '1px solid var(--color-surface-border)' }}>
+            <TableSkeletonView
+              rows={4} rowHeight={20}
+              columns={[{ width: '34%', fill: 0.7 }, { width: 'flex', fill: 0.55 }]}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const sev = severityOf(detail);
   const color = severityColor(sev);
