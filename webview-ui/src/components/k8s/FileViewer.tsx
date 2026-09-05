@@ -19,8 +19,10 @@
  * everything in a container that is not shipping its own source.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CopyIcon, DownloadIcon, EyeIcon, CloseIcon } from '../../icons';
+import { CopyIcon, DownloadIcon, EyeIcon, CloseIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { useK8sStore } from '../../store/k8s-store';
 import { redactLines, copyText, type RedactedLine } from './file-redact';
 
 const ACCENT = 'var(--color-dk8s)';
@@ -40,6 +42,8 @@ export function FileViewer({
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
   const seq = useRef(0);
+  const askAi = useDk8sAiStore(s => s.ask);
+  const detail = useK8sStore(s => s.detail);
 
   useEffect(() => {
     const requestId = `fv-${++seq.current}`;
@@ -87,6 +91,23 @@ export function FileViewer({
     type: 'files:download', context, namespace, pod, container, path, name,
   });
 
+  const ask = () => {
+    if (text === null) return;
+    askAi({
+      promptKey: 'dk8s.file.explain',
+      title: `Explain ${name}`,
+      evidence: copyText(lines, revealed),
+      evidenceLabel: `FILE ${path} (${lines.length} line${lines.length === 1 ? '' : 's'}`
+        + `${maskedCount ? `, ${maskedCount} value${maskedCount === 1 ? '' : 's'} masked` : ''})`,
+      podContext: {
+        pod, namespace, phase: detail?.phase,
+        restarts: detail?.restarts, reason: detail?.reason,
+        image: detail?.containers?.[0]?.image,
+        file: path,
+      },
+    });
+  };
+
   return (
     <div
       className="absolute inset-0 flex flex-col z-20"
@@ -114,6 +135,34 @@ export function FileViewer({
           </span>
         )}
         <span className="flex-1" />
+        {/*
+          Ask AI sends what the SCREEN shows, masking included.
+
+          The same rule as copy, and for a stronger reason: this is the one
+          control here that takes the file off the machine. `copyText` is
+          reused rather than reimplemented so a value cannot be masked on
+          screen, masked in the clipboard, and then quietly sent in full to a
+          model — which is the exact failure the redaction exists to prevent.
+          A line the reader deliberately revealed goes as they revealed it.
+        */}
+        <button
+          type="button"
+          onClick={ask}
+          disabled={text === null}
+          title="Ask AI what this file configures and whether anything looks wrong"
+          className="flex items-center gap-1 rounded-md px-2 py-0.5"
+          style={{
+            fontSize: 9.5, fontWeight: 700, letterSpacing: '.05em',
+            textTransform: 'uppercase', whiteSpace: 'nowrap',
+            cursor: text === null ? 'default' : 'pointer',
+            opacity: text === null ? 0.45 : 1,
+            color: 'var(--color-primary-light)',
+            background: 'color-mix(in srgb, var(--color-primary) 16%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--color-primary) 40%, transparent)',
+          }}
+        >
+          <SparkleIcon size={10} /> Ask AI
+        </button>
         {copied && (
           <span className="text-[10px]" style={{ color: 'var(--color-success)' }}>copied</span>
         )}
@@ -198,16 +247,28 @@ export function FileViewer({
   );
 }
 
+/*
+  Every row occupies one line, including the ones with nothing on them.
+
+  A blank line rendered as an empty div is zero pixels tall, while its number
+  in the gutter beside it is a full line — so the two columns drift apart by
+  one line for every blank in the file, and the numbers run on past the end of
+  the text. On a shell script with 21 blank lines it put `exec "$@"` — line 123
+  — next to the number 102, and left 22 numbered rows below the last line of
+  code. Nothing was ever missing; the columns had simply stopped agreeing.
+*/
+const ROW = { minHeight: '1.75em' } as const;
+
 function LineRow({ line, revealed, onReveal }: {
   line: Line; revealed: boolean; onReveal: () => void;
 }) {
   if (line.secretFrom === undefined) {
-    return <div style={{ whiteSpace: 'pre', ...colourFor(line.text) }}>{render(line.text)}</div>;
+    return <div style={{ whiteSpace: 'pre', ...ROW, ...colourFor(line.text) }}>{render(line.text)}</div>;
   }
   const head = line.text.slice(0, line.secretFrom);
   const value = line.text.slice(line.secretFrom);
   return (
-    <div style={{ whiteSpace: 'pre' }}>
+    <div style={{ whiteSpace: 'pre', ...ROW }}>
       {render(head)}
       {revealed ? (
         <span style={{ color: 'var(--color-success)' }}>{value}</span>

@@ -19,7 +19,7 @@ import {
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
 import {
-  EyeIcon, DownloadIcon, RefreshIcon, SearchIcon, LockIcon, ArrowToLeftIcon,
+  EyeIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
 import { FileViewer } from './FileViewer';
@@ -44,13 +44,54 @@ interface Listing {
 }
 
 interface Hits {
-  hits: { path: string; name: string }[];
+  hits: { path: string; name: string; size?: number; modified?: string }[];
   capped: boolean;
   command: string;
   error?: string;
 }
 
 const ACCENT = 'var(--color-dk8s)';
+
+/**
+ * The longest plain run in a pattern, for highlighting.
+ *
+ * A search pattern is a glob or a regex; a highlight needs literal text. This
+ * takes the longest stretch with no metacharacter in it, which for `*invoice*`
+ * is `invoice`, for `inv[0-9]+\.pdf` is `inv`, and for a bare word is the
+ * word. Longest rather than first because the informative part of a pattern is
+ * usually its longest literal — `.*application` should mark `application`,
+ * not nothing.
+ */
+export function literalOf(pattern: string): string {
+  const runs = pattern.split(/[*?\[\]().+^$|{}\\]+/).filter(Boolean);
+  return runs.reduce((best, r) => (r.length > best.length ? r : best), '');
+}
+
+/** Mirrors the host's `maxDepth` default in pod-files.ts — shown, not guessed. */
+const SEARCH_DEPTH = 8;
+
+/** One of the query's bounds, worn beside the box that sets the rest of it. */
+function Cap({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{
+      /*
+        A raised dark pill, the way the plan draws it — not a tinted wash.
+        These are bounds on the query, not findings, so they take no hue at
+        all; the lift comes from a lighter surface than the row behind it plus
+        one hairline along the top edge.
+      */
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      lineHeight: 1, height: 20,
+      fontSize: 8.5, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase',
+      padding: '0 8px', borderRadius: 5, whiteSpace: 'nowrap', flexShrink: 0,
+      fontFamily: 'ui-monospace, monospace',
+      color: 'var(--color-text-muted)',
+      background: 'var(--color-surface-hover)',
+      border: '1px solid var(--color-surface-border)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,.045)',
+    }}>{children}</span>
+  );
+}
 
 /*
   Where to start.
@@ -80,6 +121,17 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   onBackToSearch?: () => void;
 }) {
   const [mode, setMode] = useState<'files' | 'search' | 'downloads' | 'access'>('files');
+  /*
+    Typing a path needs room the chain does not.
+
+    The chain is as wide as its segments and no wider, which is right when it
+    is a row of jump targets. The moment it becomes a text field it is the
+    thing being used, and sharing a line with a search box that still holds its
+    full width leaves a few characters to type an absolute path into. So the
+    field takes 70% and the query squeezes — for exactly as long as the edit
+    lasts.
+  */
+  const [pathEditing, setPathEditing] = useState(false);
   const [path, setPath] = useState<string>('');
   const [listing, setListing] = useState<Listing | null>(null);
   const [hits, setHits] = useState<Hits | null>(null);
@@ -262,11 +314,12 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   });
 
   const hitRows: FileBrowserEntry[] = (hits?.hits ?? []).map(h => {
-    const k = kindBadge({ name: h.name, kind: 'file' });
+    const k = kindBadge({ name: h.name, kind: 'file', size: h.size });
     return {
       id: h.path,
       name: h.path,
       kind: 'file',
+      size: h.size,
       badge: k.badge,
       badgeTone: k.tone,
       fullPath: h.path,
@@ -280,17 +333,6 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       {/* ── bar ── */}
       <div className="flex items-center gap-3 px-3 py-2 flex-shrink-0 flex-wrap"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <SegmentedControlView
-          options={[
-            { value: 'files', label: 'Files' },
-            { value: 'search', label: 'Search' },
-            { value: 'downloads', label: unseen ? `Downloads (${unseen})` : 'Downloads' },
-            { value: 'access', label: 'Access' },
-          ]}
-          value={mode}
-          onChange={v => setMode(v as typeof mode)}
-          size="sm" density="compact" accentColor={ACCENT}
-        />
         {onBackToSearch && (
           <button
             type="button"
@@ -306,27 +348,32 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
             <ArrowToLeftIcon size={11} /> Back to search
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => (mode === 'files' ? go(path) : runSearch())}
-          title="Run it again"
-          aria-label="Refresh"
-          className="flex items-center justify-center rounded-md"
-          style={{
-            width: 24, height: 22, cursor: 'pointer',
-            color: 'var(--color-text-muted)',
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-surface-border)',
-          }}
-        >
-          <RefreshIcon size={12} />
-        </button>
         <span className="flex-1" />
         {busy && (
           <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
             asking the pod…
           </span>
         )}
+        {/*
+          The mode strip sits at the right, and there is no refresh beside it.
+
+          Refresh was a second button for something every screen already does:
+          Search re-runs on its own button, and a directory re-lists whenever
+          you navigate to it — including to the one you are already on. A
+          control whose only job is to repeat what the control next to it does
+          is a control to remove.
+        */}
+        <SegmentedControlView
+          options={[
+            { value: 'files', label: 'Files' },
+            { value: 'search', label: 'Search' },
+            { value: 'downloads', label: unseen ? `Downloads (${unseen})` : 'Downloads' },
+            { value: 'access', label: 'Access' },
+          ]}
+          value={mode}
+          onChange={v => setMode(v as typeof mode)}
+          size="xs" density="compact" accentColor={ACCENT}
+        />
       </div>
 
       {/* ── path, and the query when searching ── */}
@@ -337,39 +384,54 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
              borderBottom: '1px solid var(--color-surface-border)',
              background: 'var(--color-panel)',
            }}>
-        <span style={{ display: 'flex', alignItems: 'center', flex: '0 1 auto', minWidth: 0 }}>
+        <span style={{
+          display: 'flex', alignItems: 'center', minWidth: 0,
+          flex: pathEditing ? '1 1 70%' : '0 1 auto',
+        }}>
           <PathBreadcrumbView
             path={path || '/'}
             onNavigate={p => { setMode('files'); go(p); }}
             onSubmit={p => { setMode('files'); go(p.startsWith('/') ? p : `/${p}`); }}
+            onEditingChange={setPathEditing}
             size="sm"
             color={ACCENT}
           />
         </span>
 
         {mode === 'search' && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 320px', minWidth: 0 }}>
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
+            flex: pathEditing ? '1 1 0%' : '1 1 320px',
+          }}>
+            {/*
+              Enter runs it, and the icon lives inside the box.
+
+              A Search button beside a search field is a second way to do what
+              Enter already does, and it was taking width from the field on
+              every screen. The icon moves inside and keeps the accent the
+              button had, so the control still reads as the thing that
+              searches — it just stopped being two things.
+            */}
             <span style={{ flex: '1 1 auto', minWidth: 0 }}>
               <SearchInputView
                 value={pattern}
                 onChange={setPattern}
-                placeholder="Name to look for — *invoice*"
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
+                prefix={<SearchIcon size={12} color={ACCENT} />}
+                placeholder="Name, glob or regex — *invoice*, inv.*\.pdf — Enter to search"
                 size="sm"
               />
             </span>
-            <button
-              type="button"
-              onClick={runSearch}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1"
-              style={{
-                fontSize: 10.5, cursor: 'pointer', whiteSpace: 'nowrap',
-                color: ACCENT,
-                background: `color-mix(in srgb, ${ACCENT} 13%, transparent)`,
-                border: `1px solid color-mix(in srgb, ${ACCENT} 34%, transparent)`,
-              }}
-            >
-              <SearchIcon size={11} /> Search
-            </button>
+            {/*
+              The caps are part of the query, so they are shown next to it.
+
+              A short result list has two very different explanations — there
+              are few matches, or the walk stopped early — and without the
+              bounds on screen they look identical. Reading pattern, depth and
+              type as one line is how you tell a real answer from a narrow one.
+            */}
+            <Cap>depth {SEARCH_DEPTH}</Cap>
+            <Cap>files only</Cap>
           </span>
         )}
       </div>
@@ -453,6 +515,20 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           actions={actions.filter(a => a.id !== 'saveDir')}
           onAction={onAction}
           onOpen={e => onAction('open', e)}
+          onSelect={e => setSelected(e.id)}
+          selectedId={selected}
+          /*
+            The literal behind the pattern, for the eye only.
+
+            `*invoice*` highlighted as written would match nothing, so the glob
+            and regex punctuation comes off and what is left is the run to
+            mark. Three weights then say why each row is a result: the
+            directory dim, the matched text in the flash colour, the rest of
+            the filename bright.
+          */
+          match={literalOf(pattern)}
+          showSize
+          showModified={false}
           showHeader={false}
           accentColor={ACCENT}
           size="sm"

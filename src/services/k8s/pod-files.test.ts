@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseLsLine, joinPath, parentOf, kindOf, looksBinary,
-  shellQuote, explainExecFailure, VIEW_LIMIT_BYTES,
+  shellQuote, explainExecFailure, VIEW_LIMIT_BYTES, REGEX_ONLY
 } from './pod-files';
 
 describe('parseLsLine — busybox / Alpine', () => {
@@ -240,5 +240,36 @@ describe('explainExecFailure', () => {
 
   it('falls back to what the container said rather than inventing', () => {
     expect(explainExecFailure('some novel error', '/x')).toBe('some novel error');
+  });
+});
+
+describe('glob or regex, decided by the pattern', () => {
+  /*
+    The rule is easy to get subtly wrong, and I did: `?` was read as a glob
+    wildcard, which sent a regex ending in `?ml$` to `find -iname` and returned
+    nothing for a file that was plainly there. `?` cannot decide on its own.
+  */
+  const isGlob = (p: string) => /[*?]/.test(p) && !REGEX_ONLY.test(p);
+
+  it('treats plain wildcards as globs, so nothing already typed changes meaning', () => {
+    expect(isGlob('*invoice*')).toBe(true);
+    expect(isGlob('*.pdf')).toBe(true);
+    expect(isGlob('app?.log')).toBe(true);
+  });
+
+  it('treats a wildcard beside regex-only syntax as a regex', () => {
+    // The case that was broken: `?` as a quantifier, not a wildcard.
+    expect(isGlob(String.raw`\.ya?ml$`)).toBe(false);
+    expect(isGlob('(a|b)*')).toBe(false);
+  });
+
+  it('treats anything without a wildcard as a regex, which a bare word also is', () => {
+    expect(isGlob('application')).toBe(false);
+    expect(isGlob('inv[0-9]+')).toBe(false);
+    expect(isGlob('a+b')).toBe(false);
+  });
+
+  it('does not count a dot, which is in almost every filename', () => {
+    expect(isGlob('*.tar.gz')).toBe(true);
   });
 });

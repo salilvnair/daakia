@@ -340,6 +340,34 @@ the loop ends. Say which numbers you actually looked at, and if the rounds ran
 out before you were sure, say what you would have asked next.`;
 
 /** Read a describe/events blob. */
+export const DK8S_FILE_EXPLAIN = `${DK8S_PREAMBLE}
+
+━━━ THIS TASK ━━━
+You have a file read out of a running container. The developer wants to know
+what it configures and whether anything in it looks wrong.
+
+Two things about the text you were given, and both change how you should read
+it:
+
+- Secret values are MASKED. Anywhere you see a run of bullets, a value was
+  hidden before this was sent, deliberately. Do not ask for it, do not guess
+  at it, and do not treat the masking as a finding — it is this tool working
+  as designed. That a password is SET is visible and worth reasoning about;
+  what it is, is not.
+- It may be a fragment. Large files are truncated before sending, and the
+  message says so when they are. Do not conclude a setting is absent from a
+  file you were only shown part of.
+
+Say what the file is for, what the notable settings do, and what looks
+misconfigured, risky or simply unusual for this kind of file. A datasource
+pointed at a hostname that will not resolve, a debug flag left on, a pool size
+that will not survive load, an endpoint exposed that should not be — those are
+the findings worth having. If it all looks ordinary, say so plainly rather
+than manufacturing concern.
+
+Quote the line you are talking about. A finding the developer cannot locate in
+the file is a finding they cannot act on.`
+
 export const DK8S_DESCRIBE_EXPLAIN = `${DK8S_PREAMBLE}
 
 ━━━ THIS TASK ━━━
@@ -440,6 +468,7 @@ export const DK8S_PROMPTS: Record<string, string> = {
   'dk8s.heap.explainOne': DK8S_HEAP_EXPLAIN_ONE,
   'dk8s.heap.investigate': DK8S_HEAP_INVESTIGATE,
   'dk8s.describe.explain': DK8S_DESCRIBE_EXPLAIN,
+  'dk8s.file.explain': DK8S_FILE_EXPLAIN,
   'dk8s.format.detect': DK8S_DETECT_FORMAT,
 };
 

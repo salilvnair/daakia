@@ -166,7 +166,51 @@ export async function listDirectory(t: PodTarget, path: string): Promise<ListRes
     const bd = b.kind === 'dir' ? 0 : 1;
     return ad - bd || a.name.localeCompare(b.name);
   });
+
+  await fillLinkSizes(t, path, entries);
   return { path, entries, command };
+}
+
+/**
+ * Give symlinks the size of what they point at.
+ *
+ * `ls -l` reports a symlink's own size, which is the length of the target
+ * STRING — 29 bytes for a link to a 4 KB properties file. Showing that would
+ * be worse than showing nothing, so the parser drops it, and the column read
+ * as a dash for every link in the listing.
+ *
+ * That is not a rare case. A ConfigMap mount projects every key as a symlink
+ * into a timestamped directory, so an entire /config — the most interesting
+ * directory in a Spring Boot pod — had no sizes at all.
+ *
+ * `-L` makes `ls` stat the target instead. It runs as a SECOND exec rather
+ * than replacing the first, for two reasons: the first listing is what knows a
+ * link is a link and what it points at, which `-L` hides; and this way the
+ * extra round trip only happens in directories that actually contain links.
+ * It runs without a shell, like the listing itself, so an image with `ls` and
+ * no `sh` keeps working.
+ *
+ * A broken link stays sizeless. `ls -L` cannot stat what is not there, and a
+ * dash is the honest answer for a link that leads nowhere.
+ */
+async function fillLinkSizes(
+  t: PodTarget, path: string, entries: FileEntry[],
+): Promise<void> {
+  if (!entries.some(e => e.kind === 'link')) return;
+
+  const r = await run(execArgs(t, ['ls', '-lLA', path]));
+  if (r.code !== 0 && !r.stdout.trim()) return;
+
+  const sizes = new Map<string, number>();
+  for (const line of r.stdout.split('\n')) {
+    const e = parseLsLine(line, path);
+    // Only a link that resolves to a regular file has a size worth showing;
+    // a link to a directory is still a directory.
+    if (e?.kind === 'file' && e.size !== undefined) sizes.set(e.name, e.size);
+  }
+  for (const e of entries) {
+    if (e.kind === 'link' && e.size === undefined) e.size = sizes.get(e.name);
+  }
 }
 
 /**
@@ -228,8 +272,16 @@ export interface SearchOptions {
   caseSensitive?: boolean;
 }
 
+export interface SearchHit {
+  path: string;
+  name: string;
+  /** From the stat pass; absent when `ls` could not reach the file. */
+  size?: number;
+  modified?: string;
+}
+
 export interface SearchResult {
-  hits: { path: string; name: string }[];
+  hits: SearchHit[];
   /** True when the cap stopped us, so the UI can say "showing the first N". */
   capped: boolean;
   command: string;
@@ -244,14 +296,41 @@ export interface SearchResult {
  * `2>/dev/null` is not tidiness either: on any volume with mixed ownership the
  * permission-denied lines outnumber the hits.
  */
+/**
+ * Characters that only ever mean something in a regex.
+ *
+ * `?` alone cannot decide: it is a glob wildcard AND the commonest regex
+ * quantifier, and reading it as a glob sent `\.ya?ml$` to `find -iname`,
+ * which matched nothing. So a pattern is a glob only when it has `*` or `?`
+ * and nothing that would be meaningless outside a regex. `.` is deliberately
+ * absent — it appears in almost every filename, and treating `*.pdf` as a
+ * regex would be the more surprising reading by far.
+ */
+export const REGEX_ONLY = /[\\\[\]()+^$|{}]/;
+
 export async function searchFiles(t: PodTarget, o: SearchOptions): Promise<SearchResult> {
   const limit = o.limit ?? 500;
   const depth = o.maxDepth ?? 8;
-  const pattern = o.pattern.includes('*') ? o.pattern : `*${o.pattern}*`;
-  const nameFlag = o.caseSensitive ? '-name' : '-iname';
   const typeArgs = o.kind === 'dir' ? ['-type', 'd']
     : o.kind === 'any' ? []
       : ['-type', 'f'];
+
+  /*
+    Glob or regex, decided by the pattern rather than by a checkbox.
+
+    `*` and `?` are glob metacharacters and almost never what someone means in
+    a regex typed into a file-search box, so a pattern containing either goes
+    to `find -iname` exactly as it always did — `*.pdf` and `*invoice*` keep
+    working, and nothing anyone has already typed changes meaning.
+
+    Everything else goes through `grep -E`, which makes the box a regex box by
+    default: `inv[0-9]+\.pdf`, `\.ya?ml$`, `^/etc` all work, and a bare word
+    still behaves as the substring search it was, because a word is its own
+    regex. The trade is that grep matches the whole PATH where `-iname`
+    matched the basename, which is why the anchors are worth having.
+  */
+  const isGlob = /[*?]/.test(o.pattern) && !REGEX_ONLY.test(o.pattern);
+  const nameFlag = o.caseSensitive ? '-name' : '-iname';
 
   /*
     Run through `sh -c` so the redirect and the pipe are the shell's, not
@@ -259,8 +338,28 @@ export async function searchFiles(t: PodTarget, o: SearchOptions): Promise<Searc
   */
   const script = [
     'find', shellQuote(o.root), '-maxdepth', String(depth),
-    nameFlag, shellQuote(pattern), ...typeArgs,
-    '2>/dev/null', '|', 'head', '-n', String(limit + 1),
+    ...(isGlob ? [nameFlag, shellQuote(o.pattern)] : []),
+    ...typeArgs,
+    '2>/dev/null',
+    ...(isGlob ? [] : ['|', 'grep', o.caseSensitive ? '-E' : '-Ei', '--', shellQuote(o.pattern)]),
+    '|', 'head', '-n', String(limit + 1),
+    /*
+      Then stat what survived the cap, so a hit can show its size.
+
+      `find` cannot print a size portably — `-printf` is GNU-only and would
+      break on the Alpine and busybox images this mostly meets — so the paths
+      go back through `ls -lLd` and return as listing lines the parser already
+      understands and is tested against. `-L` so a symlinked hit reports what
+      it points at.
+
+      The cap comes FIRST, deliberately. `-exec ls {} +` batches more neatly
+      but would stat everything `find` turned up before anything was capped,
+      which on a large volume is exactly the runaway the caps exist to stop.
+      A `while read` loop rather than `xargs`, because xargs splits on spaces
+      unless given flags busybox does not have, and a path with a space in it
+      is not an edge case.
+    */
+    '|', 'while', 'IFS=', 'read', '-r', 'f;', 'do', 'ls', '-lLd', '"$f"', '2>/dev/null;', 'done',
   ].join(' ');
 
   const args = execArgs(t, ['sh', '-c', script]);
@@ -273,14 +372,23 @@ export async function searchFiles(t: PodTarget, o: SearchOptions): Promise<Searc
 
   const lines = r.stdout.split('\n').map(l => l.replace(/\r$/, '')).filter(Boolean);
   const capped = lines.length > limit;
-  return {
-    hits: lines.slice(0, limit).map(path => ({
-      path,
-      name: path.slice(path.lastIndexOf('/') + 1),
-    })),
-    capped,
-    command,
-  };
+
+  /*
+    Every line is now an `ls -l` line whose name field is the full path, so
+    there is no directory to join on — the parser is given an empty one.
+  */
+  const hits: SearchHit[] = [];
+  for (const line of lines.slice(0, limit)) {
+    const e = parseLsLine(line, '');
+    if (!e) continue;
+    hits.push({
+      path: e.name,
+      name: e.name.slice(e.name.lastIndexOf('/') + 1),
+      size: e.size,
+      modified: e.modified,
+    });
+  }
+  return { hits, capped, command };
 }
 
 /** Single-quote for `sh -c`, the only form with no escapes inside it. */

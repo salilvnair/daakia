@@ -376,6 +376,8 @@ export type AiPromptTemplateKey =
   | 'dk8s.heap.investigate.system'
   | 'dk8s.describe.explain'
   | 'dk8s.describe.explain.system'
+  | 'dk8s.file.explain'
+  | 'dk8s.file.explain.system'
   | 'dk8s.format.detect'
   | 'dk8s.format.detect.system';
 
@@ -418,6 +420,8 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
   'dk8s.heap.investigate.system': DK8S_SYSTEM['dk8s.heap.investigate'] ?? '',
   'dk8s.describe.explain': DK8S_USER['dk8s.describe.explain'] ?? '',
   'dk8s.describe.explain.system': DK8S_SYSTEM['dk8s.describe.explain'] ?? '',
+  'dk8s.file.explain': DK8S_USER['dk8s.file.explain'] ?? '',
+  'dk8s.file.explain.system': DK8S_SYSTEM['dk8s.file.explain'] ?? '',
   'dk8s.format.detect': DK8S_USER['dk8s.format.detect'] ?? '',
   'dk8s.format.detect.system': DK8S_SYSTEM['dk8s.format.detect'] ?? '',
   // ── Response & Diagnostics — system prompts ───────────────────────────────
@@ -802,6 +806,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'dk8s.heap.investigate.system': { label: 'Investigate the heap — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.describe.explain': { label: 'Explain kubectl describe', description: 'A pod description, in terms of what is actually wrong' },
   'dk8s.describe.explain.system': { label: 'Explain kubectl describe — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.file.explain': { label: 'Explain a file from a pod', description: 'What a config file configures, and what looks wrong in it' },
+  'dk8s.file.explain.system': { label: 'Explain a file from a pod — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.format.detect': { label: 'Detect a log format', description: 'Infer a parser from sample lines' },
   'dk8s.format.detect.system': { label: 'Detect a log format — system', description: 'Instruction block: who the model is and how it must answer' },
   askAiWhy:               { label: 'Ask AI Why (Error Diagnosis)', description: 'Prompt used when "Ask AI why" is clicked on a failed HTTP response' },
@@ -983,6 +989,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'dk8s.heap.investigate.system': [],
   'dk8s.describe.explain': [...DK8S_USER_VARIABLES],
   'dk8s.describe.explain.system': [],
+  'dk8s.file.explain': [...DK8S_USER_VARIABLES],
+  'dk8s.file.explain.system': [],
   'dk8s.format.detect': [...DK8S_USER_VARIABLES],
   'dk8s.format.detect.system': [],
   askAiWhy:               ['{method}', '{url}', '{status}', '{statusText}', '{body}'],
@@ -1241,6 +1249,7 @@ export const AI_TEMPLATE_CATEGORIES: {
       'dk8s.heap.explainOne',
       'dk8s.heap.investigate',
       'dk8s.describe.explain',
+      'dk8s.file.explain',
       'dk8s.format.detect',
     ],
   },
@@ -1283,7 +1292,9 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'dk8s.heap.investigate': '#ec4899',
   'dk8s.heap.investigate.system': '#ec4899',
   'dk8s.describe.explain': '#22d3ee',
+  'dk8s.file.explain': '#22d3ee',
   'dk8s.describe.explain.system': '#22d3ee',
+  'dk8s.file.explain.system': '#22d3ee',
   'dk8s.format.detect': '#10b981',
   'dk8s.format.detect.system': '#10b981',
   askAiWhy:               '#ef4444',
