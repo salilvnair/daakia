@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   PathBreadcrumbView, FileBrowserView, SearchFieldView, SegmentedControlView,
-  EmptyStateView, SelectInputView, ContextMenuView, ModalView,
+  EmptyStateView, SelectInputView, ContextMenuView, ModalView, ButtonView,
   type ContextMenuItem,
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
@@ -1067,19 +1067,40 @@ function ScopedSearch({ root, target, onClose, onOpenFile, onReveal }: {
   });
 
   return (
-    <ModalView open onClose={onClose} title="Search in this folder" size="md">
-      <div className="flex flex-col gap-2" style={{ minHeight: 380 }}>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* The scope, stated. This searches ONE folder and it has to say
-              which, or the results read as coming from the whole pod. */}
-          <span className="text-[10.5px] font-mono px-2 py-1 rounded"
-                style={{
-                  background: 'var(--color-surface-hover)',
-                  color: ACCENT, overflowWrap: 'anywhere',
-                }}>
-            {root}
-          </span>
-          <span className="flex-1" style={{ minWidth: 200 }}>
+    /*
+      Sized like Quick Search, because it is the same kind of screen.
+
+      A 560px popout gave a hundred and forty full paths a column narrow enough
+      to truncate most of them, over an empty half-screen of dialog. `inline`
+      takes the panel's width the way Quick Search does, and the body carries
+      the same 520px floor so a result list has somewhere to be before it needs
+      to scroll.
+    */
+    <ModalView
+      open
+      mode="inline"
+      onClose={onClose}
+      title="Search in this folder"
+      subtitle={root}
+      headerColor={ACCENT}
+      footerRight={
+        <div className="flex items-center gap-2">
+          {hits && (
+            <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+              {hits.hits.length} {hits.hits.length === 1 ? 'match' : 'matches'}
+              {hits.capped && ' · capped'}
+            </span>
+          )}
+          <ButtonView label="Close" size="sm" variant="secondary" onClick={onClose} />
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3" style={{ minHeight: 520 }}>
+        {/* The scope is the dialog's subtitle now — it belongs to the whole
+            screen rather than to the query row, and repeating it beside the
+            box cost the box width on the one screen that wants it. */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <span className="flex-1" style={{ minWidth: 240 }}>
             <SearchFieldView
               value={pattern}
               onChange={setPattern}
@@ -1094,7 +1115,11 @@ function ScopedSearch({ root, target, onClose, onOpenFile, onReveal }: {
         </div>
 
         <div className="flex-1 min-h-0 rounded-md overflow-hidden"
-             style={{ border: '1px solid var(--color-surface-border)', minHeight: 300 }}>
+             style={{
+               border: '1px solid var(--color-surface-border)',
+               background: 'var(--color-surface)',
+               minHeight: 440, maxHeight: 560,
+             }}>
           <FileBrowserView
             className="h-full"
             style={{ ['--dui-file-badge' as string]: ACCENT } as React.CSSProperties}
@@ -1151,12 +1176,9 @@ function ScopedSearch({ root, target, onClose, onOpenFile, onReveal }: {
                 />
               </div>
             )}
-            footer={hits && (
-              <>
-                {hits.hits.length} {hits.hits.length === 1 ? 'match' : 'matches'} under {root}
-                {hits.capped && ' · capped — narrow the pattern or lower the depth'}
-              </>
-            )}
+            footer={hits?.capped
+              ? 'capped — narrow the pattern or lower the depth to see the rest'
+              : undefined}
           />
         </div>
       </div>
