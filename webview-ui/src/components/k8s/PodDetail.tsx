@@ -177,7 +177,7 @@ function YamlPane({ text, busy }: { text?: string; busy: boolean }) {
  * their font and their scrollback, is both simpler and strictly more capable.
  */
 function TerminalTab() {
-  const { detail, capabilities, openShell } = useK8sStore();
+  const { detail, capabilities, openShell, shellPending } = useK8sStore();
   if (!detail) return null;
 
   const distroless = capabilities && !capabilities.shell && !capabilities.unreachable;
@@ -199,6 +199,7 @@ function TerminalTab() {
       <button
         type="button"
         onClick={openShell}
+        disabled={shellPending}
         className="flex items-center gap-2 px-4 py-2 rounded-md text-[12px] cursor-pointer"
         style={{
           background: 'color-mix(in srgb, var(--color-dk8s) 18%, transparent)',

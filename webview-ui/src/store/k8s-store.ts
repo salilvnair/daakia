@@ -485,6 +485,15 @@ interface K8sState {
    */
   access: Access;
   shellNotice?: { reason: string; suggestion: string; suggestionLabel?: string };
+  /*
+    A shell request is in flight.
+
+    Opening one probes for bash, then sh, then ash — three execs, each of which
+    can sit for its timeout on a pod that is not answering. Typically that is a
+    second or two and occasionally it is much longer, and with no pending state
+    the button was indistinguishable from a broken one for the whole of it.
+  */
+  shellPending?: boolean;
 
   probe: () => void;
   useContext: (name: string) => void;
@@ -867,7 +876,7 @@ export const useK8sStore = create<K8sState>((set, get) => ({
   openShell: () => {
     const { detail, logContainer } = get();
     if (!detail) return;
-    set({ shellNotice: undefined });
+    set({ shellNotice: undefined, shellPending: true });
     // The most sensitive action in the tool, so the record is the fullest.
     logUiEvent('dk8s.shell', {
       context: detail.context, namespace: detail.namespace, pod: detail.name,
@@ -1274,8 +1283,17 @@ export const useK8sStore = create<K8sState>((set, get) => ({
         break;
       }
 
+      /*
+        The terminal opened. Nothing to show — the terminal IS the feedback —
+        but the pending state has to end, and nothing was listening for this
+        at all, so a successful shell left the button spinning forever.
+      */
+      case 'dk8s:shellOpened':
+        set({ shellPending: false });
+        break;
+
       case 'dk8s:shellUnavailable':
-        set({ shellNotice: {
+        set({ shellPending: false, shellNotice: {
           reason: msg.reason as string,
           suggestion: msg.suggestion as string,
           suggestionLabel: msg.suggestionLabel as string | undefined,

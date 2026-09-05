@@ -474,7 +474,7 @@ export class MainPanel {
         handleDk8sDescribe(msg, this._post);
         break;
       case 'dk8s:shell':
-        handleDk8sShell(msg, this._post);
+        void handleDk8sShell(msg, this._post);
         break;
       case 'dk8s:probePod':
         handleDk8sProbePod(msg, this._post);

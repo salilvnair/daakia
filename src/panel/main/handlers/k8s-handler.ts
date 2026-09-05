@@ -840,11 +840,54 @@ export async function handleDk8sShell(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
+  try {
+    await openShell(msg, postMessage);
+  } catch (err) {
+    /*
+      A floor under the whole thing.
+
+      The dispatcher called this without awaiting it and without a catch, so
+      anything thrown in here — kubectl missing from the path, a terminal that
+      would not open — became an unhandled rejection and the click did nothing.
+      A failure the reader can see beats one only the console saw.
+    */
+    postMessage({
+      type: 'dk8s:shellUnavailable',
+      pod: String(msg.pod ?? '(unknown)'),
+      reason: err instanceof Error ? err.message : String(err),
+      suggestion: `kubectl -n ${String(msg.namespace ?? '<ns>')} exec -it `
+        + `${String(msg.pod ?? '<pod>')} -- sh`,
+      suggestionLabel: 'Run it yourself to see the raw error:',
+    });
+  }
+}
+
+async function openShell(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
   const context = String(msg.context ?? state().context ?? '');
   const namespace = String(msg.namespace ?? '');
   const pod = String(msg.pod ?? '');
   const container = msg.container as string | undefined;
-  if (!context || !namespace || !pod) return;
+  /*
+    A bare `return` here was a click that did nothing, silently.
+
+    Every other outcome of this handler posts something back — a terminal, or
+    a notice explaining why there is not one. This path posted nothing, so a
+    request arriving before the context resolved looked exactly like a dead
+    button, and there is no reading of "nothing happened" a user can act on.
+  */
+  if (!context || !namespace || !pod) {
+    postMessage({
+      type: 'dk8s:shellUnavailable',
+      pod: pod || '(unknown)',
+      reason: 'dk8s does not know which cluster or namespace this pod is in yet.',
+      suggestion: 'Reopen the pod from the grid, which carries the context with it.',
+      suggestionLabel: 'If it keeps happening:',
+    });
+    return;
+  }
 
   // Distroless images have no bash, and many have no sh either. `exec -- bash`
   // on one fails with an OCI error that reads like a permissions problem and
