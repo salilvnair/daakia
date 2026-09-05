@@ -117,6 +117,7 @@ import {
   handleFilesDirSize, handleFilesSearch, handleFilesRead,
   handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
   handleFilesSearchMany,
+  handleDk8sCancel,
 } from './handlers/files-handler';
 import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from './handlers/jfr-handler';
 import { handleDk8sHeapInvestigate } from './handlers/heap-investigate';
@@ -735,6 +736,10 @@ export class MainPanel {
         break;
       case 'files:searchMany':
         void handleFilesSearchMany(msg, this._post);
+        break;
+      // One stop for every long dk8s operation — see cancel.ts.
+      case 'dk8s:cancel':
+        handleDk8sCancel(msg, this._post);
         break;
       case 'files:revealFolder':
         void handleFilesReveal(msg, this._post);

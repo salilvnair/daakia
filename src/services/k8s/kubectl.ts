@@ -22,6 +22,14 @@ export interface RunOptions {
   /** Merged over process.env. */
   env?: Record<string, string>;
   stdin?: string;
+  /**
+   * Kills the child when it fires.
+   *
+   * The only way to actually stop a long `kubectl exec` — a loop that stops
+   * awaiting still leaves `find` walking the container's filesystem. See
+   * `cancel.ts` for why cancellation is a signal rather than a flag.
+   */
+  signal?: AbortSignal;
 }
 
 export interface RunResult {
@@ -89,6 +97,7 @@ function runRaw(bin: string, args: string[], opts: RunOptions = {}): Promise<Run
         timeout: opts.timeoutMs ?? 60_000,
         maxBuffer: opts.maxBuffer ?? 32 * 1024 * 1024,
         windowsHide: true,
+        signal: opts.signal,
         // No `shell` option. Not for globs, not for convenience, not ever.
       },
       (err, stdout, stderr) => {

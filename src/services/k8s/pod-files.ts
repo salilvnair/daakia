@@ -439,6 +439,8 @@ export interface SearchOptions {
   /** Directories are worth finding too when someone is hunting a mount. */
   kind?: 'file' | 'dir' | 'any';
   caseSensitive?: boolean;
+  /** Kills the `find` when the caller stops the search. */
+  signal?: AbortSignal;
 }
 
 export interface SearchHit {
@@ -533,7 +535,7 @@ export async function searchFiles(t: PodTarget, o: SearchOptions): Promise<Searc
 
   const args = execArgs(t, ['sh', '-c', script]);
   const command = showCommand(args);
-  const r = await run(args);
+  const r = await run(args, { signal: o.signal });
 
   if (r.code !== 0 && !r.stdout.trim()) {
     return { hits: [], capped: false, command, error: explainExecFailure(r.stderr, o.root) };

@@ -379,7 +379,9 @@ export type AiPromptTemplateKey =
   | 'dk8s.file.explain'
   | 'dk8s.file.explain.system'
   | 'dk8s.format.detect'
-  | 'dk8s.format.detect.system';
+  | 'dk8s.format.detect.system'
+  | 'dk8s.terminal.theme'
+  | 'dk8s.terminal.theme.system';
 
 // ─── Default templates ────────────────────────────────────────────────────────
 
@@ -424,6 +426,8 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
   'dk8s.file.explain.system': DK8S_SYSTEM['dk8s.file.explain'] ?? '',
   'dk8s.format.detect': DK8S_USER['dk8s.format.detect'] ?? '',
   'dk8s.format.detect.system': DK8S_SYSTEM['dk8s.format.detect'] ?? '',
+  'dk8s.terminal.theme': DK8S_USER['dk8s.terminal.theme'] ?? '',
+  'dk8s.terminal.theme.system': DK8S_SYSTEM['dk8s.terminal.theme'] ?? '',
   // ── Response & Diagnostics — system prompts ───────────────────────────────
   'askAiWhy.system':
     `You are a precise HTTP error diagnosis assistant. Analyze the status code, response body, and request context to identify the root cause and provide actionable fix steps. Be concise and technical. Format with numbered steps.`,
@@ -810,6 +814,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'dk8s.file.explain.system': { label: 'Explain a file from a pod — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.format.detect': { label: 'Detect a log format', description: 'Infer a parser from sample lines' },
   'dk8s.format.detect.system': { label: 'Detect a log format — system', description: 'Instruction block: who the model is and how it must answer' },
+  'dk8s.terminal.theme': { label: 'Design a terminal theme', description: 'Fill in a palette from a description of the look wanted' },
+  'dk8s.terminal.theme.system': { label: 'Design a terminal theme — system', description: 'Instruction block: who the model is and how it must answer' },
   askAiWhy:               { label: 'Ask AI Why (Error Diagnosis)', description: 'Prompt used when "Ask AI why" is clicked on a failed HTTP response' },
   explainWithAi:          { label: 'Explain with AI',              description: 'Prompt used when "Explain" is clicked on a successful HTTP response' },
   followupWithAi:         { label: 'Follow-up with AI',            description: 'Prompt used when "Follow-up Requests" is clicked to suggest next API calls' },
@@ -992,6 +998,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'dk8s.file.explain': [...DK8S_USER_VARIABLES],
   'dk8s.file.explain.system': [],
   'dk8s.format.detect': [...DK8S_USER_VARIABLES],
+  'dk8s.terminal.theme': [...DK8S_USER_VARIABLES],
+  'dk8s.terminal.theme.system': [],
   'dk8s.format.detect.system': [],
   askAiWhy:               ['{method}', '{url}', '{status}', '{statusText}', '{body}'],
   explainWithAi:          ['{method}', '{url}', '{status}', '{statusText}', '{body}'],
@@ -1251,6 +1259,7 @@ export const AI_TEMPLATE_CATEGORIES: {
       'dk8s.describe.explain',
       'dk8s.file.explain',
       'dk8s.format.detect',
+      'dk8s.terminal.theme',
     ],
   },
   // ── MCP & Platform AI ─────────────────────────────────────────────────────
@@ -1296,7 +1305,9 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'dk8s.describe.explain.system': '#22d3ee',
   'dk8s.file.explain.system': '#22d3ee',
   'dk8s.format.detect': '#10b981',
+  'dk8s.terminal.theme': '#a78bfa',
   'dk8s.format.detect.system': '#10b981',
+  'dk8s.terminal.theme.system': '#a78bfa',
   askAiWhy:               '#ef4444',
   explainWithAi:          '#06b6d4',
   followupWithAi:         '#10b981',

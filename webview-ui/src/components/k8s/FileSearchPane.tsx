@@ -63,6 +63,8 @@ export const EMPTY_FILE_SEARCH: FileSearchState = {
  * panel that shows nothing until the last one finishes reads as hung.
  */
 export function useFileSearch(): FileSearchState & {
+  /** Force-stops the sweep on the host, keeping what it already found. */
+  stop(): void;
   run(pods: FileSearchPod[], pattern: string, root: string, caseSensitive: boolean,
       maxDepth?: number): void;
   reset(): void;
@@ -109,7 +111,25 @@ export function useFileSearch(): FileSearchState & {
   return {
     ...state,
     run(pods, pattern, root, caseSensitive, maxDepth) {
-      const requestId = `fsm-${Date.now()}`;
+      /*
+        Random, not the clock.
+
+        `fsm-${Date.now()}` collided whenever two searches started in the same
+        millisecond — which a double-fired Enter does — and since the registry
+        cancels an earlier run on the same id, the collision showed up as a
+        search that reported itself stopped before it had scanned anything.
+      */
+      const requestId = `fsm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      /*
+        A new search abandons the old one, on the host as well as here.
+
+        Without this, starting a second search left the first sweep running —
+        two loops posting pod results into one view, and only the newer one
+        reachable by Stop, because `active` had already moved on. It showed up
+        as results arriving after a search was stopped and as counts that did
+        not add up. A double-fired Enter is enough to cause it.
+      */
+      if (active.current) postMsg({ type: 'dk8s:cancel', requestId: active.current });
       active.current = requestId;
       setFileSearch({
         running: true, ran: true, results: [], scanned: 0,
@@ -120,7 +140,27 @@ export function useFileSearch(): FileSearchState & {
         pods: pods.map(p => ({ context: p.context, namespace: p.namespace, pod: p.name })),
       });
     },
+    /*
+      Stop, and mean it.
+
+      The host is looping over pods with a `kubectl exec` per pod, so setting
+      `running: false` here only stopped the spinner — results kept arriving
+      and the sweep ran to the end. `dk8s:cancel` kills the `find` that is in
+      flight and breaks the loop; the id is the one the request was started
+      with, which is why it is held in a ref.
+
+      The results already collected are kept. Someone who stops a search
+      because they can see their file in the list wants that list.
+    */
+    stop() {
+      const id = active.current;
+      if (id) postMsg({ type: 'dk8s:cancel', requestId: id });
+      active.current = null;
+      setFileSearch({ running: false });
+    },
     reset() {
+      const id = active.current;
+      if (id) postMsg({ type: 'dk8s:cancel', requestId: id });
       active.current = null;
       setFileSearch({ ...EMPTY_FILE_SEARCH, collapsed: [] });
     },

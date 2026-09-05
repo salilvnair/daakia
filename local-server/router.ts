@@ -33,6 +33,7 @@ import {
   handleFilesDirSize, handleFilesSearch, handleFilesRead,
   handleFilesDownload, handleFilesDownloadDir, handleFilesReveal,
   handleFilesSearchMany,
+  handleDk8sCancel,
 } from '../src/panel/main/handlers/files-handler';
 import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from '../src/panel/main/handlers/jfr-handler';
 import { cancelRestRequest } from '../src/http/request-executor';
@@ -342,6 +343,10 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'files:searchMany':
       void handleFilesSearchMany(msg, post);
+      break;
+    // One stop for every long dk8s operation — see cancel.ts.
+    case 'dk8s:cancel':
+      handleDk8sCancel(msg, post);
       break;
     case 'files:revealFolder':
       void handleFilesReveal(msg, post);

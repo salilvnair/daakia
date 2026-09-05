@@ -7,6 +7,7 @@
  */
 import * as path from 'path';
 import { createWriteStream, mkdirSync } from 'fs';
+import { begin, end, cancel } from '../../../services/k8s/cancel';
 import {
   listDirectory, searchFiles, readFile, showCommand, directorySize,
   explainExecFailure, type PodTarget,
@@ -279,9 +280,22 @@ export async function handleFilesSearchMany(msg: Record<string, unknown>, post: 
   let matched = 0;
   const podsWithHits = new Set<string>();
 
+  /*
+    Stoppable, in both of the ways it has to be.
+
+    `cancelled()` between pods keeps the sweep from starting the next one, and
+    the signal kills the `find` already running inside the current one — which
+    is the half that matters, because the pod someone presses Stop during is
+    the slow pod. Without the signal, Stop still meant waiting out a `find` over
+    /sys and /proc.
+  */
+  const op = begin(requestId, 'files:searchMany');
+
   post({ type: 'files:searchMany:start', requestId, total: pods.length });
 
+  try {
   for (const raw of pods) {
+    if (op.cancelled()) break;
     const t = targetOf(raw);
     try {
       const r = await searchFiles(t, {
@@ -290,7 +304,16 @@ export async function handleFilesSearchMany(msg: Record<string, unknown>, post: 
         limit: typeof msg.limit === 'number' ? msg.limit : 200,
         maxDepth: typeof msg.maxDepth === 'number' ? msg.maxDepth : undefined,
         caseSensitive: !!msg.caseSensitive,
+        signal: op.signal,
       });
+      /*
+        A pod killed by Stop is not a pod that failed.
+
+        An aborted exec surfaces as a spawn failure, which this loop otherwise
+        reports as "that pod could not be searched" — so a cancelled sweep would
+        end in a column of red rows blaming the user's own Stop.
+      */
+      if (op.cancelled()) break;
       scanned++;
       if (r.hits.length) {
         matched += r.hits.length;
@@ -308,6 +331,7 @@ export async function handleFilesSearchMany(msg: Record<string, unknown>, post: 
         error: r.error,
       });
     } catch (err) {
+      if (op.cancelled()) break;
       scanned++;
       post({
         type: 'files:searchMany:pod', requestId,
@@ -321,5 +345,26 @@ export async function handleFilesSearchMany(msg: Record<string, unknown>, post: 
   post({
     type: 'files:searchMany:done', requestId,
     scanned, matched, podsWithHits: podsWithHits.size,
+    // Said, not inferred: "27 of 34" with no reason reads as a search that
+    // lost seven pods rather than one that was stopped.
+    cancelled: op.cancelled(),
+    total: pods.length,
   });
+  } finally {
+    end(requestId);
+  }
+}
+
+/**
+ * Stop whatever that request id is doing.
+ *
+ * One handler for every long dk8s operation rather than one per feature — see
+ * `cancel.ts`. It answers either way: a request that had already finished is
+ * not a failure, and the view should not report one.
+ */
+export function handleDk8sCancel(msg: Record<string, unknown>, post: PostMessage): void {
+  const requestId = String(msg.requestId ?? '');
+  if (!requestId) return;
+  const stopped = cancel(requestId);
+  post({ type: 'dk8s:cancelled', requestId, stopped });
 }

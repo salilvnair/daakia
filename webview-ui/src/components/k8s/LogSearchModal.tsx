@@ -17,7 +17,7 @@ import {
   CheckSquareIcon, EmptySquareIcon, BadgeChipView, IconSize } from '@salilvnair/dui';
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
-  FolderExportIcon, FilterIcon, ClockIcon, CodeIcon, RefreshIcon,
+  FolderExportIcon, FilterIcon, ClockIcon, CodeIcon, RefreshIcon, StopSquareIcon,
 } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
@@ -355,9 +355,13 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-2">
           <ButtonView label="Close" size="sm" variant="secondary" onClick={onClose} />
           {(searchIn === 'logs' ? running : fileSearch.running)
+            /* Stop goes to whichever search is running. The file one used to
+               fall through to the log store's cancel, which meant it stopped
+               nothing at all — the sweep on the host had no idea. */
             ? <ButtonView label="Stop" size="sm" variant="secondary"
                           accentColor="var(--color-error)" color="var(--color-error)"
-                          onClick={cancel} />
+                          iconLeft={<StopSquareIcon size={IconSize.action} color="var(--color-error)" />}
+                          onClick={() => (searchIn === 'logs' ? cancel() : fileSearch.stop())} />
             : <ButtonView label="Search" size="sm" variant="secondary" accentColor={ACCENT}
                           color={canSearch ? ACCENT : 'var(--color-text-muted)'}
                           disabled={!canSearch}
