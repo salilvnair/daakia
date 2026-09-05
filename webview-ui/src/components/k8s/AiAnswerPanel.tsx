@@ -6,7 +6,7 @@
  * reader to choose between the explanation and the thing being explained.
  */
 import { useState } from 'react';
-import { CopyButtonView, SplitPanelView, MultilineInputView } from '@salilvnair/dui';
+import { CopyButtonView, SplitPanelView, MultilineInputView, IconSize } from '@salilvnair/dui';
 import {
   SparkleIcon, SpinnerIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon, ShieldIcon,
   SendIcon,
@@ -32,8 +32,8 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
       <div className="flex items-center gap-2 px-3 py-2"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         {answer.streaming
-          ? <SpinnerIcon size={12} color={ACCENT} />
-          : <SparkleIcon size={12} color={ACCENT} />}
+          ? <SpinnerIcon size={IconSize.action} color={ACCENT} />
+          : <SparkleIcon size={IconSize.action} color={ACCENT} />}
         {/* The title never wraps. It is three short words and the label for the
             whole card; letting a long pod name push it onto a second line made
             two cards side by side look like different components. */}
@@ -133,7 +133,7 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
           borderTop: '1px solid var(--color-surface-border)',
         }}
       >
-        {showEvidence ? <ChevronDownIcon size={10} /> : <ChevronRightIcon size={10} />}
+        {showEvidence ? <ChevronDownIcon size={IconSize.inline} /> : <ChevronRightIcon size={IconSize.inline} />}
         {showEvidence ? 'Hide' : 'Show'} what was sent
         {' · '}
         {(() => {
@@ -157,7 +157,7 @@ function AnswerCard({ answer }: { answer: Dk8sAnswer }) {
                color: 'var(--color-success)',
                borderTop: '1px solid color-mix(in srgb, var(--color-success) 25%, transparent)',
              }}>
-          <ShieldIcon size={11} />
+          <ShieldIcon size={IconSize.inline} />
           <span>{answer.redactionNote}</span>
         </div>
       )}
@@ -246,7 +246,7 @@ function FollowUpBox({ answerId, busy }: { answerId: string; busy: boolean }) {
             : 'var(--color-surface-border)'}`,
         }}
       >
-        <SendIcon size={12} />
+        <SendIcon size={IconSize.action} />
       </button>
     </div>
   );
@@ -334,7 +334,7 @@ export function AiAnswerPanel() {
          style={{ background: 'var(--color-surface-secondary, var(--color-surface))' }}>
       <div className="flex items-center gap-2 px-3 py-2.5 shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <SparkleIcon size={14} color={ACCENT} />
+        <SparkleIcon size={IconSize.row} color={ACCENT} />
         <span className="text-[12px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           AI analysis
         </span>
@@ -349,7 +349,7 @@ export function AiAnswerPanel() {
         {answers.length > 0 && !activeId && (
           <button type="button" onClick={clear} title="Clear answers"
                   className="p-1 rounded cursor-pointer border-none bg-transparent">
-            <TrashIcon size={12} color="var(--color-text-muted)" />
+            <TrashIcon size={IconSize.action} color="var(--color-text-muted)" />
           </button>
         )}
 
@@ -358,7 +358,7 @@ export function AiAnswerPanel() {
       <div className="flex-1 overflow-auto px-3 py-3 flex flex-col gap-3 min-h-0">
         {answers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center">
-            <SparkleIcon size={22} color="var(--color-text-muted)" />
+            <SparkleIcon size={IconSize.medallion} color="var(--color-text-muted)" />
             <span className="text-[11.5px] text-[var(--color-text-muted)]">
               Select any text in the log and ask why. The pod's state goes along with it,
               so the answer accounts for restarts and exit codes rather than just the words.

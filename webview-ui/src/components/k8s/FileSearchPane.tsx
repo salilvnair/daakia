@@ -13,8 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   EmptyStateView, FileBrowserView,
-  type FileBrowserEntry, type FileBrowserAction,
-} from '@salilvnair/dui';
+  type FileBrowserEntry, type FileBrowserAction, IconSize } from '@salilvnair/dui';
 import { SearchIcon, FolderOpenIcon, LockIcon, ExternalLinkIcon, DownloadIcon,
   ChevronRightIcon, ChevronDownIcon } from '../../icons';
 import { postMsg } from '../../vscode';
@@ -205,14 +204,14 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
       <div className="flex-1 min-h-0 grid place-items-center px-8">
         <EmptyStateView
           variant="medallion"
-          icon={<SearchIcon size={22} />}
+          icon={<SearchIcon size={IconSize.medallion} />}
           title="Find a file across these pods"
           message="Each pod walks its own filesystem — there is no filesystem API to query, so this is one exec per pod."
           accentColor={ACCENT}
           hints={[
-            { key: <SearchIcon size={12} />, text: 'a name or a glob — *invoice*, application.properties' },
-            { key: <FolderOpenIcon size={12} />, text: 'every hit opens that pod’s Explorer at the file' },
-            { key: <LockIcon size={12} />, text: 'a pod with no shell reports that, and the rest still search' },
+            { key: <SearchIcon size={IconSize.action} />, text: 'a name or a glob — *invoice*, application.properties' },
+            { key: <FolderOpenIcon size={IconSize.action} />, text: 'every hit opens that pod’s Explorer at the file' },
+            { key: <LockIcon size={IconSize.action} />, text: 'a pod with no shell reports that, and the rest still search' },
           ]}
         />
       </div>
@@ -249,13 +248,13 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
         const actions: FileBrowserAction[] = [
           {
             id: 'open', label: 'Open in the viewer', tone: 'accent',
-            icon: <ExternalLinkIcon size={12} />,
+            icon: <ExternalLinkIcon size={IconSize.action} />,
             show: e => e.badge !== 'binary',
           },
-          { id: 'save', label: 'Save to disk', icon: <DownloadIcon size={12} /> },
+          { id: 'save', label: 'Save to disk', icon: <DownloadIcon size={IconSize.action} /> },
           {
             id: 'reveal', label: 'Show in this pod’s Explorer', tone: 'success',
-            icon: <FolderOpenIcon size={12} />,
+            icon: <FolderOpenIcon size={IconSize.action} />,
           },
         ];
 
@@ -293,7 +292,7 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
                   color: 'var(--color-text-muted)', flexShrink: 0, padding: 0,
                 }}
               >
-                {open ? <ChevronDownIcon size={11} /> : <ChevronRightIcon size={11} />}
+                {open ? <ChevronDownIcon size={IconSize.inline} /> : <ChevronRightIcon size={IconSize.inline} />}
               </button>
               <span className="text-[10.5px] font-mono font-semibold"
                     onClick={e => e.stopPropagation()}
@@ -323,7 +322,7 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
                   background: 'transparent', border: 'none', opacity: 0.85,
                 }}
               >
-                <FolderOpenIcon size={12} />
+                <FolderOpenIcon size={IconSize.action} />
               </button>
             </div>
 
@@ -371,7 +370,7 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
           </div>
           {failed.map(r => (
             <div key={`${r.namespace}/${r.pod}`} className="flex items-start gap-2 py-1">
-              <LockIcon size={11} color="var(--color-warning)" />
+              <LockIcon size={IconSize.inline} color="var(--color-warning)" />
               <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
                 <span className="font-mono" style={{ color: 'var(--color-text-secondary)' }}>
                   {r.pod}

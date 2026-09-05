@@ -17,8 +17,7 @@ import {
   PathBreadcrumbView, FileBrowserView, SearchFieldView, SegmentedControlView,
   EmptyStateView, SelectInputView, ContextMenuView, ModalView, ButtonView, BadgeChipView,
   type ContextMenuItem,
-  type FileBrowserEntry, type FileBrowserAction,
-} from '@salilvnair/dui';
+  type FileBrowserEntry, type FileBrowserAction, IconSize } from '@salilvnair/dui';
 import {
   ExternalLinkIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon, FolderOpenIcon,
   RefreshIcon,
@@ -375,7 +374,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   const actions: FileBrowserAction[] = [
     {
       id: 'open', label: 'Open in the viewer', tone: 'accent',
-      icon: <ExternalLinkIcon size={12} />,
+      icon: <ExternalLinkIcon size={IconSize.action} />,
       // A folder opens by clicking its name; the eye is for files that can be
       // rendered, and its absence is how a row says nothing here can show it.
       /*
@@ -396,12 +395,12 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     },
     {
       id: 'save', label: 'Save to disk',
-      icon: <DownloadIcon size={12} />,
+      icon: <DownloadIcon size={IconSize.action} />,
       show: e => fileLike(e),
     },
     {
       id: 'saveDir', label: 'Download this directory', tone: 'success',
-      icon: <DownloadIcon size={12} />,
+      icon: <DownloadIcon size={IconSize.action} />,
       show: e => dirLike(e),
     },
   ];
@@ -438,32 +437,32 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     return [
       ...(can('open') ? [{
         id: 'open', label: 'Open as text',
-        icon: <ExternalLinkIcon size={12} />, iconColor: ACCENT,
+        icon: <ExternalLinkIcon size={IconSize.action} />, iconColor: ACCENT,
       }] : []),
       ...(dirLike(e) ? [{
         id: 'go', label: 'Open folder',
-        icon: <FolderOpenIcon size={12} />, iconColor: 'var(--color-warning)',
+        icon: <FolderOpenIcon size={IconSize.action} />, iconColor: 'var(--color-warning)',
       }] : []),
       ...(dirLike(e) ? [{
         id: 'searchHere', label: 'Search in this folder',
-        icon: <SearchIcon size={12} />, iconColor: 'var(--color-info, #3fb9cc)',
+        icon: <SearchIcon size={IconSize.action} />, iconColor: 'var(--color-info, #3fb9cc)',
       }] : []),
       ...(can('save') ? [{
         id: 'save', label: 'Download',
-        icon: <DownloadIcon size={12} />, iconColor: 'var(--color-success)',
+        icon: <DownloadIcon size={IconSize.action} />, iconColor: 'var(--color-success)',
       }] : []),
       ...(can('saveDir') ? [{
         id: 'saveDir', label: 'Download this directory',
-        icon: <DownloadIcon size={12} />, iconColor: 'var(--color-success)',
+        icon: <DownloadIcon size={IconSize.action} />, iconColor: 'var(--color-success)',
       }] : []),
       { id: 'sep', label: '', separator: true },
       {
         id: 'copy', label: 'Copy path',
-        icon: <CopyIcon size={12} />, iconColor: 'var(--color-text-secondary)',
+        icon: <CopyIcon size={IconSize.action} />, iconColor: 'var(--color-text-secondary)',
       },
       {
         id: 'info', label: 'Get Info',
-        icon: <InfoCircleIcon size={12} />, iconColor: 'var(--color-primary-light)',
+        icon: <InfoCircleIcon size={IconSize.action} />, iconColor: 'var(--color-primary-light)',
       },
     ];
   };
@@ -479,24 +478,24 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   const emptyMenu = (): ContextMenuItem[] => [
     {
       id: 'searchHere', label: 'Search in this folder',
-      icon: <SearchIcon size={12} />, iconColor: 'var(--color-info, #3fb9cc)',
+      icon: <SearchIcon size={IconSize.action} />, iconColor: 'var(--color-info, #3fb9cc)',
       onClick: () => { setMenu(null); setScopedSearch(path || '/'); },
     },
     {
       id: 'refresh', label: 'Refresh',
-      icon: <RefreshIcon size={12} />, iconColor: ACCENT,
+      icon: <RefreshIcon size={IconSize.action} />, iconColor: ACCENT,
       onClick: () => { setMenu(null); go(path || '/'); },
     },
     {
       id: 'up', label: 'Go up one',
-      icon: <ArrowToLeftIcon size={12} />, iconColor: 'var(--color-warning)',
+      icon: <ArrowToLeftIcon size={IconSize.action} />, iconColor: 'var(--color-warning)',
       disabled: !path || path === '/',
       onClick: () => { setMenu(null); go(parentOf(path)); },
     },
     { id: 'sep', label: '', separator: true },
     {
       id: 'saveDir', label: 'Download this directory',
-      icon: <DownloadIcon size={12} />, iconColor: 'var(--color-success)',
+      icon: <DownloadIcon size={IconSize.action} />, iconColor: 'var(--color-success)',
       onClick: () => {
         setMenu(null);
         postMsg({ type: 'files:downloadDir', ...target, path: path || '/', name: (path || '/').split('/').pop() || 'root' });
@@ -504,7 +503,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     },
     {
       id: 'copy', label: 'Copy this path',
-      icon: <CopyIcon size={12} />, iconColor: 'var(--color-text-secondary)',
+      icon: <CopyIcon size={IconSize.action} />, iconColor: 'var(--color-text-secondary)',
       onClick: () => { setMenu(null); void navigator.clipboard?.writeText(path || '/'); },
     },
   ];
@@ -601,7 +600,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
               border: `1px solid color-mix(in srgb, ${ACCENT} 34%, transparent)`,
             }}
           >
-            <ArrowToLeftIcon size={11} /> Back to search
+            <ArrowToLeftIcon size={IconSize.inline} /> Back to search
           </button>
         )}
         <span className="flex-1" />
@@ -773,7 +772,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           <div style={{ maxWidth: 520 }}>
             <EmptyStateView
               variant="medallion"
-              icon={<LockIcon size={22} />}
+              icon={<LockIcon size={IconSize.medallion} />}
               title="This pod will not open its filesystem"
               message={error}
               accentColor="var(--color-warning)"
@@ -870,7 +869,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
                 <div className="px-8 py-6">
                   <EmptyStateView
                     variant="medallion"
-                    icon={<FileSearchIcon size={22} />}
+                    icon={<FileSearchIcon size={IconSize.medallion} />}
                     title="Nothing matched"
                     message={`No file under ${path || '/'} matched that name.`}
                     accentColor="var(--color-warning)"
@@ -893,7 +892,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
                   <div className="px-8 py-6">
                     <EmptyStateView
                       variant="medallion"
-                      icon={<SearchIcon size={22} />}
+                      icon={<SearchIcon size={IconSize.medallion} />}
                       title="Find a file in this pod"
                       message="One `find`, starting at the path above. Enter runs it."
                       accentColor={ACCENT}
@@ -1128,7 +1127,7 @@ function ScopedSearch({
               <div className="px-6 py-4">
                 <EmptyStateView
                   variant="medallion"
-                  icon={<FileSearchIcon size={22} />}
+                  icon={<FileSearchIcon size={IconSize.medallion} />}
                   title="Nothing matched"
                   message={`No file under ${root} matched that name.`}
                   accentColor="var(--color-warning)"
@@ -1142,7 +1141,7 @@ function ScopedSearch({
               <div className="px-6 py-4">
                 <EmptyStateView
                   variant="medallion"
-                  icon={<SearchIcon size={22} />}
+                  icon={<SearchIcon size={IconSize.medallion} />}
                   title="Search under this folder"
                   message="One `find`, rooted here rather than at the pod. The file list behind stays where it is."
                   accentColor={ACCENT}
@@ -1235,9 +1234,9 @@ function InfoPanel({ entry, mount, onClose }: {
         <div className="flex items-center gap-2.5 pb-3 flex-wrap"
              style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
           <span style={{ display: 'flex', flexShrink: 0, color: isDir ? 'var(--color-warning)' : ACCENT }}>
-            {entry.disabledReason ? <LockIcon size={15} />
-              : isDir ? <FolderOpenIcon size={15} />
-                : <ExternalLinkIcon size={15} />}
+            {entry.disabledReason ? <LockIcon size={IconSize.row} />
+              : isDir ? <FolderOpenIcon size={IconSize.row} />
+                : <ExternalLinkIcon size={IconSize.row} />}
           </span>
           <span className="text-[12.5px] font-mono font-semibold"
                 style={{ color: 'var(--color-text-primary)', overflowWrap: 'anywhere' }}>
@@ -1271,7 +1270,7 @@ function InfoPanel({ entry, mount, onClose }: {
                  background: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
                  border: '1px solid color-mix(in srgb, var(--color-error) 26%, transparent)',
                }}>
-            <LockIcon size={12} color="var(--color-error)" />
+            <LockIcon size={IconSize.action} color="var(--color-error)" />
             <span className="text-[10.5px] leading-relaxed"
                   style={{ color: 'var(--color-error)' }}>{entry.disabledReason}</span>
           </div>

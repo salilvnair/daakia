@@ -10,7 +10,7 @@ import {
   CloseIcon, TerminalIcon, FileTextIcon, CodeIcon, StethoscopeIcon,
   SparkleIcon, ChevronLeftIcon, LayersIcon, LockIcon, FolderOpenIcon,
 } from '../../icons';
-import { CopyButtonView } from '@salilvnair/dui';
+import { CopyButtonView, IconSize } from '@salilvnair/dui';
 import { useK8sStore, type DetailTab } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
@@ -71,7 +71,7 @@ function NoAccess({ what, needs }: { what: string; needs: AccessKey }) {
   const rule = ACCESS_RULE[needs];
   return (
     <div className="flex flex-col items-center justify-center h-full gap-2.5 px-8 text-center">
-      <LockIcon size={22} color="var(--color-text-muted)" />
+      <LockIcon size={IconSize.medallion} color="var(--color-text-muted)" />
       <span className="text-[12.5px]" style={{ color: 'var(--color-text-primary)' }}>
         {what} needs access this account does not have
       </span>
@@ -184,7 +184,7 @@ function TerminalTab() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-3 px-8 text-center">
-      <TerminalIcon size={22} color={ACCENT} />
+      <TerminalIcon size={IconSize.medallion} color={ACCENT} />
       <span className="text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
         Open a shell in this pod
       </span>
@@ -206,7 +206,7 @@ function TerminalTab() {
           color: '#fff', fontWeight: 600,
         }}
       >
-        <TerminalIcon size={13} color={ACCENT} />
+        <TerminalIcon size={IconSize.item} color={ACCENT} />
         Open terminal
       </button>
       {capabilities?.shell && (
@@ -283,7 +283,7 @@ export function PodDetail() {
         <button type="button" onClick={goBack}
                 title={cameFromSearch ? 'Back to search results' : 'Back to pods'}
                 className="p-1 rounded cursor-pointer border-none bg-transparent">
-          <ChevronLeftIcon size={16} color="var(--color-text-secondary)" />
+          <ChevronLeftIcon size={IconSize.nav} color="var(--color-text-secondary)" />
         </button>
 
         <span style={{ width: 7, height: 7, borderRadius: 7, background: color, boxShadow: `0 0 8px ${color}` }} />
@@ -319,7 +319,7 @@ export function PodDetail() {
           }}
           title="Open a shell in this pod, in a VS Code terminal"
         >
-          <TerminalIcon size={12} />
+          <TerminalIcon size={IconSize.action} />
           Shell
         </button>
 
@@ -343,7 +343,7 @@ export function PodDetail() {
           }}
           title={aiOpen ? 'Hide AI analysis' : 'Show AI analysis'}
         >
-          <SparkleIcon size={12} color={AI_ACCENT} />
+          <SparkleIcon size={IconSize.action} color={AI_ACCENT} />
           AI{answers.length > 0 && ` · ${answers.length}`}
         </button>
 
@@ -374,7 +374,7 @@ export function PodDetail() {
           <CopyButtonView text={shellNotice.suggestion} size="xs" />
           <button type="button" onClick={dismissShellNotice}
                   className="p-1 rounded cursor-pointer border-none bg-transparent">
-            <CloseIcon size={11} color="var(--color-text-muted)" />
+            <CloseIcon size={IconSize.inline} color="var(--color-text-muted)" />
           </button>
         </div>
       )}
@@ -407,9 +407,12 @@ export function PodDetail() {
                     opacity: locked ? 0.45 : 1,
                   }}
                 >
+                  {/* One slot, one size. The lock was 11 and the tab's own
+                      icon 12, so the strip changed height as permissions
+                      resolved — the row twitching is what gives it away. */}
                   {locked
-                    ? <LockIcon size={11} color="var(--color-text-muted)" />
-                    : <Icon size={12} color={on ? ACCENT : 'var(--color-text-muted)'} />}
+                    ? <LockIcon size={IconSize.action} color="var(--color-text-muted)" />
+                    : <Icon size={IconSize.action} color={on ? ACCENT : 'var(--color-text-muted)'} />}
                   {label}
                 </button>
               );

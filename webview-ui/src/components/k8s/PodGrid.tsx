@@ -14,8 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SparklineView, SearchInputView, SegmentedControlView, CheckSquareIcon, EmptySquareIcon,
-  ModalView, ButtonView, FilterInputView,
-} from '@salilvnair/dui';
+  ModalView, ButtonView, FilterInputView, IconSize } from '@salilvnair/dui';
 import { useLongPress } from './use-long-press';
 import { PodContextMenu } from './PodContextMenu';
 import { useK8sStore, type PodSummary } from '../../store/k8s-store';
@@ -181,7 +180,7 @@ function Pulse({ pods }: { pods: PodSummary[] }) {
           border: `1px solid color-mix(in srgb, ${ACCENT} 45%, transparent)`,
         }}
       >
-        <SearchIcon size={12} />
+        <SearchIcon size={IconSize.action} />
         Quick Search
       </button>
 
@@ -520,7 +519,7 @@ function PodTable({ pods, onOpen, onMenu }: {
                       background: color, opacity: failing ? 1 : 0.7, flexShrink: 0,
                     }} />
                     {pod.name}
-                    <FavoriteStar pod={pod} size={11} />
+                    <FavoriteStar pod={pod} size={IconSize.inline} />
                   </span>
                 </td>
                 <td className="text-[11px] font-mono px-3 py-1.5 tabular-nums" style={cell}>
@@ -597,8 +596,8 @@ function GroupHeader({ group, collapsed, onToggle }: {
     >
       {onToggle && (
         collapsed
-          ? <ChevronRightIcon size={11} style={{ color: group.tint.label }} />
-          : <ChevronDownIcon size={11} style={{ color: group.tint.label }} />
+          ? <ChevronRightIcon size={IconSize.inline} style={{ color: group.tint.label }} />
+          : <ChevronDownIcon size={IconSize.inline} style={{ color: group.tint.label }} />
       )}
       <span className="text-[10px] font-mono font-semibold tracking-wide"
             style={{ color: group.tint.label }}>
@@ -818,8 +817,8 @@ export function PodGrid() {
           style={{ width: 22, height: 22, marginLeft: 4 }}
         >
           {selectMode
-            ? <CheckSquareIcon size={19} color={ACCENT} />
-            : <EmptySquareIcon size={19} color="var(--color-text-muted)" />}
+            ? <CheckSquareIcon size={IconSize.control} color={ACCENT} />
+            : <EmptySquareIcon size={IconSize.control} color="var(--color-text-muted)" />}
         </button>
 
         {/* Takes the row rather than capping at 560px — on a wide window the
@@ -916,7 +915,7 @@ export function PodGrid() {
               cursor: selected.length ? 'pointer' : 'not-allowed',
             }}
           >
-            <SearchIcon size={12} strokeWidth={2} />
+            <SearchIcon size={IconSize.action} strokeWidth={2} />
             Search {selected.length || ''} log{selected.length === 1 ? '' : 's'}
           </button>
 
@@ -935,7 +934,7 @@ export function PodGrid() {
               cursor: selected.length ? 'pointer' : 'not-allowed',
             }}
           >
-            <FolderExportIcon size={12} strokeWidth={2} />
+            <FolderExportIcon size={IconSize.action} strokeWidth={2} />
             Export {selected.length || ''} log{selected.length === 1 ? '' : 's'}
           </button>
 
@@ -969,7 +968,7 @@ export function PodGrid() {
               cursor: newlyStarred ? 'pointer' : 'not-allowed',
             }}
           >
-            <StarIcon size={12} filled={!newlyStarred} />
+            <StarIcon size={IconSize.action} filled={!newlyStarred} />
             Add {newlyStarred || ''} to favourites
           </button>
         </div>
@@ -984,7 +983,7 @@ export function PodGrid() {
                border: '1px solid color-mix(in srgb, var(--color-method-get) 30%, transparent)',
                color: 'var(--color-method-get)',
              }}>
-          <FolderExportIcon size={13} strokeWidth={1.8} />
+          <FolderExportIcon size={IconSize.item} strokeWidth={1.8} />
           <span className="font-medium">{exportState.summary}</span>
           {/* Selectable, not just a tooltip: the path is the thing you need
               next, and you usually need to paste it somewhere. */}

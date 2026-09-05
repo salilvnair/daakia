@@ -8,7 +8,7 @@
  * seconds while somebody is looking at the file list.
  */
 import { useEffect, useState } from 'react';
-import { EmptyStateView, ContextMenuView, BadgeChipView, type ContextMenuItem } from '@salilvnair/dui';
+import { EmptyStateView, ContextMenuView, BadgeChipView, type ContextMenuItem, IconSize } from '@salilvnair/dui';
 import { DownloadIcon, FolderOpenIcon, CloseIcon, ExternalLinkIcon, CopyIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sFilesStore, type Download } from '../../store/dk8s-files-store';
@@ -54,16 +54,16 @@ export function DownloadsPanel() {
       <div className="flex-1 min-h-0 grid place-items-center px-8">
         <EmptyStateView
           variant="medallion"
-          icon={<DownloadIcon size={22} />}
+          icon={<DownloadIcon size={IconSize.medallion} />}
           title="Nothing downloaded yet"
           message="Anything you save from Files or Search lands here, with the folder it went to."
           accentColor={ACCENT}
           hints={[
-            { key: <ExternalLinkIcon size={12} />,
+            { key: <ExternalLinkIcon size={IconSize.action} />,
               text: 'opens a file in the viewer, without downloading it' },
-            { key: <DownloadIcon size={12} />,
+            { key: <DownloadIcon size={IconSize.action} />,
               text: 'saves it to disk — streamed, so size is not a problem' },
-            { key: <FolderOpenIcon size={12} />,
+            { key: <FolderOpenIcon size={IconSize.action} />,
               text: 'takes a whole directory, the one action that needs tar' },
           ]}
         />
@@ -90,7 +90,7 @@ export function DownloadsPanel() {
               border: '1px solid var(--color-surface-border)',
             }}
           >
-            <FolderOpenIcon size={11} /> Show folder
+            <FolderOpenIcon size={IconSize.inline} /> Show folder
           </button>
         )}
         {done > 0 && (
@@ -105,7 +105,7 @@ export function DownloadsPanel() {
               border: '1px solid var(--color-surface-border)',
             }}
           >
-            <CloseIcon size={10} /> Clear
+            <CloseIcon size={IconSize.inline} /> Clear
           </button>
         )}
       </div>
@@ -151,21 +151,21 @@ function itemsFor(d: Download, close: () => void): ContextMenuItem[] {
   const folder = folderOf(d.dest);
   return [
     ...(done ? [{
-      id: 'reveal', label: 'Show in folder', icon: <FolderOpenIcon size={12} />,
+      id: 'reveal', label: 'Show in folder', icon: <FolderOpenIcon size={IconSize.action} />,
       onClick: () => { close(); postMsg({ type: 'files:revealFolder', path: folder }); },
     }] : []),
     {
-      id: 'copyPath', label: 'Copy path', icon: <CopyIcon size={12} />,
+      id: 'copyPath', label: 'Copy path', icon: <CopyIcon size={IconSize.action} />,
       onClick: () => { close(); void navigator.clipboard?.writeText(d.dest); },
     },
     {
-      id: 'copyFolder', label: 'Copy folder', icon: <CopyIcon size={12} />,
+      id: 'copyFolder', label: 'Copy folder', icon: <CopyIcon size={IconSize.action} />,
       onClick: () => { close(); void navigator.clipboard?.writeText(folder); },
     },
     ...(d.error ? [
       { id: 'sep', label: '', separator: true },
       {
-        id: 'copyError', label: 'Copy the reason it failed', icon: <CopyIcon size={12} />,
+        id: 'copyError', label: 'Copy the reason it failed', icon: <CopyIcon size={IconSize.action} />,
         onClick: () => { close(); void navigator.clipboard?.writeText(d.error ?? ''); },
       },
     ] : []),

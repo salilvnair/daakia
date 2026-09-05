@@ -18,8 +18,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView,
-} from '@salilvnair/dui';
+  BadgeChipView, IconSize } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
@@ -125,7 +124,7 @@ function FieldFilterChip({ filter, onFlip, onRemove }: {
         className="flex items-center px-1 cursor-pointer border-none bg-transparent h-full"
         style={{ color, opacity: 0.75 }}
       >
-        <CloseIcon size={9} />
+        <CloseIcon size={IconSize.chip} />
       </button>
     </span>
   );
@@ -191,7 +190,7 @@ function FieldFilterStrip({ filters, onFlip, onRemove, onClearAll }: {
       style={{ color: enabled ? 'var(--color-text-secondary)' : 'var(--color-text-muted)',
                opacity: enabled ? 1 : 0.35 }}
     >
-      {dir === 'left' ? <ChevronLeftIcon size={11} /> : <ChevronRightIcon size={11} />}
+      {dir === 'left' ? <ChevronLeftIcon size={IconSize.inline} /> : <ChevronRightIcon size={IconSize.inline} />}
     </button>
   );
 
@@ -225,7 +224,7 @@ function FieldFilterStrip({ filters, onFlip, onRemove, onClearAll }: {
                    border-none bg-transparent text-[10.5px] transition-opacity"
         style={{ color: 'var(--color-error)', opacity: 0.85 }}
       >
-        <FilterClearIcon size={11} />
+        <FilterClearIcon size={IconSize.inline} />
         Clear all
       </button>
     </div>
@@ -1097,7 +1096,7 @@ export function LogViewer() {
               >
                 {/* The same mark the menu's Clear filter carries, so the two
                     ways out of a filter look like one idea. */}
-                <FilterClearIcon size={13} />
+                <FilterClearIcon size={IconSize.item} />
               </button>
             ) : undefined}
           />
@@ -1130,10 +1129,10 @@ export function LogViewer() {
             buttons — and they sit apart from the controls that fetch. */}
         <IconButton on={logWrap} onClick={() => setLogWrap(!logWrap)}
                     title={logWrap ? 'Wrapping long lines' : 'Long lines run off the right'}
-                    icon={<WrapLinesIcon size={13} />} />
+                    icon={<WrapLinesIcon size={IconSize.item} />} />
         <IconButton on={foldTraces} onClick={() => setFoldTraces(!foldTraces)}
                     title={foldTraces ? 'Stack traces are folded' : 'Stack traces shown in full'}
-                    icon={<LayersIcon size={13} />} />
+                    icon={<LayersIcon size={IconSize.item} />} />
 
         <Sep />
 
@@ -1200,7 +1199,7 @@ export function LogViewer() {
           disabled={logLive}
           onClick={fetchLogs}
           title={logLive ? 'Following already refetches continuously' : 'Load these lines now'}
-          iconLeft={<RefreshIcon size={12} color={logLive ? 'var(--color-text-muted)' : ACCENT} />}
+          iconLeft={<RefreshIcon size={IconSize.action} color={logLive ? 'var(--color-text-muted)' : ACCENT} />}
           style={{
             background: logLive ? 'transparent' : 'color-mix(in srgb, var(--color-dk8s) 14%, transparent)',
             borderColor: logLive
@@ -1248,7 +1247,7 @@ export function LogViewer() {
         <IconButton
           onClick={openLogExport}
           title="Download — write this pod's log to a file, with the same options as a bulk export"
-          icon={<DownloadIcon size={13} />}
+          icon={<DownloadIcon size={IconSize.item} />}
         />
 
         <ButtonView
@@ -1260,7 +1259,7 @@ export function LogViewer() {
           disabled={!logs.length}
           onClick={analyzeBuffer}
           title="Ask AI for a timeline of what this log shows"
-          iconLeft={<SparkleIcon size={11} color={logs.length ? AI_ACCENT : 'var(--color-text-muted)'} />}
+          iconLeft={<SparkleIcon size={IconSize.inline} color={logs.length ? AI_ACCENT : 'var(--color-text-muted)'} />}
           style={{
             background: logs.length
               ? 'color-mix(in srgb, var(--color-protocol-ai) 16%, transparent)'
@@ -1448,7 +1447,7 @@ export function LogViewer() {
                             fontSize: 10, lineHeight: '15px',
                           }}
                         >
-                          {isOpen ? <ChevronDownIcon size={9} /> : <ChevronRightIcon size={9} />}
+                          {isOpen ? <ChevronDownIcon size={IconSize.chip} /> : <ChevronRightIcon size={IconSize.chip} />}
                           {isOpen ? 'hide' : (() => {
                             /*
                               How many of the hidden frames are known library
@@ -1497,7 +1496,7 @@ export function LogViewer() {
                             fontSize: 10, lineHeight: '15px',
                           }}
                         >
-                          <SparkleIcon size={9} /> Ask AI
+                          <SparkleIcon size={IconSize.chip} /> Ask AI
                         </button>
                       )}
                     </div>

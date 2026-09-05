@@ -10,7 +10,7 @@
  * directory — no tar in this image" rather than `tar: false`, because the
  * reader came here to find out what they can do, not to read a probe's output.
  */
-import { BadgeChipView } from '@salilvnair/dui';
+import { BadgeChipView, IconSize } from '@salilvnair/dui';
 import { LockIcon, RefreshIcon } from '../../icons';
 
 export interface Capability {
@@ -108,7 +108,7 @@ export function CapabilityPanel({ capabilities, onRecheck }: {
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center gap-3 px-3 py-1.5 flex-shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <LockIcon size={12} color="var(--color-text-muted)" />
+        <LockIcon size={IconSize.action} color="var(--color-text-muted)" />
         <span className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
           What this container will allow
         </span>
@@ -124,7 +124,7 @@ export function CapabilityPanel({ capabilities, onRecheck }: {
               border: '1px solid var(--color-surface-border)',
             }}
           >
-            <RefreshIcon size={11} /> Check again
+            <RefreshIcon size={IconSize.inline} /> Check again
           </button>
         )}
       </div>

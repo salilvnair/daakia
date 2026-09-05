@@ -11,6 +11,7 @@
  * sits now AND where the dump would take it, against the limit. Someone glances
  * at that and knows the answer before reading a word.
  */
+import { IconSize } from '@salilvnair/dui';
 import { WarningTriangleIcon, CheckCircleIcon, XCircleIcon, HelpCircleIcon, MemoryIcon } from '../../icons';
 import { useK8sStore, type MemoryProfile, type HeapDumpSafety, type SafetyVerdict } from '../../store/k8s-store';
 
@@ -143,7 +144,7 @@ export function MemoryPanel() {
                : 'var(--color-surface-border)'}`,
          }}>
       <div className="flex items-center gap-2 flex-wrap">
-        <MemoryIcon size={13} color={v?.color ?? 'var(--color-text-muted)'} />
+        <MemoryIcon size={IconSize.item} color={v?.color ?? 'var(--color-text-muted)'} />
         <span className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
           memory
         </span>
@@ -153,7 +154,7 @@ export function MemoryPanel() {
                   background: `color-mix(in srgb, ${v.color} 14%, transparent)`,
                   color: v.color, fontWeight: 600,
                 }}>
-            <v.Icon size={9} color={v.color} />
+            <v.Icon size={IconSize.chip} color={v.color} />
             {v.label}
           </span>
         )}

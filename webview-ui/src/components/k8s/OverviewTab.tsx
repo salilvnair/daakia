@@ -5,7 +5,7 @@
  * doing, what it is made of, and what Kubernetes has been saying about it —
  * on one screen, in the order you would actually ask.
  */
-import { CopyButtonView } from '@salilvnair/dui';
+import { CopyButtonView, IconSize } from '@salilvnair/dui';
 import { LayersIcon, ServerIcon, ClockIcon, NetworkIcon, WarningTriangleIcon } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { severityOf, severityColor, shortAge, restartLabel, formatBytes } from './pod-view';
@@ -34,7 +34,7 @@ function Card({ title, Icon, children }: {
     <div className="flex flex-col gap-1 px-3.5 py-3 rounded-lg"
          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)' }}>
       <div className="flex items-center gap-1.5 mb-1">
-        <Icon size={12} color={ACCENT} />
+        <Icon size={IconSize.action} color={ACCENT} />
         <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
           {title}
         </span>
@@ -162,7 +162,7 @@ export function OverviewTab() {
                    style={{ color: /Warning|Failed|BackOff|Unhealthy|Killing/.test(e)
                      ? 'var(--color-warning)' : 'var(--color-text-secondary)' }}>
                 {/Warning|Failed|BackOff|Unhealthy|Killing/.test(e) && (
-                  <WarningTriangleIcon size={10} color="var(--color-warning)" />
+                  <WarningTriangleIcon size={IconSize.inline} color="var(--color-warning)" />
                 )}
                 <span style={{ whiteSpace: 'pre-wrap' }}>{e}</span>
               </div>

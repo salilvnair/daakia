@@ -11,7 +11,7 @@
  * away.
  */
 import { useEffect, useRef } from 'react';
-import { ButtonView } from '@salilvnair/dui';
+import { ButtonView, IconSize } from '@salilvnair/dui';
 import {
   ChevronLeftIcon, SparkleIcon, MemoryIcon, LayersIcon, DocumentIcon, PlusIcon, CpuIcon,
   StethoscopeIcon,
@@ -31,22 +31,22 @@ const AI_ACCENT = 'var(--color-protocol-ai)';
 /** A colour per analyzer, kept even when its tab is not the active one. */
 const TABS: { id: AnalyzerId; label: string; icon: React.ReactNode; color: string; tagline: string }[] = [
   {
-    id: 'heap', label: 'Heap Dump', icon: <MemoryIcon size={13} />,
+    id: 'heap', label: 'Heap Dump', icon: <MemoryIcon size={IconSize.item} />,
     color: 'var(--color-protocol-graphql, #e535ab)',
     tagline: 'Retained sizes, dominators and leak suspects from a .hprof',
   },
   {
-    id: 'threads', label: 'Thread Dump', icon: <LayersIcon size={13} />,
+    id: 'threads', label: 'Thread Dump', icon: <LayersIcon size={IconSize.item} />,
     color: 'var(--color-dk8s)',
     tagline: 'Deadlocks, lock contention and thread-state distribution',
   },
   {
-    id: 'logs', label: 'Logs', icon: <DocumentIcon size={13} />,
+    id: 'logs', label: 'Logs', icon: <DocumentIcon size={IconSize.item} />,
     color: 'var(--color-warning)',
     tagline: 'Pattern extraction, bursts and anomaly detection',
   },
   {
-    id: 'cpu', label: 'Flight Recording', icon: <CpuIcon size={13} />,
+    id: 'cpu', label: 'Flight Recording', icon: <CpuIcon size={IconSize.item} />,
     color: 'var(--color-success)',
     tagline: 'Where the CPU went, and how it got there, from a .jfr',
   },
@@ -187,7 +187,7 @@ export function ArtifactDetail() {
            }}>
         <button type="button" onClick={close} title="Back to artifacts"
                 className="p-1 rounded cursor-pointer border-none bg-transparent">
-          <ChevronLeftIcon size={16} color="var(--color-text-secondary)" />
+          <ChevronLeftIcon size={IconSize.nav} color="var(--color-text-secondary)" />
         </button>
 
         {/* Where the pod header carries a status dot, this carries the kind —
@@ -195,7 +195,7 @@ export function ArtifactDetail() {
             file name at a glance. With nothing open there is no kind yet, so
             it carries the stethoscope this screen was reached by. */}
         <span style={{ color: empty ? 'var(--color-text-secondary)' : active.color, display: 'flex' }}>
-          {empty ? <StethoscopeIcon size={14} /> : active.icon}
+          {empty ? <StethoscopeIcon size={IconSize.row} /> : active.icon}
         </span>
 
         {/*
@@ -242,7 +242,7 @@ export function ArtifactDetail() {
 
         <ButtonView
           label="Open a file…" size="sm" variant="secondary"
-          iconLeft={<PlusIcon size={11} />}
+          iconLeft={<PlusIcon size={IconSize.inline} />}
           onClick={importFile}
           style={{ background: 'transparent' }}
         />
@@ -258,7 +258,7 @@ export function ArtifactDetail() {
           // Always the AI colour. Greying it when the panel is closed made the
           // icon read as disabled — the pod header keeps it lit and lets the
           // label and fill carry the on/off state.
-          iconLeft={<SparkleIcon size={11} color={AI_ACCENT} />}
+          iconLeft={<SparkleIcon size={IconSize.inline} color={AI_ACCENT} />}
           style={{
             background: aiOpen
               ? `color-mix(in srgb, ${AI_ACCENT} 16%, transparent)`

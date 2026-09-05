@@ -11,7 +11,7 @@
  * warning that only appears sometimes trains people to click through the times
  * it does not.
  */
-import { ModalView, ButtonView, CheckboxView } from '@salilvnair/dui';
+import { ModalView, ButtonView, CheckboxView, IconSize } from '@salilvnair/dui';
 import { WarningTriangleIcon, SparkleIcon } from '../../icons';
 import type { LogLine } from '../../store/k8s-store';
 import { softPrimary } from './button-style';
@@ -128,7 +128,7 @@ export function AnalyzeModal({
           <ButtonView
             label={`Send ${plan.sentLines.toLocaleString()} lines`}
             size="sm" variant="secondary" accentColor={ACCENT} color={ACCENT}
-            iconLeft={<SparkleIcon size={12} color={ACCENT} />}
+            iconLeft={<SparkleIcon size={IconSize.action} color={ACCENT} />}
             onClick={onConfirm}
             style={softPrimary(ACCENT)}
           />
@@ -154,7 +154,7 @@ export function AnalyzeModal({
                  background: 'color-mix(in srgb, var(--color-warning) 9%, transparent)',
                  border: '1px solid color-mix(in srgb, var(--color-warning) 30%, transparent)',
                }}>
-            <WarningTriangleIcon size={14} color="var(--color-warning)" />
+            <WarningTriangleIcon size={IconSize.row} color="var(--color-warning)" />
             <span className="flex flex-col gap-1.5 text-[11.5px] leading-relaxed"
                   style={{ color: 'var(--color-text-secondary)' }}>
               <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}>

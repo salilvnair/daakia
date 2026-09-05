@@ -8,7 +8,7 @@
  * "are you sure?".
  */
 import { useMemo, useState } from 'react';
-import { CopyButtonView } from '@salilvnair/dui';
+import { CopyButtonView, IconSize } from '@salilvnair/dui';
 import {
   StethoscopeIcon, SpinnerIcon, CheckCircleIcon, XCircleIcon,
   SparkleIcon, FolderOpenIcon, WarningTriangleIcon, CpuIcon, MemoryIcon,
@@ -85,7 +85,7 @@ function ActionCard({ action }: { action: PodAction }) {
            opacity: available ? 1 : 0.62,
          }}>
       <div className="flex items-start gap-2.5 px-3 py-2.5">
-        <Icon size={15} color={available ? ACCENT : 'var(--color-text-muted)'} />
+        <Icon size={IconSize.row} color={available ? ACCENT : 'var(--color-text-muted)'} />
 
         <div className="flex flex-col gap-1 flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -156,7 +156,7 @@ function ActionCard({ action }: { action: PodAction }) {
 
         {busy && (
           <span className="flex items-center gap-1.5 text-[11px] shrink-0" style={{ color: ACCENT }}>
-            <SpinnerIcon size={12} color={ACCENT} />
+            <SpinnerIcon size={IconSize.action} color={ACCENT} />
             working
           </span>
         )}
@@ -170,7 +170,7 @@ function ActionCard({ action }: { action: PodAction }) {
                background: 'color-mix(in srgb, var(--color-warning) 8%, transparent)',
                borderTop: '1px solid color-mix(in srgb, var(--color-warning) 25%, transparent)',
              }}>
-          <WarningTriangleIcon size={13} color="var(--color-warning)" />
+          <WarningTriangleIcon size={IconSize.item} color="var(--color-warning)" />
           <span className="text-[11px] flex-1" style={{ color: 'var(--color-text-secondary)' }}>
             {meta.warning}
           </span>
@@ -248,8 +248,8 @@ function ResultCard({ result }: { result: CollectResult }) {
          }}>
       <div className="flex items-center gap-2 px-3 py-2">
         {result.ok
-          ? <CheckCircleIcon size={13} color="var(--color-success)" />
-          : <XCircleIcon size={13} color="var(--color-error)" />}
+          ? <CheckCircleIcon size={IconSize.item} color="var(--color-success)" />
+          : <XCircleIcon size={IconSize.item} color="var(--color-error)" />}
         <span className="text-[11.5px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
           {meta?.label ?? result.kind}
         </span>
@@ -273,7 +273,7 @@ function ResultCard({ result }: { result: CollectResult }) {
                     border: `1px solid color-mix(in srgb, ${ACCENT} 35%, transparent)`,
                     color: ACCENT,
                   }}>
-            <SparkleIcon size={10} color={ACCENT} />
+            <SparkleIcon size={IconSize.inline} color={ACCENT} />
             Ask AI
           </button>
         )}
@@ -373,7 +373,7 @@ export function DoctorTab() {
   if (probeBusy) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-2">
-        <SpinnerIcon size={18} color={ACCENT} />
+        <SpinnerIcon size={IconSize.state} color={ACCENT} />
         <span className="text-[12px] text-[var(--color-text-muted)]">
           Looking at what this container has…
         </span>
@@ -384,7 +384,7 @@ export function DoctorTab() {
   if (capabilities?.unreachable) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-2 px-8 text-center">
-        <WarningTriangleIcon size={20} color="var(--color-warning)" />
+        <WarningTriangleIcon size={IconSize.state} color="var(--color-warning)" />
         <span className="text-[12px]" style={{ color: 'var(--color-text-primary)' }}>
           dk8s could not run anything inside this container.
         </span>
@@ -403,7 +403,7 @@ export function DoctorTab() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2.5 rounded-lg"
            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-surface-border)' }}>
         <div className="flex items-center gap-1.5">
-          <StethoscopeIcon size={13} color={ACCENT} />
+          <StethoscopeIcon size={IconSize.item} color={ACCENT} />
           <span className="text-[11px]" style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
             {runtime && runtime.runtime !== 'unknown'
               ? `${runtime.runtime} · detected from ${runtime.detectedFrom}`
@@ -463,7 +463,7 @@ export function DoctorTab() {
             <button type="button" onClick={reveal}
                     className="flex items-center gap-1 text-[10.5px] cursor-pointer bg-transparent border-none"
                     style={{ color: 'var(--color-text-secondary)' }}>
-              <FolderOpenIcon size={11} />
+              <FolderOpenIcon size={IconSize.inline} />
               open folder
             </button>
           </div>

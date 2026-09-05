@@ -20,7 +20,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CopyIcon, DownloadIcon, EyeIcon, CloseIcon, SparkleIcon } from '../../icons';
-import { ContextMenuView, BadgeChipView } from '@salilvnair/dui';
+import { ContextMenuView, BadgeChipView, IconSize } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useK8sStore } from '../../store/k8s-store';
@@ -226,20 +226,20 @@ export function FileViewer({
             tone={AI_TONE}
             style={{ opacity: text === null ? 0.4 : 1, gap: 3 }}
           >
-            <SparkleIcon size={8} /> Ask AI
+            <SparkleIcon size={IconSize.chip} /> Ask AI
           </BadgeChipView>
         </button>
         {copied && (
           <span className="text-[10px]" style={{ color: 'var(--color-success)' }}>copied</span>
         )}
         <IconBtn label="Copy what is shown" onClick={copy} disabled={text === null}>
-          <CopyIcon size={11} />
+          <CopyIcon size={IconSize.inline} />
         </IconBtn>
         <IconBtn label="Save to disk" onClick={save}>
-          <DownloadIcon size={11} />
+          <DownloadIcon size={IconSize.inline} />
         </IconBtn>
         <IconBtn label="Close" onClick={onClose}>
-          <CloseIcon size={11} />
+          <CloseIcon size={IconSize.inline} />
         </IconBtn>
       </div>
 
@@ -324,7 +324,7 @@ export function FileViewer({
           */
           ...(menu.selection.trim() ? [{
             id: 'copySel', label: 'Copy selection',
-            icon: <CopyIcon size={12} />, iconColor: ACCENT,
+            icon: <CopyIcon size={IconSize.action} />, iconColor: ACCENT,
             onClick: () => {
               setMenu(null);
               void navigator.clipboard?.writeText(menu.selection);
@@ -332,24 +332,24 @@ export function FileViewer({
           }] : []),
           {
             id: 'copyAll', label: 'Copy what is shown',
-            icon: <CopyIcon size={12} />, iconColor: ACCENT,
+            icon: <CopyIcon size={IconSize.action} />, iconColor: ACCENT,
             onClick: () => { setMenu(null); copy(); },
           },
           {
             id: 'copyPath', label: 'Copy path',
-            icon: <CopyIcon size={12} />, iconColor: 'var(--color-text-secondary)',
+            icon: <CopyIcon size={IconSize.action} />, iconColor: 'var(--color-text-secondary)',
             onClick: () => { setMenu(null); void navigator.clipboard?.writeText(path); },
           },
           { id: 'sep', label: '', separator: true },
           {
             id: 'ask', label: 'Ask AI about this file',
-            icon: <SparkleIcon size={12} />, iconColor: 'var(--color-primary-light)',
+            icon: <SparkleIcon size={IconSize.action} />, iconColor: 'var(--color-primary-light)',
             disabled: text === null,
             onClick: () => { setMenu(null); ask(); },
           },
           {
             id: 'save', label: 'Save to disk',
-            icon: <DownloadIcon size={12} />, iconColor: 'var(--color-success)',
+            icon: <DownloadIcon size={IconSize.action} />, iconColor: 'var(--color-success)',
             onClick: () => { setMenu(null); save(); },
           },
           ...(maskedCount ? [
@@ -359,7 +359,7 @@ export function FileViewer({
               label: revealed.size >= maskedCount
                 ? 'All values revealed'
                 : `Reveal all ${maskedCount} masked value${maskedCount === 1 ? '' : 's'}`,
-              icon: <EyeIcon size={12} />, iconColor: 'var(--color-error)',
+              icon: <EyeIcon size={IconSize.action} />, iconColor: 'var(--color-error)',
               disabled: revealed.size >= maskedCount,
               /*
                 Offered because hunting six eye icons down a properties file to
@@ -423,7 +423,7 @@ function LineRow({ line, revealed, onReveal, sh }: {
               border: '1px solid var(--color-surface-border)',
             }}
           >
-            <EyeIcon size={10} />
+            <EyeIcon size={IconSize.inline} />
           </button>
         </>
       )}

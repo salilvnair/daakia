@@ -14,8 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ButtonView, SearchInputView, SegmentedControlView, CheckboxView, HudView,
-  CheckSquareIcon, EmptySquareIcon, FilterInputView,
-} from '@salilvnair/dui';
+  CheckSquareIcon, EmptySquareIcon, FilterInputView, IconSize } from '@salilvnair/dui';
 import { CopyButtonView } from '@salilvnair/dui';
 import {
   MemoryIcon, CpuIcon, FileTextIcon, TimelineIcon, NetworkIcon,
@@ -89,7 +88,7 @@ function Row({ a, picked, onPick, onAskDelete }: {
              : 'var(--color-surface-border)'}`,
          }}>
       <CheckboxView checked={picked} size="xs" accentColor={ACCENT} onChange={onPick} />
-      <Icon size={15} color={ACCENT} />
+      <Icon size={IconSize.row} color={ACCENT} />
 
       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
@@ -132,7 +131,7 @@ function Row({ a, picked, onPick, onAskDelete }: {
           swapped this row's own buttons out — deleting one file and deleting
           ten are the same decision and should ask the same question. */}
       <ButtonView label="" size="sm" variant="secondary"
-                  iconLeft={<TrashIcon size={11} color={DANGER} />}
+                  iconLeft={<TrashIcon size={IconSize.inline} color={DANGER} />}
                   onClick={onAskDelete}
                   title="Delete this file"
                   style={{ background: 'transparent' }} />
@@ -220,8 +219,8 @@ export function ArtifactsView() {
           }}
         >
           {allShown
-            ? <CheckSquareIcon size={19} color={ACCENT} />
-            : <EmptySquareIcon size={19} color="var(--color-text-muted)" />}
+            ? <CheckSquareIcon size={IconSize.control} color={ACCENT} />
+            : <EmptySquareIcon size={IconSize.control} color="var(--color-text-muted)" />}
         </button>
 
         <div className="flex-1" style={{ minWidth: 200, paddingRight: 8 }}>
@@ -255,7 +254,7 @@ export function ArtifactsView() {
         */}
         <ButtonView label="Open a file…" size="sm" variant="secondary"
                     accentColor={ACCENT} color={ACCENT}
-                    iconLeft={<PlusIcon size={12} />}
+                    iconLeft={<PlusIcon size={IconSize.action} />}
                     onClick={importFile}
                     style={{
                       height: CTRL_H,
@@ -267,7 +266,7 @@ export function ArtifactsView() {
             directory these files live in, in the system file manager — the
             path is in the footer, and this saves copying it. */}
         <ButtonView label="Show folder" size="sm" variant="secondary"
-                    iconLeft={<FolderOpenIcon size={12} />}
+                    iconLeft={<FolderOpenIcon size={IconSize.action} />}
                     onClick={reveal}
                     title={dir
                       ? `Open ${dir} in your file manager`
@@ -284,7 +283,7 @@ export function ArtifactsView() {
           knows how to ask for a file.
         */}
         <ButtonView label="" size="sm" variant="secondary"
-                    iconLeft={<StethoscopeIcon size={13} />}
+                    iconLeft={<StethoscopeIcon size={IconSize.item} />}
                     onClick={() => openArtifactIn('heap')}
                     title="Open the analyzer — for a dump you already have on disk"
                     style={{ height: CTRL_H, width: CTRL_H, background: 'transparent' }} />
@@ -304,7 +303,7 @@ export function ArtifactsView() {
       <div className="flex-1 overflow-auto px-4 py-3 flex flex-col gap-2 min-h-0">
         {visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 px-8 text-center">
-            <StethoscopeIcon size={22} color="var(--color-text-muted)" />
+            <StethoscopeIcon size={IconSize.medallion} color="var(--color-text-muted)" />
             <span className="text-[12px]" style={{ color: 'var(--color-text-primary)' }}>
               {artifacts.length === 0 ? 'Nothing collected yet' : 'Nothing matches that filter'}
             </span>
@@ -353,7 +352,7 @@ export function ArtifactsView() {
               id: 'clear',
               // Red X, matching the pod grid's own convention: green to enter
               // a selection, red to leave it.
-              icon: <CloseIcon size={13} color={DANGER} />,
+              icon: <CloseIcon size={IconSize.item} color={DANGER} />,
               label: 'Cancel',
               title: 'Clear the selection',
               onClick: () => setPicked([]),
@@ -363,7 +362,7 @@ export function ArtifactsView() {
               // Red, because it is the one item here that destroys something.
               // Held at 80% so it reads as a warning rather than an alarm —
               // the HUD is already the accent colour around it.
-              icon: <TrashIcon size={13} color={DANGER} />,
+              icon: <TrashIcon size={IconSize.item} color={DANGER} />,
               label: `Delete ${picked.length}`,
               title: 'Delete the selected files from this machine',
               separator: true,

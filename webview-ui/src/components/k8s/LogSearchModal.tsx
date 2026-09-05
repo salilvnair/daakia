@@ -14,8 +14,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ModalView, ButtonView, SearchInputView, CheckboxView, SelectInputView,
   SegmentedControlView, FilterInputView, SearchFieldView, EmptyStateView,
-  CheckSquareIcon, EmptySquareIcon, BadgeChipView,
-} from '@salilvnair/dui';
+  CheckSquareIcon, EmptySquareIcon, BadgeChipView, IconSize } from '@salilvnair/dui';
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
   FolderExportIcon,
@@ -361,7 +360,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             : <ButtonView label="Search" size="sm" variant="secondary" accentColor={ACCENT}
                           color={canSearch ? ACCENT : 'var(--color-text-muted)'}
                           disabled={!canSearch}
-                          iconLeft={<SearchIcon size={12} color={canSearch ? ACCENT : 'var(--color-text-muted)'} />}
+                          iconLeft={<SearchIcon size={IconSize.action} color={canSearch ? ACCENT : 'var(--color-text-muted)'} />}
                           onClick={submit}
                           style={softPrimary(ACCENT, canSearch)} />}
         </div>
@@ -388,7 +387,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
             style={{ background: 'var(--color-surface-hover)' }}
           >
             <ChevronRightIcon
-              size={12}
+              size={IconSize.action}
               color="var(--color-text-muted)"
               style={{ transform: pickerOpen ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }}
             />
@@ -478,8 +477,8 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                               )}
                             >
                               {allPicked
-                                ? <CheckSquareIcon size={15} color={ACCENT} />
-                                : <EmptySquareIcon size={15} color="var(--color-text-muted)" />}
+                                ? <CheckSquareIcon size={IconSize.row} color={ACCENT} />
+                                : <EmptySquareIcon size={IconSize.row} color="var(--color-text-muted)" />}
                             </button>
                           ) : h}
                         </th>
@@ -638,7 +637,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         {searchIn === 'files' && (fileSearch.running || fileSearch.ran) && (
           <div className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[11.5px]"
                style={{ background: 'var(--color-surface-hover)' }}>
-            {fileSearch.running && <SpinnerIcon size={12} color={ACCENT} />}
+            {fileSearch.running && <SpinnerIcon size={IconSize.action} color={ACCENT} />}
             <span style={{ color: fileSearch.running ? ACCENT : 'var(--color-text-secondary)' }}>
               {fileSearch.running
                 ? `Scanning ${fileSearch.scanned} of ${fileSearch.total} pods`
@@ -665,7 +664,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
         {searchIn === 'logs' && (running || summary) && (
           <div className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[11.5px]"
                style={{ background: 'var(--color-surface-hover)' }}>
-            {running && <SpinnerIcon size={12} color={ACCENT} />}
+            {running && <SpinnerIcon size={IconSize.action} color={ACCENT} />}
             <span style={{ color: running ? ACCENT : 'var(--color-text-secondary)' }}>
               {running
                 // The archive pass is the slow half and runs after the live
@@ -714,7 +713,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 <ButtonView
                   label={`Export ${ticked.length || ''}`.trim()}
                   size="sm" variant="secondary"
-                  iconLeft={<FolderExportIcon size={11} />}
+                  iconLeft={<FolderExportIcon size={IconSize.inline} />}
                   disabled={!ticked.length}
                   onClick={() => setExportOpen(true)}
                   title={ticked.length
@@ -848,7 +847,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
               {running ? (
                 <EmptyStateView
                   variant="medallion"
-                  icon={<SpinnerIcon size={22} />}
+                  icon={<SpinnerIcon size={IconSize.medallion} />}
                   title="Scanning"
                   message={`Reading ${chosen.length} pod${chosen.length === 1 ? '' : 's'} on this machine, a line at a time.`}
                   accentColor={ACCENT}
@@ -856,7 +855,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
               ) : summary ? (
                 <EmptyStateView
                   variant="medallion"
-                  icon={<SearchIcon size={22} />}
+                  icon={<SearchIcon size={IconSize.medallion} />}
                   title="No pod matched"
                   message="Nothing left this machine — the logs were read and matched here, and only hits would have come back."
                   accentColor={ACCENT}
@@ -869,7 +868,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
               ) : chosen.length ? (
                 <EmptyStateView
                   variant="medallion"
-                  icon={<SearchIcon size={22} />}
+                  icon={<SearchIcon size={IconSize.medallion} />}
                   title="Search these pods' logs"
                   message={`${chosen.length} pod${chosen.length === 1 ? '' : 's'} selected. Type a string and search — the logs are read here and only the matching lines come back.`}
                   accentColor={ACCENT}
@@ -877,7 +876,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
               ) : (
                 <EmptyStateView
                   variant="medallion"
-                  icon={<SearchIcon size={22} />}
+                  icon={<SearchIcon size={IconSize.medallion} />}
                   title="Pick the pods to search"
                   message="Nothing is selected yet. Open the list above and choose, or take the lot."
                   accentColor={ACCENT}
@@ -910,7 +909,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                           borderTop: '1px solid var(--color-surface-border)',
                         }}
                       >
-                        {isCollapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} />}
+                        {isCollapsed ? <ChevronRightIcon size={IconSize.inline} /> : <ChevronDownIcon size={IconSize.inline} />}
                         {/* Ticking a pod must not also collapse it — the row
                             behind this is the expand/collapse target. */}
                         {r.matched > 0 && !r.error && (
@@ -938,7 +937,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                         )}
                         {r.error ? (
                           <span className="flex items-center gap-1" style={{ color: 'var(--color-error)' }}>
-                            <WarningTriangleIcon size={10} color="var(--color-error)" />
+                            <WarningTriangleIcon size={IconSize.inline} color="var(--color-error)" />
                             {r.error}
                           </span>
                         ) : (

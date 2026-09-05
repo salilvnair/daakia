@@ -10,6 +10,7 @@
  * dead-end when a cluster says no.
  */
 import { useEffect, useRef } from 'react';
+import { IconSize } from '@salilvnair/dui';
 import { Dk8sIcon, EyeIcon, StethoscopeIcon } from '../../icons';
 import { useK8sStore, type Dk8sView } from '../../store/k8s-store';
 import { KubectlSetupGuide } from './KubectlSetupGuide';
@@ -101,7 +102,7 @@ function Breadcrumb() {
       style={{ height: 42, borderBottom: '1px solid var(--color-surface-border)' }}
     >
       <div className="flex items-center justify-center flex-shrink-0" style={{ color: ACCENT }}>
-        <Dk8sIcon size={17} strokeWidth={1.8} />
+        <Dk8sIcon size={IconSize.nav} strokeWidth={1.8} />
       </div>
       <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Dk8s</span>
 
@@ -142,7 +143,7 @@ function Breadcrumb() {
           onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${ACCENT_FILL} 14%, transparent)`; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
         >
-          <EyeIcon size={12} strokeWidth={1.8} />
+          <EyeIcon size={IconSize.action} strokeWidth={1.8} />
           Watch
         </button>
       )}

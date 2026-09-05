@@ -17,7 +17,7 @@
  * shows, in the place the decision is actually being made.
  */
 import { useMemo } from 'react';
-import { ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
+import { ContextMenuView, type ContextMenuItem, IconSize } from '@salilvnair/dui';
 import {
   StarIcon, CopyIcon, TerminalIcon, FileTextIcon, StethoscopeIcon, FolderOpenIcon,
   CheckCircleIcon, XCircleIcon, CpuIcon, MemoryIcon, NetworkIcon, TimelineIcon,
@@ -36,12 +36,12 @@ const ACCENT = 'var(--color-dk8s)';
   depending on where it was reached from.
 */
 const DOCTOR: { id: ArtifactKind; icon: React.ReactNode }[] = [
-  { id: 'threaddump', icon: <CpuIcon size={13} /> },
-  { id: 'threaddump-sigquit', icon: <CpuIcon size={13} /> },
-  { id: 'histogram', icon: <MemoryIcon size={13} /> },
-  { id: 'heapdump', icon: <MemoryIcon size={13} /> },
-  { id: 'jfr', icon: <TimelineIcon size={13} /> },
-  { id: 'conns', icon: <NetworkIcon size={13} /> },
+  { id: 'threaddump', icon: <CpuIcon size={IconSize.item} /> },
+  { id: 'threaddump-sigquit', icon: <CpuIcon size={IconSize.item} /> },
+  { id: 'histogram', icon: <MemoryIcon size={IconSize.item} /> },
+  { id: 'heapdump', icon: <MemoryIcon size={IconSize.item} /> },
+  { id: 'jfr', icon: <TimelineIcon size={IconSize.item} /> },
+  { id: 'conns', icon: <NetworkIcon size={IconSize.item} /> },
 ];
 
 /*
@@ -178,7 +178,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         description: picked
           ? 'Drop this pod from the selection.'
           : 'Pick this pod, and others, to search or export together.',
-        icon: picked ? <XCircleIcon size={13} /> : <CheckCircleIcon size={13} />,
+        icon: picked ? <XCircleIcon size={IconSize.item} /> : <CheckCircleIcon size={IconSize.item} />,
         iconColor: picked ? 'var(--color-warning)' : undefined,
         onClick: () => {
           if (picked) togglePodSelected(pod.uid); else beginSelection(pod.uid);
@@ -189,13 +189,13 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
       {
         id: 'logs',
         label: 'Show logs',
-        icon: <FileTextIcon size={13} />,
+        icon: <FileTextIcon size={IconSize.item} />,
         onClick: () => { onOpen(pod, 'logs'); onClose(); },
       },
       {
         id: 'shell',
         label: 'Open shell',
-        icon: <TerminalIcon size={13} />,
+        icon: <TerminalIcon size={IconSize.item} />,
         // Offered only where it will work: a shell that opens on a 403 is a
         // worse answer than an item that says it is not yours to run.
         disabled: access?.exec === false,
@@ -208,17 +208,17 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
       {
         id: 'copy',
         label: 'Copy',
-        icon: <CopyIcon size={13} />,
+        icon: <CopyIcon size={IconSize.item} />,
         children: [
           {
             id: 'copy-pod', label: 'Pod name', shortcut: 'P',
-            icon: <CopyIcon size={13} />, onClick: copy(pod.name),
+            icon: <CopyIcon size={IconSize.item} />, onClick: copy(pod.name),
           },
           {
             id: 'copy-workload',
             label: pod.workload ? `${pod.workload.kind} name` : 'Workload name',
             shortcut: 'D',
-            icon: <CopyIcon size={13} />,
+            icon: <CopyIcon size={IconSize.item} />,
             // A bare pod has no owning workload, and copying its own name
             // under a second label would look like it had one.
             disabled: !pod.workload,
@@ -227,19 +227,19 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
           },
           {
             id: 'copy-ns', label: 'Namespace', shortcut: 'N',
-            icon: <CopyIcon size={13} />, onClick: copy(pod.namespace),
+            icon: <CopyIcon size={IconSize.item} />, onClick: copy(pod.namespace),
           },
           { id: 'copy-sep', label: '', separator: true },
           {
             id: 'copy-describe', label: 'Describe',
             description: 'Fetches it first, then copies.',
-            icon: <FileTextIcon size={13} />,
+            icon: <FileTextIcon size={IconSize.item} />,
             onClick: () => { copyPodText(pod, 'describe'); onClose(); },
           },
           {
             id: 'copy-yaml', label: 'YAML',
             description: 'Fetches it first, then copies.',
-            icon: <FileTextIcon size={13} />,
+            icon: <FileTextIcon size={IconSize.item} />,
             onClick: () => { copyPodText(pod, 'yaml'); onClose(); },
           },
         ],
@@ -247,7 +247,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
       {
         id: 'doctor',
         label: 'Doctor',
-        icon: <StethoscopeIcon size={13} />,
+        icon: <StethoscopeIcon size={IconSize.item} />,
         iconColor: ACCENT,
         children: doctor,
       },
@@ -259,7 +259,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         */
         id: 'explorer',
         label: 'Browse files',
-        icon: <FolderOpenIcon size={13} />,
+        icon: <FolderOpenIcon size={IconSize.item} />,
         onClick: () => { onOpen(pod, 'explorer'); onClose(); },
       },
       { id: 'sep-3', label: '', separator: true },
@@ -274,7 +274,7 @@ export function PodContextMenu({ pod, at, onClose, onConfirmUnfavorite, onOpen }
         */
         id: 'favorite',
         label: starred ? 'Remove from favourites' : 'Add to favourites',
-        icon: <StarIcon size={13} filled={starred} />,
+        icon: <StarIcon size={IconSize.item} filled={starred} />,
         iconColor: starred ? 'var(--color-warning)' : undefined,
         onClick: () => {
           if (starred) { onConfirmUnfavorite(pod); } else { toggleFavorite(key); }
