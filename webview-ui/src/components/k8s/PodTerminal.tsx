@@ -502,8 +502,11 @@ export function PodTerminal() {
         )}
       </div>
 
-      {/* ── the other way, kept ── */}
-      <div className="flex items-center gap-2 px-2.5 py-1 flex-shrink-0"
+      {/* ── the other way, kept ──
+          `py-2`, not `py-1`: the chip is 15px in a 23px strip, which left it
+          sitting on the panel's bottom edge with nothing under it. A control
+          flush against an edge reads as clipped rather than as placed. */}
+      <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
            style={{ borderTop: '1px solid var(--color-surface-border)' }}>
         <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>
           {phase === 'live'
