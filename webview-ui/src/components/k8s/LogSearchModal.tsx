@@ -17,7 +17,7 @@ import {
   CheckSquareIcon, EmptySquareIcon, BadgeChipView, IconSize } from '@salilvnair/dui';
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
-  FolderExportIcon,
+  FolderExportIcon, FilterIcon, ClockIcon, CodeIcon, RefreshIcon,
 } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
@@ -860,9 +860,12 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                   message="Nothing left this machine — the logs were read and matched here, and only hits would have come back."
                   accentColor={ACCENT}
                   hints={[
-                    { key: 'window', text: 'the time window is the commonest reason a search comes back empty' },
-                    { key: 'regex', text: 'off by default — a pattern typed as one is matched literally' },
-                    { key: 'runs', text: 'previous runs looks in the log a crash left behind' },
+                    { key: <ClockIcon size={IconSize.action} />,
+                      text: 'the time window is the commonest reason a search comes back empty' },
+                    { key: <CodeIcon size={IconSize.action} />,
+                      text: 'regex is off by default — a pattern typed as one is matched literally' },
+                    { key: <RefreshIcon size={IconSize.action} />,
+                      text: 'previous runs looks in the log a crash left behind' },
                   ]}
                 />
               ) : chosen.length ? (
@@ -881,8 +884,10 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                   message="Nothing is selected yet. Open the list above and choose, or take the lot."
                   accentColor={ACCENT}
                   hints={[
-                    { key: 'checkbox', text: 'the one at the head of the column selects every pod listed' },
-                    { key: 'filter', text: 'filter first, then select all, to take a subset' },
+                    { key: <CheckSquareIcon size={IconSize.action} />,
+                      text: 'the one at the head of the column selects every pod listed' },
+                    { key: <FilterIcon size={IconSize.action} />,
+                      text: 'filter first, then select all, to take a subset' },
                   ]}
                 />
               )}

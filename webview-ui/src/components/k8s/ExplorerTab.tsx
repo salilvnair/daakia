@@ -17,11 +17,12 @@ import {
   PathBreadcrumbView, FileBrowserView, SearchFieldView, SegmentedControlView,
   EmptyStateView, SelectInputView, ContextMenuView, ModalView, ButtonView, BadgeChipView,
   type ContextMenuItem,
-  type FileBrowserEntry, type FileBrowserAction, IconSize } from '@salilvnair/dui';
+  type FileBrowserEntry, type FileBrowserAction, IconSize, SkeletonView } from '@salilvnair/dui';
 import {
   ExternalLinkIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon, FolderOpenIcon,
   RefreshIcon,
-  CopyIcon, InfoCircleIcon, FileSearchIcon,
+  CopyIcon, InfoCircleIcon, FileSearchIcon, LayersIcon, FolderIcon,
+  CodeIcon, CodeBracketsIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
 import { FileViewer } from './FileViewer';
@@ -301,6 +302,16 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   const go = useCallback(async (to: string) => {
     setBusy(true);
     setPath(to);
+    /*
+      The old listing goes the moment the path does.
+
+      Keeping it was worse than showing nothing: the breadcrumb changed
+      immediately and the rows did not, so for the length of one exec the
+      previous directory's files sat under the new directory's name. That is
+      not a flicker, it is a wrong answer — and at ~120ms it is exactly long
+      enough to read one line of it.
+    */
+    setListing(null);
     const r = await request<Listing>('files:list', { path: to });
     setListing(r);
     setBusy(false);
@@ -819,7 +830,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           highlightId={flash}
           accentColor={ACCENT}
           size="sm"
-          emptyText={busy ? 'asking the pod…' : 'This directory is empty.'}
+          emptyText={busy ? <ListSkeleton /> : 'This directory is empty.'}
           footer={listing && (
             <>
               {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
@@ -874,9 +885,12 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
                     message={`No file under ${path || '/'} matched that name.`}
                     accentColor="var(--color-warning)"
                     hints={[
-                      { key: 'depth', text: 'the walk stops at the depth beside the box — raise it to look deeper' },
-                      { key: 'path', text: 'the search starts at the path above, not at /' },
-                      { key: 'glob', text: 'a bare word matches anywhere in the path; *name* matches the filename' },
+                      { key: <LayersIcon size={IconSize.action} />,
+                        text: 'the walk stops at the depth beside the box — raise it to look deeper' },
+                      { key: <FolderIcon size={IconSize.action} />,
+                        text: 'the search starts at the path above, not at /' },
+                      { key: <CodeBracketsIcon size={IconSize.action} />,
+                        text: 'a bare word matches anywhere in the path; *name* matches the filename' },
                     ]}
                   />
                 </div>
@@ -904,11 +918,11 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
                         frames, and the wider ones ran under the text.
                       */
                       hints={[
-                        { key: 'glob',
+                        { key: <CodeBracketsIcon size={IconSize.action} />,
                           text: '*invoice*, *.pdf — matched against the filename' },
-                        { key: 'regex',
+                        { key: <CodeIcon size={IconSize.action} />,
                           text: 'anything else: \.ya?ml$, inv[0-9]+ — matched against the path' },
-                        { key: 'cap',
+                        { key: <LayersIcon size={IconSize.action} />,
                           text: 'the depth beside the box, and a result cap — a large volume '
                             + 'cannot be walked forever' },
                       ]}
@@ -1123,7 +1137,7 @@ function ScopedSearch({
             onSelect={onSelect}
             selectedId={selectedId}
             onContextMenu={onContextMenu}
-            emptyText={busy ? 'searching…' : hits ? (
+            emptyText={busy ? <ListSkeleton rows={5} /> : hits ? (
               <div className="px-6 py-4">
                 <EmptyStateView
                   variant="medallion"
@@ -1132,8 +1146,10 @@ function ScopedSearch({
                   message={`No file under ${root} matched that name.`}
                   accentColor="var(--color-warning)"
                   hints={[
-                    { key: 'depth', text: 'the walk stops at the depth beside the box' },
-                    { key: 'scope', text: 'only this folder and what is under it is searched' },
+                    { key: <LayersIcon size={IconSize.action} />,
+                      text: 'the walk stops at the depth beside the box' },
+                    { key: <FolderIcon size={IconSize.action} />,
+                      text: 'only this folder and what is under it is searched' },
                   ]}
                 />
               </div>
@@ -1146,9 +1162,12 @@ function ScopedSearch({
                   message="One `find`, rooted here rather than at the pod. The file list behind stays where it is."
                   accentColor={ACCENT}
                   hints={[
-                    { key: 'glob', text: '*invoice*, *.pdf — matched against the filename' },
-                    { key: 'regex', text: 'anything else — matched against the path' },
-                    { key: 'recursive', text: 'every directory under this one, to the depth beside the box' },
+                    { key: <CodeBracketsIcon size={IconSize.action} />,
+                      text: '*invoice*, *.pdf — matched against the filename' },
+                    { key: <CodeIcon size={IconSize.action} />,
+                      text: 'anything else — matched against the path' },
+                    { key: <LayersIcon size={IconSize.action} />,
+                      text: 'every directory under this one, to the depth beside the box' },
                   ]}
                 />
               </div>
@@ -1160,6 +1179,40 @@ function ScopedSearch({
         </div>
       </div>
     </ModalView>
+  );
+}
+
+/**
+ * The shape of the answer, while the answer is on its way.
+ *
+ * Rows rather than a spinner, because a spinner says "something is happening"
+ * and this says "a file list is coming" — the panel does not change shape when
+ * the real rows arrive, which is what stops the eye being pulled back to a
+ * region it had already finished reading.
+ *
+ * Deliberately not the LAST directory's row count: a guess that is usually
+ * wrong makes the list jump twice. Eight is enough to read as a list and short
+ * enough that no directory looks emptier than it is.
+ */
+function ListSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-1.5 px-3 py-2" aria-label="loading" aria-busy="true">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-3" style={{ height: 20 }}>
+          <SkeletonView variant="block" width={13} height={13} />
+          {/*
+            Names vary in length and the widths here vary with them, because a
+            column of identical bars reads as a progress meter rather than as
+            a list. The sizes shrink down the list so it does not look like a
+            table of one repeated value.
+          */}
+          <SkeletonView variant="text" width={`${34 - (i % 4) * 6}%`} height={9} />
+          <span style={{ flex: 1 }} />
+          <SkeletonView variant="text" width={44} height={9} />
+          <SkeletonView variant="text" width={78} height={9} />
+        </div>
+      ))}
+    </div>
   );
 }
 
