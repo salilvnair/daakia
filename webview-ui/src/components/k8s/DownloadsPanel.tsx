@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from 'react';
 import { EmptyStateView, ContextMenuView, type ContextMenuItem } from '@salilvnair/dui';
-import { DownloadIcon, FolderOpenIcon, CloseIcon, EyeIcon, CopyIcon } from '../../icons';
+import { DownloadIcon, FolderOpenIcon, CloseIcon, ExternalLinkIcon, CopyIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sFilesStore, type Download } from '../../store/dk8s-files-store';
 
@@ -59,7 +59,7 @@ export function DownloadsPanel() {
           message="Anything you save from Files or Search lands here, with the folder it went to."
           accentColor={ACCENT}
           hints={[
-            { key: <EyeIcon size={12} />,
+            { key: <ExternalLinkIcon size={12} />,
               text: 'opens a file in the viewer, without downloading it' },
             { key: <DownloadIcon size={12} />,
               text: 'saves it to disk — streamed, so size is not a problem' },

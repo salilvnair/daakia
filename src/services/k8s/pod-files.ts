@@ -32,6 +32,16 @@ export interface FileEntry {
   modified?: string;
   /** Where a symlink points, when `ls` told us. */
   linkTarget?: string;
+  /**
+   * What the symlink resolves to.
+   *
+   * A link is not a kind of thing, it is a pointer at one, and the difference
+   * decides what can be done with it: `/bin -> usr/bin` offered "view" and ran
+   * `cat /bin`, which fails with "Is a directory" — an error the reader can do
+   * nothing with, about a row that should have opened as a folder. Absent when
+   * the link is broken, which is also the honest answer for one.
+   */
+  linkKind?: FileEntry['kind'];
   /** The mode string, kept so the UI can explain an unreadable entry. */
   mode?: string;
   /** Owner and group as `ls` printed them — a name, or a number if unresolved. */
@@ -272,7 +282,7 @@ export async function listDirectory(t: PodTarget, path: string): Promise<ListRes
     return ad - bd || a.name.localeCompare(b.name);
   });
 
-  await fillLinkSizes(t, path, entries);
+  await resolveLinks(t, path, entries);
 
   /*
     Mark what we can see but cannot open.
@@ -288,7 +298,7 @@ export async function listDirectory(t: PodTarget, path: string): Promise<ListRes
 }
 
 /**
- * Give symlinks the size of what they point at.
+ * Follow every symlink far enough to know what it IS.
  *
  * `ls -l` reports a symlink's own size, which is the length of the target
  * STRING — 29 bytes for a link to a 4 KB properties file. Showing that would
@@ -309,7 +319,7 @@ export async function listDirectory(t: PodTarget, path: string): Promise<ListRes
  * A broken link stays sizeless. `ls -L` cannot stat what is not there, and a
  * dash is the honest answer for a link that leads nowhere.
  */
-async function fillLinkSizes(
+async function resolveLinks(
   t: PodTarget, path: string, entries: FileEntry[],
 ): Promise<void> {
   if (!entries.some(e => e.kind === 'link')) return;
@@ -317,15 +327,19 @@ async function fillLinkSizes(
   const r = await run(execArgs(t, ['ls', '-lLAn', path]));
   if (r.code !== 0 && !r.stdout.trim()) return;
 
-  const sizes = new Map<string, number>();
+  const resolved = new Map<string, FileEntry>();
   for (const line of r.stdout.split('\n')) {
     const e = parseLsLine(line, path);
-    // Only a link that resolves to a regular file has a size worth showing;
-    // a link to a directory is still a directory.
-    if (e?.kind === 'file' && e.size !== undefined) sizes.set(e.name, e.size);
+    if (e) resolved.set(e.name, e);
   }
   for (const e of entries) {
-    if (e.kind === 'link' && e.size === undefined) e.size = sizes.get(e.name);
+    if (e.kind !== 'link') continue;
+    const to = resolved.get(e.name);
+    if (!to) continue;
+    e.linkKind = to.kind;
+    // Only a link to a regular file has a size worth showing; the size `ls`
+    // reports for a directory is the size of the directory entry itself.
+    if (to.kind === 'file' && e.size === undefined) e.size = to.size;
   }
 }
 

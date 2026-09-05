@@ -20,8 +20,8 @@ import {
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
 import {
-  EyeIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon, FolderOpenIcon,
-  CopyIcon, InfoCircleIcon,
+  ExternalLinkIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon, FolderOpenIcon,
+  CopyIcon, InfoCircleIcon, FileSearchIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
 import { FileViewer } from './FileViewer';
@@ -41,6 +41,8 @@ export interface ExplorerEntry {
   mode?: string;
   owner?: string;
   group?: string;
+  /** What a symlink resolves to; absent when it is broken. */
+  linkKind?: 'file' | 'dir' | 'link' | 'other';
 }
 
 interface Listing {
@@ -148,8 +150,16 @@ function DepthPicker({ value, onChange }: { value: number; onChange: (v: number)
         value={String(value)}
         onChange={v => onChange(Number(v))}
         options={[2, 4, 6, 8, 12].map(d => ({ value: String(d), label: `depth ${d}` }))}
-        size="xs"
-        width={104}
+        /*
+          The same size token as the field beside it.
+
+          dui sizes every control off one scale, so `sm` here and `sm` there is
+          what keeps a row of controls on one baseline — an `xs` select next to
+          an `sm` input is two heights on one line, and the eye reads that as a
+          mistake before it reads either control.
+        */
+        size="sm"
+        width={112}
         accentColor={ACCENT}
       />
     </span>
@@ -389,31 +399,34 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   const actions: FileBrowserAction[] = [
     {
       id: 'open', label: 'Open in the viewer', tone: 'accent',
-      icon: <EyeIcon size={12} />,
+      icon: <ExternalLinkIcon size={12} />,
       // A folder opens by clicking its name; the eye is for files that can be
       // rendered, and its absence is how a row says nothing here can show it.
       /*
-        Symlinks count as files here.
+        A symlink counts as whatever it points at.
 
-        `cat` follows a link without being asked, so reading one has always
-        worked — the actions were just never offered. That mattered more than
-        it sounds: a ConfigMap mount is the ordinary way a Spring Boot pod gets
-        its application.properties, and Kubernetes projects every key in one as
-        a symlink into a timestamped directory. The whole of /config was
-        therefore unopenable in the one place people most want to look.
+        `cat` follows a link without being asked, so reading one through a link
+        to a FILE always worked and the actions were simply never offered —
+        which mattered, because a ConfigMap mount projects every key as a
+        symlink and that made the whole of /config unopenable.
+
+        But a link to a DIRECTORY is a directory, and offering to view it ran
+        `cat /bin` and returned "Is a directory": an error the reader can do
+        nothing with, on a row that should have opened as a folder. So the
+        resolved kind decides, and a broken link — one that resolves to nothing
+        — offers neither.
       */
-      show: e => (e.kind === 'file' || e.kind === 'link')
-        && e.badge !== 'binary' && e.badge !== 'too large',
+      show: e => fileLike(e) && e.badge !== 'binary' && e.badge !== 'too large',
     },
     {
       id: 'save', label: 'Save to disk',
       icon: <DownloadIcon size={12} />,
-      show: e => e.kind === 'file' || e.kind === 'link',
+      show: e => fileLike(e),
     },
     {
       id: 'saveDir', label: 'Download this directory', tone: 'success',
       icon: <DownloadIcon size={12} />,
-      show: e => e.kind === 'dir',
+      show: e => dirLike(e),
     },
   ];
 
@@ -439,9 +452,9 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     };
     return [
       ...(can('open') ? [{
-        id: 'open', label: 'View', icon: <EyeIcon size={12} />,
+        id: 'open', label: 'Open as text', icon: <ExternalLinkIcon size={12} />,
       }] : []),
-      ...(e.kind === 'dir' ? [{
+      ...(dirLike(e) ? [{
         id: 'go', label: 'Open folder', icon: <FolderOpenIcon size={12} />,
       }] : []),
       ...(can('save') ? [{
@@ -487,6 +500,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       size: e.size,
       modified: e.modified,
       linkTarget: e.linkTarget,
+      linkKind: e.linkKind,
       badge: k.badge,
       badgeTone: k.tone,
       fullPath: e.path,
@@ -524,7 +538,13 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   const error = mode === 'files' ? listing?.error : (hits?.error ?? listing?.error);
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0"
+         /*
+           The type badges take this panel's accent rather than dui's default.
+           A file list inside dk8s should look like dk8s, and the badge is the
+           one part of the row that carries a colour of its own.
+         */
+         style={{ ['--dui-file-badge' as string]: ACCENT } as React.CSSProperties}>
       {/* ── bar ── */}
       <div className="flex items-center gap-3 px-3 py-2 flex-shrink-0 flex-wrap"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
@@ -737,7 +757,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           entries={rows}
           onParent={path && path !== '/' ? () => go(parentOf(path)) : undefined}
           onOpen={e => {
-            if (e.kind === 'dir') go((e as FileBrowserEntry & { fullPath: string }).fullPath);
+            if (dirLike(e)) go((e as FileBrowserEntry & { fullPath: string }).fullPath);
             else if (actions[0].show?.(e)) onAction('open', e);
           }}
           actions={actions}
@@ -785,7 +805,30 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
           size="sm"
           emptyText={
             busy ? 'searching…'
-              : pattern ? 'Nothing matched that name.'
+              /*
+                Keyed on a search having RUN, not on the box having text.
+
+                It was `pattern ? ...`, so the first keystroke replaced the
+                instructions with "Nothing matched that name" — a verdict on a
+                search nobody had asked for yet, delivered while the reader was
+                still typing the thing they wanted to search for.
+              */
+              : hits ? (
+                <div className="px-8 py-6">
+                  <EmptyStateView
+                    variant="medallion"
+                    icon={<FileSearchIcon size={22} />}
+                    title="Nothing matched"
+                    message={`No file under ${path || '/'} matched that name.`}
+                    accentColor="var(--color-warning)"
+                    hints={[
+                      { key: 'depth', text: 'the walk stops at the depth beside the box — raise it to look deeper' },
+                      { key: 'path', text: 'the search starts at the path above, not at /' },
+                      { key: 'glob', text: 'a bare word matches anywhere in the path; *name* matches the filename' },
+                    ]}
+                  />
+                </div>
+              )
                 : (
                   /*
                     The same medallion the Downloads tab uses. A bare line of
@@ -861,6 +904,28 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
   );
 }
 
+/**
+ * What a row behaves as, following the link if there is one.
+ *
+ * `kind` says what the entry IS; these say what it points at, which is what
+ * every action here actually cares about. A link with no resolved kind is
+ * broken — it names something that is not there — and answers false to both,
+ * so it offers nothing rather than offering something that will fail.
+ */
+function resolvedKind(e: FileBrowserEntry): string | undefined {
+  const k = e.kind;
+  if (k !== 'link') return k;
+  return (e as FileBrowserEntry & { linkKind?: string }).linkKind;
+}
+
+function fileLike(e: FileBrowserEntry): boolean {
+  return resolvedKind(e) === 'file';
+}
+
+function dirLike(e: FileBrowserEntry): boolean {
+  return resolvedKind(e) === 'dir';
+}
+
 /** The absolute path a row carries, whichever list it came from. */
 function fullOf(e: FileBrowserEntry): string {
   return (e as FileBrowserEntry & { fullPath?: string }).fullPath ?? e.name;
@@ -934,7 +999,7 @@ function InfoPanel({ entry, mount, onClose }: {
           <span style={{ display: 'flex', flexShrink: 0, color: isDir ? 'var(--color-warning)' : ACCENT }}>
             {entry.disabledReason ? <LockIcon size={15} />
               : isDir ? <FolderOpenIcon size={15} />
-                : <EyeIcon size={15} />}
+                : <ExternalLinkIcon size={15} />}
           </span>
           <span className="text-[12.5px] font-mono font-semibold"
                 style={{ color: 'var(--color-text-primary)', overflowWrap: 'anywhere' }}>

@@ -14,11 +14,11 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   ModalView, ButtonView, SearchInputView, CheckboxView, SelectInputView,
   SegmentedControlView, FilterInputView, SearchFieldView, EmptyStateView,
+  CheckSquareIcon, EmptySquareIcon,
 } from '@salilvnair/dui';
 import {
   SearchIcon, SpinnerIcon, WarningTriangleIcon, ChevronDownIcon, ChevronRightIcon,
   FolderExportIcon,
-  FilterIcon, FilterClearIcon,
 } from '../../icons';
 import { useK8sStore } from '../../store/k8s-store';
 import { favoriteKey, useFavoriteKeys } from '../../store/dk8s-favorites-store';
@@ -457,20 +457,30 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                               borderBottom: '1px solid var(--color-surface-border)',
                               width: i === 0 ? 28 : undefined,
                             }}>
+                          {/*
+                            The header cell gets the same square the pod grid
+                            uses to enter selection mode, not dui's filled
+                            checkbox: this row is a header, and it should look
+                            like the control people already know rather than
+                            like a nineteenth pod.
+                          */}
                           {i === 0 ? (
-                            <span title={allPicked ? 'Clear all' : 'Select all'}
-                                  style={{ display: 'inline-flex' }}>
-                            <CheckboxView
-                              checked={allPicked}
-                              size="xs"
-                              accentColor={ACCENT}
-                              onChange={() => setPicked(
+                            <button
+                              type="button"
+                              title={allPicked ? 'Clear all' : 'Select all'}
+                              aria-label={allPicked ? 'Clear all' : 'Select all'}
+                              className="flex items-center justify-center cursor-pointer border-none bg-transparent p-0"
+                              style={{ width: 18, height: 18 }}
+                              onClick={() => setPicked(
                                 allPicked
                                   ? picked.filter(u => !pickable.some(p => p.uid === u))
                                   : [...new Set([...picked, ...pickable.map(p => p.uid)])],
                               )}
-                            />
-                            </span>
+                            >
+                              {allPicked
+                                ? <CheckSquareIcon size={15} color={ACCENT} />
+                                : <EmptySquareIcon size={15} color="var(--color-text-muted)" />}
+                            </button>
                           ) : h}
                         </th>
                       ))}
@@ -555,7 +565,7 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
                 value={String(fileDepth)}
                 onChange={v => setFileDepth(Number(v))}
                 options={[2, 4, 6, 8, 12].map(d => ({ value: String(d), label: `depth ${d}` }))}
-                size="xs" width={104} accentColor={ACCENT}
+                size="md" width={112} accentColor={ACCENT}
               />
             </span>
           )}

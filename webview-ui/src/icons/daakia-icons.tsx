@@ -760,6 +760,18 @@ export function InfoCircleIcon(props: IconProps) {
   );
 }
 
+/** A file with a magnifier: searched, and there was nothing of this name. */
+export function FileSearchIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h9" />
+      <polyline points="14 2 14 8 20 8" />
+      <circle cx="15" cy="16" r="3" />
+      <line x1="17.3" y1="18.3" x2="20" y2="21" />
+    </svg>
+  );
+}
+
 export function WarningTriangleIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

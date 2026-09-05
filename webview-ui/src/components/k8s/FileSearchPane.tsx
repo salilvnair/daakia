@@ -15,7 +15,7 @@ import {
   EmptyStateView, FileBrowserView,
   type FileBrowserEntry, type FileBrowserAction,
 } from '@salilvnair/dui';
-import { SearchIcon, FolderOpenIcon, LockIcon, EyeIcon, DownloadIcon,
+import { SearchIcon, FolderOpenIcon, LockIcon, ExternalLinkIcon, DownloadIcon,
   ChevronRightIcon, ChevronDownIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
@@ -249,7 +249,7 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
         const actions: FileBrowserAction[] = [
           {
             id: 'open', label: 'Open in the viewer', tone: 'accent',
-            icon: <EyeIcon size={12} />,
+            icon: <ExternalLinkIcon size={12} />,
             show: e => e.badge !== 'binary',
           },
           { id: 'save', label: 'Save to disk', icon: <DownloadIcon size={12} /> },
@@ -329,6 +329,7 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload }:
 
             {open && (
             <FileBrowserView
+              style={{ ['--dui-file-badge' as string]: ACCENT } as React.CSSProperties}
               entries={entries}
               showHeader={false}
               showSize={false}
