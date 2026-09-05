@@ -22,7 +22,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import {
   BadgeChipView, EmptyStateView, IconSize, SwatchPickerView, TableSkeletonView,
-  TERMINAL_PALETTES, resolveTerminalTheme, groundMode,
+  resolveTerminalTheme, groundMode,
 } from '@salilvnair/dui';
 import {
   TerminalIcon, SparkleIcon, CopyIcon, TrashIcon, RefreshIcon, CloseIcon, LockIcon,
@@ -30,6 +30,7 @@ import {
 import { postMsg } from '../../vscode';
 import { useK8sStore } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
+import { useDk8sTerminalStore } from '../../store/dk8s-terminal-store';
 import { ACCENT, AI, OK, BAD, WARN, MUTED } from './tone';
 
 type Phase = 'idle' | 'opening' | 'live' | 'ended' | 'error';
@@ -64,8 +65,6 @@ function groundOf(el: HTMLElement): string {
  */
 const TIDY_LS = "export LS_COLORS='ow=01;36:tw=01;36:st=01;36'; clear\r";
 
-/** The palette, remembered per person. */
-const THEME_PREF = 'dk8s.terminal.palette';
 
 export function PodTerminal() {
   const detail = useK8sStore(s => s.detail);
@@ -87,11 +86,20 @@ export function PodTerminal() {
     of the cluster — so it is stored, and it is the one thing here that
     survives closing the tab.
   */
-  const [themeId, setThemeId] = useState(() => {
-    try { return localStorage.getItem(THEME_PREF) ?? TERMINAL_PALETTES[0].id; }
-    catch { return TERMINAL_PALETTES[0].id; }
-  });
-  const palette = TERMINAL_PALETTES.find(t => t.id === themeId) ?? TERMINAL_PALETTES[0];
+  /*
+    The palette and the preferences come from the settings store.
+
+    They used to be a `useState` and a localStorage key right here, which was
+    the right size for one swatch row and the wrong size the moment themes
+    could be imported: the Settings tab and the terminal have to agree on
+    which six are on the strip, and two copies of that never do.
+  */
+  const prefs = useDk8sTerminalStore(st => st.prefs);
+  const activeId = useDk8sTerminalStore(st => st.active);
+  const setActive = useDk8sTerminalStore(st => st.setActive);
+  const palette = useDk8sTerminalStore(st => st.theme)();
+  const strip = useDk8sTerminalStore(st => st.strip)();
+
   const [shell, setShell] = useState<string>();
   const [problem, setProblem] = useState<{
     error: string; suggestion?: string; suggestionLabel?: string;
@@ -143,8 +151,9 @@ export function PodTerminal() {
   useEffect(() => {
     const noShell = capabilities && !capabilities.shell && !capabilities.unreachable;
     if (noShell) { setPhase('idle'); return; }
+    if (!prefs.openOnArrival) { setPhase(p => (p === 'opening' ? 'idle' : p)); return; }
     if (!idRef.current && phase === 'opening' && detail && container) start();
-  }, [detail, container, phase, start, capabilities]);
+  }, [detail, container, phase, start, capabilities, prefs.openOnArrival]);
 
   // ── the xterm instance, created once ──────────────────────────────────
   useEffect(() => {
@@ -152,10 +161,11 @@ export function PodTerminal() {
     if (!host) return;
 
     const term = new Terminal({
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-      fontSize: 12,
-      lineHeight: 1.25,
-      cursorBlink: true,
+      fontFamily: prefs.fontFamily,
+      fontSize: prefs.fontSize,
+      lineHeight: prefs.lineHeight,
+      cursorBlink: prefs.cursorBlink,
+      cursorStyle: prefs.cursorStyle,
       /*
         Ten thousand lines, not the default thousand.
 
@@ -165,7 +175,7 @@ export function PodTerminal() {
         terminal is a few megabytes, which is affordable for something that
         lives as long as a tab.
       */
-      scrollback: 10_000,
+      scrollback: prefs.scrollback,
       theme: resolveTerminalTheme(palette, groundMode(groundOf(host)), groundOf(host)),
       allowProposedApi: true,
     });
@@ -176,6 +186,20 @@ export function PodTerminal() {
 
     termRef.current = term;
     fitRef.current = fit;
+
+    /*
+      Copy on select, when it is asked for.
+
+      Off by default because this terminal lives inside an editor, where
+      selecting text does NOT usually put it on the clipboard — matching the
+      surrounding application beats matching xterm's own tradition. On, it
+      behaves the way a terminal does.
+    */
+    const onSel = term.onSelectionChange(() => {
+      if (!useDk8sTerminalStore.getState().prefs.copyOnSelect) return;
+      const sel = term.getSelection();
+      if (sel) void navigator.clipboard?.writeText(sel);
+    });
 
     const onData = term.onData(d => {
       if (idRef.current) postMsg({ type: 'term:input', id: idRef.current, data: d });
@@ -207,6 +231,7 @@ export function PodTerminal() {
       if (idRef.current) postMsg({ type: 'term:close', id: idRef.current });
       idRef.current = '';
       ro.disconnect();
+      onSel.dispose();
       onData.dispose();
       term.dispose();
       termRef.current = null;
@@ -222,12 +247,32 @@ export function PodTerminal() {
   */
   useEffect(() => {
     const host = hostRef.current;
-    if (termRef.current && host) {
-      const bg = groundOf(host);
-      termRef.current.options.theme = resolveTerminalTheme(palette, groundMode(bg), bg);
-    }
-    try { localStorage.setItem(THEME_PREF, palette.id); } catch { /* private mode */ }
-  }, [palette]);
+    const term = termRef.current;
+    if (!term || !host) return;
+    const bg = groundOf(host);
+    term.options.theme = resolveTerminalTheme(palette, groundMode(bg), bg);
+    /*
+      Type and cursor are applied the same way, and for the same reason.
+
+      Every one of these is a live option on the instance; rebuilding the
+      terminal to change a font size would clear the scrollback, and losing the
+      output you were reading in order to make it bigger is a bad trade.
+      Re-fitting after is what keeps the column count honest — a larger font in
+      the same box is fewer columns, and the far end has to be told.
+    */
+    term.options.fontFamily = prefs.fontFamily;
+    term.options.fontSize = prefs.fontSize;
+    term.options.lineHeight = prefs.lineHeight;
+    term.options.cursorBlink = prefs.cursorBlink;
+    term.options.cursorStyle = prefs.cursorStyle;
+    term.options.scrollback = prefs.scrollback;
+    try {
+      fitRef.current?.fit();
+      if (idRef.current) {
+        postMsg({ type: 'term:resize', id: idRef.current, cols: term.cols, rows: term.rows });
+      }
+    } catch { /* mid-layout; the observer will settle it */ }
+  }, [palette, prefs]);
 
   // ── host messages ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -244,7 +289,9 @@ export function PodTerminal() {
             const t = termRef.current;
             if (t) {
               postMsg({ type: 'term:resize', id: idRef.current, cols: t.cols, rows: t.rows });
-              postMsg({ type: 'term:input', id: idRef.current, data: TIDY_LS });
+              if (useDk8sTerminalStore.getState().prefs.tidyLsColors) {
+                postMsg({ type: 'term:input', id: idRef.current, data: TIDY_LS });
+              }
               t.focus();
             }
           }
@@ -337,7 +384,7 @@ export function PodTerminal() {
     everywhere else in the pod: go back.
   */
   useEffect(() => {
-    if (phase !== 'live') return;
+    if (phase !== 'live' || !prefs.escapeCloses) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
@@ -346,7 +393,7 @@ export function PodTerminal() {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [phase]);
+  }, [phase, prefs.escapeCloses]);
 
   const distroless = capabilities && !capabilities.shell && !capabilities.unreachable;
 
@@ -374,10 +421,11 @@ export function PodTerminal() {
         {/* The palette, chosen by looking at it. Names are tooltips: nobody
             picks a terminal theme from a word. */}
         <SwatchPickerView
-          options={TERMINAL_PALETTES.map(t => ({ id: t.id, label: t.label, color: t.swatch }))}
-          value={palette.id}
-          onChange={setThemeId}
-          size={11}
+          options={strip.map(t => ({ id: t.id, label: t.label, color: t.swatch }))}
+          value={activeId}
+          onChange={setActive}
+          size={16}
+          initials
           style={{ marginRight: 4 }}
         />
 
@@ -436,12 +484,16 @@ export function PodTerminal() {
               icon={phase === 'error' ? <LockIcon size={IconSize.medallion} />
                 : <TerminalIcon size={IconSize.medallion} />}
               title={phase === 'error' ? 'That shell did not open'
-                : 'No shell in this container'}
-              message={problem?.error
-                ?? 'This container looks distroless — there is nothing to exec into. '
-                 + 'A debug container with a shell in it is the way in.'}
+                : distroless ? 'No shell in this container'
+                  : 'Open a shell in this pod'}
+              message={problem?.error ?? (distroless
+                ? 'This container looks distroless — there is nothing to exec into. '
+                  + 'A debug container with a shell in it is the way in.'
+                : 'A real PTY in this pod, over the Kubernetes exec API — no port is '
+                  + 'opened and no credential leaves your machine.')}
               accentColor={phase === 'error' ? WARN : ACCENT}
-              action={distroless ? undefined : { label: 'Try again', onClick: start }}
+              action={distroless ? undefined
+                : { label: phase === 'error' ? 'Try again' : 'Open terminal', onClick: start }}
               hints={problem?.suggestion
                 ? [{ key: <TerminalIcon size={IconSize.action} />, text: problem.suggestion }]
                 : undefined}

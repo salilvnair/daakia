@@ -451,6 +451,61 @@ in-house wording. Omit "levelMap" entirely otherwise.
 - Set "confidence" honestly. Below 0.5 tells the reader to check it before
   saving, which is the point of showing them.`;
 
+/**
+ * A terminal palette, described in words and returned as a theme file.
+ *
+ * The template goes out with the request, so the shape is shown rather than
+ * described — a model handed an exact object to fill in returns an object, and
+ * a model handed a schema in English returns an essay about palettes.
+ *
+ * Nothing here is trusted on the way back. The answer goes through the same
+ * validator an imported file does, which refuses any value that is not a plain
+ * colour, and the user sees the theme rendered before it is applied. The rules
+ * below are about the palette being GOOD, not about it being safe; safety is
+ * not something a prompt can be responsible for.
+ */
+export const DK8S_TERMINAL_THEME = `
+You design terminal colour schemes. You are given a template theme object and a
+description of what someone wants. Fill in the template and reply with it.
+
+Reply with the JSON object and nothing else. No prose, no markdown fence.
+
+Keep every key that is in the template, and add none. Every value must be a hex
+colour: #rgb, #rrggbb or #rrggbbaa, except "selectionBackground", which may
+also be rgba(r,g,b,a). Nothing else is a colour here, and anything else is
+rejected before anyone sees it.
+
+Give "id" a short lowercase-and-dashes name derived from the description, and
+"label" the two or three words a person would call it.
+
+━━━ WHAT MAKES ONE WORK ━━━
+- "dark" is for a dark background and "light" is for a light one, and they are
+  not the same colours darkened. A green that reads on #16161e disappears on
+  white; the light variant needs darker, more saturated ink. Choose both.
+- The background is NOT yours to set and is not in the template. These colours
+  sit on whatever the surrounding panel uses, so each has to hold against both
+  a near-black and a near-white ground.
+- "foreground" is the tone most of the text will be. Aim for a legible
+  off-white on dark and an off-black on light — a pure #fff body under muted
+  syntax reads as unfinished.
+- "brightBlack" is what dimmed text and stack frames use. It has to be visibly
+  lower contrast than "foreground" and still readable.
+- The eight base colours and their eight bright counterparts should be
+  recognisably the same hue, with the bright one lighter or more saturated —
+  not a different colour.
+- "cursor" should be findable at a glance without being the loudest thing on
+  screen.
+- Red, yellow and green carry meaning in a terminal: errors, warnings and
+  success. Keep them distinguishable from one another even when the
+  description pulls the whole palette toward a single hue.
+
+━━━ MATCHING THE DESCRIPTION ━━━
+Take the description as the mood, not as a literal instruction. "Warm" means
+the palette leans warm, not that every colour becomes orange. If it names a
+real published theme, produce your best rendering of that theme rather than
+something adjacent to it.
+`;
+
 /** The registry, keyed the way the webview asks for them. */
 export const DK8S_PROMPTS: Record<string, string> = {
   'dk8s.log.askWhy': DK8S_LOG_ASK_WHY,
@@ -470,6 +525,7 @@ export const DK8S_PROMPTS: Record<string, string> = {
   'dk8s.describe.explain': DK8S_DESCRIBE_EXPLAIN,
   'dk8s.file.explain': DK8S_FILE_EXPLAIN,
   'dk8s.format.detect': DK8S_DETECT_FORMAT,
+  'dk8s.terminal.theme': DK8S_TERMINAL_THEME,
 };
 
 /** What each prompt is offered as in the UI. */
