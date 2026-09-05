@@ -344,7 +344,7 @@ export function TerminalSettings() {
                   small ones in the rows — comparing six themes on one ground
                   is the comparison worth making. */}
               <SegmentedControlView
-                size="xs" accentColor={ACCENT}
+                size="sm" accentColor={ACCENT}
                 options={[{ label: 'Dark', value: 'dark' }, { label: 'Light', value: 'light' }]}
                 value={ground}
                 onChange={v => setGround(v as Ground)}

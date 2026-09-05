@@ -540,6 +540,16 @@ interface K8sState {
   setLogSelection: (sel?: LogSelection) => void;
   openShell: () => void;
   openVsCodeShell: () => void;
+  /**
+   * Open the Terminal tab with the shell starting in `path`.
+   *
+   * Consumed once by PodTerminal when it opens the session, then cleared —
+   * it describes one opening rather than a property of the pod, and leaving
+   * it set would send you back to that directory every time the tab remounts.
+   */
+  openShellIn: (path: string) => void;
+  terminalCwd?: string;
+  clearTerminalCwd: () => void;
   dismissShellNotice: () => void;
   setGuardHeapDump: (on: boolean) => void;
   setLogLineNumbers: (on: boolean) => void;
@@ -917,6 +927,20 @@ export const useK8sStore = create<K8sState>((set, get) => ({
       container: logContainer,
     });
   },
+
+  openShellIn: (path) => {
+    const { detail } = get();
+    if (!detail) return;
+    logUiEvent('dk8s.shell', {
+      context: detail.context, namespace: detail.namespace, pod: detail.name,
+      // The directory is part of the record: "opened a shell" and "opened a
+      // shell in /var/lib/secrets" are not the same event to an auditor.
+      cwd: path, into: 'panel', from: 'explorer',
+    });
+    set({ shellNotice: undefined, terminalCwd: path, detailTab: 'terminal' });
+  },
+
+  clearTerminalCwd: () => set({ terminalCwd: undefined }),
 
   dismissShellNotice: () => set({ shellNotice: undefined }),
 

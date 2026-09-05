@@ -37,6 +37,35 @@ const DNS_NAME = /^[a-z0-9]([a-z0-9-]{0,251}[a-z0-9])?$/;
 /** Session ids are ours, but they come back from the webview, so they are checked too. */
 const SESSION_ID = /^t[0-9a-z]{4,32}$/;
 
+/**
+ * A directory to open the shell in, and the one field here that becomes shell
+ * text rather than an API parameter.
+ *
+ * ── Why this needs a rule the others do not ──
+ *
+ * Namespace, pod and container are passed to the Kubernetes API as parameters,
+ * so there is no command for them to be injected into. A starting directory is
+ * different: it can only be applied by sending `cd` to the shell, which is a
+ * shell word. And the value does NOT come from the user — it comes from a
+ * directory listing inside the container, so a hostile image could plant a
+ * filename and have it run without anyone typing it.
+ *
+ * ── Why single quotes, and why this shape ──
+ *
+ * Inside single quotes a POSIX shell interprets nothing at all — no
+ * substitution, no globbing, no escapes — with exactly one exception: the
+ * closing quote itself. So a path with no single quote in it is inert once
+ * wrapped, and this pattern is what guarantees that. Control characters are
+ * out for the same reason a newline would be: it would end the command and
+ * start another one.
+ *
+ * Absolute only, because a relative path against an unknown working directory
+ * is not a location. `--` goes in front of the quoted path so a directory
+ * named like an option is still a directory.
+ */
+export const START_DIR = new RegExp('^/[^' + chr39() + String.fromCharCode(0) + '-' + String.fromCharCode(31) + ']{0,4095}$');
+function chr39() { return String.fromCharCode(39); }
+
 function targetOf(msg: Record<string, unknown>): TerminalTarget | undefined {
   const namespace = String(msg.namespace ?? '');
   const pod = String(msg.pod ?? '');
@@ -72,6 +101,17 @@ export async function handleTerminalOpen(
   const id = String(msg.id ?? '');
   if (!SESSION_ID.test(id)) return;
 
+  /*
+    A bad directory is dropped, not refused.
+
+    The shell is the thing being asked for; landing in the container's default
+    directory is a worse answer than the one requested and a much better one
+    than no terminal at all. The path is echoed back so the view can say where
+    it actually started.
+  */
+  const wanted = typeof msg.cwd === 'string' ? msg.cwd : '';
+  const cwd = wanted && START_DIR.test(wanted) ? wanted : '';
+
   const target = targetOf(msg);
   if (!target) {
     post({ type: 'term:error', id, error: 'That pod, namespace or container name is not a valid Kubernetes name.' });
@@ -103,7 +143,26 @@ export async function handleTerminalOpen(
       onExit: (sid, reason) => post({ type: 'term:exit', id: sid, reason }),
     });
 
-    post({ type: 'term:opened', id, shell: probe.shell, container: target.container });
+    /*
+      `cd` is written as input rather than folded into the exec command.
+
+      The session runs the bare shell, and building `sh -c "cd X && exec sh"`
+      would put a path inside a command string on the host — the one place it
+      is worth not having one. Sent as a keystroke it goes through the same
+      path a person typing it would, already quoted, and a shell that cannot
+      change to the directory says so in the terminal where it can be read.
+    */
+    if (cwd) {
+      const q = String.fromCharCode(39);
+      write(id, 'cd -- ' + q + cwd + q + ' 2>/dev/null || true\r');
+    }
+
+    post({
+      type: 'term:opened', id, shell: probe.shell, container: target.container,
+      cwd: cwd || undefined,
+      // Said only when it was asked for and refused, so silence is not a claim.
+      cwdRejected: wanted && !cwd ? wanted : undefined,
+    });
   } catch (err) {
     post({
       type: 'term:error', id,

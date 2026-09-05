@@ -12,14 +12,16 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import {
-  EmptyStateView, FileBrowserView,
+  EmptyStateView, FileBrowserView, ContextMenuView,
   type FileBrowserEntry, type FileBrowserAction, IconSize } from '@salilvnair/dui';
 import { FileSearchIcon, SearchIcon, FolderOpenIcon, LockIcon, ExternalLinkIcon, DownloadIcon,
+  TerminalIcon, CopyIcon, LayersIcon,
   ChevronRightIcon, ChevronDownIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 
-import { ACCENT, MATCH, MUTED } from './tone';
+import { ACCENT, MATCH, MUTED, INFO, AI } from './tone';
+import { useK8sStore } from '../../store/k8s-store';
 
 export interface FileSearchPod {
   uid: string;
@@ -167,6 +169,12 @@ export function useFileSearch(): FileSearchState & {
   };
 }
 
+/** The folder a hit lives in — `cd` into a file is not a thing. */
+function dirOf(path: string): string {
+  const cut = path.lastIndexOf('/');
+  return cut > 0 ? path.slice(0, cut) : '/';
+}
+
 export interface HitTarget {
   pod: string; namespace: string; context: string; path?: string;
 }
@@ -211,6 +219,19 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload, m
     same failure the jump itself was fixing, only in the other direction — so
     the flash fires on the way back in, and never on a click.
   */
+  /*
+    A menu of this view's own, because the browser's is worse than nothing.
+
+    Right-clicking a result gave Copy and Select All over a list that has
+    neither — the same gap the Explorer's rows had before they grew one. These
+    are the actions the row's own icons offer plus the two that only make sense
+    once you know which pod a hit is in.
+  */
+  const [menu, setMenu] = useState<{ target: HitTarget; x: number; y: number } | null>(null);
+  const openShellIn = useK8sStore(st => st.openShellIn);
+  const openDetail = useK8sStore(st => st.openDetail);
+  const pods = useK8sStore(st => st.pods);
+
   const [returnFlash, setReturnFlash] = useState<string | undefined>(state.selected);
   /*
     A hit is a pod AND a path, never a path.
@@ -400,6 +421,10 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload, m
                 else if (id === 'save') onDownload(t);
                 else onOpenExplorer(t);
               }}
+              onContextMenu={(e, ev) => {
+                setFS({ selected: hitKey(key, e.id) });
+                setMenu({ target: { ...r, path: e.id }, x: ev.clientX, y: ev.clientY });
+              }}
             />
             )}
 
@@ -438,6 +463,69 @@ export function FileSearchResults({ state, onOpenExplorer, onView, onDownload, m
           search ran, every pod replied, and none of them had it. So it says
           which term found nothing, in the colour a hit would have been
           written in, and offers the two things that usually fix it. */}
+      <ContextMenuView
+        open={!!menu}
+        anchorEl={null}
+        position={menu ? { x: menu.x, y: menu.y } : undefined}
+        onClose={() => setMenu(null)}
+        items={!menu ? [] : [
+          {
+            id: 'open', label: 'View',
+            icon: <ExternalLinkIcon size={IconSize.action} />, iconColor: ACCENT,
+            onClick: () => { const t = menu.target; setMenu(null); onView(t); },
+          },
+          {
+            id: 'explorer', label: 'Open in Explorer',
+            icon: <FolderOpenIcon size={IconSize.action} />, iconColor: 'var(--color-warning)',
+            onClick: () => { const t = menu.target; setMenu(null); onOpenExplorer(t); },
+          },
+          {
+            id: 'save', label: 'Download',
+            icon: <DownloadIcon size={IconSize.action} />, iconColor: 'var(--color-success)',
+            onClick: () => { const t = menu.target; setMenu(null); onDownload(t); },
+          },
+          { id: 'sep', label: '', separator: true },
+          {
+            /*
+              The reason this menu exists.
+
+              A hit is a path in a particular pod, and the thing you most often
+              want next is to be standing in that directory with a shell. Doing
+              it by hand is: note the pod, leave the search, open the pod, open
+              Terminal, retype the path.
+            */
+            id: 'shell', label: 'Open shell in this folder',
+            icon: <TerminalIcon size={IconSize.action} />, iconColor: ACCENT,
+            onClick: () => {
+              const t = menu.target;
+              setMenu(null);
+              const pod = pods.find(p => p.name === t.pod && p.namespace === t.namespace);
+              if (pod) openDetail(pod);
+              openShellIn(dirOf(t.path ?? '/'));
+            },
+          },
+          { id: 'sep2', label: '', separator: true },
+          {
+            id: 'copyPath', label: 'Copy path',
+            icon: <CopyIcon size={IconSize.action} />, iconColor: 'var(--color-text-secondary)',
+            onClick: () => {
+              const t = menu.target; setMenu(null);
+              void navigator.clipboard?.writeText(t.path ?? '');
+            },
+          },
+          {
+            // The pod is the half of a hit the path does not carry, and it is
+            // what you paste into a kubectl command.
+            id: 'copyPod', label: 'Copy pod name',
+            icon: <LayersIcon size={IconSize.action} />, iconColor: INFO,
+            onClick: () => {
+              const t = menu.target; setMenu(null);
+              void navigator.clipboard?.writeText(t.pod);
+            },
+          },
+        ]}
+      />
+
       {!state.running && withHits.length === 0 && failed.length === 0 && (
         <div className="flex-1 min-h-0 grid place-items-center px-8 py-6">
           <EmptyStateView

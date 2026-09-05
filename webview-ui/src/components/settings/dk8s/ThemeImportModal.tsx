@@ -164,6 +164,7 @@ export function ThemeImportModal({ onClose }: { onClose: () => void }) {
             </span>
             <TextInputView
               size="sm"
+              accentColor={AI}
               placeholder="warm low-contrast, amber accents, easy at night"
               value={wish}
               onChange={e => setWish(e.target.value)}
@@ -207,6 +208,7 @@ export function ThemeImportModal({ onClose }: { onClose: () => void }) {
           >
             <MultilineInputView
               size="sm" rows={9} resize="vertical"
+              accentColor={ACCENT}
               spellCheck={false}
               placeholder='{ "id": "my-theme", "label": "My Theme", "dark": { … } }'
               value={text}

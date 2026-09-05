@@ -22,9 +22,10 @@ import {
   ExternalLinkIcon, DownloadIcon, SearchIcon, LockIcon, ArrowToLeftIcon, FolderOpenIcon,
   RefreshIcon,
   CopyIcon, InfoCircleIcon, FileSearchIcon, LayersIcon, FolderIcon,
-  CodeIcon, CodeBracketsIcon,
+  CodeIcon, CodeBracketsIcon, TerminalIcon,
 } from '../../icons';
 import { postMsg } from '../../vscode';
+import { useK8sStore } from '../../store/k8s-store';
 import { FileViewer } from './FileViewer';
 import { DownloadsPanel } from './DownloadsPanel';
 import { CapabilityPanel, capabilitiesFrom } from './CapabilityPanel';
@@ -221,6 +222,7 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     { entry: FileBrowserEntry | null; x: number; y: number } | null>(null);
   /** The folder a scoped search was opened on, or none. */
   const [scopedSearch, setScopedSearch] = useState<string | null>(null);
+  const openShellIn = useK8sStore(st => st.openShellIn);
   const [info, setInfo] = useState<FileBrowserEntry | null>(null);
   const [path, setPath] = useState<string>('');
   const [listing, setListing] = useState<Listing | null>(null);
@@ -445,6 +447,19 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
         id: 'searchHere', label: 'Search in this folder',
         icon: <SearchIcon size={IconSize.action} />, iconColor: INFO,
       }] : []),
+      /*
+        A shell, already standing where the row is.
+
+        For a directory that is the directory; for a file it is the directory
+        holding it, because `cd` into a file is not a thing and "take me to
+        where this lives" is what someone right-clicking a file and asking for
+        a shell means.
+      */
+      {
+        id: 'shellHere',
+        label: dirLike(e) ? 'Open shell here' : 'Open shell in this folder',
+        icon: <TerminalIcon size={IconSize.action} />, iconColor: ACCENT,
+      },
       ...(can('save') ? [{
         id: 'save', label: 'Download',
         icon: <DownloadIcon size={IconSize.action} />, iconColor: 'var(--color-success)',
@@ -480,6 +495,11 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
       onClick: () => { setMenu(null); setScopedSearch(path || '/'); },
     },
     {
+      id: 'shellHere', label: 'Open shell here',
+      icon: <TerminalIcon size={IconSize.action} />, iconColor: ACCENT,
+      onClick: () => { setMenu(null); openShellIn(path || '/'); },
+    },
+    {
       id: 'refresh', label: 'Refresh',
       icon: <RefreshIcon size={IconSize.action} />, iconColor: ACCENT,
       onClick: () => { setMenu(null); go(path || '/'); },
@@ -510,6 +530,11 @@ export function ExplorerTab({ context, namespace, pod, container, initialPath,
     setMenu(null);
     if (id === 'go') { setMode('files'); go(fullOf(e)); return; }
     if (id === 'searchHere') { setScopedSearch(fullOf(e)); return; }
+    if (id === 'shellHere') {
+      const full = fullOf(e);
+      openShellIn(dirLike(e) ? full : parentOf(full));
+      return;
+    }
     if (id === 'copy') { void navigator.clipboard?.writeText(fullOf(e)); return; }
     if (id === 'info') { setInfo(e); return; }
     onAction(id, e);

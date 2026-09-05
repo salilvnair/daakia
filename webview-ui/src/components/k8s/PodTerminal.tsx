@@ -31,7 +31,7 @@ import { postMsg } from '../../vscode';
 import { useK8sStore } from '../../store/k8s-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { useDk8sTerminalStore } from '../../store/dk8s-terminal-store';
-import { ACCENT, AI, OK, BAD, WARN, MUTED } from './tone';
+import { ACCENT, AI, OK, BAD, WARN, MUTED, INFO } from './tone';
 
 type Phase = 'idle' | 'opening' | 'live' | 'ended' | 'error';
 
@@ -71,6 +71,8 @@ export function PodTerminal() {
   const logContainer = useK8sStore(s => s.logContainer);
   const capabilities = useK8sStore(s => s.capabilities);
   const openVsCodeShell = useK8sStore(s => s.openVsCodeShell);
+  const terminalCwd = useK8sStore(s => s.terminalCwd);
+  const clearTerminalCwd = useK8sStore(s => s.clearTerminalCwd);
   const ask = useDk8sAiStore(s => s.ask);
 
   const hostRef = useRef<HTMLDivElement>(null);
@@ -101,6 +103,7 @@ export function PodTerminal() {
   const strip = useDk8sTerminalStore(st => st.strip)();
 
   const [shell, setShell] = useState<string>();
+  const [startedIn, setStartedIn] = useState<string>();
   const [problem, setProblem] = useState<{
     error: string; suggestion?: string; suggestionLabel?: string;
   } | null>(null);
@@ -134,8 +137,16 @@ export function PodTerminal() {
       type: 'term:open', id,
       context: detail.context, namespace: detail.namespace,
       pod: detail.name, container,
+      /*
+        Read from the store rather than taken as a prop, and cleared the moment
+        it is used: it describes this opening, not the pod. The host validates
+        it and drops it if it is not a plain absolute path — see the note on
+        START_DIR, which is the one field here that becomes shell text.
+      */
+      cwd: useK8sStore.getState().terminalCwd,
     });
-  }, [detail, container]);
+    clearTerminalCwd();
+  }, [detail, container, clearTerminalCwd]);
 
   /*
     Opened on arrival, not on a button.
@@ -285,6 +296,12 @@ export function PodTerminal() {
         case 'term:opened':
           setPhase('live');
           setShell(String(m.shell ?? ''));
+          setStartedIn(m.cwd ? String(m.cwd) : undefined);
+          if (m.cwdRejected) {
+            termRef.current?.write(
+              `\x1b[38;5;179m── that path could not be used as a starting directory `
+              + `── \x1b[0m\r\n`);
+          }
           {
             const t = termRef.current;
             if (t) {
@@ -415,6 +432,11 @@ export function PodTerminal() {
           <BadgeChipView tone={ACCENT} size="xs">{shell}</BadgeChipView>
         )}
         {phase === 'live' && <BadgeChipView tone={WARN} size="xs">tty</BadgeChipView>}
+        {phase === 'live' && startedIn && (
+          <BadgeChipView tone={INFO} size="xs" title={startedIn}>
+            {startedIn.length > 28 ? `…${startedIn.slice(-27)}` : startedIn}
+          </BadgeChipView>
+        )}
 
         <span className="flex-1" />
 
