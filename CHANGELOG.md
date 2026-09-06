@@ -4,6 +4,99 @@ All notable changes to the Daakia API Client extension are documented here.
 
 ---
 
+## [2.1.0] — 2026-09-07
+
+dk8s arrives: a Kubernetes surface inside the extension — pods, logs, a real
+terminal, a file explorer, cross-pod search — and Doctor, which reads a heap
+dump, a thread dump or a flight recording and tells you what is wrong with
+the process that produced it. Alongside it, per-request execution settings,
+the operating system's proxy, an audit trail for every protocol, and four
+features that were written months ago and had never been reachable from the
+UI.
+
+### Added — dk8s: Kubernetes, without leaving the editor
+- **Pods, watched live** — contexts, namespaces and pod grids with status,
+  restarts and age; starred deployments stay at the top and the tab opens on
+  them
+- **Logs with structure** — a configurable format turns raw lines into
+  fields, and a panel down the left of the log says how the events divide
+  across them: threads, loggers, and any MDC key the application logged
+  (`tenant`, `orderId`). Click a value to include it, again to exclude it,
+  again to clear; the magnifier beside it asks the pod's whole log rather
+  than the buffer
+- **A real terminal in the pod** — a PTY over the Kubernetes exec API
+  carrying your own kubeconfig, so no port is opened and no credential
+  leaves your machine. Themes are configurable (import, export, generate
+  with AI, six at a time), and every theme carries a dark and a light
+  variant with a preview toggle
+- **An Explorer beside it** — the container's filesystem, with folder sizes,
+  downloads that can be stopped and retried, and "open a shell here" from
+  any path or search hit
+- **Search across pods** — text or regex over files and logs in every
+  watched pod, with force-stop that actually kills the child processes
+  rather than setting a flag
+- **Doctor** — open a `.hprof`, a thread dump or a `.jfr` and get a verdict:
+  dominators and retained sizes, leak suspects, deadlocks and contention,
+  CPU hot spots with self and total kept apart, blocking and allocation
+  profiles. The AI can ask for another view and drill, rather than being
+  handed one summary
+- **dk8s as MCP tools**, deliberately read-only
+- Redaction runs over everything that reaches a model, and now catches
+  dotted property names — `spring.datasource.password=…` used to get through
+
+### Added — Requests, settings and proxy
+- **Per-request and per-collection execution settings** — timeout,
+  redirects, SSL verification, encoding and proxy, each inheriting from the
+  level above and showing where its value came from. Testing one endpoint
+  with a self-signed cert no longer means flipping a global switch and
+  remembering to flip it back
+- **The operating system's proxy is honoured**, including PAC and WPAD
+- **An audit trail for every protocol** — REST, GraphQL, SOAP, gRPC and the
+  realtime protocols as sessions, recording the whole request rather than
+  method and URL
+- **Keymap settings** — keyboard shortcuts, listed and rebindable
+- **Connect-time payloads** for WebSocket, SSE and Socket.IO
+- **Copy JSON path and Copy XPath**, at every level of a response
+- **Expand and collapse a collection**, whole or by subtree
+
+### Added — Four features that existed and could not be reached
+- **Assert** — click a field in a JSON response, get a `dk.expect(...)`; the
+  assertions land in the request's post-response script
+- **Visualize** — an array of objects as a table, images and PDFs inline.
+  Both tabs appear only when the response has something for them to show
+- **Response chaining** — `data.token` into `{{token}}` without writing a
+  script, applied automatically when a response arrives. It writes the
+  environment's *current* value and leaves the initial one empty, so a token
+  pulled off a response never lands in an export
+- **Starred requests** float to the top of their folder. A per-person view
+  preference: never exported, never synced
+
+### Fixed
+- **Imported Postman tests said the opposite of what they meant.**
+  `.to.not.equal(500)` converted to `toBe` with a `/* NOT */` comment inside
+  the argument list — an assertion that passed exactly when it should fail.
+  Negation is real now, and a second bug behind it meant every negative
+  assertion was being commented out instead. `pm.response.to.have.status()`
+  — the first line of most exported collections — converted to a method that
+  does not exist and threw on the first run; it resolves through
+  `dk.expect(dk.response)` now. The translator has 37 tests, several of which
+  execute the converted script rather than grepping it
+- **Mock routes** answered on the variable rather than the path, and allowed
+  two routes for one method and path
+- **Proxy settings never reached the extension host**
+- **Two AI buttons** posted prompt keys that were registered nowhere
+- **Collection Properties** showed the wrong name and led with the request
+- The assertion builder generated `dk.expect(data.[0].name)` for any
+  response whose root is an array, and quoted string values by hand
+- The wiki's "Export as JSON isn't wired up" note was three releases stale
+
+### Removed
+- A second, superseded gRPC client and a "Coming soon" protocol placeholder,
+  both unreferenced; the realtime protocol selector's unreachable "soon"
+  badge
+
+---
+
 ## [2.0.2] — 2026-07-31
 
 Git-native sync grows up into a real sync engine with encrypted secrets and a
