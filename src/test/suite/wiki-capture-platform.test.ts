@@ -332,7 +332,7 @@ const SCREENS: ScreenSpec[] = [
     // (children ids prefixed `wiki:`) instead of DaakiaViewPage rendering a
     // second, independent SideNavView — this screen captures landing on the
     // wiki's default "Quick Start" tab via that merged nav.
-    id: 'settings-wiki',
+    id: 'wiki-quick-start',
     label: 'Settings — Wiki',
     explanation: 'The Wiki, reached via the "Wiki" group in Settings\' own left nav — lands on Quick Start.',
     directives: [
@@ -343,9 +343,9 @@ const SCREENS: ScreenSpec[] = [
       // Settings captures (openSettingsTab only ADDS a Settings tab, it
       // doesn't replace whatever's already open).
       { action: 'closeAllTabs' },
-      { action: 'openSettingsTab' },
+      { action: 'openWikiTab' },
       { action: 'wait', ms: 600 },
-      { action: 'click', selector: '[data-nav-id="wiki:quick-start"]' },
+      { action: 'click', selector: '[data-nav-id="quick-start"]' },
       { action: 'wait', ms: 400 },
     ],
   },
@@ -355,9 +355,9 @@ const SCREENS: ScreenSpec[] = [
     // Env" nav item — the page with the most SectionTitle usages, so this is
     // the most sensitive screen for catching regressions in the gradient
     // section-card CSS (see WikiShared.css's `:has(> .dw-section-title)`).
-    id: 'settings-wiki-collections-env',
-    label: 'Settings — Wiki — Collections & Env (nested)',
-    explanation: 'The wiki\'s own Collections & Env page, reached via Settings\' own "Wiki" nav group.',
+    id: 'wiki-collections-env',
+    label: 'Wiki — Collections & Env',
+    explanation: 'The wiki\'s Collections & Env page — the most SectionTitle-dense screen, so the most sensitive to a regression in the gradient section-card CSS.',
     directives: [
       { action: 'closeDevTools' },
       // The 5 REST tabs opened by the sidebar/devtools screens just before
@@ -366,9 +366,9 @@ const SCREENS: ScreenSpec[] = [
       // Settings captures (openSettingsTab only ADDS a Settings tab, it
       // doesn't replace whatever's already open).
       { action: 'closeAllTabs' },
-      { action: 'openSettingsTab' },
+      { action: 'openWikiTab' },
       { action: 'wait', ms: 600 },
-      { action: 'click', selector: '[data-nav-id="wiki:collections-env"]' },
+      { action: 'click', selector: '[data-nav-id="collections-env"]' },
       { action: 'wait', ms: 400 },
     ],
   },

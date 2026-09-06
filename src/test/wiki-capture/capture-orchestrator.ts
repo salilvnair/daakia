@@ -17,7 +17,7 @@
  */
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab';
   selector?: string;
   text?: string;
   ms?: number;

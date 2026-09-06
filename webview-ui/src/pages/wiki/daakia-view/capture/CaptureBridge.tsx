@@ -28,7 +28,7 @@ import { useSMWorkspaceStore, useSMTabsStore } from '@salilvnair/state-machine';
 import { getVsCodeApi } from '../../../../vscode';
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab';
   selector?: string;       // CSS selector — click, type
   text?: string;           // type
   ms?: number;             // wait
@@ -249,6 +249,19 @@ async function runDirective(d: CaptureDirective): Promise<void> {
     }
     case 'openSettingsTab': {
       useTabsStore.getState().openSettingsTab();
+      return;
+    }
+    /*
+      The wiki is its own tab, not a section of Settings.
+
+      Two captures reached it through Settings, which nested the wiki's nav
+      under a "Wiki" group and prefixed every id with `wiki:`. That group is
+      gone — the wiki opens from the sidebar now — so those captures were
+      clicking `[data-nav-id="wiki:quick-start"]` at a nav that has never
+      rendered it and timing out on a selector that cannot appear.
+    */
+    case 'openWikiTab': {
+      useTabsStore.getState().openDaakiaWikiTab();
       return;
     }
     case 'closeAllTabs': {
