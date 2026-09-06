@@ -19,6 +19,7 @@ const TOC_ITEMS: TocItem[] = [
   { id: 'dk-archive', emoji: '📼', label: 'What is skipped' },
   { id: 'dk-window', emoji: '🕐', label: 'Time & zones' },
   { id: 'dk-counts', emoji: '🔢', label: 'Counts vs kept' },
+  { id: 'dk-stop', emoji: '🛑', label: 'Stopping a search' },
   { id: 'dk-export', emoji: '📄', label: 'Export' },
 ];
 
@@ -232,6 +233,34 @@ for line in stream:                                 # one pass, one line held
           “4,812 matches in this pod” is an honest answer where a silently truncated “200” is not.
           The export lifts the cap rather than paging what is on screen, which is why it re-runs the
           search instead of reusing the results.
+        </p>
+      </div>
+
+      <Divider />
+
+      <div>
+        <SectionTitle id="dk-stop" emoji="🛑">Stopping a search</SectionTitle>
+        <p className="dw-p">
+          A search is a loop over pods on the host, each turn awaiting one exec. Stop cancels it —
+          and cancelling means <b>killing the command that is running</b>, not just no longer
+          waiting for it.
+        </p>
+        <Callout type="warn" title="Why a flag is not enough">
+          Checking a flag between pods bounds the wait at one pod, and one pod is exactly the slow
+          one you pressed Stop during: <Code>find</Code> across <Code>/sys</Code> and
+          <Code>/proc</Code> in a large container. So cancellation is an abort signal that kills the
+          child process, and the sweep reports how far it got —
+          <Code>4 of 34 scanned</Code> with the reason attached, because &ldquo;4 of 34&rdquo; on its
+          own reads as a search that lost thirty pods.
+        </Callout>
+        <p className="dw-p">
+          Results already collected are kept: someone who stops a search because they can see their
+          file in the list wants that list. Starting a new search cancels the previous one too —
+          two sweeps posting into one view is a set of counts that cannot be read.
+        </p>
+        <p className="dw-p">
+          The same registry backs every long dk8s operation, so Stop means one thing everywhere:
+          file search, log search, and a download that is still copying.
         </p>
       </div>
 

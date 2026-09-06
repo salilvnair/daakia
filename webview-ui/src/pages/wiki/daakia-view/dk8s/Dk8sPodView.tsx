@@ -8,10 +8,11 @@ import {
 } from '../shared/WikiShared';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'pd-tabs', emoji: '🗂️', label: 'Six tabs' },
+  { id: 'pd-tabs', emoji: '🗂️', label: 'Seven tabs' },
   { id: 'pd-logs', emoji: '📜', label: 'Logs' },
   { id: 'pd-format', emoji: '🧩', label: 'Format detection' },
   { id: 'pd-terminal', emoji: '⌨️', label: 'Terminal' },
+  { id: 'pd-facets', emoji: '🔦', label: 'Fields & facets' },
   { id: 'pd-yaml', emoji: '📄', label: 'Describe & YAML' },
   { id: 'pd-export', emoji: '💾', label: 'Exporting a log' },
 ];
@@ -30,7 +31,7 @@ export function Dk8sPodView() {
       toc={<TocBar items={TOC_ITEMS} />}
     >
       <div>
-        <SectionTitle id="pd-tabs" emoji="🗂️">Six tabs</SectionTitle>
+        <SectionTitle id="pd-tabs" emoji="🗂️">Seven tabs</SectionTitle>
         <p className="dw-p">
           Opening a pod takes over the panel rather than sliding a drawer in from the side. Reading
           logs is the main activity here, and a 380px drawer turns every stack trace into a
@@ -42,6 +43,7 @@ export function Dk8sPodView() {
             ['Overview', '—', 'What the pod is, what it is doing, what it is made of, and what Kubernetes has been saying about it — the three commands you would otherwise run, on one screen'],
             ['Logs', <Code>pods/log</Code>, 'The log stream, with levels, filters and follow'],
             ['Terminal', <Code>exec</Code>, 'A shell in the container'],
+            ['Explorer', <Code>exec</Code>, 'The container’s filesystem — see the Terminal & Files page'],
             ['Doctor', <Code>exec</Code>, 'The collectors — see the Doctor page'],
             ['Describe', <Code>get</Code>, <><Code>kubectl describe</Code>, with events highlighted</>],
             ['YAML', <Code>get</Code>, 'The pod object as the cluster holds it'],
@@ -113,20 +115,67 @@ export function Dk8sPodView() {
       <div>
         <SectionTitle id="pd-terminal" emoji="⌨️">Terminal</SectionTitle>
         <p className="dw-p">
-          A real shell in the container, opened as a VS Code terminal running the kubectl binary
-          directly — argv, not a command string.
+          A real PTY inside the container, drawn in the panel — resize, <Code>Ctrl-C</Code> and
+          full-screen tools all work. It runs over the Kubernetes exec API carrying your own
+          kubeconfig, so <b>no port is opened and no credential leaves your machine</b>.
         </p>
-        <CodeBlock label="the shell" lang="bash">{`kubectl --context C -n NS exec -it POD [-c CONTAINER] -- SHELL`}</CodeBlock>
         <p className="dw-p">
-          Which <Code>SHELL</Code> comes from the capability probe, which looks for
-          <Code>bash</Code>, <Code>sh</Code>, <Code>ash</Code> and <Code>busybox</Code> in that
-          order. A distroless image has none of them, and dk8s says exactly that rather than
-          reporting a generic exec failure.
+          Which shell comes from a probe that tries <Code>bash</Code>, <Code>sh</Code> and
+          <Code>ash</Code> in that order over the same channel the terminal will use — a probe that
+          could succeed where the real thing would fail would be worse than none. A distroless image
+          has none of them, and dk8s says exactly that, with the <Code>kubectl debug</Code> line
+          that gets you in.
         </p>
+        <Callout type="info" title="There is a page for this">
+          Themes, key bindings, the file browser beside it and &ldquo;open a shell here&rdquo; are on
+          the <b>Terminal &amp; Files</b> page. Prefer your own terminal, with your own font and
+          shell integration? The chip in the terminal&rsquo;s footer still opens one in VS Code.
+        </Callout>
         <Callout type="warn" title="“Not running” and “no shell” are different failures">
           Both make <Code>exec</Code> fail, and only one of them is about the image. dk8s separates
           them on the wording of the error, so a crashlooping pod is never mislabelled distroless —
           a confident wrong answer that sends you looking in the wrong place.
+        </Callout>
+      </div>
+
+      <Divider />
+
+      <div>
+        <SectionTitle id="pd-facets" emoji="🔦">Fields &amp; facets</SectionTitle>
+        <p className="dw-p">
+          Where a log format is configured, a panel down the left of the log lists every field the
+          format named and how the events divide across them. It answers &ldquo;what <i>is</i> this
+          log&rdquo; before anything is clicked — four threads, three tenants, one of them carrying
+          most of the errors.
+        </p>
+        <WikiTable
+          headers={['Click', 'Does']}
+          rows={[
+            ['A value', 'Includes it'],
+            ['The same value again', 'Flips it to exclude — “everything except this thread” is the filter a search box could never express'],
+            ['And again', 'Clears it'],
+            ['The magnifier beside it', 'Asks the pod’s whole log instead of the buffer, by handing the value to Quick Search'],
+          ]}
+        />
+        <p className="dw-p">
+          Beyond <Code>thread</Code>, <Code>logger</Code> and <Code>app</Code>, any key a structured
+          format carried becomes a field — MDC, in practice: <Code>tenant</Code>,{' '}
+          <Code>orderId</Code>, whatever the application logged beside its message. Those are marked
+          <Code>mdc</Code> and ranked by how evenly they divide the buffer, so a field where one
+          value dominates sits below one that actually splits the events.
+        </p>
+        <Callout type="warn" title="The counts are of the buffer, not the log">
+          dk8s holds a few hundred to a few thousand lines out of a pod&rsquo;s millions, so
+          &ldquo;settle-worker-3 · 412&rdquo; means 412 of what is on screen — which is why the
+          panel says <Code>N events on screen</Code> at its head. A field with a distinct value on
+          nearly every line, like a trace id, is left out entirely: 400 values of count 1 is a list,
+          not a filter.
+        </Callout>
+        <Callout type="info" title="Fields come from a format, never from a guess">
+          An earlier version inferred structure from the text and offered
+          <Code>hibernate-core-6.6.4.Final.jar!/:6.6.4.Final</Code> as a thread name — a jar tag
+          scraped out of a stack frame. With no format configured there are no fields and no panel,
+          which is the honest state.
         </Callout>
       </div>
 
