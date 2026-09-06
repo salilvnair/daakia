@@ -147,6 +147,14 @@ export interface LogLine {
    * without checking.
    */
   fields?: Record<string, string>;
+  /**
+   * The message with the parsed fields taken out, when a format found them.
+   *
+   * What a row shows. `text` stays the raw line, because Copy, Export and Ask
+   * AI all mean the line as the pod wrote it — a JSON log is only unreadable
+   * on screen, not on the clipboard.
+   */
+  message?: string;
 
   /**
    * This line belongs to the event above it rather than being one itself.

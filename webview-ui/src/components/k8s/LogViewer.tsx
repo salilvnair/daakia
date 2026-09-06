@@ -27,7 +27,7 @@ import {
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
-import { buildFacets } from './log-facets';
+import { buildFacets, filterTermFor } from './log-facets';
 import { FacetRail } from './FacetRail';
 import {
   setFilterProvider, clearFilterProvider,
@@ -37,6 +37,7 @@ import {
   filterLines, densityBuckets, describeBucket, levelCounts, levelColor,
   formatLogTime, selectionText, LEVEL_ORDER, foldStackTraces, bufferBytes,
   compactCount, grepTermFor, frameOrigin, type MatchedLine, type FieldFilter,
+  displayText,
 } from './log-view';
 import {
   AnalyzeModal, planAnalyze, ANALYZE_HEAD, ANALYZE_TAIL, type AnalyzePlan,
@@ -1369,6 +1370,14 @@ export function LogViewer() {
             filters={logFieldFilters}
             onToggle={f => addFieldFilter(f)}
             onClear={(field, value) => removeFieldFilter(field, value)}
+            /*
+              Hands the value to the search that reads the pod's log rather
+              than the buffer. `filterTermFor` brackets a thread, because
+              `main` appears inside `domain` and inside any message that
+              mentions it — the same reason the selection menu brackets it.
+            */
+            onSearchEverywhere={(field, value) =>
+              useDk8sSearchStore.getState().searchEverywhere(filterTermFor(field, value))}
           />
         )}
 
@@ -1466,7 +1475,7 @@ export function LogViewer() {
                         flex: logWrap ? 1 : undefined,
                         minWidth: 0,
                       }}>
-                        <Highlighted text={line.text} hits={line.hits} />
+                        <Highlighted text={displayText(line)} hits={line.hits} />
                         {/*
                           A cut line says it was cut.
 

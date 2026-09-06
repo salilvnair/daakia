@@ -43,6 +43,16 @@ export interface LogLine {
    */
   fields?: Record<string, string>;
   /**
+   * The message with the parsed fields taken out, when a format found them.
+   *
+   * `text` stays the raw line, because Copy, Export and Ask AI all mean the
+   * line as the pod wrote it. This is what the ROW should show: a JSON log
+   * rendered as its own JSON is a wall of quoted keys with the sentence
+   * somewhere inside it, and every field in that wall is already a column or
+   * a facet by the time it is drawn.
+   */
+  message?: string;
+  /**
    * This line belongs to the event above it rather than being one itself.
    *
    * With a format configured this is exact — it means the format did not parse
@@ -296,6 +306,10 @@ export function parseLine(
         // Bounded at parse time — see extraFields — so this is a handful of
         // short strings per line rather than an open door.
         fields: p.fields,
+        // Only where it differs from the raw line — for a pattern format the
+        // message usually IS most of the line, and carrying a near-copy of
+        // every line would double what crosses the boundary for nothing.
+        message: p.message && p.message !== text ? p.message : undefined,
         text,
         /*
           Explicitly false, not absent.

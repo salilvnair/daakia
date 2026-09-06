@@ -159,7 +159,27 @@ function read(): {
   // Re-validated, not trusted — see the note at the top of the file.
   let custom: TerminalPalette[] = [];
   if (Array.isArray(s.custom) && s.custom.length) {
-    const parsed = parseTerminalThemes(s.custom);
+    /*
+      Themes stored before light variants were derived are repaired on read.
+
+      That build filled a missing `light` with a copy of `dark`, so the theme
+      came back looking authored — a light panel then rendered it in colours
+      chosen for near-black, and nothing in the UI said so because the copy was
+      indistinguishable from a decision. An exact match between the two halves
+      is that signature: it is not a palette anyone designs, and re-deriving is
+      right whether it came from the old path or from a file that did it by
+      hand.
+    */
+    const repaired = (s.custom as unknown[]).map(t => {
+      if (!t || typeof t !== 'object') return t;
+      const o = t as Record<string, unknown>;
+      if (o.light && JSON.stringify(o.light) === JSON.stringify(o.dark)) {
+        const { light: _drop, ...rest } = o;
+        return rest;
+      }
+      return t;
+    });
+    const parsed = parseTerminalThemes(repaired);
     if (parsed.ok) custom = parsed.themes.filter(t => !BUILT_IN_IDS.includes(t.id));
   }
 

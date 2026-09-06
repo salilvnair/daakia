@@ -136,8 +136,23 @@ export function matchesFieldFilters(
 }
 
 export interface MatchedLine extends LogLine {
-  /** Character ranges of the query hit, for highlighting. */
+  /** Character ranges of the query hit, in `displayText`. */
   hits?: [number, number][];
+}
+
+/**
+ * What a row should show.
+ *
+ * The parsed message where a format found one, the raw line otherwise. A JSON
+ * log rendered as its own JSON is a wall of quoted keys with the sentence
+ * buried in it — and by the time it is drawn, every key in that wall is
+ * already a level, a column or a facet.
+ *
+ * `text` stays the raw line for Copy, Export and Ask AI, which all mean the
+ * line as the pod wrote it.
+ */
+export function displayText(line: Pick<LogLine, 'text' | 'message'>): string {
+  return line.message ?? line.text;
 }
 
 /**
@@ -236,8 +251,18 @@ export function filterLines(lines: LogLine[], spec: LogFilterSpec): MatchedLine[
       }
     }
     if (!match) { out.push(line); continue; }
-    const hits = match(line.text);
-    if (hits) out.push({ ...line, hits });
+    /*
+      Matched against the raw line, highlighted in the shown one.
+
+      A search has to reach a value that only appears inside the JSON — that is
+      half of why anyone searches a structured log. But the ranges a matcher
+      returns are offsets into what it was given, so highlighting needs its own
+      pass over the string actually on screen. A query that only matches a key
+      name keeps the row and highlights nothing, which is the honest result.
+    */
+    if (!match(line.text)) continue;
+    const shown = displayText(line);
+    out.push({ ...line, hits: (shown === line.text ? null : match(shown)) ?? match(line.text) ?? undefined });
   }
   return out;
 }

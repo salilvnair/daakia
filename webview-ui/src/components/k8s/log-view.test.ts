@@ -3,7 +3,7 @@ import {
   buildMatcher, filterLines, densityBuckets, levelCounts,
   formatLogTime, selectionText, describeBucket,
   foldStackTraces, isStackFrame, compactCount, placeSelectionToolbar, grepTermFor,
-  matchesFieldFilters, frameOrigin,
+  matchesFieldFilters, frameOrigin, displayText,
 } from './log-view';
 import type { LogLine } from '../../store/k8s-store';
 
@@ -617,5 +617,55 @@ describe('frameOrigin', () => {
 
   it('says unknown for a line that is not a frame', () => {
     expect(frameOrigin('2026-08-31 INFO started')).toBe('unknown');
+  });
+});
+
+/* ── What a row shows, once a format parses the line ──────────────────── */
+
+describe('displayText', () => {
+  const raw = '{"level":"ERROR","message":"settlement failed","tenant":"eu-west"}';
+
+  it('shows the parsed message rather than the JSON that carried it', () => {
+    expect(displayText({ text: raw, message: 'settlement failed' })).toBe('settlement failed');
+  });
+
+  it('falls back to the raw line when no format parsed one', () => {
+    expect(displayText({ text: raw })).toBe(raw);
+  });
+
+  it('leaves the raw line alone — Copy and Export still mean what the pod wrote', () => {
+    const line = { text: raw, message: 'settlement failed' };
+    displayText(line);
+    expect(line.text).toBe(raw);
+  });
+});
+
+describe('filterLines highlights what is on screen', () => {
+  const line = (over: Partial<LogLine> = {}): LogLine => ({
+    seq: 1, level: 'error',
+    text: '{"level":"ERROR","message":"settlement failed","tenant":"eu-west"}',
+    message: 'settlement failed',
+    ...over,
+  } as LogLine);
+
+  it('offsets point into the shown text, not the raw line', () => {
+    const [m] = filterLines([line()], { query: 'settlement', levels: [] });
+    expect(m.hits?.[0]).toEqual([0, 10]);
+    // Which is where it is in the message, not in the JSON.
+    expect('settlement failed'.slice(0, 10)).toBe('settlement');
+  });
+
+  it('still matches a value that only exists inside the raw JSON', () => {
+    // Half of why anyone searches a structured log is to find a field value.
+    const out = filterLines([line()], { query: 'eu-west', levels: [] });
+    expect(out).toHaveLength(1);
+  });
+
+  it('keeps a row whose match is only in a key name, and highlights nothing there', () => {
+    const out = filterLines([line()], { query: 'tenant', levels: [] });
+    expect(out).toHaveLength(1);
+    // The word is not in the message, so no range can point at it honestly.
+    expect(out[0].hits?.every(([a, b]) =>
+      'settlement failed'.slice(a, b).toLowerCase() !== 'tenant')).toBe(true);
   });
 });

@@ -25,17 +25,27 @@
  */
 import { useMemo, useState } from 'react';
 import { BadgeChipView, IconSize } from '@salilvnair/dui';
-import { ChevronDownIcon, ChevronRightIcon, FilterIcon } from '../../icons';
+import { ChevronDownIcon, ChevronRightIcon, FilterIcon, SearchIcon } from '../../icons';
 import { buildFacets, type Facet } from './log-facets';
 import type { FieldFilter } from './log-view';
 import type { LogLine } from '../../store/k8s-store';
 import { ACCENT, BAD, MUTED } from './tone';
 
-export function FacetRail({ lines, filters, onToggle, onClear }: {
+export function FacetRail({ lines, filters, onToggle, onClear, onSearchEverywhere }: {
   lines: LogLine[];
   filters: FieldFilter[];
   onToggle: (f: FieldFilter) => void;
   onClear: (field: string, value: string) => void;
+  /**
+   * Take this value to the whole log, rather than the buffer.
+   *
+   * The counts here are of what is on screen, which is the honest limit of a
+   * facet — and the obvious next question when one of them looks interesting
+   * is "how many really". That question already has an answer in dk8s: the
+   * log search reads the pod's log rather than the buffer, so this hands the
+   * value to it instead of growing a second way to read a log.
+   */
+  onSearchEverywhere: (field: string, value: string) => void;
 }) {
   /*
     Recomputed from the lines rather than kept in the store.
@@ -94,7 +104,12 @@ export function FacetRail({ lines, filters, onToggle, onClear }: {
               {!facet.named && <BadgeChipView tone={MUTED} size="xs">mdc</BadgeChipView>}
             </button>
 
-            {open && <FacetValues facet={facet} modeOf={modeOf} onToggle={onToggle} onClear={onClear} />}
+            {open && (
+              <FacetValues
+                facet={facet} modeOf={modeOf} onToggle={onToggle}
+                onClear={onClear} onSearchEverywhere={onSearchEverywhere}
+              />
+            )}
           </div>
         );
       })}
@@ -102,11 +117,12 @@ export function FacetRail({ lines, filters, onToggle, onClear }: {
   );
 }
 
-function FacetValues({ facet, modeOf, onToggle, onClear }: {
+function FacetValues({ facet, modeOf, onToggle, onClear, onSearchEverywhere }: {
   facet: Facet;
   modeOf: (field: string, value: string) => FieldFilter['mode'] | undefined;
   onToggle: (f: FieldFilter) => void;
   onClear: (field: string, value: string) => void;
+  onSearchEverywhere: (field: string, value: string) => void;
 }) {
   const top = facet.values[0]?.count ?? 1;
   return (
@@ -117,6 +133,7 @@ function FacetValues({ facet, modeOf, onToggle, onClear }: {
         const out = mode === 'exclude';
         return (
           <div key={v.value}>
+            <div className="flex items-center gap-1 px-2.5 py-0.5">
             <button
               type="button"
               title={out ? 'Click to clear' : on ? 'Click to exclude' : 'Click to include'}
@@ -125,7 +142,8 @@ function FacetValues({ facet, modeOf, onToggle, onClear }: {
                 else if (on) onToggle({ field: facet.field, value: v.value, mode: 'exclude' });
                 else onClear(facet.field, v.value);
               }}
-              className="flex items-center gap-1.5 w-full px-2.5 py-0.5 border-none bg-transparent cursor-pointer text-left"
+              className="flex items-center gap-1.5 flex-1 min-w-0 border-none bg-transparent cursor-pointer text-left"
+              style={{ padding: 0 }}
             >
               <span style={{
                 width: 11, height: 11, borderRadius: 3, flexShrink: 0,
@@ -147,6 +165,21 @@ function FacetValues({ facet, modeOf, onToggle, onClear }: {
                 {v.count.toLocaleString()}
               </span>
             </button>
+            {/* The count above is of the buffer; this asks the pod's whole log.
+                Dimmed and small because it is the second question, not the
+                first — most of the time narrowing what is on screen is what
+                someone wants, and only sometimes "how many really". */}
+            <button
+              type="button"
+              title={`Search the whole log for ${v.value}`}
+              aria-label={`Search the whole log for ${v.value}`}
+              onClick={() => onSearchEverywhere(facet.field, v.value)}
+              className="border-none bg-transparent cursor-pointer shrink-0"
+              style={{ padding: 0, lineHeight: 0, opacity: 0.45, marginLeft: 4 }}
+            >
+              <SearchIcon size={IconSize.chip} color="var(--color-text-muted)" />
+            </button>
+            </div>
             {/* Share of the buffer, so a value taking most of it is visible
                 without reading a number. */}
             <div style={{
