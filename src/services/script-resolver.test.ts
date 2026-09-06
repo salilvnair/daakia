@@ -13,6 +13,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { resolveScript } from './script-resolver';
+import { testProvider } from './script-runtime/core/test-provider';
 
 /** What `dk.expect(...)` really answers to. Kept in step with the provider. */
 const MATCHERS = new Set([
@@ -102,8 +103,21 @@ describe('the common Chai vocabulary', () => {
     for (const m of matchersUsed(out)) expect(MATCHERS.has(m)).toBe(true);
   });
 
-  it('converts the response-status idiom', () => {
-    expect(convert(`pm.response.to.have.status(200);`)).toContain('.toHaveStatus(200)');
+  /*
+    The subject matters as much as the matcher here. `.toHaveStatus(200)` on
+    its own was satisfied by `dk.response.toHaveStatus(200)`, which is a call
+    on an object that has no matchers — so this asserts the receiver too, and
+    the block at the bottom of this file runs it.
+  */
+  it('converts the response-status idiom onto something that has matchers', () => {
+    const out = convert(`pm.response.to.have.status(200);`);
+    expect(out).toContain('dk.expect(dk.response).toHaveStatus(200)');
+    expect(out).not.toContain('dk.response.toHaveStatus');
+  });
+
+  it('converts the negated status idiom', () => {
+    expect(convert(`pm.response.to.not.have.status(404);`))
+      .toContain('dk.expect(dk.response).not.toHaveStatus(404)');
   });
 });
 
@@ -180,5 +194,80 @@ describe('the other importers', () => {
     );
     expect(out).toContain('.not.toBe(2)');
     expect(out).not.toMatch(/NOT/);
+  });
+});
+
+/*
+  Running the output, not reading it.
+
+  Every test above this point asserts on converted TEXT, which is a weaker
+  claim than it looks: `dk.response.toHaveStatus(200)` contains
+  `.toHaveStatus(200)`, satisfies a grep, and throws
+  "dk.response.toHaveStatus is not a function" the moment it executes. The
+  matchers live on what `dk.expect()` returns and nowhere else, so the only
+  assertion worth making about a converted script is that it runs and that its
+  verdict moves the right way when the response changes.
+
+  The sandbox here is the real one — `testProvider` as the extension host
+  activates it — with `dk.response` supplied the way the request runtime
+  supplies it.
+*/
+describe('the converted script, executed', () => {
+  interface Verdict { name: string; passed: boolean; error?: string }
+
+  /** Convert, run against a response, and report what the suite decided. */
+  function run(postman: string, response: { status: number; body?: string }): Verdict[] {
+    const results: Verdict[] = [];
+    const contributed = testProvider.activate({
+      addTestResult: (r: Verdict) => results.push(r),
+    } as unknown as Parameters<typeof testProvider.activate>[0]);
+    const dk = {
+      ...(contributed.dk ?? {}),
+      response: { ...response, json: () => JSON.parse(response.body ?? 'null') },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('dk', resolveScript(postman, 'postman'))(dk);
+    return results;
+  }
+
+  const STATUS = `pm.test("status is 200", function () { pm.response.to.have.status(200); });`;
+
+  it('runs the status idiom instead of throwing on it', () => {
+    expect(run(STATUS, { status: 200 })).toEqual([{ name: 'status is 200', passed: true }]);
+  });
+
+  it('fails the status idiom when the status is wrong', () => {
+    const [v] = run(STATUS, { status: 500 });
+    expect(v.passed).toBe(false);
+    // The failure has to name both numbers, or the report is unactionable.
+    expect(v.error).toContain('500');
+    expect(v.error).toContain('200');
+  });
+
+  /*
+    The negation the sweep used to comment out.
+
+    A commented assertion is not a caught error — it is a test that reports
+    green while checking nothing, which is the failure this whole file exists
+    to prevent.
+  */
+  const NEGATIVE = `pm.test("not a server error", function () { pm.expect(pm.response.code).to.not.equal(500); });`;
+
+  it('keeps a negative assertion, and passes it when it holds', () => {
+    expect(resolveScript(NEGATIVE, 'postman')).not.toContain('TODO: unsupported');
+    expect(run(NEGATIVE, { status: 200 })).toEqual([{ name: 'not a server error', passed: true }]);
+  });
+
+  it('fails the negative assertion when the thing it forbids happens', () => {
+    const [v] = run(NEGATIVE, { status: 500 });
+    expect(v.passed).toBe(false);
+  });
+
+  it('still comments out a negated chain nothing converted', () => {
+    const out = resolveScript(
+      `pm.expect(pm.response.code).to.not.be.frobnicated(1);`,
+      'postman',
+    );
+    expect(out).toContain('TODO: unsupported assertion');
   });
 });

@@ -94,8 +94,9 @@ export function CollectionsEnvView() {
           ]}
         />
         <Callout type="info">
-          The top-level sidebar toolbar's "Export as JSON" shortcut isn't wired up yet (shows a "not implemented" toast)
-          — use right-click → Export on a specific collection for the real export flow.
+          Every format above is on both menus. The toolbar's <b>Export</b> submenu writes{' '}
+          <b>all</b> your collections in the chosen format; right-click a single collection and its
+          Export submenu writes just that one.
         </Callout>
         <SubTitle>Collection Properties</SubTitle>
         <WikiCard title="Collection-Level Settings" icon="⚙️">

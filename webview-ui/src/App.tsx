@@ -52,7 +52,7 @@ import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, Protoco
 import { DevToolsPanel } from './components/shared/devtools';
 import { DebugHud } from './components/shared/debugger';
 import { useExtensionMessages } from './app/use-extension-messages';
-import { ProtocolIcon, ProtocolPlaceholder, EmptyState } from './app/app-shell';
+import { ProtocolIcon, EmptyState } from './app/app-shell';
 import { CaptureBridge } from './pages/wiki/daakia-view/capture/CaptureBridge';
 import { DaakiaViewPage } from './pages/wiki/daakia-view/DaakiaViewPage';
 

@@ -66,6 +66,22 @@ function resolvePostmanScript(script: string): string {
   // ── pm.expect → dk.expect ──
   result = result.replace(/\bpm\.expect\b/g, 'dk.expect');
 
+  /*
+    `pm.response.to.have.status(200)` is the first line of most exported
+    collections, and it needs the whole receiver rewritten, not the tail.
+
+    Every dk matcher lives on the object `dk.expect()` returns; none live on
+    the response. Mapping only `.to.have.status(` left
+    `dk.response.toHaveStatus(200)` — which converts cleanly, reads correctly,
+    passes a test that greps the output for `.toHaveStatus(200)`, and throws
+    `dk.response.toHaveStatus is not a function` the first time it runs. The
+    subject has to be lifted into `dk.expect(...)` here, before the general
+    `pm.response` rewrite below turns it into something this pattern can no
+    longer recognise.
+  */
+  result = result.replace(/\bpm\.response\.to\.not\.have\.status\(/g, 'dk.expect(dk.response).not.toHaveStatus(');
+  result = result.replace(/\bpm\.response\.to\.have\.status\(/g, 'dk.expect(dk.response).toHaveStatus(');
+
   // ── pm.response → dk.response ──
   result = result.replace(/\bpm\.response\.code\b/g, 'dk.response.status');
   result = result.replace(/\bpm\.response\.status\b/g, 'dk.response.statusText');
@@ -414,7 +430,21 @@ function resolveChaiAssertions(script: string): string {
   result = result.split('\n').map(line => {
     const trimmed = line.trim();
     if (!/^(?:await\s+)?(?:dk|pm)\.(?:expect|response)\b/.test(trimmed)) return line;
-    if (!/\.to\.|\.__NOT__\./.test(line)) return line;
+    /*
+      The placeholder is still in the text at this point, and a converted
+      negation carries it: `.__NOT__.toBe(500)` is finished work waiting for
+      one more replace. Reading the placeholder itself as "did not convert"
+      commented out every negative assertion in the file — `not.equal`,
+      `not.be.null`, `not.include` — leaving a suite that imports clean, runs
+      green, and checks nothing.
+
+      Converted negations are distinguishable without keeping a matcher list
+      here: every matcher the runtime defines is `to` followed by a capital.
+      Blank those out, and a placeholder still standing in what is left really
+      is a chain nothing converted.
+    */
+    const residue = line.replace(/\.__NOT__\.to[A-Z]/g, '.');
+    if (!/\.to\.|\.__NOT__\./.test(residue)) return line;
     const indent = line.slice(0, line.length - line.trimStart().length);
     return `${indent}// TODO: unsupported assertion — rewrite with dk.expect(...)\n`
       + `${indent}// ${trimmed.replace(/\*\//g, '* /')}`;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SideNavView, type SideNavItem } from '@salilvnair/dui';
 import { QuickStartView } from './platform/QuickStartView';
 import { RestView } from './rest/RestView';
@@ -10,6 +10,7 @@ import { MockServerView } from './mock-server/MockServerView';
 import { CollectionsEnvView } from './platform/CollectionsEnvView';
 import { AiAssistantView } from './platform/AiAssistantView';
 import { SettingsView } from './platform/SettingsView';
+import { useTabsStore } from '../../../store/tabs-store';
 import { Dk8sOverviewView } from './dk8s/Dk8sOverviewView';
 import { Dk8sPodView } from './dk8s/Dk8sPodView';
 import { Dk8sTerminalView } from './dk8s/Dk8sTerminalView';
@@ -109,6 +110,21 @@ interface DaakiaViewPageProps {
 
 export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSelectProp }: DaakiaViewPageProps = {}) {
   const [activeIdState, setActiveIdState] = useState<TabId>('quick-start');
+  /*
+    A deep link into the wiki, from anywhere in the app.
+
+    The tab stays mounted so its page and scroll position survive a switch,
+    which means opening it again cannot re-run an initialiser — the target has
+    to arrive as state and be consumed here. Cleared immediately, so returning
+    to the wiki later leaves you where you were rather than snapping back to
+    whichever page linked you in.
+  */
+  const wikiTarget = useTabsStore(s => s.wikiTarget);
+  useEffect(() => {
+    if (!wikiTarget) return;
+    if (wikiTarget in TAB_BY_ID) setActiveIdState(wikiTarget as TabId);
+    useTabsStore.getState().clearWikiTarget();
+  }, [wikiTarget]);
   const activeId = activeIdProp ?? activeIdState;
   const onSelect = onSelectProp ?? setActiveIdState;
   const active = TAB_BY_ID[activeId];

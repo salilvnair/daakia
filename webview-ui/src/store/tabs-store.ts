@@ -455,7 +455,15 @@ interface TabsState {
   openMockServerTab: () => void;
   openDk8sTab: () => void;
   openDaakiaAiTab: () => void;
-  openDaakiaWikiTab: () => void;
+  /**
+   * @param page  A wiki page id to land on. The wiki keeps its own
+   *              selection, so a deep link has to say where to go; it is
+   *              parked in `wikiTarget` and cleared by the page once read.
+   */
+  openDaakiaWikiTab: (page?: string) => void;
+  /** Set by a deep link, consumed by the wiki page, then cleared. */
+  wikiTarget?: string;
+  clearWikiTarget: () => void;
   openStateMachineTab: (serverId?: string) => void;
   switchProtocol: (protocol: Protocol) => void;
   closeTab: (id: string) => void;
@@ -555,8 +563,11 @@ export const useTabsStore = create<TabsState>((set, get) => {
       }
     },
 
-    openDaakiaWikiTab: () => {
+    clearWikiTarget: () => set({ wikiTarget: undefined }),
+
+    openDaakiaWikiTab: (page?: string) => {
       const { tabs, activeTabId } = get();
+      if (page) set({ wikiTarget: page });
       const existing = tabs.find(t => t.type === 'wiki');
       if (existing) {
         set({ activeTabId: existing.id, previousTabId: activeTabId });

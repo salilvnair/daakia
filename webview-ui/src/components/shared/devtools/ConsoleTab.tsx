@@ -401,7 +401,7 @@ export function ConsoleTab() {
               { code: 'Line #', label: 'Toggle line numbers' },
             ]}
             footer="Supports multi-line scripts, console.log, dk.env, dk.global, and more."
-            wikiSlug="console-repl"
+            wikiSlug="collections-env"
             accentColor={getProtocolAccent(useTabsStore.getState().activeProtocol)}
           />
           {/* Send button */}
