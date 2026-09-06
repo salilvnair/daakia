@@ -5,7 +5,7 @@ import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { useDebugStore } from '../../../store/debug-store';
 import { KeyValueTable, AuthEditor, ScriptsEditor } from '../../shared';
-import { TabView, type TabItem, KeyValueTableView, type KeyValueTableRow } from '@salilvnair/dui';
+import { TabView, type TabItem, KeyValueTableView, type KeyValueTableRow, MarkdownView, ButtonView } from '@salilvnair/dui';
 import { postMsg } from '../../../vscode';
 import { computeAuthRows } from './requestUtils';
 import { HeadersTab } from './HeadersTab';
@@ -23,6 +23,9 @@ const CONFIG_TABS: TabItem[] = [
   { id: 'auth', label: 'Authorization' },
   { id: 'scripts', label: 'Scripts' },
   { id: 'variables', label: 'Variables' },
+  // Markdown describing the request — the thing that makes an exported
+  // collection useful to somebody who did not write it.
+  { id: 'docs', label: 'Docs' },
   // Per-request execution overrides — timeout, redirects, SSL, encoding, proxy.
   { id: 'settings', label: 'Settings' },
 ];
@@ -49,6 +52,59 @@ function RequestSettingsTab({ tab }: { tab: RequestTab }) {
         inheritedFrom={from}
         accentColor="var(--color-protocol-rest, var(--color-accent))"
       />
+    </div>
+  );
+}
+
+/**
+ * The Docs tab: markdown in, rendered markdown out.
+ *
+ * Edit and Preview rather than a live split, because the pane is narrow and a
+ * request's documentation is written once and read many times — so it opens
+ * in Preview when there is something to read, and in Edit when there is not.
+ */
+function RequestDocsTab({ tab }: { tab: RequestTab }) {
+  const updateTab = useTabsStore(s => s.updateTab);
+  const docs = tab.docs ?? '';
+  const [editing, setEditing] = useState(!docs);
+
+  return (
+    <div className="flex flex-col gap-2 h-full min-h-0">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
+          Documentation · markdown
+        </span>
+        <ButtonView
+          size="xs"
+          variant="secondary"
+          onClick={() => setEditing(v => !v)}
+          accentColor="var(--color-protocol-rest, var(--color-accent))"
+        >
+          {editing ? 'Preview' : 'Edit'}
+        </ButtonView>
+      </div>
+
+      {editing ? (
+        <textarea
+          value={docs}
+          onChange={e => updateTab(tab.id, { docs: e.target.value })}
+          placeholder={'Why this request exists, what it needs, what it returns.\n\n## Auth\nNeeds a bearer token from POST /login.'}
+          spellCheck={false}
+          className="flex-1 min-h-[220px] w-full resize-none rounded-md px-3 py-2 text-[12px] leading-relaxed
+                     font-mono bg-[var(--color-input-bg)] text-[var(--color-text-primary)]
+                     border border-[var(--color-surface-border)] focus:outline-none
+                     focus:border-[var(--color-accent)]"
+        />
+      ) : docs.trim() ? (
+        <div className="flex-1 min-h-0 overflow-auto rounded-md px-3 py-2
+                        border border-[var(--color-surface-border)]">
+          <MarkdownView content={docs} />
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-[12px] text-[var(--color-text-muted)]">
+          Nothing written yet — press Edit.
+        </div>
+      )}
     </div>
   );
 }
@@ -255,6 +311,10 @@ export function RequestPanel() {
               responseHeaders={tab.response?.headers}
             />
           </div>
+        )}
+
+        {activeSection === 'docs' && (
+          <RequestDocsTab tab={tab} />
         )}
 
         {activeSection === 'settings' && (

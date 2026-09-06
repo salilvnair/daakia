@@ -87,6 +87,19 @@ export interface RequestTab {
    * response arrives — see `services/request/chaining.ts`.
    */
   chainExtractions?: ChainExtraction[];
+  /**
+   * Markdown describing what this request is for.
+   *
+   * There was nowhere to write it down — no description on a request, a
+   * folder or a collection — which is most of what makes an exported
+   * collection useful to somebody else, and the reason the doc generator had
+   * to infer intent from URLs and payloads.
+   *
+   * Stored in the request's `data` blob rather than a new column, so it
+   * round-trips through save, git sync and the Daakia export with no
+   * migration.
+   */
+  docs?: string;
   // Response state
   response: ResponseData | null;
   loading: boolean;

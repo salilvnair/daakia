@@ -83,6 +83,17 @@ UI.
 - **Starred requests** float to the top of their folder. A per-person view
   preference: never exported, never synced
 
+### Added — Requests can carry documentation
+- **A Docs tab** on every request: markdown describing why it exists, what it
+  needs and what it returns, in Edit and Preview. There was nowhere to write
+  this down before, which is most of what makes an exported collection useful
+  to somebody else
+- It **travels with the collection** — into the Markdown docs export above
+  the mechanics, and into the OpenAPI export as the operation's
+  `description`. Both previously had nothing to work from but URLs and
+  payloads
+- Chaining rules persist with the request too, so they survive a closed tab
+
 ### Fixed
 - **Imported Postman tests said the opposite of what they meant.**
   `.to.not.equal(500)` converted to `toBe` with a `/* NOT */` comment inside

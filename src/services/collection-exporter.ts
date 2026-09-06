@@ -509,7 +509,7 @@ export async function handleExportCollectionHttpie(
 
 interface OAParam { name: string; in: string; schema: { type: string }; required?: boolean; }
 interface OARequestBody { content: Record<string, { schema: { type: string } }>; required: boolean; }
-interface OAOperation { summary: string; operationId: string; tags: string[]; parameters?: OAParam[]; requestBody?: OARequestBody; responses: Record<string, { description: string }>; }
+interface OAOperation { summary: string; description?: string; operationId: string; tags: string[]; parameters?: OAParam[]; requestBody?: OARequestBody; responses: Record<string, { description: string }>; }
 
 function buildOpenApiPaths(node: CollectionTreeNode, tag: string, paths: Record<string, Record<string, OAOperation>>) {
   for (const req of node.requests) {
@@ -541,6 +541,9 @@ function buildOpenApiPaths(node: CollectionTreeNode, tag: string, paths: Record<
 
     const op: OAOperation = {
       summary: req.name,
+      // OpenAPI's `description` is markdown, which is exactly what the Docs
+      // tab holds — so it travels into the spec unchanged.
+      ...(typeof d.docs === 'string' && d.docs.trim() ? { description: d.docs.trim() } : {}),
       operationId: req.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, ''),
       tags: [tag],
       responses: { '200': { description: 'Successful response' }, '400': { description: 'Bad request' }, '500': { description: 'Server error' } },
@@ -604,6 +607,17 @@ function buildMarkdownDocs(node: CollectionTreeNode, depth: number, lines: strin
     lines.push(`${'#'.repeat(Math.min(depth + 2, 6))} ${req.name}`, '');
     lines.push(`**Method:** \`${req.method || 'GET'}\`  `);
     lines.push(`**URL:** \`${req.url || ''}\``, '');
+
+    /*
+      The author's own words, above the mechanics.
+
+      Until requests could carry documentation this generator had nothing but
+      URLs and payloads to work from, which is why its output read as a
+      transcript rather than a document. When someone has written the Docs
+      tab, that is the part of the page worth reading first.
+    */
+    const docs = typeof d.docs === 'string' ? d.docs.trim() : '';
+    if (docs) lines.push(docs, '');
 
     const headers = d.headers as { key: string; value: string; enabled?: boolean }[] || [];
     const enabledHeaders = headers.filter(h => h.enabled !== false && h.key);

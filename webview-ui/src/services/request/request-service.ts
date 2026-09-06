@@ -175,6 +175,10 @@ export function saveRequest(tab: RequestTab) {
       variables: tab.variables,
       preRequestScript: tab.preRequestScript,
       postResponseScript: tab.postResponseScript,
+      // Both live in the blob rather than a column: no migration, and they
+      // travel with every export and sync that already carries `data`.
+      chainExtractions: tab.chainExtractions,
+      docs: tab.docs,
     };
 
     if (tab.protocol === 'ai') {

@@ -39,6 +39,7 @@ const TOC_ITEMS: TocItem[] = [
   { id: 'rest-auth', emoji: '🔒', label: 'Auth' },
   { id: 'rest-scripts', emoji: '📜', label: 'Scripts' },
   { id: 'rest-variables', emoji: '🔤', label: 'Variables' },
+  { id: 'rest-docs', emoji: '📝', label: 'Docs' },
   { id: 'rest-send', emoji: '🚀', label: 'Send & Code' },
   { id: 'rest-response', emoji: '📥', label: 'Response' },
   { id: 'rest-tips', emoji: '💡', label: 'Tips' },
@@ -367,6 +368,21 @@ dk.env.set('user_id', dk.response.json().id);`}
       {cap('rest-variables')}
 
       <Divider />
+
+      {/* ── Docs ──────────────────────────────────────────────────────── */}
+      <div>
+        <SectionTitle id="rest-docs" emoji="📝">Docs</SectionTitle>
+        <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+          Markdown on the request itself — why it exists, what it needs, what it returns. Edit and
+          Preview; it opens in Preview when there is something to read.
+        </p>
+        <Callout type="info" title="It travels with the collection">
+          What you write here goes into the <b>Markdown docs export</b> above the mechanics, and
+          becomes the operation&rsquo;s <Code>description</Code> in the <b>OpenAPI export</b>. Both
+          previously had nothing to work from but URLs and payloads, which is why their output read
+          as a transcript rather than a document.
+        </Callout>
+      </div>
 
       {/* ── Send + Code Gen ───────────────────────────────────────────── */}
       <div>

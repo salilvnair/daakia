@@ -93,6 +93,8 @@ export function openCollectionRequest(req: CollectionRequest, forceNewTab = fals
     preRequestScript: typeof config.preRequestScript === 'string' ? config.preRequestScript : '',
     postResponseScript: typeof config.postResponseScript === 'string' ? config.postResponseScript : (typeof config.testScript === 'string' ? config.testScript : ''),
     variables: Array.isArray(config.variables) ? config.variables : [],
+    chainExtractions: Array.isArray(config.chainExtractions) ? config.chainExtractions as never : [],
+    docs: typeof config.docs === 'string' ? config.docs : '',
     // GraphQL
     ...(protocol === 'graphql' ? {
       bodyRaw: config.bodyRaw || '',
