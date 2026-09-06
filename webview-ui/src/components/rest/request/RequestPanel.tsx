@@ -11,6 +11,7 @@ import { computeAuthRows } from './requestUtils';
 import { HeadersTab } from './HeadersTab';
 import { BodyEditor } from './BodyEditor';
 import { RequestAiToolbar } from './RequestAiToolbar';
+import { RequestChaining } from '../../power/RequestChaining';
 import { ExecutionSettingsEditor } from '../../shared/settings/ExecutionSettingsEditor';
 import { useEffectiveSettings } from '../../shared/settings/use-effective-settings';
 import { countOverrides } from '../../shared/settings/execution-settings';
@@ -233,13 +234,27 @@ export function RequestPanel() {
         )}
 
         {activeSection === 'variables' && (
-          <KeyValueTableView
-            rows={tab.variables as KeyValueTableRow[]}
-            onChange={(rows) => updateTab(tab.id, { variables: rows as typeof tab.variables })}
-            placeholder={{ key: 'Variable', value: 'Value' }}
-            showDescription
-            label="Request Variables"
-          />
+          <div className="flex flex-col gap-3">
+            <KeyValueTableView
+              rows={tab.variables as KeyValueTableRow[]}
+              onChange={(rows) => updateTab(tab.id, { variables: rows as typeof tab.variables })}
+              placeholder={{ key: 'Variable', value: 'Value' }}
+              showDescription
+              label="Request Variables"
+            />
+            {/*
+              Values that come the other way: out of the response, into a
+              variable the next request reads. Beneath the table because the
+              table is what you set by hand and this is what gets set for you.
+            */}
+            <RequestChaining
+              tabId={tab.id}
+              extractions={tab.chainExtractions ?? []}
+              onExtractionsChange={(next) => updateTab(tab.id, { chainExtractions: next })}
+              responseBody={tab.response?.body}
+              responseHeaders={tab.response?.headers}
+            />
+          </div>
         )}
 
         {activeSection === 'settings' && (

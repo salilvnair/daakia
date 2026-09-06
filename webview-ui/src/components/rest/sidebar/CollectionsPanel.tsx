@@ -7,9 +7,9 @@ import { useUiStateStore } from '../../../store/ui-state-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { NewItemModal, ConfirmDialog, RunCollectionModal, CollectionPropertiesModal, ExportResponseOptionModal, ImportExportIcon, type CollectionProperties } from '../../shared';
-import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
+import { findNodeById, findParentOfRequest, findRequestById, filterTree, collectAllIds, hasAnyRequests, openCollectionRequest, useStarredIds, toggleStar, starFirst, type CollectionTreeNode, type CollectionRequest } from '../../../services/collections';
 import { METHOD_COLORS, getProtocolAccent } from '../../../colors';
-import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon } from '../../../icons';
+import { PlusIcon, FolderIcon, FolderOpenIcon, PlayIcon, DocumentIcon, ServerIcon, RenameIcon, CopyIcon, SettingsIcon, TrashIcon, ExternalLinkIcon, PlusSquareIcon, ChevronRightIcon, MoreVerticalIcon, FilePlusIcon, FolderPlusIcon, FolderImportIcon, FolderExportIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, SparkleIcon, CloseCircleIcon, SearchIcon, HelpCircleIcon, SortIcon, CheckIcon, ExpandAllIcon, CollapseAllIcon, StarIcon } from '../../../icons';
 import { SidebarSkeleton } from '../../shared/display/SidebarSkeleton';
 import { AiEnvExtractModal } from '../../ai/AiEnvExtractModal';
 import { AiCollectionOrganizerModal } from '../../ai/AiCollectionOrganizerModal';
@@ -114,6 +114,8 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
   const [contextMenu, setContextMenu] = useState<{ position: { x: number; y: number }; items: DuiContextMenuItem[] } | null>(null);
   // Request row context menu — DUI ContextMenuView
   const [reqContextMenu, setReqContextMenu] = useState<{ position: { x: number; y: number }; req: CollectionRequest } | null>(null);
+  /** Per-person, persisted with the other UI prefs — never exported, never synced. */
+  const starredIds = useStarredIds();
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
 
   // Sidebar-view-only sort mode (Postman-style "Folders first, Default / A to Z") —
@@ -677,7 +679,15 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
       })()
     : filterTree(tree, search);
 
-  const sortedTree = sortMode === 'alpha' ? sortTreeAlpha(filteredTree) : filteredTree;
+  /*
+    Starred requests ride at the top of their own folder, after whichever
+    sort is in force — so "Folders first, A to Z" still holds within the
+    starred and within the rest.
+  */
+  const sortedTree = starFirst(
+    sortMode === 'alpha' ? sortTreeAlpha(filteredTree) : filteredTree,
+    starredIds,
+  );
 
   /*
     Expand and collapse, whole or by subtree.
@@ -958,6 +968,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
               onCollapseSubtree={collapseSubtree}
               onCollectionContextMenu={openCollectionContextMenu}
               onRequestContextMenu={openRequestContextMenu}
+              starredIds={starredIds}
               dragItem={dragItem}
               dropTarget={dropTarget}
               onDragStart={handleDragStart}
@@ -1056,6 +1067,14 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           position={reqContextMenu.position}
           onClose={() => setReqContextMenu(null)}
           items={[
+            {
+              id: 'star',
+              label: starredIds.has(reqContextMenu.req.id) ? 'Unstar' : 'Star',
+              shortcut: 'S',
+              icon: <StarIcon size={13} filled={starredIds.has(reqContextMenu.req.id)} style={{ color: 'var(--color-warning)' }} />,
+              onClick: () => { toggleStar(reqContextMenu.req.id); setReqContextMenu(null); },
+            },
+            { id: 'sep-star', label: '', separator: true },
             { id: 'open', label: 'Open', shortcut: 'O', icon: <ExternalLinkIcon size={13} style={{ color: 'var(--color-info)' }} />, onClick: () => { handleOpenRequest(reqContextMenu.req); setReqContextMenu(null); } },
             { id: 'open-new-tab', label: 'Open in New Tab', shortcut: 'T', icon: <PlusSquareIcon size={13} style={{ color: 'var(--color-info)' }} />, onClick: () => { handleOpenRequest(reqContextMenu.req, true); setReqContextMenu(null); } },
             { id: 'rename', label: 'Rename', shortcut: 'N', icon: <RenameIcon size={13} style={{ color: 'var(--color-ctx-rename)' }} />, onClick: () => { setRenamingId(reqContextMenu.req.id); setRenameValue(reqContextMenu.req.name); setRenamingType('request'); setReqContextMenu(null); } },
@@ -1315,6 +1334,8 @@ interface TreeNodeProps {
   onCollapseSubtree: (node: CollectionTreeNode) => void;
   onCollectionContextMenu: (e: React.MouseEvent, node: CollectionTreeNode) => void;
   onRequestContextMenu: (e: React.MouseEvent, req: CollectionRequest) => void;
+  /** Starred request ids — the rows already float, this is what marks them. */
+  starredIds: Set<string>;
   // DnD props
   dragItem: { id: string; type: 'collection' | 'request'; parentId: string | null } | null;
   dropTarget: { id: string; position: 'before' | 'inside' | 'after' } | null;
@@ -1330,7 +1351,7 @@ function TreeNode({
   renamingId, renameValue, setRenameValue, renameRef, handleRename, startRename, setRenamingId,
   onDelete, onDeleteRequest, onNewFolder, onNewRequest, onOpenRequest, onRunCollection,
   onExpandSubtree, onCollapseSubtree,
-  onCollectionContextMenu, onRequestContextMenu,
+  onCollectionContextMenu, onRequestContextMenu, starredIds,
   dragItem, dropTarget, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd,
 }: TreeNodeProps) {
   const isExpanded = expandedIds.has(node.id);
@@ -1464,6 +1485,7 @@ function TreeNode({
               onCollapseSubtree={onCollapseSubtree}
               onCollectionContextMenu={onCollectionContextMenu}
               onRequestContextMenu={onRequestContextMenu}
+              starredIds={starredIds}
               dragItem={dragItem}
               dropTarget={dropTarget}
               onDragStart={onDragStart}
@@ -1501,6 +1523,11 @@ function TreeNode({
                   >
                     {req.method}
                   </span>
+                  {/* Why this row is first in its folder, said on the row —
+                      an order with no visible cause reads as a bug. */}
+                  {starredIds.has(req.id) && (
+                    <StarIcon size={10} filled className="shrink-0" style={{ color: 'var(--color-warning)' }} />
+                  )}
                   {renamingId === req.id ? (
                     <input
                       ref={renameRef}

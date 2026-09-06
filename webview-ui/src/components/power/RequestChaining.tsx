@@ -6,17 +6,12 @@
  * The variable is then available in subsequent requests via the env system.
  */
 import { useState } from 'react';
-import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import { PlusIcon, TrashIcon } from '../../icons';
+import { applyChainExtractions, extractValue } from '../../services/request/chaining';
+import type { ChainExtraction } from '../../store/tabs-store';
 
-export interface ChainExtraction {
-  id: string;
-  source: 'body' | 'header' | 'status';
-  path: string;           // JSONPath-like: data.users[0].id  or  header: Authorization
-  variableName: string;   // {{variableName}} — without the braces
-  enabled: boolean;
-}
+export type { ChainExtraction };
 
 interface Props {
   tabId: string;
@@ -24,27 +19,6 @@ interface Props {
   onExtractionsChange: (extractions: ChainExtraction[]) => void;
   responseBody?: string;
   responseHeaders?: Record<string, string>;
-}
-
-function extractValue(body: string, headers: Record<string, string>, extraction: ChainExtraction): string | undefined {
-  if (extraction.source === 'status') return undefined;
-  if (extraction.source === 'header') {
-    const key = Object.keys(headers).find(k => k.toLowerCase() === extraction.path.toLowerCase());
-    return key ? headers[key] : undefined;
-  }
-  // Body extraction — simple dot-path resolver
-  try {
-    const obj = JSON.parse(body);
-    const parts = extraction.path.replace(/\[(\d+)\]/g, '.$1').split('.');
-    let current: unknown = obj;
-    for (const part of parts) {
-      if (current === null || current === undefined) return undefined;
-      current = (current as Record<string, unknown>)[part];
-    }
-    return current !== undefined ? String(current) : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 export function RequestChaining({ tabId, extractions, onExtractionsChange, responseBody = '', responseHeaders = {} }: Props) {
@@ -66,27 +40,31 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
     onExtractionsChange(extractions.map(e => e.id === id ? { ...e, ...partial } : e));
   };
 
-  const applyExtractions = () => {
-    const applied: Record<string, string> = {};
-    for (const ex of extractions) {
-      if (!ex.enabled || !ex.variableName || !ex.path) continue;
-      const value = extractValue(responseBody, responseHeaders, ex);
-      if (value !== undefined) {
-        applied[ex.variableName] = value;
-      }
-    }
+  /*
+    The same run the arrival of a response does on its own, on demand.
 
-    if (Object.keys(applied).length === 0) {
+    Kept because a rule is written against a response you already have, and
+    pressing the button is how you find out the path is `data.id` and not
+    `id` without sending again.
+  */
+  const applyExtractions = () => {
+    const { applied, missed } = applyChainExtractions(tabId, {
+      body: responseBody, headers: responseHeaders,
+    });
+    if (applied.length === 0) {
       addToast({ type: 'warning', message: 'No values extracted. Check your paths.' });
       return;
     }
-
-    postMsg({ type: 'env:setVars', vars: applied });
-    addToast({ type: 'success', message: `Extracted ${Object.keys(applied).length} variable${Object.keys(applied).length !== 1 ? 's' : ''} to environment` });
+    addToast({
+      type: missed.length ? 'warning' : 'success',
+      message: `Set ${applied.map(a => `{{${a.name}}}`).join(', ')}`
+        + (missed.length ? ` — no value at the path for ${missed.join(', ')}` : ''),
+    });
   };
 
   const extractedPreviews: Array<{ ex: ChainExtraction; value: string | undefined }> = responseBody
-    ? extractions.filter(e => e.enabled && e.path).map(ex => ({ ex, value: extractValue(responseBody, responseHeaders, ex) }))
+    ? extractions.filter(e => e.enabled && e.path)
+        .map(ex => ({ ex, value: extractValue(ex, responseBody, responseHeaders) }))
     : [];
 
   return (

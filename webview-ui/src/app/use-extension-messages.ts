@@ -5,6 +5,7 @@
  * Extracted from App.tsx — behavior is verbatim.
  */
 import { useEffect } from 'react';
+import { applyChainExtractions } from '../services/request/chaining';
 import { useTabsStore } from '../store/tabs-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
@@ -122,6 +123,16 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
             loading: false,
             requestProgress: undefined,
           });
+          /*
+            Chaining, on arrival.
+
+            This is the whole feature: a login writes `{{token}}` and the next
+            request already has it. Placed after `updateTab` so the rules are
+            read against a tab that already holds this response, and silent on
+            success — a toast per send would be noise on a request that chains
+            every time.
+          */
+          if (response) applyChainExtractions(tabId, response);
           // Push structured console logs to DevTools
           if (consoleLogs && consoleLogs.length > 0) {
             const reqTab = useTabsStore.getState().tabs.find(t => t.id === tabId);

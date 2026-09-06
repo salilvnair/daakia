@@ -24,6 +24,18 @@ function detectMode(body: string, contentType: string = ''): VisualizationMode {
   }
 }
 
+/**
+ * Whether this response has anything to show here.
+ *
+ * The tab is offered only when the answer is yes: a Visualize tab that sits
+ * present and empty on every plain JSON object teaches people to ignore it.
+ * Exported so the response panel can ask without keeping its own copy of the
+ * rules — two copies of "is this a table" would disagree within a week.
+ */
+export function canVisualize(body: string, contentType?: string): boolean {
+  return detectMode(body, contentType) !== 'none';
+}
+
 function JsonTable({ data }: { data: Record<string, unknown>[] }) {
   if (data.length === 0) return null;
 

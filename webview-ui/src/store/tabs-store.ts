@@ -79,6 +79,14 @@ export interface RequestTab {
    * collection and the global settings as those change.
    */
   settings?: ExecutionSettings;
+  /**
+   * Response values to lift into environment variables after each send.
+   *
+   * Bruno's Vars tab and Insomnia's response chaining: `data.token` into
+   * `{{token}}` without writing a script. Applied automatically when a
+   * response arrives — see `services/request/chaining.ts`.
+   */
+  chainExtractions?: ChainExtraction[];
   // Response state
   response: ResponseData | null;
   loading: boolean;
@@ -223,6 +231,23 @@ export interface ResponseCookie {
   httpOnly?: boolean;
   secure?: boolean;
   sameSite?: string;
+}
+
+/**
+ * One value lifted out of a response and into a variable.
+ *
+ * Declared here rather than beside the editor that edits it: it is tab state
+ * that outlives the panel, and the chaining service reads it without wanting
+ * a component import.
+ */
+export interface ChainExtraction {
+  id: string;
+  source: 'body' | 'header' | 'status';
+  /** Dot path into the JSON body (`data.users[0].id`), or a header name. */
+  path: string;
+  /** The name to bind, without braces. */
+  variableName: string;
+  enabled: boolean;
 }
 
 export interface ResponseData {
@@ -432,6 +457,7 @@ function createDefaultTab(partial?: Partial<RequestTab>): RequestTab {
     preRequestScript: '',
     postResponseScript: '',
     variables: [],
+    chainExtractions: [],
     response: null,
     loading: false,
     dirty: false,
