@@ -264,3 +264,49 @@ describe('redact — a logger name is not a secret key', () => {
     expect(clean('password=hunter2')).toBe(`password=${REDACTED}`);
   });
 });
+
+/*
+  Found by the extension-host test, not imagined.
+
+  `spring.datasource.password=hunter2` went to the provider intact. The rule's
+  lookbehind excluded a DOT before the key, which was put there for a real
+  case — a logger named `com.acme.Auth` followed by Spring's padded ` : ` made
+  the first word of the message look like a secret — but it also excluded every
+  dotted property name, which is how Java, Spring and .NET name config keys.
+
+  The separator was already doing that work: Spring pads a logger name to a
+  fixed width, and the rule allows at most one space around the colon. So the
+  dot was redundant in the direction it was meant to help and load-bearing in
+  the direction it hurt.
+*/
+describe('redact — a dotted property name is still a secret key', () => {
+  it('redacts the canonical Spring Boot secret', () => {
+    const out = clean('spring.datasource.password=hunter2 failed to connect');
+    expect(out).not.toContain('hunter2');
+    // The key survives: an empty password and a wrong one fail differently.
+    expect(out).toContain('spring.datasource.password');
+  });
+
+  it('redacts the other dotted shapes an application actually writes', () => {
+    for (const [line, secret] of [
+      ['aws.secret-access-key=AKIA1234567890', 'AKIA1234567890'],
+      ['app.auth.client-secret=s3cr3tvalue', 's3cr3tvalue'],
+      ['ConnectionStrings.Default.Password=p@ssw0rd', 'p@ssw0rd'],
+      ['redis.session-id=abc123xyz', 'abc123xyz'],
+    ] as const) {
+      expect(clean(line), line).not.toContain(secret);
+    }
+  });
+
+  it('still leaves a padded logger name alone', () => {
+    // The case the dot was added for, which the separator already covers.
+    const line = 'com.acme.Auth                            : retry with the pool';
+    expect(clean(line)).toContain(': retry with the pool');
+  });
+
+  it('still does not match a key that merely mentions a secret', () => {
+    // `password` is not immediately followed by a separator here.
+    const out = clean('security.password_policy_enabled=true');
+    expect(out).toContain('true');
+  });
+});

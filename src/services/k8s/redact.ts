@@ -130,7 +130,7 @@ const RULES: Rule[] = [
   */
   {
     kind: 'secret value',
-    re: new RegExp(String.raw`(?<![.\w])(${SECRET_KEY})([ ]?[=:][ ]?)("[^"]*"|'[^']*'|[^\s,;&}\])]+)`, 'gi'),
+    re: new RegExp(String.raw`(?<!\w)(${SECRET_KEY})([ ]?[=:][ ]?)("[^"]*"|'[^']*'|[^\s,;&}\])]+)`, 'gi'),
     /*
       Declines when the value is not the secret.
 
