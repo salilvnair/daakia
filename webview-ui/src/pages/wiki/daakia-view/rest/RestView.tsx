@@ -341,6 +341,28 @@ dk.env.set('user_id', dk.response.json().id);`}
           'Collection Variables — shared across the collection',
           'Global Variables — shared across the whole workspace',
         ]} />
+
+        <SubTitle>Response chaining — the other direction</SubTitle>
+        <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+          Under the table, <b>Response Chaining</b> takes values <i>out</i> of a response and binds
+          them to variables the next request reads — a login writes <Code>{'{{token}}'}</Code> and
+          the request after it already has one. No script involved.
+        </p>
+        <WikiTable
+          headers={['Field', 'Means']}
+          rows={[
+            ['Source', 'Body, header or status'],
+            ['Path', 'A dot path into the JSON body — data.users[0].id — or a header name'],
+            ['Variable', 'The name to bind, without braces'],
+          ]}
+        />
+        <Callout type="info" title="It runs on every response, by itself">
+          The <b>Apply to Environment</b> button is for working out that the path is
+          <Code>data.id</Code> and not <Code>id</Code> without sending again — the rules run
+          automatically as each response arrives. Values land in the active environment&rsquo;s
+          <b> current value</b> and leave the initial one empty, so a token pulled off a response
+          never ends up in an export.
+        </Callout>
       </div>
       {cap('rest-variables')}
 
@@ -379,6 +401,8 @@ dk.env.set('user_id', dk.response.json().id);`}
           rows={[
             ['JSON', 'What did the server send back? (pretty-printed, filterable)'],
             ['Raw', 'What EXACTLY did the server send, unformatted?'],
+            ['Visualize', 'Show me this as a table — or render the image/PDF that came back'],
+            ['Assert', 'Click a field and turn it into a test'],
             ['Headers', 'What headers came with it?'],
             ['Cookies', 'Did a session/auth cookie get set?'],
             ['Tests', 'Did my Post-response assertions pass?'],
@@ -386,6 +410,26 @@ dk.env.set('user_id', dk.response.json().id);`}
           ]}
         />
       </div>
+      <Callout type="info" title="Visualize and Assert appear when they apply">
+        Visualize shows up when the body is an array of objects, an image or a PDF — there is
+        nothing to draw for a single JSON object. Assert shows up for any JSON body. A tab that
+        sits there empty on most responses is one you learn to ignore.
+      </Callout>
+      <SubTitle>Assert — a test without writing a test</SubTitle>
+      <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+        Click any field in the tree and it becomes a <Code>dk.expect(...)</Code>: the value for a
+        number or a boolean, a shape for an email. Build up a few, press <b>Apply to Script</b>, and
+        they are appended to the request&rsquo;s post-response script — the same place a
+        hand-written test lives, so the runner and the CLI pick them up with everything else.
+      </p>
+      <CodeBlock label="What three clicks produce" lang="javascript">
+{`const data = dk.response.json();
+dk.test('Visual assertions', () => {
+  dk.expect(data[0].id).toBe(1);
+  dk.expect(data[0].name).toBe("Ada");
+  dk.expect(data[0].email).toMatch(/^[^@]+@[^@]+\.[^@]+$/);
+});`}
+      </CodeBlock>
       {cap('rest-response-json')}
       {cap('rest-response-raw')}
       {cap('rest-response-headers')}

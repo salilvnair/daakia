@@ -1,5 +1,5 @@
 import { WikiScrollPage, CaptureCard } from '../capture/CaptureScrollView';
-import { WikiHero, SectionTitle, SubTitle, Steps, FeatureGrid, Callout, WikiTable, Code, Collapsible, WikiCard, Divider, ProtocolActivateNote, chips, TocBar, type TocItem } from '../shared/WikiShared';
+import { WikiHero, SectionTitle, SubTitle, Steps, FeatureGrid, Callout, WikiTable, Code, CodeBlock, Collapsible, WikiCard, Divider, ProtocolActivateNote, chips, TocBar, type TocItem } from '../shared/WikiShared';
 import { CollectionsFolderIcon, ClockIcon, LayersIcon } from '../../../../icons';
 import { PLATFORM_CAPTURES } from './captures';
 
@@ -11,6 +11,7 @@ const TOC_ITEMS: TocItem[] = [
   { id: 'ce-scripts', emoji: '📝', label: 'Scripts' },
   { id: 'ce-cookies', emoji: '🍪', label: 'Cookies' },
   { id: 'ce-timeline', emoji: '⏱️', label: 'Timeline' },
+  { id: 'ce-cli', emoji: '🤖', label: 'CI runner' },
   { id: 'ce-devtools', emoji: '🛠️', label: 'DevTools' },
 ];
 
@@ -358,6 +359,51 @@ export function CollectionsEnvView() {
       <Divider />
 
       {/* ─── DevTools ─────────────────────────────────────────────── */}
+      <div>
+        <SectionTitle id="ce-cli" emoji="🤖">Running a collection in CI</SectionTitle>
+        <p className="dw-p">
+          Export a collection (or point at a Postman v2.1 file) and run it from a pipeline. The
+          runner speaks the two things CI needs: an exit code, and a report a build page can
+          render.
+        </p>
+        <CodeBlock label="A pipeline step" lang="bash">
+{`node cli/daakia-run.mjs api.daakia.json \
+  --env staging.json \
+  --env-var token=$API_TOKEN \
+  --folder Smoke \
+  --junit report.xml`}
+        </CodeBlock>
+        <WikiTable
+          headers={['Flag', 'Does']}
+          rows={[
+            ['--env <file>', 'Environment file — a {"key":"value"} map or a Daakia env export'],
+            ['--env-var k=v', 'Override one variable; repeatable, and it beats the file — this is where a CI secret goes'],
+            ['--folder <name>', 'Run one folder. Matched on whole path segments, so it cannot quietly match a request name'],
+            ['--filter <text>', 'Run requests whose name contains the text'],
+            ['--data <file>', 'CSV or JSON rows — one run of the collection per row, columns bound as variables'],
+            ['--iterations <n>', 'Run n times, when there is no data file'],
+            ['--delay <ms>', 'Wait between requests'],
+            ['--timeout <ms>', 'Per-request timeout (default 30000)'],
+            ['--bail', 'Stop at the first failure'],
+            ['--insecure', 'Ignore TLS certificate errors'],
+            ['--json', 'Machine-readable report on stdout'],
+            ['--junit <file>', 'JUnit XML — what GitHub Actions, GitLab and Jenkins actually display'],
+          ]}
+        />
+        <Callout type="info" title="Fifty accounts from a CSV">
+          <Code>--data users.csv</Code> runs the whole collection once per row, with each column
+          bound as a variable: a request that says <Code>{'{{email}}'}</Code> gets row one&rsquo;s
+          email on the first pass and row two&rsquo;s on the second. The JUnit report gives each
+          iteration its own suite, so a failure names the row rather than repeating the request.
+        </Callout>
+        <Callout type="warn" title="The exit code is the contract">
+          <Code>0</Code> when every request passed, <Code>1</Code> when any failed. Nothing else —
+          a run that exits any other way is the runner itself failing, and worth reporting.
+        </Callout>
+      </div>
+
+      <Divider />
+
       <div>
         <SectionTitle id="ce-devtools" emoji="🛠️">DevTools Panel</SectionTitle>
         <Callout type="info" title="Not the same as the Response panel">
