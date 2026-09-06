@@ -131,3 +131,71 @@ describe('filterTermFor', () => {
     expect(filterTermFor('logger', 'com.example.Foo')).toBe('com.example.Foo');
   });
 });
+
+/* ── MDC fields, added when facets stopped being three named slots ────── */
+
+describe('facets over fields the application named', () => {
+  const line = (over: Record<string, unknown> = {}) => ({
+    thread: 'main', logger: 'com.zp.App',
+    fields: { tenant: 'eu-west', orderId: 'ORD-1' },
+    ...over,
+  });
+
+  it('offers an MDC key as a facet', () => {
+    const facets = buildFacets([
+      line(), line({ fields: { tenant: 'us-east', orderId: 'ORD-2' } }),
+    ]);
+    const tenant = facets.find(f => f.field === 'tenant');
+    expect(tenant).toBeTruthy();
+    expect(tenant!.values.map(v => v.value).sort()).toEqual(['eu-west', 'us-east']);
+    // Labelled by its own key: the name the person writing the log chose.
+    expect(tenant!.label).toBe('tenant');
+    expect(tenant!.named).toBe(false);
+  });
+
+  it('keeps the named fields first, in their usual order', () => {
+    const facets = buildFacets([
+      line(), line({ thread: 'worker-2', logger: 'com.zp.Other',
+        fields: { tenant: 'us-east', orderId: 'ORD-2' } }),
+    ]);
+    const named = facets.filter(f => f.named).map(f => f.field);
+    expect(named).toEqual(['thread', 'logger']);
+    expect(facets.findIndex(f => f.named)).toBe(0);
+  });
+
+  it('drops a field with a distinct value on nearly every line', () => {
+    // traceId is the case: 60 values of count 1 is a list, not a filter.
+    const many = Array.from({ length: 60 }, (_, i) =>
+      line({ fields: { traceId: `t${i}`, tenant: i % 2 ? 'eu' : 'us' } }));
+    const facets = buildFacets(many);
+    expect(facets.map(f => f.field)).not.toContain('traceId');
+    // ...while the field that actually divides the buffer survives.
+    expect(facets.map(f => f.field)).toContain('tenant');
+  });
+
+  it('still refuses a field with only one value', () => {
+    const facets = buildFacets([line(), line()]);
+    expect(facets.map(f => f.field)).not.toContain('tenant');
+  });
+
+  it('reports how many values the cap hid', () => {
+    const lines = Array.from({ length: 40 }, (_, i) =>
+      line({ fields: { tenant: `t${i % 30}` } }));
+    const tenant = buildFacets(lines, 5).find(f => f.field === 'tenant');
+    expect(tenant!.values).toHaveLength(5);
+    expect(tenant!.distinct).toBe(30);
+  });
+
+  it('bounds how many facets reach the UI', () => {
+    const wide: Record<string, string> = {};
+    for (let i = 0; i < 30; i++) wide[`k${i}`] = 'a';
+    const other: Record<string, string> = {};
+    for (let i = 0; i < 30; i++) other[`k${i}`] = 'b';
+    const facets = buildFacets([line({ fields: wide }), line({ fields: other })]);
+    expect(facets.length).toBeLessThanOrEqual(12);
+  });
+
+  it('gives nothing at all when no format named anything', () => {
+    expect(buildFacets([{ thread: undefined, logger: undefined, app: undefined }])).toEqual([]);
+  });
+});

@@ -276,9 +276,25 @@ export function LogSearchModal({ onClose }: { onClose: () => void }) {
     })));
   }, [chosen, run, searchIn, fileSearch, options.query, options.caseSensitive]);
 
-  // Enter searches. Anyone who has typed a query expects it to.
+  /*
+    Enter searches — once.
+
+    This is the dialog-wide fallback, so that Enter works after ticking pods or
+    changing a level chip, where focus is on something with no opinion about
+    the key. The search box has its own `onSearch`, and Enter pressed there
+    bubbles up to here as well: both handlers fired, two sweeps started on the
+    host, and only the newer one was reachable by Stop.
+
+    So anything that is itself a text field is left alone. The search box
+    submits through `onSearch`; the pod filter narrows a list and Enter in it
+    should not launch a search at all.
+  */
   const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !running && options.query.trim()) submit();
+    if (e.key !== 'Enter' || running || !options.query.trim()) return;
+    const el = e.target as HTMLElement | null;
+    const tag = el?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+    submit();
   };
 
   const jumpToPod = (m: SearchMatch) => {

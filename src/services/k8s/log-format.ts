@@ -111,6 +111,66 @@ export interface ParsedLine {
   app?: string;
   /** The message, with the parsed fields removed where the format found them. */
   message: string;
+  /**
+   * Everything else the format carried, when the format is structured.
+   *
+   * A Logback or zap JSON line puts MDC beside the standard keys —
+   * `traceId`, `orderId`, `tenant` — and this parser used to read six keys and
+   * drop the rest, so the one thing that makes a request traceable was thrown
+   * away at the point it was already in hand.
+   *
+   * Only from a STRUCTURED format. Nothing here is sniffed out of free text,
+   * which is the rule that stopped the log view offering `na:na` as a thread
+   * name; a pattern format has exactly the fields its pattern names and gets
+   * no extras.
+   */
+  fields?: Record<string, string>;
+}
+
+/**
+ * What may become a field, decided where the data is rather than in the view.
+ *
+ * Applied at parse time so nothing large ever crosses to the webview: a stack
+ * trace stuffed into an MDC key would otherwise be copied onto every line and
+ * sent, and the view would then have to defend itself against its own data.
+ */
+const MAX_FIELD_KEYS = 24;
+const MAX_FIELD_VALUE = 120;
+/** Keys already carried in their own slot, so they are not repeated as extras. */
+const CLAIMED = new Set([
+  'time', 'timestamp', 'ts', '@timestamp', 'level', 'severity', 'lvl',
+  'logger', 'logger_name', 'caller', 'component',
+  'thread', 'thread_name', 'app', 'app_name', 'application',
+  'msg', 'message', 'stack_trace', 'stacktrace', 'exception',
+]);
+
+export function extraFields(
+  obj: Record<string, unknown>, claimed: Iterable<string | undefined> = [],
+): Record<string, string> | undefined {
+  const skip = new Set(CLAIMED);
+  for (const c of claimed) if (c) skip.add(c.toLowerCase());
+
+  const out: Record<string, string> = {};
+  let n = 0;
+  for (const key of Object.keys(obj)) {
+    if (n >= MAX_FIELD_KEYS) break;
+    if (skip.has(key.toLowerCase())) continue;
+    /*
+      Scalars only.
+
+      A nested object is not a facet value, and flattening one invents field
+      names nobody logged — `context.user.id` reads like something the
+      application chose to record when it is something this code made up.
+    */
+    const v = (obj as Record<string, unknown>)[key];
+    const t = typeof v;
+    if (t !== 'string' && t !== 'number' && t !== 'boolean') continue;
+    const text = String(v);
+    if (!text || text.length > MAX_FIELD_VALUE) continue;
+    out[key] = text;
+    n++;
+  }
+  return n ? out : undefined;
 }
 
 // ── Level normalisation ─────────────────────────────────────────────────────
@@ -349,6 +409,11 @@ function parseJsonLine(text: string, fmt: LogFormat): ParsedLine | null {
     thread: (pick(obj, 'thread_name') ?? pick(obj, 'thread')) as string | undefined,
     app: (pick(obj, 'app_name') ?? pick(obj, 'application') ?? pick(obj, 'app')) as string | undefined,
     message: typeof message === 'string' ? message : JSON.stringify(message),
+    // Whatever the application also logged. Only top-level keys: a dotted
+    // `fields` path may reach into a nested object for a KNOWN field, but an
+    // unknown one is only a field if the log put it where fields go.
+    fields: extraFields(obj as Record<string, unknown>,
+      [f.message, f.level, f.logger, f.timestamp]),
   };
 }
 
@@ -400,7 +465,47 @@ function parseLogfmtLine(text: string, fmt: LogFormat): ParsedLine | null {
     thread: read('thread') ?? read('thread_name'),
     app: read('app') ?? read('application'),
     message: msgFull,
+    /*
+      logfmt is key=value all the way down, so the extras are read by the same
+      scan rather than by parsing the line twice. Only the head is scanned —
+      the same window every other field here comes from, which keeps a long
+      message from turning into forty fields.
+    */
+    fields: extraFields(logfmtPairs(head), [f.message, f.level, f.logger, f.timestamp]),
   };
+}
+
+/**
+ * Every `key=value` in a logfmt head, as an object.
+ *
+ * Written as a scan rather than a regex because a quoted value may contain
+ * spaces and an equals sign, and a regex that handles both correctly is
+ * longer than this and harder to be sure of.
+ */
+export function logfmtPairs(head: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  let i = 0;
+  while (i < head.length) {
+    while (i < head.length && head[i] === ' ') i++;
+    const eq = head.indexOf('=', i);
+    if (eq === -1) break;
+    const key = head.slice(i, eq);
+    // A key with a space in it is not a key — it is the tail of a message
+    // that happens to contain an equals sign.
+    if (!key || /[\s"]/.test(key)) { i = eq + 1; continue; }
+    let value: string;
+    if (head[eq + 1] === '"') {
+      const end = head.indexOf('"', eq + 2);
+      value = end === -1 ? head.slice(eq + 2) : head.slice(eq + 2, end);
+      i = end === -1 ? head.length : end + 1;
+    } else {
+      const end = head.indexOf(' ', eq + 1);
+      value = end === -1 ? head.slice(eq + 1) : head.slice(eq + 1, end);
+      i = end === -1 ? head.length : end;
+    }
+    out[key] = value;
+  }
+  return out;
 }
 
 function parsePatternLine(text: string, fmt: LogFormat, re: RegExp): ParsedLine | null {

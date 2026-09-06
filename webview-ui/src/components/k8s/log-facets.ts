@@ -34,7 +34,18 @@
  */
 import type { LogLine } from '../../store/k8s-store';
 
-export type FacetField = 'thread' | 'logger' | 'app';
+/**
+ * The three the format names in their own slots, plus anything else it carried.
+ *
+ * A string rather than a union now, because MDC keys are whatever the
+ * application chose to log. The three named ones keep their labels and their
+ * position at the top of the list; the rest are labelled by their own key,
+ * which is the name the person who wrote the log line picked.
+ */
+export type FacetField = string;
+
+/** The ones with a slot of their own, in the order they are worth reading. */
+export const NAMED_FIELDS = ['thread', 'logger', 'app'] as const;
 
 export interface FacetValue {
   value: string;
@@ -48,15 +59,48 @@ export interface Facet {
   values: FacetValue[];
   /** How many parsed events produced these counts. */
   scanned: number;
+  /** Values before `perField` truncated the list, so the UI can say so. */
+  distinct: number;
+  /** One of thread/logger/app rather than a field the application named. */
+  named: boolean;
 }
 
-export const FACET_LABEL: Record<FacetField, string> = {
+export const FACET_LABEL: Record<string, string> = {
   thread: 'Thread name',
   logger: 'Logger',
   app: 'Application',
 };
 
-const FIELDS: FacetField[] = ['thread', 'logger', 'app'];
+/** A field's label: the friendly one where there is one, its own key otherwise. */
+export function facetLabel(field: string): string {
+  return FACET_LABEL[field] ?? field;
+}
+
+/**
+ * How well a field divides the buffer, from 0 to 1.
+ *
+ * A field where every line shares one value tells you nothing, and one with a
+ * distinct value per line — a trace id — is a list rather than a filter. The
+ * useful ones sit between: a handful of values splitting the events unevenly.
+ *
+ * Used to ORDER the extra fields, so the most informative surface first and a
+ * cap drops the least. The three named fields skip this and keep their places;
+ * they are the ones a reader goes looking for by name.
+ */
+export function usefulness(values: { count: number }[], scanned: number): number {
+  if (scanned <= 0 || values.length < 2) return 0;
+  // Distinct values as a share of events: 1 means every line is unique.
+  const spread = values.length / scanned;
+  if (spread > 0.6) return 0;
+  // Normalised entropy — highest when the events are split evenly, lowest
+  // when one value dominates. Both extremes are less useful than the middle.
+  let h = 0;
+  for (const v of values) {
+    const pr = v.count / scanned;
+    if (pr > 0) h -= pr * Math.log2(pr);
+  }
+  return h / Math.log2(values.length);
+}
 
 /**
  * Group the buffered lines by each field a format actually named.
@@ -69,22 +113,53 @@ const FIELDS: FacetField[] = ['thread', 'logger', 'app'];
  * hundreds of threads and a menu cannot show hundreds of anything; the cap
  * applies after sorting, so what is dropped is always the quietest.
  */
+/**
+ * A ceiling on how many fields reach the UI.
+ *
+ * The rail is scanned, not read, and past a dozen headings it stops being
+ * scannable. What is dropped is decided by `usefulness`, so the ones that
+ * survive are the ones that actually divide the buffer.
+ */
+const MAX_FACETS = 12;
+
+/**
+ * A field with a distinct value on nearly every line is a list, not a filter.
+ *
+ * `traceId` is the case this exists for: 400 values of count 1 is not
+ * something anyone browses. Such fields are still on the line and still
+ * filterable from a row's own menu, where you have picked one value rather
+ * than being offered all of them.
+ */
+const MAX_DISTINCT = 50;
+
 export function buildFacets(
-  lines: Pick<LogLine, 'thread' | 'logger' | 'app'>[],
+  lines: Pick<LogLine, 'thread' | 'logger' | 'app' | 'fields'>[],
   perField = 20,
 ): Facet[] {
-  const counts: Record<FacetField, Map<string, number>> = {
-    thread: new Map(), logger: new Map(), app: new Map(),
+  const counts = new Map<string, Map<string, number>>();
+  const bump = (field: string, value: string) => {
+    let m = counts.get(field);
+    if (!m) { m = new Map(); counts.set(field, m); }
+    m.set(value, (m.get(value) ?? 0) + 1);
   };
 
   let scanned = 0;
   for (const line of lines) {
     let sawAny = false;
-    for (const field of FIELDS) {
+    for (const field of NAMED_FIELDS) {
       const v = line[field];
       if (!v) continue;
       sawAny = true;
-      counts[field].set(v, (counts[field].get(v) ?? 0) + 1);
+      bump(field, v);
+    }
+    // Whatever else the format carried. Bounded on the host, so this is a
+    // handful of short strings rather than an open door.
+    if (line.fields) {
+      for (const [k, v] of Object.entries(line.fields)) {
+        if (!v) continue;
+        sawAny = true;
+        bump(k, v);
+      }
     }
     // Only lines that carried fields count toward the denominator, so the
     // reported scan size describes the events these values came from rather
@@ -92,9 +167,11 @@ export function buildFacets(
     if (sawAny) scanned++;
   }
 
-  const facets: Facet[] = [];
-  for (const field of FIELDS) {
-    const values = [...counts[field].entries()]
+  const named: Facet[] = [];
+  const extra: { facet: Facet; score: number }[] = [];
+
+  for (const [field, m] of counts) {
+    const values = [...m.entries()]
       .map(([value, count]) => ({ value, count }))
       .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
 
@@ -106,10 +183,29 @@ export function buildFacets(
       possibly select.
     */
     if (values.length < 2) continue;
-    facets.push({ field, label: FACET_LABEL[field], values: values.slice(0, perField), scanned });
+
+    const facet: Facet = {
+      field, label: facetLabel(field),
+      values: values.slice(0, perField), scanned,
+      /* The full count, so the UI can say what the cap hid rather than
+         silently showing twenty of two hundred. */
+      distinct: values.length,
+      named: (NAMED_FIELDS as readonly string[]).includes(field),
+    };
+
+    if (facet.named) { named.push(facet); continue; }
+    if (values.length > MAX_DISTINCT) continue;
+    extra.push({ facet, score: usefulness(values, scanned) });
   }
 
-  return facets;
+  // Named fields keep their own order — a reader looks for "Thread name"
+  // where it has always been — and the rest are ranked by what they divide.
+  named.sort((a, b) =>
+    NAMED_FIELDS.indexOf(a.field as typeof NAMED_FIELDS[number])
+    - NAMED_FIELDS.indexOf(b.field as typeof NAMED_FIELDS[number]));
+  extra.sort((a, b) => b.score - a.score || a.facet.field.localeCompare(b.facet.field));
+
+  return [...named, ...extra.map(e => e.facet)].slice(0, MAX_FACETS);
 }
 
 /**

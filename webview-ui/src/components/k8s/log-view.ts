@@ -44,7 +44,14 @@ export function levelLabel(level: LogLevel): string {
  * clicked. log-viewer's thread filter uses exactly this.
  */
 export interface FieldFilter {
-  field: 'thread' | 'logger' | 'app';
+  /**
+   * `thread`, `logger`, `app`, or any key a structured format carried.
+   *
+   * Widened from the three named slots when MDC arrived: `tenant` and
+   * `orderId` are fields in exactly the same sense, they just do not have a
+   * dedicated property on the line.
+   */
+  field: string;
   value: string;
   /** `exclude` hides matching lines; `include` hides everything else. */
   mode: 'include' | 'exclude';
@@ -85,22 +92,35 @@ function wildcard(value: string): (v: string) => boolean {
  * than being judged on its own — otherwise filtering to one thread would show
  * that thread's errors with every stack trace stripped out from under them.
  */
+/**
+ * A field's value on a line, from its own slot or from the extras.
+ *
+ * One lookup for both so a filter does not have to know which kind of field
+ * it holds — which is the whole point of widening `field` to a string.
+ */
+function valueOf(
+  line: Pick<LogLine, 'thread' | 'logger' | 'app' | 'fields'>, field: string,
+): string | undefined {
+  if (field === 'thread' || field === 'logger' || field === 'app') return line[field];
+  return line.fields?.[field];
+}
+
 export function matchesFieldFilters(
-  line: Pick<LogLine, 'thread' | 'logger' | 'app'>,
+  line: Pick<LogLine, 'thread' | 'logger' | 'app' | 'fields'>,
   filters: FieldFilter[],
 ): boolean {
   if (!filters.length) return true;
 
   for (const f of filters) {
     if (f.mode !== 'exclude') continue;
-    const v = line[f.field];
+    const v = valueOf(line, f.field);
     if (v && wildcard(f.value)(v)) return false;
   }
 
   const includes = filters.filter(f => f.mode === 'include');
   if (!includes.length) return true;
 
-  const byField = new Map<FieldFilter['field'], FieldFilter[]>();
+  const byField = new Map<string, FieldFilter[]>();
   for (const f of includes) {
     const list = byField.get(f.field) ?? [];
     list.push(f);
@@ -108,7 +128,7 @@ export function matchesFieldFilters(
   }
 
   for (const [field, list] of byField) {
-    const v = line[field];
+    const v = valueOf(line, field);
     if (!v) return false;
     if (!list.some(f => wildcard(f.value)(v))) return false;
   }

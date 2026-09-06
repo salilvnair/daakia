@@ -139,6 +139,14 @@ export interface LogLine {
   logger?: string;
   thread?: string;
   app?: string;
+  /**
+   * Everything else a structured format carried — MDC, in practice.
+   *
+   * Same rule as the three above: from a configured format or absent. The host
+   * bounds the count and the value length, so a view may treat this as small
+   * without checking.
+   */
+  fields?: Record<string, string>;
 
   /**
    * This line belongs to the event above it rather than being one itself.

@@ -36,6 +36,13 @@ export interface LogLine {
   thread?: string;
   app?: string;
   /**
+   * Everything else a structured format carried — MDC, in practice.
+   *
+   * Same rule as the three above, and bounded by `extraFields` at parse time
+   * so a line cannot arrive here carrying a stack trace under a field name.
+   */
+  fields?: Record<string, string>;
+  /**
    * This line belongs to the event above it rather than being one itself.
    *
    * With a format configured this is exact — it means the format did not parse
@@ -286,6 +293,9 @@ export function parseLine(
         logger: p.logger,
         thread: p.thread,
         app: p.app,
+        // Bounded at parse time — see extraFields — so this is a handful of
+        // short strings per line rather than an open door.
+        fields: p.fields,
         text,
         /*
           Explicitly false, not absent.

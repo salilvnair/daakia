@@ -22,12 +22,13 @@ import {
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
-  ChevronLeftIcon,
+  ChevronLeftIcon, SidebarLeftIcon,
 } from '../../icons';
 import { useK8sStore, type LogLevel } from '../../store/k8s-store';
 import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets } from './log-facets';
+import { FacetRail } from './FacetRail';
 import {
   setFilterProvider, clearFilterProvider,
   type FilterMenu, type FilterGroup,
@@ -559,6 +560,22 @@ export function LogViewer() {
   */
   const SETTLE_MS = 900;
   const [settling, setSettling] = useState(false);
+  /*
+    The rail is on by default and remembered.
+
+    It answers "what is this log" before anything is clicked, which is the
+    question people arrive with — but a narrow panel is a real constraint, and
+    208px is a lot of it. Stored per person rather than per pod: whether you
+    want a facet rail is a preference about how you read.
+  */
+  const [facetsOpen, setFacetsOpen] = useState(() => {
+    try { return localStorage.getItem('dk8s.logs.facets') !== 'off'; }
+    catch { return true; }
+  });
+  const toggleFacets = () => setFacetsOpen(v => {
+    try { localStorage.setItem('dk8s.logs.facets', v ? 'off' : 'on'); } catch { /* private mode */ }
+    return !v;
+  });
   useEffect(() => {
     if (!logRequestedAt) { setSettling(false); return; }
     const left = SETTLE_MS - (Date.now() - logRequestedAt);
@@ -1063,6 +1080,25 @@ export function LogViewer() {
         />
 
       <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0">
+        {/* Before the level chips, because it governs the panel beside them
+            rather than the rows — and because a control that hides a whole
+            column should not be buried at the end of a toolbar. */}
+        <button
+          type="button"
+          onClick={toggleFacets}
+          title={facetsOpen ? 'Hide the field panel' : 'Show the field panel'}
+          aria-pressed={facetsOpen}
+          className="flex items-center justify-center rounded shrink-0 border-none cursor-pointer"
+          style={{
+            width: 24, height: 20,
+            color: facetsOpen ? ACCENT : 'var(--color-text-muted)',
+            background: facetsOpen
+              ? 'color-mix(in srgb, var(--color-dk8s) 14%, transparent)' : 'transparent',
+          }}
+        >
+          <SidebarLeftIcon size={IconSize.inline} />
+        </button>
+
         <LevelChips />
 
         {/* Takes whatever is left between the chips and the controls, rather
@@ -1323,6 +1359,19 @@ export function LogViewer() {
         // menu; the menu dispatches back here rather than knowing about logs.
         data-selection-actions="ai search filter"
       >
+        {/* The rail sits inside the body rather than above it, so it scrolls
+            with the log's own region and disappears with it — it is about
+            these lines, and following them to another tab would be a panel
+            describing something that is no longer on screen. */}
+        {facetsOpen && (
+          <FacetRail
+            lines={logs}
+            filters={logFieldFilters}
+            onToggle={f => addFieldFilter(f)}
+            onClear={(field, value) => removeFieldFilter(field, value)}
+          />
+        )}
+
         <div
           ref={scrollRef}
           onScroll={onScroll}
