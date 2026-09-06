@@ -94,6 +94,21 @@ UI.
   payloads
 - Chaining rules persist with the request too, so they survive a closed tab
 
+### Changed — The OpenAPI export describes a real API
+- **`servers`** — the base URL is declared once instead of baked into every
+  path, including the `{{baseUrl}}` convention every exported Postman
+  collection uses. That convention used to parse as part of the host, so a
+  request whose whole URL was the variable collapsed to `/` and collided with
+  every other one
+- **`components.securitySchemes`** — the bearer, basic or API-key config each
+  request carries becomes a named scheme the operations reference, instead of
+  vanishing. Two different API-key headers stay two schemes
+- **`{id}` survives** as a path parameter rather than arriving
+  percent-encoded as `%7Bid%7D`, which no tool reads
+- The exporter emits **3.1.0**, the version the AI doc generator has always
+  claimed — one app was producing two spec versions depending which button
+  you pressed
+
 ### Fixed
 - **Imported Postman tests said the opposite of what they meant.**
   `.to.not.equal(500)` converted to `toBe` with a `/* NOT */` comment inside

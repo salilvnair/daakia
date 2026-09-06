@@ -9,6 +9,7 @@
  *   - HTTPie (5.4.12)      — named request objects JSON
  */
 import * as vscode from 'vscode';
+import { splitUrl, schemeFor, buildOpenApiDoc, type OAContext, type OAOperation } from './openapi-doc';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCollectionTree, getCollectionSubtree, getAllCollectionTrees, type CollectionTreeNode, type CollectionRequestRow } from '../storage/db';
@@ -509,18 +510,12 @@ export async function handleExportCollectionHttpie(
 
 interface OAParam { name: string; in: string; schema: { type: string }; required?: boolean; }
 interface OARequestBody { content: Record<string, { schema: { type: string } }>; required: boolean; }
-interface OAOperation { summary: string; description?: string; operationId: string; tags: string[]; parameters?: OAParam[]; requestBody?: OARequestBody; responses: Record<string, { description: string }>; }
-
-function buildOpenApiPaths(node: CollectionTreeNode, tag: string, paths: Record<string, Record<string, OAOperation>>) {
+function buildOpenApiPaths(node: CollectionTreeNode, tag: string, ctx: OAContext) {
+  const paths = ctx.paths;
   for (const req of node.requests) {
     const d = parseRequestData(req);
-    // Build path — replace query param literals with path template params where {} not already present
-    let urlPath = req.url || '/';
-    try {
-      const u = new URL(urlPath.startsWith('http') ? urlPath : `http://placeholder${urlPath}`);
-      urlPath = u.pathname || '/';
-    } catch { urlPath = '/'; }
-    if (!urlPath) urlPath = '/';
+    const { path: urlPath, server } = splitUrl(req.url || '/');
+    if (server) ctx.servers.add(server);
 
     const method = (req.method || 'GET').toLowerCase();
     const parameters: OAParam[] = [];
@@ -550,6 +545,14 @@ function buildOpenApiPaths(node: CollectionTreeNode, tag: string, paths: Record<
     };
     if (parameters.length) op.parameters = parameters;
 
+    // The credential this request carries, named in the document rather than
+    // dropped on the floor.
+    const auth = schemeFor(d);
+    if (auth) {
+      ctx.schemes.set(auth.name, auth.scheme);
+      op.security = [{ [auth.name]: [] }];
+    }
+
     const bodyMode = d.bodyMode as string;
     if (['raw', 'form-data', 'urlencoded'].includes(bodyMode) && ['post', 'put', 'patch'].includes(method)) {
       const ct = bodyMode === 'raw' ? 'application/json' : bodyMode === 'form-data' ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
@@ -560,7 +563,7 @@ function buildOpenApiPaths(node: CollectionTreeNode, tag: string, paths: Record<
     paths[urlPath][method] = op;
   }
   for (const child of node.children) {
-    buildOpenApiPaths(child, tag, paths);
+    buildOpenApiPaths(child, tag, ctx);
   }
 }
 
@@ -572,29 +575,25 @@ export async function handleExportCollectionOpenApi(
   const tree = getCollectionTree();
   const node = collectionId ? findNode(tree, collectionId) : null;
 
-  const paths: Record<string, Record<string, OAOperation>> = {};
+  const ctx: OAContext = { paths: {}, servers: new Set(), schemes: new Map() };
   const toExport = node ? [node] : tree;
   for (const n of toExport) {
-    buildOpenApiPaths(n as CollectionTreeNode, n.name, paths);
+    buildOpenApiPaths(n as CollectionTreeNode, n.name, ctx);
   }
 
   const collectionName = node?.name || 'Daakia API';
-  const doc = {
-    openapi: '3.0.3',
-    info: { title: collectionName, version: '1.0.0', description: `OpenAPI 3.0 spec generated from Daakia collection — ${collectionName}` },
-    paths,
-  };
+  const doc = buildOpenApiDoc(collectionName, ctx);
 
   const defaultName = node ? `${node.name}.openapi.json` : 'daakia-openapi.json';
   const uri = await vscode.window.showSaveDialog({
-    saveLabel: 'Export as OpenAPI 3.0 spec',
+    saveLabel: 'Export as OpenAPI spec',
     defaultUri: vscode.Uri.file(defaultName),
     filters: { 'JSON Files': ['json'] },
   });
   if (!uri) return;
 
   fs.writeFileSync(uri.fsPath, JSON.stringify(doc, null, 2), 'utf8');
-  postMessage({ type: 'toast', toastType: 'success', message: `Exported OpenAPI 3.0 spec to ${path.basename(uri.fsPath)}` });
+  postMessage({ type: 'toast', toastType: 'success', message: `Exported OpenAPI 3.1 spec to ${path.basename(uri.fsPath)}` });
 }
 
 // ─── 5.4.8 — API Documentation (Markdown) ────────────────────────────────────

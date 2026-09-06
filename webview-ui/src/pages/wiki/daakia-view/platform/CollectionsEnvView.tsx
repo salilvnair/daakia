@@ -90,7 +90,7 @@ export function CollectionsEnvView() {
             ['Insomnia', 'Insomnia workspace export'],
             ['Bruno (.bru)', 'Bruno\'s plain-text request format'],
             ['HTTPie', 'Command-line HTTPie syntax, one file per request'],
-            ['OpenAPI 3.0', 'Reverse-generated spec from your requests'],
+            ['OpenAPI 3.1', 'Reverse-generated spec — with servers, security schemes and your Docs text'],
             ['API Docs (Markdown)', 'Human-readable Markdown documentation of the collection'],
           ]}
         />
