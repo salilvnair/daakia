@@ -420,9 +420,19 @@ export function PodTerminal() {
       <div className="flex items-center gap-2 px-2.5 py-1.5 flex-shrink-0 flex-wrap"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <TerminalIcon size={IconSize.action} color={ACCENT} />
-        <span className="text-[11px] font-mono" style={{ color: 'var(--color-text-primary)' }}>
-          {container || 'no container'}
-        </span>
+        {/*
+          The container's name, only when there is a choice of container.
+
+          A single-container pod called it `app` next to a tab that already
+          says which pod this is — a word that told you nothing, sitting where
+          a row of state chips begins. With a sidecar beside it the name is the
+          one thing on the bar you cannot work out from anything else, so it
+          stays, as a chip like the rest of the row rather than a heading.
+        */}
+        {(detail?.containers.length ?? 0) > 1 && container && (
+          <BadgeChipView tone={MUTED} size="xs">{container}</BadgeChipView>
+        )}
+        {!container && <BadgeChipView tone={BAD} size="xs">no container</BadgeChipView>}
 
         {phase === 'live' && <BadgeChipView tone={OK} size="xs">live</BadgeChipView>}
         {phase === 'opening' && <BadgeChipView tone={ACCENT} size="xs">connecting</BadgeChipView>}

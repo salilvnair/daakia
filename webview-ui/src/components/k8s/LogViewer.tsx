@@ -1071,15 +1071,6 @@ export function LogViewer() {
       {/* ── Controls: every strip lives up here ── */}
       <div className="flex flex-col shrink-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        {/* Applied filters get the first row, so the controls below them keep
-            their positions however many are applied. */}
-        <FieldFilterStrip
-          filters={logFieldFilters}
-          onFlip={f => addFieldFilter(f)}
-          onRemove={f => removeFieldFilter(f.field, f.value)}
-          onClearAll={() => useK8sStore.getState().clearFieldFilters()}
-        />
-
       <div className="flex items-center gap-3 px-4 py-2.5 flex-wrap shrink-0">
         {/* Before the level chips, because it governs the panel beside them
             rather than the rows — and because a control that hides a whole
@@ -1381,199 +1372,219 @@ export function LogViewer() {
           />
         )}
 
-        <div
-          ref={scrollRef}
-          onScroll={onScroll}
-          className="flex-1 overflow-auto pl-4 pr-1 py-2 font-mono min-h-0 dk8s-no-scrollbar"
-          style={{ fontSize: 11.5, lineHeight: `${ROW_HEIGHT}px` }}
-        >
-          {total === 0 && settling && logs.length === 0 ? (
-            /* Log lines, in outline: timestamp, level, message — the three
-               columns that are about to arrive, in the places they arrive in.
-               A centred "Reading logs…" moved the eye to the middle of a pane
-               whose first line then appeared at the top. */
-            <TableSkeletonView
-              rowHeight={ROW_HEIGHT} fill={0.72}
-              columns={[{ width: 92, fill: 0.85 }, { width: 44 }, { width: 'flex', fill: 0.7 }]}
-            />
-          ) : total === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <span className="text-[12px] text-[var(--color-text-muted)]" style={{ fontFamily: 'inherit' }}>
-                {logs.length === 0
-                  ? logStatus === 'streaming' ? 'Connected — waiting for the pod to say something.'
-                    : 'No output yet.'
-                  : `No line matches. ${logs.length.toLocaleString()} hidden by the filter.`}
-              </span>
-            </div>
-          ) : (
-            <div style={{ height: contentHeight, position: 'relative' }}>
-              <div style={{ position: 'absolute', top: offsets[first], left: 0, right: 0 }}>
-                {slice.map((row, i) => {
-                  const line = row.line;
-                  const isOpen = expanded.has(line.seq);
-                  // Position in what is on screen, so it reads 1..N and the
-                  // last number is the count — the same thing an editor's
-                  // gutter tells you at a glance.
-                  const lineNo = first + i + 1;
-                  return (
-                    <div
-                      key={`${line.seq}-${i}`}
-                      ref={el => measureRow(first + i, el)}
-                      data-seq={line.seq}
-                      className="flex gap-2.5 items-start"
-                      style={{
-                        minHeight: ROW_HEIGHT,
-                        whiteSpace: logWrap ? 'pre-wrap' : 'pre',
-                        background: line.level === 'error'
-                          ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
-                          : line.level === 'warn'
-                            ? 'color-mix(in srgb, var(--color-warning) 5%, transparent)'
-                            : 'transparent',
-                        borderLeft: `2px solid ${
-                          line.level === 'error' ? 'var(--color-error)'
-                          : line.level === 'warn' ? 'var(--color-warning)' : 'transparent'
-                        }`,
-                        paddingLeft: row.isFrame ? 22 : 6,
-                        opacity: row.isFrame ? 0.75 : 1,
-                      }}
-                    >
-                      {/* Off is a real preference: on a narrow panel the
-                          gutter is width a long line needs more. */}
-                      {logLineNumbers && (
-                        <span className="shrink-0 select-none text-right"
-                              style={{
-                                width: gutterWidth,
-                                color: 'var(--color-text-muted)',
-                                opacity: 0.45,
-                                fontVariantNumeric: 'tabular-nums',
-                              }}>
-                          {lineNo}
-                        </span>
-                      )}
+        {/*
+          Applied filters sit over the rows they act on, not over the toolbar.
 
-                      {line.ts !== undefined && !row.isFrame && (
-                        <span className="shrink-0 select-none"
-                              style={{ color: 'var(--color-text-muted)', opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>
-                          {formatLogTime(line.ts)}
-                        </span>
-                      )}
-                      {!row.isFrame && <LevelTag level={line.level} />}
+          They were a row in the header, which meant the header grew by 36px
+          the moment a filter existed and shrank again when the last one went
+          — moving everything below it, including the facet panel whose value
+          you had just clicked. A list that moves when you click it is unusable
+          however correct the filtering is. Down here the rail's top edge is
+          fixed to the body, the toolbar never moves, and the only thing that
+          shifts is the log itself, which was about to change anyway.
+        */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+          <FieldFilterStrip
+            filters={logFieldFilters}
+            onFlip={f => addFieldFilter(f)}
+            onRemove={f => removeFieldFilter(f.field, f.value)}
+            onClearAll={() => useK8sStore.getState().clearFieldFilters()}
+          />
 
-                      <span style={{
-                        color: line.level === 'error' ? 'var(--color-error)'
-                          : line.level === 'warn' ? 'var(--color-warning)'
-                          : line.level === 'debug' ? 'var(--color-text-muted)'
-                          : 'var(--color-text-primary)',
-                        /*
-                          Library frames recede so the application's own stand
-                          out. Dimmed rather than hidden: the framework's stack
-                          is often how you tell WHICH of your calls failed, so
-                          removing it would take away the context that makes
-                          your frames mean something.
-                        */
-                        opacity: row.isFrame && frameOrigin(line.text) === 'library' ? 0.55 : 1,
-                        flex: logWrap ? 1 : undefined,
-                        minWidth: 0,
-                      }}>
-                        <Highlighted text={displayText(line)} hits={line.hits} />
-                        {/*
-                          A cut line says it was cut.
-
-                          Lines past 32KB are truncated on ingest, because a
-                          serialised payload on one line costs every stage that
-                          touches it. Silently dropping the tail is the part
-                          that would be unacceptable — someone searching for a
-                          string that was in the discarded half needs to know
-                          it could have been there.
-                        */}
-                        {line.truncated && (
-                          <BadgeChipView
-                            tone="var(--color-warning)"
-                            size="xs"
-                            title="This line was longer than 32 KB and has been cut here."
-                            style={{ marginLeft: 6 }}
-                          >cut</BadgeChipView>
-                        )}
-                      </span>
-
-                      {/* The fold. One row instead of forty, and the count is
-                          on it so you know what you are choosing to open. */}
-                      {row.folded && row.folded.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setExpanded(prev => {
-                            const next = new Set(prev);
-                            if (next.has(line.seq)) next.delete(line.seq); else next.add(line.seq);
-                            return next;
-                          })}
-                          className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
-                          style={{
-                            background: 'var(--color-surface-hover)',
-                            color: 'var(--color-text-muted)',
-                            fontSize: 10, lineHeight: '15px',
-                          }}
-                        >
-                          {isOpen ? <ChevronDownIcon size={IconSize.chip} /> : <ChevronRightIcon size={IconSize.chip} />}
-                          {isOpen ? 'hide' : (() => {
-                            /*
-                              How many of the hidden frames are known library
-                              frames.
-
-                              Not "how many are yours" — that needs home
-                              packages nobody has stated, and the first version
-                              of this claimed thirteen of yours in a trace that
-                              contained none. Counting what can be RECOGNISED
-                              is honest and still useful: "70 frames, 66 of
-                              them framework" says the same thing about where
-                              to look without inventing the other number.
-                            */
-                            const lib = row.folded!.filter(f => frameOrigin(f.text) === 'library').length;
-                            return lib
-                              ? `… ${row.folded!.length} more frames · ${lib} framework`
-                              : `… ${row.folded!.length} more frames`;
-                          })()}
-                        </button>
-                      )}
-
-                      {/*
-                        Ask AI, on the row that has something to ask about.
-
-                        The existing Ask AI acts on a SELECTION, which means
-                        reading an exception, dragging across forty frames and
-                        then finding the menu — for the one thing in a log
-                        anybody actually wants explained. A stack trace already
-                        knows its own extent: the message line plus the frames
-                        folded under it. So the chip goes where the fold is and
-                        sends exactly that, no selecting.
-
-                        Same height as the fold beside it, because two chips on
-                        one line at two heights is the first thing the eye
-                        notices about a row it was meant to read.
-                      */}
-                      {row.folded && row.folded.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => askAboutTrace(line, row.folded!)}
-                          title="Ask AI what this exception means"
-                          className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
-                          style={{
-                            /* The same tone as the panel this opens. It was
-                               `--color-primary`, so the chip that asks and the
-                               answer it produces were different colours. */
-                            background: `color-mix(in srgb, ${AI_ACCENT} 16%, transparent)`,
-                            color: AI_ACCENT,
-                            fontSize: 10, lineHeight: '15px',
-                          }}
-                        >
-                          <SparkleIcon size={IconSize.chip} /> Ask AI
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+          <div
+            ref={scrollRef}
+            onScroll={onScroll}
+            className="flex-1 overflow-auto pl-4 pr-1 py-2 font-mono min-h-0 dk8s-no-scrollbar"
+            style={{ fontSize: 11.5, lineHeight: `${ROW_HEIGHT}px` }}
+          >
+            {total === 0 && settling && logs.length === 0 ? (
+              /* Log lines, in outline: timestamp, level, message — the three
+                 columns that are about to arrive, in the places they arrive in.
+                 A centred "Reading logs…" moved the eye to the middle of a pane
+                 whose first line then appeared at the top. */
+              <TableSkeletonView
+                rowHeight={ROW_HEIGHT} fill={0.72}
+                columns={[{ width: 92, fill: 0.85 }, { width: 44 }, { width: 'flex', fill: 0.7 }]}
+              />
+            ) : total === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <span className="text-[12px] text-[var(--color-text-muted)]" style={{ fontFamily: 'inherit' }}>
+                  {logs.length === 0
+                    ? logStatus === 'streaming' ? 'Connected — waiting for the pod to say something.'
+                      : 'No output yet.'
+                    : `No line matches. ${logs.length.toLocaleString()} hidden by the filter.`}
+                </span>
               </div>
-            </div>
-          )}
+            ) : (
+              <div style={{ height: contentHeight, position: 'relative' }}>
+                <div style={{ position: 'absolute', top: offsets[first], left: 0, right: 0 }}>
+                  {slice.map((row, i) => {
+                    const line = row.line;
+                    const isOpen = expanded.has(line.seq);
+                    // Position in what is on screen, so it reads 1..N and the
+                    // last number is the count — the same thing an editor's
+                    // gutter tells you at a glance.
+                    const lineNo = first + i + 1;
+                    return (
+                      <div
+                        key={`${line.seq}-${i}`}
+                        ref={el => measureRow(first + i, el)}
+                        data-seq={line.seq}
+                        className="flex gap-2.5 items-start"
+                        style={{
+                          minHeight: ROW_HEIGHT,
+                          whiteSpace: logWrap ? 'pre-wrap' : 'pre',
+                          background: line.level === 'error'
+                            ? 'color-mix(in srgb, var(--color-error) 7%, transparent)'
+                            : line.level === 'warn'
+                              ? 'color-mix(in srgb, var(--color-warning) 5%, transparent)'
+                              : 'transparent',
+                          borderLeft: `2px solid ${
+                            line.level === 'error' ? 'var(--color-error)'
+                            : line.level === 'warn' ? 'var(--color-warning)' : 'transparent'
+                          }`,
+                          paddingLeft: row.isFrame ? 22 : 6,
+                          opacity: row.isFrame ? 0.75 : 1,
+                        }}
+                      >
+                        {/* Off is a real preference: on a narrow panel the
+                            gutter is width a long line needs more. */}
+                        {logLineNumbers && (
+                          <span className="shrink-0 select-none text-right"
+                                style={{
+                                  width: gutterWidth,
+                                  color: 'var(--color-text-muted)',
+                                  opacity: 0.45,
+                                  fontVariantNumeric: 'tabular-nums',
+                                }}>
+                            {lineNo}
+                          </span>
+                        )}
+
+                        {line.ts !== undefined && !row.isFrame && (
+                          <span className="shrink-0 select-none"
+                                style={{ color: 'var(--color-text-muted)', opacity: 0.6, fontVariantNumeric: 'tabular-nums' }}>
+                            {formatLogTime(line.ts)}
+                          </span>
+                        )}
+                        {!row.isFrame && <LevelTag level={line.level} />}
+
+                        <span style={{
+                          color: line.level === 'error' ? 'var(--color-error)'
+                            : line.level === 'warn' ? 'var(--color-warning)'
+                            : line.level === 'debug' ? 'var(--color-text-muted)'
+                            : 'var(--color-text-primary)',
+                          /*
+                            Library frames recede so the application's own stand
+                            out. Dimmed rather than hidden: the framework's stack
+                            is often how you tell WHICH of your calls failed, so
+                            removing it would take away the context that makes
+                            your frames mean something.
+                          */
+                          opacity: row.isFrame && frameOrigin(line.text) === 'library' ? 0.55 : 1,
+                          flex: logWrap ? 1 : undefined,
+                          minWidth: 0,
+                        }}>
+                          <Highlighted text={displayText(line)} hits={line.hits} />
+                          {/*
+                            A cut line says it was cut.
+
+                            Lines past 32KB are truncated on ingest, because a
+                            serialised payload on one line costs every stage that
+                            touches it. Silently dropping the tail is the part
+                            that would be unacceptable — someone searching for a
+                            string that was in the discarded half needs to know
+                            it could have been there.
+                          */}
+                          {line.truncated && (
+                            <BadgeChipView
+                              tone="var(--color-warning)"
+                              size="xs"
+                              title="This line was longer than 32 KB and has been cut here."
+                              style={{ marginLeft: 6 }}
+                            >cut</BadgeChipView>
+                          )}
+                        </span>
+
+                        {/* The fold. One row instead of forty, and the count is
+                            on it so you know what you are choosing to open. */}
+                        {row.folded && row.folded.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(prev => {
+                              const next = new Set(prev);
+                              if (next.has(line.seq)) next.delete(line.seq); else next.add(line.seq);
+                              return next;
+                            })}
+                            className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
+                            style={{
+                              background: 'var(--color-surface-hover)',
+                              color: 'var(--color-text-muted)',
+                              fontSize: 10, lineHeight: '15px',
+                            }}
+                          >
+                            {isOpen ? <ChevronDownIcon size={IconSize.chip} /> : <ChevronRightIcon size={IconSize.chip} />}
+                            {isOpen ? 'hide' : (() => {
+                              /*
+                                How many of the hidden frames are known library
+                                frames.
+
+                                Not "how many are yours" — that needs home
+                                packages nobody has stated, and the first version
+                                of this claimed thirteen of yours in a trace that
+                                contained none. Counting what can be RECOGNISED
+                                is honest and still useful: "70 frames, 66 of
+                                them framework" says the same thing about where
+                                to look without inventing the other number.
+                              */
+                              const lib = row.folded!.filter(f => frameOrigin(f.text) === 'library').length;
+                              return lib
+                                ? `… ${row.folded!.length} more frames · ${lib} framework`
+                                : `… ${row.folded!.length} more frames`;
+                            })()}
+                          </button>
+                        )}
+
+                        {/*
+                          Ask AI, on the row that has something to ask about.
+
+                          The existing Ask AI acts on a SELECTION, which means
+                          reading an exception, dragging across forty frames and
+                          then finding the menu — for the one thing in a log
+                          anybody actually wants explained. A stack trace already
+                          knows its own extent: the message line plus the frames
+                          folded under it. So the chip goes where the fold is and
+                          sends exactly that, no selecting.
+
+                          Same height as the fold beside it, because two chips on
+                          one line at two heights is the first thing the eye
+                          notices about a row it was meant to read.
+                        */}
+                        {row.folded && row.folded.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => askAboutTrace(line, row.folded!)}
+                            title="Ask AI what this exception means"
+                            className="shrink-0 flex items-center gap-1 px-1.5 rounded cursor-pointer border-none self-center"
+                            style={{
+                              /* The same tone as the panel this opens. It was
+                                 `--color-primary`, so the chip that asks and the
+                                 answer it produces were different colours. */
+                              background: `color-mix(in srgb, ${AI_ACCENT} 16%, transparent)`,
+                              color: AI_ACCENT,
+                              fontSize: 10, lineHeight: '15px',
+                            }}
+                          >
+                            <SparkleIcon size={IconSize.chip} /> Ask AI
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <DensityRibbon

@@ -101,7 +101,9 @@ export function FacetRail({ lines, filters, onToggle, onClear, onSearchEverywher
               </span>
               {/* Where the field came from, because a key the application
                   chose and a slot dk8s defined are different kinds of thing. */}
-              {!facet.named && <BadgeChipView tone={MUTED} size="xs">mdc</BadgeChipView>}
+              {!facet.named && (
+                <BadgeChipView tone={MUTED} size="2xs" style={{ opacity: 0.8 }}>mdc</BadgeChipView>
+              )}
             </button>
 
             {open && (
