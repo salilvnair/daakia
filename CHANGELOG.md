@@ -59,6 +59,18 @@ UI.
 - **Copy JSON path and Copy XPath**, at every level of a response
 - **Expand and collapse a collection**, whole or by subtree
 
+### Added — The CI runner grows up
+- **`--junit <file>`** writes the one report format CI actually renders: a
+  case per request, the folder path as its classname so viewers group by it,
+  and a suite per iteration
+- **`--folder <name>`** runs one folder, matched on whole path segments;
+  **`--env-var k=v`** overrides a variable at the call site, which is where a
+  CI secret belongs
+- **`--data rows.csv`** runs the collection once per row with the row's
+  columns bound as variables — the fifty-accounts case, which could not be
+  expressed before. JSON rows work too; **`--iterations n`** and
+  **`--delay ms`** cover the rest
+
 ### Added — Four features that existed and could not be reached
 - **Assert** — click a field in a JSON response, get a `dk.expect(...)`; the
   assertions land in the request's post-response script
@@ -89,6 +101,12 @@ UI.
 - The assertion builder generated `dk.expect(data.[0].name)` for any
   response whose root is an array, and quoted string values by hand
 - The wiki's "Export as JSON isn't wired up" note was three releases stale
+- **A passing CLI run exited 127.** Any run with more than one request died
+  on Windows with a libuv assertion, because `process.exit()` fired while
+  fetch's connection pool still held sockets it was closing — in CI,
+  indistinguishable from a broken runner
+- **The wiki's "Open Wiki" links did nothing** — a button with an empty
+  handler. They open the page they name now
 
 ### Removed
 - A second, superseded gRPC client and a "Coming soon" protocol placeholder,
