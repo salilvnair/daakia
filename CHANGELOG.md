@@ -94,6 +94,17 @@ UI.
 - **Starred requests** float to the top of their folder. A per-person view
   preference: never exported, never synced
 
+### Added — One search across every collection
+- **Ctrl+Shift+F**, or "Search all collections" in the command palette:
+  names, URLs, headers, params, bodies and docs, across every protocol at
+  once. `/pattern/` is a regular expression, plain text is a substring
+- Each hit says **where** it matched — "in the body" and "in the URL" send
+  you to different places — with the matched text beside it, grouped by
+  collection. Folders match on their own name, because an empty folder called
+  `staging` is part of the answer to "where does staging still appear"
+- The sidebar panels each filter their own protocol's tree by name and URL,
+  which could never answer "which request sends this header"
+
 ### Added — Requests can carry documentation
 - **A Docs tab** on every request: markdown describing why it exists, what it
   needs and what it returns, in Edit and Preview. There was nowhere to write

@@ -5,6 +5,8 @@ import { installKeyboardListener } from './services/keyboard';
 
 // Install bridges before any React render so ConvEngineChat fetch/EventSource is ready
 installDaakiaBridges();
+import { useModalStore } from './store/modal-store';
+import { SearchCollectionsModal } from './components/shared';
 import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
 import { SplitPanelView, ButtonView } from '@salilvnair/dui';
 import { TabBar } from './components/tabs/TabBar';
@@ -244,6 +246,19 @@ export default function App() {
       return next;
     });
   }, 'Toggle sidebar');
+
+  /*
+    The one search that crosses collections and protocols.
+
+    Ctrl+Shift+F is what every editor binds "find in all files" to, and this
+    is the same question asked of requests rather than files.
+  */
+  const searchCollectionsOpen = useModalStore(s => s.searchCollectionsOpen);
+
+  useKeyboardShortcut('app.search-collections', { key: 'F', ctrlKey: true, shiftKey: true }, (e) => {
+    e.preventDefault();
+    useModalStore.getState().openSearchCollections();
+  }, 'Search all collections');
 
   useKeyboardShortcut('app.toggle-split', { key: '/', altKey: true }, (e) => {
     e.preventDefault();
@@ -821,6 +836,13 @@ export default function App() {
       </div>
 
       {/* Toast notifications */}
+      {/* One search across every collection and protocol — Ctrl+Shift+F, or
+          the command palette. Mounted here because nothing else owns it. */}
+      <SearchCollectionsModal
+        open={searchCollectionsOpen}
+        onClose={() => useModalStore.getState().closeSearchCollections()}
+      />
+
       <ToastContainer />
       <RightClickMenu />
       <SaveRequestModal

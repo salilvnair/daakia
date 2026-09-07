@@ -17,6 +17,7 @@ import {
 } from '../../../storage/db';
 import { runCollection as runCollectionService, type RunConfig } from '../../../services/collection-runner';
 import { archiveCollection, archiveCollectionRequest } from '../../../services/bin';
+import { searchTree, type SearchNode } from '../../../services/collection-search';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -179,6 +180,21 @@ export function handleReorderRequests(msg: Record<string, unknown>, postMessage:
   const protocol = msg.protocol as string | undefined;
   reorderRequests(ids);
   handleGetCollections(postMessage, protocol);
+}
+
+// ────────────────── Search across every collection ──────────────────
+
+/**
+ * One search over every protocol's collections.
+ *
+ * Host-side because the answer needs the request blobs — headers, bodies,
+ * docs — and the webview holds only the tree it is showing. `getCollectionTree()`
+ * with no protocol is every collection there is, which is the point.
+ */
+export function handleSearchCollections(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const query = String(msg.query ?? '');
+  const hits = searchTree(getCollectionTree() as unknown as SearchNode[], query, { limit: 300 });
+  postMessage({ type: 'collectionSearchResults', query, hits });
 }
 
 // ────────────────── Collection Runner ──────────────────

@@ -46,6 +46,7 @@ export { NewItemModal } from './modals/NewItemModal';
 export { GenerateCodeModal } from './modals/GenerateCodeModal';
 export { ImportCurlModal } from './modals/ImportCurlModal';
 export { RunCollectionModal } from './modals/RunCollectionModal';
+export { SearchCollectionsModal } from './modals/SearchCollectionsModal';
 export { CollectionPropertiesModal } from './modals/CollectionPropertiesModal';
 export type { CollectionProperties } from './modals/CollectionPropertiesModal';
 export { SaveRequestModal } from './modals/SaveRequestModal';

@@ -5,6 +5,7 @@ import { useTabsStore, type Protocol } from '../../../store/tabs-store';
 import { useK8sStore } from '../../../store/k8s-store';
 import { useDk8sSearchStore } from '../../../store/dk8s-search-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
+import { useModalStore } from '../../../store/modal-store';
 import { useDevToolsStore } from '../../../store/devtools-store';
 import { useEnvStore } from '../../../store/env-store';
 import { postMsg } from '../../../vscode';
@@ -220,6 +221,14 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
         { id: 'nav-mock-server', iconColor: 'var(--color-mock-server)', icon: <ServerIcon size={15} />, label: 'Mock Server', keywords: ['mock', 'routes'], run: () => useTabsStore.getState().openMockServerTab() },
         { id: 'nav-daakia-ai', iconColor: 'var(--color-protocol-ai)', icon: <SparkleIcon size={15} />, label: 'Daakia AI Assistant', keywords: ['ai', 'chat', 'tools'], run: () => useTabsStore.getState().openDaakiaAiTab() },
         { id: 'nav-settings', iconColor: 'var(--color-settings)', icon: <SettingsIcon size={15} />, label: 'Settings', keywords: ['preferences', 'theme', 'llm'], run: () => useTabsStore.getState().openSettingsTab() },
+        {
+          id: 'search-collections',
+          iconColor: 'var(--color-accent)',
+          icon: <SearchIcon size={15} />,
+          label: 'Search all collections',
+          keywords: ['find', 'grep', 'header', 'url', 'across', 'everywhere'],
+          run: () => useModalStore.getState().openSearchCollections(),
+        },
         { id: 'nav-wiki', iconColor: 'var(--color-wiki)', icon: <BookOpenIcon size={15} />, label: 'Daakia Wiki', keywords: ['docs', 'documentation', 'help', 'guide'], run: () => useTabsStore.getState().openDaakiaWikiTab() },
         { id: 'nav-ai-actions', iconColor: 'var(--color-protocol-ai)', icon: <SparkleIcon size={15} />, label: 'AI Actions…', keywords: ['inline', 'features', 'sparkle', 'ai tools'], to: 'ai-actions' },
       ],
