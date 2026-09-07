@@ -6,6 +6,7 @@
  */
 import { useEffect } from 'react';
 import { applyChainExtractions } from '../services/request/chaining';
+import { logUiEvent } from '../store/ui-audit-store';
 import { useTabsStore } from '../store/tabs-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
@@ -107,6 +108,22 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
           useAppSettingsStore.getState().setSettings(msg.settings || {});
           break;
         }
+        /*
+          An AI call that failed, audited centrally.
+
+          Thirty-seven components handle `ai:error` for their own UI; none of
+          them recorded it, so a run that failed left the same trace as one
+          that was never made — which is the gap behind "nothing happens and
+          nothing shows in the footprint".
+        */
+        case 'ai:error': {
+          logUiEvent('ai.failed', {
+            stage: msg.stage ?? 'DAAKIA_AI',
+            code: msg.code,
+            message: typeof msg.message === 'string' ? msg.message.slice(0, 200) : undefined,
+          });
+          break;
+        }
         case 'responseData': {
           const { tabId, response, scriptLogs, scriptErrors, testResults, consoleLogs } = msg;
           useTabsStore.getState().updateTab(tabId, {
@@ -132,7 +149,17 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
             success — a toast per send would be noise on a request that chains
             every time.
           */
-          if (response) applyChainExtractions(tabId, response);
+          if (response) {
+            const chained = applyChainExtractions(tabId, response);
+            // Off by default: a chained request fires this on every send, and
+            // an audit nobody asked for is noise in the one they did.
+            if (chained.applied.length || chained.missed.length) {
+              logUiEvent('rest.chain_auto', {
+                variables: chained.applied.map(a => a.name),
+                missed: chained.missed,
+              });
+            }
+          }
           // Push structured console logs to DevTools
           if (consoleLogs && consoleLogs.length > 0) {
             const reqTab = useTabsStore.getState().tabs.find(t => t.id === tabId);

@@ -9,7 +9,14 @@ import { ChevronRightIcon } from '../../../icons';
 import { useUiStateStore } from '../../../store/ui-state-store';
 import { AUDIT_EVENT_DEFS, getAuditConfig, setAuditEventEnabled, isAuditEventEnabled, resetAuditConfig, logUiEvent } from '../../../store/ui-audit-store';
 
-const MODULE_ORDER = ['REST', 'GraphQL', 'gRPC', 'SOAP', 'WebSocket', 'SSE', 'MQTT', 'Socket.IO', 'Mock Server', 'dk8s', 'Collections', 'History', 'Settings'];
+/*
+  The order the sections appear in, and — because this list decides what is
+  rendered at all — the reason the AI events were invisible after being
+  added: a module missing here has its events silently dropped from the
+  screen that turns them on. Anything not listed now falls in at the end
+  rather than disappearing.
+*/
+const MODULE_ORDER = ['REST', 'GraphQL', 'gRPC', 'SOAP', 'WebSocket', 'SSE', 'MQTT', 'Socket.IO', 'Mock Server', 'AI', 'dk8s', 'Collections', 'Environment', 'History', 'DevTools', 'MCP', 'Settings'];
 
 /**
  * Which groups are folded shut, and where the list was scrolled.
@@ -81,7 +88,12 @@ export function AuditConfigTab() {
     refresh();
   };
 
-  const grouped = MODULE_ORDER.map(module => ({
+  // Every module in the taxonomy, ordered — listed ones first, the rest after.
+  const allModules = [
+    ...MODULE_ORDER,
+    ...[...new Set(AUDIT_EVENT_DEFS.map(d => d.module))].filter(m => !MODULE_ORDER.includes(m)),
+  ];
+  const grouped = allModules.map(module => ({
     module,
     defs: AUDIT_EVENT_DEFS.filter(d => d.module === module),
   })).filter(g => g.defs.length > 0);

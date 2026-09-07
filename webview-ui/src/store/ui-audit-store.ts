@@ -26,6 +26,10 @@ export const AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'rest.show_code',       module: 'REST', button: 'Show Code',       action: 'click',  description: 'Open Generate Code modal',            color: 'var(--color-protocol-rest)', defaultEnabled: false },
   { id: 'rest.import_curl',     module: 'REST', button: 'Import cURL',     action: 'click',  description: 'Import request from cURL command',    color: 'var(--color-protocol-rest)', defaultEnabled: false },
   { id: 'rest.copy_response',   module: 'REST', button: 'Copy',            action: 'click',  description: 'Copy REST response body',             color: 'var(--color-protocol-rest)', defaultEnabled: false },
+  { id: 'rest.example_save',    module: 'REST', button: 'Save example',        action: 'create', description: 'Save the response on screen as a named example',            color: 'var(--color-protocol-rest)', defaultEnabled: true },
+  { id: 'rest.chain_apply',     module: 'REST', button: 'Apply to environment', action: 'update', description: 'Run the chaining rules against the response on screen',     color: 'var(--color-protocol-rest)', defaultEnabled: true },
+  { id: 'rest.chain_auto',      module: 'REST', button: 'Response chaining',    action: 'update', description: 'Chaining rules ran by themselves when a response arrived',  color: 'var(--color-protocol-rest)', defaultEnabled: false },
+  { id: 'rest.docs_generate',   module: 'REST', button: 'Write with AI',        action: 'create', description: 'Ask the model to write this request\u2019s documentation', color: 'var(--color-protocol-ai)',   defaultEnabled: true },
   { id: 'rest.download',        module: 'REST', button: 'Send & Download', action: 'click',  description: 'Send and download response as file',  color: 'var(--color-protocol-rest)', defaultEnabled: false },
 
   // ── GraphQL ────────────────────────────────────────────────────────────────
@@ -233,6 +237,20 @@ export const AUDIT_EVENT_DEFS: AuditEventDef[] = [
   { id: 'devtools.audit_config',     module: 'DevTools', button: 'Audit Config',      action: 'toggle', description: 'Toggle audit event enabled/disabled',  color: 'var(--color-settings)', defaultEnabled: false },
   { id: 'devtools.snapshot_dl',      module: 'DevTools', button: 'Download Snapshot', action: 'click',  description: 'Download debug snapshot JSON',         color: 'var(--color-settings)', defaultEnabled: false },
   { id: 'devtools.db_query',         module: 'DevTools', button: 'DB Query',          action: 'click',  description: 'Run DB Explorer query',                color: 'var(--color-settings)', defaultEnabled: false },
+  // ── AI ─────────────────────────────────────────────────────────────────────
+  /*
+    Every AI button in the app, from one place.
+
+    There are fifty-odd of them and they all reach the host the same way — a
+    posted `ai:send` carrying the stage that names the feature. Auditing that
+    one message covers every button, present and future, and says which one it
+    was in `stage`. A def per button would be fifty entries to keep in step
+    with fifty call sites, which is the shape of coupling that leaves events
+    declared and never fired.
+  */
+  { id: 'ai.request',           module: 'AI', button: 'Any AI action', action: 'create', description: 'An AI call was made — the feature is named in the stage',  color: 'var(--color-protocol-ai)', defaultEnabled: true },
+  { id: 'ai.failed',            module: 'AI', button: 'Any AI action', action: 'error',  description: 'An AI call failed — no provider, a timeout, or a refusal', color: 'var(--color-error)',       defaultEnabled: true },
+
 // ── dk8s ───────────────────────────────────────────────────────────────────
   /*
     What is auditable about a Kubernetes tool.

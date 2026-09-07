@@ -56,12 +56,30 @@ export async function handleAiSend(
     resolvedBaseUrl = resolvedUrl || resolved.baseUrl || resolveProviderConfig(providerId).baseUrl;
   } catch (err) {
     // No provider available at all — surface a helpful error immediately
-    postMessage({
-      type: 'ai:error',
-      tabId,
-      message: err instanceof Error ? err.message : 'No AI provider configured',
-      code: '503',
-    });
+    const message = err instanceof Error ? err.message : 'No AI provider configured';
+    postMessage({ type: 'ai:error', tabId, message, code: '503', stage: msg.stage });
+    /*
+      And record it.
+
+      Every other failure on this path writes an audit row; this one returned
+      before reaching them, so the most common failure of all — no provider
+      configured, no key — was the one that left no trace in the AI footprint.
+      A button that does nothing and logs nothing is indistinguishable from a
+      button that was never pressed.
+    */
+    try {
+      insertAudit({
+        conversation_id: tabId,
+        stage: (msg.stage as string | undefined) || 'DAAKIA_AI',
+        model: requestedModel || '(unresolved)',
+        request_payload: JSON.stringify({
+          provider: requestedProvider || '(none)',
+          userPrompt: (msg.userPrompt as string | undefined)?.slice(0, 2000),
+        }),
+        response_payload: JSON.stringify({ error: message, code: '503' }),
+        duration_ms: 0,
+      });
+    } catch { /* an audit failure must not mask the error it is recording */ }
     return;
   }
 
@@ -163,7 +181,7 @@ export async function handleAiSend(
     if (!signal.aborted) {
       cancelAiRequest(tabId);
       cleanupAiRequest(tabId);
-      postMessage({ type: 'ai:error', tabId, message: 'Request timed out after 60 seconds. Check your provider URL and API key.', code: 'TIMEOUT' });
+      postMessage({ type: 'ai:error', tabId, stage: auditStage, message: 'Request timed out after 60 seconds. Check your provider URL and API key.', code: 'TIMEOUT' });
     }
   }, REQUEST_TIMEOUT_MS);
 
@@ -225,7 +243,7 @@ export async function handleAiSend(
       onError: (error) => {
         clearTimeout(timeoutId);
         cleanupAiRequest(tabId);
-        postMessage({ type: 'ai:error', ...error });
+        postMessage({ type: 'ai:error', stage: auditStage, ...error });
         try {
           insertAudit({
             conversation_id: tabId,
@@ -258,7 +276,7 @@ export async function handleAiSend(
       // Check if the AI response contains tool_calls that need MCP execution
       if (result.message.toolCalls?.length && mcpTools.length > 0) {
         // Execute MCP tool calls and continue the conversation
-        await handleMcpToolCallLoop(tabId, payload, result, postMessage);
+        await handleMcpToolCallLoop(tabId, payload, result, postMessage, auditStage);
         return;
       }
 
@@ -320,7 +338,7 @@ export async function handleAiSend(
       if (error.diagnostics) {
         console.error('[AI Handler Diagnostics]', JSON.stringify(error.diagnostics, null, 2));
       }
-      postMessage({ type: 'ai:error', ...error });
+      postMessage({ type: 'ai:error', stage: auditStage, ...error });
 
       // AI errors are tracked in the AI Audit panel — not in HTTP request history
       // Save error to AI audit log
@@ -361,12 +379,14 @@ async function handleMcpToolCallLoop(
   payload: AiRequestPayload,
   result: { message: AiMessage; tokens?: { prompt: number; completion: number; total: number }; duration: number },
   postMessage: PostMessage,
+  /** Which feature this call belongs to, so a failure here is not filed as generic AI. */
+  auditStage: string,
   depth = 0,
 ) {
   const MAX_TOOL_LOOPS = 10; // Safety limit to prevent infinite loops
   if (depth >= MAX_TOOL_LOOPS) {
     cleanupAiRequest(tabId);
-    postMessage({ type: 'ai:error', tabId, message: 'Too many tool call iterations (limit: 10)', code: '429' });
+    postMessage({ type: 'ai:error', tabId, stage: auditStage, message: 'Too many tool call iterations (limit: 10)', code: '429' });
     return;
   }
 
@@ -421,7 +441,7 @@ async function handleMcpToolCallLoop(
     onComplete: async (followUpResult) => {
       // Recurse if more tool calls
       if (followUpResult.message.toolCalls?.length) {
-        await handleMcpToolCallLoop(tabId, followUpPayload, followUpResult, postMessage, depth + 1);
+        await handleMcpToolCallLoop(tabId, followUpPayload, followUpResult, postMessage, auditStage, depth + 1);
         return;
       }
       cleanupAiRequest(tabId);
@@ -433,7 +453,7 @@ async function handleMcpToolCallLoop(
       if (error.diagnostics) {
         console.error('[AI MCP Follow-up Diagnostics]', JSON.stringify(error.diagnostics, null, 2));
       }
-      postMessage({ type: 'ai:error', ...error });
+      postMessage({ type: 'ai:error', stage: auditStage, ...error });
     },
   });
 }

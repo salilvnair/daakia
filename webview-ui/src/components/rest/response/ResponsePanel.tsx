@@ -16,6 +16,7 @@ import { ResponseAssertionsBuilder } from '../../power/ResponseAssertionsBuilder
 import { ExamplesView } from './ExamplesView';
 import { addExample, defaultName, toExample } from '../../../services/request/examples';
 import { useToastStore } from '../../../store/toast-store';
+import { logUiEvent } from '../../../store/ui-audit-store';
 import { ActionButtonView } from '@salilvnair/dui';
 import { SaveIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
@@ -124,6 +125,7 @@ export function ResponsePanel() {
   */
   const saveExample = () => {
     const next = addExample(examples, toExample(response, defaultName(response, examples)));
+    logUiEvent('rest.example_save', { status: response.status, count: next.length });
     useTabsStore.getState().updateTab(tab.id, { examples: next });
     useToastStore.getState().addToast({
       type: 'success',

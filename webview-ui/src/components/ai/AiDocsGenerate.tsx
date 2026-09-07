@@ -21,6 +21,7 @@ import { AIButtonView } from '@salilvnair/dui';
 import type { RequestTab } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useToastStore } from '../../store/toast-store';
+import { logUiEvent } from '../../store/ui-audit-store';
 import { postMsg } from '../../vscode';
 
 /** Fences around the whole answer, which the model adds despite being asked not to. */
@@ -79,6 +80,7 @@ export function AiDocsGenerate({ tab, onApply }: { tab: RequestTab; onApply: (ma
   }, [onApply]);
 
   const generate = useCallback(() => {
+    logUiEvent('rest.docs_generate', { method: tab.method, url: tab.url });
     setLoading(true);
     accumulated.current = '';
     const id = `ai-docs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

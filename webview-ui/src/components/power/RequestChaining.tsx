@@ -7,6 +7,7 @@
  */
 import { useState } from 'react';
 import { useToastStore } from '../../store/toast-store';
+import { logUiEvent } from '../../store/ui-audit-store';
 import { PlusIcon, TrashIcon, LinkIcon, CheckCircleFilledIcon } from '../../icons';
 import { ActionButtonView, RadioGroupView, TextInputView, IconButtonView, ArrowRightIcon } from '@salilvnair/dui';
 import { PathField } from './PathField';
@@ -55,6 +56,12 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
   const applyExtractions = () => {
     const { applied, missed } = applyChainExtractions(tabId, {
       body: responseBody, headers: responseHeaders,
+    });
+    logUiEvent('rest.chain_apply', {
+      // The names, never the values: an extracted value is a token as often
+      // as not, and an audit row is a place it must not end up.
+      variables: applied.map(a => a.name),
+      missed,
     });
     if (applied.length === 0) {
       addToast({ type: 'warning', message: 'No values extracted. Check your paths.' });
