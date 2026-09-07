@@ -23,6 +23,15 @@ const CONFIG_TABS: TabItem[] = [
   { id: 'auth', label: 'Authorization' },
   { id: 'scripts', label: 'Scripts' },
   { id: 'variables', label: 'Variables' },
+  /*
+    Things this request DOES around a send, as opposed to values it carries.
+
+    Response chaining lived under Variables, which is about the request's own
+    variables — reading a value out of a response and writing it to the
+    environment is a different kind of thing, and the tab is where the rest of
+    that kind will go.
+  */
+  { id: 'action', label: 'Action' },
   // Markdown describing the request — the thing that makes an exported
   // collection useful to somebody who did not write it.
   { id: 'docs', label: 'Docs' },
@@ -226,6 +235,11 @@ export function RequestPanel() {
       case 'params':    return { ...t, badge: tab.params.filter(p => p.enabled && p.key).length };
       case 'headers':   return { ...t, badge: tab.headers.filter(h => h.enabled && h.key).length + hiddenHeadersCount };
       case 'variables': return { ...t, badge: tab.variables?.filter((v: any) => v.enabled && v.key).length || 0 };
+      // How many rules this request runs after a send — the same reading as
+      // every other count on this row: what is configured, not what exists.
+      case 'action':    return { ...t, badge: tab.chainExtractions?.filter(e => e.enabled && e.path && e.variableName).length || 0 };
+      // The Docs tab is a dot, not a count: markdown has no natural number.
+      case 'docs':      return { ...t, dot: !!tab.docs?.trim() };
       // The count is how many fields this request pins, not how many exist —
       // an untouched Settings tab inherits everything and shows nothing.
       case 'settings':  return { ...t, badge: countOverrides(tab.settings) };
@@ -290,19 +304,17 @@ export function RequestPanel() {
         )}
 
         {activeSection === 'variables' && (
+          <KeyValueTableView
+            rows={tab.variables as KeyValueTableRow[]}
+            onChange={(rows) => updateTab(tab.id, { variables: rows as typeof tab.variables })}
+            placeholder={{ key: 'Variable', value: 'Value' }}
+            showDescription
+            label="Request Variables"
+          />
+        )}
+
+        {activeSection === 'action' && (
           <div className="flex flex-col gap-3">
-            <KeyValueTableView
-              rows={tab.variables as KeyValueTableRow[]}
-              onChange={(rows) => updateTab(tab.id, { variables: rows as typeof tab.variables })}
-              placeholder={{ key: 'Variable', value: 'Value' }}
-              showDescription
-              label="Request Variables"
-            />
-            {/*
-              Values that come the other way: out of the response, into a
-              variable the next request reads. Beneath the table because the
-              table is what you set by hand and this is what gets set for you.
-            */}
             <RequestChaining
               tabId={tab.id}
               extractions={tab.chainExtractions ?? []}

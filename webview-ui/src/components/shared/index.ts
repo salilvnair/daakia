@@ -1,6 +1,4 @@
 // ─── Controls ───
-export { StyledDropdown } from './controls/StyledDropdown';
-export type { DropdownOption } from './controls/StyledDropdown';
 export { PillTabs } from './controls/PillTabs';
 export type { PillTab } from './controls/PillTabs';
 export { KeyValueTable, InsertRowDivider } from './controls/KeyValueTable';

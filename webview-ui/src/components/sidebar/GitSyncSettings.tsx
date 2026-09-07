@@ -12,15 +12,15 @@
  * at a time — a sync already in progress blocks the next until it finishes.
  */
 import { useEffect, useState } from 'react';
-import { ButtonView, TextInputView, CheckboxView } from '@salilvnair/dui';
+import { ButtonView, TextInputView, CheckboxView, SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
-import { StyledDropdown, type DropdownOption } from '../shared';
+
 import { GitHubIcon, CheckCircleFilledIcon, WarningTriangleIcon, XCircleIcon, GitBranchIcon, ArrowUpIcon, ArrowDownIcon, UploadIcon, DownloadIcon, RefreshIcon } from '../../icons';
 
 const ACCENT = 'var(--color-settings)';
 
-const AUTO_SYNC_OPTIONS: DropdownOption[] = [
+const AUTO_SYNC_OPTIONS: SelectOption[] = [
   { value: '0', label: 'Off' },
   { value: '1', label: 'Every 1 second' },
   { value: '5', label: 'Every 5 seconds' },
@@ -167,7 +167,7 @@ export function GitSyncSettings() {
             When on, runs a full sync (export → commit → pull → push → import) of collections, history, mock servers, and state machine workflows on this interval — always one cycle at a time, never overlapping
           </p>
         </div>
-        <StyledDropdown
+        <SelectInputView
           options={AUTO_SYNC_OPTIONS}
           value={String(settings.autoSyncSeconds)}
           onChange={(v) => { const autoSyncSeconds = parseInt(v, 10) || 0; patch({ autoSyncSeconds }); handleSaveSettings({ autoSyncSeconds }); }}

@@ -3,9 +3,9 @@ import { useTabsStore } from '../../store/tabs-store';
 import type { Protocol } from '../../store/tabs-store';
 import { useEnvStore, GLOBAL_ENV_ID } from '../../store/env-store';
 import { getProtocolAccent } from '../../colors';
-import { MethodBadge, ConfirmDialog, StyledDropdown, ContextMenu, type ContextMenuItem, type ContextMenuSubItem, type DropdownOption } from '../shared';
+import { MethodBadge, ConfirmDialog, ContextMenu, type ContextMenuItem, type ContextMenuSubItem } from '../shared';
 import { SettingsIcon, ServerIcon, LayersIcon, RenameIcon, CopyIcon, CloseCircleIcon, CloseSquareIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon, ArrowToRightIcon, ArrowToLeftIcon, CloseAllIcon, SaveCheckIcon, GeneralAssistantIcon, FilterIcon, BookOpenIcon, Dk8sIcon, StethoscopeIcon } from '../../icons';
-import { IconButtonView, StateMachineIcon } from '@salilvnair/dui';
+import { IconButtonView, StateMachineIcon, SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { logUiEvent } from '../../store/ui-audit-store';
 
 interface TabContextMenuState {
@@ -150,7 +150,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     el.scrollBy({ left: dir === 'left' ? -150 : 150, behavior: 'smooth' });
   };
   const customEnvs = environments.filter(e => e.id !== GLOBAL_ENV_ID);
-  const envOptions: DropdownOption[] = customEnvs.map(e => ({ value: e.id, label: e.name }));
+  const envOptions: SelectOption[] = customEnvs.map(e => ({ value: e.id, label: e.name }));
 
   const handleClose = (tabId: string) => {
     logUiEvent('tab.close', { tabId });
@@ -587,14 +587,14 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
           {customEnvs.length === 0 ? (
             <span className="text-[12px] text-[var(--color-text-muted)]">No Environment</span>
           ) : (
-            <StyledDropdown
+            <SelectInputView
               options={envOptions}
               value={(activeTab.envId && activeTab.envId !== GLOBAL_ENV_ID) ? activeTab.envId : envOptions[0]?.value || ''}
               onChange={(v) => {
                 updateTab(activeTab.id, { envId: v });
                 setActiveEnvironment(v);
               }}
-              size="sm"
+              size="md"
             />
           )}
         </div>

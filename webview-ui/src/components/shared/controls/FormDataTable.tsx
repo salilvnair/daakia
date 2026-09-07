@@ -1,6 +1,7 @@
+import { SelectInputView, type SelectOption } from '@salilvnair/dui';
 import { useState, useRef } from 'react';
 import { type KeyValueRow, InsertRowDivider } from './KeyValueTable';
-import { StyledDropdown } from './StyledDropdown';
+
 import { ConfirmDialog } from '../modals/ConfirmDialog';
 import { CheckCircleFilledIcon, TrashIcon, DownloadIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
@@ -160,11 +161,14 @@ export function FormDataTable({ rows, onChange, hideToolbar = false }: Props) {
             />
 
             {/* Type dropdown */}
-            <StyledDropdown
+            {/* `md`, the height of the key and value fields it sits between —
+                a 24px control in a row of 28px ones reads as misaligned even
+                when it is centred. */}
+            <SelectInputView
               options={TYPE_OPTIONS}
               value={row.type || 'text'}
               onChange={(v) => updateRow(idx, { type: v as 'text' | 'file', value: v === 'file' ? '' : row.value, files: v === 'file' ? [] : undefined })}
-              size="sm"
+              size="md"
             />
 
             {/* Value: text input or file chooser */}
