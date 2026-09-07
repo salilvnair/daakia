@@ -4,6 +4,7 @@
  * response, headers, and metadata. Mirrors dmcr_copilot's AI Footprint panel.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { nameForStage, screenForStage } from '../../store/ai-audit-events';
 import { postMsg } from '../../vscode';
 import { RefreshIcon, TrashIcon, CopyIcon, CheckIcon, ChevronLeftIcon, SparkleIcon } from '../../icons';
 
@@ -102,7 +103,20 @@ const STAGE_LABEL_MAP: Record<string, string> = {
   'mock.mqtt.generate':               'MQTT Mock',
 };
 
+/**
+ * The feature's name, from the one place features are named.
+ *
+ * This screen kept its own map, and the map had drifted: `dk8s.log.askWhy`,
+ * `dk8s.file.explain` and `dk8s.terminal.theme` all showed as raw keys
+ * because nobody added them here when the features were built. The prompt
+ * library names every feature already — it has to, those labels are what
+ * Settings shows — so that is the source now, and the local map is kept only
+ * for the handful of stages that are not prompt keys at all (`DAAKIA_AI`,
+ * `aiChat`).
+ */
 function prettifyStage(stage: string): string {
+  const fromLibrary = nameForStage(stage);
+  if (fromLibrary !== stage) return fromLibrary;
   return STAGE_LABEL_MAP[stage] ?? stage;
 }
 
@@ -493,7 +507,7 @@ export function AiAuditPanel() {
                     style={{ cursor: 'pointer', accentColor: 'var(--color-protocol-ai)' }}
                   />
                 </th>
-                {['#', 'Stage', 'Model', 'Duration', 'Created At', ''].map(h => (
+                {['#', 'Feature', 'Screen', 'Model', 'Duration', 'Created At', ''].map(h => (
                   <th
                     key={h}
                     className="px-2 py-2 text-left font-medium whitespace-nowrap"
@@ -552,6 +566,11 @@ export function AiAuditPanel() {
                       >
                         {prettifyStage(e.stage)}
                       </span>
+                    </td>
+                    {/* Which screen asked — "Generate Body" alone does not
+                        tell you where to go back to. */}
+                    <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
+                      {screenForStage(e.stage)}
                     </td>
                     <td className="px-2 py-1.5 text-[var(--color-text-primary)]">
                       {e.model ?? '—'}

@@ -162,7 +162,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
       footerRight={
         !running ? (
           <ButtonView size="md" variant="primary" accentColor={ACCENT} onClick={startInterceptor}>
-            ▶ Start Proxy
+            Start Proxy
           </ButtonView>
         ) : (
           <ButtonView size="md" accentColor="var(--color-error)" iconLeft={<span className="w-2 h-2 rounded-full bg-white animate-pulse" />} onClick={stopInterceptor}>
@@ -283,7 +283,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
           <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
             {captured.length === 0 ? (
               <div className="p-6 text-center flex flex-col items-center gap-2">
-                <span className="text-[24px] opacity-20">🔌</span>
+                <span className="text-[24px] opacity-20"></span>
                 <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
                   {running ? 'Waiting for requests…' : 'Start the proxy, then browse your app.'}
                 </p>
@@ -388,7 +388,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6">
-              <span className="text-[32px] opacity-15">🔌</span>
+              <span className="text-[32px] opacity-15"></span>
               <p className="text-[12px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
                 {captured.length === 0 ? 'No requests captured yet' : 'Select a request to inspect'}
               </p>

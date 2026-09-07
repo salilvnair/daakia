@@ -1,11 +1,21 @@
 /**
  * RequestBodyDisplay — renders request body with special handling for multipart file attachments.
- * Detects lines starting with 📎 and renders them as file attachment cards.
+ * Detects lines carrying the multipart file marker and renders them as cards.
  * Used in DevTools NetworkTab and Response TimelineView.
  */
 import { useState } from 'react';
 import { AttachmentIcon, DownloadIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
+
+/**
+ * How the host marks a multipart file line.
+ *
+ * It was a paperclip emoji. Removing the emoji from this side alone left the
+ * check reading `startsWith('')`, which is true of every line — so every plain
+ * text field in a multipart body rendered as a file card. The marker is now a
+ * word, and both sides of the wire use this one constant.
+ */
+const FILE_MARKER = '[file]';
 
 interface Props {
   body: string;
@@ -30,10 +40,10 @@ function parseMultipartBody(body: string): { files: FileAttachment[]; textFields
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    if (trimmed.startsWith('📎')) {
+    if (trimmed.startsWith(FILE_MARKER)) {
       hasFiles = true;
-      // Format: 📎 key: filename [mime/type] (size) {filePath}
-      const match = trimmed.match(/📎\s+(.+?):\s+(.+?)\s+\[(.+?)\](?:\s+\((.+?)\))?(?:\s+\{(.+?)\})?/);
+      // Format: [file] key: filename [mime/type] (size) {filePath}
+      const match = trimmed.match(/\[file\]\s+(.+?):\s+(.+?)\s+\[(.+?)\](?:\s+\((.+?)\))?(?:\s+\{(.+?)\})?/);
       if (match) {
         files.push({ fieldName: match[1], fileName: match[2], mimeType: match[3], size: match[4] || '', filePath: match[5] || '' });
       }
@@ -73,7 +83,7 @@ function FileCard({ file }: { file: FileAttachment }) {
           </span>
           {(isImage || isPdf) && (
             <span className="text-[9px] text-[var(--color-primary)]">
-              {isImage ? '🖼' : '📄'}
+              {isImage ? '': ''}
             </span>
           )}
         </div>

@@ -11,6 +11,7 @@ import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { useAiResponseActionsStore } from '../../store/ai-response-actions-store';
 import { ModalView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   tabId: string;
@@ -41,9 +42,9 @@ Check for issues like:
 - URL fields that aren't valid URLs
 
 Format your response as markdown with:
-1. A summary line (✅ Looks semantically valid / ⚠️ N issues found)
+1. A summary line ( Looks semantically valid / N issues found)
 2. For each issue: field name, value found, why it's suspicious
-3. Severity: 🔴 Critical | 🟡 Warning | 🔵 Note
+3. Severity: Critical | Warning | Note
 
 Be concise. If data looks valid, say so briefly.`;
 
@@ -95,9 +96,10 @@ export function AiSemanticValidatorModal({ tabId, responseBody, method, url, sta
     const pid = `ai-sem-val-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.semantic.validate',
+      screen: 'REST · Response',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Endpoint: ${method || 'GET'} ${url || ''}\nStatus: ${status || ''}\n\nResponse body:\n${responseBody.slice(0, 5000)}`,
       conversation: [], tools: [],
@@ -106,7 +108,7 @@ export function AiSemanticValidatorModal({ tabId, responseBody, method, url, sta
     });
   }, [responseBody, method, url, status]);
 
-  const isAllGood = result && (result.includes('✅') || result.toLowerCase().includes('semantically valid')) && !result.includes('🔴') && !result.includes('🟡');
+ const isAllGood = result && (result.includes('') || result.toLowerCase().includes('semantically valid')) && !result.includes('') && !result.includes('');
 
   return (
     <ModalView

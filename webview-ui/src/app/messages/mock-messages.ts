@@ -42,7 +42,7 @@ export function handleMockMessages(msg: any): boolean {
           useDevToolsStore.getState().addLog({
             level: 'info',
             args: [
-              `🟢 Mock Server Started`,
+              `Mock Server Started`,
               startedName ? `"${startedName}"` : startedId,
               `port ${startedPort}`,
               startedProto ? `protocol: ${startedProto.toUpperCase()}` : '',
@@ -58,7 +58,7 @@ export function handleMockMessages(msg: any): boolean {
           useMockStore.getState().updateServer(stoppedId, { running: false, port: null } as any);
           useDevToolsStore.getState().addLog({
             level: 'info',
-            args: [`🔴 Mock Server Stopped`, stoppedName ? `"${stoppedName}"` : stoppedId],
+ args: [`Mock Server Stopped`, stoppedName ? `"${stoppedName}"`: stoppedId],
             timestamp: Date.now(),
             requestName: `Mock Server`,
             scriptPhase: 'mock',
@@ -71,7 +71,7 @@ export function handleMockMessages(msg: any): boolean {
           useDevToolsStore.getState().addLog({
             level: 'error',
             args: [
-              `🚨 Mock Server Error`,
+              `Mock Server Error`,
               errName ? `"${errName}"` : errId,
               mockErr,
             ].filter(Boolean),

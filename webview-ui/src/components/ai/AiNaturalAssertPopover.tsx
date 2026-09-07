@@ -13,6 +13,7 @@ import { postMsg } from '../../vscode';
 import { SparkleIcon, RefreshIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, MultilineInputView, ButtonView, IconButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -120,11 +121,11 @@ User's assertion in plain English:
 
 Generate the dk.* test script:`;
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: pid,
       provider: '', model: '', baseUrl: '',
       stage: 'rest.assert.generate',
+      screen: 'REST · Response',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt,
       conversation: [], tools: [],

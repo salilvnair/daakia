@@ -73,7 +73,7 @@ const SCREENS: ScreenSpec[] = [
   {
     id: 'grpc-metadata',
     label: 'gRPC — Metadata',
-    explanation: "gRPC's header equivalent — same key/value table as REST Headers, with an AI ✨ suggest button. Nothing auto-added; every row is what you typed.",
+    explanation: "gRPC's header equivalent — same key/value table as REST Headers, with an AI suggest button. Nothing auto-added; every row is what you typed.",
     directives: [
       { action: 'addTab', patch: BASE_REQUEST_PATCH },
       { action: 'click', selector: 'button[data-tab="metadata"]' },

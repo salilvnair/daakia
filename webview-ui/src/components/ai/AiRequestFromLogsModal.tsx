@@ -11,6 +11,7 @@ import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 import { normalizeCollectionProtocol } from '../../services/collections';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   onClose: () => void;
@@ -93,9 +94,10 @@ export function AiRequestFromLogsModal({ onClose, contextProtocol }: Props) {
     const pid = `ai-logs-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'import.logs',
+      screen: 'Import',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Extract API requests from these server logs:\n\n${logs.slice(0, 8000)}`,
       conversation: [], tools: [],

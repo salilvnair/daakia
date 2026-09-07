@@ -420,7 +420,7 @@ export default function App() {
         useDevToolsStore.getState().addLog({
           level: 'info',
           args: [
-            `⚙️ [Settings Audit] AI Providers Changed`,
+            `[Settings Audit] AI Providers Changed`,
             ...changed,
             { providers: state.providers.map(p => ({ id: p.id, name: p.name, enabled: p.enabled, models: p.models.map(m => m.id) })), defaultProviderId: state.defaultProviderId, defaultModelId: state.defaultModelId, changedAt: new Date().toISOString() },
           ],

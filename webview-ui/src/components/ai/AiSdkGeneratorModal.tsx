@@ -10,6 +10,7 @@ import { postMsg } from '../../vscode';
 import { useSidebarDataStore } from '../../store/sidebar-data-store';
 import { ModalView, AIButtonView, ButtonView, SelectInputView, CodeBlockView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   onClose: () => void;
@@ -98,9 +99,10 @@ export function AiSdkGeneratorModal({ onClose }: Props) {
 
     const summary = JSON.stringify({ name: collection.name, requests: [] }, null, 2);
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'collection.sdk.generate',
+      screen: 'Collections',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Generate a ${LANGUAGES.find(l => l.value === language)?.label} SDK for this collection:\n\n${summary}`,
       conversation: [], tools: [],

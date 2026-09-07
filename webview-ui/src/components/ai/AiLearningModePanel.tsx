@@ -8,6 +8,7 @@ import { postMsg } from '../../vscode';
 import { useTabsStore } from '../../store/tabs-store';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, TextInputView, ButtonView, AIButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface RecordedStep {
   method: string;
@@ -82,11 +83,11 @@ export function AiLearningModePanel({ onClose }: Props) {
 
     const summary = steps.map(s => `${s.method} ${s.url} → ${s.responseStatus}`).join('\n');
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: `ai-learn-${Date.now()}`,
       provider: '', model: '', baseUrl: '',
       stage: 'agent.learn.analyze',
+      screen: 'Daakia AI',
       systemPrompts: ['You are an API workflow analyzer. Given a sequence of API calls the user made, identify the workflow name and describe it in 1-2 sentences.'],
       userPrompt: `API call sequence:\n${summary}`,
       conversation: [], tools: [],

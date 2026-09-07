@@ -84,6 +84,8 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
       : body;
 
     triggerAi(buildSchemaPrompt(lang, jsonPreview), {
+      stage: 'rest.schema.generate',
+      screen: 'REST · Response',
       systemPrompts: ['You are a precise code generation assistant. Output only code — no explanations, no markdown code fences, no preamble.'],
       settings: { temperature: 0.2, maxTokens: 1500 },
     });
@@ -228,7 +230,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
           )}
           {aiError && (
             <span className="text-[10px] text-[var(--color-error)] max-w-[240px] truncate" title={aiError}>
-              ⚠️ {aiError}
+               {aiError}
             </span>
           )}
         </div>
@@ -288,7 +290,7 @@ export function DataSchemaModal({ body, onClose }: { body: string; onClose: () =
           {/* Error state */}
           {aiMode && aiError && !aiCode && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10 bg-[var(--color-panel)]">
-              <p className="text-[13px] text-[var(--color-error)]">⚠️ Generation failed</p>
+              <p className="text-[13px] text-[var(--color-error)]"> Generation failed</p>
               <p className="text-[11px] text-[var(--color-text-muted)] max-w-[400px] text-center">{aiError}</p>
               <button
                 type="button"

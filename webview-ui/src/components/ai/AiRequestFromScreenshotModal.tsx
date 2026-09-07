@@ -11,6 +11,7 @@ import { postMsg } from '../../vscode';
 import { useTabsStore } from '../../store/tabs-store';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   onClose: () => void;
@@ -122,9 +123,10 @@ export function AiRequestFromScreenshotModal({ onClose }: Props) {
       ? `Extract the API request from this documentation screenshot:\n\n${textFallback || '(See attached image)'}`
       : `Extract the API request from this documentation:\n\n${textFallback}`;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'import.screenshot',
+      screen: 'Import',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt,
       ...(imageDataUrl ? { imageUrl: imageDataUrl } : {}),

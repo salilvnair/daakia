@@ -134,7 +134,7 @@ function AllBaselinesModal({ onClose }: { onClose: () => void }) {
     >
       {patterns.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', gap: 8, textAlign: 'center' }}>
-          <span style={{ fontSize: 28 }}>📊</span>
+          <span style={{ fontSize: 28 }}></span>
           <p style={{ fontSize: 12, margin: 0, color: 'var(--color-text-secondary)' }}>No baselines recorded yet</p>
           <p style={{ fontSize: 11, margin: 0, color: 'var(--color-text-muted)' }}>
             Send a request then click "Record Baseline" in the response panel
@@ -433,7 +433,7 @@ export function AiRequestPatternStatus({ method, url, variant, open: controlledO
         }}
       >
         <SparkleIcon size={11} />
-        {hasBaseline ? '📊' : '○'}
+        {hasBaseline ? '': '○'}
       </button>
       {isOpen && (
         <PatternBaselinePopup method={method} url={url} onClose={closePopup} />

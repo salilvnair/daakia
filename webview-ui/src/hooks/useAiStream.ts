@@ -2,16 +2,16 @@
  * useAiStream — Centralized AI streaming hook.
  *
  * All AI-powered features (DataSchemaModal, AiAssistPopover, future widgets)
- * should use this hook instead of calling postMsg({ type: 'ai:send' }) directly.
+ * should use this hook instead of building an AI request by hand.
  *
  * Benefits:
- * - Single place to maintain the ai:send message contract
+ * - Sends through the one AI client, so the call is named and audited
  * - baseUrl is ALWAYS '' — the extension host resolves from provider registry + user settings
  * - Consistent streaming state (text / streaming / error)
  * - Per-call tabId isolation prevents message cross-talk
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { postMsg } from '../vscode';
+import { sendAiRequest, type AiScreen } from '../services/ai/ai-client';
 import { useAiProvidersStore } from '../store/ai-providers-store';
 import { useTabsStore } from '../store/tabs-store';
 
@@ -23,13 +23,22 @@ export interface AiStreamSettings {
   stream?: boolean;
   topP?: number;
   stopSequences?: string[];
-  responseFormat?: string;
+  responseFormat?: 'text' | 'json_object';
   frequencyPenalty?: number;
   presencePenalty?: number;
   seed?: null | number;
 }
 
 export interface AiStreamOptions {
+  /**
+   * The feature making the call, and the screen it was made from.
+   *
+   * Required: an AI call that cannot say which feature it is shows up in the
+   * audit as "an AI call whose stage is not in the prompt library", which is
+   * the one row this whole taxonomy exists to stop being the only one.
+   */
+  stage: string;
+  screen: AiScreen;
   /** Override the active AI provider ID */
   provider?: string;
   /** Override the active model ID */
@@ -52,7 +61,7 @@ export interface AiStreamResult {
    * @param userPrompt   The user message / prompt to send.
    * @param opts         Optional overrides for provider, model, settings, system prompts.
    */
-  trigger: (userPrompt: string, opts?: AiStreamOptions) => void;
+  trigger: (userPrompt: string, opts: AiStreamOptions) => void;
   /** Reset text/streaming/error to initial state (useful for reuse without unmount) */
   reset: () => void;
 }
@@ -121,10 +130,7 @@ export function useAiStream(): AiStreamResult {
 
   // ── trigger ─────────────────────────────────────────────────────────────────
   const trigger = useCallback(
-    (userPrompt: string, opts: AiStreamOptions = {}) => {
-      // Unique request ID — used to isolate this stream from other AI tabs
-      const pid = `ai-stream-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      streamIdRef.current = pid;
+    (userPrompt: string, opts: AiStreamOptions) => {
       accRef.current = '';
 
       setText('');
@@ -148,21 +154,18 @@ export function useAiStream(): AiStreamResult {
 
       const mergedSettings = { ...DEFAULT_SETTINGS, ...opts.settings };
 
-      postMsg({
-        type: 'ai:send',
-        tabId: pid,
+      // baseUrl is left to the client: the extension resolves it from the
+      // provider registry and user settings. Passing the tab's URL here would
+      // send the AI request at the REST endpoint under test.
+      streamIdRef.current = sendAiRequest({
+        stage: opts.stage,
+        screen: opts.screen,
         provider: resolvedProvider,
         model: resolvedModel,
-        // CRITICAL: always empty — extension resolves baseUrl from provider registry + user settings.
-        // Never pass activeTab.url here (that's the REST endpoint, not the AI provider URL).
-        baseUrl: '',
         systemPrompts: opts.systemPrompts || [],
         userPrompt,
-        conversation: [],
-        tools: [],
         settings: mergedSettings,
-        mcpServerConfigs: [],
-        envId: activeTab?.envId,
+        context: { envId: activeTab?.envId },
       });
     },
     [providers, defaultProviderId, defaultModelId, activeTab],

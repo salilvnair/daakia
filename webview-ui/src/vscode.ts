@@ -67,7 +67,7 @@ function auditToDevTools(msg: Record<string, unknown>) {
       storeModule.getState().addLog({
         level: 'info' as const,
         args: [
-          `⚙️ [Settings Audit] ${msg.type}`,
+          `[Settings Audit] ${msg.type}`,
           sanitize({ ...msg, type: undefined }),
           `at ${new Date().toISOString()}`,
         ].filter(Boolean),
@@ -106,7 +106,7 @@ export function postMsg(msg: unknown) {
     */
     if (typed.type === 'ai:send') {
       void import('./store/ui-audit-store')
-        .then(m => m.logUiEvent('ai.request', { stage: typed.stage ?? 'DAAKIA_AI' }))
+        .then(m => m.logAiCall(typed.stage as string | undefined, typed.screen as string | undefined))
         .catch(() => { /* auditing must never break a send */ });
     }
   }

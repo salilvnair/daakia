@@ -3,7 +3,7 @@
  *
  * Task: 4.3.4 — AI Auto-complete Headers
  *
- * Shows a "✨ Suggest" button above the KeyValueTable.
+ * Shows a "Suggest" button above the KeyValueTable.
  * On click: asks the active AI provider to suggest relevant headers based on
  * the request's method, URL, body content-type, and auth type.
  * Suggestions appear as clickable chips — one click adds the header row.
@@ -14,6 +14,7 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import type { KeyValueRow } from '../shared';
 import { CloseIcon, PlusIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 export interface AiHeaderSuggestHandle {
   trigger: () => void;
@@ -138,8 +139,7 @@ export const AiHeaderSuggest = forwardRef<AiHeaderSuggestHandle, Props>(function
       existing,
     });
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: pid,
       // Leave provider/model/baseUrl empty — ai-handler.ts reads aiDefaultProvider
       // from DB settings and auto-resolves (same path as DaakiaAiPanel / AiAssistPopover).
@@ -150,6 +150,7 @@ export const AiHeaderSuggest = forwardRef<AiHeaderSuggestHandle, Props>(function
       model: '',
       baseUrl: '',
       stage: 'rest.headers.suggest.generate',
+      screen: 'REST · Request',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [],

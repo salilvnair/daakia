@@ -25,10 +25,10 @@ function fmtBytes(b: number): string {
 
 const TILE_META = [
   { key: 'node',    label: 'Node.js Version', color: '#10b981', emoji: '⬡' },
-  { key: 'pid',     label: 'Process ID',      color: '#06b6d4', emoji: '⚙' },
+  { key: 'pid', label: 'Process ID', color: '#06b6d4', emoji: ''},
   { key: 'heap',    label: 'Heap Used',        color: '#818cf8', emoji: '◈' },
   { key: 'tables',  label: 'DB Tables',        color: '#a855f7', emoji: '⊞' },
-  { key: 'errors',  label: 'Recent Errors',    color: '#ef4444', emoji: '⚠' },
+  { key: 'errors', label: 'Recent Errors', color: '#ef4444', emoji: ''},
 ];
 
 function MemoryCard({ label, value, color, emoji }: { label: string; value: string; color: string; emoji: string }) {

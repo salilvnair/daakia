@@ -191,7 +191,7 @@ function TestRow({ test, index }: { test: { name: string; passed: boolean; error
                 color: 'var(--color-warning)',
               }}
             >
-              <span className="text-[13px] leading-tight flex-shrink-0">💡</span>
+              <span className="text-[13px] leading-tight flex-shrink-0"></span>
               <span>{parsed.hint}</span>
             </div>
           )}
@@ -306,7 +306,7 @@ export function ScriptResultsView({ response }: { response: ResponseData }) {
           {/* All-pass celebration */}
           {allPass && (
             <div className="text-[10.5px] font-medium flex items-center gap-1.5" style={{ color: 'var(--color-success)' }}>
-              <span>🎉</span>
+              <span></span>
               All tests passed
             </div>
           )}

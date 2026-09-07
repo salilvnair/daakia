@@ -15,6 +15,7 @@ import { CloseIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { EditorView, MultilineInputView, ButtonView, IconButtonView } from '@salilvnair/dui';
 import type { EditorLanguage } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 // ─── Public handle ────────────────────────────────────────────────────────────
 
@@ -122,13 +123,13 @@ export const AiBodyGenerate = forwardRef<AiBodyGenerateHandle, Props>(
         description: description.trim(),
       });
 
-      postMsg({
-        type: 'ai:send',
+      sendAiRequest({
         tabId: pid,
         provider: '',
         model: '',
         baseUrl: '',
         stage: 'rest.body.generate',
+        screen: 'REST · Request',
         systemPrompts: [systemPrompt],
         userPrompt,
         conversation: [],

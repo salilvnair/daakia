@@ -72,7 +72,7 @@ Brief description of what domains you identified and why.
 
 ## Proposed Collection Structure
 
-### 📁 [Domain Name] (N requests)
+###  [Domain Name] (N requests)
 > Brief description of this domain
 
 | # | Method | Endpoint | Suggested Name |

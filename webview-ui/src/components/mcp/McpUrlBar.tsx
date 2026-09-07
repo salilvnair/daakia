@@ -105,7 +105,7 @@ export function McpUrlBar() {
     <>
       {connectionError && (
         <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] shrink-0" style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)', borderBottom: '1px solid color-mix(in srgb, var(--color-error) 30%, transparent)', color: 'var(--color-error)' }}>
-          <span className="flex-1 truncate">⚠ {connectionError}</span>
+          <span className="flex-1 truncate"> {connectionError}</span>
           <ButtonView
             variant="secondary"
             size="sm"

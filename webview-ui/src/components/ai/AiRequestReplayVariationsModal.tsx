@@ -10,6 +10,7 @@ import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface VariationResult {
   index: number;
@@ -88,9 +89,10 @@ export function AiRequestReplayVariationsModal({ requestMethod, requestUrl, requ
     const pid = `ai-variations-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'test.variations.generate',
+      screen: 'REST · Response',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `${description}\n\nEndpoint: ${requestMethod} ${requestUrl}${requestBody ? `\nBody: ${requestBody.slice(0, 500)}` : ''}`,
       conversation: [], tools: [],
@@ -133,9 +135,10 @@ export function AiRequestReplayVariationsModal({ requestMethod, requestUrl, requ
     const pid = `ai-analysis-${Date.now()}`;
     analysisReqRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'test.variations.analyze',
+      screen: 'REST · Response',
       systemPrompts: ['Analyze test results and provide insights. Be concise — 3-5 bullet points max.'],
       userPrompt: `Endpoint: ${requestMethod} ${requestUrl}\n${passed} passed, ${failed} failed out of ${res.length} variations.\nFailed inputs: ${res.filter(r => !r.passed).map(r => r.input).slice(0, 10).join(', ')}`,
       conversation: [], tools: [],
@@ -163,7 +166,7 @@ export function AiRequestReplayVariationsModal({ requestMethod, requestUrl, requ
       footerLeft={
         variations.length > 0 && results.length === 0 ? (
           <ButtonView size="md" variant="primary" accentColor="var(--color-success)" disabled={running} onClick={runVariations}>
-            ▶ Run All ({variations.length})
+            Run All ({variations.length})
           </ButtonView>
         ) : undefined
       }

@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { applyChainExtractions } from '../services/request/chaining';
 import { logUiEvent } from '../store/ui-audit-store';
+import { nameForStage, screenForStage } from '../store/ai-audit-events';
 import { useTabsStore } from '../store/tabs-store';
 import { useToastStore } from '../store/toast-store';
 import { useEnvStore } from '../store/env-store';
@@ -119,6 +120,8 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
         case 'ai:error': {
           logUiEvent('ai.failed', {
             stage: msg.stage ?? 'DAAKIA_AI',
+            feature: msg.stage ? nameForStage(msg.stage) : 'Unnamed AI call',
+            screen: msg.screen ?? (msg.stage ? screenForStage(msg.stage) : 'Daakia AI'),
             code: msg.code,
             message: typeof msg.message === 'string' ? msg.message.slice(0, 200) : undefined,
           });

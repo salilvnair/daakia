@@ -212,7 +212,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
     const items: ContextMenuItem[] = [];
     if (isRequest) items.push({ id: 'rename', label: 'Rename', shortcut: 'R', icon: <RenameIcon size={13} />, iconColor: 'var(--color-ctx-rename)' });
     items.push({ id: 'duplicate', label: 'Duplicate', shortcut: 'D', icon: <CopyIcon size={13} />, iconColor: 'var(--color-ctx-duplicate)' });
-    if (isRequest) items.push({ id: isPinned ? 'unpin' : 'pin', label: isPinned ? 'Unpin' : 'Pin', shortcut: isPinned ? 'U' : 'P', icon: <span className="text-[13px]">{isPinned ? '📍' : '📌'}</span>, iconColor: 'var(--color-ctx-pin)' });
+ if (isRequest) items.push({ id: isPinned ? 'unpin': 'pin', label: isPinned ? 'Unpin': 'Pin', shortcut: isPinned ? 'U': 'P', icon: <span className="text-[13px]">{isPinned ? '': ''}</span>, iconColor: 'var(--color-ctx-pin)'});
 
     if (hasRequestTabs && uniqueProtocols.length >= 1) {
       items.push({ id: 'sep-filter', label: '', separator: true });
@@ -528,7 +528,7 @@ export function TabBar({ requestAccentColor, onEnvironmentsClick }: TabBarProps)
                 />
               )}
               {tab.pinned ? (
-                <span className="flex-shrink-0 text-[11px]">📌</span>
+                <span className="flex-shrink-0 text-[11px]"></span>
               ) : (
                 <button
                   type="button"

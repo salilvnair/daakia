@@ -2179,7 +2179,7 @@ export function AzureOpenAiProviderIcon({ size = 22 }: { size?: number }) {
   );
 }
 
-/** 🤖 Bot/Agent icon — for AI agents */
+/** Bot/Agent icon — for AI agents */
 export function AgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2193,7 +2193,7 @@ export function AgentIcon(props: IconProps) {
 
 // ─── AI Agent Scenario Icons ──────────────────────────────────────────────────
 
-/** 🌐 REST API Agent — globe with HTTP layers */
+/** REST API Agent — globe with HTTP layers */
 export function RestAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2205,7 +2205,7 @@ export function RestAgentIcon(props: IconProps) {
   );
 }
 
-/** 💻 cURL Agent — terminal prompt with command line */
+/** cURL Agent — terminal prompt with command line */
 export function CurlAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2216,7 +2216,7 @@ export function CurlAgentIcon(props: IconProps) {
   );
 }
 
-/** 🗄️ Mock Server Agent — layered server rack */
+/** Mock Server Agent — layered server rack */
 export function MockServerAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2229,7 +2229,7 @@ export function MockServerAgentIcon(props: IconProps) {
   );
 }
 
-/** 🧪 Test Script Agent — beaker / test tube */
+/** Test Script Agent — beaker / test tube */
 export function TestAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2239,7 +2239,7 @@ export function TestAgentIcon(props: IconProps) {
   );
 }
 
-/** 📚 Knowledge Agent — open book */
+/** Knowledge Agent — open book */
 export function KnowledgeAgentIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>
@@ -2249,7 +2249,7 @@ export function KnowledgeAgentIcon(props: IconProps) {
   );
 }
 
-/** 💬 General Assistant — chat bubble with sparkle dot */
+/** General Assistant — chat bubble with sparkle dot */
 export function GeneralAssistantIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

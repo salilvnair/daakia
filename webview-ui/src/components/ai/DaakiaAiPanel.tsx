@@ -40,14 +40,14 @@ import { useToastStore } from '../../store/toast-store';
 // ─── Suggestion chips ─────────────────────────────────────────────────────────
 
 const SUGGESTION_CHIPS = [
-  { chipText: '📡 Build a request',   chatText: '/request GET all users from https://jsonplaceholder.typicode.com/users' },
-  { chipText: '🔧 Create a mock',     chatText: '/mock Create a mock POST /api/users that returns a created user' },
-  { chipText: '🧪 Generate tests',    chatText: '/test Write assertions for a 200 response with a users array' },
-  { chipText: '🔄 Convert to cURL',   chatText: '/curl curl -X POST https://api.example.com/data -H "Content-Type: application/json" -d \'{"name":"test"}\'' },
-  { chipText: '🔐 GraphQL query',     chatText: '/graphql Write a GraphQL query to get all users with their id, name, and email' },
-  { chipText: '📄 SOAP envelope',     chatText: '/soap Generate a SOAP 1.1 envelope for a GetUserById operation with userId parameter' },
-  { chipText: '🛡️ Security scan',    chatText: '/security Scan this request for security issues: GET http://api.example.com/users?apiKey=sk-abc123' },
-  { chipText: '📋 Document endpoint', chatText: '/docs Document the POST /api/users endpoint that creates a new user with name and email' },
+  { chipText: 'Build a request', chatText: '/request GET all users from https://jsonplaceholder.typicode.com/users'},
+  { chipText: 'Create a mock', chatText: '/mock Create a mock POST /api/users that returns a created user'},
+  { chipText: 'Generate tests', chatText: '/test Write assertions for a 200 response with a users array'},
+  { chipText: 'Convert to cURL', chatText: '/curl curl -X POST https://api.example.com/data -H "Content-Type: application/json"-d \'{"name":"test"}\''},
+  { chipText: 'GraphQL query', chatText: '/graphql Write a GraphQL query to get all users with their id, name, and email'},
+  { chipText: 'SOAP envelope', chatText: '/soap Generate a SOAP 1.1 envelope for a GetUserById operation with userId parameter'},
+  { chipText: 'Security scan', chatText: '/security Scan this request for security issues: GET http://api.example.com/users?apiKey=sk-abc123'},
+  { chipText: 'Document endpoint', chatText: '/docs Document the POST /api/users endpoint that creates a new user with name and email'},
 ];
 
 // ─── MdViewer renderer provider ───────────────────────────────────────────────
@@ -255,7 +255,7 @@ function AiContextBar({
           className="h-[18px] px-1.5 text-[9.5px] font-medium rounded cursor-pointer transition-all hover:opacity-80 border"
           style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-surface-border)', backgroundColor: 'transparent' }}
         >
-          💾 Save
+ Save
         </button>
       </div>
     </div>
@@ -670,7 +670,7 @@ export function DaakiaAiPanel() {
                   className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
                   style={{ borderColor: 'var(--color-protocol-ai)', color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, var(--color-panel))' }}
                 >
-                  ▶ Run request
+                  Run request
                 </button>
                 <button
                   type="button"
@@ -678,7 +678,7 @@ export function DaakiaAiPanel() {
                   className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
                   style={{ borderColor: 'var(--color-protocol-ai)', color: 'var(--color-protocol-ai)', backgroundColor: 'color-mix(in srgb, var(--color-protocol-ai) 10%, var(--color-panel))' }}
                 >
-                  💾 Save to collection
+ Save to collection
                 </button>
                 <button
                   type="button"
@@ -686,7 +686,7 @@ export function DaakiaAiPanel() {
                   className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
                   style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-panel)' }}
                 >
-                  📋 Copy URL
+ Copy URL
                 </button>
                 <button
                   type="button"
@@ -694,7 +694,7 @@ export function DaakiaAiPanel() {
                   className="pointer-events-auto h-[24px] px-2.5 text-[10.5px] font-medium rounded-full border cursor-pointer hover:opacity-90 transition-opacity whitespace-nowrap"
                   style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-panel)' }}
                 >
-                  🔍 Switch to tab
+ Switch to tab
                 </button>
               </>
             )}

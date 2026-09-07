@@ -19,7 +19,7 @@ const ACCENT = 'var(--color-warning)';
 const SYSTEM_PROMPT = `You are an API schema drift detection expert. Compare two API response schemas and identify drift.
 
 For each changed field provide:
-- **Severity**: BREAKING (🔴), ADDITIVE (🟢), or DEPRECATION (🟡)
+- **Severity**: BREAKING (), ADDITIVE (), or DEPRECATION ()
 - **Field path** — using dot notation (e.g. data.user.email)
 - **Change type**: added, removed, type-changed, renamed, made-optional, made-required
 - **Impact** — what breaks if consumers don't update

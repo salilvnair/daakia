@@ -612,10 +612,10 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
                         onClick={() => { setEditRole(role); updateDecos(role === 'b' ? editB : editA); }}
                         className="px-3 py-2 text-[11px] cursor-pointer transition-colors border-b-2"
                         style={{ borderColor: editRole === role ? ACCENT : 'transparent', color: editRole === role ? ACCENT : 'var(--color-text-muted)' }}
-                      >{role === 'a' ? '⚙ System' : '💬 User'}</button>
+                      >{role === 'a'? 'System': 'User'}</button>
                     ))
                   ) : (
-                    <span className="px-3 py-2 text-[11px] border-b-2" style={{ borderColor: editorColor, color: editorColor }}>📝 Template</span>
+                    <span className="px-3 py-2 text-[11px] border-b-2"style={{ borderColor: editorColor, color: editorColor }}> Template</span>
                   )}
                 </div>
                 <div className="flex items-center">
@@ -623,7 +623,7 @@ export function PromptLibraryPanel({ externalTarget, onTargetConsumed }: { exter
                     <button key={mode} type="button" onClick={() => setViewMode(mode)}
                       className="px-3 py-2 text-[11px] cursor-pointer transition-colors border-b-2"
                       style={{ borderColor: viewMode === mode ? ACCENT : 'transparent', color: viewMode === mode ? ACCENT : 'var(--color-text-muted)' }}
-                    >{mode === 'preview' ? '👁 Preview' : '✏ Edit'}</button>
+                    >{mode === 'preview'? 'Preview': '✏ Edit'}</button>
                   ))}
                 </div>
               </div>

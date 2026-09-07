@@ -7,6 +7,7 @@ import { SparkleIcon, PlayIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { ModalView, ButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
 import { METHOD_COLORS } from '../../colors';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface VariableExtraction { variable: string; path: string; description: string; }
 
@@ -64,9 +65,10 @@ export function AiApiFlowBuilderModal({ protocol = 'rest', onClose }: Props) {
     setLoading(true); setFlow(null); setError(''); setCreated(false); accRef.current = '';
     const pid = `ai-flow-${Date.now()}`;
     reqIdRef.current = pid;
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.api.flow',
+      screen: 'REST · Request',
       systemPrompts: [resolve('rest.api.flow.system')],
       userPrompt: resolve('rest.api.flow', { description: description.trim(), baseUrl: baseUrl.trim() || 'https://api.example.com' }),
       conversation: [], tools: [],

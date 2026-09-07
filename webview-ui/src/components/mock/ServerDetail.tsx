@@ -62,10 +62,10 @@ function serverTabs(protocol: string): { id: ServerTab; label: string }[] {
     { id: 'routes',  label: configTabLabel(protocol) },
     { id: 'state',   label: stateMachineTabLabel(protocol) },
     { id: 'traffic', label: trafficTabLabel(protocol) },
-    { id: 'chaos',   label: '⚡ Chaos' },
+    { id: 'chaos',   label: 'Chaos' },
     { id: 'import',  label: 'Import' },
     { id: 'export',  label: 'Export' },
-    { id: 'catalog', label: '📚 Catalog' },
+    { id: 'catalog', label: 'Catalog'},
   ];
 }
 
@@ -147,7 +147,7 @@ export function ServerDetail({ server, onUpdate, onToggleRunning, onDelete, onAd
           onClick={onToggleRunning}
           accentColor={server.running ? 'var(--color-error)' : MOCK_PROTOCOL_COLORS[server.protocol || 'rest']}
         >
-          {server.running ? '⏹ Stop' : '▶ Start'}
+          {server.running ? 'Stop' : 'Start'}
         </ButtonView>
         <ButtonView
           variant="secondary"

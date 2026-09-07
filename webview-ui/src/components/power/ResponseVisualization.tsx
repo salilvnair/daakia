@@ -174,7 +174,7 @@ export function ResponseVisualization({ responseBody, contentType }: Props) {
 
         {activeMode === 'pdf' && (
           <div className="flex items-center justify-center h-full flex-col gap-2">
-            <span className="text-[32px]">📄</span>
+            <span className="text-[32px]"></span>
             <p className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>PDF response detected</p>
             <button type="button"
               onClick={() => {

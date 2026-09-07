@@ -131,7 +131,7 @@ export function UrlBar() {
     : hasWarn
       ? `${preflightCounts.warnings} warning${preflightCounts.warnings > 1 ? 's' : ''}`
       : 'Pre-flight';
-  const preflightIcon = hasErr || hasWarn ? '⚠' : '✓';
+ const preflightIcon = hasErr || hasWarn ? '': '✓';
 
   return (
     <div className="url-bar">

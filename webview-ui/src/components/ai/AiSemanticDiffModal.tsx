@@ -10,6 +10,7 @@ import { SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView, EditorView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   responseBodyA?: string;
@@ -22,12 +23,12 @@ const ACCENT = 'var(--color-protocol-ai)';
 const SYSTEM_PROMPT = `You are a semantic API diff analyzer. Given two API responses, provide an intelligent diff that understands intent — not just structural differences.
 
 For each difference, classify it as:
-- 🔄 **Rename**: field was renamed (userName → username — same data, different key)
+-  **Rename**: field was renamed (userName → username — same data, different key)
 - ➕ **Added**: genuinely new field
 - ➖ **Removed**: field no longer present
-- 🔀 **Type changed**: field exists but type changed (string → number)
-- 📦 **Restructured**: data moved (user.address → user.location.address)
-- ⚠️ **Breaking change**: will cause clients to break
+-  **Type changed**: field exists but type changed (string → number)
+-  **Restructured**: data moved (user.address → user.location.address)
+-  **Breaking change**: will cause clients to break
 
 Format:
 ## Semantic Diff Analysis
@@ -75,9 +76,10 @@ export function AiSemanticDiffModal({ responseBodyA = '', responseBodyB = '', on
     const pid = `ai-diff-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.semantic.diff',
+      screen: 'REST · Response',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Response A (before/old):\n${bodyA.slice(0, 3000)}\n\nResponse B (after/new):\n${bodyB.slice(0, 3000)}`,
       conversation: [], tools: [],

@@ -11,6 +11,7 @@ import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useAiFeaturesStore } from '../../../store/ai-features-store';
 import { postMsg } from '../../../vscode';
 import { AIButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../../services/ai/ai-client';
 
 const ACCENT = 'var(--color-protocol-ai)';
 const PROTOCOLS = ['rest', 'graphql', 'grpc', 'soap', 'websocket', 'sse', 'mqtt', 'socketio'];
@@ -100,30 +101,30 @@ export function AiInsightsTab() {
       ...mostUsed.slice(0, 5).map(e => `  ${e.method} ${e.url} — ${e.count} calls`),
     ].join('\n');
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: analysisId,
       provider: '',
       model: '',
       baseUrl: '',
       stage: 'ai.insights',
+      screen: 'Daakia AI',
       systemPrompts: [`You are an API intelligence analyst. Analyze the request history data and provide:
 
 ## AI API Intelligence Report
 
-### 🔴 Performance Issues
+### Performance Issues
 - Identify slow endpoints and likely root causes (payload size, server-side, network)
 
-### 🟡 Reliability Concerns
+### Reliability Concerns
 - Endpoints with high error rates and what error patterns suggest
 
-### 🟢 Usage Patterns
+### Usage Patterns
 - Heavily used endpoints, unusual usage spikes, underutilized APIs
 
-### 💡 Optimization Recommendations
+### Optimization Recommendations
 - Specific, actionable steps to improve performance and reliability (max 5 bullets)
 
-### 📊 Weekly Trend Estimate
+### Weekly Trend Estimate
 - Based on the patterns, briefly estimate what the trend looks like
 
 Keep the analysis concise and actionable. Use emoji bullets. Format in clear Markdown.`],

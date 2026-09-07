@@ -587,7 +587,7 @@ export function SplitPanelPanel() {
                   ].map((line, i) => (
                     <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4, fontSize: 11, fontFamily: 'Menlo, Monaco, monospace' }}>
                       <span style={{ color: line.type === 'ok' ? 'var(--color-success)' : line.type === 'warn' ? 'var(--color-warning)' : 'var(--color-info)', flexShrink: 0 }}>
-                        {line.type === 'ok' ? '✓' : line.type === 'warn' ? '⚠' : 'i'}
+                        {line.type === 'ok'? '✓': line.type === 'warn'? '': 'i'}
                       </span>
                       <span style={{ color: 'var(--color-text-muted)' }}>{line.text}</span>
                     </div>
@@ -1286,7 +1286,7 @@ export function ToastPanel() {
         <Block style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '16px' }}>
           <button type="button" onClick={() => add('success', 'Request saved', 'GET /api/users saved to collection.')} style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid var(--color-success)', background: 'color-mix(in srgb, var(--color-success) 12%, transparent)', cursor: 'pointer', color: 'var(--color-success)', fontSize: '12px' }}>✓ Success</button>
           <button type="button" onClick={() => add('error', 'Request failed', 'Connection refused on port 8080.')} style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid var(--color-error)', background: 'color-mix(in srgb, var(--color-error) 12%, transparent)', cursor: 'pointer', color: 'var(--color-error)', fontSize: '12px' }}>✕ Error</button>
-          <button type="button" onClick={() => add('warning', 'Rate limit exceeded', 'Slow down — 429 Too Many Requests.')} style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid var(--color-warning)', background: 'color-mix(in srgb, var(--color-warning) 12%, transparent)', cursor: 'pointer', color: 'var(--color-warning)', fontSize: '12px' }}>⚠ Warning</button>
+          <button type="button"onClick={() => add('warning', 'Rate limit exceeded', 'Slow down — 429 Too Many Requests.')} style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid var(--color-warning)', background: 'color-mix(in srgb, var(--color-warning) 12%, transparent)', cursor: 'pointer', color: 'var(--color-warning)', fontSize: '12px'}}> Warning</button>
           <button type="button" onClick={() => add('info', 'Auth token refreshed', 'Bearer token valid for 60 minutes.')} style={{ padding: '6px 12px', borderRadius: 5, border: '1px solid var(--color-primary)', background: 'color-mix(in srgb, var(--color-primary) 12%, transparent)', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '12px' }}>ℹ Info</button>
         </Block>
       </Row>
@@ -2625,7 +2625,7 @@ export function SpacerViewPanel() {
           <div title="GQL" style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-protocol-graphql) 12%, transparent)', color: 'var(--color-protocol-graphql)', fontSize: 11, fontWeight: 700 }}>G</div>
           <div title="WS" style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-protocol-websocket) 12%, transparent)', color: 'var(--color-protocol-websocket)', fontSize: 11, fontWeight: 700 }}>W</div>
           <SpacerView orientation="horizontal" spacing="md" />
-          <div title="Settings" style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)', color: 'var(--color-text-muted)', fontSize: 11, fontWeight: 700 }}>⚙</div>
+          <div title="Settings"style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)', color: 'var(--color-text-muted)', fontSize: 11, fontWeight: 700 }}></div>
           <div title="DevTools" style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--color-text-muted) 10%, transparent)', color: 'var(--color-text-muted)', fontSize: 11, fontWeight: 700 }}>{'</>'}</div>
         </div>
       </Row>

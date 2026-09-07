@@ -84,7 +84,7 @@ function OpenButton() {
 function QuickStartSection() {
   return (
     <SectionCard>
-      <SectionHeader icon="⚡" label="Quick Start" />
+      <SectionHeader label="Quick Start" />
       <TipBox title="Send your first request" accent="#6366f1">
         Type a URL → choose method → click <strong>Send</strong>
         <br />or press <code style={{ background: 'rgba(99,102,241,0.15)', padding: '0 4px', borderRadius: 3, fontFamily: 'monospace' }}>Ctrl+Enter</code>
@@ -115,7 +115,7 @@ const PROTOCOLS = [
 function ProtocolsSection() {
   return (
     <SectionCard>
-      <SectionHeader icon="🔌" label="Protocols" />
+      <SectionHeader label="Protocols"/>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {PROTOCOLS.map(p => <ProtocolBadge key={p.label} label={p.label} color={p.color} />)}
       </div>
@@ -129,22 +129,22 @@ function RestSection() {
   const c = PROTOCOL_COLORS.rest;
   return (
     <SectionCard>
-      <SectionHeader icon="📡" label="REST API" accent={c} />
-      <FeatureRow icon="🔗" title="Params & Headers"
+      <SectionHeader label="REST API" accent={c} />
+      <FeatureRow title="Params & Headers"
         desc="Key-value tables with enable/disable toggles, badge counts, AI header suggestions, and bulk-edit" />
-      <FeatureRow icon="📦" title="Body"
+      <FeatureRow title="Body"
         desc="JSON · XML · Form-data · URL-encoded · Binary · GraphQL modes with syntax highlighting" />
-      <FeatureRow icon="🔐" title="Auth"
+      <FeatureRow title="Auth"
         desc="Bearer token, Basic, API Key, OAuth 2.0, Digest — saved per-request" />
-      <FeatureRow icon="⏱️" title="Timeline"
+      <FeatureRow title="Timeline"
         desc="DNS · TCP · TLS · TTFB breakdown with visual waterfall bars" />
-      <FeatureRow icon="🍪" title="Cookie Jar"
+      <FeatureRow title="Cookie Jar"
         desc="Auto-capture and replay cookies per domain" />
-      <FeatureRow icon="📋" title="Pre-request Scripts"
+      <FeatureRow title="Pre-request Scripts"
         desc="Run JS before each request to mutate headers, env vars, or body" />
-      <FeatureRow icon="🔍" title="Response Inspector"
+      <FeatureRow title="Response Inspector"
         desc="Syntax-highlighted JSON/XML, search, copy, format, size & status display" />
-      <FeatureRow icon="⚙️" title="Environments"
+      <FeatureRow title="Environments"
         desc="Inject variables into URL, headers, body — swap dev/staging/prod instantly" />
     </SectionCard>
   );
@@ -156,14 +156,14 @@ function GraphQLSection() {
   const c = PROTOCOL_COLORS.graphql;
   return (
     <SectionCard>
-      <SectionHeader icon="◈" label="GraphQL" accent={c} />
-      <FeatureRow icon="🗂️" title="Schema Explorer"
+      <SectionHeader label="GraphQL" accent={c} />
+      <FeatureRow title="Schema Explorer"
         desc="Auto-introspect and browse types, queries, mutations, and subscriptions" />
-      <FeatureRow icon="✍️" title="Query Builder"
+      <FeatureRow title="Query Builder"
         desc="Syntax-aware editor with field auto-complete from introspected schema" />
-      <FeatureRow icon="📐" title="Variables & Fragments"
+      <FeatureRow title="Variables & Fragments"
         desc="Dedicated JSON variable panel and reusable fragment management" />
-      <FeatureRow icon="📡" title="Subscriptions"
+      <FeatureRow title="Subscriptions"
         desc="Real-time subscription support over WebSocket transport" />
     </SectionCard>
   );
@@ -175,14 +175,14 @@ function WebSocketSection() {
   const c = PROTOCOL_COLORS.websocket;
   return (
     <SectionCard>
-      <SectionHeader icon="⚡" label="WebSocket" accent={c} />
-      <FeatureRow icon="🔄" title="Connect / Disconnect"
+      <SectionHeader label="WebSocket" accent={c} />
+      <FeatureRow title="Connect / Disconnect"
         desc="Manual connect lifecycle with status indicator and reconnect control" />
-      <FeatureRow icon="💬" title="Message History"
+      <FeatureRow title="Message History"
         desc="Timestamped send/receive log with filter, search, and copy per message" />
-      <FeatureRow icon="📟" title="Binary & Text Frames"
+      <FeatureRow title="Binary & Text Frames"
         desc="Send raw text, JSON, or binary payloads with encoding selector" />
-      <FeatureRow icon="🔁" title="Auto-reconnect"
+      <FeatureRow title="Auto-reconnect"
         desc="Configurable retry delay and max-attempts with exponential backoff" />
     </SectionCard>
   );
@@ -194,14 +194,14 @@ function GrpcSection() {
   const c = PROTOCOL_COLORS.grpc;
   return (
     <SectionCard>
-      <SectionHeader icon="⚙️" label="gRPC" accent={c} />
-      <FeatureRow icon="📄" title="Proto Upload & Compile"
+      <SectionHeader label="gRPC" accent={c} />
+      <FeatureRow title="Proto Upload & Compile"
         desc="Upload .proto files — services, methods, and message types auto-parsed" />
-      <FeatureRow icon="📦" title="All Streaming Modes"
+      <FeatureRow title="All Streaming Modes"
         desc="Unary · Server streaming · Client streaming · Bidirectional streaming" />
-      <FeatureRow icon="🗂️" title="Package Browser"
+      <FeatureRow title="Package Browser"
         desc="Navigate nested proto packages and select method from dropdown" />
-      <FeatureRow icon="🔐" title="TLS / mTLS"
+      <FeatureRow title="TLS / mTLS"
         desc="Connect to secured gRPC endpoints with cert and key upload" />
     </SectionCard>
   );
@@ -213,12 +213,12 @@ function SoapSection() {
   const c = PROTOCOL_COLORS.soap;
   return (
     <SectionCard>
-      <SectionHeader icon="🧼" label="SOAP" accent={c} />
-      <FeatureRow icon="📋" title="WSDL Auto-parse"
+      <SectionHeader label="SOAP" accent={c} />
+      <FeatureRow title="WSDL Auto-parse"
         desc="Load WSDL URL or file — services, ports, and bindings extracted automatically" />
-      <FeatureRow icon="🔧" title="Operation Picker"
+      <FeatureRow title="Operation Picker"
         desc="Select operation from dropdown; request envelope pre-filled from WSDL schema" />
-      <FeatureRow icon="✏️" title="XML Editor"
+      <FeatureRow title="XML Editor"
         desc="Full XML editor with schema-aware hints and SOAP envelope template" />
     </SectionCard>
   );
@@ -230,21 +230,21 @@ function AiSection() {
   const c = PROTOCOL_COLORS.ai;
   return (
     <SectionCard>
-      <SectionHeader icon="✦" label="AI Assistant" accent={c} />
+      <SectionHeader label="AI Assistant" accent={c} />
       <TipBox title="8 Specialized Agents" accent={c}>
         Click <strong>✦</strong> in the left rail to open the full AI panel
       </TipBox>
-      <FeatureRow icon="🤖" title="Daakia AI Panel"
+      <FeatureRow title="Daakia AI Panel"
         desc="Chat with purpose-built agents: REST builder, test generator, mock designer, curl converter, debugger, and more"
         chips={['Builder', 'Tester', 'Debugger', 'MockGen', 'CurlBot']} chipColor={c} />
-      <FeatureRow icon="@" title="@daakia in VS Code Chat"
+      <FeatureRow title="@daakia in VS Code Chat"
         desc="Use slash commands from the VS Code chat panel without opening Daakia"
         chips={['/request', '/mock', '/test', '/curl', '/explain']} chipColor={c} />
-      <FeatureRow icon="💡" title="Inline AI"
+      <FeatureRow title="Inline AI"
         desc="Hover any error or response → AI explains it, suggests fixes, and proposes follow-up requests" />
-      <FeatureRow icon="🔑" title="Header Hints"
+      <FeatureRow title="Header Hints"
         desc="AI suggests missing auth headers, content-type, and common API headers inline" />
-      <FeatureRow icon="🧪" title="AI Test Generation"
+      <FeatureRow title="AI Test Generation"
         desc="Generate Playwright, Jest, or Postman test scripts from any captured request" />
     </SectionCard>
   );
@@ -256,16 +256,16 @@ function McpSection() {
   const c = PROTOCOL_COLORS.mcp;
   return (
     <SectionCard>
-      <SectionHeader icon="🔗" label="MCP — Model Context Protocol" accent={c} />
-      <FeatureRow icon="🖥️" title="Server Management"
+      <SectionHeader label="MCP — Model Context Protocol" accent={c} />
+      <FeatureRow title="Server Management"
         desc="Add, configure, and toggle STDIO or HTTP MCP servers from a central panel" />
-      <FeatureRow icon="🛠️" title="Tools Browser"
+      <FeatureRow title="Tools Browser"
         desc="Discover, inspect, and invoke tools exposed by connected MCP servers" />
-      <FeatureRow icon="📚" title="Resources & Prompts"
+      <FeatureRow title="Resources & Prompts"
         desc="Browse resources and prompt templates served by each MCP server" />
-      <FeatureRow icon="🔑" title="Auth & Env Vars"
+      <FeatureRow title="Auth & Env Vars"
         desc="Manage per-server environment variables with secret masking, bulk-edit, and insert-row" />
-      <FeatureRow icon="⚙️" title="Config Editor"
+      <FeatureRow title="Config Editor"
         desc="Raw JSON editor with Load Example, Copy, and Apply for rapid server config" />
     </SectionCard>
   );
@@ -277,30 +277,30 @@ function MockServerSection() {
   const c = PROTOCOL_COLORS.mock;
   return (
     <SectionCard>
-      <SectionHeader icon="🎭" label="Mock Server" accent={c} />
+      <SectionHeader label="Mock Server" accent={c} />
       <SubHeader>Protocols</SubHeader>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 7 }}>
         {['REST', 'GraphQL', 'WebSocket', 'SSE', 'Socket.IO', 'MQTT', 'gRPC', 'SOAP', 'MCP'].map(p => (
           <Chip key={p} label={p} color={c} />
         ))}
       </div>
-      <FeatureRow icon="⚡" title="Local Servers"
+      <FeatureRow title="Local Servers"
         desc="Spin up typed mock servers with hot-reload on route changes" />
-      <FeatureRow icon="🤖" title="AI Generate"
+      <FeatureRow title="AI Generate"
         desc="Describe your API in plain text → AI generates routes, responses, and schemas automatically" />
-      <FeatureRow icon="📝" title="WireMock Mode"
+      <FeatureRow title="WireMock Mode"
         desc="Import/export WireMock JSON stubs; full pattern matching (URL, method, headers, body)" />
-      <FeatureRow icon="🔀" title="State Machine Workflows"
+      <FeatureRow title="State Machine Workflows"
         desc="Model multi-step stateful flows: states, transitions, guards, and auto-advance timers" />
-      <FeatureRow icon="💥" title="Fault Injection & Chaos"
+      <FeatureRow title="Fault Injection & Chaos"
         desc="Inject latency, timeouts, 5xx errors, and random failures per route or globally" />
-      <FeatureRow icon="🔔" title="Webhook Callbacks"
+      <FeatureRow title="Webhook Callbacks"
         desc="Fire outbound POST callbacks after a route matches — supports template variables" />
-      <FeatureRow icon="🔍" title="Traffic Inspector"
+      <FeatureRow title="Traffic Inspector"
         desc="Live log of all requests hitting mock servers with matched route, latency, and body" />
-      <FeatureRow icon="🎨" title="Template Editor"
+      <FeatureRow title="Template Editor"
         desc="Handlebars templates with request variables — dynamic responses from static definitions" />
-      <FeatureRow icon="📦" title="Import / Export"
+      <FeatureRow title="Import / Export"
         desc="Snapshot and restore mock server definitions as portable JSON packages" />
     </SectionCard>
   );
@@ -311,16 +311,16 @@ function MockServerSection() {
 function CollectionsSection() {
   return (
     <SectionCard>
-      <SectionHeader icon="📁" label="Collections" />
-      <FeatureRow icon="📂" title="Organize Requests"
+      <SectionHeader label="Collections"/>
+      <FeatureRow title="Organize Requests"
         desc="Nested folders with drag-to-reorder, right-click context menu, and rename in-place" />
-      <FeatureRow icon="📥" title="Import"
+      <FeatureRow title="Import"
         desc="Postman v2.1 · OpenAPI 3.0 · HAR · Bruno — one-click import with full header/body preservation" />
-      <FeatureRow icon="📤" title="Export"
+      <FeatureRow title="Export"
         desc="Export any folder or full collection as Postman or OpenAPI format" />
-      <FeatureRow icon="▶️" title="Collection Runner"
+      <FeatureRow title="Collection Runner"
         desc="Run all requests sequentially with configurable delay, variable injection, and stop-on-error" />
-      <FeatureRow icon="🔗" title="Share & Sync"
+      <FeatureRow title="Share & Sync"
         desc="Collections persisted in SQLite — no cloud required, no account needed" />
     </SectionCard>
   );
@@ -331,14 +331,14 @@ function CollectionsSection() {
 function EnvironmentsSection() {
   return (
     <SectionCard>
-      <SectionHeader icon="🌍" label="Environments & Variables" />
-      <FeatureRow icon="🔧" title="Multiple Environments"
+      <SectionHeader label="Environments & Variables"/>
+      <FeatureRow title="Multiple Environments"
         desc="Define dev, staging, prod — switch active env from the toolbar in one click" />
-      <FeatureRow icon="💉" title="Variable Injection"
+      <FeatureRow title="Variable Injection"
         desc="Use {{variable}} in any URL, header, body, or auth field — resolved at send time" />
-      <FeatureRow icon="🔒" title="Secret Masking"
+      <FeatureRow title="Secret Masking"
         desc="Mark variables as secret — values hidden in the UI, never logged in history" />
-      <FeatureRow icon="📋" title="Global Variables"
+      <FeatureRow title="Global Variables"
         desc="Shared variables available across all collections and environments" />
     </SectionCard>
   );

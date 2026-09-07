@@ -404,7 +404,7 @@ export function CommandPaletteView({ open, onClose, onOpenSidebarSection }: Comm
       title: 'AI Actions',
       placeholder: 'Search 80+ inline AI features…',
       groups: [{
-        heading: 'Opens Daakia AI — each feature also has its own ✨ trigger where it\'s used',
+ heading: 'Opens Daakia AI — each feature also has its own trigger where it\'s used',
         items: AI_ACTIONS.map((name, i) => ({
           id: `ai-action-${i}`,
           icon: <SparkleIcon size={15} />,

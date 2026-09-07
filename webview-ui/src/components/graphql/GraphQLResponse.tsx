@@ -75,7 +75,7 @@ export function GraphQLResponse() {
         <span className="text-[var(--color-text-muted)]">Size: {formatSize(response.size)}</span>
         {response.time > 0 && <span className="text-[var(--color-text-muted)]">{response.time}ms</span>}
         {hasErrors && (
-          <span className="text-[var(--color-error)] font-medium">⚠ GraphQL Errors</span>
+          <span className="text-[var(--color-error)] font-medium"> GraphQL Errors</span>
         )}
       </div>
 

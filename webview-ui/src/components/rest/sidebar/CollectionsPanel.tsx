@@ -35,6 +35,7 @@ import { AiSmartTestSuiteModal } from '../../ai/AiSmartTestSuiteModal';
 import { InsomniaImportModal } from '../../power/InsomniaImportModal';
 import { IconButtonView, ContextMenuView, TextInputView, InfoPopupView, ModalView, ButtonView, UptimeMonitorIcon, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
+import { sendAiRequest } from '../../../services/ai/ai-client';
 
 // ────────────── Main Component ──────────────
 
@@ -298,11 +299,11 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
     const systemPrompt = resolveTemplate('rest.collection.search.system');
     const userPrompt = resolveTemplate('rest.collection.search', { query, requests: requestsText });
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: pid,
       provider: '', model: '', baseUrl: '',
       stage: 'rest.collection.search',
+      screen: 'Collections',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [],

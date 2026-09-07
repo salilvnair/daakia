@@ -171,7 +171,7 @@ const CODE_SCHEMA_ADD = `// webview-ui/src/dui/theme/core.ts
 export const SCHEMA: ThemeSchemaEntry[] = [
   // ... existing entries ...
 
-  // ✅ Add your new entry at the end of the relevant group:
+  // Add your new entry at the end of the relevant group:
   {
     group:   'brand',
     key:     'my_highlight',
@@ -185,14 +185,14 @@ const CODE_CSS_VAR = `/* webview-ui/src/index.css — inside the @theme block */
 @theme {
   /* ... existing vars ... */
 
-  /* ✅ Add your new CSS custom property with a default value: */
+  /* Add your new CSS custom property with a default value: */
   --color-my-highlight: #a78bfa;
 }`;
 
 const CODE_LIGHT_DARK_BLOCK = `/* webview-ui/src/index.css — optional light theme override */
 
 [data-theme="light"] {
-  /* ✅ Override for light mode (darker shade for contrast): */
+  /* Override for light mode (darker shade for contrast): */
   --color-my-highlight: #7c3aed;
 }`;
 
@@ -201,7 +201,7 @@ const CODE_PALETTE = `// webview-ui/src/colors/daakia-colors.ts  (optional — f
 export const palette = {
   // ... existing entries ...
 
-  // ✅ Add a semantic pair for light + dark:
+  // Add a semantic pair for light + dark:
   myHighlight: { light: '#7c3aed', dark: '#a78bfa' },
 };
 
@@ -362,7 +362,7 @@ export function ThemeAddVarGuidePanel() {
         </Body>
         <CodeBlockView language="typescript" code={CODE_SCHEMA_ADD} showCopyButton />
 
-        <HintBox color="var(--color-primary)" icon="💡">
+        <HintBox color="var(--color-primary)"icon="">
           The <strong>key</strong> becomes the YAML path on export (e.g.{' '}
           <Code>brand.my_highlight: "#a78bfa"</Code>). Keep it snake_case, dot-free.
           The <strong>cssVar</strong> must start with <Code>--color-</Code> to match the convention.
@@ -430,7 +430,7 @@ export function ThemeAddVarGuidePanel() {
         <SectionLabel label="CSS files and Tailwind arbitrary values" />
         <CodeBlockView language="css" code={CODE_USE_CSS} showCopyButton />
 
-        <HintBox color="var(--color-error)" icon="🚫">
+        <HintBox color="var(--color-error)"icon="">
           <strong>Rule:</strong> NEVER write a hardcoded hex value like <Code>#a78bfa</Code> in a{' '}
           <Code>.tsx</Code> file. Always use <Code>var(--color-my-highlight)</Code> or import from{' '}
           <Code>daakia-colors.ts</Code>. This is enforced by project convention — violations must
@@ -498,7 +498,7 @@ export function ThemeAddVarGuidePanel() {
         </Body>
         <CodeBlockView language="tsx" code={CODE_LIVE_CUSTOMIZER} showCopyButton />
 
-        <HintBox color="var(--color-warning)" icon="✨">
+        <HintBox color="var(--color-warning)"icon="">
           Changes made in the Theme editor or LiveColorCustomizer are applied via{' '}
           <Code>document.documentElement.style.setProperty()</Code> and persist for the session.
           Use <strong>Export YAML</strong> to save your theme and <strong>Upload YAML</strong> to restore it.

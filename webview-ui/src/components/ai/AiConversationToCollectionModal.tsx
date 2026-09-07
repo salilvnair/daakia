@@ -11,6 +11,7 @@ import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 import { resolveCollectionProtocol, COLLECTION_PROTOCOL_LABELS } from '../../services/collections';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   onClose: () => void;
@@ -165,9 +166,10 @@ export function AiConversationToCollectionModal({ onClose, contextProtocol }: Pr
     const pid = `ai-conv2col-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'collection.generate',
+      screen: 'Collections',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: description,
       conversation: [], tools: [],

@@ -8,6 +8,7 @@ import { PlusIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import type { CollectionTreeNode, CollectionRequest } from '../../services/collections';
 import { ModalView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface EnvSuggestion {
   name: string;
@@ -99,9 +100,10 @@ export function AiEnvExtractModal({ collectionNode, onClose }: Props) {
     setLoading(true); setError(''); setSuggestions([]); setAdded(new Set()); accumulatedRef.current = '';
     const pid = `ai-env-extract-${Date.now()}`;
     reqIdRef.current = pid;
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.env.extract',
+      screen: 'Environments',
       systemPrompts: [resolve('rest.env.extract.system')],
       userPrompt: resolve('rest.env.extract', { collectionName: collectionNode.name, requests: buildRequestsSummary(requests) }),
       conversation: [], tools: [],

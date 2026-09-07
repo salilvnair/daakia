@@ -209,7 +209,7 @@ export function getToastTypeConfig(): Record<string, ToastTypeStyle> {
     success: { border: c.success, bg: hexToRgba(c.success, 0.08), icon: '✓' },
     error:   { border: c.error,   bg: hexToRgba(c.error, 0.08),   icon: '✕' },
     info:    { border: c.info,    bg: hexToRgba(c.info, 0.08),    icon: 'ℹ' },
-    warning: { border: c.warning, bg: hexToRgba(c.warning, 0.08), icon: '⚠' },
+ warning: { border: c.warning, bg: hexToRgba(c.warning, 0.08), icon: ''},
   };
 }
 

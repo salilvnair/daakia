@@ -5,6 +5,7 @@ import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { postMsg } from '../../../vscode';
 import { SparkleIcon } from '../../../icons';
 import { ModalView, PilledTabView, MultilineInputView, AIButtonView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../../services/ai/ai-client';
 
 interface ImportCurlModalProps {
   open: boolean;
@@ -151,11 +152,11 @@ export function ImportCurlModal({ open, onClose }: ImportCurlModalProps) {
     const systemPrompt = resolve('rest.code.import.system');
     const userPrompt = resolve('rest.code.import', { code: trimmed.slice(0, 6000) });
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: pid,
       provider: '', model: '', baseUrl: '',
       stage: 'rest.code.import',
+      screen: 'Import',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [],
@@ -220,11 +221,11 @@ export function ImportCurlModal({ open, onClose }: ImportCurlModalProps) {
     const systemPrompt = resolve('rest.curl.explain.system');
     const userPrompt = resolve('rest.curl.explain', { curlCommand: trimmed });
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: pid,
       provider: '', model: '', baseUrl: '',
       stage: 'rest.curl.explain',
+      screen: 'Import',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [],

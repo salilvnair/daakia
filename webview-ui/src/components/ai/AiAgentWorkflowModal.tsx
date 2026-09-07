@@ -10,6 +10,7 @@ import { MdViewer } from '../shared/display/MdViewer';
 import { METHOD_COLORS } from '../../colors';
 import { ModalView, ButtonView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface RequestResult {
   id: string; name: string; method: string; url: string;
@@ -108,11 +109,11 @@ export function AiAgentWorkflowModal({ collectionId, collectionName, protocol, o
     const failCount = currentResults.filter(r => r.error || r.status >= 400).length;
     const envName = protocol ? `${protocol} collection` : 'REST collection';
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId,
       provider: '', model: '', baseUrl: '',
       stage: 'rest.agent.workflow',
+      screen: 'REST · Request',
       systemPrompts: [resolveTemplate('rest.agent.workflow.system')],
       userPrompt: resolveTemplate('rest.agent.workflow', {
         collectionName,

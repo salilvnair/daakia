@@ -9,6 +9,7 @@ import { useSidebarDataStore } from '../../store/sidebar-data-store';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView, ButtonView, SelectInputView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   onClose: () => void;
@@ -27,7 +28,7 @@ Look for:
 6. **Unnecessary polling**: Repeated calls that should use webhooks/SSE instead
 
 Format as markdown with:
-## ⚡ Optimization Report
+## Optimization Report
 
 ### Critical (Save >50% calls)
 - **Pattern**: description
@@ -91,9 +92,10 @@ export function AiMultiRequestOptimizer({ onClose }: Props) {
     const pid = `ai-optimizer-${Date.now()}`;
     reqIdRef.current = pid;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'collection.optimize',
+      screen: 'Collections',
       systemPrompts: [SYSTEM_PROMPT],
       userPrompt: `Analyze collection "${collection.name}" for optimization opportunities.`,
       conversation: [], tools: [],

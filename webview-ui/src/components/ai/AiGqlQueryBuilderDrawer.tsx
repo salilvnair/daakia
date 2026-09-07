@@ -12,6 +12,7 @@ import { useToastStore } from '../../store/toast-store';
 import { CloseIcon, SparkleIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import { EditorView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 export interface AiGqlQueryBuilderDrawerHandle {
   open: () => void;
@@ -111,13 +112,13 @@ export const AiGqlQueryBuilderDrawer = forwardRef<AiGqlQueryBuilderDrawerHandle,
       setError('');
       setLoading(true);
 
-      postMsg({
-        type: 'ai:send',
+      sendAiRequest({
         tabId: pid,
         provider: '',
         model: '',
         baseUrl: '',
-        stage: 'graphql.query.generate',
+        stage: 'gql.query.builder',
+        screen: 'GraphQL',
         systemPrompts: [systemPrompt],
         userPrompt,
         conversation: [],
@@ -270,7 +271,7 @@ export const AiGqlQueryBuilderDrawer = forwardRef<AiGqlQueryBuilderDrawerHandle,
         {/* Inline error (also shown as toast above) */}
         {error && !loading && (
           <div className="px-3 pb-2.5">
-            <p className="text-[11px] text-[var(--color-error)]">⚠️ {error}</p>
+            <p className="text-[11px] text-[var(--color-error)]"> {error}</p>
           </div>
         )}
       </div>

@@ -387,7 +387,7 @@ export function AuditLogTab() {
 
                 const modelOrButton = e.kind === 'ai' ? (e.model ?? '—') : (e.action ?? '—');
                 const previewText = e.kind === 'ai'
-                  ? (e.error ? `⚠ ${e.error}` : (e.user_prompt ?? '').slice(0, 80) || '—')
+                  ? (e.error ? `${e.error}`: (e.user_prompt ?? '').slice(0, 80) || '—')
                   : (e.event_type);
 
                 return (

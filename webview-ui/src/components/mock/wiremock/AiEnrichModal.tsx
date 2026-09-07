@@ -20,6 +20,7 @@ import { useAiProvidersStore } from '../../../store/ai-providers-store';
 import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { SparkleIcon, PlusIcon, TrashIcon, ChevronDownIcon, ChevronRightIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
+import { sendAiRequest } from '../../../services/ai/ai-client';
 import type {
   RecordedRequest,
   MockRoute,
@@ -375,20 +376,15 @@ export function AiEnrichModal({ record, onClose, onAddRoutes, onApplyStateMachin
       .replace(/{responseHeaders}/g, JSON.stringify(record.response.headers ?? {}, null, 2))
       .replace(/{responseBody}/g, record.response.body ?? '(empty)');
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: activeTab?.id,
+      stage: 'mock.traffic.enrich',
+      screen: 'Mock Server',
       provider,
       model,
-      baseUrl: '',
       systemPrompts: systemPrompt ? [systemPrompt] : [],
       userPrompt,
-      conversation: [],
-      tools: [],
-      settings: {},
-      mcpServerConfigs: [],
-      images: [],
-      envId: activeTab?.envId,
+      context: { envId: activeTab?.envId },
     });
   }, [activeTab, loading, defaultProviderId, defaultModelId, providers, templates, entityName, alternatives, count, record, cookies]);
 

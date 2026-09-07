@@ -128,7 +128,7 @@ export function LoadTester({ initialUrl = '', initialMethod = 'GET', onClose }: 
             disabled={running || !config.url.trim()}
             onClick={run}
           >
-            ▶ Start Load Test
+            Start Load Test
           </ButtonView>
         </div>
       }

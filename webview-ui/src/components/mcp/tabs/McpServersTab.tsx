@@ -18,10 +18,10 @@ const TRANSPORT_OPTIONS = [
 ];
 
 const CATEGORY_OPTIONS = [
-  { value: 'general', label: '⚙️ General — tool-calling only' },
-  { value: 'database', label: '🗄️ Database — enables Schema Explorer' },
-  { value: 'docs', label: '📚 Docs — documentation retrieval' },
-  { value: 'code', label: '💻 Code — code analysis tools' },
+  { value: 'general', label: 'General — tool-calling only'},
+  { value: 'database', label: 'Database — enables Schema Explorer'},
+  { value: 'docs', label: 'Docs — documentation retrieval'},
+  { value: 'code', label: 'Code — code analysis tools'},
 ];
 
 // ─── Form state (text representations of array/object fields) ───
@@ -302,7 +302,7 @@ export function McpServersTab() {
               {/* Error */}
               {state.error && (
                 <div className="px-3 pb-1 text-[11px]" style={{ color: 'var(--color-error)' }}>
-                  ⚠ {state.error}
+                   {state.error}
                 </div>
               )}
 

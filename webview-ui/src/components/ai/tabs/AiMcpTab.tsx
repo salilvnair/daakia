@@ -189,7 +189,7 @@ export function AiMcpTab() {
       {/* Empty state */}
       {servers.length === 0 && !editingServer && (
         <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
-          <span className="text-[28px] opacity-20">🔌</span>
+          <span className="text-[28px] opacity-20"></span>
           <span className="text-[12px] text-[var(--color-text-muted)]">
             No MCP servers configured.
           </span>
@@ -433,7 +433,7 @@ export function AiMcpTab() {
       {/* Info hint */}
       {servers.length > 0 && allConnectedTools.length > 0 && (
         <div className="text-[10px] text-[var(--color-text-muted)] opacity-70 px-1">
-          💡 Connected MCP tools are automatically included when sending AI requests. The AI model can call these tools during conversation.
+ Connected MCP tools are automatically included when sending AI requests. The AI model can call these tools during conversation.
         </div>
       )}
 

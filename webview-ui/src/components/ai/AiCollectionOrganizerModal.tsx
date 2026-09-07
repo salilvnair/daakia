@@ -7,6 +7,7 @@ import { SparkleIcon, FolderIcon, DocumentIcon, CheckIcon } from '../../icons';
 import { postMsg } from '../../vscode';
 import type { CollectionTreeNode, CollectionRequest } from '../../services/collections';
 import { ModalView, ButtonView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface OrganizerFolder { name: string; requestIds: string[]; }
 interface OrganizerResult { folders: OrganizerFolder[]; uncategorized: string[]; }
@@ -72,9 +73,10 @@ export function AiCollectionOrganizerModal({ collectionNode, protocol, onClose, 
     const pid = `ai-organize-${Date.now()}`;
     reqIdRef.current = pid;
     const reqLines = requests.slice(0, 60).map(r => `${r.id} | ${r.method} | ${r.name} | ${r.url}`).join('\n');
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.collection.organize',
+      screen: 'Collections',
       systemPrompts: [resolve('rest.collection.organize.system')],
       userPrompt: resolve('rest.collection.organize', { collectionName: collectionNode.name, requests: reqLines }),
       conversation: [], tools: [],

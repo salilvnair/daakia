@@ -11,6 +11,8 @@ import { postMsg } from '../../vscode';
 import { SparkleIcon, PlusIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, ButtonView, AIButtonView, TextInputView, MultilineInputView } from '@salilvnair/dui';
+import { sendAiRequest } from '../../services/ai/ai-client';
+import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,6 +80,9 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
   const [filter, setFilter] = useState<'all' | 'api' | 'reachable'>('api');
 
   const reqIdRef = useRef(`disc-${Date.now()}`);
+  /** The AI analysis call, which the host answers under `tabId`. */
+  const aiIdRef = useRef('');
+  const resolve = useAiPromptTemplatesStore(s => s.resolve);
   const accRef = useRef('');
 
   // Listen for discovery events from extension host
@@ -111,20 +116,28 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
           alert(`Discovery error: ${msg.message as string}`);
           break;
 
-        // AI streaming events (for analysis phase)
+        /* The prober replies with `reqId`; the AI replies with `tabId`. They
+           are two different host handlers and were sharing one id here, so the
+           analysis read `msg.chunk` — a field nothing sends — and stayed empty. */
         case 'ai:chunk': {
-          const chunk = msg.chunk as { delta?: { content?: string } } | string;
-          const delta = typeof chunk === 'string' ? chunk
-            : (chunk?.delta?.content ?? '');
-          accRef.current += delta;
+          if (msg.tabId !== aiIdRef.current) return;
+          accRef.current += (msg.delta as string) || (msg.text as string) || '';
           setAnalysis(accRef.current);
           break;
         }
-        case 'ai:complete':
+        case 'ai:complete': {
+          if (msg.tabId !== aiIdRef.current) return;
+          if (!accRef.current) {
+            const payload = msg.message as { content?: string } | undefined;
+            setAnalysis(payload?.content ?? '');
+          }
           setPhase('analyzed');
           break;
+        }
         case 'ai:error':
-          setPhase('done');
+          if (msg.tabId !== aiIdRef.current) return;
+          setAnalysis((msg.message as string) || 'The AI call failed — check the AI provider settings.');
+          setPhase('analyzed');
           break;
       }
     };
@@ -156,21 +169,20 @@ export function AiApiDiscoveryModal({ initialUrl = '', onClose }: Props) {
   }, [baseUrl, customPaths]);
 
   const handleAnalyze = useCallback(() => {
-    const resultsText = formatResultsForAi(results, baseUrl);
-    const systemPrompt = 'You are a senior API developer helping discover and document API endpoints. Be concise and practical.';
-    const userMessage = `I probed this API and found these endpoints:\n\n${resultsText}\n\nPlease:\n1. Identify which paths are likely real API endpoints vs static/infra paths\n2. Describe what each endpoint probably does based on the path name and response\n3. Suggest any important endpoints that might be missing (common patterns)\n4. Rate the overall API health/design quality briefly`;
-
     accRef.current = '';
     setAnalysis('');
     setPhase('analyzing');
-    postMsg({
-      type: 'ai:send',
-      reqId: reqIdRef.current,
-      systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
-      stream: true,
+    aiIdRef.current = sendAiRequest({
+      stage: 'import.api.discovery',
+      screen: 'Import',
+      systemPrompts: [resolve('import.api.discovery.system')],
+      userPrompt: resolve('import.api.discovery', {
+        baseUrl,
+        results: formatResultsForAi(results, baseUrl),
+      }),
+      settings: { temperature: 0.3, maxTokens: 1400 },
     });
-  }, [results, baseUrl]);
+  }, [results, baseUrl, resolve]);
 
   const handleCreateCollection = useCallback(() => {
     const apiResults = results.filter(r => r.isApi || (r.status > 0 && r.status < 500));

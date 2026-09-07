@@ -15,6 +15,7 @@ import {
 } from '@salilvnair/dui';
 import { useUrlSuggestionsStore } from '../../store/url-suggestions-store';
 import { useMockSuggestions } from '../../hooks/useMockSuggestions';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 const ACCENT = 'var(--color-protocol-ai)';
 
@@ -123,12 +124,12 @@ export function AiUrlBar() {
     // URL suggestions
     if (url.trim()) useUrlSuggestionsStore.getState().addUrls([url.trim()], 'ai');
 
-    const aiPayload = {
-      type: 'ai:send',
+    sendAiRequest({
       tabId: activeTab.id,
-      provider: provider,
-      model: model,
-      baseUrl: '',
+      stage: 'ai.chat',
+      screen: 'Daakia AI',
+      provider,
+      model,
       systemPrompts: activeTab.aiSystemPrompts || [],
       userPrompt: userPrompt || '',
       conversation: activeTab.aiConversation || [],
@@ -136,16 +137,15 @@ export function AiUrlBar() {
       settings: activeTab.aiSettings || {},
       mcpServerConfigs: activeTab.mcpServerConfigs || [],
       images: activeTab.aiImages || [],
-      envId: activeTab.envId,
-    };
-    postMsg(aiPayload);
+      context: { envId: activeTab.envId },
+    });
 
     const providerInfoCurrent = useAiProvidersStore.getState().providers.find(p => p.id === provider);
     const modelInfo = providerInfoCurrent?.models.find(m => m.id === model);
     useDevToolsStore.getState().addLog({
       level: 'info',
       args: [
-        `📡 AI Request Sent → ${provider}/${model}`,
+        `AI Request Sent → ${provider}/${model}`,
         {
           provider,
           providerName: providerInfoCurrent?.name || provider,

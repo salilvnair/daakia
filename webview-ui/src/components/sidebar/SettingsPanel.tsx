@@ -4,7 +4,8 @@ import { useDbStatusStore } from '../../store/db-status-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon } from '../../icons';
+import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
+         CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon } from '../../icons';
 import { Dk8sClusterSettings } from '../settings/Dk8sSettings';
 import { TerminalSettings } from '../settings/dk8s/TerminalSettings';
 import { LlmProviderSettings } from './LlmProviderSettings';
@@ -656,15 +657,23 @@ function MockServerSettings() {
 
 // ────────── Power Features Panel ──────────
 
-const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon: string }[] = [
-  { id: 'cookies',     label: 'Cookie Manager',      description: 'View, edit, and delete cookies across all domains', icon: '🍪' },
-  { id: 'proxy',       label: 'Proxy Settings',       description: 'Configure HTTP/HTTPS/SOCKS proxy for all requests', icon: '🔀' },
-  { id: 'certs',       label: 'Client Certificates',  description: 'mTLS client certificate configuration per domain', icon: '🔐' },
-  { id: 'monitor',     label: 'API Monitor',          description: 'Schedule periodic health checks with VS Code alerts', icon: '📡' },
-  { id: 'interceptor', label: 'Request Interceptor',  description: 'Capture browser traffic via built-in proxy', icon: '🎯' },
-  { id: 'diff',        label: 'Response Diff',        description: 'Compare two responses side-by-side with highlighting', icon: '⚖️' },
-  { id: 'bulk',        label: 'Bulk URL Tester',      description: 'Test multiple URLs at once, get summary table', icon: '⚡' },
-  { id: 'load',        label: 'Load Tester',          description: 'Concurrent load testing with p50/p95/p99 metrics', icon: '📊' },
+/*
+  Icons, not emoji.
+
+  These eight cards carried emoji — glyphs that render as a different picture
+  on every platform, sit at a different baseline from every other icon in the
+  app, and cannot take the theme's colour. Every other row
+  and card here draws from the icon set; these do too now.
+*/
+const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon: React.ReactNode }[] = [
+  { id: 'cookies',     label: 'Cookie Manager',      description: 'View, edit, and delete cookies across all domains',   icon: <CookieIcon size={15} /> },
+  { id: 'proxy',       label: 'Proxy Settings',      description: 'Configure HTTP/HTTPS/SOCKS proxy for all requests',   icon: <NetworkIcon size={15} /> },
+  { id: 'certs',       label: 'Client Certificates', description: 'mTLS client certificate configuration per domain',    icon: <ShieldIcon size={15} /> },
+  { id: 'monitor',     label: 'API Monitor',         description: 'Schedule periodic health checks with VS Code alerts', icon: <UptimeIcon size={15} /> },
+  { id: 'interceptor', label: 'Request Interceptor', description: 'Capture browser traffic via built-in proxy',          icon: <FilterIcon size={15} /> },
+  { id: 'diff',        label: 'Response Diff',       description: 'Compare two responses side-by-side with highlighting', icon: <LayersIcon size={15} /> },
+  { id: 'bulk',        label: 'Bulk URL Tester',     description: 'Test multiple URLs at once, get summary table',       icon: <BulkEditIcon size={15} /> },
+  { id: 'load',        label: 'Load Tester',         description: 'Concurrent load testing with p50/p95/p99 metrics',    icon: <GaugeIcon size={15} /> },
 ];
 
 function PowerFeaturesPanel() {
@@ -709,7 +718,7 @@ function PowerFeaturesPanel() {
             style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface)' }}
           >
             <div className="flex items-center gap-2">
-              <span className="text-[15px] leading-none">{t.icon}</span>
+              <span className="flex items-center leading-none" style={{ color: 'var(--color-settings)' }}>{t.icon}</span>
               <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{t.label}</p>
             </div>
             <p className="text-[10.5px] leading-snug" style={{ color: 'var(--color-text-muted)' }}>{t.description}</p>

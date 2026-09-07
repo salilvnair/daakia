@@ -6,6 +6,7 @@ import { useAiPromptTemplatesStore } from '../../../store/prompt-template';
 import { SparkleIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, TrashIcon, MoreVerticalIcon, RenameIcon, CopyIcon, ChevronRightIcon, CheckCircleFilledIcon } from '../../../icons';
 import { ConfirmDialog } from '../index';
 import { ModalView, ButtonView, IconButtonView, TextInputView, ContextMenuView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
+import { sendAiRequest } from '../../../services/ai/ai-client';
 
 const PROTOCOL_ACCENT: Record<string, string> = {
   rest: 'var(--color-primary)',
@@ -486,11 +487,11 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
                     bodyPreview: bodyPreview || '(empty)',
                   });
 
-                  postMsg({
-                    type: 'ai:send',
+                  sendAiRequest({
                     tabId: pid,
                     provider: '', model: '', baseUrl: '',
                     stage: 'rest.request.name',
+                    screen: 'REST · Request',
                     systemPrompts: ['You are a concise HTTP request naming assistant. Return only the name — nothing else.'],
                     userPrompt,
                     conversation: [],

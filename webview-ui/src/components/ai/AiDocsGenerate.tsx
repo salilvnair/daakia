@@ -21,8 +21,7 @@ import { AIButtonView } from '@salilvnair/dui';
 import type { RequestTab } from '../../store/tabs-store';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import { useToastStore } from '../../store/toast-store';
-import { logUiEvent } from '../../store/ui-audit-store';
-import { postMsg } from '../../vscode';
+import { sendAiRequest, newAiRequestId } from '../../services/ai/ai-client';
 
 /** Fences around the whole answer, which the model adds despite being asked not to. */
 function stripOuterFence(text: string): string {
@@ -80,10 +79,9 @@ export function AiDocsGenerate({ tab, onApply }: { tab: RequestTab; onApply: (ma
   }, [onApply]);
 
   const generate = useCallback(() => {
-    logUiEvent('rest.docs_generate', { method: tab.method, url: tab.url });
     setLoading(true);
     accumulated.current = '';
-    const id = `ai-docs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = newAiRequestId('rest.docs.generate');
     requestId.current = id;
 
     const headers = (tab.headers ?? [])
@@ -91,11 +89,10 @@ export function AiDocsGenerate({ tab, onApply }: { tab: RequestTab; onApply: (ma
       .map(h => `${h.key}: ${h.value}`)
       .join('\n') || '(none)';
 
-    postMsg({
-      type: 'ai:send',
-      tabId: id,
-      provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      requestId: id,
       stage: 'rest.docs.generate',
+      screen: 'REST · Docs',
       systemPrompts: [resolve('rest.docs.generate.system')],
       userPrompt: resolve('rest.docs.generate', {
         method: tab.method || 'GET',
@@ -104,17 +101,8 @@ export function AiDocsGenerate({ tab, onApply }: { tab: RequestTab; onApply: (ma
         body: (tab.bodyRaw || '').slice(0, 1200) || '(none)',
         examples: describeExamples(tab),
       }),
-      conversation: [],
-      tools: [],
-      settings: {
-        temperature: 0.3, maxTokens: 1200, stream: true, topP: 1,
-        stopSequences: [], responseFormat: 'text',
-        frequencyPenalty: 0, presencePenalty: 0, seed: null,
-      },
-      mcpServerConfigs: [],
-      authType: tab.authType,
-      authData: tab.authData,
-      envId: tab.envId,
+      settings: { temperature: 0.3, maxTokens: 1200 },
+      context: { authType: tab.authType, authData: tab.authData, envId: tab.envId },
     });
   }, [tab, resolve]);
 

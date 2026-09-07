@@ -15,6 +15,7 @@ import { useRef, useCallback, useEffect } from 'react';
 import { postMsg } from '../vscode';
 import { interpolateTemplate } from '../store/prompt-template';
 import { useAiPromptTemplatesStore } from '../store/prompt-template';
+import { sendAiRequest } from '../services/ai/ai-client';
 
 // DK context summary string shown to AI
 const DK_CONTEXT_SUMMARY = `dk.response.json() — parsed response body
@@ -103,11 +104,11 @@ export function useAiScriptAutocomplete({ enabled, mode }: UseAiScriptAutocomple
         dkContext: DK_CONTEXT_SUMMARY,
       });
 
-      postMsg({
-        type: 'ai:send',
+      sendAiRequest({
         tabId: pid,
         provider: '', model: '', baseUrl: '',
         stage: 'rest.script.autocomplete',
+        screen: 'REST · Scripts',
         systemPrompts: [systemPrompt],
         userPrompt,
         conversation: [],

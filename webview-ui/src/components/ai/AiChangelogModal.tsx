@@ -13,6 +13,7 @@ import { MdViewer } from '../shared/display/MdViewer';
 import { type CollectionTreeNode } from '../../services/collections';
 import { ModalView, AIButtonView, ButtonView, EditorView, CopyButtonView } from '@salilvnair/dui';
 import { useAiCollectionCacheStore } from '../../store/ai-collection-cache-store';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   collectionNode: CollectionTreeNode;
@@ -115,11 +116,11 @@ export function AiChangelogModal({ collectionNode, onClose }: Props) {
       currentCollection: currentSummary.slice(0, 4000),
     });
 
-    postMsg({
-      type: 'ai:send',
+    sendAiRequest({
       tabId: pid,
       provider: '', model: '', baseUrl: '',
       stage: 'rest.changelog.generate',
+      screen: 'REST · Request',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [],

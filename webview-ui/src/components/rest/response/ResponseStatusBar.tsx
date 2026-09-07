@@ -53,7 +53,7 @@ export function ResponseStatusBar({ response, requestMethod = 'GET', requestUrl 
     <div>
       {response.bodyTruncated && (
         <div className="flex items-center gap-2 px-4 py-1 bg-[color-mix(in_srgb,var(--color-warning)_8%,transparent)] border-t border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[10.5px] text-[var(--color-warning)]">
-          ⚠ Response body truncated to 512 KB for display. Full size: {response.fullSize ? (response.fullSize / 1024 / 1024).toFixed(2) + ' MB' : 'unknown'}.
+ Response body truncated to 512 KB for display. Full size: {response.fullSize ? (response.fullSize / 1024 / 1024).toFixed(2) + 'MB': 'unknown'}.
         </div>
       )}
       <div className="flex items-center gap-4 px-4 py-2 border-t border-[var(--color-surface-border)] bg-[var(--color-surface)]">

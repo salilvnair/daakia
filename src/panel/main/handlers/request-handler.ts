@@ -363,7 +363,7 @@ export async function handleExecuteRequest(
               let size = '';
               let fileExists = false;
               try { if (filePath && fs.existsSync(filePath)) { fileExists = true; size = ` (${formatBytes(fs.statSync(filePath).size)})`; } } catch { /* ignore */ }
-              return `📎 ${f.key}: ${name} [${mime}]${size}${fileExists ? ` {${filePath}}` : ''}`;
+              return `[file] ${f.key}: ${name} [${mime}]${size}${fileExists ? ` {${filePath}}` : ''}`;
             }).join('\n');
           }
           return `${f.key}: ${f.value}`;

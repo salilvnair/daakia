@@ -388,7 +388,7 @@ suite('Daakia Wiki Capture — Mock Server', () => {
       { action: 'clickText', text: 'traffic-demo-api' },
       { action: 'wait', ms: 300 },
       { action: 'closeModals' },
-      { action: 'clickText', text: '▶ Start' },
+      { action: 'clickText', text: 'Start' },
       { action: 'waitForMessage', messageType: 'mockServer:started', timeoutMs: 10_000 },
       { action: 'wait', ms: 300 },
     ]);
@@ -422,7 +422,7 @@ suite('Daakia Wiki Capture — Mock Server', () => {
     // Stop the real server so it doesn't stay bound to its port for the rest
     // of this long-lived test session.
     await runCapture(MainPanel, [
-      { action: 'clickText', text: '⏹ Stop' },
+      { action: 'clickText', text: 'Stop' },
       { action: 'wait', ms: 300 },
     ]);
   });

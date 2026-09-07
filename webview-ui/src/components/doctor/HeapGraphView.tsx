@@ -452,7 +452,7 @@ export function HeapGraphView({ liveBytes, onAsk }: {
                 title={locked
                   ? 'Positions are frozen — expanding a node will not move anything'
                   : 'Freeze positions, so expanding a node does not rearrange the graph'}>
-          {locked ? '🔒 locked' : '🔓 unlocked'}
+          {locked ? 'locked': 'unlocked'}
         </button>
         <span className="text-[11px] text-[var(--color-text-muted)] font-mono tabular-nums">
           {nodesData.length} shown

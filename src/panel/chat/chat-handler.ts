@@ -98,7 +98,7 @@ export function createDaakiaChatHandler(_opts: { extensionUri: vscode.Uri }): vs
 
     if (!model) {
       stream.markdown([
-        '⚠️ **No AI model available.**',
+        '**No AI model available.**',
         '',
         'Daakia\'s chat participant requires GitHub Copilot or another VS Code language model.',
         'Please sign in to GitHub Copilot and try again.',
@@ -130,19 +130,19 @@ export function createDaakiaChatHandler(_opts: { extensionUri: vscode.Uri }): vs
     } catch (err) {
       if (err instanceof vscode.LanguageModelError) {
         if (err.code === vscode.LanguageModelError.Blocked().code) {
-          stream.markdown('🚫 This request was blocked by the content policy.');
+          stream.markdown('This request was blocked by the content policy.');
           return {};
         }
         if (err.code === vscode.LanguageModelError.NotFound().code) {
-          stream.markdown('⚠️ The selected AI model is not available. Please try again.');
+          stream.markdown('The selected AI model is not available. Please try again.');
           return {};
         }
         if (err.code === vscode.LanguageModelError.NoPermissions().code) {
-          stream.markdown('🔒 No permission to use this model. Please check your Copilot subscription.');
+          stream.markdown('No permission to use this model. Please check your Copilot subscription.');
           return {};
         }
       }
-      stream.markdown(`❌ An error occurred: ${err instanceof Error ? err.message : String(err)}`);
+      stream.markdown(`An error occurred: ${err instanceof Error ? err.message : String(err)}`);
       return {};
     }
 

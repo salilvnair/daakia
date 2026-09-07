@@ -167,7 +167,7 @@ export function BulkUrlTester({ onClose }: Props) {
               onClick={runAll}
               style={{ flex: 1 }}
             >
-              ▶ Run All ({parseUrls(input).length})
+              Run All ({parseUrls(input).length})
             </ButtonView>
             {running && (
               <ButtonView

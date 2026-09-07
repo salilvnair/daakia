@@ -13,6 +13,7 @@ import { SparkleIcon } from '../../icons';
 import { MdViewer } from '../shared/display/MdViewer';
 import { ModalView, AIButtonView } from '@salilvnair/dui';
 import { useAiPromptTemplatesStore } from '../../store/prompt-template';
+import { sendAiRequest } from '../../services/ai/ai-client';
 
 interface Props {
   status: number;
@@ -103,9 +104,10 @@ export function AiSmartRetryAdvisor({ status, responseBody, method, url, request
     const headersStr = requestHeaders ? Object.entries(requestHeaders).map(([k, v]) => `${k}: ${v}`).join('\n') : '';
     const userPrompt = `Failed request:\n${method} ${url}\nStatus: ${status}\n${headersStr ? `Request Headers:\n${headersStr}\n` : ''}Error body:\n${responseBody.slice(0, 3000)}`;
 
-    postMsg({
-      type: 'ai:send', tabId: pid, provider: '', model: '', baseUrl: '',
+    sendAiRequest({
+      tabId: pid, provider: '', model: '', baseUrl: '',
       stage: 'rest.smart.retry',
+      screen: 'REST · Response',
       systemPrompts: [systemPrompt],
       userPrompt,
       conversation: [], tools: [],

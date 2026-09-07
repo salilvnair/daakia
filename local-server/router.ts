@@ -92,7 +92,7 @@ import {
   handleSmWorkflowSaveFolder, handleSmWorkflowDeleteFolder, handleSmWorkflowSaveTodos,
 } from '../src/panel/main/handlers/sm-workflow-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from '../src/panel/main/handlers/ui-state-handler';
-import { handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/panel/main/handlers/ai-handler';
+import { handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/panel/main/handlers/ai-handler';
 import { window as vscodeWindow, Uri } from './vscode-shim';
 import * as fs from 'fs';
 
@@ -750,6 +750,19 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     // in this router; retrieveApiKey() gracefully returns undefined outside a real
     // extension host (no SecretStorage) instead of throwing, so this degrades to a
     // real aiStream:error instead of hanging silently like the unwired default case did.
+    /* The contract every AI feature in the app actually uses. It was missing
+       here, so in the browser dev build every sparkle button posted into the
+       unwired default case: no reply, no error, and a spinner that ran until
+       the panel was closed. The real handler, same as everything else in this
+       router — outside a real extension host it degrades to an ai:error about
+       the missing provider rather than hanging. */
+    case 'ai:send':
+      handleAiSend(msg, post);
+      break;
+    case 'ai:cancel':
+      handleAiCancel(msg, post);
+      break;
+
     case 'aiChat':
       handleAiChat(msg, post);
       break;

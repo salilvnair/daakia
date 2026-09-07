@@ -532,7 +532,7 @@ export const AI_FEATURE_LABELS: Record<keyof AiFeatureFlags, {
     label: 'Mock AI Route Generator',
     description: 'AI generates mock routes and response schemas for the Mock Server',
     group: 'Mock Generation',
-    gates: '"✨ Generate with AI" button in Mock Server tab → REST / GraphQL / SOAP / gRPC / SSE config',
+ gates: '"Generate with AI"button in Mock Server tab → REST / GraphQL / SOAP / gRPC / SSE config',
   },
   aiScenarioManager: {
     label: 'AI Scenario Manager',
