@@ -34,7 +34,7 @@ import {
   handleDeleteRequestFromCollection, handleUpdateCollectionProperties,
   handleGetCollectionProperties, handleClearCollections, handleDuplicateCollection,
   handleDuplicateRequest, handleReorderCollections, handleMoveRequest,
-  handleReorderRequests, handleRunCollection, handleStopCollectionRun,
+  handleReorderRequests, handleRunCollection, handleStopCollectionRun, handlePickRunData,
 } from './handlers/collection-handler';
 import {
   handleExportCollectionDaakia, handleExportCollectionPostman,
@@ -1076,6 +1076,9 @@ export class MainPanel {
         break;
       case 'runCollection':
         handleRunCollection(msg, this._post);
+        break;
+      case 'pickRunData':
+        handlePickRunData(msg, this._post);
         break;
       case 'stopCollectionRun':
         handleStopCollectionRun();

@@ -1,6 +1,13 @@
 /**
  * Collection handlers — CRUD, tree operations, runner.
  */
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+// The CLI's own parser, so a file that iterates fifty rows in a pipeline
+// iterates the same fifty rows here.
+// @ts-expect-error — plain ESM JavaScript shipped with the CLI; types in data.d.mts.
+import { parseDataFile } from '../../../../cli/lib/data.mjs';
 import {
   getCollectionTree, getCollectionChildren, getCollectionBreadcrumb,
   upsertCollection, moveCollection,
@@ -178,6 +185,53 @@ export function handleReorderRequests(msg: Record<string, unknown>, postMessage:
 
 let runAbortSignal: { aborted: boolean } = { aborted: false };
 
+/**
+ * Choose a CSV or JSON data file for a run.
+ *
+ * The host reads it, because the webview cannot: it parses with the same
+ * module `daakia-run` uses in CI, so a file that iterates fifty rows in a
+ * pipeline iterates the same fifty rows here.
+ */
+export async function handlePickRunData(_msg: Record<string, unknown>, postMessage: PostMessage) {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    openLabel: 'Use as run data',
+    filters: { 'Data files': ['csv', 'json'], 'All Files': ['*'] },
+  });
+  const uri = picked?.[0];
+  if (!uri) return;
+
+  try {
+    const rows = parseDataFile(fs.readFileSync(uri.fsPath, 'utf8'), uri.fsPath);
+    if (rows.length === 0) {
+      postMessage({ type: 'toast', toastType: 'warning', message: 'That file has no rows.' });
+      return;
+    }
+    /*
+      Capped on the way in. A run is one HTTP request per row per request in
+      the collection, so a spreadsheet somebody exported with 40,000 rows is
+      not a run, it is an outage — and the number is worth saying out loud
+      rather than silently truncating.
+    */
+    const capped = rows.slice(0, MAX_RUN_ROWS);
+    postMessage({
+      type: 'runDataPicked',
+      fileName: path.basename(uri.fsPath),
+      rows: capped,
+      columns: Object.keys(capped[0] ?? {}),
+      truncated: rows.length > capped.length ? rows.length : undefined,
+    });
+  } catch (e) {
+    postMessage({
+      type: 'toast', toastType: 'error',
+      message: `Could not read that data file: ${e instanceof Error ? e.message : String(e)}`,
+    });
+  }
+}
+
+/** One pass per row, so the row count is a multiplier on the whole run. */
+const MAX_RUN_ROWS = 500;
+
 export async function handleRunCollection(msg: Record<string, unknown>, postMessage: PostMessage) {
   const config: RunConfig = {
     collectionId: msg.collectionId as string,
@@ -185,6 +239,8 @@ export async function handleRunCollection(msg: Record<string, unknown>, postMess
     flow: (msg.flow as 'sandwich' | 'sequential') || 'sandwich',
     delay: (msg.delay as number) || 500,
     stopOnError: (msg.stopOnError as boolean) || false,
+    iterations: (msg.iterations as number) || 1,
+    dataRows: Array.isArray(msg.dataRows) ? msg.dataRows as Record<string, string>[] : undefined,
   };
 
   runAbortSignal = { aborted: false };
@@ -209,6 +265,7 @@ export async function handleRunCollection(msg: Record<string, unknown>, postMess
       passedTests: result.passedTests,
       failedTests: result.failedTests,
       duration: result.duration,
+      iterations: result.iterations ?? 1,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

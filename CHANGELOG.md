@@ -59,6 +59,17 @@ UI.
 - **Copy JSON path and Copy XPath**, at every level of a response
 - **Expand and collapse a collection**, whole or by subtree
 
+### Added — The collection runner iterates
+- **An iteration count and a data file** in Run collection: one pass per CSV
+  or JSON row, each column bound as a variable over the environment, so a
+  request saying `{{email}}` gets that row's value. The runner previously took
+  a collection and an environment and ran each request exactly once
+- The file is parsed by **the same module the CLI uses**, so a file that
+  iterates fifty rows in a pipeline iterates the same fifty rows in the app.
+  Rows are capped at 500 — a run is one request per row per request
+- Progress counts across the whole run rather than restarting each pass, and
+  the summary says how many iterations there were
+
 ### Added — The CI runner grows up
 - **`--junit <file>`** writes the one report format CI actually renders: a
   case per request, the folder path as its classname so viewers group by it,

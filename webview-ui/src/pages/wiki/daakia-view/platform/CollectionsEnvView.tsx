@@ -366,6 +366,13 @@ export function CollectionsEnvView() {
           runner speaks the two things CI needs: an exit code, and a report a build page can
           render.
         </p>
+        <Callout type="info" title="The same iteration in the app">
+          <b>Run collection</b> takes an iteration count, or a CSV/JSON data file — one pass per
+          row, each column bound as a variable, so a request saying <Code>{'{{email}}'}</Code> gets
+          that row&rsquo;s value. A data file wins over the count rather than multiplying with it.
+          The file is parsed by the same module the CLI uses, so fifty rows here are fifty rows in
+          the pipeline.
+        </Callout>
         <CodeBlock label="A pipeline step" lang="bash">
 {`node cli/daakia-run.mjs api.daakia.json \
   --env staging.json \

@@ -185,13 +185,20 @@ export function ResponsePanel() {
           variant="underline"
         />
 
-        {/* `whiteSpace: nowrap` because the row it sits in is a flex line with
-            three AI buttons after it — without it the label wrapped to two
-            lines and the button grew taller than everything beside it. */}
-        <div className="flex items-center gap-1.5 shrink-0" style={{ whiteSpace: 'nowrap' }}>
+        {/*
+          Aligned to the AI buttons it sits beside, not merely near them.
+
+          It first shipped in a bare wrapper: the label wrapped onto two lines,
+          and once that was fixed it still sat 2.5px lower with a 3px corner
+          against their 5px, because the AI toolbar carries `pb-1.5` and this
+          did not. Four buttons on one line that disagree about their baseline
+          and their radius read as a mistake before anyone reads the labels.
+        */}
+        <div className="flex items-center gap-1.5 pb-1.5 shrink-0" style={{ whiteSpace: 'nowrap' }}>
           <ButtonView
             size="xs"
             variant="secondary"
+            borderRadius={5}
             onClick={saveExample}
             accentColor="var(--color-protocol-rest, var(--color-accent))"
           >
