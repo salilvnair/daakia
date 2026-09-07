@@ -88,6 +88,7 @@ export default function App() {
   const compareB = useCompareStore(s => s.b);
   const compareLabelA = useCompareStore(s => s.labelA);
   const compareLabelB = useCompareStore(s => s.labelB);
+  const compareFocusB = useCompareStore(s => s.focusB);
 
   const activeProtocol = useTabsStore(s => s.activeProtocol);
   // Tabs that take over the whole surface, so the protocol rail should show
@@ -861,6 +862,7 @@ export default function App() {
           initialB={compareB}
           initialLabelA={compareLabelA}
           initialLabelB={compareLabelB}
+          focusB={compareFocusB}
           onClose={() => useCompareStore.getState().close()}
         />
       )}

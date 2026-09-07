@@ -25,22 +25,26 @@ export async function openCompareWithClipboard(source: Comparable | null): Promi
     readable = false;
   }
 
+  /* The right pane is the clipboard's, whether or not we were allowed to read
+     it — so it says so either way, and an unreadable clipboard leaves the pane
+     focused and waiting for the Ctrl+V that will fill it. */
   useCompareStore.getState().openCompare({
     a: source.text,
     labelA: source.label,
     b: clipboard,
-    labelB: clipboard ? 'Clipboard' : 'Paste here',
+    labelB: 'Clipboard content',
+    focusB: !clipboard,
   });
 
   if (!readable) {
     useToastStore.getState().addToast({
       type: 'info',
-      message: 'Paste the other side into the right pane — the clipboard could not be read directly.',
+      message: 'Press Ctrl+V in the right pane — Daakia was not allowed to read the clipboard directly.',
     });
   } else if (!clipboard.trim()) {
     useToastStore.getState().addToast({
       type: 'info',
-      message: 'The clipboard is empty — paste or type the other side into the right pane.',
+      message: 'The clipboard is empty — copy the other side, then press Ctrl+V in the right pane.',
     });
   }
 }

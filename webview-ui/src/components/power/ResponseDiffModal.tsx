@@ -2,7 +2,7 @@
  * ResponseDiffModal — compare two responses side-by-side with diff highlighting.
  * Feature 6B.3 — Response diff (compare)
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTabsStore } from '../../store/tabs-store';
 import { logUiEvent } from '../../store/ui-audit-store';
 import {
@@ -14,6 +14,7 @@ import {
   ToggleSwitchView,
   type EditorLanguage,
 } from '@salilvnair/dui';
+import { detectLanguage } from '../../services/editor/detect-language';
 
 interface Props {
   onClose: () => void;
@@ -28,17 +29,18 @@ interface Props {
   initialB?: string;
   initialLabelA?: string;
   initialLabelB?: string;
+  /**
+   * Put the cursor in the right pane on open.
+   *
+   * "Compare with clipboard" cannot always read the clipboard — the host may
+   * simply refuse — so it opens with that pane empty and focused, and the
+   * Ctrl+V the user was going to press anyway lands in the right place.
+   */
+  focusB?: boolean;
 }
 
 const ACCENT = 'var(--color-settings)';
 
-function detectLanguage(content: string): EditorLanguage {
-  const trimmed = content.trimStart();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json';
-  if (trimmed.startsWith('<'))
-    return trimmed.includes('<!DOCTYPE') || trimmed.includes('<html') ? 'html' : 'xml';
-  return 'plaintext';
-}
 
 function prettyJson(body: string): string {
   try { return JSON.stringify(JSON.parse(body), null, 2); }
@@ -46,7 +48,7 @@ function prettyJson(body: string): string {
 }
 
 export function ResponseDiffModal({
-  onClose, initialA = '', initialB = '', initialLabelA, initialLabelB,
+  onClose, initialA = '', initialB = '', initialLabelA, initialLabelB, focusB = false,
 }: Props) {
   const [bodyA, setBodyA] = useState(initialA);
   const [bodyB, setBodyB] = useState(initialB);
@@ -72,6 +74,20 @@ export function ResponseDiffModal({
   };
 
   const diffLanguage = detectLanguage(processedA || processedB);
+
+  /*
+    Focus the right pane once Monaco has mounted into it. Clicking its textarea
+    is what actually moves the caret — focusing the container does not, and a
+    paste would land wherever the caret happened to be.
+  */
+  const paneBRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusB) return;
+    const t = setTimeout(() => {
+      paneBRef.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [focusB]);
 
   return (
     <ModalView
@@ -167,13 +183,13 @@ export function ResponseDiffModal({
                     <span>{labelB}</span>
                     {bodyB && <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>{bodyB.length} chars</span>}
                   </div>
-                  <div className="flex-1 min-h-0">
+                  <div className="flex-1 min-h-0" ref={paneBRef}>
                     <EditorView
                       value={bodyB}
                       onChange={v => setBodyB(v ?? '')}
                       language={detectLanguage(bodyB)}
                       height="100%"
-                      placeholder="Paste response B here…"
+                      placeholder="Press Ctrl+V to paste the clipboard here…"
                     />
                   </div>
                 </div>

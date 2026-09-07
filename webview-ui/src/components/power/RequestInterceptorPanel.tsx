@@ -227,7 +227,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
 
           {/* Config section */}
           {!running && (
-            <div className="p-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-surface-border)' }}>
+            <div className="p-4 flex-shrink-0">
               <p className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: `color-mix(in srgb, ${ACCENT} 70%, var(--color-text-muted))` }}>
                 Proxy Config
               </p>
@@ -307,13 +307,22 @@ export function RequestInterceptorPanel({ onClose }: Props) {
             </div>
           )}
 
-          {/* Captured list header */}
-          <div className="flex items-center gap-2 px-4 py-2 border-b flex-shrink-0"
-            style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-hover)' }}>
-            <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--color-text-secondary)' }}>
-              {captured.length} captured
+          {/* Captured list header.
+
+              Was a filled band with its own border, bolted under a plain
+              section — two different visual registers stacked, which is what
+              made this column look assembled rather than designed. It is a
+              section header now, same padding and same uppercase accent label
+              as PROXY CONFIG above it. */}
+          <div className="flex items-center gap-2 px-4 pt-4 pb-2 flex-shrink-0">
+            <span className="text-[10px] font-bold uppercase tracking-widest flex-1"
+              style={{ color: `color-mix(in srgb, ${ACCENT} 70%, var(--color-text-muted))` }}>
+              Captured
+              <span className="ml-1.5 tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+                {captured.length}
+              </span>
               {selectedCount > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ color: 'var(--color-info)', background: 'color-mix(in srgb, var(--color-info) 12%, transparent)' }}>
+                <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold normal-case tracking-normal" style={{ color: 'var(--color-info)', background: 'color-mix(in srgb, var(--color-info) 12%, transparent)' }}>
                   {selectedCount} selected
                 </span>
               )}
