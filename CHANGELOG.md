@@ -77,6 +77,10 @@ UI.
 - **`--folder <name>`** runs one folder, matched on whole path segments;
   **`--env-var k=v`** overrides a variable at the call site, which is where a
   CI secret belongs
+- **`--concurrency n`** sends n requests at a time, in batches — a smoke
+  suite of forty independent requests no longer takes forty round trips. A
+  batch settles before the next starts, so the report keeps the collection's
+  order and `--bail` still means something
 - **`--data rows.csv`** runs the collection once per row with the row's
   columns bound as variables — the fifty-accounts case, which could not be
   expressed before. JSON rows work too; **`--iterations n`** and

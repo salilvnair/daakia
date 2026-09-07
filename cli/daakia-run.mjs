@@ -12,7 +12,8 @@
  *   --filter <text>     Only run requests whose name contains <text>
  *   --data <file>       CSV or JSON rows — one iteration of the run per row
  *   --iterations <n>    Run the collection n times (ignored when --data is given)
- *   --delay <ms>        Wait between requests
+ *   --delay <ms>        Wait between requests (between batches when concurrent)
+ *   --concurrency <n>   Send n requests at once — for suites whose order does not matter
  *   --timeout <ms>      Per-request timeout (default 30000)
  *   --bail              Stop on first failure
  *   --insecure          Ignore TLS certificate errors
@@ -30,13 +31,13 @@ const args = process.argv.slice(2);
 if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
   console.log('Usage: node cli/daakia-run.mjs <collection.json> [--env env.json] [--env-var k=v]'
     + ' [--folder name] [--filter text] [--data rows.csv] [--iterations n] [--delay ms]'
-    + ' [--timeout ms] [--bail] [--insecure] [--json] [--junit report.xml]');
+    + ' [--timeout ms] [--concurrency n] [--bail] [--insecure] [--json] [--junit report.xml]');
   process.exit(args.length === 0 ? 1 : 0);
 }
 
 const opt = {
   file: args[0], env: null, envVars: [], folder: null, filter: null,
-  data: null, iterations: 1, delay: 0,
+  data: null, iterations: 1, delay: 0, concurrency: 1,
   timeout: 30000, bail: false, insecure: false, json: false, junit: null,
 };
 for (let i = 1; i < args.length; i++) {
@@ -48,6 +49,7 @@ for (let i = 1; i < args.length; i++) {
     case '--data': opt.data = args[++i]; break;
     case '--iterations': opt.iterations = Math.max(1, Number(args[++i]) || 1); break;
     case '--delay': opt.delay = Math.max(0, Number(args[++i]) || 0); break;
+    case '--concurrency': opt.concurrency = Math.min(50, Math.max(1, Number(args[++i]) || 1)); break;
     case '--timeout': opt.timeout = Number(args[++i]) || 30000; break;
     case '--bail': opt.bail = true; break;
     case '--insecure': opt.insecure = true; break;
@@ -202,6 +204,38 @@ const results = [];
 let failures = 0;
 let stopped = false;
 
+/** Send one request and describe what happened. Never throws. */
+async function runOne(entry, iteration) {
+  const { url, method, headers, body } = buildRequest(entry);
+  const started = Date.now();
+  let status = 0, statusText = '', error = null, size = 0;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), opt.timeout);
+    const res = await fetch(url, { method, headers, body, signal: ctrl.signal, redirect: 'follow' });
+    clearTimeout(timer);
+    status = res.status;
+    statusText = res.statusText;
+    const buf = await res.arrayBuffer();
+    size = buf.byteLength;
+  } catch (e) {
+    error = e.name === 'AbortError' ? `timeout after ${opt.timeout}ms` : (e.cause?.code ?? e.message);
+  }
+  const ms = Date.now() - started;
+  const passed = !error && status > 0 && status < 400;
+  return { name: entry.name, method, url, status, statusText, ms, size, passed, error, iteration };
+}
+
+function report(result) {
+  results.push(result);
+  if (!result.passed) failures++;
+  if (!opt.json) {
+    const mark = result.passed ? '✓' : '✗';
+    const detail = result.error ? `ERROR ${result.error}` : `${result.status} ${result.statusText}`;
+    console.log(`${mark} ${result.method.padEnd(6)} ${result.name}  →  ${detail}  (${result.ms}ms, ${result.size}B)`);
+  }
+}
+
 for (let iteration = 0; iteration < iterations && !stopped; iteration++) {
   rowVars = dataRows[iteration] ?? {};
   if (iterations > 1 && !opt.json) {
@@ -211,34 +245,37 @@ for (let iteration = 0; iteration < iterations && !stopped; iteration++) {
     console.log(`
 ── ${label}`);
   }
-  for (const entry of toRun) {
-    const { url, method, headers, body } = buildRequest(entry);
-    const started = Date.now();
-    let status = 0, statusText = '', error = null, size = 0;
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), opt.timeout);
-      const res = await fetch(url, { method, headers, body, signal: ctrl.signal, redirect: 'follow' });
-      clearTimeout(timer);
-      status = res.status;
-      statusText = res.statusText;
-      const buf = await res.arrayBuffer();
-      size = buf.byteLength;
-    } catch (e) {
-      error = e.name === 'AbortError' ? `timeout after ${opt.timeout}ms` : (e.cause?.code ?? e.message);
-    }
-    const ms = Date.now() - started;
-    const passed = !error && status > 0 && status < 400;
-    if (!passed) failures++;
-    results.push({ name: entry.name, method, url, status, statusText, ms, size, passed, error, iteration });
 
-    if (!opt.json) {
-      const mark = passed ? '✓' : '✗';
-      const detail = error ? `ERROR ${error}` : `${status} ${statusText}`;
-      console.log(`${mark} ${method.padEnd(6)} ${entry.name}  →  ${detail}  (${ms}ms, ${size}B)`);
+  if (opt.concurrency > 1) {
+    /*
+      Batched, not pipelined, and deliberately so.
+
+      A batch settles before the next one starts, which keeps the report in
+      the collection's own order and keeps `--bail` meaning something: the
+      run stops after the batch that failed rather than mid-flight with an
+      unknown number of requests still in the air. Order within a batch does
+      not matter — that is what asking for concurrency says.
+
+      `rowVars` is read by `buildRequest` when the request is BUILT, which
+      happens inside `runOne` before its first await, so a batch cannot see
+      the next iteration's row.
+    */
+    for (let i = 0; i < toRun.length && !stopped; i += opt.concurrency) {
+      const batch = toRun.slice(i, i + opt.concurrency);
+      const settled = await Promise.all(batch.map(entry => runOne(entry, iteration)));
+      for (const result of settled) report(result);
+      if (opt.bail && settled.some(r => !r.passed)) { stopped = true; break; }
+      if (opt.delay > 0 && i + opt.concurrency < toRun.length) {
+        await new Promise(r => setTimeout(r, opt.delay));
+      }
     }
-    if (!passed && opt.bail) { stopped = true; break; }
-    if (opt.delay > 0) await new Promise(r => setTimeout(r, opt.delay));
+  } else {
+    for (const entry of toRun) {
+      const result = await runOne(entry, iteration);
+      report(result);
+      if (!result.passed && opt.bail) { stopped = true; break; }
+      if (opt.delay > 0) await new Promise(r => setTimeout(r, opt.delay));
+    }
   }
 }
 
