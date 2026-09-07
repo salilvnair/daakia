@@ -9,6 +9,7 @@
 import { create } from 'zustand';
 import { postMsg } from '../vscode';
 import type { AiPromptTemplateKey } from './prompt-template';
+import { stageFeatureDefaults, featureKeyForStage } from './ai-stage-features';
 
 export interface AiFeatureFlags {
   // ── Core AI ─────────────────────────────────────────────────────────────────
@@ -753,30 +754,54 @@ export const AI_FEATURE_LABELS: Record<keyof AiFeatureFlags, {
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
+/**
+ * A flag key: one of the hand-written flags above, or a stage.
+ *
+ * Forty-three AI features — every dk8s one among them — had no hand-written
+ * flag and so no switch. Those are generated from the audit taxonomy and keyed
+ * by their stage; see `ai-stage-features.ts`. Hand-written keys are camelCase
+ * with no dots, so the two spaces cannot collide.
+ */
+export type AiFeatureKey = keyof AiFeatureFlags | (string & {});
+
+export type AiFeatureMap = Record<string, boolean>;
+
 interface AiFeaturesState {
-  features: AiFeatureFlags;
+  features: AiFeatureMap;
   loaded: boolean;
 
-  setFeatures: (features: AiFeatureFlags) => void;
-  toggleFeature: (key: keyof AiFeatureFlags) => void;
+  setFeatures: (features: Record<string, boolean | undefined>) => void;
+  toggleFeature: (key: AiFeatureKey) => void;
   /** Set a specific group of keys to enabled=true or enabled=false */
-  setGroupEnabled: (keys: (keyof AiFeatureFlags)[], enabled: boolean) => void;
+  setGroupEnabled: (keys: AiFeatureKey[], enabled: boolean) => void;
   /** Enable or disable every feature flag */
   setAllEnabled: (enabled: boolean) => void;
   loadFeatures: () => void;
-  isEnabled: (key: keyof AiFeatureFlags) => boolean;
+  isEnabled: (key: AiFeatureKey) => boolean;
 }
 
-function persist(features: AiFeatureFlags) {
+function persist(features: AiFeatureMap) {
   postMsg({ type: 'aiFeatures:save', features });
 }
 
+/** The hand-written defaults plus one generated flag per uncovered stage. */
+function allDefaults(): AiFeatureMap {
+  return { ...AI_FEATURE_DEFAULTS, ...stageFeatureDefaults() };
+}
+
 export const useAiFeaturesStore = create<AiFeaturesState>((set, get) => ({
-  features: AI_FEATURE_DEFAULTS,
+  features: allDefaults(),
   loaded: false,
 
+  /* A key the host has no row for keeps its default rather than reading as
+     off — an older install has rows for none of the generated flags. */
   setFeatures: (features) => set({
-    features: { ...AI_FEATURE_DEFAULTS, ...features },
+    features: {
+      ...allDefaults(),
+      ...Object.fromEntries(
+        Object.entries(features).filter((entry): entry is [string, boolean] => entry[1] !== undefined),
+      ),
+    },
     loaded: true,
   }),
 
@@ -787,7 +812,7 @@ export const useAiFeaturesStore = create<AiFeaturesState>((set, get) => ({
   },
 
   setGroupEnabled: (keys, enabled) => {
-    const patch: Partial<AiFeatureFlags> = {};
+    const patch: AiFeatureMap = {};
     keys.forEach(k => { patch[k] = enabled; });
     const next = { ...get().features, ...patch };
     set({ features: next });
@@ -795,8 +820,8 @@ export const useAiFeaturesStore = create<AiFeaturesState>((set, get) => ({
   },
 
   setAllEnabled: (enabled) => {
-    const allKeys = Object.keys(get().features) as (keyof AiFeatureFlags)[];
-    const patch: Partial<AiFeatureFlags> = {};
+    const allKeys = Object.keys(get().features);
+    const patch: AiFeatureMap = {};
     allKeys.forEach(k => { patch[k] = enabled; });
     const next = { ...get().features, ...patch };
     set({ features: next });
@@ -814,105 +839,25 @@ export const useAiFeaturesStore = create<AiFeaturesState>((set, get) => ({
 }));
 
 // ── Feature → Prompt Template mapping ────────────────────────────────────────
-// Maps each AI feature flag to its primary prompt template key.
-// Used to navigate from AI Features settings to the matching Prompt Library entry.
+// Lives in `ai-feature-map.ts` so the generated stage flags can read it without
+// importing this store back — re-exported here for the existing callers.
 
-export const FEATURE_TO_TEMPLATE_KEY: Partial<Record<keyof AiFeatureFlags, AiPromptTemplateKey>> = {
-  masterAgent:            'agent.master',
-  errorDiagnosis:         'askAiWhy',
-  smartRetryAdvisor:      'rest.smart.retry',
-  explainRest:            'explainWithAi',
-  followUpsRest:          'followupWithAi',
-  explainGraphql:         'explainWithAi',
-  followUpsGraphql:       'followupWithAi',
-  explainSoap:            'explainWithAi',
-  followUpsSoap:          'followupWithAi',
-  explainGrpc:            'explainWithAi',
-  followUpsGrpc:          'followupWithAi',
-  assertGeneration:       'rest.assert.generate',
-  schemaRest:             'rest.schema.validate',
-  schemaGraphql:          'graphql.schema.view',
-  schemaSoap:             'soap.schema.view',
-  schemaGrpc:             'grpc.schema.view',
-  semanticValidator:      'rest.semantic.validate',
-  responseTransformer:    'rest.response.transform',
-  patternBaseline:        'rest.pattern.baseline',
-  recordBaseline:         'rest.record.baseline',
-  responseDiff:           'rest.response.diff',
-  headerAutocomplete:     'rest.headers.suggest.generate',
-  bodyGenerator:          'rest.body.generate',
-  requestNamer:           'rest.request.name',
-  requestFuzzer:          'rest.request.fuzz',
-  preflightCheck:         'rest.preflight',
-  contractTestGenerator:  'rest.contract.test',
-  scriptAutocomplete:     'rest.script.autocomplete',
-  extractVariables:       'rest.env.extract',
-  organizeWithAi:         'rest.collection.organize',
-  buildApiFlow:           'rest.api.flow',
-  testWithAiAgent:        'rest.agent.workflow',
-  generateChangelog:      'rest.changelog.generate',
-  dependencyGraph:        'collection.dependency.graph',
-  checkCompliance:        'collection.compliance',
-  generateSdk:            'collection.sdk.generate',
-  optimizeRequests:       'collection.optimize',
-  regressionDetector:     'collection.regression',
-  importFromScreenshot:   'import.screenshot',
-  importFromLogs:         'import.logs',
-  describeWorkflow:       'import.describe.workflow',
-  generateScenario:       'import.scenario.generate',
-  reverseEngineer:        'import.reverse.engineer',
-  mockAiGenerate:         'mock.rest.generate',
-  aiScenarioManager:      'mock.scenario.manager',
-  daakiaAiChat:           'agent.master',
-  dataGenerator:          'data.generate',
-  gqlQueryBuilder:        'gql.query.builder',
-  gqlSchemaExplainer:     'gql.schema.explainer',
-  grpcProtoExplainer:     'grpc.proto.explainer',
-  soapWsdlExplainer:      'soap.wsdl.explainer',
-  wsTrafficAnalyzer:      'ws.traffic.analyzer',
-  sseTrafficAnalyzer:     'sse.traffic.analyzer',
-  sseEventSuggester:      'sse.event.suggester',
-  mqttTopicSuggester:     'mqtt.topic.suggester',
-  sioTrafficAnalyzer:     'sio.traffic.analyzer',
-  mcpPromptBuilder:       'mcp.prompt.builder',
-  openApiGenerator:       'platform.openapi.generator',
-  securityAudit:          'platform.security.audit',
-  mockIntelligence:       'platform.mock.intelligence',
-  postmanTranslator:      'platform.postman.translator',
-  soapToRest:             'platform.soap.to.rest',
-  gqlFederation:          'platform.gql.federation',
-  webhookDebugger:        'platform.webhook.debugger',
-  requestClustering:      'platform.request.clustering',
-  // Sprint 11
-  autoDiscovery:          'import.reverse.engineer',
-  nlRequestBuilder:       'rest.body.generate',
-  sequenceComposer:       'rest.api.flow',
-  collectionOptimizer:    'collection.optimize',
-  apiKnowledgeGraph:      'collection.dependency.graph',
-  regressionGuardian:     'collection.regression',
-  schemaDriftMonitor:     'rest.schema.validate',
-  adaptiveLoadTester:     'rest.preflight',
-  // Sprint 12
-  intelligenceDashboard:  'rest.performance.insights',
-  performanceAnomalyDetector: 'rest.performance.insights',
-  apiChangelogMonitor:    'rest.changelog.generate',
-  compatibilityScorer:    'rest.schema.validate',
-  deepSecurityAudit:      'platform.security.audit',
-  docAutoGenerator:       'platform.openapi.generator',
-  smartTestSuiteGen:      'rest.contract.test',
-  // Sprint 14
-  crossProtocolOrchestrator: 'agent.master',
-  chaosEngineeringPlanner:   'rest.request.fuzz',
-  contractNegotiator:        'rest.contract.test',
-  adaptiveMockLearning:      'mock.scenario.manager',
-  aiScenarioComposer:        'mock.scenario.manager',
-  liveTrafficMirror:         'platform.mock.intelligence',
-};
+export { FEATURE_TO_TEMPLATE_KEY, TEMPLATE_TO_FEATURE_KEY } from './ai-feature-map';
 
-// Inverse map: prompt template key → primary feature flag key
-export const TEMPLATE_TO_FEATURE_KEY: Partial<Record<AiPromptTemplateKey, keyof AiFeatureFlags>> =
-  Object.fromEntries(
-    Object.entries(FEATURE_TO_TEMPLATE_KEY)
-      .filter(([, v]) => v !== undefined)
-      .map(([k, v]) => [v, k as keyof AiFeatureFlags])
-  ) as Partial<Record<AiPromptTemplateKey, keyof AiFeatureFlags>>;
+/**
+ * Is the feature behind this AI stage switched on?
+ *
+ * The one question `sendAiRequest` asks before every call. It resolves through
+ * `featureKeyForStage`, so a hand-written flag governs its stage where one
+ * exists and the generated flag governs the rest.
+ *
+ * Unknown keys read as on: a feature that has never been switched off should
+ * not be blocked by the absence of a stored row.
+ */
+export function isAiFeatureOn(key: AiFeatureKey): boolean {
+  return useAiFeaturesStore.getState().isEnabled(key);
+}
+
+export function isAiStageEnabled(stage: string): boolean {
+  return useAiFeaturesStore.getState().isEnabled(featureKeyForStage(stage));
+}

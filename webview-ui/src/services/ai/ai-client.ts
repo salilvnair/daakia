@@ -22,6 +22,8 @@
  */
 import { postMsg } from '../../vscode';
 import type { AiPromptTemplateKey } from '../../store/prompt-template';
+import { isAiStageEnabled, isAiFeatureOn } from '../../store/ai-features-store';
+import { nameForStage } from '../../store/ai-audit-events';
 
 /** Where the user was when they asked. Shown in the audit beside the feature. */
 export type AiScreen =
@@ -50,6 +52,13 @@ export interface AiCallOptions {
   stage: AiPromptTemplateKey | string;
   /** The screen it was asked from. */
   screen: AiScreen;
+  /**
+   * The AI Features flag that governs this call, where the stage alone cannot
+   * say. Four per-protocol Explain features share one prompt and one stage, so
+   * only the call site knows whether this is Explain on REST or on GraphQL.
+   * Omitted, the flag is resolved from the stage.
+   */
+  feature?: string;
 
   /** The instruction block. */
   systemPrompts?: string[];
@@ -119,8 +128,26 @@ export function newAiRequestId(stage: string): string {
  * messages will carry — listen for that id, not for the message type alone.
  */
 export function sendAiRequest(options: AiCallOptions): string {
-  const { requestId, tabId, context, settings, ...rest } = options;
+  const { requestId, tabId, context, settings, feature, ...rest } = options;
   const id = requestId || tabId || newAiRequestId(options.stage);
+
+  /*
+    The AI Features screen says a disabled feature makes "no LLM calls". That
+    was true of six of the eighty-seven switches — the rest hid a button at
+    most, and several hid nothing at all. Asking here makes it true of every
+    one of them, because every AI call comes through this function.
+
+    The refusal is delivered as an `ai:error` on the feature's own id, so the
+    caller's existing error handling shows it. Returning quietly would leave
+    the button spinning, which is the failure this file was written to end.
+  */
+  if (!(feature ? isAiFeatureOn(feature) : isAiStageEnabled(options.stage))) {
+    const message = `${nameForStage(options.stage)} is turned off in Settings → AI Features.`;
+    queueMicrotask(() => {
+      window.postMessage({ type: 'ai:error', tabId: id, stage: options.stage, message }, '*');
+    });
+    return id;
+  }
 
   postMsg({
     // Empty means "resolve from settings" unless the caller overrode it below.
