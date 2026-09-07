@@ -110,14 +110,14 @@ export function BodyEditor({ tab, showFuzzer, onCloseFuzzer }: BodyEditorProps) 
       <div className="flex items-center gap-3 px-1">
         <span className="text-[12px] text-[var(--color-text-muted)]">Content Type</span>
         {/* The labels are short (`JSON`, `XML`), so the menu would come out
-            narrower than the list deserves: a floor of 234px, with 14px of
+            narrower than the list deserves: a floor of 200px, with 14px of
             room either side of each row. */}
         <SelectInputView
           options={bodyTypeOptions(dropdownValue)}
           value={dropdownValue}
           onChange={handleContentTypeChange}
           size="md"
-          menuMinWidth={234}
+          menuMinWidth={200}
           menuPaddingX={14}
           menuFontSize={12.5}
         />
