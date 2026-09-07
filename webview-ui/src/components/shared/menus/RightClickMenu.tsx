@@ -15,6 +15,7 @@ import { candidatesFrom, pickComparable, type Comparable } from '../../../servic
 import { openCompareWithClipboard } from '../../../services/compare/open-compare';
 import { getFilterMenu, type FilterMenu } from './filter-provider';
 import { jsonPathLevels, xPathLevels } from '@salilvnair/dui';
+import { readClipboard } from '../../../services/compare/read-clipboard';
 
 type MenuContext = 'monaco' | 'input' | 'selection';
 
@@ -553,21 +554,22 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
           }
           case 'paste': {
             /*
-              Two ways in, because the first one is often not allowed.
+              Three ways in, because the obvious one is often not allowed.
 
               `navigator.clipboard.readText()` needs the `clipboard-read`
               permission, which a webview frequently denies outright — and the
               failure landed in an empty catch, so Paste did nothing and said
-              nothing, which is indistinguishable from an empty clipboard.
+              nothing, indistinguishable from an empty clipboard. The extension
+              host has no such restriction, so `readClipboard` asks it first
+              and falls back to the browser API.
 
-              Monaco's own paste action goes through the browser's native
-              clipboard path instead, which is permitted by the click that
-              opened this menu. The native inputs above already did exactly
-              this; the editor branch had been left behind.
+              Monaco's own paste action is the last resort: it goes through the
+              browser's native clipboard path, permitted by the click that
+              opened this menu.
             */
             let pasted = false;
             try {
-              const text = await navigator.clipboard.readText();
+              const { text } = await readClipboard();
               const sel = editor.getSelection();
               if (text && sel) {
                 editor.executeEdits('contextmenu', [{ range: sel, text, forceMoveMarkers: true }]);
@@ -917,7 +919,7 @@ export function RightClickMenu() {
           break;
         case 'paste':
           try {
-            const text = await navigator.clipboard.readText();
+            const { text } = await readClipboard();
             document.execCommand('insertText', false, text);
           } catch {
             document.execCommand('paste');

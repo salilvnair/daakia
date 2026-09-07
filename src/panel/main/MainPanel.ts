@@ -636,6 +636,21 @@ export class MainPanel {
       case 'bulk:stop':
         handleBulkStop(msg);
         break;
+      /*
+        The clipboard, read where it can actually be read.
+
+        A webview frequently denies `clipboard-read`, so
+        `navigator.clipboard.readText()` there fails with no way to ask the
+        user for permission. The extension host has no such restriction.
+      */
+      case 'clipboard:read': {
+        const requestId = msg.requestId as string | undefined;
+        void vscode.env.clipboard.readText().then(
+          text => this._post({ type: 'clipboard:text', requestId, text }),
+          () => this._post({ type: 'clipboard:text', requestId, text: '', failed: true }),
+        );
+        break;
+      }
       case 'load:start':
         handleLoadStart(msg, this._post);
         break;

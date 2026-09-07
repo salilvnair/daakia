@@ -96,7 +96,7 @@ import { handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStr
 import { handleLoadStart, handleLoadStop } from '../src/panel/main/handlers/load-handler';
 import { handleBulkRun, handleBulkStop } from '../src/panel/main/handlers/bulk-handler';
 import { handleInterceptorStart, handleInterceptorStop } from '../src/panel/main/handlers/interceptor-handler';
-import { window as vscodeWindow, Uri } from './vscode-shim';
+import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
 
 import {
@@ -782,6 +782,16 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
     case 'bulk:stop':
       handleBulkStop(msg);
       break;
+
+    /* The clipboard, read where it can actually be read — see MainPanel. */
+    case 'clipboard:read': {
+      const requestId = msg.requestId as string | undefined;
+      void vscodeEnv.clipboard.readText().then(
+        (text: string) => post({ type: 'clipboard:text', requestId, text }),
+        () => post({ type: 'clipboard:text', requestId, text: '', failed: true }),
+      );
+      break;
+    }
 
     case 'load:start':
       handleLoadStart(msg, post);

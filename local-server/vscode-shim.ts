@@ -86,6 +86,36 @@ const env = {
     async writeText(text: string) {
       console.log(`[vscode-shim] clipboard.writeText (no real clipboard here): ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`);
     },
+    /*
+      The OS clipboard, for the dev build.
+
+      In a real extension host `vscode.env.clipboard.readText()` does this. Out
+      here there is no VS Code, so ask the platform directly — otherwise every
+      clipboard-backed feature behaves differently in dev than it does shipped,
+      which is the sort of difference that gets found by a user.
+    */
+    async readText(): Promise<string> {
+      const { execFile } = await import('child_process');
+      const { promisify } = await import('util');
+      const run = promisify(execFile);
+      try {
+        if (process.platform === 'win32') {
+          const { stdout } = await run('powershell.exe',
+            ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'],
+            { maxBuffer: 8 * 1024 * 1024 });
+          return stdout.replace(/
+$/, '');
+        }
+        if (process.platform === 'darwin') {
+          const { stdout } = await run('pbpaste', [], { maxBuffer: 8 * 1024 * 1024 });
+          return stdout;
+        }
+        const { stdout } = await run('xclip', ['-selection', 'clipboard', '-o'], { maxBuffer: 8 * 1024 * 1024 });
+        return stdout;
+      } catch {
+        return '';
+      }
+    },
   },
 };
 
