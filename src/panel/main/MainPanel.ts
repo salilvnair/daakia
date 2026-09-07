@@ -67,6 +67,7 @@ import { handleAiDiscovery } from './handlers/ai-discovery-handler';
 import { handleAiFuzz } from './handlers/ai-fuzz-handler';
 import { handleLoadStart, handleLoadStop } from './handlers/load-handler';
 import { handleBulkRun, handleBulkStop } from './handlers/bulk-handler';
+import { handleInterceptorStart, handleInterceptorStop } from './handlers/interceptor-handler';
 import { handleMcpConnect, handleMcpDisconnect, handleMcpCallTool, handleMcpGetPrompt, handleMcpReadResource, cleanupAllMcpClients, handleMcpConnectServer, handleMcpDisconnectServer, handleMcpCallToolOnServer } from './handlers/mcp-handler';
 import { handleAiMcpConnect, handleAiMcpDisconnect, cleanupAiMcpClients } from './handlers/ai-mcp-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from './handlers/ui-state-handler';
@@ -622,6 +623,13 @@ export class MainPanel {
       // ── Load testing — real requests, measured. The panel used to invent
       // its own latencies and status codes in the webview.
       // ── Bulk URL checks — real responses, run with a worker pool.
+      // ── Request interceptor — the panel posted these to nothing at all.
+      case 'interceptor:start':
+        handleInterceptorStart(msg, this._post);
+        break;
+      case 'interceptor:stop':
+        handleInterceptorStop(msg, this._post);
+        break;
       case 'bulk:run':
         handleBulkRun(msg, this._post);
         break;

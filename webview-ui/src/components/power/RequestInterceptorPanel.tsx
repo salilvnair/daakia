@@ -1,6 +1,21 @@
 /**
- * RequestInterceptorPanel — configure proxy to intercept browser traffic and capture requests.
- * Feature 6B.7 — Request interceptor/proxy
+ * RequestInterceptorPanel — a proxy that captures what a browser sends.
+ *
+ * ── What this replaces ──
+ *
+ * "Start Proxy" posted `interceptor:start` to a host handler that did not
+ * exist. The button set a spinner, the list sat at "0 captured" forever, and
+ * there was no error because no code path could produce one. There is a real
+ * proxy behind it now (`interceptor-handler.ts`).
+ *
+ * ── Why HTTPS rows say "tunnelled" ──
+ *
+ * A browser sends `CONNECT host:443` and everything after it is encrypted
+ * end to end. Reading it would mean terminating TLS with a generated
+ * certificate and installing a new trusted root on this machine — a permanent
+ * hole in the user's trust store, not something to do behind a button. So an
+ * HTTPS request is recorded as the one thing honestly visible: that a tunnel
+ * to that host was opened.
  */
 import { useState, useEffect } from 'react';
 import { TrashIcon } from '../../icons';
@@ -18,6 +33,8 @@ interface InterceptedRequest {
   body?: string;
   timestamp: number;
   selected: boolean;
+  /** HTTPS: the host was seen, the contents were not. */
+  tunnelled?: boolean;
 }
 
 interface InterceptorConfig {
@@ -79,7 +96,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
       }
       if (msg.type === 'interceptor:started') {
         setRunning(true);
-        addToast({ type: 'success', message: `Proxy listening on ${config.listenHost}:${config.port}` });
+        addToast({ type: 'success', message: `Proxy listening on ${msg.host ?? config.listenHost}:${msg.port ?? config.port}` });
       }
       if (msg.type === 'interceptor:stopped') {
         setRunning(false);
@@ -96,8 +113,9 @@ export function RequestInterceptorPanel({ onClose }: Props) {
 
   const startInterceptor = () => {
     logUiEvent('settings.intercept_start', { port: config.port });
+    /* `running` is set by `interceptor:started`, not here: claiming it started
+       is what made a proxy that never bound look like one that was working. */
     postMsg({ type: 'interceptor:start', config });
-    setRunning(true);
     addToast({ type: 'info', message: `Starting proxy on port ${config.port}…` });
   };
 
@@ -113,23 +131,55 @@ export function RequestInterceptorPanel({ onClose }: Props) {
   const selectNone = () => setCaptured(prev => prev.map(r => ({ ...r, selected: false })));
 
   const openSelected = () => {
-    const sel = captured.filter(r => r.selected);
+    const sel = captured.filter(r => r.selected && !r.tunnelled);
     sel.slice(0, 20).forEach(r => {
       addTab({ name: `${r.method} ${r.url.split('/').pop()}`, method: r.method as import('../../store/tabs-store').HttpMethod, url: r.url, headers: Object.entries(r.headers).map(([key, value]) => ({ id: crypto.randomUUID(), key, value, enabled: true })), bodyRaw: r.body || '', bodyMode: r.body ? ('raw' as const) : ('none' as const) });
     });
     addToast({ type: 'success', message: `Opened ${Math.min(sel.length, 20)} request tabs` });
   };
 
+  /*
+    This used to create the collection and stop — then say "created with N
+    requests" over an empty one. Each captured request is saved into it now.
+    A tunnelled HTTPS row is skipped: there is no request body or path to save.
+  */
   const importAsCollection = () => {
-    const sel = captured.filter(r => r.selected);
-    if (sel.length === 0) { addToast({ type: 'warning', message: 'No requests selected' }); return; }
-    postMsg({ type: 'createCollection', id: `intercepted-${Date.now()}`, name: collectionName, protocol: 'rest' });
-    addToast({ type: 'success', message: `Collection "${collectionName}" created with ${sel.length} requests` });
+    const sel = captured.filter(r => r.selected && !r.tunnelled);
+    if (sel.length === 0) {
+      addToast({ type: 'warning', message: 'Nothing to import — HTTPS rows carry only the host.' });
+      return;
+    }
+    const collectionId = `intercepted-${Date.now()}`;
+    postMsg({ type: 'createCollection', id: collectionId, name: collectionName, protocol: 'rest' });
+
+    for (const r of sel) {
+      let name = r.url;
+      try { name = `${r.method} ${new URL(r.url).pathname}`; } catch { /* keep the raw URL */ }
+      postMsg({
+        type: 'saveRequestToCollection',
+        collectionId,
+        protocol: 'rest',
+        request: {
+          id: `${collectionId}-${r.id}`,
+          name,
+          method: r.method,
+          url: r.url,
+          data: JSON.stringify({
+            headers: Object.entries(r.headers).map(([key, value]) => ({ key, value, enabled: true })),
+            bodyRaw: r.body ?? '',
+            bodyMode: r.body ? 'raw' : 'none',
+          }),
+        },
+      });
+    }
+
+    addToast({ type: 'success', message: `Saved ${sel.length} request${sel.length === 1 ? '' : 's'} into "${collectionName}"` });
     onClose();
   };
 
   const selectedReq = captured.find(r => r.id === selectedView);
-  const selectedCount = captured.filter(r => r.selected).length;
+  const selectedCount = captured.filter(r => r.selected && !r.tunnelled).length;
+  const tunnelledCount = captured.filter(r => r.tunnelled).length;
 
   return (
     <ModalView
@@ -302,9 +352,11 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                     onClick={() => setSelectedView(req.id)}
                   >
                     <input type="checkbox" checked={req.selected}
+                      disabled={req.tunnelled}
                       onChange={e => { e.stopPropagation(); toggleSelect(req.id); }}
                       onClick={e => e.stopPropagation()}
                       className="flex-shrink-0 w-3 h-3 cursor-pointer"
+                      style={{ opacity: req.tunnelled ? 0.3 : 1 }}
                     />
                     <span
                       className="text-[9px] font-bold w-[34px] flex-shrink-0 text-right px-1 py-0.5 rounded"
@@ -312,9 +364,25 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                     >
                       {req.method}
                     </span>
-                    <span className="text-[10px] truncate flex-1 font-mono" style={{ color: 'var(--color-text-primary)' }}>
-                      {req.url.replace(/^https?:\/\/[^/]+/, '')}
+                    <span
+                      className="text-[10px] truncate flex-1 font-mono"
+                      style={{ color: req.tunnelled ? 'var(--color-text-muted)' : 'var(--color-text-primary)' }}
+                      title={req.url}
+                    >
+                      {req.tunnelled ? req.url.replace(/^https?:\/\//, '') : req.url.replace(/^https?:\/\/[^/]+/, '')}
                     </span>
+                    {req.tunnelled && (
+                      /* An encrypted tunnel: the host is all there is. Saying so
+                         beats an empty row the user has to guess about. */
+                      <span
+                        title="HTTPS — encrypted end to end, so only the host is visible"
+                        className="text-[8.5px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
+                        style={{
+                          color: 'var(--color-text-muted)',
+                          background: 'color-mix(in srgb, var(--color-text-primary) 7%, transparent)',
+                        }}
+                      >TUNNEL</span>
+                    )}
                   </div>
                 );
               })
@@ -387,13 +455,65 @@ export function RequestInterceptorPanel({ onClose }: Props) {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6">
-              <span className="text-[32px] opacity-15"></span>
-              <p className="text-[12px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-                {captured.length === 0 ? 'No requests captured yet' : 'Select a request to inspect'}
-              </p>
-              {captured.length > 0 && (
-                <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>{captured.length} requests ready</p>
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8">
+              {captured.length === 0 ? (
+                <div style={{ maxWidth: 380, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
+                    {running ? 'Listening — nothing has come through yet' : 'Not listening'}
+                  </p>
+                  <p style={{ fontSize: 11, lineHeight: 1.7, color: 'var(--color-text-muted)', margin: 0 }}>
+                    {running
+                      ? 'Point a browser or a tool at the proxy address below and its requests will appear here.'
+                      : 'Start the proxy, then send traffic through it. Requests appear here as they pass.'}
+                  </p>
+
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      padding: '9px 12px', borderRadius: 9,
+                      background: `color-mix(in srgb, ${ACCENT} 7%, transparent)`,
+                      border: `1px solid color-mix(in srgb, ${ACCENT} 22%, transparent)`,
+                    }}
+                  >
+                    <code style={{ fontSize: 12, color: ACCENT, fontFamily: 'var(--font-mono, monospace)' }}>
+                      http://{config.listenHost}:{config.port}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(`http://${config.listenHost}:${config.port}`);
+                        addToast({ type: 'success', message: 'Proxy address copied' });
+                      }}
+                      style={{
+                        fontSize: 10, padding: '2px 7px', borderRadius: 5, cursor: 'pointer',
+                        color: 'var(--color-text-secondary)', background: 'transparent',
+                        border: '1px solid color-mix(in srgb, var(--color-text-primary) 15%, transparent)',
+                      }}
+                    >Copy</button>
+                  </div>
+
+                  <p style={{
+                    fontSize: 10.5, lineHeight: 1.65, color: 'var(--color-text-muted)', margin: 0,
+                    paddingTop: 10, borderTop: '1px solid color-mix(in srgb, var(--color-text-primary) 7%, transparent)',
+                    textAlign: 'left',
+                  }}>
+                    <strong style={{ color: 'var(--color-text-secondary)' }}>HTTP</strong> is captured in full —
+                    method, URL, headers and body.{' '}
+                    <strong style={{ color: 'var(--color-text-secondary)' }}>HTTPS</strong> is tunnelled: the host is
+                    recorded, the contents are not. Reading them would mean installing a new trusted
+                    certificate authority on this machine, which Daakia will not do on its own.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', margin: 0 }}>
+                    Select a request to inspect
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: 0 }}>
+                    {captured.length - tunnelledCount} captured
+                    {tunnelledCount > 0 && ` · ${tunnelledCount} HTTPS tunnel${tunnelledCount === 1 ? '' : 's'} (host only)`}
+                  </p>
+                </>
               )}
             </div>
           )}

@@ -95,6 +95,7 @@ import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handl
 import { handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/panel/main/handlers/ai-handler';
 import { handleLoadStart, handleLoadStop } from '../src/panel/main/handlers/load-handler';
 import { handleBulkRun, handleBulkStop } from '../src/panel/main/handlers/bulk-handler';
+import { handleInterceptorStart, handleInterceptorStop } from '../src/panel/main/handlers/interceptor-handler';
 import { window as vscodeWindow, Uri } from './vscode-shim';
 import * as fs from 'fs';
 
@@ -767,6 +768,14 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
 
     // ── Load testing — real requests, measured.
     // ── Bulk URL checks — real responses, run with a worker pool.
+    // ── Request interceptor — the panel posted these to nothing at all.
+    case 'interceptor:start':
+      handleInterceptorStart(msg, post);
+      break;
+    case 'interceptor:stop':
+      handleInterceptorStop(msg, post);
+      break;
+
     case 'bulk:run':
       handleBulkRun(msg, post);
       break;
