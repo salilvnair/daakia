@@ -1,5 +1,5 @@
 import type React from 'react';
-import { TableIcon, BracesIcon, XmlTagIcon, CodeIcon, SchemaIcon, FileTextIcon, FileUploadIcon, CloseIcon } from '../../../icons';
+import { TableIcon, BracesIcon, XmlTagIcon, CodeIcon, FileTextIcon, FileUploadIcon, CloseIcon } from '../../../icons';
 
 /** Content type → bodyMode mapping */
 export const CONTENT_TYPE_MODE: Record<string, string> = {
@@ -77,18 +77,20 @@ export const CONTENT_TYPE_PLACEHOLDER: Record<string, string> = {
  * it in this list, and can set any header it likes from the Headers tab.
  */
 export const CONTENT_TYPE_OPTIONS: BodyTypeOption[] = [
-  { value: '_h_form', label: 'Form', isHeader: true },
-  { value: 'multipart/form-data', label: 'Multipart Form', icon: <TableIcon size={13} /> },
-  { value: 'application/x-www-form-urlencoded', label: 'Form URL Encoded', icon: <TableIcon size={13} /> },
+  // No Body leads, under no header: it is the default for a GET, the thing
+  // people come back to, and a group of one is a header wasted on it.
+  { value: 'none', label: 'No Body', icon: <CloseIcon size={13} /> },
   { value: '_h_raw', label: 'Raw', isHeader: true },
   { value: 'application/json', label: 'JSON', icon: <BracesIcon size={13} /> },
   { value: 'application/xml', label: 'XML', icon: <XmlTagIcon size={13} /> },
   { value: 'text/html', label: 'HTML', icon: <CodeIcon size={13} /> },
-  { value: 'application/yaml', label: 'YAML', icon: <SchemaIcon size={13} /> },
+  { value: 'application/yaml', label: 'YAML', icon: <XmlTagIcon size={13} /> },
   { value: 'text/plain', label: 'Text', icon: <FileTextIcon size={13} /> },
+  { value: '_h_form', label: 'Form', isHeader: true },
+  { value: 'multipart/form-data', label: 'Multipart Form', icon: <TableIcon size={13} /> },
+  { value: 'application/x-www-form-urlencoded', label: 'Form URL Encoded', icon: <TableIcon size={13} /> },
   { value: '_h_other', label: 'Other', isHeader: true },
   { value: 'application/octet-stream', label: 'File / Binary', icon: <FileUploadIcon size={13} /> },
-  { value: 'none', label: 'No Body', icon: <CloseIcon size={13} /> },
 ];
 
 export interface BodyTypeOption {
