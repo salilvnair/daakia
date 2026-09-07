@@ -2428,3 +2428,18 @@ export function ClipboardCompareIcon(props: IconProps) {
     </svg>
   );
 }
+
+/**
+ * A compass — the Daakia Tour's nav icon.
+ *
+ * A tour is the one page in the wiki you navigate rather than read, and a
+ * compass says that where a document page icon would not.
+ */
+export function CompassIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m15.5 8.5-2.1 5-5 2.1 2.1-5z" />
+    </svg>
+  );
+}

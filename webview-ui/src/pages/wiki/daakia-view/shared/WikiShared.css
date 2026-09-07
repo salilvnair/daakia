@@ -182,20 +182,29 @@ div:has(> .dw-section-title) {
   margin-bottom: 20px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
 }
+/* A tinted header, not a saturated one.
+
+   This used to be the raw accent at full strength across the whole banner —
+   a wall of cyan behind white text, once per section, which shouted over the
+   prose it was introducing. The accent now shows as a wash over the card's
+   own surface plus a solid rule on the leading edge, so the eye still finds
+   the section boundary without the page turning into stripes. */
 .dw-section-title {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
+  font-size: 15.5px;
+  font-weight: 650;
+  color: var(--dw-text);
   margin: 0;
-  padding: 16px 20px;
+  padding: 13px 20px;
   letter-spacing: -0.01em;
   background: linear-gradient(135deg,
-    var(--dw-accent) 0%,
-    color-mix(in srgb, var(--dw-accent) 65%, #000 20%) 100%
+    color-mix(in srgb, var(--dw-accent) 16%, var(--dw-surface)) 0%,
+    color-mix(in srgb, var(--dw-accent) 6%, var(--dw-surface)) 100%
   );
+  border-bottom: 1px solid color-mix(in srgb, var(--dw-accent) 22%, transparent);
+  box-shadow: inset 3px 0 0 0 var(--dw-accent);
   /* Leaves room below the pinned TocBar when a jump-link scrolls this
      section's card into view — otherwise the sticky bar covers the title. */
   scroll-margin-top: 42px;

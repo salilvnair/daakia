@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SideNavView, type SideNavItem } from '@salilvnair/dui';
+import { DaakiaTourView } from './tour/DaakiaTourView';
 import { QuickStartView } from './platform/QuickStartView';
 import { RestView } from './rest/RestView';
 import { GqlView } from './gql/GqlView';
@@ -19,7 +20,7 @@ import { Dk8sDoctorView } from './dk8s/Dk8sDoctorView';
 import { Dk8sArchiveView } from './dk8s/Dk8sArchiveView';
 import { Dk8sCommandsView } from './dk8s/Dk8sCommandsView';
 import { Dk8sViewsView } from './dk8s/Dk8sViewsView';
-import {
+import { CompassIcon,
   DocumentIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge,
   ProtocolGrpcBadge, ProtocolSoapBadge, ServerIcon, CollectionsFolderIcon,
   GeneralAssistantIcon, SettingsIcon, Dk8sIcon, SearchIcon, StethoscopeIcon,
@@ -28,7 +29,7 @@ import {
 
 // ─── Wiki tabs ──────────────────────────────────────────────────────────────
 
-export type TabId = 'quick-start' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views';
+export type TabId = 'daakia-tour' | 'quick-start' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views';
 
 interface Tab {
   id: TabId;
@@ -38,6 +39,7 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
+  { id: 'daakia-tour',      label: 'Daakia Tour',       color: 'var(--color-accent)',             icon: <CompassIcon size={15} /> },
   { id: 'quick-start',      label: 'Quick Start',       color: 'var(--color-accent)',             icon: <DocumentIcon size={15} /> },
   { id: 'rest',              label: 'REST API',          color: 'var(--color-protocol-rest)',      icon: <ProtocolRestBadge size={16} /> },
   { id: 'gql',               label: 'GraphQL',           color: 'var(--color-protocol-graphql)',   icon: <ProtocolGraphQLBadge size={16} /> },
@@ -69,6 +71,9 @@ export const WIKI_TABS_FULL: Tab[] = TABS;
 
 const NAV_ITEMS: SideNavItem[] = [
   { id: 'g-start', label: 'Get Started', isGroup: true, children: [
+    // The tour first: it is the page for somebody who has not opened Daakia
+    // yet, and everything below it reads better once you have seen the app.
+    { id: 'daakia-tour', label: TAB_BY_ID['daakia-tour'].label, icon: TAB_BY_ID['daakia-tour'].icon },
     { id: 'quick-start', label: TAB_BY_ID['quick-start'].label, icon: TAB_BY_ID['quick-start'].icon },
   ] },
   { id: 'g-protocols', label: 'Protocols', isGroup: true, children: [
@@ -155,6 +160,7 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
           background, not just "default styled"), which is why the wiki
           previously rendered as borderless, backgroundless floating text. */}
       <div className="dw-root flex-1 overflow-hidden relative min-w-0">
+        {activeId === 'daakia-tour'    && <DaakiaTourView />}
         {activeId === 'quick-start'    && <QuickStartView onNavigate={onSelect} />}
         {activeId === 'rest'           && <RestView />}
         {activeId === 'gql'            && <GqlView />}

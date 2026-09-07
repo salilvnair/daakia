@@ -1,0 +1,321 @@
+/* Daakia Tour — see DaakiaTourView.tsx.
+
+   The look is the dk8s wiki's: a tinted hero, accent used as a rule and a
+   wash rather than a fill, and one saturated thing per screen — here the
+   markers, because they are the only part you are meant to click. */
+
+.dt-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--dw-bg, var(--color-panel));
+}
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+
+.dt-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 18px 24px 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--dw-border, var(--color-surface-border));
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--dw-accent, var(--color-accent)) 14%, var(--dw-surface, var(--color-surface))) 0%,
+    color-mix(in srgb, var(--dw-accent, var(--color-accent)) 4%, var(--dw-surface, var(--color-surface))) 62%,
+    var(--dw-surface, var(--color-surface)) 100%
+  );
+}
+.dt-hero-main { flex: 1; min-width: 0; }
+.dt-hero-eyebrow {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dw-accent, var(--color-accent));
+  margin-bottom: 6px;
+}
+.dt-hero-title {
+  font-size: 21px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  color: var(--dw-text, var(--color-text-primary));
+  margin: 0 0 6px;
+  text-wrap: balance;
+}
+.dt-hero-blurb {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--dw-muted, var(--color-text-secondary));
+  margin: 0;
+  max-width: 78ch;
+}
+.dt-hero-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.dt-chapter {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--dw-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--dw-accent, var(--color-accent)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dw-accent, var(--color-accent)) 28%, transparent);
+  white-space: nowrap;
+}
+.dt-count {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dw-text, var(--color-text-primary));
+  font-weight: 650;
+}
+.dt-count i { font-style: normal; opacity: 0.4; margin: 0 2px; }
+
+/* ── Chapter rail ───────────────────────────────────────────────────────── */
+
+.dt-rail {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 24px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--dw-border, var(--color-surface-border));
+}
+.dt-rail-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.dt-rail-label {
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--dw-muted, var(--color-text-muted));
+  white-space: nowrap;
+}
+.dt-rail-dots { display: flex; gap: 4px; }
+.dt-rail-dot {
+  width: 18px;
+  height: 4px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--dw-text, var(--color-text-primary)) 14%, transparent);
+  transition: background 0.16s, width 0.16s;
+}
+.dt-rail-dot:hover { background: color-mix(in srgb, var(--dw-accent, var(--color-accent)) 45%, transparent); }
+.dt-rail-dot--on { width: 26px; background: var(--dw-accent, var(--color-accent)); }
+
+/* ── Stage ──────────────────────────────────────────────────────────────── */
+
+.dt-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+/* The wrapper is not clipped, so a popover near an edge is not cut in half.
+   The picture inside it is. */
+.dt-stage-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+}
+.dt-stage {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--dw-border, var(--color-surface-border));
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1), 0 18px 40px rgba(0,0,0,0.16);
+  background: var(--dw-surface, var(--color-surface));
+}
+.dt-shot { pointer-events: none; user-select: none; }
+/* Unscaled and exactly over the picture, so percentages still land correctly
+   while the markers keep their natural size. */
+.dt-spots { position: absolute; top: 0; left: 0; right: 0; }
+
+.dt-stage--missing {
+  height: auto;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--dw-muted, var(--color-text-muted));
+  font-size: 12px;
+}
+.dt-stage--missing code {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--dw-text, var(--color-text-primary)) 6%, transparent);
+}
+
+.dt-hint {
+  font-size: 11px;
+  color: var(--dw-muted, var(--color-text-muted));
+  margin: 0;
+}
+
+/* ── Markers ────────────────────────────────────────────────────────────── */
+
+.dt-spot { position: absolute; transform: translate(-50%, -50%); }
+
+.dt-dot {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--dw-accent, var(--color-accent));
+  border: 2px solid color-mix(in srgb, #fff 70%, transparent);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+  transition: transform 0.14s;
+}
+.dt-dot:hover { transform: scale(1.12); }
+.dt-dot--open { transform: scale(1.12); }
+.dt-dot-num { position: relative; z-index: 1; }
+
+/* The halo that says "this is the thing to click". Stops once the card for
+   it is open — it has done its job by then. */
+.dt-dot-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 999px;
+  border: 2px solid var(--dw-accent, var(--color-accent));
+  opacity: 0.55;
+  animation: dt-pulse 2.1s ease-out infinite;
+}
+.dt-dot--open .dt-dot-pulse { animation: none; opacity: 0; }
+
+@keyframes dt-pulse {
+  0%   { transform: scale(0.75); opacity: 0.6; }
+  70%  { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-dot-pulse { animation: none; opacity: 0.4; }
+}
+
+/* ── Popover ────────────────────────────────────────────────────────────── */
+
+.dt-pop {
+  position: absolute;
+  left: 22px;
+  top: -8px;
+  width: 268px;
+  z-index: 5;
+  border-radius: 10px;
+  padding: 11px 12px 12px;
+  cursor: default;
+  /* Opaque on purpose: this sits over a screenshot, and a translucent card
+     lets the picture bleed through the words. */
+  background: var(--color-elevated, #1e1e1e);
+  border: 1px solid color-mix(in srgb, var(--dw-accent, var(--color-accent)) 32%, transparent);
+  box-shadow: 0 10px 34px rgba(0,0,0,0.4);
+  animation: dt-pop-in 0.13s ease-out;
+}
+.dt-pop--left { left: auto; right: 22px; }
+.dt-pop--up { top: auto; bottom: -8px; }
+
+@keyframes dt-pop-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-pop { animation: none; }
+}
+
+.dt-pop-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+.dt-pop-index {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9.5px; font-weight: 700;
+  color: var(--dw-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--dw-accent, var(--color-accent)) 15%, transparent);
+}
+.dt-pop-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--dw-text, var(--color-text-primary));
+}
+.dt-pop-close {
+  border: none; background: none; padding: 2px; cursor: pointer;
+  color: var(--dw-muted, var(--color-text-muted));
+  display: flex; align-items: center;
+}
+.dt-pop-close:hover { color: var(--dw-text, var(--color-text-primary)); }
+.dt-pop-body {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--dw-muted, var(--color-text-secondary));
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+
+.dt-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 24px 14px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--dw-border, var(--color-surface-border));
+}
+.dt-foot-mid { flex: 1; display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
+.dt-pip {
+  width: 7px; height: 7px; border-radius: 999px; border: none; padding: 0;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--dw-text, var(--color-text-primary)) 16%, transparent);
+  transition: background 0.15s, transform 0.15s;
+}
+.dt-pip:hover { transform: scale(1.3); }
+.dt-pip--on { background: var(--dw-accent, var(--color-accent)); }
+
+.dt-nav {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 13px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--dw-text, var(--color-text-primary));
+  background: transparent;
+  border: 1px solid var(--dw-border, var(--color-surface-border));
+  transition: all 0.15s;
+}
+.dt-nav:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--dw-accent, var(--color-accent)) 45%, transparent);
+  background: color-mix(in srgb, var(--dw-accent, var(--color-accent)) 8%, transparent);
+}
+.dt-nav:disabled { opacity: 0.35; cursor: default; }
+.dt-nav--primary {
+  color: #fff;
+  background: var(--dw-accent, var(--color-accent));
+  border-color: transparent;
+}
+.dt-nav--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dw-accent, var(--color-accent)) 86%, #000);
+  border-color: transparent;
+}

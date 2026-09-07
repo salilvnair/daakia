@@ -327,6 +327,7 @@
     "lint": "eslint src/ --ext .ts",
     "backup": "node scripts/zip_daakia_latest.js",
     "audit:ai-handlers": "node scripts/audit-ai-message-contracts.mjs",
+    "screencapture": "node scripts/screencapture.mjs",
     "heap:parse": "node dist/heap-worker.js",
     "heap:verify": "node dist/heap-worker.js src/test/fixtures/heap/out/leak.hprof --verify src/test/fixtures/heap/out/leak.truth.json",
     "heap:gate": "node src/test/fixtures/heap/gate.test.mjs",
