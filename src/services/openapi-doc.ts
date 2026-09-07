@@ -7,12 +7,18 @@
  */
 
 export interface OAParam { name: string; in: string; schema: { type: string }; required?: boolean; }
-export interface OARequestBody { content: Record<string, { schema: { type: string } }>; required: boolean; }
+export interface OAMediaType {
+  schema: Record<string, unknown>;
+  /** One saved response, shown as the example for this media type. */
+  example?: unknown;
+}
+export interface OARequestBody { content: Record<string, OAMediaType>; required: boolean; }
+export interface OAResponse { description: string; content?: Record<string, OAMediaType>; }
 export interface OAOperation {
   summary: string; description?: string; operationId: string; tags: string[];
   parameters?: OAParam[]; requestBody?: OARequestBody;
   security?: Record<string, string[]>[];
-  responses: Record<string, { description: string }>;
+  responses: Record<string, OAResponse>;
 }
 
 type OASecurityScheme =
@@ -120,4 +126,124 @@ export function buildOpenApiDoc(collectionName: string, ctx: OAContext) {
     ...(Object.keys(schemes).length ? { components: { securitySchemes: schemes } } : {}),
     paths: ctx.paths,
   };
+}
+
+/**
+ * A JSON Schema inferred from a body that actually came back.
+ *
+ * Every request body exported as `{ type: 'object' }` and every response as a
+ * bare description — a stub spec, produced by an app that had a real payload
+ * sitting right there. This walks one, which is enough to be useful and
+ * honest about what it is: a description of one example, not a contract.
+ *
+ * Depth and width are capped. A deeply nested response would otherwise
+ * produce a spec longer than the API it describes, and nobody reads page
+ * fourteen of an inferred schema.
+ */
+export function inferSchema(value: unknown, depth = 0): Record<string, unknown> {
+  if (value === null) return { type: 'null' };
+  if (depth >= MAX_SCHEMA_DEPTH) return {};
+
+  if (Array.isArray(value)) {
+    // The first element, because an array of mixed shapes is a union nobody
+    // can act on and a per-element walk is unbounded work for a stub.
+    return value.length > 0
+      ? { type: 'array', items: inferSchema(value[0], depth + 1) }
+      : { type: 'array' };
+  }
+
+  switch (typeof value) {
+    case 'string': return stringSchema(value);
+    case 'number': return Number.isInteger(value) ? { type: 'integer' } : { type: 'number' };
+    case 'boolean': return { type: 'boolean' };
+    case 'object': break;
+    default: return {};
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>).slice(0, MAX_SCHEMA_PROPS);
+  const properties: Record<string, unknown> = {};
+  for (const [k, v] of entries) properties[k] = inferSchema(v, depth + 1);
+  return {
+    type: 'object',
+    properties,
+    /*
+      Every key that was present is required.
+
+      An inferred schema describes the one body it saw, and in that body every
+      key it lists was there. Marking them optional would describe a different,
+      weaker thing — and someone hand-editing the spec afterwards can relax it,
+      which is easier than working out what was ever present.
+    */
+    ...(entries.length ? { required: entries.map(([k]) => k) } : {}),
+  };
+}
+
+const MAX_SCHEMA_DEPTH = 8;
+const MAX_SCHEMA_PROPS = 60;
+
+/** Formats worth naming, recognised conservatively enough to be right. */
+function stringSchema(value: string): Record<string, unknown> {
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    return { type: 'string', format: 'date-time' };
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return { type: 'string', format: 'date' };
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+    return { type: 'string', format: 'uuid' };
+  }
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) return { type: 'string', format: 'email' };
+  return { type: 'string' };
+}
+
+/** Parse a body and infer from it, or say nothing rather than guess. */
+export function schemaFromBody(body: string | undefined): Record<string, unknown> | undefined {
+  if (!body || !body.trim()) return undefined;
+  try {
+    return inferSchema(JSON.parse(body));
+  } catch {
+    // Not JSON — XML, a form, an image. An inferred JSON schema would be a
+    // claim about a body this is not.
+    return undefined;
+  }
+}
+
+/**
+ * The `responses` block, from what this request has actually returned.
+ *
+ * Saved examples are the only real knowledge the app has about what comes
+ * back, so a request with them describes its own responses — status by
+ * status, with a schema inferred from the body and the body itself as the
+ * example. Without them the old placeholder trio stands: it says nothing, but
+ * it says it in a shape tools can read.
+ */
+export function responsesFrom(examples: unknown): Record<string, OAResponse> {
+  const list = Array.isArray(examples) ? examples as Record<string, unknown>[] : [];
+  const out: Record<string, OAResponse> = {};
+
+  for (const ex of list) {
+    const status = typeof ex.status === 'number' && ex.status > 0 ? String(ex.status) : null;
+    if (!status || out[status]) continue;   // First example for a status wins.
+    const name = typeof ex.name === 'string' ? ex.name : '';
+    const statusText = typeof ex.statusText === 'string' ? ex.statusText : '';
+    const body = typeof ex.body === 'string' ? ex.body : '';
+    const ct = typeof ex.contentType === 'string' && ex.contentType
+      ? ex.contentType.split(';')[0]!.trim()
+      : 'application/json';
+
+    const schema = schemaFromBody(body);
+    out[status] = {
+      description: name || statusText || `Response ${status}`,
+      ...(schema ? { content: { [ct]: { schema, example: safeParse(body) } } } : {}),
+    };
+  }
+
+  if (Object.keys(out).length > 0) return out;
+  return {
+    '200': { description: 'Successful response' },
+    '400': { description: 'Bad request' },
+    '500': { description: 'Server error' },
+  };
+}
+
+function safeParse(body: string): unknown {
+  try { return JSON.parse(body); } catch { return undefined; }
 }

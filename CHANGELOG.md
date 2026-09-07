@@ -132,6 +132,14 @@ UI.
 - The exporter emits **3.1.0**, the version the AI doc generator has always
   claimed — one app was producing two spec versions depending which button
   you pressed
+- **Request bodies carry an inferred schema** instead of
+  `{ type: 'object' }` — true of every JSON payload ever written, and useful
+  for nothing. Types, `integer` apart from `number`, and `date-time`, `date`,
+  `uuid` and `email` formats where a value is unambiguous
+- **Responses come from saved examples**: a status per example, a schema
+  inferred from its body, and the body itself as the example. Without any,
+  the old 200/400/500 placeholders stand — they say nothing, but in a shape
+  tools can read
 
 ### Fixed
 - **Imported Postman tests said the opposite of what they meant.**
@@ -162,6 +170,8 @@ UI.
 - A second, superseded gRPC client and a "Coming soon" protocol placeholder,
   both unreferenced; the realtime protocol selector's unreachable "soon"
   badge
+- The orphaned CSV request-templating panel — the runner and the CLI both
+  iterate over a data file now, which is what it was written for
 
 ---
 

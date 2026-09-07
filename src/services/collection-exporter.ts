@@ -9,7 +9,7 @@
  *   - HTTPie (5.4.12)      — named request objects JSON
  */
 import * as vscode from 'vscode';
-import { splitUrl, schemeFor, buildOpenApiDoc, type OAContext, type OAOperation } from './openapi-doc';
+import { splitUrl, schemeFor, buildOpenApiDoc, responsesFrom, schemaFromBody, type OAContext, type OAOperation } from './openapi-doc';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCollectionTree, getCollectionSubtree, getAllCollectionTrees, type CollectionTreeNode, type CollectionRequestRow } from '../storage/db';
@@ -541,7 +541,8 @@ function buildOpenApiPaths(node: CollectionTreeNode, tag: string, ctx: OAContext
       ...(typeof d.docs === 'string' && d.docs.trim() ? { description: d.docs.trim() } : {}),
       operationId: req.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, ''),
       tags: [tag],
-      responses: { '200': { description: 'Successful response' }, '400': { description: 'Bad request' }, '500': { description: 'Server error' } },
+      // What this request has actually returned, when anyone saved one.
+      responses: responsesFrom(d.examples),
     };
     if (parameters.length) op.parameters = parameters;
 
@@ -556,7 +557,17 @@ function buildOpenApiPaths(node: CollectionTreeNode, tag: string, ctx: OAContext
     const bodyMode = d.bodyMode as string;
     if (['raw', 'form-data', 'urlencoded'].includes(bodyMode) && ['post', 'put', 'patch'].includes(method)) {
       const ct = bodyMode === 'raw' ? 'application/json' : bodyMode === 'form-data' ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
-      op.requestBody = { content: { [ct]: { schema: { type: 'object' } } }, required: true };
+      /*
+        Inferred from the body that is right there.
+
+        Every request body used to export as `schema: { type: 'object' }` —
+        true of every JSON payload ever written, and useful for nothing.
+      */
+      const bodySchema = schemaFromBody(d.bodyRaw as string | undefined);
+      op.requestBody = {
+        content: { [ct]: { schema: bodySchema ?? { type: 'object' } } },
+        required: true,
+      };
     }
 
     if (!paths[urlPath]) paths[urlPath] = {};
