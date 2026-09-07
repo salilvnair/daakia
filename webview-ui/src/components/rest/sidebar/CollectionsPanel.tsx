@@ -608,6 +608,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
           { id: 'export-httpie',  label: 'HTTPie',              shortcut: 'H', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionHttpie',   collectionId: targetId }); close(); } },
           { id: 'export-openapi', label: 'OpenAPI 3.1',         shortcut: 'O', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi',  collectionId: targetId }); close(); } },
           { id: 'export-docs',    label: 'API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocs',     collectionId: targetId }); close(); } },
+          { id: 'export-docs-html', label: 'API Docs (HTML page)', shortcut: 'W', icon: <FolderExportIcon size={13} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocsHtml',     collectionId: targetId }); close(); } },
         ],
       },
       {
@@ -910,6 +911,7 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
                   { id: 'export-httpie',  label: 'HTTPie',              shortcut: 'H', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionHttpie' }); setHeaderMenu(null); } },
                   { id: 'export-openapi', label: 'OpenAPI 3.1',         shortcut: 'O', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-success)' }} />, onClick: () => { postMsg({ type: 'exportCollectionOpenApi' }); setHeaderMenu(null); } },
                   { id: 'export-docs',    label: 'API Docs (Markdown)', shortcut: 'D', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />,    onClick: () => { postMsg({ type: 'exportCollectionDocs' }); setHeaderMenu(null); } },
+                  { id: 'export-docs-html', label: 'API Docs (HTML page)', shortcut: 'W', icon: <FolderExportIcon size={14} style={{ color: 'var(--color-info)' }} />, onClick: () => { postMsg({ type: 'exportCollectionDocsHtml' }); setHeaderMenu(null); } },
                 ],
               },
             ] as DuiContextMenuItem[]}

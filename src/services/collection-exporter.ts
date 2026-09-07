@@ -10,6 +10,7 @@
  */
 import * as vscode from 'vscode';
 import { splitUrl, schemeFor, buildOpenApiDoc, responsesFrom, schemaFromBody, type OAContext, type OAOperation } from './openapi-doc';
+import { buildDocsHtml, type DocsNode } from './docs-bundle';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCollectionTree, getCollectionSubtree, getAllCollectionTrees, type CollectionTreeNode, type CollectionRequestRow } from '../storage/db';
@@ -687,6 +688,37 @@ function buildMarkdownDocs(node: CollectionTreeNode, depth: number, lines: strin
   for (const child of node.children) {
     buildMarkdownDocs(child, depth + 1, lines);
   }
+}
+
+/**
+ * The collection as one HTML page you can commit.
+ *
+ * The Markdown export is for a diff; this is for reading. One file, no CDN,
+ * no fonts, no scripts fetched at open time — it gets opened from a file://
+ * URL on a laptop with no network, which is exactly when someone is
+ * debugging.
+ */
+export async function handleExportCollectionDocsHtml(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+) {
+  const collectionId = msg.collectionId as string;
+  const tree = getCollectionTree();
+  const node = collectionId ? findNode(tree, collectionId) : null;
+  const roots = (node ? [node] : tree) as unknown as DocsNode[];
+  const title = node?.name || 'Daakia API Documentation';
+
+  const html = buildDocsHtml(roots, title);
+  const defaultName = node ? `${node.name}.docs.html` : 'daakia-api-docs.html';
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: 'Export as API Documentation (HTML)',
+    defaultUri: vscode.Uri.file(defaultName),
+    filters: { 'HTML Files': ['html'], 'All Files': ['*'] },
+  });
+  if (!uri) return;
+
+  fs.writeFileSync(uri.fsPath, html, 'utf8');
+  postMessage({ type: 'toast', toastType: 'success', message: `API documentation exported to ${path.basename(uri.fsPath)}` });
 }
 
 export async function handleExportCollectionDocs(

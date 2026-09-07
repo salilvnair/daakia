@@ -40,7 +40,7 @@ import {
   handleExportCollectionDaakia, handleExportCollectionPostman,
   handleExportCollectionBruno, handleExportCollectionInsomnia,
   handleExportCollectionHttpie, handleExportCollectionOpenApi,
-  handleExportCollectionDocs,
+  handleExportCollectionDocs, handleExportCollectionDocsHtml,
 } from '../../services/collection-exporter';
 import {
   handleStartMockServer, handleStopMockServer, handleUpdateMockRoutes,
@@ -1073,6 +1073,9 @@ export class MainPanel {
         break;
       case 'exportCollectionDocs':
         handleExportCollectionDocs(msg, this._post);
+        break;
+      case 'exportCollectionDocsHtml':
+        handleExportCollectionDocsHtml(msg, this._post);
         break;
       case 'runCollection':
         handleRunCollection(msg, this._post);
