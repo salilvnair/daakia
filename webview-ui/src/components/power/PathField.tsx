@@ -18,6 +18,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { TextInputView } from '@salilvnair/dui';
 import { pathSuggestions } from '../../services/request/chaining';
 
 export function PathField({ value, onChange, responseBody, placeholder, disabled }: {
@@ -116,10 +117,14 @@ export function PathField({ value, onChange, responseBody, placeholder, disabled
 
   return (
     <div ref={boxRef} className="relative flex-1 min-w-0">
-      <input
-        type="text"
-        value={value}
+      {/* dui's input, so this box is the same height as the variable box
+          beside it and every other field in the panel — a hand-rolled one
+          came out 24px against their 28. */}
+      <TextInputView
         ref={inputRef}
+        size="md"
+        width="fw"
+        value={value}
         onChange={e => { onChange(e.target.value); setOpen(true); place(); }}
         onFocus={() => { setOpen(true); place(); }}
         onKeyDown={onKeyDown}
@@ -127,12 +132,7 @@ export function PathField({ value, onChange, responseBody, placeholder, disabled
         disabled={disabled}
         spellCheck={false}
         autoComplete="off"
-        className="w-full px-2 py-1 rounded text-[11px] font-mono outline-none"
-        style={{
-          backgroundColor: 'var(--color-input-bg)',
-          border: '1px solid var(--color-input-border)',
-          color: 'var(--color-text-primary)',
-        }}
+        inputStyle={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
       />
 
       {open && options.length > 0 && !disabled && rect && createPortal(

@@ -7,13 +7,16 @@
  */
 import { useState } from 'react';
 import { useToastStore } from '../../store/toast-store';
-import { PlusIcon, TrashIcon, LinkIcon } from '../../icons';
-import { ActionButtonView } from '@salilvnair/dui';
+import { PlusIcon, TrashIcon, LinkIcon, CheckCircleFilledIcon } from '../../icons';
+import { ActionButtonView, RadioGroupView, TextInputView, IconButtonView, ArrowRightIcon } from '@salilvnair/dui';
 import { PathField } from './PathField';
 import { applyChainExtractions, extractValue } from '../../services/request/chaining';
 import type { ChainExtraction } from '../../store/tabs-store';
 
 export type { ChainExtraction };
+
+/** One grid for the header row and every rule, so the columns line up. */
+const ROW_COLS = 'grid-cols-[24px_1fr_28px_minmax(160px,0.45fr)_28px]';
 
 interface Props {
   tabId: string;
@@ -98,77 +101,112 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
             Extract values from the response and inject them as environment variables for use in subsequent requests.
           </p>
 
-          {extractions.map(ex => (
-            <div key={ex.id} className="flex items-start gap-2 p-2 rounded-md border"
-              style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
-              <input
-                type="checkbox"
-                checked={ex.enabled}
-                onChange={e => updateExtraction(ex.id, { enabled: e.target.checked })}
-                className="flex-shrink-0"
-              />
+          {/*
+            A key/value table, like the ones this sits beside.
 
-              {/* Source */}
-              <div className="flex flex-col gap-1 w-[80px] flex-shrink-0">
-                {(['body', 'header', 'status'] as const).map(src => (
-                  <label key={src} className="flex items-center gap-1 cursor-pointer">
-                    <input type="radio" name={`src-${ex.id}`} value={src} checked={ex.source === src}
-                      onChange={() => updateExtraction(ex.id, { source: src })} className="w-3 h-3" />
-                    <span className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>{src}</span>
-                  </label>
-                ))}
-              </div>
+            The row was a checkbox, a column of three stacked radios, two
+            boxes and an arrow, all on one line — nothing lined up with the
+            Params or Form-data tables a tab away, and the source radios ate
+            the left margin of every row. Now: a header row, a round enable
+            mark, path and variable in aligned columns with a real arrow
+            between them, and the source as one horizontal group above the
+            pair it applies to.
+          */}
+          {extractions.length > 0 && (
+            <div className={`grid ${ROW_COLS} gap-2 px-1`}>
+              <div />
+              <div className="text-[10px] uppercase tracking-wide font-medium"
+                   style={{ color: 'var(--color-text-muted)' }}>Path in response</div>
+              <div />
+              <div className="text-[10px] uppercase tracking-wide font-medium"
+                   style={{ color: 'var(--color-text-muted)' }}>Variable</div>
+              <div />
+            </div>
+          )}
 
-              {/* Path, with what it finds underneath it */}
-              {/* 70/30 of the leftover: the path box was taking the whole row
-                  while the variable name — the thing you read back in
-                  `{{...}}` — sat in a fixed 120px. */}
-              <div className="flex-[0.7] min-w-0 flex flex-col gap-1">
-                <PathField
-                  value={ex.path}
-                  onChange={next => updateExtraction(ex.id, { path: next })}
-                  responseBody={ex.source === 'body' ? responseBody : undefined}
-                  placeholder={ex.source === 'header' ? 'Authorization' : ex.source === 'status' ? '(status code)' : 'data.user.id'}
-                  disabled={ex.source === 'status'}
+          {extractions.map(ex => {
+            const preview = extractedPreviews.find(p => p.ex.id === ex.id)?.value;
+            return (
+              <div key={ex.id} className="flex flex-col gap-2 p-2 rounded-md border"
+                style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
+
+                {/* Where the value comes from, across the top of its own rule. */}
+                <RadioGroupView
+                  direction="horizontal"
+                  size="sm"
+                  value={ex.source}
+                  onChange={v => updateExtraction(ex.id, { source: v as ChainExtraction['source'] })}
+                  options={[
+                    { value: 'body', label: 'Body' },
+                    { value: 'header', label: 'Header' },
+                    { value: 'status', label: 'Status' },
+                  ]}
+                  accentColor="var(--color-protocol-rest, var(--color-accent))"
                 />
 
-                {/*
-                  What this path pulls out of the response on screen.
+                <div className={`grid ${ROW_COLS} gap-2 items-start`}>
+                  {/* The same round mark the Form-data and Params tables use
+                      for "this row counts". */}
+                  <button
+                    type="button"
+                    title={ex.enabled ? 'Rule is on — click to disable' : 'Rule is off — click to enable'}
+                    onClick={() => updateExtraction(ex.id, { enabled: !ex.enabled })}
+                    className="flex items-center justify-center h-[28px] border-none bg-transparent cursor-pointer p-0"
+                  >
+                    {ex.enabled
+                      ? <CheckCircleFilledIcon size={16} checked className="text-[var(--color-success)]" />
+                      : <CheckCircleFilledIcon size={16} checked={false} />}
+                  </button>
 
-                  It used to sit at the far right of the row, truncated to
-                  80px — which is enough for `ada@…` and useless for a token,
-                  the one value anybody chains. Under the box it has the whole
-                  width, and it sits next to the thing that produced it.
-                */}
-                {responseBody && ex.path && (
-                  <span className="text-[10px] font-mono truncate"
-                    style={{
-                      color: extractedPreviews.find(p => p.ex.id === ex.id)?.value
-                        ? 'var(--color-success)' : 'var(--color-text-muted)'
-                    }}>
-                    {extractedPreviews.find(p => p.ex.id === ex.id)?.value ?? 'no value at this path'}
-                  </span>
-                )}
+                  <div className="min-w-0 flex flex-col gap-1">
+                    <PathField
+                      value={ex.path}
+                      onChange={next => updateExtraction(ex.id, { path: next })}
+                      responseBody={ex.source === 'body' ? responseBody : undefined}
+                      placeholder={ex.source === 'header' ? 'Authorization' : ex.source === 'status' ? '(status code)' : 'data.user.id'}
+                      disabled={ex.source === 'status'}
+                    />
+
+                    {/*
+                      What this path pulls out of the response on screen,
+                      under the box that names it.
+                    */}
+                    {responseBody && ex.path && (
+                      <span className="text-[10px] font-mono truncate px-0.5"
+                        style={{ color: preview ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                        {preview ?? 'no value at this path'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Reads as the direction it describes: out of the response,
+                      into the variable. */}
+                  <div className="flex items-center justify-center h-[28px]">
+                    <ArrowRightIcon size={17} strokeWidth={2.4}
+                      style={{ color: 'var(--color-text-muted)' }} />
+                  </div>
+
+                  <TextInputView
+                    size="md"
+                    width="fw"
+                    value={ex.variableName}
+                    onChange={e => updateExtraction(ex.id, { variableName: e.target.value })}
+                    placeholder="variableName"
+                    inputStyle={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                  />
+
+                  <div className="flex items-center justify-center h-[28px]">
+                    <IconButtonView
+                      icon={<TrashIcon size={13} />}
+                      size="sm"
+                      tooltip="Remove this rule"
+                      onClick={() => removeExtraction(ex.id)}
+                    />
+                  </div>
+                </div>
               </div>
-
-              <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>→</span>
-
-              {/* Variable name */}
-              <input
-                type="text"
-                value={ex.variableName}
-                onChange={e => updateExtraction(ex.id, { variableName: e.target.value })}
-                placeholder="variableName"
-                className="flex-[0.3] min-w-[130px] px-2 py-1 rounded text-[11px] font-mono outline-none"
-                style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-              />
-
-              <button type="button" onClick={() => removeExtraction(ex.id)}
-                className="w-6 h-6 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer flex-shrink-0">
-                <TrashIcon size={11} />
-              </button>
-            </div>
-          ))}
+            );
+          })}
 
           {/*
             Both buttons in the same tinted shape the rest of the app uses.
