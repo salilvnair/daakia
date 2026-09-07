@@ -94,6 +94,19 @@ UI.
   payloads
 - Chaining rules persist with the request too, so they survive a closed tab
 
+### Added — Saved response examples
+- **Save example** on any response keeps it under the request, named after
+  its status and renameable — the 200 that works, the 401 when the token has
+  expired, the 422 with the validation body somebody will ask about. A
+  request used to store exactly one response: the last one
+- They **travel with the request** into the Markdown docs export, which is
+  the half of the documentation a URL and a payload cannot give you
+- Kept deliberately small, because they ride in the record the sidebar reads
+  whole: bodies over 64 KB are trimmed and say so, the last 20 survive, and
+  only headers describing the body or the outcome are kept —
+  `Set-Cookie` is dropped, since a saved example is a file that gets
+  committed
+
 ### Changed — The OpenAPI export describes a real API
 - **`servers`** — the base URL is declared once instead of baked into every
   path, including the `{{baseUrl}}` convention every exported Postman

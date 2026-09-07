@@ -13,10 +13,14 @@ import { TimelineView } from './TimelineView';
 import { ResponseAiToolbar } from './ResponseAiToolbar';
 import { ResponseVisualization, canVisualize } from '../../power/ResponseVisualization';
 import { ResponseAssertionsBuilder } from '../../power/ResponseAssertionsBuilder';
+import { ExamplesView } from './ExamplesView';
+import { addExample, defaultName, toExample } from '../../../services/request/examples';
+import { useToastStore } from '../../../store/toast-store';
+import { ButtonView } from '@salilvnair/dui';
 import { postMsg } from '../../../vscode';
 import { useDebugStore } from '../../../store/debug-store';
 
-type ResponseView = 'json' | 'raw' | 'visualize' | 'assert' | 'headers' | 'cookies' | 'timeline' | 'tests';
+type ResponseView = 'json' | 'raw' | 'visualize' | 'assert' | 'examples' | 'headers' | 'cookies' | 'timeline' | 'tests';
 
 /** A body we can build assertions against by clicking it. */
 function isJsonObject(body: string): boolean {
@@ -111,9 +115,29 @@ export function ResponsePanel() {
     have left the panel on a tab that is no longer in the row, showing
     nothing at all.
   */
+  const examples = tab.examples ?? [];
+
+  /*
+    Saving is on the response, not in a menu three levels down: it is the
+    thing you want the moment you are looking at a response worth keeping.
+  */
+  const saveExample = () => {
+    const next = addExample(examples, toExample(response, defaultName(response, examples)));
+    useTabsStore.getState().updateTab(tab.id, { examples: next });
+    useToastStore.getState().addToast({
+      type: 'success',
+      message: next.length === examples.length
+        // The cap dropped the oldest rather than refusing the click.
+        ? `Saved — keeping the last ${next.length} examples`
+        : `Saved as “${next[0]!.name}”`,
+    });
+    setActiveView('examples');
+  };
+
   const canShow: Record<string, boolean> = {
     visualize: canVisualize(response.body, response.contentType),
     assert: isJsonObject(response.body),
+    examples: examples.length > 0,
     tests: !!hasScriptOutput,
   };
   const view: ResponseView = canShow[activeView] === false ? 'json' : activeView;
@@ -147,6 +171,9 @@ export function ResponsePanel() {
               ? [{ id: 'visualize', label: 'Visualize' }] : []),
             ...(isJsonObject(response.body)
               ? [{ id: 'assert', label: 'Assert' }] : []),
+            // Always present once anything is saved, because its content does
+            // not depend on the response currently on screen.
+            ...(examples.length ? [{ id: 'examples', label: 'Examples', badge: examples.length }] : []),
             { id: 'headers', label: 'Headers', badge: headerEntries.length },
             { id: 'cookies', label: 'Cookies', badge: cookies.length > 0 ? cookies.length : undefined },
             ...(hasScriptOutput ? [{ id: 'tests', label: 'Tests', badge: response.testResults?.length }] : []),
@@ -157,6 +184,20 @@ export function ResponsePanel() {
           size="md"
           variant="underline"
         />
+
+        {/* `whiteSpace: nowrap` because the row it sits in is a flex line with
+            three AI buttons after it — without it the label wrapped to two
+            lines and the button grew taller than everything beside it. */}
+        <div className="flex items-center gap-1.5 shrink-0" style={{ whiteSpace: 'nowrap' }}>
+          <ButtonView
+            size="xs"
+            variant="secondary"
+            onClick={saveExample}
+            accentColor="var(--color-protocol-rest, var(--color-accent))"
+          >
+            Save example
+          </ButtonView>
+        </div>
 
         <ResponseAiToolbar
           tabId={tab.id}
@@ -197,6 +238,10 @@ export function ResponsePanel() {
             request's post-response script, where the runner reads them. */}
         {view === 'assert' && (
           <ResponseAssertionsBuilder responseBody={response.body} tabId={tab.id} />
+        )}
+
+        {view === 'examples' && (
+          <ExamplesView tabId={tab.id} examples={examples} />
         )}
 
         {view === 'headers' && (

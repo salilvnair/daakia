@@ -179,6 +179,7 @@ export function saveRequest(tab: RequestTab) {
       // travel with every export and sync that already carries `data`.
       chainExtractions: tab.chainExtractions,
       docs: tab.docs,
+      examples: tab.examples,
     };
 
     if (tab.protocol === 'ai') {

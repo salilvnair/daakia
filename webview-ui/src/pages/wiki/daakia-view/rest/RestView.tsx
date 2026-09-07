@@ -419,6 +419,7 @@ dk.env.set('user_id', dk.response.json().id);`}
             ['Raw', 'What EXACTLY did the server send, unformatted?'],
             ['Visualize', 'Show me this as a table — or render the image/PDF that came back'],
             ['Assert', 'Click a field and turn it into a test'],
+            ['Examples', 'What did this return the last time it worked — and when it did not?'],
             ['Headers', 'What headers came with it?'],
             ['Cookies', 'Did a session/auth cookie get set?'],
             ['Tests', 'Did my Post-response assertions pass?'],
@@ -430,6 +431,19 @@ dk.env.set('user_id', dk.response.json().id);`}
         Visualize shows up when the body is an array of objects, an image or a PDF — there is
         nothing to draw for a single JSON object. Assert shows up for any JSON body. A tab that
         sits there empty on most responses is one you learn to ignore.
+      </Callout>
+      <SubTitle>Examples — more than one saved response</SubTitle>
+      <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+        A request used to keep exactly one response: the last one. <b>Save example</b> keeps as many
+        as you want — the 200 that works, the 401 when the token has expired, the 422 with the
+        validation body somebody will ask about. They are named after their status, renameable, and
+        they travel with the request into the Markdown docs export.
+      </p>
+      <Callout type="info" title="Kept small on purpose">
+        Examples ride in the request itself, and that record is read whole every time the sidebar
+        loads — so a body over 64 KB is trimmed (and says so), only the headers that describe the
+        body or the outcome are kept, and the last 20 survive. <Code>Set-Cookie</Code> is dropped:
+        a saved example is a file that gets committed.
       </Callout>
       <SubTitle>Assert — a test without writing a test</SubTitle>
       <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">

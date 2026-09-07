@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ExecutionSettings } from '../components/shared/settings/execution-settings';
 import type { KeyValueRow } from '../components/shared';
+import type { ResponseExample } from '../services/request/examples';
 import { useEnvStore, GLOBAL_ENV_ID } from './env-store';
 
 // ────────────── Daakia Assistant system prompt ──────────────────────────────
@@ -100,6 +101,15 @@ export interface RequestTab {
    * migration.
    */
   docs?: string;
+  /**
+   * Saved responses, newest first.
+   *
+   * A request stored exactly one response — the last one — so "what does this
+   * look like when the token has expired" had nowhere to live. Capped and
+   * trimmed by `services/request/examples.ts`, because this rides in the same
+   * `data` blob every collection load reads whole.
+   */
+  examples?: ResponseExample[];
   // Response state
   response: ResponseData | null;
   loading: boolean;

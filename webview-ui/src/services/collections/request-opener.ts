@@ -1,6 +1,7 @@
 /** Opens a request in a tab — with deduplication and data deserialization.
  *  Shared between CollectionsPanel and HistoryPanel. */
 
+import { parseExamples } from '../request/examples';
 import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
 import type { CollectionRequest } from './tree-helpers';
@@ -95,6 +96,7 @@ export function openCollectionRequest(req: CollectionRequest, forceNewTab = fals
     variables: Array.isArray(config.variables) ? config.variables : [],
     chainExtractions: Array.isArray(config.chainExtractions) ? config.chainExtractions as never : [],
     docs: typeof config.docs === 'string' ? config.docs : '',
+    examples: parseExamples(config.examples),
     // GraphQL
     ...(protocol === 'graphql' ? {
       bodyRaw: config.bodyRaw || '',

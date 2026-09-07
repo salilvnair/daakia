@@ -598,6 +598,14 @@ export async function handleExportCollectionOpenApi(
 
 // ─── 5.4.8 — API Documentation (Markdown) ────────────────────────────────────
 
+/**
+ * How many saved examples a request contributes to the document.
+ *
+ * All of them would turn a twenty-request collection into a hundred pages of
+ * response bodies; the first few are the ones anybody reads.
+ */
+const MAX_DOC_EXAMPLES = 3;
+
 function buildMarkdownDocs(node: CollectionTreeNode, depth: number, lines: string[]) {
   const heading = '#'.repeat(Math.min(depth + 1, 6));
   lines.push(`${heading} ${node.name}`, '');
@@ -642,6 +650,25 @@ function buildMarkdownDocs(node: CollectionTreeNode, depth: number, lines: strin
       lines.push('**Request Body:**', '');
       const lang = bodyMode === 'raw' ? 'json' : bodyMode || '';
       lines.push(`\`\`\`${lang}`, bodyRaw.trim(), '```', '');
+    }
+
+    /*
+      Saved responses, which is the half of the documentation a URL and a
+      payload cannot give you: what it looks like when it works, and what it
+      looks like when the token has expired.
+    */
+    const examples = Array.isArray(d.examples) ? d.examples as Record<string, unknown>[] : [];
+    for (const ex of examples.slice(0, MAX_DOC_EXAMPLES)) {
+      const name = typeof ex.name === 'string' ? ex.name : 'Example';
+      const status = typeof ex.status === 'number' ? ex.status : '';
+      const statusText = typeof ex.statusText === 'string' ? ex.statusText : '';
+      lines.push(`**Example — ${name}** \`${status} ${statusText}\`  `.trimEnd(), '');
+      const body = typeof ex.body === 'string' ? ex.body.trim() : '';
+      if (body) {
+        const ct = typeof ex.contentType === 'string' ? ex.contentType : '';
+        lines.push(`\`\`\`${ct.includes('json') ? 'json' : ct.includes('xml') ? 'xml' : ''}`, body, '```', '');
+      }
+      if (ex.truncated === true) lines.push('_(body truncated when the example was saved)_', '');
     }
 
     lines.push('---', '');
