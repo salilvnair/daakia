@@ -8,12 +8,17 @@ import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { EditorView, CopyButtonView, AIButtonView } from '@salilvnair/dui';
+import { useComparable } from '../../services/compare/comparable-registry';
 
 /**
  * GraphQL Response panel — shows JSON response, errors, and metadata.
  */
 export function GraphQLResponse() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
+  /* Right-click → Compare with clipboard. */
+  const comparableRef = useRef<HTMLDivElement>(null);
+  useComparable(comparableRef, 'GraphQL response', () => activeTab?.response?.body ?? '');
+
   const [activePopup, setActivePopup] = useState<AssistMode | null>(null);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
   const explainRef = useRef<HTMLDivElement>(null);
@@ -162,7 +167,7 @@ export function GraphQLResponse() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div ref={comparableRef} className="flex-1 min-h-0 overflow-hidden">
         <EditorView
           value={response.body ? formatJson(response.body) : ''}
           language="json"

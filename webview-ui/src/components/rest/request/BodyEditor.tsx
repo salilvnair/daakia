@@ -10,6 +10,7 @@ import { AiBodyGenerate, type AiBodyGenerateHandle } from '../../ai/AiBodyGenera
 import { AiDataGeneratorModal } from '../../ai/AiDataGeneratorModal';
 import { AiRequestFuzzerModal } from '../../ai/AiRequestFuzzerModal';
 import { CONTENT_TYPE_MODE, CONTENT_TYPE_LANG, CONTENT_TYPE_PLACEHOLDER, bodyTypeOptions } from './bodyContentTypes';
+import { useComparable } from '../../../services/compare/comparable-registry';
 
 type Tab = ReturnType<typeof useTabsStore.getState>['tabs'][0];
 
@@ -104,8 +105,13 @@ export function BodyEditor({ tab, showFuzzer, onCloseFuzzer }: BodyEditorProps) 
     else updateTab(tab.id, { bodyUrlEncoded: [...tab.bodyUrlEncoded, newRow] });
   };
 
+  /* Right-click → Compare with clipboard. The editor's own module copy is
+     invisible to `window.monaco`, so the surface hands over its text itself. */
+  const comparableRef = useRef<HTMLDivElement>(null);
+  useComparable(comparableRef, 'Request body', () => tab.bodyRaw ?? '');
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-2">
+    <div ref={comparableRef} className="flex flex-col flex-1 min-h-0 gap-2">
       {/* Content Type row */}
       <div className="flex items-center gap-3 px-1">
         <span className="text-[12px] text-[var(--color-text-muted)]">Content Type</span>

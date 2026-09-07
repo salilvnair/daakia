@@ -11,6 +11,7 @@ import { AiResponseActionsMenu } from '../rest/response/AiResponseActionsMenu';
 import { AiResponsePatternLearning } from '../ai/AiResponsePatternLearning';
 import { AiSmartRetryAdvisor } from '../ai/AiSmartRetryAdvisor';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
+import { useComparable } from '../../services/compare/comparable-registry';
 import {
   TabView,
   EditorView,
@@ -35,6 +36,10 @@ const responseTabs: TabItem[] = [
  */
 export function GrpcResponsePanel() {
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId));
+  /* Right-click → Compare with clipboard. */
+  const comparableRef = useRef<HTMLDivElement>(null);
+  useComparable(comparableRef, 'gRPC response', () => activeTab?.response?.body ?? '');
+
   const activeTabId = useTabsStore(s => s.activeTabId);
   const storedSubTab = useUiStateStore(s => s.prefs[`grpc.response.subtab.${activeTabId}`]);
   const [activeSubTab, setActiveSubTabLocal] = useState(storedSubTab || 'body');
@@ -195,7 +200,7 @@ export function GrpcResponsePanel() {
                 <CopyButtonView text={response.body || ''} size="sm" />
               </div>
             </div>
-            <div className="flex-1 min-h-0">
+            <div ref={comparableRef} className="flex-1 min-h-0">
               <EditorView
                 value={displayBody}
                 onChange={setDisplayBody}

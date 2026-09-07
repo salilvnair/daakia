@@ -57,6 +57,8 @@ import { useExtensionMessages } from './app/use-extension-messages';
 import { ProtocolIcon, EmptyState } from './app/app-shell';
 import { CaptureBridge } from './pages/wiki/daakia-view/capture/CaptureBridge';
 import { DaakiaViewPage } from './pages/wiki/daakia-view/DaakiaViewPage';
+import { ResponseDiffModal } from './components/power/ResponseDiffModal';
+import { useCompareStore } from './store/compare-store';
 
 type FocusedPanel = 'request' | 'response' | null;
 
@@ -81,6 +83,12 @@ export default function App() {
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, []);
+  const compareOpen = useCompareStore(s => s.open);
+  const compareA = useCompareStore(s => s.a);
+  const compareB = useCompareStore(s => s.b);
+  const compareLabelA = useCompareStore(s => s.labelA);
+  const compareLabelB = useCompareStore(s => s.labelB);
+
   const activeProtocol = useTabsStore(s => s.activeProtocol);
   // Tabs that take over the whole surface, so the protocol rail should show
   // nothing as selected while one of them is open.
@@ -845,6 +853,17 @@ export default function App() {
 
       <ToastContainer />
       <RightClickMenu />
+      {/* Opened by "Compare with clipboard" in the right-click menu, from
+          wherever the data happened to be. */}
+      {compareOpen && (
+        <ResponseDiffModal
+          initialA={compareA}
+          initialB={compareB}
+          initialLabelA={compareLabelA}
+          initialLabelB={compareLabelB}
+          onClose={() => useCompareStore.getState().close()}
+        />
+      )}
       <SaveRequestModal
         open={!!saveAsTabId}
         tab={tabs.find(t => t.id === saveAsTabId) ?? null}

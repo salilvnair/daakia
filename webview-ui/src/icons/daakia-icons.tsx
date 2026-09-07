@@ -2411,3 +2411,20 @@ export function ShieldIcon(props: IconProps) {
     </svg>
   );
 }
+
+/**
+ * Compare with clipboard — a clipboard whose page is split down the middle,
+ * one half against the other. Used by the right-click entry that diffs what is
+ * under the pointer against whatever was copied.
+ */
+export function ClipboardCompareIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1z" />
+      <path d="M16 5h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1" />
+      <path d="M12 9v9" />
+      <path d="M9.5 12 8 13.5 9.5 15" />
+      <path d="M14.5 12 16 13.5 14.5 15" />
+    </svg>
+  );
+}

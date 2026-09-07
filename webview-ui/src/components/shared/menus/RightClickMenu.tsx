@@ -10,7 +10,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
-import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, ChevronDownIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon, BracesIcon, XmlTagIcon } from '../../../icons';
+import { UndoIcon, RedoIcon, CutIcon, CopyIcon, PasteIcon, SelectAllIcon, SearchIcon, WrapLinesIcon, ChevronRightIcon, ChevronDownIcon, SparkleIcon, HelpCircleIcon, FilterIcon, FilterClearIcon, BracesIcon, XmlTagIcon, ClipboardCompareIcon } from '../../../icons';
+import { candidatesFrom, pickComparable, type Comparable } from '../../../services/compare/comparable-text';
+import { openCompareWithClipboard } from '../../../services/compare/open-compare';
 import { getFilterMenu, type FilterMenu } from './filter-provider';
 import { jsonPathLevels, xPathLevels } from '@salilvnair/dui';
 
@@ -29,7 +31,29 @@ interface MenuState {
    * went away is worse than no action.
    */
   selection: string;
+  /**
+   * What "Compare with clipboard" would act on, decided when the menu opened.
+   *
+   * Captured here for the same reason as the selection: by the time the entry
+   * is clicked the pointer has moved and, in Monaco's case, the editor may
+   * have scrolled away from what was under it.
+   */
+  comparable: Comparable | null;
 }
+
+/**
+ * Diff whatever is under the pointer against the clipboard.
+ *
+ * The pair of texts is what a comparison needs and the clipboard is where the
+ * other one nearly always is — a colleague's payload, the previous run's
+ * response, the version from the ticket.
+ */
+const COMPARE_ITEM: ContextMenuItem = {
+  id: 'compareClipboard',
+  label: 'Compare with clipboard',
+  icon: <ClipboardCompareIcon size={14} />,
+  iconColor: 'var(--color-settings)',
+};
 
 const INPUT_ITEMS: ContextMenuItem[] = [
   { id: 'undo', label: 'Undo', icon: <UndoIcon size={14} />, iconColor: 'var(--color-ctx-rename)', shortcut: 'Ctrl+Z' },
@@ -212,6 +236,19 @@ function getMonacoEditorInstance(el: HTMLElement): any | null {
 
 // --- Monaco Context Menu (custom layout with compact clipboard row + submenu) ---
 
+/**
+ * Diff a Monaco editor's contents against the clipboard.
+ *
+ * A selection wins over the whole document, on the same reasoning as the plain
+ * menu: highlighting a block and asking to compare it means that block.
+ */
+function compareWithClipboard(editor: any, target: HTMLElement | null): Promise<void> {
+  return openCompareWithClipboard(pickComparable(candidatesFrom(target, {
+    selection: window.getSelection()?.toString() ?? '',
+    editorValue: editor?.getModel?.()?.getValue?.() ?? undefined,
+  })));
+}
+
 interface MonacoMenuItem {
   id: string;
   label: string;
@@ -220,6 +257,15 @@ interface MonacoMenuItem {
   iconColor?: string;
   submenu?: MonacoMenuItem[];
 }
+
+const COMPARE_GROUP: MonacoMenuItem[] = [
+  {
+    id: 'compareClipboard',
+    label: 'Compare with clipboard',
+    icon: <ClipboardCompareIcon size={14} />,
+    iconColor: 'var(--color-settings)',
+  },
+];
 
 const GOTO_SUBMENU: MonacoMenuItem[] = [
   { id: 'goToDefinition', label: 'Go to Definition', shortcut: 'F12' },
@@ -467,6 +513,14 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
       void navigator.clipboard?.writeText(id.slice(COPY_PATH.length));
       return;
     }
+    /* Before the `!editor` guard, and for the same reason as Copy Path: this
+       reads the registry rather than the editor. `editor` is null in practice
+       — `window.monaco` is a different copy of the module from the one the
+       editor bundles — so anything below that guard never runs. */
+    if (id === 'compareClipboard') {
+      void compareWithClipboard(editor, target);
+      return;
+    }
     if (!editor) return;
     // Use requestAnimationFrame to ensure DOM is updated (menu removed) before refocusing
     requestAnimationFrame(() => {
@@ -570,7 +624,7 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
         }
       });
     });
-  }, [onClose]);
+  }, [onClose, target]);
 
   // Check if there's a selection for disabling cut/copy
   const editor = editorInstanceRef.current;
@@ -595,7 +649,27 @@ function MonacoContextMenu({ position, target, onClose }: { position: { x: numbe
   // First, because it is the only entry that depends on where you clicked —
   // everything below acts on the document or the selection and is the same
   // wherever the pointer was.
-  const menuGroups = [...pathGroup(editor, position), ...baseGroups];
+  /*
+    Compare with clipboard, offered when this editor holds enough to diff.
+
+    Monaco is where the data actually is — response bodies, request bodies,
+    scripts, docs — so the entry has to exist in this menu and not only in the
+    plain one. Last in the list: the entries above are what people reach for
+    without looking, and this must not move them.
+  */
+  /* `editor` is usually null here: `window.monaco` is a different copy of the
+     module from the one the editor component bundles, so `getEditors()` finds
+     nothing. The registry is what actually answers — see
+     `services/compare/comparable-registry`. */
+  const comparable = pickComparable(candidatesFrom(target, {
+    selection: window.getSelection()?.toString() ?? '',
+    editorValue: editor?.getModel?.()?.getValue?.() ?? undefined,
+  }));
+  const menuGroups = [
+    ...pathGroup(editor, position),
+    ...baseGroups,
+    ...(comparable ? [COMPARE_GROUP] : []),
+  ];
 
   return createPortal(
     <div
@@ -764,9 +838,15 @@ export function RightClickMenu() {
     e.stopPropagation();
     e.stopImmediatePropagation();
 
+    const selectionText = window.getSelection()?.toString() ?? '';
+    const editorValue = context === 'monaco'
+      ? getMonacoEditorInstance(target)?.getModel?.()?.getValue?.()
+      : undefined;
+
     setMenu({
       x: e.clientX, y: e.clientY, context, target,
-      selection: window.getSelection()?.toString() ?? '',
+      selection: selectionText,
+      comparable: pickComparable(candidatesFrom(target, { selection: selectionText, editorValue })),
     });
   }, []);
 
@@ -786,6 +866,13 @@ export function RightClickMenu() {
     // argument is why Search Here and Search Everywhere did nothing.
     const action = subId ?? id;
     setMenu(null);
+
+    if (action === 'compareClipboard') {
+      /* Read the clipboard at click time — it is the one input genuinely
+         allowed to change between opening the menu and choosing. */
+      await openCompareWithClipboard(menu.comparable);
+      return;
+    }
 
     /*
       Filter actions, dispatched by id.
@@ -899,13 +986,20 @@ export function RightClickMenu() {
   */
   const hasSelection = !!menu.selection.trim();
 
+  /* Offered wherever there is enough data to be worth diffing — a response
+     body, a request body, a script, a docs draft — and nowhere else. */
+  const compareItems: ContextMenuItem[] = menu.comparable
+    ? [{ id: 'compare-sep', label: '', separator: true }, COMPARE_ITEM]
+    : [];
+
   const items = menu.context === 'input'
-    ? INPUT_ITEMS
+    ? [...INPUT_ITEMS, ...compareItems]
     : [
         ...SELECTION_ITEMS,
         ...(wantsAi ? aiItems(lineCount, hasSelection) : []),
         ...(wantsSearch ? (wantsAi ? SEARCH_ITEMS : [{ id: 'search-sep', label: '', separator: true }, ...SEARCH_ITEMS]) : []),
         ...(filterMenu ? filterItems(filterMenu) : []),
+        ...compareItems,
       ];
   /*
     One rule: an entry that acts on the selection needs one.

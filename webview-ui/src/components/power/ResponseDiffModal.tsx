@@ -17,6 +17,17 @@ import {
 
 interface Props {
   onClose: () => void;
+  /**
+   * Seed both sides.
+   *
+   * "Compare with clipboard" arrives with the two texts already in hand, so
+   * the modal opens on the diff rather than on two empty panes asking to be
+   * pasted into.
+   */
+  initialA?: string;
+  initialB?: string;
+  initialLabelA?: string;
+  initialLabelB?: string;
 }
 
 const ACCENT = 'var(--color-settings)';
@@ -34,12 +45,15 @@ function prettyJson(body: string): string {
   catch { return body; }
 }
 
-export function ResponseDiffModal({ onClose }: Props) {
-  const [bodyA, setBodyA] = useState('');
-  const [bodyB, setBodyB] = useState('');
-  const [labelA, setLabelA] = useState('Response A');
-  const [labelB, setLabelB] = useState('Response B');
-  const [showDiff, setShowDiff] = useState(false);
+export function ResponseDiffModal({
+  onClose, initialA = '', initialB = '', initialLabelA, initialLabelB,
+}: Props) {
+  const [bodyA, setBodyA] = useState(initialA);
+  const [bodyB, setBodyB] = useState(initialB);
+  const [labelA, setLabelA] = useState(initialLabelA ?? 'Response A');
+  const [labelB, setLabelB] = useState(initialLabelB ?? 'Response B');
+  // Opened with both sides already filled: show the comparison, not the form.
+  const [showDiff, setShowDiff] = useState(Boolean(initialA && initialB));
   const [pretty, setPretty] = useState(true);
 
   const tabs = useTabsStore(s => s.tabs);
