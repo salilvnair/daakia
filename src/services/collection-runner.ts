@@ -143,9 +143,18 @@ function loadEnvironmentVars(envId: string | undefined): Record<string, string> 
   const env = allEnvs.find(e => e.id === envId);
   if (!env) return {};
   try {
-    const vars = JSON.parse(env.variables) as { key: string; currentValue: string }[];
+    const vars = JSON.parse(env.variables) as { key: string; currentValue?: string; initialValue?: string }[];
     const result: Record<string, string> = {};
-    for (const v of vars) { if (v.key) result[v.key] = decryptIfNeeded(v.currentValue || ''); }
+    /*
+      Current, then initial — the order every other reader uses.
+
+      This took `currentValue` alone, so a variable that carries only an
+      initial value (which is what an imported or freshly committed
+      environment looks like, since nothing has overwritten it yet) resolved
+      to an empty string in a collection run and to its value on a normal
+      send. Same environment, two answers, depending on how you pressed go.
+    */
+    for (const v of vars) { if (v.key) result[v.key] = decryptIfNeeded(v.currentValue || v.initialValue || ''); }
     return result;
   } catch { return {}; }
 }
