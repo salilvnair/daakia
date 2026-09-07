@@ -12,6 +12,8 @@ import { HeadersTab } from './HeadersTab';
 import { BodyEditor } from './BodyEditor';
 import { RequestAiToolbar } from './RequestAiToolbar';
 import { RequestChaining } from '../../power/RequestChaining';
+import { AiDocsGenerate } from '../../ai/AiDocsGenerate';
+import { EyeIcon, PencilIcon } from '../../../icons';
 import { ExecutionSettingsEditor } from '../../shared/settings/ExecutionSettingsEditor';
 import { useEffectiveSettings } from '../../shared/settings/use-effective-settings';
 import { countOverrides } from '../../shared/settings/execution-settings';
@@ -83,14 +85,24 @@ function RequestDocsTab({ tab }: { tab: RequestTab }) {
         <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
           Documentation · markdown
         </span>
-        <ButtonView
-          size="xs"
-          variant="secondary"
-          onClick={() => setEditing(v => !v)}
-          accentColor="var(--color-protocol-rest, var(--color-accent))"
-        >
-          {editing ? 'Preview' : 'Edit'}
-        </ButtonView>
+        <div className="flex items-center gap-1.5">
+          {/*
+            The request describes itself: method, URL, headers, body and the
+            responses saved from it are the whole brief, so there is nothing
+            to type first. It replaces the text rather than appending — a
+            second press is a rewrite, not a duplicate.
+          */}
+          <AiDocsGenerate tab={tab} onApply={(md) => { updateTab(tab.id, { docs: md }); setEditing(false); }} />
+          <ButtonView
+            size="sm"
+            variant="secondary"
+            iconLeft={editing ? <EyeIcon size={13} /> : <PencilIcon size={13} />}
+            onClick={() => setEditing(v => !v)}
+            accentColor="var(--color-protocol-rest, var(--color-accent))"
+          >
+            {editing ? 'Preview' : 'Edit'}
+          </ButtonView>
+        </div>
       </div>
 
       {editing ? (

@@ -96,7 +96,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
       </button>
 
       {!collapsed && (
-        <div className="p-3 flex flex-col gap-2">
+        <div className="p-4 flex flex-col gap-3">
           <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
             Extract values from the response and inject them as environment variables for use in subsequent requests.
           </p>
@@ -127,13 +127,13 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
           {extractions.map(ex => {
             const preview = extractedPreviews.find(p => p.ex.id === ex.id)?.value;
             return (
-              <div key={ex.id} className="flex flex-col gap-2 p-2 rounded-md border"
+              <div key={ex.id} className="flex flex-col gap-2.5 p-3 rounded-md border"
                 style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
 
                 {/* Where the value comes from, across the top of its own rule. */}
                 <RadioGroupView
                   direction="horizontal"
-                  size="sm"
+                  size="md"
                   value={ex.source}
                   onChange={v => updateExtraction(ex.id, { source: v as ChainExtraction['source'] })}
                   options={[
@@ -144,7 +144,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
                   accentColor="var(--color-protocol-rest, var(--color-accent))"
                 />
 
-                <div className={`grid ${ROW_COLS} gap-2 items-start`}>
+                <div className={`grid ${ROW_COLS} gap-2 items-start group ${ex.enabled ? '' : 'opacity-50'}`}>
                   {/* The same round mark the Form-data and Params tables use
                       for "this row counts". */}
                   <button
@@ -195,13 +195,18 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
                     inputStyle={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
                   />
 
+                  {/* The Variables table's own delete, copied rather than
+                      approximated: hidden until the row is hovered, muted
+                      until this button is, then red. */}
                   <div className="flex items-center justify-center h-[28px]">
-                    <IconButtonView
-                      icon={<TrashIcon size={13} />}
-                      size="sm"
-                      tooltip="Remove this rule"
+                    <button
+                      type="button"
                       onClick={() => removeExtraction(ex.id)}
-                    />
+                      title="Remove this rule"
+                      className="opacity-0 group-hover:opacity-100 p-1 text-[var(--color-text-muted)] hover:text-[var(--color-error)] cursor-pointer transition-all border-none bg-transparent"
+                    >
+                      <TrashIcon size={14} />
+                    </button>
                   </div>
                 </div>
               </div>

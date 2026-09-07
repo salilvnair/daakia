@@ -182,6 +182,8 @@ export type AiPromptTemplateKey =
   // ── REST — Body Generate ──
   | 'rest.body.generate'
   | 'rest.body.generate.system'
+  | 'rest.docs.generate'
+  | 'rest.docs.generate.system'
   // ── REST — Environment Extractor ──
   | 'rest.env.extract'
   | 'rest.env.extract.system'
@@ -486,6 +488,34 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `Generate a realistic HTTP request body for this API call.\n\nRequest context:\n- Method: {method}\n- URL: {url}\n- Content-Type: {contentType}\n- User description: {description}\n\nReturn ONLY the raw request body. No explanation, no markdown fences, no preamble.\n\nFormat rules by Content-Type:\n- application/json or json: Return a valid JSON object with realistic field names and values\n- application/xml or text/xml: Return a valid XML document\n- application/x-www-form-urlencoded: Return URL-encoded key=value pairs (e.g. name=Alice&age=30)\n- text/plain: Return plain text matching the description\n- Default (unknown): Return a JSON object\n\nField values must be realistic — use real-looking names, emails, UUIDs, timestamps, amounts. Never use "string", "number", "value" as values.`,
   'rest.body.generate.system':
     `You are a precise HTTP request body generator. Return only the raw body content — no explanation, no markdown code fences, no preamble text. Output must be valid and directly usable as a request body. Generate realistic, production-looking values.`,
+  // ── REST — Docs Generate ──────────────────────────────────────────────────
+  'rest.docs.generate':
+    `Write the documentation for this API request, in Markdown.
+
+Request:
+- Method: {method}
+- URL: {url}
+- Headers: {headers}
+- Body: {body}
+
+Saved responses (status — name — body):
+{examples}
+
+Return ONLY Markdown. No preamble, no code fences around the whole answer.
+
+Structure:
+- One short paragraph saying what the endpoint does and when to call it
+- \`## Request\` — what it needs: path and query parameters, required headers, and the body's shape as a bullet list of field: meaning
+- \`## Responses\` — one bullet per status you can see in the saved responses, saying what it means
+- \`## Notes\` — auth, idempotency, rate limits or pagination, ONLY where the request itself shows evidence of them
+
+Rules:
+- Describe what is there. Never invent a parameter, a status or a limit that the request and its saved responses do not show
+- Where something is unclear, say what it appears to do rather than inventing a certainty
+- No H1 heading — the request already has a name
+- Keep it under 250 words`,
+  'rest.docs.generate.system':
+    `You are a precise API documentation writer. You are given one HTTP request and whatever responses have been saved from it, and you write the Markdown documentation for it. Return only Markdown. Document what the evidence shows and nothing beyond it: no invented parameters, no invented status codes, no invented rate limits. Prefer "appears to" over a confident wrong claim.`,
   // ── Collection Organizer ──────────────────────────────────────────────────
   'rest.collection.organize':
     `Suggest a folder structure for this API collection.\n\nCollection: {collectionName}\n\nRequests (id | method | name | url):\n{requests}\n\nReturn ONLY a JSON object. No markdown, no explanation, no code fences.\n\nFormat:\n{"folders":[{"name":"FolderName","requestIds":["id1","id2"]}],"uncategorized":["id3"]}\n\nRules:\n- Group requests by REST resource (e.g. /users → "Users", /auth → "Auth", /products → "Products")\n- Each folder name should be a short noun phrase (2-3 words max), Title Case\n- Do NOT create a folder with only 1 request unless it's a well-known resource (Auth, Health, etc.)\n- Put requests that don't fit any group in "uncategorized" array\n- Use the exact request IDs provided — do not invent or modify them\n- Return at least 2 folders, at most 10 folders\n- All request IDs must appear exactly once (either in a folder or uncategorized)`,
@@ -834,6 +864,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'rest.headers.suggest.system':   { label: 'Suggest Headers — System', description: 'Behavioral rules for the AI header suggestion assistant (format: JSON array only)' },
   'rest.body.generate':        { label: 'Generate Body',          description: 'User prompt sent when the ✨ AI body generate button is clicked in the Body tab' },
   'rest.body.generate.system': { label: 'Generate Body — System', description: 'Behavioral rules for the AI body generator (format: raw body only, no fences)' },
+  'rest.docs.generate':        { label: 'Generate Docs',          description: 'User prompt sent when the sparkle in the Docs tab writes a request’s documentation' },
+  'rest.docs.generate.system': { label: 'Generate Docs — System', description: 'Behavioral rules for the docs writer (Markdown only, document only what the request shows)' },
   'rest.env.extract':          { label: 'Extract Variables',          description: 'User prompt sent when "Extract Variables with AI" is chosen in the collection context menu' },
   'rest.env.extract.system':   { label: 'Extract Variables — System', description: 'Behavioral rules for the AI environment extractor (format: JSON array only)' },
   'data.generate':        { label: 'Generate Test Data',          description: 'User prompt sent when generating test data fixtures with AI' },
@@ -1019,6 +1051,8 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'rest.headers.suggest.system':   [],
   'rest.body.generate':        ['{method}', '{url}', '{contentType}', '{description}'],
   'rest.body.generate.system': [],
+  'rest.docs.generate':        ['{method}', '{url}', '{headers}', '{body}', '{examples}'],
+  'rest.docs.generate.system': [],
   'rest.env.extract':          ['{collectionName}', '{requests}'],
   'rest.env.extract.system':   [],
   'data.generate':        ['{dataType}', '{count}', '{format}', '{customDescription}'],
@@ -1168,7 +1202,7 @@ export const AI_TEMPLATE_CATEGORIES: {
     label: 'REST Toolkit',
     kind: 'mock',
     keys: [
-      'rest.headers.suggest.generate', 'rest.body.generate', 'rest.env.extract',
+      'rest.headers.suggest.generate', 'rest.body.generate', 'rest.docs.generate', 'rest.env.extract',
       'rest.assert.generate', 'rest.preflight', 'rest.request.fuzz',
       'rest.code.import', 'rest.response.transform', 'rest.script.autocomplete',
       'rest.pattern.baseline', 'rest.record.baseline', 'rest.curl.explain',
@@ -1326,6 +1360,8 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'rest.headers.suggest.system':   '#a855f7',
   'rest.body.generate':        '#f59e0b',
   'rest.body.generate.system': '#f59e0b',
+  'rest.docs.generate':        '#f59e0b',
+  'rest.docs.generate.system': '#f59e0b',
   'rest.env.extract':          '#22c55e',
   'rest.env.extract.system':   '#22c55e',
   'data.generate':        '#0ea5e9',
