@@ -73,6 +73,7 @@ function Section({ kind }: { kind: ArtifactKind }) {
 }
 
 export function Dk8sViewsView() {
+
   const total = CATALOGUE.filter(e => e.needs !== 'mcp').length;
   const tools = CATALOGUE.filter(e => e.needs === 'mcp').length;
 

@@ -6,12 +6,13 @@
  * refused — and dk8s spends four calls up front so that shows up as a disabled
  * button with a reason rather than a failure after you click.
  */
-import { WikiScrollPage } from '../capture/CaptureScrollView';
+import { WikiScrollPage, CaptureCard } from '../capture/CaptureScrollView';
 import {
   WikiHero, SectionTitle, SubTitle, WikiTable, Callout, Divider, Code, CodeBlock,
   WikiFigure, chips, TocBar, type TocItem,
 } from '../shared/WikiShared';
 import { ConnectDiagram } from './FlowDiagrams';
+import { DK8S_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
   { id: 'dk-what', emoji: '🧭', label: 'What it is' },
@@ -22,6 +23,9 @@ const TOC_ITEMS: TocItem[] = [
 ];
 
 export function Dk8sOverviewView() {
+  const byId = Object.fromEntries(DK8S_CAPTURES.map(c => [c.id, c]));
+  const cap = (id: string) => byId[id] && <CaptureCard entry={byId[id]} />;
+
   return (
     <WikiScrollPage
       hero={
@@ -94,6 +98,7 @@ export function Dk8sOverviewView() {
 
       <div>
         <SectionTitle id="dk-grid" emoji="🧱">The pod grid</SectionTitle>
+        {cap('dk8s-pods')}
         <p className="dw-p">
           Pods as cards or as a table, grouped by namespace, with the ones needing attention sorted
           up. The header counts are live: how many pods, how many ready, how many failing, and how
@@ -119,6 +124,7 @@ export function Dk8sOverviewView() {
 
       <div>
         <SectionTitle id="dk-watch" emoji="📡">Watching</SectionTitle>
+        {cap('dk8s-pods-table')}
         <p className="dw-p">
           The <Code>watching</Code> indicator means a live stream is open and the grid is being
           updated by the cluster rather than polled. Hovering it tells you how long since the last

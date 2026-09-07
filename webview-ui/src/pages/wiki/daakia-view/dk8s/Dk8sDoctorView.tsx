@@ -5,12 +5,13 @@
  * so the page is written the way the panel is built — honest about the cost
  * before you pay it.
  */
-import { WikiScrollPage } from '../capture/CaptureScrollView';
+import { WikiScrollPage, CaptureCard } from '../capture/CaptureScrollView';
 import {
   WikiHero, SectionTitle, SubTitle, WikiTable, Callout, Divider, Code, CodeBlock,
   WikiFigure, chips, TocBar, type TocItem,
 } from '../shared/WikiShared';
 import { CollectDiagram } from './FlowDiagrams';
+import { DK8S_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
   { id: 'dr-probe', emoji: '🔦', label: 'The probe' },
@@ -21,6 +22,9 @@ const TOC_ITEMS: TocItem[] = [
 ];
 
 export function Dk8sDoctorView() {
+  const byId = Object.fromEntries(DK8S_CAPTURES.map(c => [c.id, c]));
+  const cap = (id: string) => byId[id] && <CaptureCard entry={byId[id]} />;
+
   return (
     <WikiScrollPage
       hero={
@@ -82,6 +86,7 @@ true      # a capability check that finds nothing exits 1 — without this the
 
       <div>
         <SectionTitle id="dr-collect" emoji="🧪">The collectors</SectionTitle>
+        {cap('dk8s-doctor')}
         <p className="dw-p">
           Every one runs through <Code>kubectl exec</Code>, and every result carries the command it
           ran so you can reproduce it by hand.
@@ -166,6 +171,7 @@ stat -f -c '%T %a %S' DIR   ||   df -P DIR | tail -1`}</CodeBlock>
 
       <div>
         <SectionTitle id="dr-artifacts" emoji="📦">Artifacts</SectionTitle>
+        {cap('dk8s-artifacts')}
         <p className="dw-p">
           Everything collected lands in one place and stays there. Before this, a dump was only
           visible in the panel that collected it and vanished when the pod was closed — so the

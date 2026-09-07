@@ -1,11 +1,12 @@
 /**
  * One pod, up close: the six tabs and what each one actually runs.
  */
-import { WikiScrollPage } from '../capture/CaptureScrollView';
+import { WikiScrollPage, CaptureCard } from '../capture/CaptureScrollView';
 import {
   WikiHero, SectionTitle, SubTitle, WikiTable, Callout, Divider, Code, CodeBlock,
   chips, TocBar, type TocItem,
 } from '../shared/WikiShared';
+import { DK8S_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
   { id: 'pd-tabs', emoji: '🗂️', label: 'Seven tabs' },
@@ -18,6 +19,9 @@ const TOC_ITEMS: TocItem[] = [
 ];
 
 export function Dk8sPodView() {
+  const byId = Object.fromEntries(DK8S_CAPTURES.map(c => [c.id, c]));
+  const cap = (id: string) => byId[id] && <CaptureCard entry={byId[id]} />;
+
   return (
     <WikiScrollPage
       hero={
@@ -32,6 +36,7 @@ export function Dk8sPodView() {
     >
       <div>
         <SectionTitle id="pd-tabs" emoji="🗂️">Seven tabs</SectionTitle>
+        {cap('dk8s-overview')}
         <p className="dw-p">
           Opening a pod takes over the panel rather than sliding a drawer in from the side. Reading
           logs is the main activity here, and a 380px drawer turns every stack trace into a
@@ -59,6 +64,7 @@ export function Dk8sPodView() {
 
       <div>
         <SectionTitle id="pd-logs" emoji="📜">Logs</SectionTitle>
+        {cap('dk8s-logs')}
         <CodeBlock label="the log stream" lang="bash">{`kubectl --context C -n NS logs POD \\
   [--follow] [-c CONTAINER] [--previous] \\
   --timestamps [--since=Ns] \\
@@ -114,6 +120,7 @@ export function Dk8sPodView() {
 
       <div>
         <SectionTitle id="pd-terminal" emoji="⌨️">Terminal</SectionTitle>
+        {cap('dk8s-terminal')}
         <p className="dw-p">
           A real PTY inside the container, drawn in the panel — resize, <Code>Ctrl-C</Code> and
           full-screen tools all work. It runs over the Kubernetes exec API carrying your own
@@ -142,6 +149,7 @@ export function Dk8sPodView() {
 
       <div>
         <SectionTitle id="pd-facets" emoji="🔦">Fields &amp; facets</SectionTitle>
+        {cap('dk8s-logs-filtered')}
         <p className="dw-p">
           Where a log format is configured, a panel down the left of the log lists every field the
           format named and how the events divide across them. It answers &ldquo;what <i>is</i> this
