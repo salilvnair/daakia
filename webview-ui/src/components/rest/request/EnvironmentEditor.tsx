@@ -1,7 +1,11 @@
 import { useState, useRef } from 'react';
 import { useEnvStore, type EnvVariable, GLOBAL_ENV_ID } from '../../../store/env-store';
+import { useUiStateStore } from '../../../store/ui-state-store';
+
+/** Remembered across sessions, like the other table preferences. */
+const INITIAL_COL_PREF = 'env.showInitialValue';
 import { ConfirmDialog, InsertRowDivider } from '../../shared';
-import { TrashIcon, RenameIcon, BulkEditIcon, PlusIcon } from '../../../icons';
+import { TrashIcon, RenameIcon, BulkEditIcon, PlusIcon, EyeIcon, EyeOffIcon } from '../../../icons';
 import { TabView, TextInputView, ButtonView, IconButtonView, SelectInputView } from '@salilvnair/dui';
 
 interface EnvironmentEditorProps {
@@ -30,6 +34,19 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearVarsConfirm, setShowClearVarsConfirm] = useState(false);
   const [bulkEdit, setBulkEdit] = useState(false);
+  /*
+    The initial value is hidden until asked for.
+
+    Two value columns for one variable is the question everybody asks of this
+    table, and for most of them the answer is "the one that runs" — which is
+    Current. Initial is what you commit and set once; it earns a column when
+    you are editing it, not on every visit. Remembered, because someone who
+    works in both columns should not re-open it every time.
+  */
+  const showInitial = useUiStateStore(st => st.prefs[INITIAL_COL_PREF]) === 'on';
+  const setShowInitial = (on: boolean) =>
+    useUiStateStore.getState().setPref(INITIAL_COL_PREF, on ? 'on' : 'off');
+  const cols = showInitial ? 'grid-cols-[1fr_1fr_1fr_32px]' : 'grid-cols-[1fr_2fr_32px]';
   const bulkTextRef = useRef('');
 
   const resolvedEnvId = environmentId ?? activeEnvId;
@@ -161,6 +178,13 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
                   onClick={() => { if (displayedVars.length > 0) setShowClearVarsConfirm(true); }}
                 />
                 <IconButtonView
+                  icon={showInitial ? <EyeIcon size={14} /> : <EyeOffIcon size={14} />}
+                  size="md"
+                  tooltip={showInitial ? 'Hide the initial-value column' : 'Show the initial-value column'}
+                  active={showInitial}
+                  onClick={() => setShowInitial(!showInitial)}
+                />
+                <IconButtonView
                   icon={<BulkEditIcon size={14} />}
                   size="md"
                   tooltip="Bulk edit"
@@ -203,10 +227,14 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
               <EnvBulkEditArea defaultValue={bulkTextRef.current} textRef={bulkTextRef} />
             ) : (
               <>
-                <div className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2 px-1 mb-1.5">
+                <div className={`grid ${cols} gap-2 px-1 mb-1.5`}>
                   <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide font-medium">Variable</div>
-                  <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide font-medium">Initial Value</div>
-                  <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide font-medium">Current Value</div>
+                  {showInitial && (
+                    <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide font-medium">Initial Value</div>
+                  )}
+                  <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide font-medium">
+                    {showInitial ? 'Current Value' : 'Value'}
+                  </div>
                   <div />
                 </div>
 
@@ -223,6 +251,7 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
                         <EnvVariableRow
                           variable={variable}
                           envId={activeEnv.id}
+                          showInitial={showInitial}
                           onUpdate={updateVariable}
                           onRemove={removeVariable}
                         />
@@ -259,16 +288,18 @@ export function EnvironmentEditor({ environmentId, showSelector = true, allowRen
 function EnvVariableRow({
   variable,
   envId,
+  showInitial,
   onUpdate,
   onRemove,
 }: {
   variable: EnvVariable;
   envId: string;
+  showInitial: boolean;
   onUpdate: (envId: string, varId: string, patch: Partial<EnvVariable>) => void;
   onRemove: (envId: string, varId: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2 px-1 group">
+    <div className={`grid ${showInitial ? 'grid-cols-[1fr_1fr_1fr_32px]' : 'grid-cols-[1fr_2fr_32px]'} gap-2 px-1 group`}>
       <TextInputView
         size="md"
         width="fw"
@@ -276,20 +307,22 @@ function EnvVariableRow({
         onChange={(e) => onUpdate(envId, variable.id, { key: e.target.value })}
         placeholder="Variable name"
       />
-      <TextInputView
-        size="md"
-        width="fw"
-        value={variable.initialValue}
-        onChange={(e) => onUpdate(envId, variable.id, { initialValue: e.target.value })}
-        placeholder="Initial value"
-        masked={variable.isSecret}
-      />
+      {showInitial && (
+        <TextInputView
+          size="md"
+          width="fw"
+          value={variable.initialValue}
+          onChange={(e) => onUpdate(envId, variable.id, { initialValue: e.target.value })}
+          placeholder="Initial value"
+          masked={variable.isSecret}
+        />
+      )}
       <TextInputView
         size="md"
         width="fw"
         value={variable.currentValue}
         onChange={(e) => onUpdate(envId, variable.id, { currentValue: e.target.value })}
-        placeholder="Current value"
+        placeholder={showInitial ? 'Current value' : 'Value'}
         masked={variable.isSecret}
       />
       <div className="flex items-center justify-center">
