@@ -93,6 +93,7 @@ import {
 } from '../src/panel/main/handlers/sm-workflow-handler';
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from '../src/panel/main/handlers/ui-state-handler';
 import { handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/panel/main/handlers/ai-handler';
+import { handleLoadStart, handleLoadStop } from '../src/panel/main/handlers/load-handler';
 import { window as vscodeWindow, Uri } from './vscode-shim';
 import * as fs from 'fs';
 
@@ -761,6 +762,14 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'ai:cancel':
       handleAiCancel(msg, post);
+      break;
+
+    // ── Load testing — real requests, measured.
+    case 'load:start':
+      handleLoadStart(msg, post);
+      break;
+    case 'load:stop':
+      handleLoadStop(msg);
       break;
 
     case 'aiChat':
