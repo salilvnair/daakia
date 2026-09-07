@@ -7,7 +7,9 @@
  */
 import { useState } from 'react';
 import { useToastStore } from '../../store/toast-store';
-import { PlusIcon, TrashIcon } from '../../icons';
+import { PlusIcon, TrashIcon, LinkIcon } from '../../icons';
+import { ActionButtonView } from '@salilvnair/dui';
+import { PathField } from './PathField';
 import { applyChainExtractions, extractValue } from '../../services/request/chaining';
 import type { ChainExtraction } from '../../store/tabs-store';
 
@@ -67,8 +69,11 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
         .map(ex => ({ ex, value: extractValue(ex, responseBody, responseHeaders) }))
     : [];
 
+  // `rounded-md` here and on the row below: the same 6px the bulk-edit box
+  // above uses. Two panels in one column with different corners read as two
+  // designs.
   return (
-    <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'var(--color-surface-border)' }}>
+    <div className="border rounded-md overflow-hidden" style={{ borderColor: 'var(--color-surface-border)' }}>
       {/* Header */}
       <button type="button" onClick={() => setCollapsed(p => !p)}
         className="w-full flex items-center justify-between px-3 py-2 cursor-pointer"
@@ -94,7 +99,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
           </p>
 
           {extractions.map(ex => (
-            <div key={ex.id} className="flex items-center gap-2 p-2 rounded-lg border"
+            <div key={ex.id} className="flex items-start gap-2 p-2 rounded-md border"
               style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
               <input
                 type="checkbox"
@@ -114,16 +119,37 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
                 ))}
               </div>
 
-              {/* Path */}
-              <input
-                type="text"
-                value={ex.path}
-                onChange={e => updateExtraction(ex.id, { path: e.target.value })}
-                placeholder={ex.source === 'header' ? 'Authorization' : ex.source === 'status' ? '(status code)' : 'data.user.id'}
-                disabled={ex.source === 'status'}
-                className="flex-1 px-2 py-1 rounded text-[11px] font-mono outline-none"
-                style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
-              />
+              {/* Path, with what it finds underneath it */}
+              {/* 70/30 of the leftover: the path box was taking the whole row
+                  while the variable name — the thing you read back in
+                  `{{...}}` — sat in a fixed 120px. */}
+              <div className="flex-[0.7] min-w-0 flex flex-col gap-1">
+                <PathField
+                  value={ex.path}
+                  onChange={next => updateExtraction(ex.id, { path: next })}
+                  responseBody={ex.source === 'body' ? responseBody : undefined}
+                  placeholder={ex.source === 'header' ? 'Authorization' : ex.source === 'status' ? '(status code)' : 'data.user.id'}
+                  disabled={ex.source === 'status'}
+                />
+
+                {/*
+                  What this path pulls out of the response on screen.
+
+                  It used to sit at the far right of the row, truncated to
+                  80px — which is enough for `ada@…` and useless for a token,
+                  the one value anybody chains. Under the box it has the whole
+                  width, and it sits next to the thing that produced it.
+                */}
+                {responseBody && ex.path && (
+                  <span className="text-[10px] font-mono truncate"
+                    style={{
+                      color: extractedPreviews.find(p => p.ex.id === ex.id)?.value
+                        ? 'var(--color-success)' : 'var(--color-text-muted)'
+                    }}>
+                    {extractedPreviews.find(p => p.ex.id === ex.id)?.value ?? 'no value at this path'}
+                  </span>
+                )}
+              </div>
 
               <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>→</span>
 
@@ -133,20 +159,9 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
                 value={ex.variableName}
                 onChange={e => updateExtraction(ex.id, { variableName: e.target.value })}
                 placeholder="variableName"
-                className="w-[120px] px-2 py-1 rounded text-[11px] font-mono outline-none"
+                className="flex-[0.3] min-w-[130px] px-2 py-1 rounded text-[11px] font-mono outline-none"
                 style={{ backgroundColor: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
               />
-
-              {/* Preview value */}
-              {responseBody && ex.path && (
-                <span className="text-[9.5px] font-mono max-w-[80px] truncate flex-shrink-0"
-                  style={{
-                    color: extractedPreviews.find(p => p.ex.id === ex.id)?.value
-                      ? 'var(--color-success)' : 'var(--color-text-muted)'
-                  }}>
-                  {extractedPreviews.find(p => p.ex.id === ex.id)?.value ?? '(not found)'}
-                </span>
-              )}
 
               <button type="button" onClick={() => removeExtraction(ex.id)}
                 className="w-6 h-6 flex items-center justify-center rounded opacity-50 hover:opacity-100 cursor-pointer flex-shrink-0">
@@ -155,20 +170,46 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
             </div>
           ))}
 
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={addExtraction}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded cursor-pointer border transition-all"
-              style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)' }}>
-              <PlusIcon size={10} />
-              Add Extraction
-            </button>
+          {/*
+            Both buttons in the same tinted shape the rest of the app uses.
 
-            {extractions.length > 0 && responseBody && (
-              <button type="button" onClick={applyExtractions}
-                className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded cursor-pointer text-white"
-                style={{ backgroundColor: 'var(--color-success)' }}>
-                ⛓ Apply to Environment
-              </button>
+            Apply was solid `--color-success` with white text: a filled green
+            slab shouting louder than anything on the panel, for an action
+            that is a convenience — the rules run on every response by
+            themselves. A tint states the action without claiming the eye.
+          */}
+          {/* Right-aligned, like every other footer action in the app: the
+              eye leaves a form at its end, not at its left margin. */}
+          <div className="flex items-center justify-end gap-2">
+            <ActionButtonView
+              size="sm"
+              onClick={addExtraction}
+              accentColor="var(--color-text-secondary)"
+              icon={(iconSize) => <PlusIcon size={iconSize} style={{ flexShrink: 0 }} />}
+              label="Add extraction"
+            />
+
+            {/*
+              Present whenever there are rules, disabled until there is a
+              response to read them from.
+
+              It used to render only when both were true, so it appeared and
+              vanished as you worked — and the first question anyone asks of a
+              control that disappears is where it went, not what it needed. A
+              disabled button with a reason answers that on hover.
+            */}
+            {extractions.length > 0 && (
+              <ActionButtonView
+                size="sm"
+                onClick={applyExtractions}
+                disabled={!responseBody}
+                title={responseBody
+                  ? 'Read these rules against the response on screen and set the variables'
+                  : 'Send the request first — there is no response to extract from yet'}
+                accentColor="var(--color-success)"
+                icon={(iconSize) => <LinkIcon size={iconSize} style={{ flexShrink: 0 }} />}
+                label="Apply to environment"
+              />
             )}
           </div>
         </div>

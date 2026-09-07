@@ -109,11 +109,17 @@ export function BodyEditor({ tab, showFuzzer, onCloseFuzzer }: BodyEditorProps) 
       {/* Content Type row */}
       <div className="flex items-center gap-3 px-1">
         <span className="text-[12px] text-[var(--color-text-muted)]">Content Type</span>
+        {/* The trigger is unchanged; the LIST it opens is denser and a little
+            wider — twenty content types at the trigger's own row height is a
+            menu you scroll rather than scan, and the longest of them
+            (`application/x-www-form-urlencoded`) wants the room. */}
         <SelectInputView
           options={CONTENT_TYPE_OPTIONS}
           value={dropdownValue}
           onChange={handleContentTypeChange}
           size="md"
+          menuSize="xxs"
+          menuMinWidth={192}
         />
         {bodyMode !== 'none' && contentType !== 'none' && bodyMode !== 'form-data' && bodyMode !== 'x-www-form-urlencoded' && (
           <span className="text-[12px] text-[var(--color-text-muted)] opacity-60">Override</span>

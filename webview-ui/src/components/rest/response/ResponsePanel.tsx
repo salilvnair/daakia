@@ -16,7 +16,8 @@ import { ResponseAssertionsBuilder } from '../../power/ResponseAssertionsBuilder
 import { ExamplesView } from './ExamplesView';
 import { addExample, defaultName, toExample } from '../../../services/request/examples';
 import { useToastStore } from '../../../store/toast-store';
-import { ButtonView } from '@salilvnair/dui';
+import { ActionButtonView } from '@salilvnair/dui';
+import { SaveIcon } from '../../../icons';
 import { postMsg } from '../../../vscode';
 import { useDebugStore } from '../../../store/debug-store';
 
@@ -194,24 +195,50 @@ export function ResponsePanel() {
           did not. Four buttons on one line that disagree about their baseline
           and their radius read as a mistake before anyone reads the labels.
         */}
-        <div className="flex items-center gap-1.5 pb-1.5 shrink-0" style={{ whiteSpace: 'nowrap' }}>
-          <ButtonView
-            size="xs"
-            variant="secondary"
-            borderRadius={5}
-            onClick={saveExample}
-            accentColor="var(--color-protocol-rest, var(--color-accent))"
-          >
-            Save example
-          </ButtonView>
-        </div>
+        {/*
+          One flex line for all four buttons, sharing its gap.
 
-        <ResponseAiToolbar
-          tabId={tab.id}
-          response={response}
-          requestMethod={requestMethod}
-          requestUrl={requestUrl}
-        />
+          They were two sibling groups in a row with no gap between them, so
+          the AI buttons sat 6px apart from each other and flush against Save
+          example — three even gaps and one zero, which reads as a button
+          stuck to the wrong group. Same container, same `gap-1.5`, same
+          `pb-1.5`: one row of four.
+        */}
+        {/*
+          One row of four buttons, all the same object.
+
+          This was a `ButtonView` beside three `AIButtonView`s: a heavier
+          fill, a different border, a different weight, and — because the two
+          groups were separate flex lines — a different baseline and no gap
+          between them. dui grew `ActionButtonView`, which is the AI button's
+          box without the sparkle, so the odd one out is now the same
+          component the other three are built from.
+        */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* The wrapper mirrors the AI toolbar's own box — `flex items-center
+              pb-1.5` — so both children are the same height and centre their
+              20px buttons identically. A bare wrapper beside it sits 2.4px
+              low, which is the whole reason this comment exists. */}
+          <div className="flex items-center pb-1.5">
+            <ActionButtonView
+              size="xs"
+              onClick={saveExample}
+              accentColor="var(--color-protocol-rest, var(--color-accent))"
+              /* Sized by the button, exactly as the sparkles beside it are —
+                 a hand-picked number here is how a row of four comes to
+                 disagree by a pixel. */
+              icon={(iconSize) => <SaveIcon size={iconSize} style={{ flexShrink: 0 }} />}
+              label="Save example"
+            />
+          </div>
+
+          <ResponseAiToolbar
+            tabId={tab.id}
+            response={response}
+            requestMethod={requestMethod}
+            requestUrl={requestUrl}
+          />
+        </div>
       </div>
 
       {/* Response content */}
