@@ -9,7 +9,7 @@ import { IconButtonView } from '@salilvnair/dui';
 import { AiBodyGenerate, type AiBodyGenerateHandle } from '../../ai/AiBodyGenerate';
 import { AiDataGeneratorModal } from '../../ai/AiDataGeneratorModal';
 import { AiRequestFuzzerModal } from '../../ai/AiRequestFuzzerModal';
-import { CONTENT_TYPE_MODE, CONTENT_TYPE_LANG, CONTENT_TYPE_PLACEHOLDER, CONTENT_TYPE_OPTIONS } from './bodyContentTypes';
+import { CONTENT_TYPE_MODE, CONTENT_TYPE_LANG, CONTENT_TYPE_PLACEHOLDER, bodyTypeOptions } from './bodyContentTypes';
 
 type Tab = ReturnType<typeof useTabsStore.getState>['tabs'][0];
 
@@ -109,11 +109,17 @@ export function BodyEditor({ tab, showFuzzer, onCloseFuzzer }: BodyEditorProps) 
       {/* Content Type row */}
       <div className="flex items-center gap-3 px-1">
         <span className="text-[12px] text-[var(--color-text-muted)]">Content Type</span>
+        {/* The labels are short now (`JSON`, `XML`), so the menu would come out
+            narrower than the list deserves: a floor of 260px and 14px of room
+            either side of each row. */}
         <SelectInputView
-          options={CONTENT_TYPE_OPTIONS}
+          options={bodyTypeOptions(dropdownValue)}
           value={dropdownValue}
           onChange={handleContentTypeChange}
           size="md"
+          menuMinWidth={260}
+          menuPaddingX={14}
+          menuFontSize={12.5}
         />
         {bodyMode !== 'none' && contentType !== 'none' && bodyMode !== 'form-data' && bodyMode !== 'x-www-form-urlencoded' && (
           <span className="text-[12px] text-[var(--color-text-muted)] opacity-60">Override</span>

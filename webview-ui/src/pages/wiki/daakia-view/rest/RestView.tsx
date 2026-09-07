@@ -6,28 +6,7 @@ import {
 import { ProtocolRestBadge } from '../../../../icons';
 import { CONTENT_TYPE_OPTIONS } from '../../../../components/rest/request/bodyContentTypes';
 
-/** What each real Content-Type value does — kept next to bodyContentTypes.ts so this list can't silently drift. */
-const CONTENT_TYPE_NOTES: Record<string, string> = {
-  'application/json': 'Default — full JSON editor, validation, bracket matching',
-  'application/ld+json': 'JSON-LD — linked-data graphs with an @context/@type envelope',
-  'application/hal+json': 'HAL+JSON — hypermedia APIs with an _links envelope',
-  'application/vnd.api+json': 'JSON:API — the data/type/id/attributes envelope',
-  'application/xml': 'Generic XML with an XML declaration',
-  'text/xml': 'XML without the declaration — some legacy servers expect this over application/xml',
-  'application/soap+xml': 'SOAP envelope template — Header/Body wrapper included',
-  'text/plain': 'Unstructured text, no editor validation',
-  'text/html': 'HTML document, starter boilerplate included',
-  'text/css': 'CSS stylesheet',
-  'text/csv': 'Comma-separated values',
-  'text/markdown': 'Markdown document',
-  'application/javascript': 'Raw JS source as the body (not the same as the Scripts tab)',
-  'application/graphql': 'Raw GraphQL query text as the body — for GraphQL-over-plain-body servers, not the GraphQL tab',
-  'application/yaml': 'YAML document',
-  'multipart/form-data': 'Per-row Text/File toggle — real file pickers, mixed uploads in one request',
-  'application/x-www-form-urlencoded': 'key=value&key2=value2 — classic HTML form encoding',
-  'application/octet-stream': 'One file, sent as the raw request body (no multipart wrapper)',
-  'application/msgpack': 'Binary MessagePack — same file-as-body flow as octet-stream, different Content-Type',
-};
+
 import { REST_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
@@ -237,19 +216,25 @@ X-Request-ID: {{$random.uuid}}`}
           ]}
         />
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          That's the 7 modes. The actual Content-Type dropdown has {CONTENT_TYPE_OPTIONS.filter(o => !o.isHeader && o.value !== 'none').length} specific
-          values grouped the same way Bruno/Postman group theirs — expand for the full list and what each one actually does:
+          That's the 7 modes. The <b>Body type</b> dropdown names them the way you would say them —
+          Multipart Form, JSON, XML, File / Binary — rather than by the header each one sends:
         </p>
-        <Collapsible title="Full Content-Type list, grouped">
+        <Collapsible title="What each entry sends, and what it opens">
           <WikiTable
-            headers={['Group', 'Content-Type', 'What it does']}
-            rows={CONTENT_TYPE_OPTIONS.filter(o => o.value !== 'none').map(o =>
+            headers={['Group', 'Entry', 'Content-Type sent']}
+            rows={CONTENT_TYPE_OPTIONS.map(o =>
               o.isHeader
                 ? [<strong key={o.value}>{o.label.toUpperCase()}</strong>, '', '']
-                : ['', <Code key={o.value}>{o.value}</Code>, CONTENT_TYPE_NOTES[o.value] || '']
+                : ['', o.label, o.value === 'none' ? '—' : <Code key={o.value}>{o.value}</Code>]
             )}
           />
         </Collapsible>
+        <Callout type="info" title="Any other Content-Type still works">
+          The list is the nine anyone reaches for; it is not a limit. A request imported carrying
+          <Code>application/hal+json</Code> keeps it, and shows it at the top of its own dropdown —
+          and the <b>Headers</b> tab sets whatever value you like, which is what actually goes on
+          the wire.
+        </Callout>
       </div>
       {cap('rest-body-json')}
       <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
