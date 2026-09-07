@@ -94,6 +94,7 @@ import {
 import { handleSaveUiState, handleGetUiState, handleSaveWorkspaceSnapshot, handleGetWorkspaceSnapshot } from '../src/panel/main/handlers/ui-state-handler';
 import { handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStreamRequest } from '../src/panel/main/handlers/ai-handler';
 import { handleLoadStart, handleLoadStop } from '../src/panel/main/handlers/load-handler';
+import { handleBulkRun, handleBulkStop } from '../src/panel/main/handlers/bulk-handler';
 import { window as vscodeWindow, Uri } from './vscode-shim';
 import * as fs from 'fs';
 
@@ -765,6 +766,14 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
 
     // ── Load testing — real requests, measured.
+    // ── Bulk URL checks — real responses, run with a worker pool.
+    case 'bulk:run':
+      handleBulkRun(msg, post);
+      break;
+    case 'bulk:stop':
+      handleBulkStop(msg);
+      break;
+
     case 'load:start':
       handleLoadStart(msg, post);
       break;

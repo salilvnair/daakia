@@ -34,6 +34,7 @@
 import * as https from 'https';
 import * as http from 'http';
 import { URL } from 'url';
+import { probe } from './http-probe';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -222,63 +223,25 @@ function buildHeaders(cfg: LoadConfig): Record<string, string> {
   return out;
 }
 
-interface Attempt { status: number; ms: number; bytes: number; error?: string }
+type Attempt = { status: number; ms: number; bytes: number; error?: string };
 
-function once(
+const once = (
   cfg: LoadConfig,
   headers: Record<string, string>,
   agents: { http: http.Agent; https: https.Agent },
   redirectsLeft: number,
   urlStr: string,
-): Promise<Attempt> {
-  const t0 = Date.now();
-
-  return new Promise((resolve) => {
-    let parsed: URL;
-    try { parsed = new URL(urlStr); } catch {
-      resolve({ status: 0, ms: 0, bytes: 0, error: 'Invalid URL' });
-      return;
-    }
-
-    const isHttps = parsed.protocol === 'https:';
-    const transport = isHttps ? https : http;
-    const bodyBuffer = cfg.body ? Buffer.from(cfg.body, 'utf8') : null;
-
-    const req = transport.request({
-      hostname: parsed.hostname,
-      port: parsed.port || (isHttps ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      method: cfg.method.toUpperCase(),
-      timeout: cfg.timeoutMs,
-      agent: isHttps ? agents.https : agents.http,
-      headers: bodyBuffer ? { ...headers, 'Content-Length': bodyBuffer.length } : headers,
-      rejectUnauthorized: !cfg.insecureTls,
-    }, (res) => {
-      const status = res.statusCode ?? 0;
-
-      if (cfg.followRedirects && status >= 300 && status < 400 && res.headers.location && redirectsLeft > 0) {
-        res.resume();
-        const next = new URL(res.headers.location, urlStr).toString();
-        once(cfg, headers, agents, redirectsLeft - 1, next)
-          .then(r => resolve({ ...r, ms: Date.now() - t0 }));
-        return;
-      }
-
-      /* The body is counted, not kept: a load run can pull gigabytes and the
-         only thing the panel shows is how many bytes came back. */
-      let bytes = 0;
-      res.on('data', (c: Buffer) => { bytes += c.length; });
-      res.on('end', () => resolve({ status, ms: Date.now() - t0, bytes }));
-      res.on('error', (e) => resolve({ status: 0, ms: Date.now() - t0, bytes, error: e.message }));
-    });
-
-    req.on('timeout', () => { req.destroy(); resolve({ status: 0, ms: Date.now() - t0, bytes: 0, error: 'Timeout' }); });
-    req.on('error', (e) => resolve({ status: 0, ms: Date.now() - t0, bytes: 0, error: e.message }));
-
-    if (bodyBuffer) req.write(bodyBuffer);
-    req.end();
-  });
-}
+): Promise<Attempt> => probe({
+  method: cfg.method,
+  url: urlStr,
+  headers,
+  body: cfg.body,
+  timeoutMs: cfg.timeoutMs,
+  followRedirects: cfg.followRedirects,
+  insecureTls: cfg.insecureTls,
+  agents,
+  redirectsLeft,
+});
 
 // ── Runner ───────────────────────────────────────────────────────────────────
 
