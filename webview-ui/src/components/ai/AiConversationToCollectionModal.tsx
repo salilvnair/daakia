@@ -12,6 +12,7 @@ import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 import { resolveCollectionProtocol, COLLECTION_PROTOCOL_LABELS } from '../../services/collections';
 import { sendAiRequest } from '../../services/ai/ai-client';
+import { importRequestsAsCollection } from '../../services/collections/import-to-collection';
 
 interface Props {
   onClose: () => void;
@@ -190,38 +191,19 @@ export function AiConversationToCollectionModal({ onClose, contextProtocol }: Pr
       const protocol = resolveCollectionProtocol(collData.protocol as string | undefined, contextProtocol);
       const requests = flattenRequests(collData);
 
-      postMsg({ type: 'createCollection', id: collId, name: (collData.name as string) || 'AI Generated', protocol });
-
-      // The generated folders/requests used to be thrown away here — the old code created
-      // the empty collection shell, toasted "imported!" and stopped, so the user got a
-      // named-but-empty collection and no indication anything was missing.
-      await new Promise(r => setTimeout(r, 120));
-      for (const req of requests) {
-        // 'saveRequestToCollection' — NOT 'createRequest', which no handler in the extension
-        // has ever listened for, so posting it silently dropped every request and left the
-        // collection empty. The shape is flat with everything else packed into a `data` JSON
-        // string, which is exactly how request-opener reads it back.
-        postMsg({
-          type: 'saveRequestToCollection',
-          collectionId: collId,
-          protocol,
-          request: {
-            id: req.id,
-            name: req.name,
-            method: req.method,
-            url: req.url,
-            data: JSON.stringify(req.data),
-          },
-        });
-        await new Promise(r => setTimeout(r, 50));
-      }
-      await new Promise(r => setTimeout(r, 150));
-      postMsg({ type: 'getCollections', protocol });
+      /* The saving itself lives in `import-to-collection` — four modals used
+         to own a copy of it and two of those copies never saved anything. */
+      const saved = await importRequestsAsCollection({
+        collectionId: collId,
+        name: (collData.name as string) || 'AI Generated',
+        protocol,
+        requests,
+      });
 
       setImported(true);
       addToast({
         type: 'success',
-        message: `Collection "${collData.name}" imported into ${COLLECTION_PROTOCOL_LABELS[protocol] ?? protocol} — ${requests.length} request${requests.length === 1 ? '' : 's'}.`,
+        message: `Collection "${collData.name}" imported into ${COLLECTION_PROTOCOL_LABELS[protocol] ?? protocol} — ${saved} request${saved === 1 ? '' : 's'}.`,
       });
       setTimeout(onClose, 1800);
     } catch {

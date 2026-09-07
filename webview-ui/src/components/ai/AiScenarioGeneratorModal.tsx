@@ -12,6 +12,7 @@ import { useToastStore } from '../../store/toast-store';
 import { ModalView, AIButtonView, MultilineInputView, ButtonView } from '@salilvnair/dui';
 import { normalizeCollectionProtocol } from '../../services/collections';
 import { sendAiRequest } from '../../services/ai/ai-client';
+import { importRequestsAsCollection } from '../../services/collections/import-to-collection';
 
 interface Props {
   onClose: () => void;
@@ -120,13 +121,34 @@ export function AiScenarioGeneratorModal({ onClose, contextProtocol }: Props) {
     });
   };
 
-  const importScenario = () => {
+  /*
+    This created the collection and stopped — a named, empty scenario and a
+    toast claiming it had been imported. Each step is saved as a request now,
+    in the order the scenario runs them.
+  */
+  const importScenario = async () => {
     if (!result) return;
+    const steps = Array.isArray(result.steps) ? (result.steps as Record<string, unknown>[]) : [];
+    if (steps.length === 0) {
+      setError('The scenario has no steps to import.');
+      return;
+    }
     try {
-      const collId = `scenario-${Date.now()}`;
-      postMsg({ type: 'createCollection', id: collId, name: (result.scenarioName as string) || 'AI Scenario', protocol: normalizeCollectionProtocol(contextProtocol) });
+      const name = (result.scenarioName as string) || 'AI Scenario';
+      const saved = await importRequestsAsCollection({
+        name,
+        protocol: normalizeCollectionProtocol(contextProtocol),
+        // Numbered, because a scenario is an order and a collection is a list.
+        requests: steps.map((step, i) => ({
+          ...step,
+          name: `${String(i + 1).padStart(2, '0')} · ${step.name ?? 'Step'}`,
+        })),
+      });
       setImported(true);
-      addToast({ type: 'success', message: `Scenario "${result.scenarioName}" imported!` });
+      addToast({
+        type: 'success',
+        message: `Imported "${name}" — ${saved} step${saved === 1 ? '' : 's'}.`,
+      });
       setTimeout(onClose, 1500);
     } catch {
       setError('Failed to import scenario.');

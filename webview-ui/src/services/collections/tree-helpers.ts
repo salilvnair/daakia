@@ -16,6 +16,21 @@ export interface CollectionRequest {
   method: string;
   url: string;
   data?: string;
+
+  /*
+    The response the request last returned.
+    
+    Saved alongside the request since the Save dialog started carrying it, but
+    the tree query did not select these columns, so nothing downstream could
+    read them — a collection request reopened with an empty response panel and
+    looked like it had never been sent.
+  */
+  status?: number;
+  status_text?: string;
+  response_time?: number;
+  response_size?: number;
+  /** JSON: `{ headers, body, contentType, cookies }`. */
+  response_data?: string;
 }
 
 /** Find a node by ID in a tree */

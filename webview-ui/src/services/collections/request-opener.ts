@@ -74,12 +74,38 @@ export function openCollectionRequest(req: CollectionRequest, forceNewTab = fals
   if (req.data) {
     try { config = JSON.parse(req.data); } catch { config = {}; }
   }
+  /*
+    The saved response, restored.
+    
+    A collection request carries the response it last returned — the Save
+    dialog has stored it for a while — but nothing put it back on the tab, so
+    reopening one showed an empty response panel and History looked like the
+    only place a response was ever kept.
+  */
+  let response = null;
+  if (req.response_data) {
+    try {
+      const parsed = JSON.parse(req.response_data);
+      response = {
+        status: req.status ?? 0,
+        statusText: req.status_text || '',
+        headers: parsed.headers || {},
+        body: parsed.body || '',
+        size: req.response_size || 0,
+        time: req.response_time || 0,
+        contentType: parsed.contentType || 'text/plain',
+        cookies: parsed.cookies || [],
+      };
+    } catch { /* a response we cannot parse is one we do not show */ }
+  }
+
   addTab({
     id: forceNewTab ? undefined : `c_${req.id}`,
     protocol: protocol || 'rest',
     method: (req.method as any) || 'GET',
     url: req.url,
     name: req.name,
+    ...(response ? { response } : {}),
     collectionId: req.collection_id,
     requestId: req.id,
     headers: Array.isArray(config.headers) ? config.headers : [],

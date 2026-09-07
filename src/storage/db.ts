@@ -841,7 +841,7 @@ export function getCollectionTree(protocol?: string): CollectionTreeNode[] {
   colStmt.free();
 
   // Get all requests
-  const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order FROM collection_requests ORDER BY sort_order');
+  const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data FROM collection_requests ORDER BY sort_order');
   while (reqStmt.step()) {
     const req = reqStmt.getAsObject() as unknown as CollectionRequestRow;
     const parent = flatList.find(c => c.id === req.collection_id);
@@ -880,7 +880,7 @@ export function getCollectionChildren(parentId: string | null): { folders: Colle
 
   const requests: CollectionRequestRow[] = [];
   if (parentId) {
-    const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order FROM collection_requests WHERE collection_id = ? ORDER BY sort_order');
+    const reqStmt = _db.prepare('SELECT id, collection_id, name, method, url, data, sort_order, status, status_text, response_time, response_size, response_data FROM collection_requests WHERE collection_id = ? ORDER BY sort_order');
     reqStmt.bind([parentId]);
     while (reqStmt.step()) {
       requests.push(reqStmt.getAsObject() as unknown as CollectionRequestRow);

@@ -26,6 +26,14 @@ const FILTERS: { key: LogFilter; label: string }[] = [
   { key: 'error', label: 'Errors' },
 ];
 
+/** Which accent a console line's source badge wears. */
+const SOURCE_TONES: Record<string, string> = {
+  settings: 'var(--color-settings)',
+  'pre-request': 'var(--color-protocol-rest)',
+  'post-response': 'var(--color-protocol-rest)',
+  test: 'var(--color-success)',
+};
+
 export function ConsoleTab() {
   const logs = useDevToolsStore(s => s.logs);
   const addLog = useDevToolsStore(s => s.addLog);
@@ -357,12 +365,20 @@ export function ConsoleTab() {
                     />
                   )}
 
-                  {/* Source badge */}
-                  {log.scriptPhase && (
-                    <span className="flex-shrink-0 text-[9px] px-1 py-0.5 rounded bg-[var(--color-surface-border)] text-[var(--color-text-muted)]">
-                      {log.scriptPhase}
-                    </span>
-                  )}
+                  {/* Source badge, tinted by where the line came from — a
+                      settings-audit line wears the settings accent, the same
+                      colour that section wears everywhere else. */}
+                  {log.scriptPhase && (() => {
+                    const tone = SOURCE_TONES[log.scriptPhase] ?? 'var(--color-text-muted)';
+                    return (
+                      <span
+                        className="flex-shrink-0 text-[9px] px-1 py-0.5 rounded"
+                        style={{ color: tone, backgroundColor: `color-mix(in srgb, ${tone} 14%, transparent)` }}
+                      >
+                        {log.scriptPhase}
+                      </span>
+                    );
+                  })()}
                 </div>
               );
             })}

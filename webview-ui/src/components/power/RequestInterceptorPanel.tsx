@@ -308,7 +308,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
           )}
 
           {/* Captured list header */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
+          <div className="flex items-center gap-2 px-4 py-2 border-b flex-shrink-0"
             style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface-hover)' }}>
             <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--color-text-secondary)' }}>
               {captured.length} captured
@@ -332,8 +332,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
           {/* Captured request list */}
           <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
             {captured.length === 0 ? (
-              <div className="p-6 text-center flex flex-col items-center gap-2">
-                <span className="text-[24px] opacity-20"></span>
+              <div className="px-4 py-6 text-center flex flex-col items-center gap-2">
                 <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
                   {running ? 'Waiting for requests…' : 'Start the proxy, then browse your app.'}
                 </p>
@@ -344,7 +343,7 @@ export function RequestInterceptorPanel({ onClose }: Props) {
                 return (
                   <div
                     key={req.id}
-                    className="flex items-center gap-2 px-3 py-2 border-b cursor-pointer transition-all"
+                    className="flex items-center gap-2 px-4 py-2 border-b cursor-pointer transition-all"
                     style={{
                       borderColor: 'var(--color-surface-border)',
                       backgroundColor: selectedView === req.id ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'transparent',

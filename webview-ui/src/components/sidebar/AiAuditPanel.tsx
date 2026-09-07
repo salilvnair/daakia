@@ -176,11 +176,14 @@ function CopyIconBtn({ text }: { text: string }) {
           setTimeout(() => setCopied(false), 1500);
         });
       }}
-      className="flex items-center justify-center w-[24px] h-[24px] rounded transition-colors cursor-pointer"
+      /* No box. A row of bordered squares reads as a toolbar of buttons
+         competing with the data; the icon alone is enough, and hover says it
+         is clickable. */
+      className="flex items-center justify-center w-[22px] h-[22px] rounded transition-colors cursor-pointer hover:bg-[var(--color-item-hover-bg)]"
       style={{
         color: copied ? 'var(--color-success)' : 'var(--color-text-muted)',
-        border: `1px solid ${copied ? 'color-mix(in srgb, var(--color-success) 25%, transparent)' : 'var(--color-surface-border)'}`,
-        background: copied ? 'color-mix(in srgb, var(--color-success) 8%, transparent)' : 'transparent',
+        border: 'none',
+        background: 'transparent',
       }}
     >
       {copied ? <CheckIcon size={10} /> : <CopyIcon size={10} />}
@@ -596,8 +599,8 @@ export function AiAuditPanel() {
                           type="button"
                           title="Delete this entry"
                           onClick={() => e.audit_id != null && handleDeleteOne(e.audit_id)}
-                          className="flex items-center justify-center w-[24px] h-[24px] rounded transition-colors cursor-pointer hover:bg-[rgba(239,68,68,0.1)]"
-                          style={{ color: 'var(--color-error)', border: '1px solid color-mix(in srgb, var(--color-error) 25%, transparent)' }}
+                          className="flex items-center justify-center w-[22px] h-[22px] rounded transition-colors cursor-pointer hover:bg-[rgba(239,68,68,0.1)]"
+                          style={{ color: 'var(--color-error)', border: 'none', background: 'transparent' }}
                         >
                           <TrashIcon size={10} />
                         </button>

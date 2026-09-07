@@ -99,6 +99,31 @@ function nameFromUrl(method: string, url: string): string {
   }
 }
 
+/**
+ * The parts of a response worth keeping with a saved request.
+ *
+ * Headers and cookies included — a saved request that comes back without its
+ * `set-cookie` or its `content-type` is not the response that was received.
+ * The body is capped because a collection lives in SQLite and a 200MB export
+ * helps nobody; when it is cut, the record says so rather than pretending the
+ * server returned a truncated payload.
+ */
+const MAX_SAVED_BODY = 250_000;
+
+function saveableResponse(res: {
+  headers?: Record<string, string>; body?: string; contentType?: string; cookies?: unknown[];
+}): Record<string, unknown> {
+  const body = res.body ?? '';
+  const truncated = body.length > MAX_SAVED_BODY;
+  return {
+    headers: res.headers ?? {},
+    cookies: res.cookies ?? [],
+    contentType: res.contentType ?? '',
+    body: truncated ? body.slice(0, MAX_SAVED_BODY) : body,
+    ...(truncated ? { truncated: true, originalLength: body.length } : {}),
+  };
+}
+
 export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }: SaveRequestModalProps) {
   const updateTab = useTabsStore(s => s.updateTab);
   const isBulk = !!bulkItems && bulkItems.length > 0;
@@ -405,9 +430,7 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
         statusText: tab.response?.statusText,
         responseTime: tab.response?.time,
         responseSize: tab.response?.size,
-        responseData: tab.response
-          ? JSON.stringify({ headers: tab.response.headers, body: tab.response.body.slice(0, 50000), contentType: tab.response.contentType })
-          : undefined,
+        responseData: tab.response ? JSON.stringify(saveableResponse(tab.response)) : undefined,
       },
     });
 
