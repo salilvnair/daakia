@@ -96,7 +96,9 @@ function RequestDocsTab({ tab }: { tab: RequestTab }) {
           <ButtonView
             size="sm"
             variant="secondary"
-            iconLeft={editing ? <EyeIcon size={13} /> : <PencilIcon size={13} />}
+            /* 11px — the icon size dui gives an `sm` button. A hand-picked
+               13 next to a 10px label reads as a glyph with a caption. */
+            iconLeft={editing ? <EyeIcon size={11} /> : <PencilIcon size={11} />}
             onClick={() => setEditing(v => !v)}
             accentColor="var(--color-protocol-rest, var(--color-accent))"
           >

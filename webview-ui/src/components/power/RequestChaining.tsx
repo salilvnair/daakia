@@ -113,7 +113,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
             pair it applies to.
           */}
           {extractions.length > 0 && (
-            <div className={`grid ${ROW_COLS} gap-2 px-1`}>
+            <div className={`grid ${ROW_COLS} gap-2 px-4`}>
               <div />
               <div className="text-[10px] uppercase tracking-wide font-medium"
                    style={{ color: 'var(--color-text-muted)' }}>Path in response</div>
@@ -127,7 +127,7 @@ export function RequestChaining({ tabId, extractions, onExtractionsChange, respo
           {extractions.map(ex => {
             const preview = extractedPreviews.find(p => p.ex.id === ex.id)?.value;
             return (
-              <div key={ex.id} className="flex flex-col gap-2.5 p-3 rounded-md border"
+              <div key={ex.id} className="flex flex-col gap-3 p-4 rounded-md border"
                 style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
 
                 {/* Where the value comes from, across the top of its own rule. */}
