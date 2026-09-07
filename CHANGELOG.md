@@ -116,6 +116,17 @@ UI.
   payloads
 - Chaining rules persist with the request too, so they survive a closed tab
 
+### Added — Contract testing from an imported spec
+- An imported OpenAPI document **keeps its `components.schemas`** with the
+  collection, so `dk.expect(body).toMatchSchema('#/components/schemas/User')`
+  resolves against the spec instead of a copy pasted into the script.
+  `#/definitions/User` and a bare `User` name the same schema
+- A name that matches nothing **fails as a broken test**, saying which schema
+  is missing rather than reporting it as a body that does not match
+- **`integer` is understood.** The validator compared JSON Schema's types
+  against `typeof`, so every spec that types an id as `integer` failed on a
+  perfectly valid body
+
 ### Added — Saved response examples
 - **Save example** on any response keeps it under the request, named after
   its status and renameable — the 200 that works, the 401 when the token has

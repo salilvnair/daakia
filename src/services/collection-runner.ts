@@ -279,6 +279,18 @@ async function runIteration(
   // Collection-level scripts
   const collectionScripts = loadFolderScripts(collectionId);
 
+  /*
+    Schemas from the spec this collection was imported from, if it was.
+    Loaded once per pass: they do not change while a run is in flight, and
+    re-reading the blob per request would be a JSON parse per request for a
+    value that cannot have moved.
+  */
+  let collectionSchemas: Record<string, unknown> | undefined;
+  try {
+    const props = JSON.parse(getCollectionData(collectionId) || '{}') as { schemas?: Record<string, unknown> };
+    collectionSchemas = props.schemas && Object.keys(props.schemas).length > 0 ? props.schemas : undefined;
+  } catch { collectionSchemas = undefined; }
+
   // Build request name → index lookup for setNextRequest
   const requestByName = new Map<string, number>();
   for (let idx = 0; idx < flatRequests.length; idx++) {
@@ -341,6 +353,7 @@ async function runIteration(
       request: { method: request.method, url: request.url, headers: headersObj, body: (reqData.bodyRaw as string) || '' },
       environmentVariables: { ...envVars },
       collectionVariables: { ...colVars },
+      schemas: collectionSchemas,
       globalVariables: { ...globalVars },
     };
 
@@ -456,6 +469,7 @@ async function runIteration(
       },
       environmentVariables: { ...envVars },
       collectionVariables: { ...colVars },
+      schemas: collectionSchemas,
       globalVariables: { ...globalVars },
     };
 

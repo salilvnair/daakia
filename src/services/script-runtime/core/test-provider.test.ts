@@ -131,3 +131,105 @@ describe('a failure is a failed test, not a crashed script', () => {
     expect(results.map(r => r.passed)).toEqual([false, true]);
   });
 });
+
+/*
+  Schemas from the spec the collection was imported from.
+
+  The validator was always deterministic; the gap was upstream — an imported
+  OpenAPI document became requests and was discarded, so a schema could only
+  reach a test by being pasted into it by hand. These check the resolution,
+  not the validation: that a `$ref` finds the schema, that a name that finds
+  nothing fails as a broken test rather than as a mismatched body.
+*/
+describe('toMatchSchema against an imported spec', () => {
+  const USER = {
+    type: 'object',
+    properties: { id: { type: 'integer' }, name: { type: 'string' } },
+    required: ['id', 'name'],
+  };
+
+  const run = (script: string, schemas?: Record<string, unknown>) => {
+    const results: { name: string; passed: boolean; error?: string }[] = [];
+    const api = testProvider.activate({
+      addTestResult: (r: { name: string; passed: boolean; error?: string }) => results.push(r),
+      scriptContext: schemas ? { schemas } : {},
+    } as never) as { dk: Record<string, unknown> };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('dk', script)(api.dk);
+    return results;
+  };
+
+  const CHECK = `dk.test('shape', () => dk.expect({ id: 1, name: 'Ada' }).toMatchSchema(REF));`;
+
+  it.each([
+    ['#/components/schemas/User'],
+    ['#/definitions/User'],
+    ['User'],
+  ])('resolves %s', (ref) => {
+    const [v] = run(CHECK.replace('REF', JSON.stringify(ref)), { User: USER });
+    expect(v).toEqual({ name: 'shape', passed: true });
+  });
+
+  it('still takes a schema object, as it always did', () => {
+    const [v] = run(CHECK.replace('REF', JSON.stringify(USER)));
+    expect(v!.passed).toBe(true);
+  });
+
+  it('fails a body that does not match the referenced schema', () => {
+    const script = `dk.test('shape', () => dk.expect({ id: 'not-a-number' }).toMatchSchema('User'));`;
+    const [v] = run(script, { User: USER });
+    expect(v!.passed).toBe(false);
+    expect(v!.error).toContain('Schema validation failed');
+  });
+
+  /* A missing schema is a broken test, not a mismatched body — saying "does
+     not match" would send whoever reads the run to the wrong place. */
+  it('names the missing schema rather than blaming the body', () => {
+    const [v] = run(CHECK.replace('REF', JSON.stringify('Ghost')), { User: USER });
+    expect(v!.passed).toBe(false);
+    expect(v!.error).toContain('No schema named Ghost');
+    expect(v!.error).not.toContain('Schema validation failed');
+  });
+
+  it('says so when the collection has no schemas at all', () => {
+    const [v] = run(CHECK.replace('REF', JSON.stringify('User')));
+    expect(v!.error).toContain('No schema named User');
+  });
+});
+
+/*
+  `integer` is a JSON Schema type and JavaScript has no such thing, so the
+  validator compared it against `typeof` and rejected every spec that types an
+  id as an integer — which is every spec. It surfaced when inferred schemas
+  started emitting `integer` and a body failed against a schema derived from
+  itself.
+*/
+describe('the integer type', () => {
+  const check = (value: unknown, schema: Record<string, unknown>) => {
+    const results: { passed: boolean; error?: string }[] = [];
+    const api = testProvider.activate({
+      addTestResult: (r: { passed: boolean; error?: string }) => results.push(r),
+      scriptContext: {},
+    } as never) as { dk: Record<string, unknown> };
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    new Function('dk', 'v', 's', `dk.test('t', () => dk.expect(v).toMatchSchema(s));`)(api.dk, value, schema);
+    return results[0]!;
+  };
+
+  it('accepts a whole number', () => {
+    expect(check(7, { type: 'integer' }).passed).toBe(true);
+  });
+
+  it('rejects a fractional one', () => {
+    expect(check(7.5, { type: 'integer' }).passed).toBe(false);
+  });
+
+  it('still accepts either under `number`', () => {
+    expect(check(7, { type: 'number' }).passed).toBe(true);
+    expect(check(7.5, { type: 'number' }).passed).toBe(true);
+  });
+
+  it('does not let a string through', () => {
+    expect(check('7', { type: 'integer' }).passed).toBe(false);
+  });
+});

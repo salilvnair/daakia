@@ -89,6 +89,7 @@ export async function handleExecuteRequest(
     const envVarsForScript = loadEnvironmentVarsForScript(msg.envId as string | undefined);
     const colVarsForScript = loadCollectionVarsForScript(msg.collectionId as string | undefined);
     const globalVarsForScript = loadGlobalVarsForScript();
+    const schemasForScript = loadCollectionSchemas(msg.collectionId as string | undefined);
 
     if (preScripts.length > 0) {
       const headersObj: Record<string, string> = {};
@@ -105,6 +106,7 @@ export async function handleExecuteRequest(
         },
         environmentVariables: { ...envVarsForScript },
         collectionVariables: { ...colVarsForScript },
+        schemas: schemasForScript,
         globalVariables: { ...globalVarsForScript },
       };
 
@@ -267,6 +269,7 @@ export async function handleExecuteRequest(
         },
         environmentVariables: { ...envVarsForScript },
         collectionVariables: { ...colVarsForScript },
+        schemas: schemasForScript,
         globalVariables: { ...globalVarsForScript },
       };
 
@@ -587,6 +590,22 @@ function loadCollectionVarsForScript(collectionId: string | undefined): Record<s
     }
   }
   return vars;
+}
+
+/**
+ * Schemas kept when an OpenAPI document was imported into this collection.
+ *
+ * What makes `toMatchSchema('#/components/schemas/User')` mean the spec
+ * rather than a blob someone pasted into the script.
+ */
+function loadCollectionSchemas(collectionId: string | undefined): Record<string, unknown> | undefined {
+  if (!collectionId) return undefined;
+  try {
+    const props = JSON.parse(getCollectionData(collectionId)) as { schemas?: Record<string, unknown> };
+    return props.schemas && Object.keys(props.schemas).length > 0 ? props.schemas : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function loadGlobalVarsForScript(): Record<string, string> {

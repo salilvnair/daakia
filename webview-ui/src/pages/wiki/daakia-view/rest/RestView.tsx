@@ -367,6 +367,15 @@ dk.env.set('user_id', dk.response.json().id);`}
       </div>
       {cap('rest-variables')}
 
+      <Callout type="info" title="Contract testing, from an imported spec">
+        Import an OpenAPI document and its <Code>components.schemas</Code> stay with the collection,
+        so a test can name one instead of carrying a copy:{' '}
+        <Code>dk.expect(dk.response.json()).toMatchSchema('#/components/schemas/User')</Code>.
+        <Code>#/definitions/User</Code> and a bare <Code>User</Code> resolve to the same schema. A
+        name that matches nothing fails as a broken test — it says which schema is missing rather
+        than blaming the body.
+      </Callout>
+
       <Divider />
 
       {/* ── Docs ──────────────────────────────────────────────────────── */}

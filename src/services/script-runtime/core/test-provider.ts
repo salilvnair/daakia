@@ -9,6 +9,9 @@
  */
 import type { ScriptProvider } from '../types';
 
+/** `#/components/schemas/` and Swagger 2's `#/definitions/`, both optional. */
+const REF_PREFIX = new RegExp('^#\/(?:components\/schemas|definitions)\/');
+
 export const testProvider: ScriptProvider = {
   id: 'core:test',
   name: 'Test & Assertions',
@@ -17,6 +20,20 @@ export const testProvider: ScriptProvider = {
 
   activate(ctx) {
     const { addTestResult } = ctx;
+    const schemas = ctx.scriptContext?.schemas ?? {};
+
+    /**
+     * `#/components/schemas/User`, `#/definitions/User`, or plain `User`.
+     *
+     * The pointer forms are what a spec writes and what anyone copying from
+     * one will type; the bare name is what they will try first. All three
+     * name the same schema, so all three resolve.
+     */
+    const resolveRef = (ref: string): Record<string, unknown> | undefined => {
+      const name = ref.replace(REF_PREFIX, '');
+      const found = schemas[name];
+      return found && typeof found === 'object' ? found as Record<string, unknown> : undefined;
+    };
 
     const test = (name: string, fn: () => void): void => {
       try {
@@ -182,8 +199,33 @@ export const testProvider: ScriptProvider = {
           not: `Expected status not to be ${show(status)}`,
         };
       },
-      toMatchSchema: (a, schema?: Record<string, unknown>) => {
-        const errors = validateJsonSchema(a, schema ?? {}, '');
+      /*
+        A schema object, or a `$ref` into the spec this collection came from.
+
+        The validator was always here and always deterministic; what was
+        missing sat upstream of it. You had to paste a schema object into the
+        script by hand, because the OpenAPI document was converted to requests
+        and discarded — so `toMatchSchema('#/components/schemas/User')` now
+        resolves against the schemas kept at import, and a contract test is a
+        line rather than a copied blob that drifts from the spec.
+      */
+      toMatchSchema: (a, schema?: Record<string, unknown> | string) => {
+        const resolved = typeof schema === 'string' ? resolveRef(schema) : schema;
+        if (resolved === undefined) {
+          const name = typeof schema === 'string' ? schema : '(none)';
+          return {
+            /*
+              Not a validation failure — a missing schema is a broken test,
+              and reporting it as "the body does not match" sends whoever
+              reads the run looking at the wrong thing entirely.
+            */
+            pass: false,
+            msg: `No schema named ${name}. An imported spec keeps its `
+              + `components.schemas; this collection has ${Object.keys(schemas).length}.`,
+            not: `No schema named ${name}`,
+          };
+        }
+        const errors = validateJsonSchema(a, resolved, '');
         return {
           pass: errors.length === 0,
           msg: `Schema validation failed:\n  - ${errors.slice(0, 10).join('\n  - ')}`
@@ -226,7 +268,17 @@ function validateJsonSchema(value: unknown, schema: Record<string, unknown>, pat
   if (schema.type) {
     const types = Array.isArray(schema.type) ? schema.type : [schema.type];
     const actualType = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
-    if (!types.includes(actualType)) {
+    /*
+      `integer` is a JSON Schema type; JavaScript has no such thing.
+
+      Every spec in the world types an id as `integer`, and this rejected
+      every one of them — `expected type integer but got number` on a body
+      that was perfectly valid. A whole number satisfies `integer`, and any
+      number satisfies `number`.
+    */
+    const satisfies = types.some(t =>
+      t === actualType || (t === 'integer' && typeof value === 'number' && Number.isInteger(value)));
+    if (!satisfies) {
       errors.push(`${p}: expected type ${types.join('|')} but got ${actualType}`);
       return errors;
     }
