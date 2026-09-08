@@ -337,6 +337,11 @@ export type AiPromptTemplateKey =
   | 'platform.openapi.generator.system'
   | 'platform.security.audit'
   | 'platform.security.audit.system'
+  // ── Schema Diff & Anomaly Detection ──────────────────────────────────────
+  | 'platform.schema.diff'
+  | 'platform.schema.diff.system'
+  | 'platform.schema.migration'
+  | 'platform.schema.migration.system'
   | 'platform.mock.intelligence'
   | 'platform.mock.intelligence.system'
   | 'platform.postman.translator'
@@ -816,6 +821,15 @@ Rules:
     `Generate an OpenAPI 3.1 specification from this API collection:\n\n{collectionName}: {requests}\n\nBase URL: {baseUrl}\n\nInclude:\n1. Info section with title, version, and description\n2. All endpoints with accurate operation summaries and descriptions\n3. Request body schemas (JSON Schema format) with examples\n4. Response schemas for all status codes returned\n5. Security schemes (Bearer, API key, Basic Auth as appropriate)\n6. Reusable components for shared schemas\n\nOutput valid OpenAPI 3.1 YAML.`,
   'platform.openapi.generator.system':
     `You are an OpenAPI 3.1 specification expert. Generate complete, standards-compliant OpenAPI 3.1 specs from API collections. Include realistic schemas, examples, security definitions, and response types. Output valid YAML. Follow the OpenAPI 3.1.0 specification exactly.`,
+  // ── Schema Diff & Anomaly Detection ────────────────────────────────────
+  'platform.schema.diff':
+    `Two database schemas have been compared. The comparison is already done — do not re-rank it, and do not invent objects that are not listed.\n\nSource: {sourceLabel}\nTarget: {targetLabel}\n\n{digest}\n\nFor each object listed, write one short paragraph answering:\n1. What breaks, or what changes, for something reading the target?\n2. Is this drift expected (a migration part-applied) or unexpected (a manual change)?\n3. The single next action — the specific statement or check, not \"investigate\".\n\nThen close with **Overall** — two or three sentences on whether the target is safe to deploy against, and what to do first.\n\nBe concrete about column and constraint names. Say plainly when a difference is harmless.`,
+  'platform.schema.diff.system':
+    `You are a database schema reviewer. You are given the RESULT of a schema comparison, not the schemas themselves, and your job is to explain what each difference means for the systems that read these databases.\n\nRules:\n- Never restate the diff back. The reader can see it.\n- Never re-rank severity. It was derived from the diff and is not yours to change.\n- An object missing from the target breaks readers NOW; say what kind of failure.\n- A removed column or constraint is a breaking change even when the table still exists.\n- An added object or column is usually safe; say so rather than padding.\n- If a difference looks like a migration applied to one side only, say that — it is the most common cause and the most actionable finding.\n- Markdown. No preamble, no summary of your instructions.`,
+  'platform.schema.migration':
+    `Write the SQL that brings the target schema in line with the source.\n\nSource: {sourceLabel}\nTarget: {targetLabel}\n\n{digest}\n\nDefinitions of the objects that differ:\n{objects}\n\nReturn exactly three fenced sql blocks, each preceded by a heading:\n\n### deploy\n\`\`\`sql\n-- statements that move the target towards the source\n\`\`\`\n\n### verify\n\`\`\`sql\n-- SELECTs that return zero rows if, and only if, deploy worked\n\`\`\`\n\n### revert\n\`\`\`sql\n-- statements that undo deploy\n\`\`\`\n\nRules:\n- Use IF EXISTS / IF NOT EXISTS so the scripts can be re-run.\n- Never write a destructive statement without a comment saying what is lost.\n- If a change cannot be reverted (a dropped column's data), say so in a comment in revert rather than pretending it can.\n- Order deploy so dependencies exist before what needs them.`,
+  'platform.schema.migration.system':
+    `You are a database migration author. You write SQL that a reviewer will read before running it against a real database, so it is commented, ordered and reversible.\n\nRules:\n- Exactly three fenced sql blocks: deploy, verify, revert, under those headings.\n- Idempotent: IF EXISTS / IF NOT EXISTS throughout.\n- verify returns ZERO rows when the deploy succeeded — a query that returns rows is a failure report, which is what a pipeline can act on.\n- Never DROP anything without a comment naming what is lost.\n- Where data cannot be restored by revert, say so in a comment instead of writing SQL that implies it can.\n- No prose outside the three blocks and their headings.`,
   'platform.security.audit':
     `Perform a security audit on these API requests and configurations:\n\n{requests}\n\nCheck for:\n1. Missing or weak authentication (no auth, Basic over HTTP, long-lived tokens)\n2. Secrets in headers, query params, or request bodies (API keys, passwords, tokens)\n3. Non-HTTPS endpoints transmitting sensitive data\n4. Exposed PII (email, SSN, credit card numbers in request/response)\n5. Missing security headers (CORS, CSP, HSTS)\n6. Overly permissive scopes or permissions\n\nFor each issue: severity (critical/high/medium/low), what was found, and exact fix.`,
   'platform.security.audit.system':
@@ -1046,6 +1060,10 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   // ── Platform AI — Sprint 10 ───────────────────────────────────────────────
   'platform.openapi.generator':        { label: 'OpenAPI Generator',             description: 'Daakia AI tab → platform tools → "OpenAPI ✦" button: generates full OpenAPI 3.1 spec from collection' },
   'platform.openapi.generator.system': { label: 'OpenAPI Generator — System',    description: 'Behavioral rules for the OpenAPI 3.1 generator (valid YAML, all schemas, security)' },
+  'platform.schema.diff':             { label: 'Schema Diff Analyst',           description: 'Explains what each schema difference means for the systems reading the target' },
+  'platform.schema.diff.system':      { label: 'Schema Diff Analyst — System',  description: 'Behavioural rules: explain, never re-rank, never restate the diff' },
+  'platform.schema.migration':        { label: 'Schema Migration Author',       description: 'Writes deploy / verify / revert SQL from a schema comparison' },
+  'platform.schema.migration.system': { label: 'Schema Migration — System',     description: 'Behavioural rules: three blocks, idempotent, reversible, commented' },
   'platform.security.audit':        { label: 'Security Audit',                   description: 'Daakia AI tab → platform tools → "Security Audit ✦" button: scans for auth gaps, secrets, PII' },
   'platform.security.audit.system': { label: 'Security Audit — System',         description: 'Behavioral rules for the API security auditor (severity levels, specific fixes)' },
   'platform.mock.intelligence':        { label: 'Mock Intelligence',             description: 'Mock Server tab → AI config panel → "Mock Intelligence ✦": learns from real responses, generates mock rules' },
@@ -1231,6 +1249,10 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'mcp.prompt.builder.system':     [],
   'platform.openapi.generator':        ['{collectionName}', '{requests}', '{baseUrl}'],
   'platform.openapi.generator.system': [],
+  'platform.schema.diff':             ['{sourceLabel}', '{targetLabel}', '{digest}'],
+  'platform.schema.diff.system':      [],
+  'platform.schema.migration':        ['{sourceLabel}', '{targetLabel}', '{digest}', '{objects}'],
+  'platform.schema.migration.system': [],
   'platform.security.audit':        ['{requests}'],
   'platform.security.audit.system': [],
   'platform.mock.intelligence':        ['{responses}'],
@@ -1377,6 +1399,7 @@ export const AI_TEMPLATE_CATEGORIES: {
     keys: [
       'mcp.prompt.builder', 'agent.master',
       'platform.openapi.generator', 'platform.security.audit', 'platform.mock.intelligence',
+      'platform.schema.diff', 'platform.schema.migration',
       'platform.postman.translator', 'platform.soap.to.rest', 'platform.gql.federation',
       'platform.webhook.debugger', 'platform.request.clustering',
       'mock.traffic.enrich',
@@ -1548,6 +1571,10 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'mcp.prompt.builder.system':     '#a855f7',
   'platform.openapi.generator':        '#0ea5e9',
   'platform.openapi.generator.system': '#0ea5e9',
+  'platform.schema.diff':             '#0ea5e9',
+  'platform.schema.diff.system':      '#0ea5e9',
+  'platform.schema.migration':        '#10b981',
+  'platform.schema.migration.system': '#10b981',
   'platform.security.audit':        '#ef4444',
   'platform.security.audit.system': '#ef4444',
   'platform.mock.intelligence':        '#8b5cf6',

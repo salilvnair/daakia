@@ -25,6 +25,7 @@ import { AiConversationToCollectionModal } from './AiConversationToCollectionMod
 import { AiSessionExportModal } from './AiSessionExportModal';
 import { AiOpenApiGeneratorModal } from './AiOpenApiGeneratorModal';
 import { AiSecurityAuditModal } from './AiSecurityAuditModal';
+import { AiSchemaDiffModal } from './AiSchemaDiffModal';
 import { AiPostmanTranslatorModal } from './AiPostmanTranslatorModal';
 import { AiWebhookDebuggerModal } from './AiWebhookDebuggerModal';
 import { AiRequestClusteringModal } from './AiRequestClusteringModal';
@@ -404,6 +405,7 @@ export function DaakiaAiPanel() {
   // ── Sprint 10.10-10.17 platform tools ────────────────────────────────────
   const [showOpenApiModal, setShowOpenApiModal] = useState(false);
   const [showSecurityAudit, setShowSecurityAudit] = useState(false);
+  const [showSchemaDiff, setShowSchemaDiff] = useState(false);
   const [showPostmanTranslator, setShowPostmanTranslator] = useState(false);
   const [showWebhookDebugger, setShowWebhookDebugger] = useState(false);
   const [showRequestClustering, setShowRequestClustering] = useState(false);
@@ -568,6 +570,9 @@ export function DaakiaAiPanel() {
         {aiEnabled('securityAudit') && (
           <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowSecurityAudit(true)} title="AI Security Audit all tabs">Security ✦</ButtonView>
         )}
+        {aiEnabled('schemaDiff') && (
+          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowSchemaDiff(true)} title="Compare two database schemas — anomalies, DDL diff and migration SQL">Schema Diff ✦</ButtonView>
+        )}
         {aiEnabled('postmanTranslator') && (
           <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowPostmanTranslator(true)} title="Translate Postman pm.* to Daakia dk.*">pm→dk ✦</ButtonView>
         )}
@@ -725,6 +730,7 @@ export function DaakiaAiPanel() {
       {/* 10.10-10.17: Platform tools */}
       {showOpenApiModal && <AiOpenApiGeneratorModal onClose={() => setShowOpenApiModal(false)} />}
       {showSecurityAudit && <AiSecurityAuditModal onClose={() => setShowSecurityAudit(false)} />}
+      {showSchemaDiff && <AiSchemaDiffModal onClose={() => setShowSchemaDiff(false)} />}
       {showPostmanTranslator && <AiPostmanTranslatorModal onClose={() => setShowPostmanTranslator(false)} />}
       {showWebhookDebugger && <AiWebhookDebuggerModal onClose={() => setShowWebhookDebugger(false)} />}
       {showRequestClustering && <AiRequestClusteringModal onClose={() => setShowRequestClustering(false)} />}

@@ -95,6 +95,7 @@ export interface AiFeatureFlags {
   apiKnowledgeGraph: boolean;
   regressionGuardian: boolean;
   schemaDriftMonitor: boolean;
+  schemaDiff: boolean;
   adaptiveLoadTester: boolean;
   // ── Sprint 12 — AI Analytics, Security & Documentation ────────────────────────
   intelligenceDashboard: boolean;
@@ -198,6 +199,7 @@ export const AI_FEATURE_DEFAULTS: AiFeatureFlags = {
   apiKnowledgeGraph: true,
   regressionGuardian: true,
   schemaDriftMonitor: true,
+  schemaDiff: true,
   adaptiveLoadTester: true,
   // Sprint 12
   intelligenceDashboard: true,
@@ -377,6 +379,12 @@ export const AI_FEATURE_LABELS: Record<keyof AiFeatureFlags, {
     description: 'Generate dk.test() contract tests from response schema with AI',
     group: 'Schema & Contracts',
     gates: '"Tests ✦" button in REST tab → Scripts tab toolbar (post-response mode)',
+  },
+  schemaDiff: {
+    label: 'Schema Diff & Anomaly Detection ✦',
+    description: 'Compare two database schemas object by object; AI explains what each difference means and writes deploy/verify/revert SQL',
+    group: 'Schema & Contracts',
+    gates: 'Daakia AI tab → platform tools → "Schema Diff ✦"',
   },
   schemaDriftMonitor: {
     label: 'Schema Drift Monitor ✦',

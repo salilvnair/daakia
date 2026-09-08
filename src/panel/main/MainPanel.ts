@@ -855,6 +855,30 @@ export class MainPanel {
         break;
       }
 
+      /*
+        Save any text the webview has already produced.
+
+        Every export before this one was a bespoke case that knew how to build
+        its own content. Schema Diff builds its report and its migration SQL in
+        the webview -- the comparison lives there -- so the host's only job is
+        the save dialog. The extension chooses the filter, so a .sql is offered
+        as SQL and a .md as Markdown without the caller having to say.
+      */
+      case 'saveTextFile': {
+        const content = (msg.content as string) ?? '';
+        const filename = (msg.filename as string) ?? 'daakia-export.txt';
+        const ext = filename.includes('.') ? filename.split('.').pop()! : 'txt';
+        vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(filename),
+          filters: { [ext.toUpperCase()]: [ext], 'All Files': ['*'] },
+          saveLabel: 'Save',
+          title: (msg.title as string) ?? 'Save file',
+        }).then(uri => {
+          if (uri) { fs.writeFileSync(uri.fsPath, content, 'utf-8'); }
+        });
+        break;
+      }
+
       case 'exportMockServer': {
         const content = msg.content as string ?? '';
         const filename = msg.filename as string ?? 'mock-server.js';
