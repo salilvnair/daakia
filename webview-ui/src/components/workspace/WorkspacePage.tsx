@@ -13,7 +13,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ImportModal } from './ImportModal';
 import { useWorkspaceStore, type Workspace } from '../../store/workspace-store';
 import { useTabsStore } from '../../store/tabs-store';
-import { SplitPanelView } from '@salilvnair/dui';
+import { SplitPanelView, AlertDialogView } from '@salilvnair/dui';
+import { NewItemModal } from '../shared/modals/NewItemModal';
 import { useUiStateStore } from '../../store/ui-state-store';
 import { postMsg } from '../../vscode';
 import {
@@ -84,6 +85,8 @@ export function WorkspacePage() {
   const [createColl, setCreateColl] = useState(0);
   const [createEnv, setCreateEnv] = useState(0);
   const [docsOpen, setDocsOpen] = useState(true);
+  const [naming, setNaming] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   /* Remembered the way every other split in the app is, so the width you drag
      to is the width you get next time. */
@@ -120,20 +123,13 @@ export function WorkspacePage() {
         renaming={renaming}
         onToggleMenu={() => setMenuOpen(o => !o)}
         onPick={(id) => { switchTo(id); setMenuOpen(false); }}
-        onCreate={() => { const n = window.prompt('Name the workspace'); if (n?.trim()) create(n); setMenuOpen(false); }}
+        onCreate={() => { setNaming(true); setMenuOpen(false); }}
         onOpen={() => { postMsg({ type: 'openWorkspace' }); setMenuOpen(false); }}
         onImport={() => { postMsg({ type: 'importWorkspace' }); setMenuOpen(false); }}
         onExport={() => { postMsg({ type: 'exportWorkspace' }); setMenuOpen(false); }}
         onRenameStart={() => { setRenaming(true); setMenuOpen(false); }}
         onRenameDone={(name) => { if (active && name.trim()) rename(active.id, name); setRenaming(false); }}
-        onDelete={() => {
-          if (!active) return;
-          const sure = window.confirm(
-            `Delete "${active.name}"?\n\nIts collections, environments and history go with it. This cannot be undone.`,
-          );
-          if (sure) remove(active.id);
-          setMenuOpen(false);
-        }}
+        onDelete={() => { setConfirmingDelete(true); setMenuOpen(false); }}
       />
 
       {/* One tab per thing a workspace owns, plus the overview. No Git tab:
@@ -214,6 +210,29 @@ export function WorkspacePage() {
       )}
 
       {importing && <ImportModal onClose={() => setImporting(false)} />}
+
+      {/* The app's own dialogs, not the browser's. A VS Code webview has no
+          `allow-modals` in its sandbox, so window.prompt returns null and
+          window.confirm returns false — silently, which is why Create
+          Workspace looked broken while doing exactly what it was told. */}
+      <NewItemModal
+        open={naming}
+        title="New Workspace"
+        placeholder="Workspace name"
+        accentColor="var(--color-workspace)"
+        onSave={name => { create(name); setNaming(false); }}
+        onCancel={() => setNaming(false)}
+      />
+
+      <AlertDialogView
+        open={confirmingDelete}
+        title={`Delete "${active?.name ?? 'this workspace'}"?`}
+        message="Its collections, environments and history go with it. This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => { if (active) remove(active.id); setConfirmingDelete(false); }}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </div>
   );
 }
