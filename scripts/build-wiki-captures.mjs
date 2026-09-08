@@ -15,6 +15,20 @@ const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const LIVE_DIR = join(ROOT, 'plan', 'daakia_live');
 const OUT_ROOT = join(ROOT, 'webview-ui', 'src', 'pages', 'wiki', 'daakia-view');
 
+/**
+ * Where a live-capture directory's module belongs, when the two are not spelt
+ * the same.
+ *
+ * plan/daakia_live/graphql/ used to compile into daakia-view/graphql/, but the
+ * GraphQL wiki page and the tour both read daakia-view/gql/ — so every recapture
+ * wrote a module nothing imported, and the app kept serving screenshots from
+ * whenever gql/captures.ts was last written by hand. That is how GraphQL ended
+ * up showing a dozen leftover SOAP tabs long after the recapture that removed
+ * them. One destination, and it is the one the app reads.
+ */
+const OUT_DIR = { graphql: 'gql' };
+const EXPORT_NAME = { graphql: 'GQL' };
+
 function buildProtocol(protocol) {
   const dir = join(LIVE_DIR, protocol);
   const manifestPath = join(dir, 'manifest.json');
@@ -28,7 +42,7 @@ function buildProtocol(protocol) {
     return { id: m.id, label: m.label, explanation: m.explanation, html };
   });
 
-  const outDir = join(OUT_ROOT, protocol);
+  const outDir = join(OUT_ROOT, OUT_DIR[protocol] ?? protocol);
   mkdirSync(outDir, { recursive: true });
   const outFile = join(outDir, 'captures.ts');
 
@@ -45,7 +59,7 @@ function buildProtocol(protocol) {
  */
 import type { CaptureEntry } from '../capture/CaptureScrollView';
 
-export const ${protocol.toUpperCase().replace(/-/g, '_')}_CAPTURES: CaptureEntry[] = [
+export const ${(EXPORT_NAME[protocol] ?? protocol.toUpperCase()).replace(/-/g, '_')}_CAPTURES: CaptureEntry[] = [
 ${body}
 ];
 `;

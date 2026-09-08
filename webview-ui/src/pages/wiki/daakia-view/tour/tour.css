@@ -104,6 +104,9 @@
 
 /* ── Chapter rail ───────────────────────────────────────────────────────── */
 
+/* Grab and shove. A scrollbar under a strip of ticks is a second, thinner
+   thing to aim at for a gesture the strip itself can take — and it followed
+   the active stop by growing a scrollbar thumb nobody was watching. */
 .dt-rail {
   display: flex;
   align-items: center;
@@ -111,8 +114,15 @@
   padding: 8px 24px;
   overflow-x: auto;
   flex-shrink: 0;
+  cursor: grab;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   border-bottom: 1px solid var(--dw-border, var(--color-surface-border));
 }
+.dt-rail::-webkit-scrollbar { display: none; }
+.dt-rail:active { cursor: grabbing; }
+/* The ticks are still buttons; only the strip between them drags. */
+.dt-rail-dot { cursor: pointer; }
 .dt-rail-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .dt-rail-label {
   font-size: 9.5px;
@@ -152,7 +162,6 @@
 .dt-controls > .dt-nav:first-child { justify-self: start; }
 .dt-controls > .dt-nav:last-child { justify-self: end; }
 .dt-controls-mid { display: flex; align-items: center; gap: 14px; }
-.dt-pips { display: flex; gap: 5px; flex-wrap: wrap; max-width: 260px; }
 
 .dt-play {
   display: inline-flex;
@@ -307,6 +316,35 @@
 }
 .dt-pop--left { left: auto; right: 22px; }
 .dt-pop--up { top: auto; bottom: -8px; }
+
+/*
+  A tail, because two markers a centimetre apart produce two cards a centimetre
+  apart and nothing says which belongs to which. Drawn as two stacked squares —
+  the back one in the border colour, the front one in the card's own background
+  a pixel further in — so the card's outline appears to continue around the
+  point instead of being crossed by it.
+*/
+.dt-pop::before,
+.dt-pop::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  top: 15px;
+}
+.dt-pop::before {
+  left: -6px;
+  background: color-mix(in srgb, var(--dt-marker) 34%, transparent);
+}
+.dt-pop::after {
+  left: -5px;
+  background: var(--color-elevated, #1e1e1e);
+}
+.dt-pop--left::before { left: auto; right: -6px; }
+.dt-pop--left::after  { left: auto; right: -5px; }
+.dt-pop--up::before,
+.dt-pop--up::after { top: auto; bottom: 15px; }
 
 @keyframes dt-pop-in {
   from { opacity: 0; transform: translateY(3px); }

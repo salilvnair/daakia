@@ -264,6 +264,38 @@ export function DaakiaTourView() {
   const [playing, setPlaying] = useState(false);
   const stop = TOUR_STOPS[index];
   const chapters = tourChapters();
+  const railRef = useRef<HTMLElement>(null);
+
+  /*
+    The strip is 88 ticks wide and had a scrollbar under it, which is a second
+    thing to aim at for something you would rather just shove. Press and drag
+    scrolls it directly; the scrollbar itself is hidden in CSS.
+  */
+  const drag = useRef<{ x: number; left: number } | null>(null);
+  const dragProps = {
+    onPointerDown: (e: React.PointerEvent) => {
+      const el = railRef.current;
+      if (!el || (e.target as HTMLElement).closest('button')) return;
+      drag.current = { x: e.clientX, left: el.scrollLeft };
+      el.setPointerCapture(e.pointerId);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const el = railRef.current;
+      if (!el || !drag.current) return;
+      el.scrollLeft = drag.current.left - (e.clientX - drag.current.x);
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      drag.current = null;
+      railRef.current?.releasePointerCapture(e.pointerId);
+    },
+  };
+
+  /* The tour walks itself past the right-hand edge within a chapter or two, so
+     the strip follows the stop rather than leaving it off screen. */
+  useEffect(() => {
+    const on = railRef.current?.querySelector<HTMLElement>('[data-on]');
+    on?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [index]);
 
   const go = useCallback((next: number) => {
     setIndex(Math.max(0, Math.min(TOUR_STOPS.length - 1, next)));
@@ -327,21 +359,10 @@ export function DaakiaTourView() {
           Back
         </button>
 
-        {/* Pips then Play, together in the middle — Play is the one thing on
-            this row you press without having decided anything first. */}
+        {/* Play alone in the middle. Eighty-eight pips wrapped into a block of
+            dots that said nothing you could act on — the chapter strip below
+            already shows where you are, and each of its ticks is one stop. */}
         <div className="dt-controls-mid">
-          <div className="dt-pips">
-            {TOUR_STOPS.map((s, i) => (
-              <button
-                key={s.id}
-                type="button"
-                className={`dt-pip${i === index ? ' dt-pip--on' : ''}`}
-                title={s.title}
-                onClick={() => goManually(i)}
-              />
-            ))}
-          </div>
-
           <button
             type="button"
             className={`dt-play${playing ? ' dt-play--on' : ''}`}
@@ -364,7 +385,7 @@ export function DaakiaTourView() {
         </button>
       </div>
 
-      <nav className="dt-rail" aria-label="Tour stops">
+      <nav className="dt-rail" ref={railRef} aria-label="Tour stops" {...dragProps}>
         {chapters.map(ch => (
           <div key={ch.chapter} className="dt-rail-group">
             <span className="dt-rail-label">{ch.chapter}</span>
@@ -377,6 +398,7 @@ export function DaakiaTourView() {
                     type="button"
                     className={`dt-rail-dot${at === index ? ' dt-rail-dot--on' : ''}`}
                     title={s.title}
+                    data-on={at === index || undefined}
                     onClick={() => goManually(at)}
                   />
                 );
