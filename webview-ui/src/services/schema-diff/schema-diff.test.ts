@@ -12,7 +12,7 @@
  * string literal is the one detail nobody re-reads.
  */
 import { describe, it, expect } from 'vitest';
-import { diffLines, tally } from './lcs';
+import { diffLines, tallyDiff as tally } from '@salilvnair/dui';
 import {
   parseDdl, compareDdl, compareSchemas, fromComparePayload, analysisDigest,
 } from './schema-diff';
@@ -47,10 +47,12 @@ describe('diffLines', () => {
     const out = diffLines(sql('keep', 'gone'), sql('keep', 'new'));
     const removed = out.find(l => l.op === 'remove')!;
     const added = out.find(l => l.op === 'add')!;
-    expect(removed.sourceLine).toBe(2);
-    expect(removed.targetLine).toBeNull();
-    expect(added.targetLine).toBe(2);
-    expect(added.sourceLine).toBeNull();
+    /* dui names them left/right rather than source/target: the component is
+       general now, and a response diff has no 'source schema'. */
+    expect(removed.leftLine).toBe(2);
+    expect(removed.rightLine).toBeNull();
+    expect(added.rightLine).toBe(2);
+    expect(added.leftLine).toBeNull();
   });
 });
 

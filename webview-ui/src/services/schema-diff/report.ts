@@ -11,7 +11,7 @@
  * that pastes every in-sync table's definition is a schema dump wearing a
  * report's title, and nobody reads the second page.
  */
-import { diffLines } from './lcs';
+import { diffLines } from '@salilvnair/dui';
 import type { SchemaAnomaly, SchemaComparison, Severity } from './schema-diff';
 
 const SEVERITY_LABEL: Record<Severity, string> = {

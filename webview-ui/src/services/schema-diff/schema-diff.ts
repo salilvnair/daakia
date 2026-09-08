@@ -22,7 +22,7 @@
  * consumer, lines that only appear cannot, and an object that is absent
  * entirely is its own case. The model's job is to say what the change means.
  */
-import { diffLines, tally, type DiffLine } from './lcs';
+import { diffLines, tallyDiff } from '@salilvnair/dui';
 
 export type SchemaObjectType =
   | 'table' | 'view' | 'materialized view' | 'function' | 'procedure'
@@ -169,7 +169,7 @@ function anomaly(
   name: string, type: SchemaObjectType, status: DriftStatus,
   sourceDdl: string, targetDdl: string,
 ): SchemaAnomaly {
-  const t = status === 'drift' ? tally(diffLines(sourceDdl, targetDdl)) : { added: 0, removed: 0, same: 0 };
+  const t = status === 'drift' ? tallyDiff(diffLines(sourceDdl, targetDdl)) : { added: 0, removed: 0, same: 0 };
   return {
     key: keyOf({ type, name }),
     name, type, status,

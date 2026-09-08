@@ -439,7 +439,7 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
             </div>
 
             {view === 'report' && (
-              <div className="flex flex-col gap-1.5" style={{ maxHeight: 460, overflowY: 'auto' }}>
+              <div className="flex flex-col gap-1.5" style={{ maxHeight: 560, overflowY: 'auto' }}>
                 {visible.length === 0 ? (
                   <p className="text-[12px] m-0 py-4 text-center" style={{ color: 'var(--color-text-muted)' }}>
                     The two schemas match.

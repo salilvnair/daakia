@@ -10,9 +10,9 @@
  * pasted into a ticket is the finding, and a bare CREATE TABLE in a comment
  * makes the reader reconstruct why it is there.
  */
-import { BadgeChipView, CopyButtonView, IconButtonView } from '@salilvnair/dui';
+import { BadgeChipView, CopyButtonView, IconButtonView, LineDiffView } from '@salilvnair/dui';
 import { ChevronRightIcon, ChevronDownIcon } from '../../../icons';
-import { LineDiffPane } from '../../shared/diff/LineDiffPane';
+
 import { STATUS_TONE } from './SchemaGraphView';
 import type { SchemaAnomaly, Severity } from '../../../services/schema-diff/schema-diff';
 
@@ -103,7 +103,7 @@ export function AnomalyCard({ anomaly, open, onToggle }: {
 
       {open && (
         <div className="px-2 pb-2">
-          <LineDiffPane
+          <LineDiffView
             left={anomaly.sourceDdl}
             right={anomaly.targetDdl}
             leftNote={anomaly.status === 'target-only' ? 'not present' : anomaly.name}
