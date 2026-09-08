@@ -1698,36 +1698,52 @@ input[type="number"] {
 /* ── The active workspace, down the rail ──────────────────────────────────── */
 
 /*
-  Which workspace you are in, where you can always see it.
+  Which workspace you are in, in the rail middle nobody was using.
 
   Rotated rather than wrapped: the rail is 48px wide and a name like
   "Payments — incident 4417" has no horizontal room at all, while vertically it
-  has the whole height of the window. Caps and letter-spaced because rotated
-  lowercase with descenders is genuinely hard to read; muted because this is a
-  thing you glance at, not a thing you read.
+  has the whole height of the window. `vertical-rl` alone starts at the top and
+  runs the word downward, which reads as falling over, so it is turned 180 to
+  set the baseline running upward the way vertical labels are set everywhere
+  else.
+
+  Muted until the workspace tab is the one you are on — this is a watermark, and
+  a watermark that shouts is just another button.
 */
 .dk-rail-workspace {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  max-height: 190px;
-  margin: 6px 0 2px;
-  padding: 4px 1px;
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0;
   border: none;
   background: none;
   cursor: pointer;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  transition: opacity 0.16s, color 0.16s;
+}
+.dk-rail-workspace:hover { opacity: 0.85; }
+.dk-rail-workspace--on {
+  opacity: 1;
+  color: var(--color-workspace);
+}
+
+.dk-rail-workspace-icon { flex-shrink: 0; }
+
+.dk-rail-workspace-name {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  max-height: 100%;
   font-size: 8.5px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: color-mix(in srgb, var(--color-workspace) 55%, var(--color-text-muted));
-  opacity: 0.72;
-  transition: opacity 0.15s, color 0.15s;
-}
-.dk-rail-workspace:hover {
-  opacity: 1;
-  color: var(--color-workspace);
 }

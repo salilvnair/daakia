@@ -239,16 +239,23 @@
   border-radius: 50%;
   background: var(--color-warning);
 }
+/* Geometry only — the colour, the hover tint and the press squeeze come from
+   dui_modal__close-btn, so this dismiss behaves like every other one. */
 .ws-docs-x {
   margin-left: auto;
-  border: none;
-  background: none;
-  padding: 2px;
-  cursor: pointer;
-  color: var(--color-text-muted);
   display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
 }
-.ws-docs-x:hover { color: var(--color-text-primary); }
 
 .ws-docs-reopen {
   align-self: flex-start;
@@ -436,16 +443,19 @@
 .ws-subtab:hover { color: var(--color-text-primary); }
 .ws-subtab--on {
   color: var(--color-text-primary);
-  border-bottom-color: var(--color-workspace);
+  border-bottom-color: var(--ws-subtab-accent, var(--color-workspace));
   font-weight: 600;
 }
+.ws-subtab--on svg { color: var(--ws-subtab-accent, var(--color-workspace)); }
+/* The count takes the tab's own colour too, so a tab reads as one object
+   rather than a label in one hue and a badge in another. */
 .ws-subtab-n {
   font-size: 9.5px;
   font-weight: 700;
   padding: 0 5px;
   border-radius: 999px;
-  color: var(--color-success);
-  background: color-mix(in srgb, var(--color-success) 16%, transparent);
+  color: var(--ws-subtab-accent, var(--color-workspace));
+  background: color-mix(in srgb, var(--ws-subtab-accent, var(--color-workspace)) 16%, transparent);
 }
 
 /* The environments editor is the same one the sidebar uses — one editor, so a
@@ -454,43 +464,7 @@
 
 /* ── Import modal ───────────────────────────────────────────────────────── */
 
-.ws-modal-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-}
-.ws-modal {
-  width: min(520px, 92vw);
-  border-radius: 11px;
-  overflow: hidden;
-  background: var(--color-elevated, #252526);
-  border: 1px solid var(--color-surface-border);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-.ws-modal-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 14px;
-  font-size: 13px;
-  font-weight: 650;
-  border-bottom: 1px solid var(--color-surface-border);
-}
-.ws-modal-x {
-  margin-left: auto;
-  border: none;
-  background: none;
-  padding: 2px;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  display: flex;
-}
-.ws-modal-x:hover { color: var(--color-text-primary); }
-
+/* The modal chrome is dui ModalView. Only what lives inside it is here. */
 .ws-modal-tabs { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--color-surface-border); }
 .ws-modal-tab {
   display: flex;
@@ -534,21 +508,6 @@
   outline: none;
 }
 .ws-url-input:focus { border-color: var(--color-info); }
-
-.ws-modal-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  color: var(--color-info);
-  background: color-mix(in srgb, var(--color-info) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-info) 45%, transparent);
-}
-.ws-modal-primary:disabled { opacity: 0.5; cursor: default; }
 
 .ws-linkish {
   border: none;

@@ -68,8 +68,13 @@ export function WorkspaceDocs({ workspace }: { workspace?: Workspace }) {
         <DocumentIcon size={12} />
         Documentation
         {dirty && <span className="ws-docs-dirty" title="Unsaved changes" />}
-        <button type="button" className="ws-docs-x" onClick={() => setOpen(false)} title="Close">
-          <CloseIcon size={11} />
+        {/* dui_modal__close-btn is the app's close button: muted until hover,
+            then a red tint and a squeeze on press. Reusing the class rather
+            than restyling an X keeps every dismiss in Daakia behaving the
+            same. */}
+        <button type="button" className="ws-docs-x dui_modal__close-btn"
+                onClick={() => setOpen(false)} title="Close">
+          ✕
         </button>
       </div>
 

@@ -194,6 +194,22 @@ export function CloseSquareIcon(props: IconProps) {
   );
 }
 
+/**
+ * A luggage-style tag: the angled label with a punched hole.
+ *
+ * Distinct from PinIcon, which is a drawing pin and reads as "pinned to the
+ * top" rather than "labelled" — the two mean different things and were being
+ * drawn with the same glyph.
+ */
+export function TagIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2.7 12.7A2 2 0 0 1 2.12 11.3V4a2 2 0 0 1 2-2h7.3a2 2 0 0 1 1.4.58l7.77 7.77a2 2 0 0 1 0 2.83z" />
+      <circle cx="7.5" cy="7.5" r="1.2" />
+    </svg>
+  );
+}
+
 export function PinIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

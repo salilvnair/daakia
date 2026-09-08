@@ -15,7 +15,7 @@
 import { useState } from 'react';
 import { ChipView } from '@salilvnair/dui';
 import { normaliseTag, tagColor } from './request-tags';
-import { PinIcon } from '../../../icons';
+import { TagIcon } from '../../../icons';
 import './tags.css';
 
 /** Past this a tag is ellipsised. Long enough for a real tag, short enough that
@@ -119,9 +119,12 @@ export function TagInput({ tags, onChange, placeholder = 'e.g. smoke, regression
               key={tag}
               label={tag}
               color={tagColor(tag)}
-              size="sm"
+              /* md (20px). sm crams an icon, a label and a dismiss into one
+                 line of text; xl made a row of tags the loudest thing on the
+                 page. This is the token in between. */
+              size="md"
               rounded={false}
-              icon={<PinIcon size={10} />}
+              icon={<TagIcon size={11} />}
               maxLabelWidth={MAX_CHIP_WIDTH}
               onRemove={() => onChange(tags.filter(t => t !== tag))}
             />

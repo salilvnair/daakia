@@ -35,13 +35,41 @@ const SUBTABS: {
   id: SubTab;
   label: string;
   icon: React.ReactNode;
+  /** The colour the sidebar already uses for this thing. Collections are purple
+      everywhere else in the app; painting them the workspace teal here would
+      make one list two colours depending on which panel you opened it from. */
+  accent: string;
   count: (s: { collections: number; environments: number; requests: number }) => number;
 }[] = [
-  { id: 'overview', label: 'Overview', icon: <LayoutGridIcon size={12} />, count: () => 0 },
-  { id: 'collections', label: 'Collections', icon: <CollectionsFolderIcon size={12} />, count: s => s.collections },
-  { id: 'environments', label: 'Environments', icon: <GlobeIcon size={12} />, count: s => s.environments },
-  { id: 'history', label: 'History', icon: <ClockIcon size={12} />, count: () => 0 },
+  { id: 'overview', label: 'Overview', icon: <LayoutGridIcon size={12} />,
+    accent: 'var(--color-workspace)', count: () => 0 },
+  { id: 'collections', label: 'Collections', icon: <CollectionsFolderIcon size={12} />,
+    accent: 'var(--color-sidebar-collections)', count: s => s.collections },
+  { id: 'environments', label: 'Environments', icon: <GlobeIcon size={12} />,
+    accent: 'var(--color-sidebar-environments)', count: s => s.environments },
+  { id: 'history', label: 'History', icon: <ClockIcon size={12} />,
+    accent: 'var(--color-sidebar-history)', count: () => 0 },
 ];
+
+/**
+ * A name, cut to something a header can hold.
+ *
+ * Truncated at the source rather than by CSS: the same name is drawn in the
+ * header, in the switcher, in the sentence under Quick Actions and down the
+ * rail, and each of those would need its own overflow rule. One function, and
+ * the full name stays in the tooltip.
+ */
+const MAX_NAME = 20;
+/** The rail is a whole window tall, so it can carry a few more characters. */
+const MAX_RAIL_NAME = 25;
+
+function cut(name: string | undefined, max: number): string {
+  if (!name) return '';
+  return name.length > max ? name.slice(0, max) + '…' : name;
+}
+
+export const shortWorkspaceName = (name: string | undefined) => cut(name, MAX_NAME);
+export const railWorkspaceName = (name: string | undefined) => cut(name, MAX_RAIL_NAME);
 
 export function WorkspacePage() {
   const { workspaces, activeId, stats, load, switchTo, create, rename, remove, error } =
@@ -51,6 +79,8 @@ export function WorkspacePage() {
   const [renaming, setRenaming] = useState(false);
   const [sub, setSub] = useState<SubTab>('overview');
   const [importing, setImporting] = useState(false);
+  const [createColl, setCreateColl] = useState(0);
+  const [createEnv, setCreateEnv] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { load(); }, [load]);
@@ -106,6 +136,7 @@ export function WorkspacePage() {
             key={t.id}
             type="button"
             className={`ws-subtab${sub === t.id ? ' ws-subtab--on' : ''}`}
+            style={{ '--ws-subtab-accent': t.accent } as React.CSSProperties}
             onClick={() => setSub(t.id)}
           >
             {t.icon}
@@ -118,9 +149,9 @@ export function WorkspacePage() {
       {error && <div className="ws-error">{error}</div>}
 
       {sub === 'collections' ? (
-        <div className="ws-panel"><CollectionsPanel /></div>
+        <div className="ws-panel"><CollectionsPanel createSignal={createColl} /></div>
       ) : sub === 'environments' ? (
-        <div className="ws-panel"><EnvironmentsPanel /></div>
+        <div className="ws-panel"><EnvironmentsPanel createSignal={createEnv} /></div>
       ) : sub === 'history' ? (
         <div className="ws-panel"><HistoryPanel /></div>
       ) : (
@@ -149,15 +180,9 @@ export function WorkspacePage() {
                 create flow of their own — one flow, so they cannot disagree
                 about what a collection or an environment needs. */}
             <Action tone="new" icon={<PlusIcon size={12} />} label="New collection"
-              onClick={() => {
-                setSub('collections');
-                setTimeout(() => window.postMessage({ type: 'collections:new' }, '*'), 60);
-              }} />
+              onClick={() => { setSub('collections'); setCreateColl(n => n + 1); }} />
             <Action tone="env" icon={<GlobeIcon size={12} />} label="New environment"
-              onClick={() => {
-                setSub('environments');
-                setTimeout(() => window.postMessage({ type: 'environments:new' }, '*'), 60);
-              }} />
+              onClick={() => { setSub('environments'); setCreateEnv(n => n + 1); }} />
           </div>
 
           <div className="ws-caps">This workspace</div>
@@ -213,8 +238,9 @@ function WorkspaceHeader({
           }}
         />
       ) : (
-        <button type="button" className="ws-name" onClick={onToggleMenu}>
-          {active?.name ?? 'Workspace'}
+        <button type="button" className="ws-name" onClick={onToggleMenu}
+                title={active?.name ?? 'Workspace'}>
+          {active ? shortWorkspaceName(active.name) : 'Workspace'}
           <ChevronDownIcon size={12} className="ws-chev" />
         </button>
       )}
@@ -252,7 +278,7 @@ function WorkspaceHeader({
               onClick={() => onPick(w.id)}
             >
               <LayoutGridIcon size={12} />
-              <span className="ws-menu-label">{w.name}</span>
+              <span className="ws-menu-label" title={w.name}>{shortWorkspaceName(w.name)}</span>
               {w.id === active?.id && <CheckIcon size={12} className="ws-menu-tick" />}
             </button>
           ))}
@@ -324,7 +350,7 @@ function WorkspaceFacts({ active, stats }: {
         </div>
       ) : (
         <p className="ws-fact">
-          <b>{active?.name}</b> holds {stats.collections} collection{stats.collections === 1 ? '' : 's'}
+          <b title={active?.name}>{shortWorkspaceName(active?.name)}</b> holds {stats.collections} collection{stats.collections === 1 ? '' : 's'}
           {stats.environments > 0 && <> and {stats.environments} environment{stats.environments === 1 ? '' : 's'}</>}.
         </p>
       )}

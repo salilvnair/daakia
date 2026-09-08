@@ -311,6 +311,33 @@ export function handleStopCollectionRun() {
  */
 const MAX_SPEC_BYTES = 8 * 1024 * 1024;
 
+/**
+ * A GitHub page URL points at a rendered page, not a document.
+ *
+ * Pasting the address bar is what people actually do, so a `blob` URL is
+ * rewritten to its raw form rather than fetched as HTML and failing to parse.
+ * `raw.githubusercontent.com` is left alone; it is already the document.
+ *
+ * A bare repository URL is deliberately not guessed at — a repo can hold any
+ * number of specs and picking one for you is how the wrong collection gets
+ * imported.
+ */
+export function toRawGitHubUrl(url: URL): { url: URL } | { error: string } {
+  if (url.hostname === 'raw.githubusercontent.com') return { url };
+  if (url.hostname !== 'github.com' && url.hostname !== 'www.github.com') return { url };
+
+  const parts = url.pathname.split('/').filter(Boolean);
+  const blobAt = parts.indexOf('blob');
+  if (blobAt === -1 || parts.length < blobAt + 3) {
+    return {
+      error: 'Point at a file on GitHub, not a repository — open the spec and copy that address.',
+    };
+  }
+  const [owner, repo] = parts;
+  const rest = parts.slice(blobAt + 1).join('/');
+  return { url: new URL(`https://raw.githubusercontent.com/${owner}/${repo}/${rest}`) };
+}
+
 export async function handleImportCollectionUrl(msg: Record<string, unknown>, postMessage: PostMessage) {
   const raw = String(msg.url ?? '').trim();
   let url: URL;
@@ -320,6 +347,13 @@ export async function handleImportCollectionUrl(msg: Record<string, unknown>, po
     postMessage({ type: 'toast', toastType: 'error', message: 'That is not a URL.' });
     return;
   }
+
+  const resolved = toRawGitHubUrl(url);
+  if ('error' in resolved) {
+    postMessage({ type: 'toast', toastType: 'error', message: resolved.error });
+    return;
+  }
+  url = resolved.url;
   if (url.protocol !== 'https:') {
     postMessage({
       type: 'toast', toastType: 'error',

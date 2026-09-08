@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initDb, closeDb, getSqliteStatus, getCollectionTree, getDbPath } from './storage/db';
 import { MainPanel } from './panel/main/MainPanel';
+import { importAnyCollection } from './services/import-any';
 import { initMockServerManager, stopAllMockServers } from './mock/mock-server-manager';
 import { importPostmanCollection } from './services/postman-importer';
 import { importOpenAPISpec, isOpenAPISpec } from './services/openapi-importer';
@@ -165,21 +166,16 @@ export async function activate(context: vscode.ExtensionContext) {
         filters: {
           'API Files': ['json', 'yaml', 'yml', 'har'],
         },
-        title: 'Import Collection (Postman/OpenAPI/Swagger/HAR)',
+        title: 'Import a collection — Daakia, Postman, Insomnia, OpenAPI, Swagger, HAR, HTTPie or Thunder Client',
       });
       if (uri?.[0]) {
         try {
           const content = fs.readFileSync(uri[0].fsPath, 'utf-8');
-          // Auto-detect format
-          const result = isHarFile(content)
-            ? importHarFile(content)
-            : isOpenAPISpec(content)
-              ? importOpenAPISpec(content)
-              : isThunderClientCollection(content)
-                ? importThunderClientCollection(content)
-                : isHttpieFile(content)
-                  ? importHttpieCollection(content)
-                  : importPostmanCollection(content);
+          /* One detector, shared with the URL import. This used to be an
+             inline chain that predated it and knew about five formats rather
+             than seven — so Daakia could not read its own exports from the one
+             import path people actually use. */
+          const result = importAnyCollection(content);
           MainPanel.createOrShow(context.extensionUri);
           if (result.success) {
             // Postman/OpenAPI/HAR/Thunder/HTTPie collections are always REST-shaped —

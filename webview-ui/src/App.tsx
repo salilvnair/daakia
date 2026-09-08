@@ -20,7 +20,7 @@ import { AppSidebar, SidebarSection } from './components/sidebar';
 import { SettingsPanel } from './components/sidebar/SettingsPanel';
 import { MockServerPanel } from './components/mock/MockServerPanel';
 import { K8sPanel } from './components/k8s/K8sPanel';
-import { WorkspacePage } from './components/workspace/WorkspacePage';
+import { WorkspacePage, railWorkspaceName } from './components/workspace/WorkspacePage';
 import { useWorkspaceStore } from './store/workspace-store';
 import { SmStateMachineTabPage } from './components/mock/SmStateMachineTabPage';
 import { GraphQLPanel } from './components/graphql';
@@ -546,21 +546,6 @@ export default function App() {
           <LayoutGridIcon size={16} strokeWidth={1.8} />
         </ProtocolIcon>
 
-        {/* The name, down the rail. The icon alone says a workspace exists, not
-            which one, and the name is otherwise only on the workspace tab —
-            the one screen where you already know. Clipped rather than wrapped:
-            the rail is 48px and a long name has to give way to it. */}
-        {activeWorkspaceName && (
-          <button
-            type="button"
-            className="dk-rail-workspace"
-            title={activeWorkspaceName}
-            onClick={() => useTabsStore.getState().openWorkspaceTab()}
-          >
-            {activeWorkspaceName}
-          </button>
-        )}
-
         <div className="w-6 h-px bg-[var(--color-surface-border)] my-1 flex-shrink-0" />
 
         <ProtocolIcon
@@ -626,8 +611,22 @@ export default function App() {
           <ProtocolMcpBadge size={32} />
         </ProtocolIcon>
 
-        {/* Spacer pushes bottom icons down */}
-        <div className="flex-1" />
+        {/* The spacer, earning its keep. The rail's empty middle is where a
+            watermark belongs: it says which workspace you are in without
+            competing with the protocols above it or the tools below. Muted
+            until the workspace tab is the one you are on, then it comes up to
+            the workspace accent. */}
+        <button
+          type="button"
+          className={`dk-rail-workspace${activeTab?.type === 'workspace' ? ' dk-rail-workspace--on' : ''}`}
+          title={activeWorkspaceName ? `Workspace — ${activeWorkspaceName}` : 'Workspace'}
+          onClick={() => useTabsStore.getState().openWorkspaceTab()}
+        >
+          <LayoutGridIcon size={13} className="dk-rail-workspace-icon" />
+          {activeWorkspaceName && (
+            <span className="dk-rail-workspace-name">{railWorkspaceName(activeWorkspaceName)}</span>
+          )}
+        </button>
 
         {/* dk8s — Kubernetes. Sits above Doctor because that is the workflow:
             dk8s collects the artifact, Doctor analyses it. */}

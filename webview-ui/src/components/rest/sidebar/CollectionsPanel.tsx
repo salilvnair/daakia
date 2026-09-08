@@ -63,7 +63,18 @@ function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
   return <ProtocolRestBadge size={size} />;
 }
 
-export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
+export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
+  protocol?: string;
+  /**
+   * Bump this to open the create dialog from outside.
+   *
+   * A counter rather than a window message: more than one of these panels is
+   * mounted at a time — the sidebar's and the workspace tab's — so a broadcast
+   * is heard by both and opens two dialogs. A prop can only reach the instance
+   * it was handed to.
+   */
+  createSignal?: number;
+}) {
   const cachedTree = useSidebarDataStore(s => s.getCollections(protocol));
   const isLoaded = useSidebarDataStore(s => s.isCollectionsLoaded(protocol));
   const setStoreCollections = useSidebarDataStore(s => s.setCollections);
@@ -341,15 +352,13 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
     setModalOpen(true);
   };
 
-  /* The workspace tab asks for this panel's own New dialog rather than
-     reimplementing the create flow, so there is one of them. */
+  /* The caller asks for this panel's own New dialog rather than reimplementing
+     the create flow, so there is one of them. Zero is the initial value, not a
+     request — opening the dialog on mount is not what anybody asked for. */
   useEffect(() => {
-    const onAsk = (e: MessageEvent) => {
-      if ((e.data as { type?: string })?.type === 'collections:new') openNewCollection();
-    };
-    window.addEventListener('message', onAsk);
-    return () => window.removeEventListener('message', onAsk);
-  }, []);
+    if (createSignal > 0) openNewCollection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createSignal]);
 
   /* The workspace tab asks for this panel's own New dialog rather than
      reimplementing the create flow, so there is one of them. */

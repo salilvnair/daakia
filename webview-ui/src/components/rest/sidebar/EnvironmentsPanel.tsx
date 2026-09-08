@@ -10,7 +10,11 @@ import { getProtocolAccent } from '../../../colors';
 import { IconButtonView, TextInputView, ContextMenuView, InfoPopupView, ButtonView, type ContextMenuItem as DuiContextMenuItem } from '@salilvnair/dui';
 import { logUiEvent } from '../../../store/ui-audit-store';
 
-export function EnvironmentsPanel() {
+export function EnvironmentsPanel({ createSignal = 0 }: {
+  /** Bump to open the create flow. See CollectionsPanel: a prop reaches one
+      instance, a broadcast reaches every mounted one. */
+  createSignal?: number;
+} = {}) {
   const activeProtocol = useTabsStore(s => s.activeProtocol);
   const {
     environments,
@@ -114,12 +118,9 @@ export function EnvironmentsPanel() {
   /* The workspace tab asks for this panel own create flow rather than making
      a second one, so an environment is created the same way from both. */
   useEffect(() => {
-    const onAsk = (e: MessageEvent) => {
-      if ((e.data as { type?: string })?.type === 'environments:new') openCreateModal();
-    };
-    window.addEventListener('message', onAsk);
-    return () => window.removeEventListener('message', onAsk);
-  }, []);
+    if (createSignal > 0) openCreateModal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createSignal]);
 
   const openEditModal = (envId: string) => {
     setCreatedEnvId(null);
