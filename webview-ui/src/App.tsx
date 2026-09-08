@@ -546,6 +546,20 @@ export default function App() {
           <LayoutGridIcon size={16} strokeWidth={1.8} />
         </ProtocolIcon>
 
+        {/* The name, under the icon it belongs to. Muted until the workspace
+            tab is the one you are on — this is a watermark, and a watermark
+            that shouts is just another button. */}
+        {activeWorkspaceName && (
+          <button
+            type="button"
+            className={`dk-rail-workspace${activeTab?.type === 'workspace' ? ' dk-rail-workspace--on' : ''}`}
+            title={`Workspace — ${activeWorkspaceName}`}
+            onClick={() => useTabsStore.getState().openWorkspaceTab()}
+          >
+            <span className="dk-rail-workspace-name">{railWorkspaceName(activeWorkspaceName)}</span>
+          </button>
+        )}
+
         <div className="w-6 h-px bg-[var(--color-surface-border)] my-1 flex-shrink-0" />
 
         <ProtocolIcon
@@ -611,22 +625,8 @@ export default function App() {
           <ProtocolMcpBadge size={32} />
         </ProtocolIcon>
 
-        {/* The spacer, earning its keep. The rail's empty middle is where a
-            watermark belongs: it says which workspace you are in without
-            competing with the protocols above it or the tools below. Muted
-            until the workspace tab is the one you are on, then it comes up to
-            the workspace accent. */}
-        <button
-          type="button"
-          className={`dk-rail-workspace${activeTab?.type === 'workspace' ? ' dk-rail-workspace--on' : ''}`}
-          title={activeWorkspaceName ? `Workspace — ${activeWorkspaceName}` : 'Workspace'}
-          onClick={() => useTabsStore.getState().openWorkspaceTab()}
-        >
-          <LayoutGridIcon size={13} className="dk-rail-workspace-icon" />
-          {activeWorkspaceName && (
-            <span className="dk-rail-workspace-name">{railWorkspaceName(activeWorkspaceName)}</span>
-          )}
-        </button>
+        {/* Spacer pushes bottom icons down */}
+        <div className="flex-1" />
 
         {/* dk8s — Kubernetes. Sits above Doctor because that is the workflow:
             dk8s collects the artifact, Doctor analyses it. */}

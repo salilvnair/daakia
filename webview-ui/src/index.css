@@ -1698,7 +1698,7 @@ input[type="number"] {
 /* ── The active workspace, down the rail ──────────────────────────────────── */
 
 /*
-  Which workspace you are in, in the rail middle nobody was using.
+  Which workspace you are in, under the icon it belongs to.
 
   Rotated rather than wrapped: the rail is 48px wide and a name like
   "Payments — incident 4417" has no horizontal room at all, while vertically it
@@ -1711,15 +1711,13 @@ input[type="number"] {
   a watermark that shouts is just another button.
 */
 .dk-rail-workspace {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
+  max-height: 190px;
+  margin: 6px 0 2px;
+  padding: 2px 1px;
+  flex-shrink: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 0;
   border: none;
   background: none;
   cursor: pointer;
@@ -1733,12 +1731,10 @@ input[type="number"] {
   color: var(--color-workspace);
 }
 
-.dk-rail-workspace-icon { flex-shrink: 0; }
-
 .dk-rail-workspace-name {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  max-height: 100%;
+  max-height: 190px;
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.18em;

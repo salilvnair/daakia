@@ -13,6 +13,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ImportModal } from './ImportModal';
 import { useWorkspaceStore, type Workspace } from '../../store/workspace-store';
 import { useTabsStore } from '../../store/tabs-store';
+import { SplitPanelView } from '@salilvnair/dui';
+import { useUiStateStore } from '../../store/ui-state-store';
 import { postMsg } from '../../vscode';
 import {
   LayoutGridIcon, ChevronDownIcon, CheckIcon, PlusIcon, FolderIcon, FolderOpenIcon,
@@ -81,6 +83,13 @@ export function WorkspacePage() {
   const [importing, setImporting] = useState(false);
   const [createColl, setCreateColl] = useState(0);
   const [createEnv, setCreateEnv] = useState(0);
+  const [docsOpen, setDocsOpen] = useState(true);
+
+  /* Remembered the way every other split in the app is, so the width you drag
+     to is the width you get next time. */
+  const setPref = useUiStateStore(s => s.setPref);
+  const storedSplit = useUiStateStore(s => s.prefs['workspace.docsSplit']);
+  const [docsSplit, setDocsSplit] = useState(() => Number(storedSplit) || 68);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { load(); }, [load]);
@@ -155,7 +164,18 @@ export function WorkspacePage() {
       ) : sub === 'history' ? (
         <div className="ws-panel"><HistoryPanel /></div>
       ) : (
-      <div className="ws-body">
+      <SplitPanelView
+        direction="horizontal"
+        split={docsSplit}
+        defaultSplit={68}
+        minFirstPct={35}
+        minSecondPct={18}
+        accentColor="var(--color-workspace)"
+        onResize={setDocsSplit}
+        onResizeEnd={next => setPref('workspace.docsSplit', String(next))}
+        collapsed={!docsOpen}
+        style={{ flex: 1, minHeight: 0 }}
+        first={
         <div className="ws-main">
           <div className="ws-stats">
             <Stat n={stats.collections} label="collections" tone="coll" />
@@ -188,9 +208,9 @@ export function WorkspacePage() {
           <div className="ws-caps">This workspace</div>
           <WorkspaceFacts active={active} stats={stats} />
         </div>
-
-        <WorkspaceDocs workspace={active} />
-      </div>
+        }
+        second={<WorkspaceDocs workspace={active} onOpenChange={setDocsOpen} />}
+      />
       )}
 
       {importing && <ImportModal onClose={() => setImporting(false)} />}

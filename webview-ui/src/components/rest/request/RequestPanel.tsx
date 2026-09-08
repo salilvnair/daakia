@@ -15,6 +15,7 @@ import { RequestChaining } from '../../power/RequestChaining';
 import { AiDocsGenerate } from '../../ai/AiDocsGenerate';
 import { EyeIcon, PencilIcon } from '../../../icons';
 import { ExecutionSettingsEditor } from '../../shared/settings/ExecutionSettingsEditor';
+import { MarkdownEditorView } from '@salilvnair/dui';
 import { useEffectiveSettings } from '../../shared/settings/use-effective-settings';
 import { countOverrides } from '../../shared/settings/execution-settings';
 
@@ -79,57 +80,30 @@ function RequestSettingsTab({ tab }: { tab: RequestTab }) {
 function RequestDocsTab({ tab }: { tab: RequestTab }) {
   const updateTab = useTabsStore(s => s.updateTab);
   const docs = tab.docs ?? '';
-  const [editing, setEditing] = useState(!docs);
 
+  /*
+    No Edit/Preview toggle any more. With a rich surface there is nothing to
+    preview — what you are typing into is the rendered document, and the
+    editor's own Markdown view covers wanting the source. Two toggles that mean
+    almost the same thing is one too many.
+  */
   return (
-    <div className="flex flex-col gap-2 h-full min-h-0">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">
-          Documentation · markdown
-        </span>
-        <div className="flex items-center gap-1.5">
-          {/*
+    <div className="flex flex-col h-full min-h-0 -mx-3 -my-2">
+      <MarkdownEditorView
+        value={docs}
+        onChange={md => updateTab(tab.id, { docs: md })}
+        accentColor="var(--color-protocol-rest, var(--color-accent))"
+        placeholder="Why this request exists, what it needs, what it returns."
+        toolbarRight={
+          /*
             The request describes itself: method, URL, headers, body and the
-            responses saved from it are the whole brief, so there is nothing
-            to type first. It replaces the text rather than appending — a
-            second press is a rewrite, not a duplicate.
-          */}
-          <AiDocsGenerate tab={tab} onApply={(md) => { updateTab(tab.id, { docs: md }); setEditing(false); }} />
-          <ButtonView
-            size="sm"
-            variant="secondary"
-            /* 11px — the icon size dui gives an `sm` button. A hand-picked
-               13 next to a 10px label reads as a glyph with a caption. */
-            iconLeft={editing ? <EyeIcon size={11} /> : <PencilIcon size={11} />}
-            onClick={() => setEditing(v => !v)}
-            accentColor="var(--color-protocol-rest, var(--color-accent))"
-          >
-            {editing ? 'Preview' : 'Edit'}
-          </ButtonView>
-        </div>
-      </div>
-
-      {editing ? (
-        <textarea
-          value={docs}
-          onChange={e => updateTab(tab.id, { docs: e.target.value })}
-          placeholder={'Why this request exists, what it needs, what it returns.\n\n## Auth\nNeeds a bearer token from POST /login.'}
-          spellCheck={false}
-          className="flex-1 min-h-[220px] w-full resize-none rounded-md px-3 py-2 text-[12px] leading-relaxed
-                     font-mono bg-[var(--color-input-bg)] text-[var(--color-text-primary)]
-                     border border-[var(--color-surface-border)] focus:outline-none
-                     focus:border-[var(--color-accent)]"
-        />
-      ) : docs.trim() ? (
-        <div className="flex-1 min-h-0 overflow-auto rounded-md px-3 py-2
-                        border border-[var(--color-surface-border)]">
-          <MarkdownView content={docs} />
-        </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-[12px] text-[var(--color-text-muted)]">
-          Nothing written yet — press Edit.
-        </div>
-      )}
+            responses saved from it are the whole brief, so there is nothing to
+            type first. It replaces the text rather than appending — a second
+            press is a rewrite, not a duplicate.
+          */
+          <AiDocsGenerate tab={tab} onApply={md => updateTab(tab.id, { docs: md })} />
+        }
+      />
     </div>
   );
 }

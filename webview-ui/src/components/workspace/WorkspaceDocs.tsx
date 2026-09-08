@@ -18,9 +18,9 @@
  * half-finished sentence into what the whole team reads is worse than pressing
  * something.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWorkspaceStore, type Workspace } from '../../store/workspace-store';
-import { MdViewer } from '../shared/display/MdViewer';
+import { MarkdownEditorView } from '@salilvnair/dui';
 import { sendAiRequest } from '../../services/ai/ai-client';
 import { isAiFeatureOn } from '../../store/ai-features-store';
 import { postMsg } from '../../vscode';
@@ -30,7 +30,11 @@ import {
 
 type View = 'rich' | 'markdown';
 
-export function WorkspaceDocs({ workspace }: { workspace?: Workspace }) {
+export function WorkspaceDocs({ workspace, onOpenChange }: {
+  workspace?: Workspace;
+  /** Told when the panel is closed, so the split can give the width back. */
+  onOpenChange?: (open: boolean) => void;
+}) {
   const saveDocs = useWorkspaceStore(s => s.saveDocs);
   const [open, setOpen] = useState(true);
   const [view, setView] = useState<View>('rich');
@@ -39,7 +43,6 @@ export function WorkspaceDocs({ workspace }: { workspace?: Workspace }) {
   const [dirty, setDirty] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [proposal, setProposal] = useState<string | null>(null);
-  const areaRef = useRef<HTMLTextAreaElement>(null);
 
   const saved = workspace?.docs ?? '';
 
@@ -54,7 +57,7 @@ export function WorkspaceDocs({ workspace }: { workspace?: Workspace }) {
 
   if (!open) {
     return (
-      <button type="button" className="ws-docs-reopen" onClick={() => setOpen(true)} title="Documentation">
+      <button type="button" className="ws-docs-reopen" onClick={() => { setOpen(true); onOpenChange?.(true); }} title="Documentation">
         <DocumentIcon size={14} />
       </button>
     );
@@ -73,47 +76,27 @@ export function WorkspaceDocs({ workspace }: { workspace?: Workspace }) {
             than restyling an X keeps every dismiss in Daakia behaving the
             same. */}
         <button type="button" className="ws-docs-x dui_modal__close-btn"
-                onClick={() => setOpen(false)} title="Close">
+                onClick={() => { setOpen(false); onOpenChange?.(false); }} title="Close">
           ✕
         </button>
       </div>
-
-      {(editing || hasContent) && (
-        <div className="ws-docs-tools">
-          <div className="ws-docs-seg">
-            <button
-              type="button"
-              className={view === 'rich' ? 'on' : ''}
-              onClick={() => setView('rich')}
-            >Rich Text</button>
-            <button
-              type="button"
-              className={view === 'markdown' ? 'on' : ''}
-              onClick={() => setView('markdown')}
-            >Markdown</button>
-          </div>
-        </div>
-      )}
 
       <div className="ws-docs-body">
         {!editing && !hasContent ? (
           <DocsEmpty
             generating={generating}
-            onWrite={() => { setEditing(true); setView('markdown'); }}
+            onWrite={() => setEditing(true)}
             onGenerate={() => runGenerate({ setGenerating, setProposal, setDraft, setEditing, setDirty, setView, hasContent })}
           />
-        ) : view === 'markdown' || editing ? (
-          <textarea
-            ref={areaRef}
-            className="ws-docs-editor"
-            value={draft}
-            placeholder={'# What this project is\n\nSetup, key workflows, anything the next person needs.'}
-            onChange={e => { setDraft(e.target.value); setDirty(true); }}
-          />
         ) : (
-          <div className="ws-docs-rendered" onDoubleClick={() => { setEditing(true); setView('markdown'); }}>
-            <MdViewer content={draft} />
-          </div>
+          <MarkdownEditorView
+            value={draft}
+            onChange={next => { setDraft(next); setDirty(true); }}
+            mode={view}
+            onModeChange={setView}
+            accentColor="var(--color-workspace)"
+            placeholder="What this project is, how to set it up, and the workflows that matter."
+          />
         )}
       </div>
 
