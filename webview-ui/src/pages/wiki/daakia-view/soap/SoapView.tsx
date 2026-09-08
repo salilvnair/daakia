@@ -7,16 +7,16 @@ import { ProtocolSoapBadge } from '../../../../icons';
 import { SOAP_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'soap-protocol', emoji: '📖', label: 'What is SOAP?' },
-  { id: 'soap-tabs', emoji: '🪪', label: 'Request Tabs' },
-  { id: 'soap-wsdl', emoji: '📥', label: 'WSDL Import' },
-  { id: 'soap-security', emoji: '🔐', label: 'WS-Security' },
-  { id: 'soap-attachments', emoji: '📎', label: 'Attachments' },
-  { id: 'soap-scripts', emoji: '📜', label: 'Scripts' },
-  { id: 'soap-assertions', emoji: '✅', label: 'Assertions' },
-  { id: 'soap-versions', emoji: '🔀', label: 'SOAP 1.1 vs 1.2' },
-  { id: 'soap-response', emoji: '📥', label: 'Response' },
-  { id: 'soap-tips', emoji: '💡', label: 'Tips' },
+  { id: 'soap-protocol', icon: 'book', label: 'What is SOAP?' },
+  { id: 'soap-tabs', icon: 'key', label: 'Request Tabs' },
+  { id: 'soap-wsdl', icon: 'download', label: 'WSDL Import' },
+  { id: 'soap-security', icon: 'shield', label: 'WS-Security' },
+  { id: 'soap-attachments', icon: 'attachment', label: 'Attachments' },
+  { id: 'soap-scripts', icon: 'script', label: 'Scripts' },
+  { id: 'soap-assertions', icon: '✅', label: 'Assertions' },
+  { id: 'soap-versions', icon: 'refresh', label: 'SOAP 1.1 vs 1.2' },
+  { id: 'soap-response', icon: 'download', label: 'Response' },
+  { id: 'soap-tips', icon: 'ai', label: 'Tips' },
 ];
 
 export function SoapView() {
@@ -26,7 +26,7 @@ export function SoapView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🪪"
+          icon="key"
           title="SOAP Client"
           subtitle="XML envelopes, WS-Security, WSDL import, attachments, and XPath response assertions."
           chips={chips(['Envelope', 'WS-Security', 'WSDL', 'Assertions', 'Attachments'])}
@@ -41,13 +41,13 @@ export function SoapView() {
       <Divider />
 
       <div>
-        <SectionTitle id="soap-protocol" emoji="📖">What is SOAP?</SectionTitle>
+        <SectionTitle id="soap-protocol" icon="book">What is SOAP?</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           <strong>SOAP</strong> (Simple Object Access Protocol) is an XML-based messaging protocol for exchanging
           structured information between applications, standardized by the W3C. Where REST treats HTTP itself as
-          the protocol (methods, status codes, URLs all carry meaning), SOAP treats HTTP as just a{' '}
+          the protocol (methods, status codes, URLs all carry meaning), SOAP treats HTTP as just a
           <em>transport</em> — nearly every real-world SOAP call is an HTTP POST, but the actual protocol semantics
-          (what operation to call, what arguments, what came back, whether it failed) all live inside the XML{' '}
+          (what operation to call, what arguments, what came back, whether it failed) all live inside the XML
           <strong>envelope</strong> in the body, not in the HTTP layer. That's also why SOAP isn't tied to HTTP at
           all in principle — the spec allows SMTP or other transports too, though HTTP dominates in practice.
         </p>
@@ -107,7 +107,7 @@ export function SoapView() {
       <Divider />
 
       <div>
-        <SectionTitle id="soap-tabs" emoji="🪪">Request Config Tabs</SectionTitle>
+        <SectionTitle id="soap-tabs" icon="key">Request Config Tabs</SectionTitle>
         <WikiTable
           headers={['Tab', 'What it does']}
           rows={[
@@ -142,7 +142,7 @@ export function SoapView() {
 
       {/* ── WSDL ──────────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="soap-wsdl" emoji="📥">WSDL Import & Operation Selector</SectionTitle>
+        <SectionTitle id="soap-wsdl" icon="download">WSDL Import & Operation Selector</SectionTitle>
         <Steps steps={[
           'Click the <strong>WSDL</strong> button in the URL bar',
           'Enter a WSDL URL (e.g. http://www.dneonline.com/calculator.asmx?WSDL) → Load, or upload a local .wsdl file',
@@ -162,8 +162,8 @@ export function SoapView() {
 
       {/* ── WS-Security ───────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="soap-security" emoji="🔐">WS-Security</SectionTitle>
-        <WikiCard title="UsernameToken, real fields" icon="🔐">
+        <SectionTitle id="soap-security" icon="shield">WS-Security</SectionTitle>
+        <WikiCard title="UsernameToken, real fields" icon="shield">
           <Steps steps={[
             'Go to <strong>WS-Security</strong> tab → toggle Enable',
             'Enter username + password, choose <Code>PasswordText</Code> or <Code>PasswordDigest</Code> as the password type',
@@ -193,7 +193,7 @@ export function SoapView() {
 
       {/* ── Attachments ───────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="soap-attachments" emoji="📎">Attachments</SectionTitle>
+        <SectionTitle id="soap-attachments" icon="attachment">Attachments</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           MTOM/SwA binary attachments — pick real files to send alongside the XML envelope, for services that expect
           large payloads (documents, images) sent as multipart attachments rather than base64-inlined in the XML.
@@ -205,7 +205,7 @@ export function SoapView() {
 
       {/* ── Scripts ───────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="soap-scripts" emoji="📜">Scripts</SectionTitle>
+        <SectionTitle id="soap-scripts" icon="script">Scripts</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Same <Code>dk.*</Code> Pre-request/Post-response runtime as REST — useful for injecting a fresh WS-Security
           timestamp or asserting on the parsed XML response:
@@ -222,7 +222,7 @@ export function SoapView() {
 
       {/* ── Assertions ────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="soap-assertions" emoji="✅">Assertions</SectionTitle>
+        <SectionTitle id="soap-assertions" icon="✅">Assertions</SectionTitle>
         <WikiTable
           headers={['Type', 'Expression', 'Pass Condition']}
           rows={[
@@ -235,9 +235,9 @@ export function SoapView() {
       {cap('soap-assertions')}
 
       <div>
-        <SectionTitle id="soap-versions" emoji="🔀">SOAP 1.1 vs 1.2</SectionTitle>
+        <SectionTitle id="soap-versions" icon="refresh">SOAP 1.1 vs 1.2</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          There's no separate content-type dropdown like REST's Body tab — just a 2-value <Code>1.1</Code> /{' '}
+          There's no separate content-type dropdown like REST's Body tab — just a 2-value <Code>1.1</Code> /
           <Code>1.2</Code> version switch in the URL bar next to the endpoint, and Daakia derives everything else from it:
         </p>
         <WikiTable
@@ -258,7 +258,7 @@ export function SoapView() {
 
       {/* ── Response ──────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="soap-response" emoji="📥">Response Panel</SectionTitle>
+        <SectionTitle id="soap-response" icon="download">Response Panel</SectionTitle>
         <WikiTable
           headers={['Tab', 'Answers']}
           rows={[
@@ -281,14 +281,14 @@ export function SoapView() {
 
       {/* ── Tips ──────────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="soap-tips" emoji="💡">Tips & Troubleshooting</SectionTitle>
-        <Collapsible title="📥 WSDL import fails or shows no operations">
+        <SectionTitle id="soap-tips" icon="ai">Tips & Troubleshooting</SectionTitle>
+        <Collapsible title=" WSDL import fails or shows no operations">
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
             Confirm the URL actually returns a WSDL document (try opening it in a browser first) — some services
             require <Code>?wsdl</Code> in a specific case, or auth headers before the WSDL itself is even reachable.
           </p>
         </Collapsible>
-        <Collapsible title="🔐 Server rejects the request with a security fault">
+        <Collapsible title=" Server rejects the request with a security fault">
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
             Check whether the service expects <Code>PasswordDigest</Code> instead of <Code>PasswordText</Code>, and
             whether it requires a <Code>Timestamp</Code> element — some strict WS-Security servers reject requests

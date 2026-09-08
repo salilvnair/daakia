@@ -65,6 +65,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'gRPC — Message',
     explanation: 'gRPC request message editor — select a service/method (via reflection or an uploaded .proto) and edit the JSON request payload.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: BASE_REQUEST_PATCH },
       { action: 'click', selector: 'button[data-tab="message"]' },
       { action: 'wait', ms: 1800 },
@@ -75,6 +76,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'gRPC — Metadata',
     explanation: "gRPC's header equivalent — same key/value table as REST Headers, with an AI suggest button. Nothing auto-added; every row is what you typed.",
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: BASE_REQUEST_PATCH },
       { action: 'click', selector: 'button[data-tab="metadata"]' },
       { action: 'wait', ms: 600 },
@@ -85,6 +87,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'gRPC — Service Definition',
     explanation: 'Upload a .proto file or use server reflection to discover available services and methods.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: BASE_REQUEST_PATCH },
       { action: 'click', selector: 'button[data-tab="proto"]' },
       { action: 'wait', ms: 600 },
@@ -95,6 +98,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'gRPC — Auth',
     explanation: 'Auth editor for gRPC calls — Bearer token, API key, or TLS client certificates.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: { ...BASE_REQUEST_PATCH, authType: 'bearer', authData: { token: 'eyJhbGciOiJIUzI1NiJ9.mock_token' } } },
       { action: 'click', selector: 'button[data-tab="auth"]' },
       { action: 'wait', ms: 600 },
@@ -105,6 +109,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'gRPC — Scripts',
     explanation: 'Pre-request / Post-response script editors — same dk.* runtime as REST and every other protocol.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: { ...BASE_REQUEST_PATCH, preRequestScript: '// Set a dynamic timestamp header\ndk.request.metadata["x-ts"] = Date.now().toString();', postResponseScript: 'dk.test("grpc-status is OK", () => {\n  dk.expect(dk.response.headers["grpc-status"]).toBe("0");\n});' } },
       { action: 'click', selector: 'button[data-tab="scripts"]' },
       { action: 'wait', ms: 1800 },
@@ -116,6 +121,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'gRPC — Response Body',
     explanation: "The RPC's decoded JSON response. For streaming calls, each message received appears here as it arrives.",
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: RESPONSE_PATCH },
       { action: 'setResponseSubtab', responseProtocol: 'grpc', subtab: 'body' },
       { action: 'wait', ms: 1800 },
@@ -126,6 +132,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'gRPC — Response Metadata',
     explanation: 'Trailing metadata the server sent back — grpc-status, grpc-message, and any custom trailers.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: RESPONSE_PATCH },
       { action: 'setResponseSubtab', responseProtocol: 'grpc', subtab: 'metadata' },
       { action: 'wait', ms: 600 },
@@ -136,6 +143,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'gRPC — Response Tests',
     explanation: 'dk.test() assertion results from the Post-response script — same Tests tab format as REST.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: RESPONSE_PATCH },
       { action: 'setResponseSubtab', responseProtocol: 'grpc', subtab: 'tests' },
       { action: 'wait', ms: 600 },
@@ -146,6 +154,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'gRPC — Response Timeline',
     explanation: "Where the call's time went — connection setup, TLS handshake, time-to-first-byte for the response.",
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'addTab', patch: RESPONSE_PATCH },
       { action: 'setResponseSubtab', responseProtocol: 'grpc', subtab: 'timeline' },
       { action: 'wait', ms: 600 },

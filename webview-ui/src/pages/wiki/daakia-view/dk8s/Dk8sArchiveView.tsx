@@ -8,11 +8,11 @@ import {
 } from '../shared/WikiShared';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'ar-why', emoji: '🗃️', label: 'Why' },
-  { id: 'ar-mounts', emoji: '📁', label: 'Mounts & templates' },
-  { id: 'ar-tokens', emoji: '🏷️', label: 'Tokens' },
-  { id: 'ar-probe', emoji: '🔎', label: 'The probe' },
-  { id: 'ar-zone', emoji: '🕐', label: 'Timestamps' },
+  { id: 'ar-why', icon: 'folder', label: 'Why' },
+  { id: 'ar-mounts', icon: 'folder', label: 'Mounts & templates' },
+  { id: 'ar-tokens', icon: 'pin', label: 'Tokens' },
+  { id: 'ar-probe', icon: 'search', label: 'The probe' },
+  { id: 'ar-zone', icon: 'clock', label: 'Timestamps' },
 ];
 
 export function Dk8sArchiveView() {
@@ -20,7 +20,7 @@ export function Dk8sArchiveView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🗃️"
+          icon="folder"
           title="dk8s — archived logs"
           subtitle="kubectl reaches two containers. A volume holds everything before that — this is how dk8s finds it."
           chips={chips(['mounts', 'templates', 'layouts', 'probe', 'log timezone'])}
@@ -29,7 +29,7 @@ export function Dk8sArchiveView() {
       toc={<TocBar items={TOC_ITEMS} />}
     >
       <div>
-        <SectionTitle id="ar-why" emoji="🗃️">Why this exists</SectionTitle>
+        <SectionTitle id="ar-why" icon="folder">Why this exists</SectionTitle>
         <p className="dw-p">
           <Code>kubectl logs</Code> reaches the running container and the one before it. Everything
           older is gone as far as the API is concerned. A pod that ships its logs to a volume still
@@ -46,7 +46,7 @@ export function Dk8sArchiveView() {
       <Divider />
 
       <div>
-        <SectionTitle id="ar-mounts" emoji="📁">Mounts and templates</SectionTitle>
+        <SectionTitle id="ar-mounts" icon="folder">Mounts and templates</SectionTitle>
         <p className="dw-p">
           A <strong>mount</strong> is a directory dk8s can read — an NFS share, a synced copy, a
           local folder. A <strong>template</strong> says where a given pod's files sit inside it.
@@ -78,7 +78,7 @@ pv-billing  in  dk8s-test   →   pv-billing-prod-pvc/pv-billing.log
       <Divider />
 
       <div>
-        <SectionTitle id="ar-tokens" emoji="🏷️">Tokens</SectionTitle>
+        <SectionTitle id="ar-tokens" icon="pin">Tokens</SectionTitle>
         <WikiTable
           headers={['Token', 'Resolves to']}
           rows={[
@@ -99,7 +99,7 @@ pv-billing  in  dk8s-test   →   pv-billing-prod-pvc/pv-billing.log
       <Divider />
 
       <div>
-        <SectionTitle id="ar-probe" emoji="🔎">The probe</SectionTitle>
+        <SectionTitle id="ar-probe" icon="search">The probe</SectionTitle>
         <p className="dw-p">
           The probe answers “is this right, now?” — it walks the configured mounts and reports what
           it actually found: how many files, how big, the oldest and newest, and a real sample of
@@ -119,7 +119,7 @@ pv-billing  in  dk8s-test   →   pv-billing-prod-pvc/pv-billing.log
       <Divider />
 
       <div>
-        <SectionTitle id="ar-zone" emoji="🕐">Timestamps, and whose clock</SectionTitle>
+        <SectionTitle id="ar-zone" icon="clock">Timestamps, and whose clock</SectionTitle>
         <p className="dw-p">
           A line like <Code>2026-08-30 06:32:25</Code> names no zone, so turning it into an instant
           means assuming one. <strong>“These logs are written in”</strong> is that assumption, stated

@@ -850,7 +850,7 @@ export function MockAiGeneratePopover({
             {idleCfg.spec && (
               <TabView
                 tabs={[
-                  { id: 'describe', label: '✏️ Describe' },
+                  { id: 'describe', label: ' Describe' },
                   { id: 'url-spec', label: `${idleCfg.spec.tabLabel}`},
                 ]}
                 activeTab={idleMode}
@@ -865,7 +865,7 @@ export function MockAiGeneratePopover({
             {idleMode === 'describe' && (
               <div className="flex flex-col gap-2.5">
                 <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-                  Describe what you want to generate{' '}
+                  Describe what you want to generate
                   <span className="text-[10px] font-normal italic" style={{ color: 'var(--color-text-muted)' }}>
                     (uses server name "{serverName}" if empty)
                   </span>
@@ -955,7 +955,7 @@ export function MockAiGeneratePopover({
         {/* Thinking placeholder */}
         {streaming && !text && !error && (
           <div className="px-5 py-4 flex-shrink-0 text-[11px] italic" style={{ color: 'var(--color-text-muted)' }}>
-            Generating {title.toLowerCase()} for{' '}
+            Generating {title.toLowerCase()} for
             <span className="font-medium not-italic" style={{ color: ACCENT }}>{serverName}</span>…
           </div>
         )}

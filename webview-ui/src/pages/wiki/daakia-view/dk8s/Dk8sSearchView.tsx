@@ -14,13 +14,13 @@ import {
 import { PipelineDiagram, ScanLoopDiagram, ArchiveSkipDiagram } from './SearchDiagrams';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'dk-halves', emoji: '🔀', label: 'Two halves' },
-  { id: 'dk-loop', emoji: '🔁', label: 'The scan loop' },
-  { id: 'dk-archive', emoji: '📼', label: 'What is skipped' },
-  { id: 'dk-window', emoji: '🕐', label: 'Time & zones' },
-  { id: 'dk-counts', emoji: '🔢', label: 'Counts vs kept' },
-  { id: 'dk-stop', emoji: '🛑', label: 'Stopping a search' },
-  { id: 'dk-export', emoji: '📄', label: 'Export' },
+  { id: 'dk-halves', icon: 'refresh', label: 'Two halves' },
+  { id: 'dk-loop', icon: 'refresh', label: 'The scan loop' },
+  { id: 'dk-archive', icon: 'dot', label: 'What is skipped' },
+  { id: 'dk-window', icon: 'clock', label: 'Time & zones' },
+  { id: 'dk-counts', icon: 'type', label: 'Counts vs kept' },
+  { id: 'dk-stop', icon: 'stop', label: 'Stopping a search' },
+  { id: 'dk-export', icon: 'document', label: 'Export' },
 ];
 
 export function Dk8sSearchView() {
@@ -28,7 +28,7 @@ export function Dk8sSearchView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🔍"
+          icon="search"
           title="dk8s — how log search works"
           subtitle="Two halves, one pass per line, and a deliberate story about what gets read and what gets skipped."
           chips={chips(['kubectl logs', 'mounted volume', 'context ±N', 'time window', 'export'])}
@@ -37,7 +37,7 @@ export function Dk8sSearchView() {
       toc={<TocBar items={TOC_ITEMS} />}
     >
       <div>
-        <SectionTitle id="dk-halves" emoji="🔀">A search has two halves</SectionTitle>
+        <SectionTitle id="dk-halves" icon="refresh">A search has two halves</SectionTitle>
         <p className="dw-p">
           <Code>kubectl logs</Code> reaches the running container and the one before it — that is all
           Kubernetes keeps. A pod whose logs are shipped to a volume has far more history than that,
@@ -71,7 +71,7 @@ export function Dk8sSearchView() {
       <Divider />
 
       <div>
-        <SectionTitle id="dk-loop" emoji="🔁">The scan loop</SectionTitle>
+        <SectionTitle id="dk-loop" icon="refresh">The scan loop</SectionTitle>
         <p className="dw-p">
           Both halves share the same shape: one pass, one line held at a time, nothing buffered
           whole. That is what lets a multi-gigabyte rotation be searched on a laptop.
@@ -146,7 +146,7 @@ for line in stream:                                 # one pass, one line held
       <Divider />
 
       <div>
-        <SectionTitle id="dk-archive" emoji="📼">What the archive refuses to read</SectionTitle>
+        <SectionTitle id="dk-archive" icon="dot">What the archive refuses to read</SectionTitle>
         <p className="dw-p">
           A time range has to narrow what is <strong>read</strong>, not merely what is reported —
           otherwise the expensive half of the work happens either way, which is the opposite of what
@@ -182,7 +182,7 @@ for line in stream:                                 # one pass, one line held
       <Divider />
 
       <div>
-        <SectionTitle id="dk-window" emoji="🕐">Time, and whose clock</SectionTitle>
+        <SectionTitle id="dk-window" icon="clock">Time, and whose clock</SectionTitle>
         <p className="dw-p">
           The window is either relative (<Code>Last 1h</Code>) or absolute (<Code>Between…</Code>).
           Relative stays relative — an hour before the search runs. Absolute resolves to two
@@ -215,7 +215,7 @@ for line in stream:                                 # one pass, one line held
       <Divider />
 
       <div>
-        <SectionTitle id="dk-counts" emoji="🔢">Counted, kept, and shown</SectionTitle>
+        <SectionTitle id="dk-counts" icon="type">Counted, kept, and shown</SectionTitle>
         <p className="dw-p">
           These are three different numbers, and conflating them is how a search quietly lies.
           Counting never stops; storing does.
@@ -239,7 +239,7 @@ for line in stream:                                 # one pass, one line held
       <Divider />
 
       <div>
-        <SectionTitle id="dk-stop" emoji="🛑">Stopping a search</SectionTitle>
+        <SectionTitle id="dk-stop" icon="stop">Stopping a search</SectionTitle>
         <p className="dw-p">
           A search is a loop over pods on the host, each turn awaiting one exec. Stop cancels it —
           and cancelling means <b>killing the command that is running</b>, not just no longer
@@ -267,7 +267,7 @@ for line in stream:                                 # one pass, one line held
       <Divider />
 
       <div>
-        <SectionTitle id="dk-export" emoji="📄">Export</SectionTitle>
+        <SectionTitle id="dk-export" icon="document">Export</SectionTitle>
         <p className="dw-p">
           The export runs the search again with the caps lifted, so the file holds every match rather
           than the first page. It writes one file per pod <em>per source</em> — a pod with both halves

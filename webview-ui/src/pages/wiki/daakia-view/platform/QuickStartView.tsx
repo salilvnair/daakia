@@ -7,11 +7,11 @@ import { WIKI_TABS_FULL, type TabId } from '../DaakiaViewPage';
 import { PLATFORM_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'qs-first-request', emoji: '🚀', label: 'First Request' },
-  { id: 'qs-explore', emoji: '🗺️', label: 'Explore Every Tab' },
-  { id: 'qs-palette', emoji: '⌘', label: 'Command Palette' },
-  { id: 'qs-shortcuts', emoji: '⌨️', label: 'Keyboard Shortcuts' },
-  { id: 'qs-cheatsheets', emoji: '📋', label: 'Cheat Sheets' },
+  { id: 'qs-first-request', icon: 'send', label: 'First Request' },
+  { id: 'qs-explore', icon: 'compass', label: 'Explore Every Tab' },
+  { id: 'qs-palette', icon: '⌘', label: 'Command Palette' },
+  { id: 'qs-shortcuts', icon: 'keyboard', label: 'Keyboard Shortcuts' },
+  { id: 'qs-cheatsheets', icon: 'clipboard', label: 'Cheat Sheets' },
 ];
 
 const TAB_DESCRIPTIONS: Partial<Record<TabId, string>> = {
@@ -34,7 +34,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🚀"
+          icon="send"
           title="Welcome to Daakia"
           subtitle="A full API client for REST, GraphQL, WebSocket, gRPC, and SOAP — plus a built-in mock server and AI assistant, all inside VS Code."
           chips={chips(['REST', 'GraphQL', 'WebSocket', 'gRPC', 'SOAP', 'Mock Server', 'AI'])}
@@ -48,7 +48,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
           Press <strong>Ctrl+Shift+P</strong> → type <strong>Daakia: Open Panel</strong> → press Enter.
         </Callout>
         {byId['platform-quick-start-main'] && <CaptureCard entry={byId['platform-quick-start-main']} />}
-        <SectionTitle id="qs-first-request" emoji="🚀">Your First Request in 30 Seconds</SectionTitle>
+        <SectionTitle id="qs-first-request" icon="send">Your First Request in 30 Seconds</SectionTitle>
         <Steps steps={[
           'Open Daakia via Command Palette (<strong>Ctrl+Shift+P</strong> → "Daakia: Open Panel")',
           'Type a URL in the URL bar — e.g. <strong>https://httpbin.org/get</strong>',
@@ -62,7 +62,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
 
       {/* ── Explore every tab ────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="qs-explore" emoji="🗺️">Explore Every Tab</SectionTitle>
+        <SectionTitle id="qs-explore" icon="compass">Explore Every Tab</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--dw-muted)]">
           Every protocol and platform surface has its own full docs page — click any card to jump straight there.
         </p>
@@ -96,7 +96,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
 
       {/* ── Command Palette ──────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="qs-palette" emoji="⌘">Command Palette</SectionTitle>
+        <SectionTitle id="qs-palette" icon="⌘">Command Palette</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--dw-muted)]">
           <Code>Cmd+K</Code> (Mac) / <Code>Ctrl+K</Code> (Windows/Linux) opens Daakia's own in-app command palette —
           separate from VS Code's <Code>Ctrl+Shift+P</Code> palette. Type to search; every result is a real action,
@@ -121,7 +121,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
 
       {/* ── Keyboard shortcuts ────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="qs-shortcuts" emoji="⌨️">Keyboard Shortcuts</SectionTitle>
+        <SectionTitle id="qs-shortcuts" icon="keyboard">Keyboard Shortcuts</SectionTitle>
         <ShortcutGrid items={[
           { label: 'Command Palette', keys: ['Ctrl+K'] },
           { label: 'Send request', keys: ['Ctrl+Enter'] },
@@ -139,7 +139,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
 
       {/* ── Cheat sheets ──────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="qs-cheatsheets" emoji="📋">Cheat Sheets</SectionTitle>
+        <SectionTitle id="qs-cheatsheets" icon="clipboard">Cheat Sheets</SectionTitle>
         <SubTitle>Variable Syntax</SubTitle>
         <WikiTable
           headers={['Syntax', 'Meaning']}
@@ -152,7 +152,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
         <p className="text-[13px] leading-relaxed text-[var(--dw-muted)]">
           Same runtime everywhere — REST, GraphQL, gRPC, SOAP, and every realtime protocol:
         </p>
-        <WikiCard title="dk.* namespaces" icon="🧰">
+        <WikiCard title="dk.* namespaces" icon="settings">
           <WikiTable
             headers={['API', 'Scope', 'What it does']}
             rows={[
@@ -174,7 +174,7 @@ export function QuickStartView({ onNavigate }: { onNavigate?: (id: TabId) => voi
 dk.env.set('user_id', dk.response.json().id);`}
         </CodeBlock>
         <Callout type="warn">
-          There's no <Code>daakia.*</Code> namespace — everything is under <Code>dk.*</Code>. Methods like{' '}
+          There's no <Code>daakia.*</Code> namespace — everything is under <Code>dk.*</Code>. Methods like
           <Code>dk.setVariable</Code> or <Code>dk.fetch</Code> that show up in older AI-generated scripts don't exist.
         </Callout>
       </div>

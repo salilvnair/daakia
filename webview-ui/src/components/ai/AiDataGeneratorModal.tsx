@@ -31,7 +31,7 @@ const DATA_CATEGORIES: DataCategory[] = [
   { id: 'payment', label: 'Payment', description: 'Card number, expiry, CVV, billing', emoji: ''},
   { id: 'product', label: 'Product', description: 'Name, SKU, price, description, category', emoji: ''},
   { id: 'company', label: 'Company', description: 'Name, domain, industry, size, address', emoji: ''},
-  { id: 'custom',  label: 'Custom',  description: 'Describe any data shape you need', emoji: '✏️' },
+  { id: 'custom',  label: 'Custom',  description: 'Describe any data shape you need', emoji: 'pencil' },
 ];
 
 const COUNTS = [1, 5, 10, 25, 50, 100];

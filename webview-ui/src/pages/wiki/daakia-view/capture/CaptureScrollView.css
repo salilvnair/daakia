@@ -17,7 +17,7 @@
   height: 720px !important;
 }
 
-/* The manual 🧢 wiki-capture button (CopyRootHtmlButton) is a dev-only tool
+/* The manual  wiki-capture button (CopyRootHtmlButton) is a dev-only tool
    baked into every captured screen's outerHTML since it's part of #root —
    never meant to ship in the docs. Hide it wherever a capture renders.
    Matches by the new data attribute (future captures) and by its title text

@@ -1591,7 +1591,7 @@ function applyTheme(mode: DuiThemeMode) {
 }
 
 const THEME_OPTIONS: { id: DuiThemeMode; label: string; icon: string }[] = [
-  { id: 'light',  label: 'Light',  icon: '☀️' },
+  { id: 'light',  label: 'Light',  icon: 'sun' },
   { id: 'dark', label: 'Dark', icon: ''},
   { id: 'system', label: 'System', icon: ''},
 ];

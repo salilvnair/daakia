@@ -14,14 +14,14 @@ import {
 } from '../shared/WikiShared';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'tm-shell', emoji: '⌨️', label: 'The terminal' },
-  { id: 'tm-transport', emoji: '🔌', label: 'How it connects' },
-  { id: 'tm-keys', emoji: '🎹', label: 'Keys and behaviour' },
-  { id: 'tm-themes', emoji: '🎨', label: 'Themes' },
-  { id: 'tm-files', emoji: '📁', label: 'The Explorer' },
-  { id: 'tm-here', emoji: '📍', label: 'Open shell here' },
-  { id: 'tm-downloads', emoji: '⬇️', label: 'Downloads' },
-  { id: 'tm-settings', emoji: '⚙️', label: 'Settings' },
+  { id: 'tm-shell', icon: 'keyboard', label: 'The terminal' },
+  { id: 'tm-transport', icon: 'connect', label: 'How it connects' },
+  { id: 'tm-keys', icon: 'keyboard', label: 'Keys and behaviour' },
+  { id: 'tm-themes', icon: 'palette', label: 'Themes' },
+  { id: 'tm-files', icon: 'folder', label: 'The Explorer' },
+  { id: 'tm-here', icon: 'pin', label: 'Open shell here' },
+  { id: 'tm-downloads', icon: 'download', label: 'Downloads' },
+  { id: 'tm-settings', icon: 'settings', label: 'Settings' },
 ];
 
 export function Dk8sTerminalView() {
@@ -29,7 +29,7 @@ export function Dk8sTerminalView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="⌨️"
+          icon="keyboard"
           title="dk8s — terminal & files"
           subtitle="A real PTY in the pod, a file browser beside it, and a shell that opens where you are looking."
           chips={chips(['exec API', 'xterm', 'no open port', 'themes', 'du -sk', 'kubectl cp'])}
@@ -38,7 +38,7 @@ export function Dk8sTerminalView() {
       toc={<TocBar items={TOC_ITEMS} />}
     >
       <div>
-        <SectionTitle id="tm-shell" emoji="⌨️">The terminal</SectionTitle>
+        <SectionTitle id="tm-shell" icon="keyboard">The terminal</SectionTitle>
         <p className="dw-p">
           The Terminal tab is a real terminal in the container, drawn in the panel. It opens as
           soon as you arrive — the tab is called Terminal and there is exactly one thing it does,
@@ -68,7 +68,7 @@ export function Dk8sTerminalView() {
       <Divider />
 
       <div>
-        <SectionTitle id="tm-transport" emoji="🔌">How it connects</SectionTitle>
+        <SectionTitle id="tm-transport" icon="connect">How it connects</SectionTitle>
         <p className="dw-p">
           Over the Kubernetes exec API, using your own kubeconfig — certificates, tokens and
           credential plugins alike. <b>No port is opened and nothing is left listening.</b>
@@ -110,7 +110,7 @@ export function Dk8sTerminalView() {
       <Divider />
 
       <div>
-        <SectionTitle id="tm-keys" emoji="🎹">Keys and behaviour</SectionTitle>
+        <SectionTitle id="tm-keys" icon="keyboard">Keys and behaviour</SectionTitle>
         <WikiTable
           headers={['Key', 'Does']}
           rows={[
@@ -143,7 +143,7 @@ export function Dk8sTerminalView() {
       <Divider />
 
       <div>
-        <SectionTitle id="tm-themes" emoji="🎨">Themes</SectionTitle>
+        <SectionTitle id="tm-themes" icon="palette">Themes</SectionTitle>
         <p className="dw-p">
           Six built-in palettes — Tokyo Night, Catppuccin, One Dark, Nord, Gruvbox and Solarized —
           each with a dark <i>and</i> a light variant, because the same sixteen colours do not work
@@ -193,7 +193,7 @@ export function Dk8sTerminalView() {
       <Divider />
 
       <div>
-        <SectionTitle id="tm-files" emoji="📁">The Explorer</SectionTitle>
+        <SectionTitle id="tm-files" icon="folder">The Explorer</SectionTitle>
         <p className="dw-p">
           A file browser over the same exec channel. Everything it does is one command the container
           may or may not have, and the Access view says which.
@@ -240,7 +240,7 @@ export function Dk8sTerminalView() {
       <Divider />
 
       <div>
-        <SectionTitle id="tm-here" emoji="📍">Open shell here</SectionTitle>
+        <SectionTitle id="tm-here" icon="pin">Open shell here</SectionTitle>
         <p className="dw-p">
           Right-click a folder, a file, or a Quick Search hit and open a shell already standing in
           that directory. For a folder that is the folder; for a file it is the folder holding it,
@@ -263,7 +263,7 @@ export function Dk8sTerminalView() {
       <Divider />
 
       <div>
-        <SectionTitle id="tm-downloads" emoji="⬇️">Downloads</SectionTitle>
+        <SectionTitle id="tm-downloads" icon="download">Downloads</SectionTitle>
         <p className="dw-p">
           Every download is a row that says what happened and where it went, because a download
           nobody can find is a download done twice. A failure carries its reason in the row rather
@@ -283,7 +283,7 @@ export function Dk8sTerminalView() {
       <Divider />
 
       <div>
-        <SectionTitle id="tm-settings" emoji="⚙️">Settings</SectionTitle>
+        <SectionTitle id="tm-settings" icon="settings">Settings</SectionTitle>
         <p className="dw-p">
           <b>Settings → Dk8s → Terminal.</b> Themes at the top, then the handful of settings a
           terminal genuinely has.

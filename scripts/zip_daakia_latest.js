@@ -138,11 +138,11 @@ function getTimestamp() {
 
 async function main() {
   const patterns = parseGitignore(GITIGNORE_PATH);
-  console.log(`📋 Parsed .gitignore: ${patterns.length} patterns`);
+  console.log(` Parsed .gitignore: ${patterns.length} patterns`);
   console.log(`   Always ignored: ${ALWAYS_IGNORE.join(', ')}`);
 
   // Collect files
-  console.log('\n📂 Scanning project files...');
+  console.log('\n Scanning project files...');
   const files = collectFiles(ROOT, patterns, ROOT);
   console.log(`   Found ${files.length} files to include`);
 
@@ -152,7 +152,7 @@ async function main() {
   const outputPath = path.resolve(ROOT, '..', zipName);
 
   // Create zip
-  console.log(`\n📦 Creating: ${zipName}`);
+  console.log(`\n Creating: ${zipName}`);
   const output = fs.createWriteStream(outputPath);
   const archive = new ZipArchive({ zlib: { level: 9 } });
 
@@ -171,7 +171,7 @@ async function main() {
 
     archive.on('warning', (err) => {
       if (err.code !== 'ENOENT') throw err;
-      console.warn('⚠️', err.message);
+      console.warn('', err.message);
     });
 
     archive.pipe(output);

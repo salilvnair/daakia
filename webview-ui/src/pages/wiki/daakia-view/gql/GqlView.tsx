@@ -7,16 +7,16 @@ import { ProtocolGraphQLBadge } from '../../../../icons';
 import { GQL_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'gql-protocol', emoji: '📖', label: 'What is GraphQL?' },
-  { id: 'gql-connect', emoji: '🔌', label: 'Connect Flow' },
-  { id: 'gql-urlbar', emoji: '🔗', label: 'Endpoint Bar' },
-  { id: 'gql-query', emoji: '📝', label: 'Query & Variables' },
-  { id: 'gql-headers', emoji: '📋', label: 'Headers & Auth' },
-  { id: 'gql-scripts', emoji: '📜', label: 'Scripts' },
-  { id: 'gql-subscription', emoji: '📡', label: 'Subscriptions' },
-  { id: 'gql-response', emoji: '📥', label: 'Response' },
-  { id: 'gql-panels', emoji: '📖', label: 'Sidebar Panels' },
-  { id: 'gql-tips', emoji: '💡', label: 'Tips' },
+  { id: 'gql-protocol', icon: 'book', label: 'What is GraphQL?' },
+  { id: 'gql-connect', icon: 'connect', label: 'Connect Flow' },
+  { id: 'gql-urlbar', icon: 'link', label: 'Endpoint Bar' },
+  { id: 'gql-query', icon: 'pencil', label: 'Query & Variables' },
+  { id: 'gql-headers', icon: 'clipboard', label: 'Headers & Auth' },
+  { id: 'gql-scripts', icon: 'script', label: 'Scripts' },
+  { id: 'gql-subscription', icon: 'radio', label: 'Subscriptions' },
+  { id: 'gql-response', icon: 'download', label: 'Response' },
+  { id: 'gql-panels', icon: 'book', label: 'Sidebar Panels' },
+  { id: 'gql-tips', icon: 'ai', label: 'Tips' },
 ];
 
 export function GqlView() {
@@ -27,7 +27,7 @@ export function GqlView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🔷"
+          icon="dot"
           title="GraphQL Client"
           subtitle="Query, mutation, and subscription editor with schema-aware autocomplete, scripting, and live events — same request scaffolding as REST underneath."
           chips={chips(['Query', 'Variables', 'Headers', 'Auth', 'Scripts', 'Subscriptions'])}
@@ -44,13 +44,13 @@ export function GqlView() {
       <Divider />
 
       <div>
-        <SectionTitle id="gql-protocol" emoji="📖">What is GraphQL?</SectionTitle>
+        <SectionTitle id="gql-protocol" icon="book">What is GraphQL?</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           <strong>GraphQL</strong> is a query language for APIs and a server-side runtime for executing those queries
           against a strongly-typed schema, originally developed at Facebook and open-sourced in 2015. Unlike REST,
           where the server decides the shape of each endpoint's response, GraphQL flips that: the client sends a
           query describing <em>exactly</em> the fields it wants, across potentially multiple related resources, and
-          the server returns a JSON object shaped to match that query — no more, no less. There's typically just{' '}
+          the server returns a JSON object shaped to match that query — no more, no less. There's typically just
           <strong>one endpoint</strong> (conventionally <Code>/graphql</Code>), and every request — whether it reads
           or writes data — is an HTTP POST with a JSON body containing the query text and any variables.
         </p>
@@ -118,16 +118,16 @@ export function GqlView() {
       <Divider />
 
       <div>
-        <SectionTitle id="gql-connect" emoji="🔌">Connect Flow</SectionTitle>
+        <SectionTitle id="gql-connect" icon="connect">Connect Flow</SectionTitle>
         <Steps steps={[
           'Click the <strong>GQL</strong> protocol icon in the left rail',
           'Enter your GraphQL endpoint URL',
           'Click <strong>Connect</strong> — the button shows "connecting…" immediately, then Daakia sends one real introspection query to the endpoint',
-          'On success, the full schema (raw JSON + a generated SDL string) is stored on the tab — Documentation (📖) and Schema (⟨/⟩) sidebar icons become active',
+          'On success, the full schema (raw JSON + a generated SDL string) is stored on the tab — Documentation () and Schema (⟨/⟩) sidebar icons become active',
           'Write a query in the Query editor → click <strong>Run</strong> (or <Code>Ctrl+Enter</Code>)',
         ]} />
         <Callout type="info">
-          Introspection is <strong>not automatic</strong> — it only runs the moment you click Connect, once.{' '}
+          Introspection is <strong>not automatic</strong> — it only runs the moment you click Connect, once.
           <strong>Disconnect</strong> just clears the locally-stored schema; it doesn't call the server. There's no
           background polling or re-introspection.
         </Callout>
@@ -146,7 +146,7 @@ export function GqlView() {
 
       {/* ── Endpoint bar ──────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="gql-urlbar" emoji="🔗">The Endpoint Bar</SectionTitle>
+        <SectionTitle id="gql-urlbar" icon="link">The Endpoint Bar</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           A lighter, separate input from REST's URL bar — same <Code>{'{{variableName}}'}</Code> highlighting and
           suggestion dropdown, but a smaller feature set:
@@ -165,7 +165,7 @@ export function GqlView() {
 
       {/* ── Query & Variables ─────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="gql-query" emoji="📝">Query & Variables</SectionTitle>
+        <SectionTitle id="gql-query" icon="pencil">Query & Variables</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           The Query editor is one of six sub-tabs — <strong>Query, Variables, Headers, Authorization, Scripts,
           Subscription</strong> — laid out as tabs directly under the endpoint bar, same tab strip style as REST's
@@ -183,10 +183,10 @@ export function GqlView() {
 
       {/* ── Headers & Auth ────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="gql-headers" emoji="📋">Headers & Authorization</SectionTitle>
+        <SectionTitle id="gql-headers" icon="clipboard">Headers & Authorization</SectionTitle>
         <Callout type="tip">
           These two tabs are <strong>identical</strong> to REST — same KeyValueTable component, same AuthEditor. Bearer,
-          Basic, API Key, OAuth 2.0 (Client Credentials + Authorization Code) all work exactly the same way, and{' '}
+          Basic, API Key, OAuth 2.0 (Client Credentials + Authorization Code) all work exactly the same way, and
           <Code>{'{{authToken}}'}</Code>-style variables resolve the same way too.
         </Callout>
       </div>
@@ -197,7 +197,7 @@ export function GqlView() {
 
       {/* ── Scripts ───────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="gql-scripts" emoji="📜">Scripts</SectionTitle>
+        <SectionTitle id="gql-scripts" icon="script">Scripts</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Same <Code>dk.*</Code> runtime as REST, same Pre-request / Post-response split — nothing GraphQL-specific
           about the API surface, it operates on the underlying HTTP call GraphQL makes under the hood:
@@ -211,7 +211,7 @@ dk.env.set('user_id', dk.response.json().data.user.id);`}
         </CodeBlock>
       </div>
       {cap('graphql-scripts')}
-      <WikiCard title="dk.* quick reference" icon="🧰">
+      <WikiCard title="dk.* quick reference" icon="settings">
         <WikiTable
           headers={['API', 'Scope', 'What it does']}
           rows={[
@@ -225,10 +225,10 @@ dk.env.set('user_id', dk.response.json().data.user.id);`}
 
       {/* ── Subscriptions ─────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="gql-subscription" emoji="📡">Subscriptions</SectionTitle>
+        <SectionTitle id="gql-subscription" icon="radio">Subscriptions</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          A dedicated live-events panel using the <Code>graphql-ws</Code> protocol over WebSocket — write a{' '}
-          <Code>subscription {'{ ... }'}</Code> query in the Query editor, switch to the <strong>Subscription</strong>{' '}
+          A dedicated live-events panel using the <Code>graphql-ws</Code> protocol over WebSocket — write a
+          <Code>subscription {'{ ... }'}</Code> query in the Query editor, switch to the <strong>Subscription</strong>
           sub-tab, then Subscribe:
         </p>
         <WikiTable
@@ -240,9 +240,9 @@ dk.env.set('user_id', dk.response.json().data.user.id);`}
           ]}
         />
         <FeatureGrid items={[
-          { emoji: '📋', title: 'Per-event copy', desc: 'Hover any event to copy its formatted JSON.' },
-          { emoji: '⬇️', title: 'Auto-scroll toggle', desc: 'Pin to the latest event, or freeze to read older ones.' },
-          { emoji: '🗑️', title: 'Clear', desc: 'Wipe the events log without disconnecting.' },
+          { icon: 'clipboard', title: 'Per-event copy', desc: 'Hover any event to copy its formatted JSON.' },
+          { icon: 'download', title: 'Auto-scroll toggle', desc: 'Pin to the latest event, or freeze to read older ones.' },
+          { icon: 'trash', title: 'Clear', desc: 'Wipe the events log without disconnecting.' },
         ]} />
       </div>
       {cap('graphql-subscription')}
@@ -251,7 +251,7 @@ dk.env.set('user_id', dk.response.json().data.user.id);`}
 
       {/* ── Response ──────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="gql-response" emoji="📥">Response Panel</SectionTitle>
+        <SectionTitle id="gql-response" icon="download">Response Panel</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           One JSON panel — GraphQL always returns HTTP 200 for most errors, so Daakia parses the body and raises its
           own <Code>⚠ GraphQL Errors</Code> flag whenever the response's <Code>errors</Code> array is non-empty, even
@@ -275,13 +275,13 @@ dk.env.set('user_id', dk.response.json().data.user.id);`}
 
       {/* ── Sidebar panels ────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="gql-panels" emoji="📖">Sidebar Panels (after Connect)</SectionTitle>
+        <SectionTitle id="gql-panels" icon="book">Sidebar Panels (after Connect)</SectionTitle>
         <FeatureGrid items={[
-          { emoji: '📖', title: 'Documentation', desc: 'Root Types, all schema types with color coding — search + filter.' },
-          { emoji: '⟨/⟩', title: 'Schema SDL', desc: 'Full Schema Definition Language view — read-only, syntax highlighted.' },
-          { emoji: '📁', title: 'Collections', desc: 'Save GraphQL requests to collections for later use.' },
-          { emoji: '🕐', title: 'History', desc: 'All executed queries — click to replay.' },
-          { emoji: '🌿', title: 'Environments', desc: 'Shared environments — {{gql_host}} resolves in endpoints and headers.' },
+          { icon: 'book', title: 'Documentation', desc: 'Root Types, all schema types with color coding — search + filter.' },
+          { icon: '⟨/⟩', title: 'Schema SDL', desc: 'Full Schema Definition Language view — read-only, syntax highlighted.' },
+          { icon: 'folder', title: 'Collections', desc: 'Save GraphQL requests to collections for later use.' },
+          { icon: 'clock', title: 'History', desc: 'All executed queries — click to replay.' },
+          { icon: 'git', title: 'Environments', desc: 'Shared environments — {{gql_host}} resolves in endpoints and headers.' },
         ]} />
         <SubTitle>Documentation Explorer Color Coding</SubTitle>
         <WikiTable
@@ -299,20 +299,20 @@ dk.env.set('user_id', dk.response.json().data.user.id);`}
 
       {/* ── Tips ──────────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="gql-tips" emoji="💡">Tips & Troubleshooting</SectionTitle>
-        <Collapsible title={'🔌 Connect button seems stuck on "connecting…"'}>
+        <SectionTitle id="gql-tips" icon="ai">Tips & Troubleshooting</SectionTitle>
+        <Collapsible title={' Connect button seems stuck on "connecting…"'}>
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
             That's the one real introspection call — if the endpoint is slow or unreachable it will sit there until
             the request times out. Check the endpoint URL and any required auth headers first.
           </p>
         </Collapsible>
-        <Collapsible title="📡 Subscribe button is disabled">
+        <Collapsible title=" Subscribe button is disabled">
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
-            It needs both a non-empty endpoint URL <em>and</em> a non-empty query in the editor — write your{' '}
+            It needs both a non-empty endpoint URL <em>and</em> a non-empty query in the editor — write your
             <Code>subscription {'{ }'}</Code> first.
           </p>
         </Collapsible>
-        <Collapsible title="⚠️ Response shows 200 but I know it failed">
+        <Collapsible title=" Response shows 200 but I know it failed">
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
             Check the <Code>⚠ GraphQL Errors</Code> flag next to the status — GraphQL servers commonly return HTTP 200
             with an <Code>errors</Code> array in the body instead of a 4xx/5xx status.

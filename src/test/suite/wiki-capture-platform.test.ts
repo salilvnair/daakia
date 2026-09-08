@@ -207,6 +207,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Sidebar — Collections (expanded)',
     explanation: 'The Collections panel, opened from the right-side icon rail — organizes saved requests into folders, each independently runnable.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -233,6 +234,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Sidebar — History (expanded)',
     explanation: 'Every request sent is logged here automatically, with method, status, and timing — click any entry to re-open it as a new tab.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -249,6 +251,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Sidebar — Environments (expanded)',
     explanation: 'Environments hold {{variable}} sets (base URLs, API keys) swappable per request — secret variables are masked in the UI.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -266,6 +269,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'DevTools — Console',
     explanation: 'The DevTools bottom panel’s Console tab — pre/post-request script logs and test assertion results, tagged by which request produced them.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -283,6 +287,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'DevTools — Network',
     explanation: 'The DevTools Network tab — every request/response Daakia has made, with headers, bodies, timing, and size, independent of the main Response panel.',
     directives: [
+      { action: 'closeAllTabs' },
       // Tabs opened by every capture suite that ran before this one in the
       // same long-lived webview session stay open otherwise — bleeding a
       // long, truncated tab-bar strip across the top of every platform
@@ -300,6 +305,7 @@ const SCREENS: ScreenSpec[] = [
     label: s.label,
     explanation: `The ${s.label.replace('Settings — ', '')} section of Settings.`,
     directives: [
+      { action: 'closeAllTabs' },
       // The DevTools panel (opened + seeded by the two devtools-* screens
       // just before this in SCREENS order) stays open across the whole
       // session otherwise — bleeding a stray Network/Console strip into
@@ -336,6 +342,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Settings — Wiki',
     explanation: 'The Wiki, reached via the "Wiki" group in Settings\' own left nav — lands on Quick Start.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'closeDevTools' },
       // The 5 REST tabs opened by the sidebar/devtools screens just before
       // this in SCREENS order stay open across the whole session otherwise —
@@ -359,6 +366,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Wiki — Collections & Env',
     explanation: 'The wiki\'s Collections & Env page — the most SectionTitle-dense screen, so the most sensitive to a regression in the gradient section-card CSS.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'closeDevTools' },
       // The 5 REST tabs opened by the sidebar/devtools screens just before
       // this in SCREENS order stay open across the whole session otherwise —

@@ -22,20 +22,20 @@ import {
 } from './view-catalogue';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'vi-how', emoji: '🧭', label: 'How to get anywhere' },
-  { id: 'vi-recording', emoji: '⏺️', label: 'Recording' },
-  { id: 'vi-heap', emoji: '🧠', label: 'Heap dump' },
-  { id: 'vi-threads', emoji: '🧵', label: 'Thread dump' },
-  { id: 'vi-logs', emoji: '📜', label: 'Logs' },
-  { id: 'vi-mcp', emoji: '🔌', label: 'MCP' },
+  { id: 'vi-how', icon: 'compass', label: 'How to get anywhere' },
+  { id: 'vi-recording', icon: 'dot', label: 'Recording' },
+  { id: 'vi-heap', icon: 'cpu', label: 'Heap dump' },
+  { id: 'vi-threads', icon: 'process', label: 'Thread dump' },
+  { id: 'vi-logs', icon: 'script', label: 'Logs' },
+  { id: 'vi-mcp', icon: 'connect', label: 'MCP' },
 ];
 
-const SECTION: Record<ArtifactKind, { id: string; emoji: string; title: string }> = {
-  recording: { id: 'vi-recording', emoji: '⏺️', title: 'Flight recording' },
-  heap: { id: 'vi-heap', emoji: '🧠', title: 'Heap dump' },
-  threads: { id: 'vi-threads', emoji: '🧵', title: 'Thread dump' },
-  logs: { id: 'vi-logs', emoji: '📜', title: 'Logs' },
-  mcp: { id: 'vi-mcp', emoji: '🔌', title: 'MCP tools' },
+const SECTION: Record<ArtifactKind, { id: string; icon: string; title: string }> = {
+  recording: { id: 'vi-recording', icon: 'dot', title: 'Flight recording' },
+  heap: { id: 'vi-heap', icon: 'cpu', title: 'Heap dump' },
+  threads: { id: 'vi-threads', icon: 'process', title: 'Thread dump' },
+  logs: { id: 'vi-logs', icon: 'script', title: 'Logs' },
+  mcp: { id: 'vi-mcp', icon: 'connect', title: 'MCP tools' },
 };
 
 function Only() {
@@ -63,7 +63,7 @@ function Section({ kind }: { kind: ArtifactKind }) {
 
   return (
     <div>
-      <SectionTitle id={s.id} emoji={s.emoji}>{s.title}</SectionTitle>
+      <SectionTitle id={s.id} icon={s.icon}>{s.title}</SectionTitle>
       <p className="dw-p">
         <strong>{ARTIFACT_LABEL[kind]}</strong> — {ARTIFACT_HOW[kind]}.
       </p>
@@ -81,7 +81,7 @@ export function Dk8sViewsView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🗂️"
+          icon="folder"
           title="dk8s — Every View"
           subtitle={`${total} views and ${tools} MCP tools, and which artifact each one needs. If you cannot find a view, it is almost always because the artifact it reads is not open.`}
           chips={chips(['.jfr', '.hprof', 'thread dump', 'logs', 'MCP'])}
@@ -90,7 +90,7 @@ export function Dk8sViewsView() {
       toc={<TocBar items={TOC_ITEMS} />}
     >
       <div>
-        <SectionTitle id="vi-how" emoji="🧭">How to get anywhere</SectionTitle>
+        <SectionTitle id="vi-how" icon="compass">How to get anywhere</SectionTitle>
         <p className="dw-p">
           Everything lives behind an artifact, and the artifact decides which views exist.
           There is no screen that shows all of them at once — open a <Code>.jfr</Code> and you
@@ -109,7 +109,7 @@ export function Dk8sViewsView() {
 
         <Callout type="info" title="Two views only appear when they have something to say">
           <p className="dw-p">
-            <Code>Locks</Code> is not drawn when no thread is waiting on a monitor, and{' '}
+            <Code>Locks</Code> is not drawn when no thread is waiting on a monitor, and
             <Code>Probes</Code> is empty when the recording captured no socket or file I/O.
             Both are correct — a healthy dump has no contention graph, and a service whose
             database answers in microseconds writes no slow-I/O events. Neither is a fault,
@@ -132,7 +132,7 @@ export function Dk8sViewsView() {
             rather than attaching an agent to a running JVM: the allocation line comes from a
             recording rather than a dump, co-blocking comes from wait spans rather than one
             instant, growth compares two files instead of needing a live session, the lock
-            graph reads ownership straight out of a dump, and{' '}
+            graph reads ownership straight out of a dump, and
             <Code>dk8s_open_source</Code> resolves a frame to a file because the source is in
             the same window. The badge is deliberately rare — a retention tree is on every
             serious heap tool and is not claimed here.

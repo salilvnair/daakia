@@ -9,13 +9,13 @@ import {
 import { DK8S_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'pd-tabs', emoji: '🗂️', label: 'Seven tabs' },
-  { id: 'pd-logs', emoji: '📜', label: 'Logs' },
-  { id: 'pd-format', emoji: '🧩', label: 'Format detection' },
-  { id: 'pd-terminal', emoji: '⌨️', label: 'Terminal' },
-  { id: 'pd-facets', emoji: '🔦', label: 'Fields & facets' },
-  { id: 'pd-yaml', emoji: '📄', label: 'Describe & YAML' },
-  { id: 'pd-export', emoji: '💾', label: 'Exporting a log' },
+  { id: 'pd-tabs', icon: 'folder', label: 'Seven tabs' },
+  { id: 'pd-logs', icon: 'script', label: 'Logs' },
+  { id: 'pd-format', icon: 'mcp', label: 'Format detection' },
+  { id: 'pd-terminal', icon: 'keyboard', label: 'Terminal' },
+  { id: 'pd-facets', icon: 'audit', label: 'Fields & facets' },
+  { id: 'pd-yaml', icon: 'document', label: 'Describe & YAML' },
+  { id: 'pd-export', icon: 'save', label: 'Exporting a log' },
 ];
 
 export function Dk8sPodView() {
@@ -26,7 +26,7 @@ export function Dk8sPodView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🔬"
+          icon="search"
           title="dk8s — one pod, up close"
           subtitle="Overview, logs, a terminal, the collectors, describe and YAML — and the command behind each."
           chips={chips(['logs --follow', 'format detection', 'exec', 'describe', 'export'])}
@@ -35,7 +35,7 @@ export function Dk8sPodView() {
       toc={<TocBar items={TOC_ITEMS} />}
     >
       <div>
-        <SectionTitle id="pd-tabs" emoji="🗂️">Seven tabs</SectionTitle>
+        <SectionTitle id="pd-tabs" icon="folder">Seven tabs</SectionTitle>
         {cap('dk8s-overview')}
         <p className="dw-p">
           Opening a pod takes over the panel rather than sliding a drawer in from the side. Reading
@@ -63,7 +63,7 @@ export function Dk8sPodView() {
       <Divider />
 
       <div>
-        <SectionTitle id="pd-logs" emoji="📜">Logs</SectionTitle>
+        <SectionTitle id="pd-logs" icon="script">Logs</SectionTitle>
         {cap('dk8s-logs')}
         <CodeBlock label="the log stream" lang="bash">{`kubectl --context C -n NS logs POD \\
   [--follow] [-c CONTAINER] [--previous] \\
@@ -95,7 +95,7 @@ export function Dk8sPodView() {
       <Divider />
 
       <div>
-        <SectionTitle id="pd-format" emoji="🧩">How a line becomes fields</SectionTitle>
+        <SectionTitle id="pd-format" icon="mcp">How a line becomes fields</SectionTitle>
         <p className="dw-p">
           Levels, threads and loggers are coloured because the log's <em>format</em> is inferred
           once, then compiled and used as the authority for every line. Fields are never guessed
@@ -119,7 +119,7 @@ export function Dk8sPodView() {
       <Divider />
 
       <div>
-        <SectionTitle id="pd-terminal" emoji="⌨️">Terminal</SectionTitle>
+        <SectionTitle id="pd-terminal" icon="keyboard">Terminal</SectionTitle>
         {cap('dk8s-terminal')}
         <p className="dw-p">
           A real PTY inside the container, drawn in the panel — resize, <Code>Ctrl-C</Code> and
@@ -148,7 +148,7 @@ export function Dk8sPodView() {
       <Divider />
 
       <div>
-        <SectionTitle id="pd-facets" emoji="🔦">Fields &amp; facets</SectionTitle>
+        <SectionTitle id="pd-facets" icon="audit">Fields &amp; facets</SectionTitle>
         {cap('dk8s-logs-filtered')}
         <p className="dw-p">
           Where a log format is configured, a panel down the left of the log lists every field the
@@ -167,7 +167,7 @@ export function Dk8sPodView() {
         />
         <p className="dw-p">
           Beyond <Code>thread</Code>, <Code>logger</Code> and <Code>app</Code>, any key a structured
-          format carried becomes a field — MDC, in practice: <Code>tenant</Code>,{' '}
+          format carried becomes a field — MDC, in practice: <Code>tenant</Code>,
           <Code>orderId</Code>, whatever the application logged beside its message. Those are marked
           <Code>mdc</Code> and ranked by how evenly they divide the buffer, so a field where one
           value dominates sits below one that actually splits the events.
@@ -190,7 +190,7 @@ export function Dk8sPodView() {
       <Divider />
 
       <div>
-        <SectionTitle id="pd-yaml" emoji="📄">Describe & YAML</SectionTitle>
+        <SectionTitle id="pd-yaml" icon="document">Describe & YAML</SectionTitle>
         <CodeBlock label="both, in parallel" lang="bash">{`kubectl --context C -n NS describe pod POD
 kubectl --context C -n NS get pod POD -o yaml`}</CodeBlock>
         <p className="dw-p">
@@ -202,7 +202,7 @@ kubectl --context C -n NS get pod POD -o yaml`}</CodeBlock>
       <Divider />
 
       <div>
-        <SectionTitle id="pd-export" emoji="💾">Exporting a log</SectionTitle>
+        <SectionTitle id="pd-export" icon="save">Exporting a log</SectionTitle>
         <p className="dw-p">
           Export writes whole logs to files you choose the folder for. It offers a range —
           <Code>All time</Code>, a preset, or <Code>Between…</Code> — and a slice, and it can

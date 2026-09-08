@@ -14,11 +14,11 @@ import { CollectDiagram } from './FlowDiagrams';
 import { DK8S_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'dr-probe', emoji: '🔦', label: 'The probe' },
-  { id: 'dr-collect', emoji: '🧪', label: 'The collectors' },
-  { id: 'dr-cost', emoji: '⚖️', label: 'Cost & consent' },
-  { id: 'dr-artifacts', emoji: '📦', label: 'Artifacts' },
-  { id: 'dr-analyze', emoji: '🩺', label: 'Analyzers' },
+  { id: 'dr-probe', icon: 'audit', label: 'The probe' },
+  { id: 'dr-collect', icon: 'test', label: 'The collectors' },
+  { id: 'dr-cost', icon: 'gauge', label: 'Cost & consent' },
+  { id: 'dr-artifacts', icon: 'layers', label: 'Artifacts' },
+  { id: 'dr-analyze', icon: 'stethoscope', label: 'Analyzers' },
 ];
 
 export function Dk8sDoctorView() {
@@ -29,7 +29,7 @@ export function Dk8sDoctorView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="🩺"
+          icon="stethoscope"
           title="dk8s — Doctor & Artifacts"
           subtitle="Thread dumps, histograms, heap dumps, flight recordings, Python stacks and sockets — with the exact command, and the cost, up front."
           chips={chips(['jcmd', 'jstack', 'SIGQUIT', 'JFR', 'py-spy', 'kubectl cp'])}
@@ -38,7 +38,7 @@ export function Dk8sDoctorView() {
       toc={<TocBar items={TOC_ITEMS} />}
     >
       <div>
-        <SectionTitle id="dr-probe" emoji="🔦">One probe decides everything</SectionTitle>
+        <SectionTitle id="dr-probe" icon="audit">One probe decides everything</SectionTitle>
         <p className="dw-p">
           Before offering anything, dk8s asks the container what it is. This is not defensive
           plumbing — it <em>is</em> the feature. It turns “that failed” into “this image has no
@@ -85,7 +85,7 @@ true      # a capability check that finds nothing exits 1 — without this the
       <Divider />
 
       <div>
-        <SectionTitle id="dr-collect" emoji="🧪">The collectors</SectionTitle>
+        <SectionTitle id="dr-collect" icon="test">The collectors</SectionTitle>
         {cap('dk8s-doctor')}
         <p className="dw-p">
           Every one runs through <Code>kubectl exec</Code>, and every result carries the command it
@@ -126,7 +126,7 @@ true      # a capability check that finds nothing exits 1 — without this the
       <Divider />
 
       <div>
-        <SectionTitle id="dr-cost" emoji="⚖️">Cost, stated before you pay it</SectionTitle>
+        <SectionTitle id="dr-cost" icon="gauge">Cost, stated before you pay it</SectionTitle>
         <p className="dw-p">
           Two of these genuinely hurt, and they ask first — with a confirmation that names the cost
           rather than saying “are you sure?”.
@@ -170,7 +170,7 @@ stat -f -c '%T %a %S' DIR   ||   df -P DIR | tail -1`}</CodeBlock>
       <Divider />
 
       <div>
-        <SectionTitle id="dr-artifacts" emoji="📦">Artifacts</SectionTitle>
+        <SectionTitle id="dr-artifacts" icon="layers">Artifacts</SectionTitle>
         {cap('dk8s-artifacts')}
         <p className="dw-p">
           Everything collected lands in one place and stays there. Before this, a dump was only
@@ -191,7 +191,7 @@ stat -f -c '%T %a %S' DIR   ||   df -P DIR | tail -1`}</CodeBlock>
       <Divider />
 
       <div>
-        <SectionTitle id="dr-analyze" emoji="🩺">Analyzers</SectionTitle>
+        <SectionTitle id="dr-analyze" icon="stethoscope">Analyzers</SectionTitle>
         <p className="dw-p">
           Clicking an artifact opens the analyzer that understands it. All of this runs locally —
           nothing is uploaded.

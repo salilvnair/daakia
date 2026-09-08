@@ -13,6 +13,9 @@ import { PLATFORM_CAPTURES } from '../platform/captures';
 import { MOCK_SERVER_CAPTURES } from '../mock-server/captures';
 import { DK8S_CAPTURES } from '../dk8s/captures';
 import { GQL_CAPTURES } from '../gql/captures';
+import { GRPC_CAPTURES } from '../grpc/captures';
+import { SOAP_CAPTURES } from '../soap/captures';
+import { WEBSOCKET_CAPTURES } from '../websocket/captures';
 
 const BY_SECTION = {
   rest: REST_CAPTURES,
@@ -20,6 +23,9 @@ const BY_SECTION = {
   'mock-server': MOCK_SERVER_CAPTURES,
   dk8s: DK8S_CAPTURES,
   graphql: GQL_CAPTURES,
+  grpc: GRPC_CAPTURES,
+  soap: SOAP_CAPTURES,
+  realtime: WEBSOCKET_CAPTURES,
 } as const;
 
 describe('every stop has its picture', () => {
@@ -48,14 +54,28 @@ describe('the stops themselves', () => {
   });
 
   /* A marker outside the frame is invisible, and one at exactly 0 or 100 sits
-     half off the edge — both read as a missing marker. */
-  it('keeps every marker inside the picture', () => {
+     half off the edge — both read as a missing marker. Only checked where the
+     marker carries coordinates; an anchored one is positioned from the capture
+     at render time and cannot be checked from here. */
+  it('keeps every hard-coded marker inside the picture', () => {
     for (const s of TOUR_STOPS) {
       for (const h of s.hotspots) {
+        if (h.x == null || h.y == null) continue;
         expect(h.x, `${s.id} · ${h.title}`).toBeGreaterThan(1);
         expect(h.x, `${s.id} · ${h.title}`).toBeLessThan(99);
         expect(h.y, `${s.id} · ${h.title}`).toBeGreaterThan(1);
         expect(h.y, `${s.id} · ${h.title}`).toBeLessThan(99);
+      }
+    }
+  });
+
+  /* A marker with neither an anchor nor coordinates has nowhere to go and is
+     dropped at render — which looks exactly like a marker somebody forgot. */
+  it('gives every marker something to aim at', () => {
+    for (const s of TOUR_STOPS) {
+      for (const h of s.hotspots) {
+        const aimed = Boolean(h.anchor) || (h.x != null && h.y != null);
+        expect(aimed, `${s.id} · ${h.title} has no anchor and no coordinates`).toBe(true);
       }
     }
   });
@@ -71,15 +91,27 @@ describe('the stops themselves', () => {
 
   /* Two markers on top of each other is one marker you can click and one you
      cannot. The dot is 26px on a 1280×720 frame — about 2% by 3.6%. */
-  it('does not stack two markers on the same spot', () => {
+  it('does not stack two hard-coded markers on the same spot', () => {
     for (const s of TOUR_STOPS) {
       for (let i = 0; i < s.hotspots.length; i++) {
         for (let j = i + 1; j < s.hotspots.length; j++) {
           const a = s.hotspots[i], b = s.hotspots[j];
+          if (a.x == null || a.y == null || b.x == null || b.y == null) continue;
           const overlaps = Math.abs(a.x - b.x) < 2.5 && Math.abs(a.y - b.y) < 4;
           expect(overlaps, `${s.id}: "${a.title}" and "${b.title}" overlap`).toBe(false);
         }
       }
+    }
+  });
+
+  /* Two markers on one anchor is one marker you can click and one you cannot,
+     the same failure as two on one coordinate. */
+  it('does not aim two markers at the same anchor', () => {
+    for (const s of TOUR_STOPS) {
+      const anchors = s.hotspots
+        .filter(h => h.anchor)
+        .map(h => `${h.anchor}#${h.nth ?? 0}`);
+      expect(new Set(anchors).size, s.id).toBe(anchors.length);
     }
   });
 });

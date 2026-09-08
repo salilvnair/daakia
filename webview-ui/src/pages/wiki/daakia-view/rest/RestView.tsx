@@ -10,18 +10,18 @@ import { CONTENT_TYPE_OPTIONS } from '../../../../components/rest/request/bodyCo
 import { REST_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'rest-protocol', emoji: '📖', label: 'What is REST?' },
-  { id: 'rest-anatomy', emoji: '🧭', label: 'Anatomy' },
-  { id: 'rest-params', emoji: '🔗', label: 'Params' },
-  { id: 'rest-headers', emoji: '📋', label: 'Headers' },
-  { id: 'rest-body', emoji: '📦', label: 'Body' },
-  { id: 'rest-auth', emoji: '🔒', label: 'Auth' },
-  { id: 'rest-scripts', emoji: '📜', label: 'Scripts' },
-  { id: 'rest-variables', emoji: '🔤', label: 'Variables' },
-  { id: 'rest-docs', emoji: '📝', label: 'Docs' },
-  { id: 'rest-send', emoji: '🚀', label: 'Send & Code' },
-  { id: 'rest-response', emoji: '📥', label: 'Response' },
-  { id: 'rest-tips', emoji: '💡', label: 'Tips' },
+  { id: 'rest-protocol', icon: 'book', label: 'What is REST?' },
+  { id: 'rest-anatomy', icon: 'compass', label: 'Anatomy' },
+  { id: 'rest-params', icon: 'link', label: 'Params' },
+  { id: 'rest-headers', icon: 'clipboard', label: 'Headers' },
+  { id: 'rest-body', icon: 'layers', label: 'Body' },
+  { id: 'rest-auth', icon: 'lock', label: 'Auth' },
+  { id: 'rest-scripts', icon: 'script', label: 'Scripts' },
+  { id: 'rest-variables', icon: 'type', label: 'Variables' },
+  { id: 'rest-docs', icon: 'pencil', label: 'Docs' },
+  { id: 'rest-send', icon: 'send', label: 'Send & Code' },
+  { id: 'rest-response', icon: 'download', label: 'Response' },
+  { id: 'rest-tips', icon: 'ai', label: 'Tips' },
 ];
 
 export function RestView() {
@@ -32,7 +32,7 @@ export function RestView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="📡"
+          icon="radio"
           title="REST API Client"
           subtitle="Build, script, and debug HTTP requests — params to response, one panel."
           chips={chips(['GET/POST/PUT/PATCH/DELETE', 'Auth', 'Pre/Post Scripts', 'Variables', 'Code Gen', 'Timeline'])}
@@ -49,7 +49,7 @@ export function RestView() {
       <Divider />
 
       <div>
-        <SectionTitle id="rest-protocol" emoji="📖">What is REST?</SectionTitle>
+        <SectionTitle id="rest-protocol" icon="book">What is REST?</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           <strong>REST</strong> (Representational State Transfer) is an architectural style for networked systems,
           defined by Roy Fielding in his 2000 doctoral dissertation. It isn't a protocol or a standard you implement
@@ -101,7 +101,7 @@ Content-Length: 68
 {"id":42,"name":"Alice Johnson","role":"admin","createdAt":"2026-07-15T02:08:00Z"}`}
         </CodeBlock>
         <Callout type="tip">
-          The <Code>Location</Code> header on a <Code>201 Created</Code> response, the <Code>Content-Type</Code>{' '}
+          The <Code>Location</Code> header on a <Code>201 Created</Code> response, the <Code>Content-Type</Code>
           negotiation via <Code>Accept</Code>, and status codes like <Code>304 Not Modified</Code> for caching are
           all part of REST's "uniform interface" doing real work — not decoration. A well-designed REST API leans on
           HTTP's own semantics instead of inventing a custom envelope on top.
@@ -111,7 +111,7 @@ Content-Length: 68
       <Divider />
 
       <div>
-        <SectionTitle id="rest-anatomy" emoji="🧭">Anatomy of a Request</SectionTitle>
+        <SectionTitle id="rest-anatomy" icon="compass">Anatomy of a Request</SectionTitle>
         <WikiTable
           headers={['Method', 'Idempotent?', 'Typical Use']}
           rows={[
@@ -125,16 +125,16 @@ Content-Length: 68
         />
         <SubTitle>Request Config Tabs</SubTitle>
         <FeatureGrid items={[
-          { emoji: '🔗', title: 'Params', desc: 'Query params, two-way synced with the URL bar.' },
-          { emoji: '📋', title: 'Headers', desc: 'Key/value table + AI ✨ suggest.' },
-          { emoji: '📦', title: 'Body', desc: 'JSON/XML/Form-Data/URL-Encoded/Binary/GraphQL editor.' },
-          { emoji: '🔒', title: 'Auth', desc: 'Bearer, Basic, API Key, OAuth 2.0, Digest.' },
-          { emoji: '📜', title: 'Scripts', desc: 'Pre-request / Post-response dk.* runtime.' },
-          { emoji: '🔤', title: 'Variables', desc: 'Request-scoped, highest-priority overrides.' },
+          { icon: 'link', title: 'Params', desc: 'Query params, two-way synced with the URL bar.' },
+          { icon: 'clipboard', title: 'Headers', desc: 'Key/value table + AI ✨ suggest.' },
+          { icon: 'layers', title: 'Body', desc: 'JSON/XML/Form-Data/URL-Encoded/Binary/GraphQL editor.' },
+          { icon: 'lock', title: 'Auth', desc: 'Bearer, Basic, API Key, OAuth 2.0, Digest.' },
+          { icon: 'script', title: 'Scripts', desc: 'Pre-request / Post-response dk.* runtime.' },
+          { icon: 'type', title: 'Variables', desc: 'Request-scoped, highest-priority overrides.' },
         ]} />
         <Callout type="info">
           <Code>{'{{variableName}}'}</Code> resolves against environment → collection → global (in that order) and
-          highlights blue when found — in URL, headers, or body. Escape a literal <Code>{'{{...}}'}</Code> as{' '}
+          highlights blue when found — in URL, headers, or body. Escape a literal <Code>{'{{...}}'}</Code> as
           <Code>{'$daakia_{varName}_$'}</Code> to skip substitution.
         </Callout>
       </div>
@@ -143,7 +143,7 @@ Content-Length: 68
 
       {/* ── Params ────────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-params" emoji="🔗">Query Parameters</SectionTitle>
+        <SectionTitle id="rest-params" icon="link">Query Parameters</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Two-way synced with the URL bar — type in either place, the other updates. Uncheck a row to drop it from the
           request without deleting the value. For example, with <Code>sort=created_at</Code> unchecked in the table,
@@ -170,7 +170,7 @@ Content-Length: 68
 
       {/* ── Headers ───────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-headers" emoji="📋">Headers</SectionTitle>
+        <SectionTitle id="rest-headers" icon="clipboard">Headers</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Same key/value editor as Params. <strong>✨ Suggest headers</strong> looks at method/URL/body and proposes a
           starting set instead of typing from memory:
@@ -202,7 +202,7 @@ X-Request-ID: {{$random.uuid}}`}
 
       {/* ── Body ──────────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-body" emoji="📦">Body</SectionTitle>
+        <SectionTitle id="rest-body" icon="layers">Body</SectionTitle>
         <WikiTable
           headers={['Mode', 'Content-Type', 'Notes']}
           rows={[
@@ -244,7 +244,7 @@ X-Request-ID: {{$random.uuid}}`}
 
       {/* ── Auth ──────────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-auth" emoji="🔒">Authorization</SectionTitle>
+        <SectionTitle id="rest-auth" icon="lock">Authorization</SectionTitle>
         <WikiTable
           headers={['Type', 'Sends']}
           rows={[
@@ -265,9 +265,9 @@ X-Request-ID: {{$random.uuid}}`}
 
       {/* ── Scripts ───────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-scripts" emoji="📜">Scripts</SectionTitle>
+        <SectionTitle id="rest-scripts" icon="script">Scripts</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-          <strong>Pre-request</strong> runs before the network call; <strong>Post-response</strong> runs after. Same{' '}
+          <strong>Pre-request</strong> runs before the network call; <strong>Post-response</strong> runs after. Same
           <Code>dk.*</Code> runtime, different lifecycle:
         </p>
         <CodeBlock label="Pre-request — refresh an auth token before sending">
@@ -291,7 +291,7 @@ dk.env.set('user_id', dk.response.json().id);`}
         </CodeBlock>
       </div>
       {cap('rest-scripts')}
-      <WikiCard title="dk.* quick reference" icon="🧰">
+      <WikiCard title="dk.* quick reference" icon="settings">
         <WikiTable
           headers={['API', 'Scope', 'What it does']}
           rows={[
@@ -305,8 +305,8 @@ dk.env.set('user_id', dk.response.json().id);`}
         />
       </WikiCard>
       <Callout type="warn" title="dk.response is undefined during Pre-request">
-        There's no response yet, so <Code>dk.response.status</Code> throws{' '}
-        <Code>Cannot read properties of undefined</Code>. Response assertions belong in{' '}
+        There's no response yet, so <Code>dk.response.status</Code> throws
+        <Code>Cannot read properties of undefined</Code>. Response assertions belong in
         <strong>Post-response</strong> — Pre-request is for setting up the request (tokens, dynamic headers,
         timestamps).
       </Callout>
@@ -317,7 +317,7 @@ dk.env.set('user_id', dk.response.json().id);`}
 
       {/* ── Variables ─────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-variables" emoji="🔤">Variables</SectionTitle>
+        <SectionTitle id="rest-variables" icon="type">Variables</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Request-scoped, exists only on this tab. Resolution order, highest wins:
         </p>
@@ -354,7 +354,7 @@ dk.env.set('user_id', dk.response.json().id);`}
 
       <Callout type="info" title="Contract testing, from an imported spec">
         Import an OpenAPI document and its <Code>components.schemas</Code> stay with the collection,
-        so a test can name one instead of carrying a copy:{' '}
+        so a test can name one instead of carrying a copy:
         <Code>dk.expect(dk.response.json()).toMatchSchema('#/components/schemas/User')</Code>.
         <Code>#/definitions/User</Code> and a bare <Code>User</Code> resolve to the same schema. A
         name that matches nothing fails as a broken test — it says which schema is missing rather
@@ -365,7 +365,7 @@ dk.env.set('user_id', dk.response.json().id);`}
 
       {/* ── Docs ──────────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-docs" emoji="📝">Docs</SectionTitle>
+        <SectionTitle id="rest-docs" icon="pencil">Docs</SectionTitle>
         <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
           Markdown on the request itself — why it exists, what it needs, what it returns. Edit and
           Preview; it opens in Preview when there is something to read.
@@ -380,7 +380,7 @@ dk.env.set('user_id', dk.response.json().id);`}
 
       {/* ── Send + Code Gen ───────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-send" emoji="🚀">Send, Import &amp; Generate Code</SectionTitle>
+        <SectionTitle id="rest-send" icon="send">Send, Import &amp; Generate Code</SectionTitle>
         <WikiTable
           headers={['Action', 'How']}
           rows={[
@@ -405,7 +405,7 @@ dk.env.set('user_id', dk.response.json().id);`}
 
       {/* ── Response ──────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-response" emoji="📥">Response Panel</SectionTitle>
+        <SectionTitle id="rest-response" icon="download">Response Panel</SectionTitle>
         <WikiTable
           headers={['Tab', 'Answers']}
           rows={[
@@ -465,16 +465,16 @@ dk.test('Visual assertions', () => {
 
       {/* ── Tips ──────────────────────────────────────────────────────── */}
       <div>
-        <SectionTitle id="rest-tips" emoji="💡">Tips &amp; Troubleshooting</SectionTitle>
-        <Collapsible title="🔍 My variable isn't resolving">
+        <SectionTitle id="rest-tips" icon="ai">Tips &amp; Troubleshooting</SectionTitle>
+        <Collapsible title=" My variable isn't resolving">
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
             Check an environment is actually selected — a variable defined only in an <em>inactive</em> environment
             won't resolve, even if the name is correct.
           </p>
         </Collapsible>
-        <Collapsible title="🔗 A variable my script wrote isn't available in the next request">
+        <Collapsible title=" A variable my script wrote isn't available in the next request">
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
-            Variable writes persist after the script finishes, not mid-flight. Pre-request → Post-response within the{' '}
+            Variable writes persist after the script finishes, not mid-flight. Pre-request → Post-response within the
             <em>same</em> request works; across two separate requests, chain a real request instead:
           </p>
           <CodeBlock label="Chaining a value into the next request">
@@ -485,9 +485,9 @@ dk.env.set('user_id', dk.response.json().id);
 const id = dk.env.get('user_id');`}
           </CodeBlock>
         </Collapsible>
-        <Collapsible title="🧪 The Tests tab isn't showing up">
+        <Collapsible title=" The Tests tab isn't showing up">
           <p className="text-[12px] leading-relaxed text-[var(--color-text-secondary)]">
-            It only renders once the response has test results, script logs, or script errors — and only{' '}
+            It only renders once the response has test results, script logs, or script errors — and only
             <strong>Post-response</strong> tests count. Move <Code>dk.test()</Code> out of Pre-request.
           </p>
         </Collapsible>

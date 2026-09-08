@@ -15,11 +15,11 @@ import { ConnectDiagram } from './FlowDiagrams';
 import { DK8S_CAPTURES } from './captures';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'dk-what', emoji: '🧭', label: 'What it is' },
-  { id: 'dk-connect', emoji: '🔌', label: 'Getting connected' },
-  { id: 'dk-grid', emoji: '🧱', label: 'The pod grid' },
-  { id: 'dk-watch', emoji: '📡', label: 'Watching' },
-  { id: 'dk-actions', emoji: '🖱️', label: 'Acting on pods' },
+  { id: 'dk-what', icon: 'compass', label: 'What it is' },
+  { id: 'dk-connect', icon: 'connect', label: 'Getting connected' },
+  { id: 'dk-grid', icon: 'layers', label: 'The pod grid' },
+  { id: 'dk-watch', icon: 'radio', label: 'Watching' },
+  { id: 'dk-actions', icon: 'select', label: 'Acting on pods' },
 ];
 
 export function Dk8sOverviewView() {
@@ -30,7 +30,7 @@ export function Dk8sOverviewView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="☸️"
+          icon=""
           title="dk8s"
           subtitle="Everything a pod can tell you — logs, heap, threads, stacks — collected from a cluster and handed to the analyzers."
           chips={chips(['contexts', 'namespaces', 'live watch', 'favourites', 'permissions'])}
@@ -39,7 +39,7 @@ export function Dk8sOverviewView() {
       toc={<TocBar items={TOC_ITEMS} />}
     >
       <div>
-        <SectionTitle id="dk-what" emoji="🧭">What it is</SectionTitle>
+        <SectionTitle id="dk-what" icon="compass">What it is</SectionTitle>
         <p className="dw-p">
           dk8s points Daakia's diagnostic analyzers at a real cluster. Collecting the evidence — a
           heap dump, a thread dump, a flight recording, the logs — is how it gets there; reasoning
@@ -58,7 +58,7 @@ export function Dk8sOverviewView() {
       <Divider />
 
       <div>
-        <SectionTitle id="dk-connect" emoji="🔌">Getting connected</SectionTitle>
+        <SectionTitle id="dk-connect" icon="connect">Getting connected</SectionTitle>
         <p className="dw-p">
           The binary comes from the dk8s setting if one is set, otherwise from <Code>PATH</Code>.
           Then four cheap calls establish what you can actually do, before you are offered anything.
@@ -97,7 +97,7 @@ export function Dk8sOverviewView() {
       <Divider />
 
       <div>
-        <SectionTitle id="dk-grid" emoji="🧱">The pod grid</SectionTitle>
+        <SectionTitle id="dk-grid" icon="layers">The pod grid</SectionTitle>
         {cap('dk8s-pods')}
         <p className="dw-p">
           Pods as cards or as a table, grouped by namespace, with the ones needing attention sorted
@@ -123,7 +123,7 @@ export function Dk8sOverviewView() {
       <Divider />
 
       <div>
-        <SectionTitle id="dk-watch" emoji="📡">Watching</SectionTitle>
+        <SectionTitle id="dk-watch" icon="radio">Watching</SectionTitle>
         {cap('dk8s-pods-table')}
         <p className="dw-p">
           The <Code>watching</Code> indicator means a live stream is open and the grid is being
@@ -153,7 +153,7 @@ kubectl --context C -n NS top pods --no-headers`}</CodeBlock>
       <Divider />
 
       <div>
-        <SectionTitle id="dk-actions" emoji="🖱️">Acting on pods</SectionTitle>
+        <SectionTitle id="dk-actions" icon="select">Acting on pods</SectionTitle>
         <p className="dw-p">
           Right-click any card or row for the pod menu; long-press to enter selection mode and act
           on several at once.

@@ -4,7 +4,7 @@
  * sequence of real DOM actions (click, type, setPref, wait, waitForMessage)
  * against the already-rendered app, then captures `document.getElementById(
  * 'root').outerHTML` — the exact same technique as CopyRootHtmlButton's manual
- * 🧢 capture, just triggered programmatically by an e2e test/orchestrator
+ *  capture, just triggered programmatically by an e2e test/orchestrator
  * instead of a human click, so we can drive and capture every wiki screen
  * headlessly via @vscode/test-electron.
  *

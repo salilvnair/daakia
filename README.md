@@ -573,5 +573,5 @@ MIT © 2026 [salilvnair](https://github.com/salilvnair)
 ---
 
 <p align="center">
-  <sub>Built with ❤️ for the VS Code community</sub>
+  <sub>Built with  for the VS Code community</sub>
 </p>

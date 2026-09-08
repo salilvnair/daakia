@@ -23,6 +23,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — REST Routes',
     explanation: 'Configured REST mock routes with method, path, status code, and response body — each independently enabled/disabled.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: REST_SERVER as any },
@@ -38,6 +39,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — Catalog',
     explanation: 'Pre-built template library — one-click add realistic route sets (Users CRUD, Auth Flow, Error Scenarios, etc.) instead of building routes from scratch.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: REST_SERVER as any },
@@ -53,6 +55,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — gRPC Services',
     explanation: 'Configured gRPC mock services and methods — supports unary and all three streaming modes, with example JSON responses.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: GRPC_SERVER as any },
@@ -68,6 +71,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — Export',
     explanation: 'Export the configured server to a WireMock mapping bundle, an OpenAPI spec, or a standalone runnable Node.js script.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: REST_SERVER as any },
@@ -89,6 +93,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — Route Editor: Response',
     explanation: 'The route editor\'s Response tab — status code, delay, response headers, and body, opened by clicking any route row.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: ROUTE_RESPONSE_SERVER as any },
@@ -111,6 +116,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — Route Editor: Matching',
     explanation: 'The route editor\'s Matching tab — extra conditions beyond method+path: query params, headers, and body content, so multiple routes can share a path and respond differently.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: ROUTE_MATCHING_SERVER as any },
@@ -132,6 +138,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — Route Editor: Advanced',
     explanation: 'The route editor\'s Advanced tab — per-route fault injection override and rate limiting, independent of the server-wide Chaos settings.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: ROUTE_ADVANCED_SERVER as any },
@@ -153,6 +160,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — Route Editor: Response Sequences',
     explanation: 'An ordered list of different responses for the same route — each hit advances to the next one, for simulating a value that changes across repeated calls.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: ROUTE_SEQUENCE_SERVER as any },
@@ -172,6 +180,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — State Machine Gating',
     explanation: 'A route gated behind a real connected workflow — the two-step State Machine + Trigger Event selector, populated from the workflow\'s own transition labels.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: STATEMACHINE_SERVER as any },
@@ -194,6 +203,12 @@ const SCREENS: ScreenSpec[] = [
       { action: 'wait', ms: 1800 }, // lazy-loaded canvas chunk on first open
       { action: 'seedStateMachineWorkflow', sampleId: 'users-crud' },
       { action: 'wait', ms: 700 },
+      /* The canvas opens at 100% on whatever the last viewport was, so a seeded
+         workflow lands mostly off the right edge and the capture is a picture
+         of an empty grid. Fit-view is the canvas's own control for exactly
+         this, and it is what a person would press. */
+      { action: 'click', selector: '.react-flow__controls-fitview' },
+      { action: 'wait', ms: 600 },
     ],
   },
   {
@@ -201,6 +216,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — Chaos & Fault Injection',
     explanation: 'Server-wide fault injection (probability slider, Low/Medium/High presets, protocol-aware fault types) and a global rate limit.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: CHAOS_SERVER as any },
@@ -216,6 +232,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — GraphQL Config',
     explanation: 'A GraphQL mock server\'s own config screen — SDL schema editor plus per-operation mock responses, each with its own Response/Sequence/Matching/Advanced tabs.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: GRAPHQL_CONFIG_SERVER as any },
@@ -231,6 +248,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — SOAP Config',
     explanation: 'A SOAP mock server\'s config screen — Service → Operation hierarchy, each operation with its own static/script/fault response type.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: SOAP_CONFIG_SERVER as any },
@@ -250,6 +268,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — WebSocket Config',
     explanation: 'A WebSocket mock server\'s config screen — On Connect / On Message (regex pattern) / On Disconnect handlers, each with its own response and broadcast toggle.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: WS_HANDLERS_SERVER as any },
@@ -265,6 +284,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — Socket.IO Config',
     explanation: 'A Socket.IO mock server\'s config screen — event-based handlers: listen for one event, emit a response event back.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: SIO_HANDLERS_SERVER as any },
@@ -280,6 +300,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — SSE Config',
     explanation: 'An SSE mock server\'s config screen — event streams with name, data, interval, and delay, independently enabled.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: SSE_EVENTS_SERVER as any },
@@ -295,6 +316,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — MQTT Config',
     explanation: 'An MQTT mock server\'s config screen — topic subscriptions with QoS, retain flag, publish payload, and interval.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: MQTT_TOPICS_SERVER as any },
@@ -310,6 +332,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — Import',
     explanation: 'The Import tab — paste or upload OpenAPI/Postman/WireMock (REST), SDL (GraphQL), .proto (gRPC), or WSDL (SOAP) to generate routes instead of building them by hand.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: IMPORT_SERVER as any },
@@ -326,6 +349,7 @@ const SCREENS: ScreenSpec[] = [
     label: 'Mock Server — WSDL Import',
     explanation: 'The Import tab for a SOAP mock server — a single WSDL format, auto-seeded with a realistic placeholder WSDL document.',
     directives: [
+      { action: 'closeAllTabs' },
       { action: 'openMockServerTab' },
       { action: 'wait', ms: 1200 },
       { action: 'addMockServer', server: WSDL_IMPORT_SERVER as any },

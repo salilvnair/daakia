@@ -12,12 +12,12 @@ import {
 } from '../shared/WikiShared';
 
 const TOC_ITEMS: TocItem[] = [
-  { id: 'cm-shape', emoji: '🧾', label: 'The shape' },
-  { id: 'cm-connect', emoji: '🔌', label: 'Connect' },
-  { id: 'cm-pods', emoji: '🧱', label: 'Pods' },
-  { id: 'cm-logs', emoji: '📜', label: 'Logs' },
-  { id: 'cm-collect', emoji: '🧪', label: 'Collectors' },
-  { id: 'cm-local', emoji: '💻', label: 'Done locally' },
+  { id: 'cm-shape', icon: 'file', label: 'The shape' },
+  { id: 'cm-connect', icon: 'connect', label: 'Connect' },
+  { id: 'cm-pods', icon: 'layers', label: 'Pods' },
+  { id: 'cm-logs', icon: 'script', label: 'Logs' },
+  { id: 'cm-collect', icon: 'test', label: 'Collectors' },
+  { id: 'cm-local', icon: 'terminal', label: 'Done locally' },
 ];
 
 export function Dk8sCommandsView() {
@@ -25,7 +25,7 @@ export function Dk8sCommandsView() {
     <WikiScrollPage
       hero={
         <WikiHero
-          emoji="⌘"
+          icon="⌘"
           title="dk8s — behind the scenes"
           subtitle="Every kubectl command dk8s runs, what triggers it, and what it does with the answer."
           chips={chips(['auth can-i', 'get --watch', 'logs', 'exec', 'cp', 'top'])}
@@ -34,7 +34,7 @@ export function Dk8sCommandsView() {
       toc={<TocBar items={TOC_ITEMS} />}
     >
       <div>
-        <SectionTitle id="cm-shape" emoji="🧾">The shape of every call</SectionTitle>
+        <SectionTitle id="cm-shape" icon="file">The shape of every call</SectionTitle>
         <CodeBlock label="always" lang="bash">{`kubectl --context <CONTEXT> -n <NAMESPACE> <verb> …`}</CodeBlock>
         <p className="dw-p">
           The context and namespace are always explicit. dk8s never relies on your
@@ -53,7 +53,7 @@ export function Dk8sCommandsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="cm-connect" emoji="🔌">Connecting</SectionTitle>
+        <SectionTitle id="cm-connect" icon="connect">Connecting</SectionTitle>
         <WikiTable
           headers={['When', 'Command']}
           rows={[
@@ -70,7 +70,7 @@ export function Dk8sCommandsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="cm-pods" emoji="🧱">Pods</SectionTitle>
+        <SectionTitle id="cm-pods" icon="layers">Pods</SectionTitle>
         <WikiTable
           headers={['When', 'Command']}
           rows={[
@@ -93,7 +93,7 @@ export function Dk8sCommandsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="cm-logs" emoji="📜">Logs</SectionTitle>
+        <SectionTitle id="cm-logs" icon="script">Logs</SectionTitle>
         <CodeBlock label="viewing" lang="bash">{`kubectl … logs POD [--follow] [-c C] [--previous] --timestamps [--since=Ns] --tail=N`}</CodeBlock>
         <CodeBlock label="searching — the same command, read line by line" lang="bash">{`kubectl … logs POD [--all-containers=true --prefix] [--previous] \\
   --timestamps [--since-time=RFC3339 | --since=Ns] --tail=N`}</CodeBlock>
@@ -119,7 +119,7 @@ export function Dk8sCommandsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="cm-collect" emoji="🧪">Collectors</SectionTitle>
+        <SectionTitle id="cm-collect" icon="test">Collectors</SectionTitle>
         <CodeBlock label="the wrapper" lang="bash">{`kubectl --context C -n NS exec POD [-c CONTAINER] -- <command>`}</CodeBlock>
         <WikiTable
           headers={['Purpose', 'Command inside the container']}
@@ -149,7 +149,7 @@ export function Dk8sCommandsView() {
       <Divider />
 
       <div>
-        <SectionTitle id="cm-local" emoji="💻">What does not touch the cluster</SectionTitle>
+        <SectionTitle id="cm-local" icon="terminal">What does not touch the cluster</SectionTitle>
         <p className="dw-p">
           A good deal of dk8s runs entirely on your machine. Worth knowing, because these cost the
           cluster nothing and work with no connection at all.
