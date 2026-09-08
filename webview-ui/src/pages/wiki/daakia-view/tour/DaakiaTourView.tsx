@@ -387,7 +387,10 @@ export function DaakiaTourView() {
 
       <nav className="dt-rail" ref={railRef} aria-label="Tour stops" {...dragProps}>
         {chapters.map(ch => (
-          <div key={ch.chapter} className="dt-rail-group">
+          <div
+            key={ch.chapter}
+            className={`dt-rail-group${ch.chapter === stop.chapter ? ' dt-rail-group--on' : ''}`}
+          >
             <span className="dt-rail-label">{ch.chapter}</span>
             <div className="dt-rail-dots">
               {ch.stops.map(s => {

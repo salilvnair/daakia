@@ -143,8 +143,26 @@
   background: color-mix(in srgb, var(--dw-text, var(--color-text-primary)) 14%, transparent);
   transition: background 0.16s, width 0.16s;
 }
-.dt-rail-dot:hover { background: color-mix(in srgb, var(--dw-accent, var(--color-accent)) 45%, transparent); }
-.dt-rail-dot--on { width: 26px; background: var(--dw-accent, var(--color-accent)); }
+.dt-rail-dot:hover { background: color-mix(in srgb, var(--dt-marker) 55%, transparent); }
+
+/* Where you are, in the marker colour rather than the section accent — the
+   accent changes per wiki section, so on some of them the active tick was the
+   same value as the strip it sat in and simply disappeared. Amber is the one
+   colour on this page that means "the tour is pointing at this", which is
+   exactly what the tick says. */
+.dt-rail-dot--on {
+  width: 30px;
+  background: var(--dt-marker);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dt-marker) 40%, transparent),
+              0 0 9px color-mix(in srgb, var(--dt-marker) 55%, transparent);
+}
+
+/* The chapter you are in, named. The active tick can be scrolled out of view
+   inside a long chapter, and then nothing on the strip says where you are. */
+.dt-rail-group--on .dt-rail-label { color: var(--dt-marker); }
+.dt-rail-group--on .dt-rail-dot:not(.dt-rail-dot--on) {
+  background: color-mix(in srgb, var(--dt-marker) 30%, transparent);
+}
 
 /* ── Controls (under the hero) ──────────────────────────────────────────── */
 
