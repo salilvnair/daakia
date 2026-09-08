@@ -32,7 +32,7 @@ import { getProtocolAccent } from '../../colors/daakia-colors';
 import { CollectionsPanel } from '../rest/sidebar/CollectionsPanel';
 import { HistoryPanel } from '../rest/sidebar/HistoryPanel';
 import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
-import { ChevronRightIcon, ChevronDownIcon, CollectionsFolderIcon, ClockIcon } from '../../icons';
+import { ChevronRightIcon, ChevronDownIcon, CollectionsFolderIcon, ClockIcon, PlusIcon } from '../../icons';
 import type { Protocol } from '../../store/tabs-store';
 import './workspace.css';
 
@@ -142,7 +142,15 @@ function ProtocolSections({ kind, counts, panel, empty, extra }: {
   }, [open, withData.length]);
 
   if (withData.length === 0) {
-    return <div className="ws-sec-empty">{empty}</div>;
+    /* `extra` holds the create dialog. Returning without it meant the one
+       screen that most needs "create your first collection" was the one screen
+       where the dialog was not mounted to open. */
+    return (
+      <>
+        {extra}
+        <div className="ws-sec-empty">{empty}</div>
+      </>
+    );
   }
 
   return (
@@ -190,7 +198,25 @@ export function WorkspaceCollections({ createSignal = 0 }: { createSignal?: numb
       kind="collections"
       counts={counts}
       panel={p => <CollectionsPanel protocol={p} />}
-      empty={<><CollectionsFolderIcon size={26} /><p>No collections saved in this workspace yet.</p></>}
+      empty={
+        <>
+          <CollectionsFolderIcon size={26} />
+          <p>No collections saved in this workspace yet.</p>
+          {/* An empty state that names the next action beats one that only
+              reports the absence — and this dialog asks which protocol, which
+              is the question the sidebar never has to ask because it is already
+              showing one. */}
+          <ButtonView
+            variant="primary"
+            size="sm"
+            iconLeft={<PlusIcon size={13} />}
+            accentColor="var(--color-workspace)"
+            onClick={() => setCreating(true)}
+          >
+            New Collection
+          </ButtonView>
+        </>
+      }
       extra={
         <NewCollectionModal
           open={creating}

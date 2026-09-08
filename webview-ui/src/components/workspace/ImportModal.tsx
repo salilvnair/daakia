@@ -47,27 +47,40 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
     window.setTimeout(() => { setBusy(false); onClose(); }, 400);
   };
 
-  const urlTab = (placeholder: string, note: React.ReactNode) => (
-    <div className="ws-url">
-      <input
-        className="ws-url-input"
-        value={url}
-        autoFocus
-        placeholder={placeholder}
-        onChange={e => setUrl(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter' && url.trim()) go({ type: 'importCollectionUrl', url: url.trim() });
-        }}
-      />
-      <ButtonView
-        size="sm"
-        variant="primary"
-        disabled={!url.trim() || busy}
-        onClick={() => go({ type: 'importCollectionUrl', url: url.trim() })}
-      >
-        Import
-      </ButtonView>
-      <p className="ws-drop-note" style={{ width: '100%' }}>{note}</p>
+  /*
+    The same shell as the File and Whole-workspace tabs.
+
+    These two were a bare input with the explanation ragged-left beneath it at
+    46ch, which in a dialog this wide is a narrow column of text hanging off the
+    left edge — four tabs of one dialog that looked like two different dialogs.
+    The dashed box, the icon and the centred note are already what the other two
+    use; there was no reason for these to differ except that they were written
+    later.
+  */
+  const urlTab = (icon: React.ReactNode, placeholder: string, note: React.ReactNode) => (
+    <div className="ws-drop">
+      {icon}
+      <div className="ws-url">
+        <input
+          className="ws-url-input"
+          value={url}
+          autoFocus
+          placeholder={placeholder}
+          onChange={e => setUrl(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && url.trim()) go({ type: 'importCollectionUrl', url: url.trim() });
+          }}
+        />
+        <ButtonView
+          size="sm"
+          variant="primary"
+          disabled={!url.trim() || busy}
+          onClick={() => go({ type: 'importCollectionUrl', url: url.trim() })}
+        >
+          Import
+        </ButtonView>
+      </div>
+      <p className="ws-drop-note">{note}</p>
     </div>
   );
 
@@ -119,6 +132,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
         )}
 
         {source === 'url' && urlTab(
+          <LinkIcon size={26} />,
           'https://example.com/openapi.json',
           <>
             An OpenAPI, Swagger, Postman or Insomnia document, over https. The request is
@@ -128,6 +142,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
         )}
 
         {source === 'github' && urlTab(
+          <GitHubIcon size={26} />,
           'https://github.com/owner/repo/blob/main/openapi.json',
           <>
             Paste the address of the file as GitHub shows it &mdash; the blob URL is rewritten

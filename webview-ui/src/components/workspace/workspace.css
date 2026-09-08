@@ -493,9 +493,20 @@
   border: 1px dashed var(--color-surface-border);
   border-radius: 10px;
 }
-.ws-drop-note { margin: 0; font-size: 11px; line-height: 1.55; max-width: 46ch; }
+.ws-drop-note { margin: 0; font-size: 11px; line-height: 1.55; max-width: 48ch; }
 
-.ws-url { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* The input row inside the dashed box. Centred and width-capped so the field
+   does not run the full dialog while the note under it wraps at 46ch — the
+   mismatch that made the URL tabs read as a different dialog. */
+.ws-url {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 430px;
+}
 .ws-url-input {
   flex: 1;
   min-width: 220px;

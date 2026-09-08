@@ -463,6 +463,31 @@ export interface McpAuth {
 
 // ────────────── Defaults ──────────────
 
+/**
+ * Is this patch value the same as what the tab already holds?
+ *
+ * Identity first, because most no-op writes hand back the very array or
+ * object they were given. Structural comparison second, for the panels that
+ * rebuild a value each render — a fresh `[]` every mount is not a change, and
+ * treating it as one is what put an unsaved dot on an untouched tab.
+ *
+ * JSON rather than a deep walk: these are request fields — headers, params,
+ * body text, small config objects — and a stringify of one of those is cheap
+ * beside the React render it is about to cause. Anything it cannot serialise
+ * is reported as changed, which is the safe direction: a spurious dot is
+ * recoverable, a missing one loses work.
+ */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (a === null || b === null || typeof a !== 'object') return false;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
 function createDefaultTab(partial?: Partial<RequestTab>): RequestTab {
   return {
     type: 'request',
@@ -737,13 +762,28 @@ export const useTabsStore = create<TabsState>((set, get) => {
         'aiConversation', 'aiStreaming', 'aiSystemPrompts', 'aiProvider', 'aiModel',
       ]);
       const hasDirtyField = 'dirty' in patch;
-      const hasContentChange = Object.keys(patch).some(k => !NON_DIRTY_FIELDS.has(k));
       set(s => ({
         tabs: s.tabs.map(t => {
           if (t.id !== id) return t;
           // daakia-ai tabs are never "dirty" — they have no save flow
           if (t.type === 'daakia-ai') return { ...t, ...patch, dirty: false };
-          const newDirty = hasDirtyField ? (patch.dirty ?? true) : (hasContentChange ? true : t.dirty);
+
+          /*
+            Dirty means changed, not written.
+
+            A panel that writes its own default back on mount — the same value
+            the tab already holds — used to flip the unsaved dot on a tab
+            nobody had touched, because any key outside the exempt list counted
+            as a change. Comparing against what is there makes a no-op write a
+            no-op, which fixes the class rather than whichever panel was found
+            doing it.
+          */
+          const changed = (Object.keys(patch) as (keyof RequestTab)[]).some(k => {
+            if (NON_DIRTY_FIELDS.has(k as string)) return false;
+            return !sameValue(t[k], patch[k]);
+          });
+
+          const newDirty = hasDirtyField ? (patch.dirty ?? true) : (changed ? true : t.dirty);
           return { ...t, ...patch, dirty: newDirty };
         }),
       }));
