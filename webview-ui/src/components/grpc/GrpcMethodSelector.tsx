@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { TextInputView, IconButtonView } from '@salilvnair/dui';
 import { useTabsStore } from '../../store/tabs-store';
 import type { GrpcMethodType, GrpcServiceDef } from '../../store/tabs-store';
 import { GrpcUnaryIcon, GrpcServerStreamIcon, GrpcClientStreamIcon, GrpcBidiStreamIcon, CheckCircleFilledIcon, RefreshIcon, ChevronDownIcon } from '../../icons';
@@ -157,9 +158,8 @@ export function GrpcMethodSelector() {
             <span className="truncate">{methodDisplay.text}</span>
           </div>
         ) : (
-          <input
+          <TextInputView
             ref={inputRef}
-            type="text"
             value={hasServices ? filter : method}
             onChange={(e) => {
               if (hasServices) {
@@ -171,17 +171,22 @@ export function GrpcMethodSelector() {
             }}
             onFocus={() => { if (hasServices && !open) setOpen(true); }}
             placeholder={hasServices ? 'Search methods...' : 'package.Service/Method'}
-            className="w-full h-[36px] px-2.5 pr-8 rounded-md bg-[var(--color-input-bg)] border border-[var(--color-input-border)] text-[13px] font-mono text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] transition-colors cursor-pointer"
+            width="fw"
+            accentColor="var(--color-protocol-grpc)"
+            /* Monospace and the 36px height the row is built around; the
+               right padding leaves room for the chevron sitting over it. */
+            style={{ height: 36, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                     fontSize: 13, paddingRight: 32 }}
           />
         )}
         {/* Dropdown chevron */}
-        <button
-          type="button"
+        <IconButtonView
+          icon={<ChevronDownIcon size={12} />}
+          size="xs"
           onClick={(e) => { e.stopPropagation(); setOpen(!open); setFilter(''); }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer"
-        >
-          <ChevronDownIcon size={12} />
-        </button>
+          tooltip={open ? 'Close' : 'Pick a method'}
+          className="absolute right-1 top-1/2 -translate-y-1/2"
+        />
       </div>
 
 
@@ -244,14 +249,13 @@ export function GrpcMethodSelector() {
               <CheckCircleFilledIcon size={10} style={{ color: 'var(--color-success)' }} />
               Using server reflection.
             </span>
-            <button
-              type="button"
+            <IconButtonView
+              icon={<RefreshIcon size={10} />}
+              size="xs"
               onClick={handleRefresh}
-              className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-protocol-grpc)] cursor-pointer transition-colors"
-              title="Refresh services"
-            >
-              <RefreshIcon size={10} />
-            </button>
+              tooltip="Refresh services"
+              style={{ '--dui-hover-color': 'var(--color-protocol-grpc)' } as React.CSSProperties}
+            />
           </div>
         </div>,
         document.body

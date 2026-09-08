@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { BadgeChipView } from '@salilvnair/dui';
 import { formatBytes } from '../../../services/response';
 import type { ResponseData } from '../../../store/tabs-store';
 import { AiActionButton } from '../../ai/AiAssistPopover';
@@ -15,6 +16,11 @@ interface ResponseStatusBarProps {
 }
 
 const ANOMALY_SIGMA_THRESHOLD = 2;
+
+/* BadgeChipView uppercases by default, which is right for a label and wrong
+   for a value: "142 MS" and "1.2 KB" are harder to read than what they
+   replaced, and a status line is scanned for its numbers. */
+const CHIP_VALUE: React.CSSProperties = { textTransform: 'none', letterSpacing: 0 };
 
 function useAnomalyCheck(url: string, currentTime: number, protocol = 'rest') {
   const history = useSidebarDataStore(s => s.history);
@@ -39,13 +45,13 @@ export function ResponseStatusBar({ response, requestMethod = 'GET', requestUrl 
   const isNetworkError = response.status === 0;
   const isError = isNetworkError || response.status >= 400;
   const statusLabel = isNetworkError ? response.statusText || 'Error' : `${response.status} ${response.statusText}`;
-  const statusColor = isNetworkError
-    ? 'text-[var(--color-error)] bg-[color-mix(in_srgb,var(--color-error)_12%,transparent)]'
+  /* One tone drives text, fill, border and highlight — a chip whose border and
+     text disagree stops reading as one object. */
+  const statusTone = isNetworkError || response.status >= 400
+    ? 'var(--color-error)'
     : response.status < 300
-      ? 'text-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)]'
-      : response.status < 400
-        ? 'text-[var(--color-warning)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)]'
-        : 'text-[var(--color-error)] bg-[color-mix(in_srgb,var(--color-error)_12%,transparent)]';
+      ? 'var(--color-success)'
+      : 'var(--color-warning)';
 
   const anomaly = useAnomalyCheck(requestUrl, response.time ?? 0);
 
@@ -57,38 +63,43 @@ export function ResponseStatusBar({ response, requestMethod = 'GET', requestUrl 
         </div>
       )}
       <div className="flex items-center gap-4 px-4 py-2 border-t border-[var(--color-surface-border)] bg-[var(--color-surface)]">
+        {/* `textTransform: none` on all three: these are values, not labels, and
+            "142 MS" reads worse than what it replaced. */}
         <span className="text-[12px] flex items-center gap-1.5">
           <span className="text-[var(--color-text-muted)]">Status:</span>
-          <span className={`px-1.5 py-[1px] rounded text-[10px] font-bold font-mono ${statusColor}`}>
+          <BadgeChipView tone={statusTone} size="md" style={CHIP_VALUE}>
             {statusLabel}
-          </span>
+          </BadgeChipView>
         </span>
         <span className="text-[12px] flex items-center gap-1.5">
           <span className="text-[var(--color-text-muted)]">Time:</span>
-          <span className="px-1.5 py-[1px] rounded text-[10px] font-mono font-semibold bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)]">{response.time} ms</span>
+          <BadgeChipView tone="var(--color-accent)" size="md" style={CHIP_VALUE}>
+            {response.time} ms
+          </BadgeChipView>
         </span>
         <span className="text-[12px] flex items-center gap-1.5">
           <span className="text-[var(--color-text-muted)]">Size:</span>
-          <span className="px-1.5 py-[1px] rounded text-[10px] font-mono font-semibold bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] text-[var(--color-accent)]">{formatBytes(response.size)}</span>
+          <BadgeChipView tone="var(--color-accent)" size="md" style={CHIP_VALUE}>
+            {formatBytes(response.size)}
+          </BadgeChipView>
         </span>
 
         <div className="flex-1" />
 
         {/* Performance anomaly badge */}
         {perfAnomalyEnabled && anomaly && (
+          /* Still a button: it opens the anomaly modal. The chip is what it
+             looks like, not what it does. */
           <button
             type="button"
             onClick={() => setShowAnomaly(true)}
-            className="flex items-center gap-1 h-[22px] px-2 text-[10px] rounded cursor-pointer transition-all animate-pulse"
-            style={{
-              background: 'color-mix(in srgb, var(--color-warning) 15%, transparent)',
-              color: 'var(--color-warning)',
-              border: '1px solid color-mix(in srgb, var(--color-warning) 30%, transparent)',
-            }}
+            className="border-none bg-transparent p-0 cursor-pointer animate-pulse"
             title={`Performance anomaly: ${Math.round(((response.time ?? 0) - anomaly.avg) / anomaly.avg * 100)}% slower than baseline`}
           >
-            <GaugeIcon size={10} />
-            <span className="font-medium">{anomaly.sigma.toFixed(1)}σ slow</span>
+            <BadgeChipView tone="var(--color-warning)" size="md" style={CHIP_VALUE}>
+              <GaugeIcon size={10} style={{ marginRight: 4 }} />
+              {anomaly.sigma.toFixed(1)}σ slow
+            </BadgeChipView>
           </button>
         )}
 
