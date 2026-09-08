@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ButtonView, TextInputView, ToggleSwitchView, TabView, SideNavView, SplitPanelView, CopyButtonView, type SideNavItem } from '@salilvnair/dui';
+import { ButtonView, TextInputView, ToggleSwitchView, TabView, SideNavView, SplitPanelView, CopyButtonView, RadioGroupView, type SideNavItem } from '@salilvnair/dui';
 import { useDbStatusStore } from '../../store/db-status-store';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
@@ -339,34 +339,19 @@ function EncodingContent() {
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Query Parameters Encoding</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-3">Configure encoding for query parameters in requests</p>
-        <div className="flex flex-col gap-2.5">
-          {([
+        {/* The radio circle, its fill, the hover tint and the hidden native
+            input were written out by hand here and again for proxy mode below.
+            RadioGroupView is that pair, once. */}
+        <RadioGroupView
+          value={encoding}
+          onChange={v => handleChange(v as typeof encoding)}
+          accentColor="var(--color-settings)"
+          options={[
             { value: 'enable', label: 'Enable' },
             { value: 'disable', label: 'Disable' },
             { value: 'auto', label: 'Auto' },
-          ] as const).map(opt => (
-            <label key={opt.value} className="flex items-center gap-2.5 cursor-pointer group">
-              <span className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center transition-colors ${
-                encoding === opt.value
-                  ? 'border-[var(--color-settings)]'
-                  : 'border-[color-mix(in_srgb,var(--color-text-primary)_20%,transparent)] group-hover:border-[color-mix(in_srgb,var(--color-text-primary)_40%,transparent)]'
-              }`}>
-                {encoding === opt.value && (
-                  <span className="w-[8px] h-[8px] rounded-full bg-[var(--color-settings)]" />
-                )}
-              </span>
-              <input
-                type="radio"
-                name="encoding"
-                value={opt.value}
-                checked={encoding === opt.value}
-                onChange={() => handleChange(opt.value)}
-                className="hidden"
-              />
-              <span className="text-[13px] text-[var(--color-text-primary)]">{opt.label}</span>
-            </label>
-          ))}
-        </div>
+          ]}
+        />
       </div>
     </div>
   );
@@ -413,37 +398,18 @@ function ProxyContent() {
       <div>
         <p className="text-[13px] font-medium text-[var(--color-text-primary)]">Proxy Configuration</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 mb-3">Route requests through a proxy server</p>
-        <div className="flex flex-col gap-2.5">
-          {([
-            { value: 'none', label: 'No Proxy', desc: 'Connect directly to the server' },
-            { value: 'system', label: 'System Proxy', desc: 'Use system proxy settings (HTTP_PROXY / HTTPS_PROXY env vars)' },
-            { value: 'manual', label: 'Manual Proxy', desc: 'Configure proxy host, port, and authentication' },
-          ] as const).map(opt => (
-            <label key={opt.value} className="flex items-start gap-2.5 cursor-pointer group">
-              <span className={`mt-0.5 w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                mode === opt.value
-                  ? 'border-[var(--color-settings)]'
-                  : 'border-[color-mix(in_srgb,var(--color-text-primary)_20%,transparent)] group-hover:border-[color-mix(in_srgb,var(--color-text-primary)_40%,transparent)]'
-              }`}>
-                {mode === opt.value && (
-                  <span className="w-[8px] h-[8px] rounded-full bg-[var(--color-settings)]" />
-                )}
-              </span>
-              <input
-                type="radio"
-                name="proxyMode"
-                value={opt.value}
-                checked={mode === opt.value}
-                onChange={() => { setMode(opt.value); save({ mode: opt.value }); }}
-                className="hidden"
-              />
-              <div>
-                <span className="text-[13px] text-[var(--color-text-primary)]">{opt.label}</span>
-                <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">{opt.desc}</p>
-              </div>
-            </label>
-          ))}
-        </div>
+        {/* `description` is a RadioOption field, so the sub-line under each
+            mode comes with the component rather than a div beside it. */}
+        <RadioGroupView
+          value={mode}
+          onChange={v => { const next = v as typeof mode; setMode(next); save({ mode: next }); }}
+          accentColor="var(--color-settings)"
+          options={[
+            { value: 'none', label: 'No Proxy', description: 'Connect directly to the server' },
+            { value: 'system', label: 'System Proxy', description: 'Use system proxy settings (HTTP_PROXY / HTTPS_PROXY env vars)' },
+            { value: 'manual', label: 'Manual Proxy', description: 'Configure proxy host, port, and authentication' },
+          ]}
+        />
       </div>
 
       {/* Manual Proxy Fields */}

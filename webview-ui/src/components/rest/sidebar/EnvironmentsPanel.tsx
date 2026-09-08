@@ -248,14 +248,15 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
       </div>
 
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-surface-border)]">
-        <button
-          type="button"
+        <ButtonView
+          variant="ghost"
+          size="sm"
+          iconLeft={<PlusIcon size={14} />}
           onClick={openCreateModal}
-          className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)] hover:text-white cursor-pointer"
+          accentColor="var(--color-sidebar-environments)"
         >
-          <PlusIcon size={14} />
-          <span>New</span>
-        </button>
+          New
+        </ButtonView>
 
         <div className="flex items-center gap-1">
           <div ref={infoAnchorRef} style={{ display: 'inline-flex' }}>
@@ -283,6 +284,7 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
             ]}
             footer="Tip: Variables resolve at send time. Use $daakia_ escape to send raw {{var}} text without resolving."
             width={320}
+            onWikiOpen={() => useTabsStore.getState().openDaakiaWikiTab('collections-env')}
           />
 
           <IconButtonView

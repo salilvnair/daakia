@@ -192,6 +192,7 @@ export function JsonResponseView({ response, wrapLines, setWrapLines, showFilter
             description="Use dot notation to access nested fields. Supports basic jq-like path expressions."
             items={JQ_ITEMS}
             width={320}
+            onWikiOpen={() => useTabsStore.getState().openDaakiaWikiTab('rest')}
           />
         </div>
       )}

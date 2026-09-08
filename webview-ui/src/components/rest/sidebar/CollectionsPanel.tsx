@@ -858,14 +858,15 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
 
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-surface-border)]">
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
+          <ButtonView
+            variant="ghost"
+            size="sm"
+            iconLeft={<PlusIcon size={14} />}
             onClick={openNewCollection}
-            className="flex items-center gap-2 text-[13px] text-[var(--color-text-primary)] hover:text-white cursor-pointer"
+            accentColor={getProtocolAccent(protocol as any)}
           >
-            <PlusIcon size={14} />
-            <span>New</span>
-          </button>
+            New
+          </ButtonView>
           {aiEnabled('autoDiscovery') && (
             <IconButtonView
               icon={<SparkleIcon size={12} />}
@@ -915,6 +916,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
               { code: 'Run', description: 'Execute all requests in order' },
             ]}
             footer="Tip: Group related endpoints into folders for easy navigation."
+            onWikiOpen={() => useTabsStore.getState().openDaakiaWikiTab('collections-env')}
           />
           <IconButtonView
             icon={<ImportExportIcon size="1.1em" />}
@@ -998,14 +1000,17 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
           <div className="flex flex-col items-center justify-center h-full px-4 text-center">
             <FolderIcon size={40} strokeWidth={1} className="text-[var(--color-text-muted)] opacity-40 mb-3" />
             <p className="text-[12px] text-[var(--color-text-muted)] mb-3">No collections yet</p>
-            <button
-              type="button"
+            {/* `text-white` was hardcoded here, which is wrong on a light
+                theme; ButtonView reads the token that follows the theme. */}
+            <ButtonView
+              variant="primary"
+              size="sm"
+              iconLeft={<PlusIcon size={13} />}
               onClick={openNewCollection}
-              className="h-[30px] px-3 text-[12px] rounded-md text-white hover:opacity-90 cursor-pointer"
-              style={{ backgroundColor: getProtocolAccent(protocol as any) }}
+              accentColor={getProtocolAccent(protocol as any)}
             >
-              + New Collection
-            </button>
+              New Collection
+            </ButtonView>
           </div>
         ) : (
           sortedTree.map(node => (
