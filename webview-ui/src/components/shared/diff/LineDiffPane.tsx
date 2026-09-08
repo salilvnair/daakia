@@ -1,27 +1,29 @@
 /**
- * SD-3 — one object's DDL, source beside target, with the changed lines marked.
+ * Two texts, side by side, with the changed lines marked.
  *
- * ── Why not two EditorViews ──
+ * ── Why this and not a Monaco diff ──
  *
- * The task says EditorView, and the first draft used two. Monaco does not
- * highlight a diff without a decoration pass, so the two panes rendered as
- * plain SQL and the reader was left comparing them by eye — which is the job
- * the panel exists to do for them. Two aligned gutters with the LCS result
- * painted on is less machinery and shows more, so that is what this is. The
- * split is still SplitPanelView, so it drags like every other pane in the app.
+ * Monaco's diff editor is a code editor first: it brings its own scrollbars,
+ * its own minimap, its own selection model and a decoration pass that has to be
+ * configured before it colours anything. For "show me what changed between
+ * these two blobs" that is a lot of machinery to look at two hundred lines,
+ * and every place that used it had to fight its sizing.
  *
- * ── Alignment ──
+ * This is the LCS result painted onto two aligned gutters. It started in the
+ * schema comparison, where it replaced exactly that Monaco pair, and it reads
+ * better for the same reason in every other place two texts are compared.
  *
- * Both sides render the same row list. A line that exists only on one side is
- * drawn as an empty slot on the other, so line 40 on the left sits opposite
- * line 40's counterpart rather than opposite whatever happens to be 40th in a
- * file that gained three rows higher up. Scrolling is shared for the same
- * reason: two panes that scroll apart are two files, not a diff.
+ * ── Alignment is the whole point ──
+ *
+ * Both sides render the SAME row list. A line that exists only on one side is
+ * drawn as an empty slot on the other, so a line sits opposite its counterpart
+ * rather than opposite whatever happens to be nth in a file that gained three
+ * rows higher up. Scrolling is shared for the same reason: two panes that drift
+ * apart are two files, not a diff.
  */
 import { useMemo, useRef, useCallback } from 'react';
 import { SplitPanelView } from '@salilvnair/dui';
-import { diffLines, type DiffLine } from '../../../services/schema-diff/lcs';
-import type { SchemaAnomaly } from '../../../services/schema-diff/schema-diff';
+import { diffLines, tally, type DiffLine } from '../../../services/schema-diff/lcs';
 
 const ROW = 17;
 
@@ -34,7 +36,7 @@ const TONE: Record<DiffLine['op'], { bg: string; fg: string }> = {
 /** One side of the pair. `side` decides which rows are real here and which are gaps. */
 function Side({ lines, side, scrollRef, onScroll }: {
   lines: DiffLine[];
-  side: 'source' | 'target';
+  side: 'left' | 'right';
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
 }) {
@@ -48,11 +50,11 @@ function Side({ lines, side, scrollRef, onScroll }: {
       style={{ fontSize: 11, lineHeight: `${ROW}px`, background: 'var(--color-input-bg)' }}
     >
       {lines.map((l, i) => {
-        /* A line the other side owns is a gap here — drawn, so the two
-           gutters stay level, but with no number and no text. */
-        const mine = side === 'source' ? l.op !== 'add' : l.op !== 'remove';
+        /* A line the other side owns is a gap here — drawn, so the two gutters
+           stay level, but with no number and no text. */
+        const mine = side === 'left' ? l.op !== 'add' : l.op !== 'remove';
         const tone = mine ? TONE[l.op] : TONE.same;
-        const no = side === 'source' ? l.sourceLine : l.targetLine;
+        const no = side === 'left' ? l.sourceLine : l.targetLine;
         return (
           <div
             key={i}
@@ -82,11 +84,29 @@ function Side({ lines, side, scrollRef, onScroll }: {
   );
 }
 
-export function DdlDiffPane({ anomaly, height = 300 }: { anomaly: SchemaAnomaly; height?: number }) {
-  const lines = useMemo(
-    () => diffLines(anomaly.sourceDdl, anomaly.targetDdl),
-    [anomaly.sourceDdl, anomaly.targetDdl],
-  );
+export interface LineDiffPaneProps {
+  left: string;
+  right: string;
+  leftLabel?: string;
+  rightLabel?: string;
+  /** Shown beside the label — e.g. the object name, or "not present". */
+  leftNote?: string;
+  rightNote?: string;
+  /** A fixed height, or omit to fill a flex parent. */
+  height?: number | string;
+  /** Adds a "+n / −n" tally to the header. */
+  showTally?: boolean;
+}
+
+export function LineDiffPane({
+  left, right,
+  leftLabel = 'Source', rightLabel = 'Target',
+  leftNote, rightNote,
+  height,
+  showTally = false,
+}: LineDiffPaneProps) {
+  const lines = useMemo(() => diffLines(left, right), [left, right]);
+  const counts = useMemo(() => tally(lines), [lines]);
 
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -104,18 +124,25 @@ export function DdlDiffPane({ anomaly, height = 300 }: { anomaly: SchemaAnomaly;
     requestAnimationFrame(() => { syncing.current = false; });
   }, []);
 
-  const header = (text: string, sub: string, tone: string) => (
+  const header = (text: string, sub: string | undefined, tone: string) => (
     <div
       className="flex items-baseline gap-2 px-2 py-1 shrink-0"
       style={{ borderBottom: '1px solid var(--color-surface-border)' }}
     >
       <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: tone }}>{text}</span>
-      <span className="text-[10px] truncate" style={{ color: 'var(--color-text-muted)' }}>{sub}</span>
+      {sub && <span className="text-[10px] truncate" style={{ color: 'var(--color-text-muted)' }}>{sub}</span>}
+      {showTally && (
+        <span className="text-[10px] ml-auto font-mono shrink-0">
+          <span style={{ color: 'var(--color-success)' }}>+{counts.added}</span>
+          {' / '}
+          <span style={{ color: 'var(--color-error)' }}>−{counts.removed}</span>
+        </span>
+      )}
     </div>
   );
 
   return (
-    <div style={{ height }} className="flex flex-col min-h-0">
+    <div style={height !== undefined ? { height } : undefined} className="flex flex-col min-h-0 h-full">
       <SplitPanelView
         direction="horizontal"
         defaultSplit={50}
@@ -124,17 +151,17 @@ export function DdlDiffPane({ anomaly, height = 300 }: { anomaly: SchemaAnomaly;
         style={{ flex: 1, minHeight: 0 }}
         first={
           <div className="flex flex-col h-full min-h-0">
-            {header('Source', anomaly.status === 'target-only' ? 'not present' : anomaly.name, 'var(--color-error)')}
+            {header(leftLabel, leftNote, 'var(--color-error)')}
             <div className="flex-1 min-h-0">
-              <Side lines={lines} side="source" scrollRef={leftRef} onScroll={sync('left')} />
+              <Side lines={lines} side="left" scrollRef={leftRef} onScroll={sync('left')} />
             </div>
           </div>
         }
         second={
           <div className="flex flex-col h-full min-h-0">
-            {header('Target', anomaly.status === 'missing' ? 'not present' : anomaly.name, 'var(--color-success)')}
+            {header(rightLabel, rightNote, 'var(--color-success)')}
             <div className="flex-1 min-h-0">
-              <Side lines={lines} side="target" scrollRef={rightRef} onScroll={sync('right')} />
+              <Side lines={lines} side="right" scrollRef={rightRef} onScroll={sync('right')} />
             </div>
           </div>
         }

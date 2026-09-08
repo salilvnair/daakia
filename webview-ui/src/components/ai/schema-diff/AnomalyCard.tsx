@@ -12,7 +12,7 @@
  */
 import { BadgeChipView, CopyButtonView, IconButtonView } from '@salilvnair/dui';
 import { ChevronRightIcon, ChevronDownIcon } from '../../../icons';
-import { DdlDiffPane } from './DdlDiffPane';
+import { LineDiffPane } from '../../shared/diff/LineDiffPane';
 import { STATUS_TONE } from './SchemaGraphView';
 import type { SchemaAnomaly, Severity } from '../../../services/schema-diff/schema-diff';
 
@@ -103,7 +103,13 @@ export function AnomalyCard({ anomaly, open, onToggle }: {
 
       {open && (
         <div className="px-2 pb-2">
-          <DdlDiffPane anomaly={anomaly} height={260} />
+          <LineDiffPane
+            left={anomaly.sourceDdl}
+            right={anomaly.targetDdl}
+            leftNote={anomaly.status === 'target-only' ? 'not present' : anomaly.name}
+            rightNote={anomaly.status === 'missing' ? 'not present' : anomaly.name}
+            height={260}
+          />
         </div>
       )}
     </div>

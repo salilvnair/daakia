@@ -406,11 +406,16 @@ const SCREENS: ScreenSpec[] = [
       { action: 'closeAllTabs' },
       { action: 'closeAllTabs' },
       ...closeSidebarPanel(),
-      { action: 'openDaakiaAiTab' },
+      /* Settings → Power Features → AI tools. The modal used to open from a
+         chip on the Daakia Assistant strip; the platform tools moved to the
+         Power Features grid, which is where anyone looking for a standalone
+         tool goes. */
+      { action: 'openSettingsTab' },
       { action: 'wait', ms: 700 },
-      // The modal opens from the AI tab’s platform tool strip.
-      { action: 'clickText', text: 'Schema Diff' },
+      { action: 'click', selector: '[data-nav-id="power-features"]' },
       { action: 'wait', ms: 600 },
+      { action: 'clickText', text: 'Schema Diff' },
+      { action: 'wait', ms: 700 },
       { action: 'seedSchemaDiff', schemaDiffSource: SCHEMA_SOURCE, schemaDiffTarget: SCHEMA_TARGET,
         schemaDiffView: 'report', schemaDiffOpen: ['table:payments'], schemaDiffAnalysis: SCHEMA_ANALYSIS },
       { action: 'wait', ms: 700 },

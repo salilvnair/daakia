@@ -10,11 +10,11 @@ import {
   ButtonView,
   EditorView,
   SplitPanelView,
-  DiffEditorView,
   ToggleSwitchView,
   type EditorLanguage,
 } from '@salilvnair/dui';
 import { detectLanguage } from '../../services/editor/detect-language';
+import { LineDiffPane } from '../shared/diff/LineDiffPane';
 
 interface Props {
   onClose: () => void;
@@ -73,8 +73,6 @@ export function ResponseDiffModal({
     else { setBodyB(body); setLabelB(label); }
   };
 
-  const diffLanguage = detectLanguage(processedA || processedB);
-
   /*
     Focus the right pane once Monaco has mounted into it. Clicking its textarea
     is what actually moves the caret — focusing the container does not, and a
@@ -95,7 +93,7 @@ export function ResponseDiffModal({
       title="Response Diff"
       subtitle={showDiff ? undefined : 'Paste two responses to compare them side-by-side'}
       headerColor={ACCENT}
-      size="xl"
+      size="xxl"
       onClose={onClose}
       footerLeft={
         <ToggleSwitchView
@@ -197,14 +195,17 @@ export function ResponseDiffModal({
               style={{ flex: 1 }}
             />
           ) : (
+            /* The same pane the schema comparison uses. Monaco's diff editor
+               brings its own scrollbars, minimap and selection model, and a
+               decoration pass that has to be configured before it colours
+               anything — a lot of machinery to look at two response bodies. */
             <div className="flex-1 min-h-0">
-              <DiffEditorView
-                original={processedA}
-                modified={processedB}
-                language={diffLanguage}
-                height="100%"
-                readOnly={false}
-                renderSideBySide
+              <LineDiffPane
+                left={processedA}
+                right={processedB}
+                leftLabel={labelA}
+                rightLabel={labelB}
+                showTally
               />
             </div>
           )}

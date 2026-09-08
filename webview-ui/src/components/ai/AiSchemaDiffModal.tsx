@@ -299,7 +299,7 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Schema Diff & Anomaly Detection"
-      size="xl"
+      size="xxl"
       headerColor={ACCENT}
       elevated
       headerIcon={

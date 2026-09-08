@@ -23,16 +23,6 @@ import { postMsg } from '../../vscode';
 import { AiPendingActions, parseDaakiaActions, type DaakiaAction } from './AiPendingActions';
 import { AiConversationToCollectionModal } from './AiConversationToCollectionModal';
 import { AiSessionExportModal } from './AiSessionExportModal';
-import { AiOpenApiGeneratorModal } from './AiOpenApiGeneratorModal';
-import { AiSecurityAuditModal } from './AiSecurityAuditModal';
-import { AiSchemaDiffModal } from './AiSchemaDiffModal';
-import { AiPostmanTranslatorModal } from './AiPostmanTranslatorModal';
-import { AiWebhookDebuggerModal } from './AiWebhookDebuggerModal';
-import { AiRequestClusteringModal } from './AiRequestClusteringModal';
-import { AiCrossProtocolOrchestratorModal } from './AiCrossProtocolOrchestratorModal';
-import { AiChaosEngineeringModal } from './AiChaosEngineeringModal';
-import { AiContractNegotiatorModal } from './AiContractNegotiatorModal';
-import { AiLiveTrafficMirrorModal } from './AiLiveTrafficMirrorModal';
 import { useAiFeaturesStore } from '../../store/ai-features-store';
 import { useAiPromptTemplatesStore, AI_PROMPT_TEMPLATE_LABELS, type AiPromptTemplateKey } from '../../store/prompt-template';
 import { insertIntoComposer } from './composer-insert';
@@ -403,17 +393,7 @@ export function DaakiaAiPanel() {
   const [showPromptPicker, setShowPromptPicker] = useState(false);
   const templates = useAiPromptTemplatesStore(s => s.templates);
   // ── Sprint 10.10-10.17 platform tools ────────────────────────────────────
-  const [showOpenApiModal, setShowOpenApiModal] = useState(false);
-  const [showSecurityAudit, setShowSecurityAudit] = useState(false);
-  const [showSchemaDiff, setShowSchemaDiff] = useState(false);
-  const [showPostmanTranslator, setShowPostmanTranslator] = useState(false);
-  const [showWebhookDebugger, setShowWebhookDebugger] = useState(false);
-  const [showRequestClustering, setShowRequestClustering] = useState(false);
   // ── Sprint 14 platform tools ──────────────────────────────────────────────
-  const [showCrossProtocol, setShowCrossProtocol] = useState(false);
-  const [showChaosEngineering, setShowChaosEngineering] = useState(false);
-  const [showContractNegotiator, setShowContractNegotiator] = useState(false);
-  const [showLiveTrafficMirror, setShowLiveTrafficMirror] = useState(false);
   const aiEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   // ── AI Suggestion Chips (4.5.5) ──────────────────────────────────────────
@@ -562,41 +542,19 @@ export function DaakiaAiPanel() {
         >
           @ Prompts
         </ButtonView>
-        <div className="w-px h-4 mx-0.5 flex-shrink-0" style={{ backgroundColor: 'var(--color-surface-border)' }} />
-        {/* Platform tools */}
-        {aiEnabled('openApiGenerator') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowOpenApiModal(true)} title="Generate OpenAPI 3.1 spec from collection">OpenAPI ✦</ButtonView>
-        )}
-        {aiEnabled('securityAudit') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowSecurityAudit(true)} title="AI Security Audit all tabs">Security ✦</ButtonView>
-        )}
-        {aiEnabled('schemaDiff') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowSchemaDiff(true)} title="Compare two database schemas — anomalies, DDL diff and migration SQL">Schema Diff ✦</ButtonView>
-        )}
-        {aiEnabled('postmanTranslator') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowPostmanTranslator(true)} title="Translate Postman pm.* to Daakia dk.*">pm→dk ✦</ButtonView>
-        )}
-        {aiEnabled('webhookDebugger') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowWebhookDebugger(true)} title="AI Webhook Debugger">Webhook ✦</ButtonView>
-        )}
-        {aiEnabled('requestClustering') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowRequestClustering(true)} title="AI Request Clustering — auto-organize into collections">Cluster ✦</ButtonView>
-        )}
-        {(aiEnabled('crossProtocolOrchestrator') || aiEnabled('chaosEngineeringPlanner') || aiEnabled('contractNegotiator') || aiEnabled('liveTrafficMirror')) && (
-          <div className="w-px h-4 mx-0.5 flex-shrink-0" style={{ backgroundColor: 'var(--color-surface-border)' }} />
-        )}
-        {aiEnabled('crossProtocolOrchestrator') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowCrossProtocol(true)} title="Cross-Protocol Orchestrator">Orchestrate ✦</ButtonView>
-        )}
-        {aiEnabled('chaosEngineeringPlanner') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowChaosEngineering(true)} title="Chaos Engineering Planner">Chaos ✦</ButtonView>
-        )}
-        {aiEnabled('contractNegotiator') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowContractNegotiator(true)} title="Contract Negotiator">Contracts ✦</ButtonView>
-        )}
-        {aiEnabled('liveTrafficMirror') && (
-          <ButtonView variant="ghost" size="xs" borderRadius={9999} onClick={() => setShowLiveTrafficMirror(true)} title="Live Traffic Mirror">Traffic ✦</ButtonView>
-        )}
+        {/*
+          The ten platform tools used to live here as chips.
+
+          They are standalone tools that happen to use a model — Schema Diff,
+          the Webhook Debugger, the Chaos Planner have nothing to do with the
+          conversation underneath them — and twelve chips in a row is where a
+          feature goes to be un-findable. They are cards in Settings → Power
+          Features → AI tools now, beside Response Diff, which is the tool they
+          most resemble.
+
+          What is left on this strip acts on the conversation itself: turn it
+          into a collection, export it, insert a prompt.
+        */}
       </div>
 
       {/* 10.9: Prompt Library quick-picker */}
@@ -728,17 +686,7 @@ export function DaakiaAiPanel() {
       {/* 10.8: Export session as markdown */}
       {showExportModal && <AiSessionExportModal onClose={() => setShowExportModal(false)} />}
       {/* 10.10-10.17: Platform tools */}
-      {showOpenApiModal && <AiOpenApiGeneratorModal onClose={() => setShowOpenApiModal(false)} />}
-      {showSecurityAudit && <AiSecurityAuditModal onClose={() => setShowSecurityAudit(false)} />}
-      {showSchemaDiff && <AiSchemaDiffModal onClose={() => setShowSchemaDiff(false)} />}
-      {showPostmanTranslator && <AiPostmanTranslatorModal onClose={() => setShowPostmanTranslator(false)} />}
-      {showWebhookDebugger && <AiWebhookDebuggerModal onClose={() => setShowWebhookDebugger(false)} />}
-      {showRequestClustering && <AiRequestClusteringModal onClose={() => setShowRequestClustering(false)} />}
       {/* Sprint 14: Cross-protocol & advanced platform tools */}
-      {showCrossProtocol && <AiCrossProtocolOrchestratorModal onClose={() => setShowCrossProtocol(false)} />}
-      {showChaosEngineering && <AiChaosEngineeringModal onClose={() => setShowChaosEngineering(false)} />}
-      {showContractNegotiator && <AiContractNegotiatorModal onClose={() => setShowContractNegotiator(false)} />}
-      {showLiveTrafficMirror && <AiLiveTrafficMirrorModal onClose={() => setShowLiveTrafficMirror(false)} />}
     </div>
   );
 }
