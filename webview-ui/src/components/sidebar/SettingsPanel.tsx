@@ -12,7 +12,7 @@ import { AiSchemaDiffModal } from '../ai/AiSchemaDiffModal';
 import { AiOpenApiGeneratorModal } from '../ai/AiOpenApiGeneratorModal';
 import { AiSecurityAuditModal } from '../ai/AiSecurityAuditModal';
 import { AiWebhookDebuggerModal } from '../ai/AiWebhookDebuggerModal';
-import { AiPostmanTranslatorModal } from '../ai/AiPostmanTranslatorModal';
+import { AiScriptTranslatorModal } from '../ai/AiScriptTranslatorModal';
 import { AiRequestClusteringModal } from '../ai/AiRequestClusteringModal';
 import { AiCrossProtocolOrchestratorModal } from '../ai/AiCrossProtocolOrchestratorModal';
 import { AiChaosEngineeringModal } from '../ai/AiChaosEngineeringModal';
@@ -678,7 +678,7 @@ const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon
   { id: 'webhook',     group: 'ai', flag: 'webhookDebugger',
     label: 'Webhook Debugger \u2726',   description: 'Explain a webhook payload and verify its HMAC signature',            icon: <ConnectIcon size={15} /> },
   { id: 'postman',     group: 'ai', flag: 'postmanTranslator',
-    label: 'Postman \u2192 Daakia \u2726',   description: 'Translate Postman pm.* scripts into Daakia dk.*',               icon: <ClipboardCompareIcon size={15} /> },
+    label: 'Anything → Daakia ✦',  description: 'Translate Postman, Bruno, Insomnia, Thunder Client, HTTPie or cURL into dk.*', icon: <ClipboardCompareIcon size={15} /> },
   { id: 'clustering',  group: 'ai', flag: 'requestClustering',
     label: 'Request Clustering \u2726', description: 'Group loose requests into collections automatically',                icon: <FolderIcon size={15} /> },
   { id: 'orchestrate', group: 'ai', flag: 'crossProtocolOrchestrator',
@@ -793,7 +793,7 @@ function PowerFeaturesPanel() {
       {aiTool === 'openapi' && <AiOpenApiGeneratorModal onClose={closeAi} />}
       {aiTool === 'security' && <AiSecurityAuditModal onClose={closeAi} />}
       {aiTool === 'webhook' && <AiWebhookDebuggerModal onClose={closeAi} />}
-      {aiTool === 'postman' && <AiPostmanTranslatorModal onClose={closeAi} />}
+      {aiTool === 'postman' && <AiScriptTranslatorModal onClose={closeAi} />}
       {aiTool === 'clustering' && <AiRequestClusteringModal onClose={closeAi} />}
       {aiTool === 'orchestrate' && <AiCrossProtocolOrchestratorModal onClose={closeAi} />}
       {aiTool === 'chaos' && <AiChaosEngineeringModal onClose={closeAi} />}

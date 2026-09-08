@@ -838,10 +838,36 @@ Rules:
     `Learn from these real API responses and generate mock rules:\n\n{responses}\n\nGenerate mock rules that:\n1. Capture the exact data structure of each response\n2. Use realistic values (not "string1", "value2" — actual domain-appropriate data)\n3. Include error cases: 404 when resource not found, 401 when auth fails, 422 for validation errors\n4. Match query parameters and path variables to appropriate responses\n5. Capture data relationships (IDs that reference other resources)\n\nOutput as Daakia mock route config JSON with method, path, statusCode, body, and condition matchers.`,
   'platform.mock.intelligence.system':
     `You are a mock server intelligence expert. Analyze real API responses to generate realistic, production-quality mock rules that capture data structure, value patterns, edge cases, and status code distributions. Return ONLY valid JSON — no explanation, no fences.`,
+  // ── Anything → Daakia ─────────────────────────────────────────────────────
+  // The key still says 'postman' because renaming it would orphan every
+  // customised copy already saved. It translates from five source tools now,
+  // and the mapping table for whichever one was detected arrives as {mappings}.
   'platform.postman.translator':
-    `Translate this Postman test script to Daakia dk.* format:\n\n\`\`\`javascript\n{postmanScript}\n\`\`\`\n\nDaakia API equivalents:\n- pm.test("name", fn) → dk.test("name", fn)\n- pm.expect(val).to.equal(x) → dk.expect(val).toBe(x)\n- pm.expect(val).to.include(x) → dk.expect(val).toContain(x)\n- pm.response.json() → JSON.parse(dk.response.body)\n- pm.response.code → dk.response.status\n- pm.environment.set(k,v) → dk.env.set(k,v)\n- pm.environment.get(k) → dk.env.get(k)\n\nOutput only the translated Daakia script. Add a comment above any line where the translation is non-obvious.`,
+    `Translate this {dialect} script or command into Daakia's dk.* API.
+
+Source:
+\`\`\`
+{source}
+\`\`\`
+
+Known equivalents:
+{mappings}
+
+Rules:
+- Keep the original variable names, test names and control flow.
+- Where there is no equivalent, write the same behaviour out with what Daakia has, and put a short comment above it saying what was replaced.
+- Do not invent dk.* functions. If something genuinely cannot be expressed, leave a // TODO comment saying so rather than a call that will fail at run time.
+- For a command line, produce the request as a Daakia pre-request script that sets the method, URL, headers and body.
+
+Respond with a single javascript code fence and nothing else.`,
   'platform.postman.translator.system':
-    `You are a Postman to Daakia migration expert. Translate Postman pm.* test scripts into equivalent Daakia dk.* assertions. You know all Postman test APIs and their Daakia equivalents. When there's no direct equivalent, implement the same behavior using Daakia's available APIs. Return ONLY the translated JavaScript — no markdown fences, no explanation outside of inline comments.`,
+    `You migrate API-client scripts into Daakia. You know Postman's pm.*, Bruno's bru/req/res, Insomnia's insomnia.* and template tags, Thunder Client's tc.* and its declarative tests JSON, and the HTTPie and cURL command lines.
+
+Rules:
+- Translate, do not rewrite. The result should do what the original did, in the same order, under the same names.
+- Never invent a dk.* API. A // TODO admitting something has no equivalent is worth more than a call that throws.
+- Comment only where a translation is non-obvious. A line-by-line commentary on an obvious mapping is noise.
+- Return ONLY a javascript code fence — no preamble, no explanation outside it.`,
   'platform.soap.to.rest':
     `Convert these SOAP operations to REST endpoints:\n\nWSDL:\n{wsdlContent}\n\nFor each SOAP operation:\n1. Map to the appropriate HTTP method (GET for reads, POST for creates/actions, PUT/PATCH for updates, DELETE for deletes)\n2. Design a RESTful path (noun-based resources, not verb-based like SOAP actions)\n3. Convert XML request/response types to JSON schema\n4. Map SOAPFault error codes to HTTP status codes and JSON error bodies\n5. Document the original SOAPAction for reference\n\nOutput as OpenAPI 3.1 YAML paths section.`,
   'platform.soap.to.rest.system':
@@ -1068,8 +1094,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'platform.security.audit.system': { label: 'Security Audit — System',         description: 'Behavioral rules for the API security auditor (severity levels, specific fixes)' },
   'platform.mock.intelligence':        { label: 'Mock Intelligence',             description: 'Mock Server tab → AI config panel → "Mock Intelligence ✦": learns from real responses, generates mock rules' },
   'platform.mock.intelligence.system': { label: 'Mock Intelligence — System',    description: 'Behavioral rules for mock intelligence (JSON only, realistic values, condition matchers)' },
-  'platform.postman.translator':        { label: 'Postman Translator',           description: 'Daakia AI tab → platform tools → "pm→dk ✦" button: translates Postman pm.* scripts to dk.*' },
-  'platform.postman.translator.system': { label: 'Postman Translator — System',  description: 'Behavioral rules for the Postman script translator (code only, inline comments for non-obvious mappings)' },
+  'platform.postman.translator':        { label: 'Anything → Daakia Translator', description: 'Settings → Power Features → "Anything → Daakia": translates Postman, Bruno, Insomnia, Thunder Client, HTTPie and cURL into dk.*' },
+  'platform.postman.translator.system': { label: 'Anything → Daakia — System',   description: 'Behavioural rules for the translator: translate rather than rewrite, never invent a dk.* API, code only' },
   'platform.soap.to.rest':        { label: 'SOAP → REST Migrator',               description: 'SOAP tab → URL bar ⋮ AI Tools menu → "SOAP→REST ✦": converts WSDL ops to OpenAPI 3.1 REST design' },
   'platform.soap.to.rest.system': { label: 'SOAP → REST Migrator — System',      description: 'Behavioral rules for the SOAP to REST migrator (OpenAPI 3.1 YAML paths section)' },
   'platform.gql.federation':        { label: 'GraphQL Federation Explorer',      description: 'GraphQL tab → URL bar ⋮ AI Tools menu → "Federation ✦": explains cross-subgraph queries, @key directives' },
@@ -1257,7 +1283,7 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'platform.security.audit.system': [],
   'platform.mock.intelligence':        ['{responses}'],
   'platform.mock.intelligence.system': [],
-  'platform.postman.translator':        ['{postmanScript}'],
+  'platform.postman.translator':        ['{dialect}', '{source}', '{mappings}'],
   'platform.postman.translator.system': [],
   'platform.soap.to.rest':        ['{wsdlContent}'],
   'platform.soap.to.rest.system': [],
