@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView, IconSize, SplitPanelView } from '@salilvnair/dui';
+  BadgeChipView, IconSize } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
@@ -570,12 +570,6 @@ export function LogViewer() {
     208px is a lot of it. Stored per person rather than per pod: whether you
     want a facet rail is a preference about how you read.
   */
-  /* The rail width is a preference about your log format, not about Daakia —
-     208px was a guess about somebody else's field values. */
-  const [railSplit, setRailSplit] = useState(() => {
-    try { return Number(localStorage.getItem('dk8s.logs.railSplit')) || 20; }
-    catch { return 20; }
-  });
   const [facetsOpen, setFacetsOpen] = useState(() => {
     try { return localStorage.getItem('dk8s.logs.facets') !== 'off'; }
     catch { return true; }
@@ -675,7 +669,20 @@ export function LogViewer() {
 
   const ask = useDk8sAiStore(s => s.ask);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * The same element, as state, so measuring it can be an effect.
+   *
+   * A ref alone is not enough: the pane's first commit is the skeleton, so a
+   * mount-time effect reading `scrollRef.current` finds null and, with an empty
+   * dependency list, never looks again. Holding the node in state gives the
+   * effect below something to depend on that changes when the node arrives.
+   */
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const attachScroll = useCallback((el: HTMLDivElement | null) => {
+    scrollRef.current = el;
+    setScrollEl(el);
+  }, []);
   const bodyRef = useRef<HTMLDivElement>(null);
   /** True while the ribbon is being dragged; freezes the follow logic. */
   const draggingRef = useRef(false);
@@ -803,8 +810,8 @@ export function LogViewer() {
   }, []);
 
   useEffect(() => {
-    if (!scrollRef.current) return;
-    const el = scrollRef.current;
+    const el = scrollEl;
+    if (!el) return;
     const ro = new ResizeObserver(() => {
       setViewportH(el.clientHeight);
       // A width change re-wraps every line, so every measured height is stale.
@@ -814,7 +821,7 @@ export function LogViewer() {
     setViewportH(el.clientHeight);
     setViewportW(el.clientWidth);
     return () => ro.disconnect();
-  }, []);
+  }, [scrollEl]);
 
   // Follow the tail, but only from the bottom. Yanking the view down while
   // someone is reading history is the worst thing a log viewer can do.
@@ -1369,28 +1376,19 @@ export function LogViewer() {
             two, so the rail arrived from nowhere and pushed the lines you had
             started reading sideways. */}
         {settling && logs.length === 0 ? (
-          <LogSkeleton railOpen={facetsOpen} railSplit={railSplit} rowHeight={ROW_HEIGHT} />
+          <LogSkeleton railOpen={facetsOpen} rowHeight={ROW_HEIGHT} />
         ) : (
-        /* The rail sits inside the body rather than above it, so it scrolls
-           with the log's own region and disappears with it — it is about these
-           lines, and following them to another tab would be a panel describing
-           something that is no longer on screen. */
-        <SplitPanelView
-          direction="horizontal"
-          split={railSplit}
-          defaultSplit={20}
-          minFirstPct={12}
-          minSecondPct={45}
-          accentColor="var(--color-dk8s)"
-          onResize={setRailSplit}
-          onResizeEnd={next => { try { localStorage.setItem('dk8s.logs.railSplit', String(next)); } catch { /* private mode */ } }}
-          /* collapsed rather than swapping the tree: the log body keeps its
-             scroll position and its virtualiser state when the rail is hidden,
-             instead of being torn down and rebuilt. */
-          collapsed={!facetsOpen}
-          collapsedSide="first"
-          style={{ flex: 1, minHeight: 0 }}
-          first={
+        <>
+        {/* The rail sits inside the body rather than above it, so it scrolls
+            with the log's own region and disappears with it — it is about
+            these lines, and following them to another tab would be a panel
+            describing something that is no longer on screen.
+
+            Three siblings in one flex row, not a split: the ribbon is a column
+            beside the log and takes its height from this row. Inside a split's
+            pane it had none, so it drew at the height of the whole document
+            and stopped scrolling with the lines it indexes. */}
+        {facetsOpen && (
           <FacetRail
             lines={logs}
             filters={logFieldFilters}
@@ -1405,8 +1403,7 @@ export function LogViewer() {
             onSearchEverywhere={(field, value) =>
               useDk8sSearchStore.getState().searchEverywhere(filterTermFor(field, value))}
           />
-          }
-          second={<>
+        )}
 
         {/*
           Applied filters sit over the rows they act on, not over the toolbar.
@@ -1428,7 +1425,7 @@ export function LogViewer() {
           />
 
           <div
-            ref={scrollRef}
+            ref={attachScroll}
             onScroll={onScroll}
             className="flex-1 overflow-auto pl-4 pr-1 py-2 font-mono min-h-0 dk8s-no-scrollbar"
             style={{ fontSize: 11.5, lineHeight: `${ROW_HEIGHT}px` }}
@@ -1635,8 +1632,7 @@ export function LogViewer() {
             if (atBottom) setLogFollow(true);
           }}
         />
-          </>}
-        />
+        </>
         )}
 
       </div>

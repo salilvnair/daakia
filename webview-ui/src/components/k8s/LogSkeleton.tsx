@@ -7,15 +7,15 @@
  * and pushed the lines you had started reading sideways.
  *
  * This draws both — the rail's field groups on the left, the divider where the
- * divider goes, and the rows on the right — at the same split the real pane
- * will use.
+ * divider goes, and the rows on the right — at the width the real rail has.
  */
 import { SkeletonView, TableSkeletonView } from '@salilvnair/dui';
 
-export function LogSkeleton({ railOpen, railSplit, rowHeight }: {
+/** The width FacetRail sets on itself, repeated so nothing shifts on arrival. */
+const RAIL_WIDTH = 208;
+
+export function LogSkeleton({ railOpen, rowHeight }: {
   railOpen: boolean;
-  /** The same percentage the real split is at, so nothing shifts on arrival. */
-  railSplit: number;
   rowHeight: number;
 }) {
   return (
@@ -24,7 +24,7 @@ export function LogSkeleton({ railOpen, railSplit, rowHeight }: {
         <>
           <div
             className="flex flex-col gap-4 overflow-hidden px-3 py-3 shrink-0"
-            style={{ width: `${railSplit}%` }}
+            style={{ width: RAIL_WIDTH }}
           >
             {/* Three groups of four, which is what a parsed log format usually
                 yields — a thread, an id, a tenant. Enough to hold the space
