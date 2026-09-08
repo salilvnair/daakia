@@ -24,9 +24,9 @@ import {
   FolderImportIcon, FolderExportIcon,
 } from '../../icons';
 import { WorkspaceDocs } from './WorkspaceDocs';
-import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
-import { CollectionsPanel } from '../rest/sidebar/CollectionsPanel';
-import { HistoryPanel } from '../rest/sidebar/HistoryPanel';
+import {
+  WorkspaceCollections, WorkspaceEnvironments, WorkspaceHistory,
+} from './ProtocolSections';
 import './workspace.css';
 
 type SubTab = 'overview' | 'collections' | 'environments' | 'history';
@@ -153,12 +153,16 @@ export function WorkspacePage() {
 
       {error && <div className="ws-error">{error}</div>}
 
+      {/* Not the sidebar's panels: those show one protocol, because that is the
+          protocol you are working in. This screen asks what is in the workspace
+          at all, so a workspace with GraphQL and SOAP collections was showing
+          as a workspace with only REST ones. */}
       {sub === 'collections' ? (
-        <div className="ws-panel"><CollectionsPanel createSignal={createColl} /></div>
+        <div className="ws-panel"><WorkspaceCollections createSignal={createColl} /></div>
       ) : sub === 'environments' ? (
-        <div className="ws-panel"><EnvironmentsPanel createSignal={createEnv} /></div>
+        <div className="ws-panel"><WorkspaceEnvironments createSignal={createEnv} /></div>
       ) : sub === 'history' ? (
-        <div className="ws-panel"><HistoryPanel /></div>
+        <div className="ws-panel"><WorkspaceHistory /></div>
       ) : (
       <SplitPanelView
         direction="horizontal"
