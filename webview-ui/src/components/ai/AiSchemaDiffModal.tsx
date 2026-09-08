@@ -300,6 +300,11 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       title="Schema Diff & Anomaly Detection"
       size="xxl"
+      /* A real height, not a content-driven one. Empty editors made the card
+         collapse to a third of the screen on open, and then jump taller the
+         moment you pasted — so the screen you looked at while deciding what to
+         paste was never the screen you ended up with. The body scrolls. */
+      height="64vh"
       headerColor={ACCENT}
       elevated
       headerIcon={
@@ -352,7 +357,7 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
         </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, height: '100%', minHeight: 0 }}>
         {/* ── The two schemas ─────────────────────────────────────────────── */}
         <div className="flex gap-2">
           {([['Source', sourceEnv, setSourceEnv], ['Target', targetEnv, setTargetEnv]] as const).map(
@@ -381,10 +386,17 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
           </p>
         )}
 
-        {/* Tall enough to hold a real table definition without scrolling.
-            At 150px a five-column CREATE TABLE was already cut off, which made
-            the one thing you are here to read the thing you had to scroll. */}
-        <div className="flex gap-2" style={{ height: 230 }}>
+        {/*
+          Before a comparison the editors own the card; after one they give the
+          room to the results. A fixed height wasted the bottom half of the
+          screen while you were pasting — which is exactly when you want the
+          space — and then squeezed the findings once they arrived, which is the
+          other time you want it.
+        */}
+        <div
+          className="flex gap-2"
+          style={comparison ? { height: 200, flexShrink: 0 } : { flex: 1, minHeight: 200 }}
+        >
           <div className="flex-1 min-w-0 flex flex-col">
             <label className="text-[10px] mb-1" style={{ color: 'var(--color-text-muted)' }}>Source DDL</label>
             <div className="flex-1 min-h-0">
@@ -439,7 +451,7 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
             </div>
 
             {view === 'report' && (
-              <div className="flex flex-col gap-1.5" style={{ maxHeight: 560, overflowY: 'auto' }}>
+              <div className="flex flex-col gap-1.5" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {visible.length === 0 ? (
                   <p className="text-[12px] m-0 py-4 text-center" style={{ color: 'var(--color-text-muted)' }}>
                     The two schemas match.
