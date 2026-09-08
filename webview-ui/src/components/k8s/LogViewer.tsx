@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView, IconSize, TableSkeletonView } from '@salilvnair/dui';
+  BadgeChipView, IconSize, SplitPanelView } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
@@ -29,6 +29,7 @@ import { useDk8sSearchStore } from '../../store/dk8s-search-store';
 import { useDk8sAiStore } from '../../store/dk8s-ai-store';
 import { buildFacets, filterTermFor } from './log-facets';
 import { FacetRail } from './FacetRail';
+import { LogSkeleton } from './LogSkeleton';
 import {
   setFilterProvider, clearFilterProvider,
   type FilterMenu, type FilterGroup,
@@ -569,6 +570,12 @@ export function LogViewer() {
     208px is a lot of it. Stored per person rather than per pod: whether you
     want a facet rail is a preference about how you read.
   */
+  /* The rail width is a preference about your log format, not about Daakia —
+     208px was a guess about somebody else's field values. */
+  const [railSplit, setRailSplit] = useState(() => {
+    try { return Number(localStorage.getItem('dk8s.logs.railSplit')) || 20; }
+    catch { return 20; }
+  });
   const [facetsOpen, setFacetsOpen] = useState(() => {
     try { return localStorage.getItem('dk8s.logs.facets') !== 'off'; }
     catch { return true; }
@@ -1081,14 +1088,19 @@ export function LogViewer() {
           title={facetsOpen ? 'Hide the field panel' : 'Show the field panel'}
           aria-pressed={facetsOpen}
           className="flex items-center justify-center rounded shrink-0 border-none cursor-pointer"
+          /* Sized to the chips beside it rather than to its glyph. It was the
+             smallest control in the toolbar and it governs a whole column. */
           style={{
-            width: 24, height: 20,
+            width: 30, height: 26, borderRadius: 6,
             color: facetsOpen ? ACCENT : 'var(--color-text-muted)',
             background: facetsOpen
-              ? 'color-mix(in srgb, var(--color-dk8s) 14%, transparent)' : 'transparent',
+              ? 'color-mix(in srgb, var(--color-dk8s) 16%, transparent)' : 'transparent',
+            border: facetsOpen
+              ? '1px solid color-mix(in srgb, var(--color-dk8s) 34%, transparent)'
+              : '1px solid transparent',
           }}
         >
-          <SidebarLeftIcon size={IconSize.inline} />
+          <SidebarLeftIcon size={15} />
         </button>
 
         <LevelChips />
@@ -1351,11 +1363,34 @@ export function LogViewer() {
         // menu; the menu dispatches back here rather than knowing about logs.
         data-selection-actions="ai search filter"
       >
-        {/* The rail sits inside the body rather than above it, so it scrolls
-            with the log's own region and disappears with it — it is about
-            these lines, and following them to another tab would be a panel
-            describing something that is no longer on screen. */}
-        {facetsOpen && (
+        {/* While the first read is in flight the whole body is drawn as a
+            skeleton — rail, divider and rows together. Drawing only the rows
+            meant the loading state had one column and the loaded state had
+            two, so the rail arrived from nowhere and pushed the lines you had
+            started reading sideways. */}
+        {settling && logs.length === 0 ? (
+          <LogSkeleton railOpen={facetsOpen} railSplit={railSplit} rowHeight={ROW_HEIGHT} />
+        ) : (
+        /* The rail sits inside the body rather than above it, so it scrolls
+           with the log's own region and disappears with it — it is about these
+           lines, and following them to another tab would be a panel describing
+           something that is no longer on screen. */
+        <SplitPanelView
+          direction="horizontal"
+          split={railSplit}
+          defaultSplit={20}
+          minFirstPct={12}
+          minSecondPct={45}
+          accentColor="var(--color-dk8s)"
+          onResize={setRailSplit}
+          onResizeEnd={next => { try { localStorage.setItem('dk8s.logs.railSplit', String(next)); } catch { /* private mode */ } }}
+          /* collapsed rather than swapping the tree: the log body keeps its
+             scroll position and its virtualiser state when the rail is hidden,
+             instead of being torn down and rebuilt. */
+          collapsed={!facetsOpen}
+          collapsedSide="first"
+          style={{ flex: 1, minHeight: 0 }}
+          first={
           <FacetRail
             lines={logs}
             filters={logFieldFilters}
@@ -1370,7 +1405,8 @@ export function LogViewer() {
             onSearchEverywhere={(field, value) =>
               useDk8sSearchStore.getState().searchEverywhere(filterTermFor(field, value))}
           />
-        )}
+          }
+          second={<>
 
         {/*
           Applied filters sit over the rows they act on, not over the toolbar.
@@ -1397,16 +1433,7 @@ export function LogViewer() {
             className="flex-1 overflow-auto pl-4 pr-1 py-2 font-mono min-h-0 dk8s-no-scrollbar"
             style={{ fontSize: 11.5, lineHeight: `${ROW_HEIGHT}px` }}
           >
-            {total === 0 && settling && logs.length === 0 ? (
-              /* Log lines, in outline: timestamp, level, message — the three
-                 columns that are about to arrive, in the places they arrive in.
-                 A centred "Reading logs…" moved the eye to the middle of a pane
-                 whose first line then appeared at the top. */
-              <TableSkeletonView
-                rowHeight={ROW_HEIGHT} fill={0.72}
-                columns={[{ width: 92, fill: 0.85 }, { width: 44 }, { width: 'flex', fill: 0.7 }]}
-              />
-            ) : total === 0 ? (
+            {total === 0 ? (
               <div className="flex items-center justify-center h-full">
                 <span className="text-[12px] text-[var(--color-text-muted)]" style={{ fontFamily: 'inherit' }}>
                   {logs.length === 0
@@ -1608,6 +1635,9 @@ export function LogViewer() {
             if (atBottom) setLogFollow(true);
           }}
         />
+          </>}
+        />
+        )}
 
       </div>
 
