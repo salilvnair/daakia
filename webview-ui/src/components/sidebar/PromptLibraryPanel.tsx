@@ -8,6 +8,7 @@
  * E6.86 — merged AI Templates into Prompt Library (single source of truth).
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { systemKeyFor } from '../../store/prompt-template';
 import { EditorView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { TrashIcon, ChevronRightIcon, SparkleIcon, SearchIcon, CloseIcon } from '../../icons';
@@ -39,10 +40,11 @@ const PL_DEFAULT_W = 255;
 //  'explainWithAi'                → 'explainWithAi.system'
 //  'followupWithAi'               → 'followupWithAi.system'
 
+/* prompt-template.ts owns this: it is the module that knows which names are
+   actually registered, and guessing here is what left nine entries with an
+   empty System tab. */
 function toSystemKey(key: AiPromptTemplateKey): AiPromptTemplateKey {
-  return (key.includes('.generate')
-    ? key.replace('.generate', '.system')
-    : `${key}.system`) as AiPromptTemplateKey;
+  return systemKeyFor(key) ?? (`${key}.system` as AiPromptTemplateKey);
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

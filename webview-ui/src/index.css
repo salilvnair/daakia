@@ -1710,8 +1710,16 @@ input[type="number"] {
   Muted until the workspace tab is the one you are on — this is a watermark, and
   a watermark that shouts is just another button.
 */
+/*
+  A fixed height, not one that follows the name.
+
+  The label is as tall as the name is long, so renaming a workspace moved every
+  protocol icon under it — the whole rail jumped on each keystroke. It reserves
+  the room a full-length name needs and keeps it whether the name is "Test" or
+  twenty-five characters, so the icons below never move.
+*/
 .dk-rail-workspace {
-  max-height: 190px;
+  height: 176px;
   margin: 6px 0 2px;
   padding: 2px 1px;
   flex-shrink: 0;
@@ -1734,7 +1742,7 @@ input[type="number"] {
 .dk-rail-workspace-name {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  max-height: 190px;
+  max-height: 100%;
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.18em;

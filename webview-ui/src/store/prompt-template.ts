@@ -185,6 +185,7 @@ export type AiPromptTemplateKey =
   | 'rest.docs.generate'
   | 'workspace.docs.generate'
   | 'workspace.docs.generate.system'
+  | 'rest.request.name.system'
   | 'rest.docs.generate.system'
   // ── REST — Environment Extractor ──
   | 'rest.env.extract'
@@ -405,6 +406,29 @@ export type AiPromptTemplateKey =
 const DK8S_SYSTEM = DK8S_PROMPTS as Record<string, string>;
 const DK8S_USER = DK8S_USER_PROMPTS as Record<string, string>;
 
+/**
+ * The system prompt that goes with a user prompt.
+ *
+ * Two naming conventions are in use and both are load-bearing: most `.generate`
+ * keys pair with `<prefix>.system` (mock.rest.generate -> mock.rest.system),
+ * and a handful pair with `<key>.system` (rest.body.generate ->
+ * rest.body.generate.system) because that is the name their call sites send.
+ *
+ * Guessing one of them left nine entries showing an empty System tab in the
+ * Prompt Library while the right prompt was going to the model — a listing that
+ * does not describe what is actually sent, which invites editing a prompt that
+ * is not the one running. This answers with the name that exists.
+ *
+ * Renaming the odd ones out was the alternative and is worse: edited prompts
+ * are stored against these keys, so a rename orphans a user's edits.
+ */
+export function systemKeyFor(key: AiPromptTemplateKey): AiPromptTemplateKey | undefined {
+  const candidates = key.includes('.generate')
+    ? [key.replace('.generate', '.system'), `${key}.system`]
+    : [`${key}.system`];
+  return candidates.find(c => c in AI_PROMPT_TEMPLATE_DEFAULTS) as AiPromptTemplateKey | undefined;
+}
+
 export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = {
   'dk8s.log.askWhy': DK8S_USER['dk8s.log.askWhy'] ?? '',
   'dk8s.log.askWhy.system': DK8S_SYSTEM['dk8s.log.askWhy'] ?? '',
@@ -511,6 +535,9 @@ above, say it is unknown rather than filling it in.`,
     `You write project READMEs for API workspaces. Be concrete and brief. You are given names only — never values — so never invent an endpoint, a credential, a payload or a behaviour that the names do not imply. A short accurate README beats a long speculative one.`,
 
   // ── REST — Docs Generate ──────────────────────────────────────────────────
+  'rest.request.name.system':
+    `You name HTTP requests. Reply with the name only — no quotes, no explanation, no trailing full stop. Three or four words at most, describing what the request does rather than how it is built: "Create user", not "POST to /users". Match the casing of the names already in the collection when any are given.`,
+
   'rest.docs.generate':
     `Write the documentation for this API request, in Markdown.
 
@@ -898,6 +925,7 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'rest.body.generate.system': { label: 'Generate Body — System', description: 'Behavioral rules for the AI body generator (format: raw body only, no fences)' },
   'workspace.docs.generate':   { label: 'Workspace Documentation', description: 'User prompt sent when "Generate with AI" drafts the workspace README from its collections, hosts and environment variable names' },
   'rest.docs.generate':        { label: 'Generate Docs',          description: 'User prompt sent when the sparkle in the Docs tab writes a request’s documentation' },
+  'rest.request.name.system': { label: 'Name a Request — System', description: 'Behavioural rules for the request namer: a name only, three or four words, what it does rather than how it is built' },
   'workspace.docs.generate.system': { label: 'Workspace Documentation — System', description: 'Behavioural rules for the workspace README writer: names only, never invent an endpoint or a credential the names do not imply' },
   'rest.docs.generate.system': { label: 'Generate Docs — System', description: 'Behavioral rules for the docs writer (Markdown only, document only what the request shows)' },
   'rest.env.extract':          { label: 'Extract Variables',          description: 'User prompt sent when "Extract Variables with AI" is chosen in the collection context menu' },
@@ -1091,6 +1119,7 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'rest.body.generate.system': [],
   'workspace.docs.generate':   ['{workspace}', '{collections}', '{hosts}', '{variableNames}'],
   'rest.docs.generate':        ['{method}', '{url}', '{headers}', '{body}', '{examples}'],
+  'rest.request.name.system': [],
   'workspace.docs.generate.system': [],
   'rest.docs.generate.system': [],
   'rest.env.extract':          ['{collectionName}', '{requests}'],
@@ -1406,6 +1435,7 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'rest.body.generate.system': '#f59e0b',
   'rest.docs.generate':        '#f59e0b',
   'workspace.docs.generate': '#2dd4bf',
+  'rest.request.name.system': '#6366f1',
   'workspace.docs.generate.system': '#2dd4bf',
   'rest.docs.generate.system': '#f59e0b',
   'rest.env.extract':          '#22c55e',
