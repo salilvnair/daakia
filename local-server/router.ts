@@ -78,6 +78,7 @@ import {
 } from '../src/panel/main/handlers/workspace-handler';
 import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
+  handleImportCollectionUrl,
   handleGetCollectionBreadcrumb, handleCreateCollection, handleCreateFolder,
   handleRenameCollection, handleRenameRequest, handleDeleteCollection,
   handleMoveCollection, handleSaveCollection, handleSaveRequestToCollection,
@@ -622,6 +623,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'saveWorkspaceDocs':
       handleSaveWorkspaceDocs(msg, post);
+      break;
+    case 'importCollectionUrl':
+      void handleImportCollectionUrl(msg, post);
       break;
     case 'importWorkspace':
       void handleImportWorkspace(post);

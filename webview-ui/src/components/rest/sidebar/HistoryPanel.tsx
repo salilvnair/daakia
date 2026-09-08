@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
+import { TagChips } from '../../shared/tags/TagChips';
+import { tagsFromData } from '../../shared/tags/request-tags';
 import { postMsg } from '../../../vscode';
 import { useUrlSuggestionsStore, type SuggestionProtocol } from '../../../store/url-suggestions-store';
 
@@ -338,6 +340,11 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
           <span className="text-[12px] text-[var(--color-text-primary)] truncate flex-1 min-w-0" title={item.url}>
             {trimUrl(item.url)}
           </span>
+
+          {/* History keeps a copy of the request blob, so a tag set before the
+              send is still on the entry afterwards without history knowing
+              tags exist. */}
+          <HistoryTags data={item.request_data} />
 
           <IconButtonView
             icon={<MoreVerticalIcon size={12} style={{ color: 'var(--color-text-muted)' }} />}
@@ -692,4 +699,13 @@ export function HistoryPanel({ protocol = 'rest' }: { protocol?: string }) {
       )}
     </div>
   );
+}
+
+function HistoryTags({ data }: { data?: string | null }) {
+  const tags = useMemo(() => {
+    if (!data) return [];
+    try { return tagsFromData(JSON.parse(data)); } catch { return []; }
+  }, [data]);
+  if (!tags.length) return null;
+  return <TagChips tags={tags} max={2} size="xs" />;
 }

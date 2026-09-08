@@ -34,6 +34,7 @@ import {
 } from './handlers/workspace-handler';
 import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
+  handleImportCollectionUrl,
   handleGetCollectionBreadcrumb, handleCreateCollection, handleCreateFolder,
   handleRenameCollection, handleRenameRequest, handleDeleteCollection,
   handleMoveCollection, handleSaveCollection, handleSaveRequestToCollection,
@@ -1013,6 +1014,9 @@ export class MainPanel {
         break;
       case 'saveWorkspaceDocs':
         handleSaveWorkspaceDocs(msg, this._post);
+        break;
+      case 'importCollectionUrl':
+        void handleImportCollectionUrl(msg, this._post);
         break;
       case 'importWorkspace':
         void handleImportWorkspace(this._post);

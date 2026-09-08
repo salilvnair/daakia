@@ -163,6 +163,23 @@ export function handleWorkspaceDocsContext(post: PostMessage) {
 // ── On and off disk ──────────────────────────────────────────────────────────
 
 /**
+ * A cancelled dialog is silence; an impossible one is worth saying out loud.
+ *
+ * The browser dev harness has no UI process to show a native picker in, so the
+ * shim returns cancelled either way. Without this the button looks broken
+ * rather than unavailable, which is a much worse thing for it to look like.
+ */
+function noDialog(post: PostMessage): void {
+  const w = vscode.window as unknown as { filePickerAvailable?: boolean };
+  if (w.filePickerAvailable === false) {
+    post({
+      type: 'workspaceError',
+      message: 'File pickers are not available in the browser preview. Run this in the VS Code extension.',
+    });
+  }
+}
+
+/**
  * Import a workspace file into a workspace of its own.
  *
  * Never into the one you are in. Merging somebody else's project into yours is
@@ -176,7 +193,7 @@ export async function handleImportWorkspace(post: PostMessage) {
     filters: { 'Daakia workspace': ['json'] },
     title: 'Import a Daakia workspace',
   });
-  if (!picked?.[0]) return;
+  if (!picked?.[0]) return noDialog(post);
 
   const result = importWorkspaceFile(picked[0].fsPath);
   if (!result.ok) {
@@ -204,7 +221,7 @@ export async function handleOpenWorkspace(post: PostMessage) {
     canSelectMany: false,
     title: `Open a folder containing ${WORKSPACE_FILE}`,
   });
-  if (!picked?.[0]) return;
+  if (!picked?.[0]) return noDialog(post);
 
   const result = openWorkspaceFolder(picked[0].fsPath);
   if (!result.ok) {

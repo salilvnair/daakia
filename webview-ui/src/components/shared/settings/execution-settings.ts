@@ -31,6 +31,12 @@ export interface ProxyConfig {
 export interface ExecutionSettings {
   timeout?: number;
   followRedirects?: boolean;
+  /** How many hops before we stop. A redirect loop is otherwise a hang. */
+  maxRedirects?: number;
+  /** Whether Authorization survives a redirect to a different origin. Off by
+      default: following one with the original header attached hands your token
+      to whatever host the response pointed at. */
+  forwardAuthOnRedirect?: boolean;
   sslVerification?: boolean;
   saveResponseInHistory?: boolean;
   encoding?: QueryEncoding;
@@ -41,6 +47,8 @@ export interface ExecutionSettings {
 export interface EffectiveSettings {
   timeout: number;
   followRedirects: boolean;
+  maxRedirects: number;
+  forwardAuthOnRedirect: boolean;
   sslVerification: boolean;
   saveResponseInHistory: boolean;
   encoding: QueryEncoding;
@@ -55,8 +63,8 @@ export const DEFAULT_PROXY: ProxyConfig = {
 };
 
 const FIELDS = [
-  'timeout', 'followRedirects', 'sslVerification',
-  'saveResponseInHistory', 'encoding', 'proxy',
+  'timeout', 'followRedirects', 'maxRedirects', 'forwardAuthOnRedirect',
+  'sslVerification', 'saveResponseInHistory', 'encoding', 'proxy',
 ] as const;
 
 /** How many fields this level pins — the badge on the Settings tab. */

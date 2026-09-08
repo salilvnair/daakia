@@ -29,6 +29,10 @@ export interface ExecuteRequestParams {
   // Settings (injected by MainPanel from app_settings)
   timeout?: number;
   followRedirects?: boolean;
+  /** How many hops before we stop. A redirect loop is otherwise a hang. */
+  maxRedirects?: number;
+  /** Whether Authorization survives a redirect to a different origin. */
+  forwardAuthOnRedirect?: boolean;
   sslVerification?: boolean;
   /** How query parameters are encoded. See services/execution-settings.ts. */
   encoding?: QueryEncoding;
@@ -256,6 +260,11 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
   // an auto-config script; explicit settings still resolve synchronously inside.
   resolvedProxy = await resolveProxyFor(params.proxy as ProxyConfig | undefined, requestUrl);
 
+  // Where the request started, so a redirect can be recognised as crossing away
+  // from it rather than merely being a redirect.
+  let origin = '';
+  try { const u = new URL(requestUrl); origin = `${u.protocol}//${u.host}`; } catch { /* not a URL we can parse */ }
+
   const config: AxiosRequestConfig = {
     method: params.method.toLowerCase() as AxiosRequestConfig['method'],
     url: requestUrl,
@@ -263,7 +272,26 @@ export async function executeRequest(params: ExecuteRequestParams): Promise<Exec
     data,
     validateStatus: () => true, // Don't throw on non-2xx
     timeout: params.timeout || 0,
-    maxRedirects: params.followRedirects === false ? 0 : 10,
+    maxRedirects: params.followRedirects === false ? 0 : (params.maxRedirects ?? 5),
+    /*
+      Do not hand the token to wherever the redirect pointed.
+
+      Axios re-sends every header on a redirect, including Authorization, so a
+      302 to another origin forwards your credentials to a host you never chose
+      to talk to. This strips it at the hop unless the request explicitly opted
+      in, which is what forwardAuthOnRedirect is for.
+    */
+    beforeRedirect: params.forwardAuthOnRedirect
+      ? undefined
+      : (options: { headers?: Record<string, unknown>; host?: string; protocol?: string }) => {
+          const to = `${options.protocol}//${options.host}`;
+          if (to === origin) return;
+          for (const key of Object.keys(options.headers ?? {})) {
+            if (/^(authorization|proxy-authorization|cookie)$/i.test(key)) {
+              delete options.headers![key];
+            }
+          }
+        },
     responseType: 'arraybuffer',
     proxy: resolvedProxy.axiosProxy as AxiosRequestConfig['proxy'],
     signal: controller.signal,

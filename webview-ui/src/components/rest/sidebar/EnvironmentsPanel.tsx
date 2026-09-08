@@ -111,6 +111,16 @@ export function EnvironmentsPanel() {
     setEditingTitle('New Environment');
   };
 
+  /* The workspace tab asks for this panel own create flow rather than making
+     a second one, so an environment is created the same way from both. */
+  useEffect(() => {
+    const onAsk = (e: MessageEvent) => {
+      if ((e.data as { type?: string })?.type === 'environments:new') openCreateModal();
+    };
+    window.addEventListener('message', onAsk);
+    return () => window.removeEventListener('message', onAsk);
+  }, []);
+
   const openEditModal = (envId: string) => {
     setCreatedEnvId(null);
     setEditingEnvId(envId);

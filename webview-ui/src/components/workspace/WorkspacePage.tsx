@@ -10,17 +10,38 @@
  * from a half-loaded view is wrong in a way nobody would think to question.
  */
 import { useEffect, useRef, useState } from 'react';
+import { ImportModal } from './ImportModal';
 import { useWorkspaceStore, type Workspace } from '../../store/workspace-store';
 import { useTabsStore } from '../../store/tabs-store';
 import { postMsg } from '../../vscode';
 import {
   LayoutGridIcon, ChevronDownIcon, CheckIcon, PlusIcon, FolderIcon, FolderOpenIcon,
   DownloadIcon, GlobeIcon, SettingsIcon, PencilIcon, TrashIcon, CloseIcon,
-  UploadIcon, DocumentIcon,
+  UploadIcon, DocumentIcon, CollectionsFolderIcon, ClockIcon,
+  FolderImportIcon, FolderExportIcon,
 } from '../../icons';
 import { WorkspaceDocs } from './WorkspaceDocs';
 import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
+import { CollectionsPanel } from '../rest/sidebar/CollectionsPanel';
+import { HistoryPanel } from '../rest/sidebar/HistoryPanel';
 import './workspace.css';
+
+type SubTab = 'overview' | 'collections' | 'environments' | 'history';
+
+/* The count beside a tab is the same number the Overview shows, from the same
+   place — the host. History has no count here because it is capped and rolls,
+   so a figure beside it would be a limit rather than a fact. */
+const SUBTABS: {
+  id: SubTab;
+  label: string;
+  icon: React.ReactNode;
+  count: (s: { collections: number; environments: number; requests: number }) => number;
+}[] = [
+  { id: 'overview', label: 'Overview', icon: <LayoutGridIcon size={12} />, count: () => 0 },
+  { id: 'collections', label: 'Collections', icon: <CollectionsFolderIcon size={12} />, count: s => s.collections },
+  { id: 'environments', label: 'Environments', icon: <GlobeIcon size={12} />, count: s => s.environments },
+  { id: 'history', label: 'History', icon: <ClockIcon size={12} />, count: () => 0 },
+];
 
 export function WorkspacePage() {
   const { workspaces, activeId, stats, load, switchTo, create, rename, remove, error } =
@@ -28,7 +49,8 @@ export function WorkspacePage() {
   const active = workspaces.find(w => w.id === activeId);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const [sub, setSub] = useState<'overview' | 'environments'>('overview');
+  const [sub, setSub] = useState<SubTab>('overview');
+  const [importing, setImporting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { load(); }, [load]);
@@ -75,33 +97,32 @@ export function WorkspacePage() {
         }}
       />
 
-      {/* Two, not three. Git Sync already has its own settings page, and a
-          second place to set the same remote is two screens that can disagree
-          about it. */}
+      {/* One tab per thing a workspace owns, plus the overview. No Git tab:
+          Git Sync has its own settings page, and a second place to set the same
+          remote is two screens that can disagree about it. */}
       <nav className="ws-subtabs">
-        <button
-          type="button"
-          className={`ws-subtab${sub === 'overview' ? ' ws-subtab--on' : ''}`}
-          onClick={() => setSub('overview')}
-        >
-          <LayoutGridIcon size={12} /> Overview
-        </button>
-        <button
-          type="button"
-          className={`ws-subtab${sub === 'environments' ? ' ws-subtab--on' : ''}`}
-          onClick={() => setSub('environments')}
-        >
-          <GlobeIcon size={12} /> Environments
-          {stats.environments > 0 && <span className="ws-subtab-n">{stats.environments}</span>}
-        </button>
+        {SUBTABS.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            className={`ws-subtab${sub === t.id ? ' ws-subtab--on' : ''}`}
+            onClick={() => setSub(t.id)}
+          >
+            {t.icon}
+            {t.label}
+            {t.count(stats) > 0 && <span className="ws-subtab-n">{t.count(stats)}</span>}
+          </button>
+        ))}
       </nav>
 
       {error && <div className="ws-error">{error}</div>}
 
-      {sub === 'environments' ? (
-        <div className="ws-envs">
-          <EnvironmentsPanel />
-        </div>
+      {sub === 'collections' ? (
+        <div className="ws-panel"><CollectionsPanel /></div>
+      ) : sub === 'environments' ? (
+        <div className="ws-panel"><EnvironmentsPanel /></div>
+      ) : sub === 'history' ? (
+        <div className="ws-panel"><HistoryPanel /></div>
       ) : (
       <div className="ws-body">
         <div className="ws-main">
@@ -112,15 +133,31 @@ export function WorkspacePage() {
           </div>
 
           <div className="ws-caps">Quick actions</div>
+          {/* Each goes through a message the app already answers. Written the
+              other way round once — from what the buttons ought to do — and
+              every one of them was a silent no-op. */}
           <div className="ws-actions">
+            {/* The same two glyphs and the same two colours the environments
+                menu already uses for import and export — blue in, amber out.
+                A third pair of colours for the same two verbs is one more thing
+                to learn for nothing. */}
+            <Action tone="imp" icon={<FolderImportIcon size={12} />} label="Import"
+              onClick={() => setImporting(true)} />
+            <Action tone="exp" icon={<FolderExportIcon size={12} />} label="Export"
+              onClick={() => postMsg({ type: 'exportWorkspace' })} />
+            {/* Both of these open the panel's own dialog rather than a second
+                create flow of their own — one flow, so they cannot disagree
+                about what a collection or an environment needs. */}
             <Action tone="new" icon={<PlusIcon size={12} />} label="New collection"
-              onClick={() => postMsg({ type: 'createCollectionPrompt', protocol: 'rest' })} />
-            <Action tone="open" icon={<FolderOpenIcon size={12} />} label="Open collection"
-              onClick={() => useTabsStore.getState().switchProtocol('rest')} />
-            <Action tone="imp" icon={<DownloadIcon size={12} />} label="Import"
-              onClick={() => postMsg({ type: 'importCollectionPrompt' })} />
+              onClick={() => {
+                setSub('collections');
+                setTimeout(() => window.postMessage({ type: 'collections:new' }, '*'), 60);
+              }} />
             <Action tone="env" icon={<GlobeIcon size={12} />} label="New environment"
-              onClick={() => postMsg({ type: 'openEnvironmentsPanel' })} />
+              onClick={() => {
+                setSub('environments');
+                setTimeout(() => window.postMessage({ type: 'environments:new' }, '*'), 60);
+              }} />
           </div>
 
           <div className="ws-caps">This workspace</div>
@@ -130,6 +167,8 @@ export function WorkspacePage() {
         <WorkspaceDocs workspace={active} />
       </div>
       )}
+
+      {importing && <ImportModal onClose={() => setImporting(false)} />}
     </div>
   );
 }

@@ -56,6 +56,8 @@ function RequestSettingsTab({ tab }: { tab: RequestTab }) {
   return (
     <div className="flex-1 min-h-0 -mx-3 -my-2">
       <ExecutionSettingsEditor
+        tags={tab.tags ?? []}
+        onTagsChange={next => updateTab(tab.id, { tags: next })}
         scope="request"
         value={tab.settings ?? {}}
         onChange={next => updateTab(tab.id, { settings: next })}

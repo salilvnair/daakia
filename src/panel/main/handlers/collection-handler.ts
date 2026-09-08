@@ -18,6 +18,7 @@ import {
 import { runCollection as runCollectionService, type RunConfig } from '../../../services/collection-runner';
 import { archiveCollection, archiveCollectionRequest } from '../../../services/bin';
 import { searchTree, type SearchNode } from '../../../services/collection-search';
+import { importAnyCollection } from '../../../services/import-any';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -291,4 +292,77 @@ export async function handleRunCollection(msg: Record<string, unknown>, postMess
 
 export function handleStopCollectionRun() {
   runAbortSignal.aborted = true;
+}
+
+// ── Import from a URL ────────────────────────────────────────────────────────
+
+/**
+ * Fetch a spec and import it.
+ *
+ * https only, and no redirects to anywhere else: an import URL is typed or
+ * pasted, so it is exactly the shape of thing that gets pasted from somewhere
+ * untrusted. A plain-http spec would travel in the clear, and following a
+ * redirect off the host you named is how a URL you checked becomes a URL you
+ * did not.
+ *
+ * The body is size-capped before it is parsed. A spec is a document; anything
+ * that keeps arriving past a few megabytes is not one, and parsing it would
+ * take the extension host down with it.
+ */
+const MAX_SPEC_BYTES = 8 * 1024 * 1024;
+
+export async function handleImportCollectionUrl(msg: Record<string, unknown>, postMessage: PostMessage) {
+  const raw = String(msg.url ?? '').trim();
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    postMessage({ type: 'toast', toastType: 'error', message: 'That is not a URL.' });
+    return;
+  }
+  if (url.protocol !== 'https:') {
+    postMessage({
+      type: 'toast', toastType: 'error',
+      message: 'Only https URLs can be imported — a spec fetched over http travels in the clear.',
+    });
+    return;
+  }
+
+  try {
+    const res = await fetch(url.toString(), {
+      redirect: 'error',
+      headers: { accept: 'application/json, application/yaml, text/yaml, text/plain;q=0.9' },
+    });
+    if (!res.ok) {
+      postMessage({ type: 'toast', toastType: 'error', message: `The server answered ${res.status}.` });
+      return;
+    }
+
+    const length = Number(res.headers.get('content-length') ?? 0);
+    if (length > MAX_SPEC_BYTES) {
+      postMessage({ type: 'toast', toastType: 'error', message: 'That document is too large to import.' });
+      return;
+    }
+    const text = await res.text();
+    if (text.length > MAX_SPEC_BYTES) {
+      postMessage({ type: 'toast', toastType: 'error', message: 'That document is too large to import.' });
+      return;
+    }
+
+    const result = importAnyCollection(text);
+    if (!result.success) {
+      postMessage({ type: 'toast', toastType: 'error', message: `Import failed: ${result.error}` });
+      return;
+    }
+    postMessage({ type: 'collectionsData', protocol: 'rest', collections: getCollectionTree('rest') });
+    postMessage({
+      type: 'toast', toastType: 'success',
+      message: `Imported "${result.collectionName}" (${result.requestCount} requests)`,
+    });
+  } catch (err) {
+    postMessage({
+      type: 'toast', toastType: 'error',
+      message: err instanceof Error ? err.message : 'Could not fetch that URL.',
+    });
+  }
 }

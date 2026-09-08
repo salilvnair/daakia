@@ -53,6 +53,15 @@ async function showOpenDialog(opts?: { canSelectFolders?: boolean }) {
   return undefined;
 }
 
+/**
+ * Whether a native file picker can actually open.
+ *
+ * False here. A caller that cannot tell "the user cancelled" from "there was no
+ * dialog" has to treat both as silence, and silence is what makes Import look
+ * broken in the browser harness rather than unavailable.
+ */
+const filePickerAvailable = false;
+
 async function showInputBox(_opts?: unknown) {
   console.log('[vscode-shim] showInputBox has no real UI here — returning undefined (cancelled)');
   return undefined;
@@ -183,6 +192,7 @@ class CancellationTokenSource {
 export const window = {
   showSaveDialog,
   showOpenDialog,
+  filePickerAvailable,
   showInputBox,
   showWarningMessage,
   showErrorMessage,

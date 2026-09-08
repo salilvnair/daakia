@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { TagChips } from '../../shared/tags/TagChips';
+import { tagsFromData } from '../../shared/tags/request-tags';
 import { postMsg } from '../../../vscode';
 import { useTabsStore } from '../../../store/tabs-store';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
@@ -338,6 +340,26 @@ export function CollectionsPanel({ protocol = 'rest' }: { protocol?: string }) {
     setModalParentId(null);
     setModalOpen(true);
   };
+
+  /* The workspace tab asks for this panel's own New dialog rather than
+     reimplementing the create flow, so there is one of them. */
+  useEffect(() => {
+    const onAsk = (e: MessageEvent) => {
+      if ((e.data as { type?: string })?.type === 'collections:new') openNewCollection();
+    };
+    window.addEventListener('message', onAsk);
+    return () => window.removeEventListener('message', onAsk);
+  }, []);
+
+  /* The workspace tab asks for this panel's own New dialog rather than
+     reimplementing the create flow, so there is one of them. */
+  useEffect(() => {
+    const onAsk = (e: MessageEvent) => {
+      if ((e.data as { type?: string })?.type === 'collections:new') openNewCollection();
+    };
+    window.addEventListener('message', onAsk);
+    return () => window.removeEventListener('message', onAsk);
+  }, []);
 
   const handleDeleteAllCollections = () => {
     postCollMsg({ type: 'clearCollections' });
@@ -1546,6 +1568,9 @@ function TreeNode({
                       {req.name || req.url || 'Untitled'}
                     </span>
                   )}
+                  {/* Two at most: a row is one line, and a wrapping strip of
+                      chips pushes every request under it down the list. */}
+                  <RequestTags data={req.data} />
                   <span className="opacity-0 group-hover/req:opacity-100">
                     <IconButtonView
                       icon={<MoreVerticalIcon size={11} />}
@@ -1583,4 +1608,20 @@ function ActionBtn({ title, onClick, disabled, children }: { title: string; onCl
       onClick={onClick}
     />
   );
+}
+
+/**
+ * The tags on a saved request, read out of its data blob.
+ *
+ * Parsed here rather than at load: the blob is already in memory and a tag is
+ * only ever wanted when a row is drawn, so widening the tree's shape to carry
+ * a parsed copy would cost every consumer for one row's benefit.
+ */
+function RequestTags({ data }: { data?: string }) {
+  const tags = useMemo(() => {
+    if (!data) return [];
+    try { return tagsFromData(JSON.parse(data)); } catch { return []; }
+  }, [data]);
+  if (!tags.length) return null;
+  return <TagChips tags={tags} max={2} size="xs" />;
 }

@@ -401,6 +401,8 @@ export function SaveRequestModal({ open, tab, onClose, bulkItems, bulkProtocol }
       variables: tab.variables,
       preRequestScript: tab.preRequestScript,
       postResponseScript: tab.postResponseScript,
+      docs: tab.docs,
+      tags: tab.tags,
     };
 
     if (tab.protocol === 'ai') {

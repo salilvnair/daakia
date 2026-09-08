@@ -26,6 +26,8 @@ import {
   type ProxyConfig, type QueryEncoding,
   DEFAULT_PROXY, LEVEL_LABEL, describeProxy, describeTimeout,
 } from './execution-settings';
+import { TagInput } from '../tags/TagChips';
+import { PinIcon } from '../../../icons';
 
 const TABS: TabItem[] = [
   { id: 'general', label: 'General' },
@@ -44,6 +46,16 @@ interface Props {
   /** Names the level being edited, for the copy. */
   scope: 'request' | 'collection';
   accentColor?: string;
+  /**
+   * Tags on the thing being edited.
+   *
+   * Not part of ExecutionSettings: a tag does not change how a request runs and
+   * does not inherit — a collection is not "inheriting" its requests' tags. The
+   * field appears only when a handler is passed, which is how the caller says
+   * this level has tags at all.
+   */
+  tags?: string[];
+  onTagsChange?: (next: string[]) => void;
 }
 
 function Row({ title, description, children, overridden }: {
@@ -100,7 +112,7 @@ function TriToggle({ value, onChange, inheritedLabel, accentColor }: {
 }
 
 export function ExecutionSettingsEditor({
-  value, onChange, inherited, inheritedFrom, scope,
+  value, onChange, inherited, inheritedFrom, scope, tags, onTagsChange,
   accentColor = 'var(--color-accent, #7c8cff)',
 }: Props) {
   const [tab, setTab] = useState('general');
@@ -108,7 +120,7 @@ export function ExecutionSettingsEditor({
 
   const eff = inherited;
   /** "Inherit (on)" — the resolved value, in the label, where it is needed. */
-  const inheritBool = (k: 'followRedirects' | 'sslVerification' | 'saveResponseInHistory') =>
+  const inheritBool = (k: 'followRedirects' | 'sslVerification' | 'saveResponseInHistory' | 'forwardAuthOnRedirect') =>
     eff ? `Inherit (${eff[k] ? 'on' : 'off'})` : 'Inherit';
   const source = (k: keyof EffectiveSettings) =>
     inheritedFrom ? ` from ${LEVEL_LABEL[inheritedFrom[k]]}` : '';
@@ -119,6 +131,10 @@ export function ExecutionSettingsEditor({
     set({ proxy: { ...DEFAULT_PROXY, ...proxy, ...patch } as ProxyConfig });
 
   const where = scope === 'request' ? 'this request' : 'every request in this collection';
+  /* Tags belong to a thing, not to a level: a collection is not "inheriting"
+     its requests' tags. So they are shown only where they can be edited, and
+     the caller decides that by passing a handler at all. */
+  const showTags = Boolean(onTagsChange);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -136,12 +152,77 @@ export function ExecutionSettingsEditor({
               there still reaches {where}. Only what you set here is pinned.
             </p>
 
+            {/* Full width: the chips wrap under the input, and a Row would pin
+                the whole thing to the right-hand control column where eight of
+                them have nowhere to go. */}
+            {showTags && (
+              <div className="py-1 w-full">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <PinIcon size={12} style={{ color: 'var(--color-text-muted)' }} />
+                  <p className="text-[13px] font-medium text-[var(--color-text-primary)] m-0">Tags</p>
+                  {(tags?.length ?? 0) > 0 && (
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: accentColor }} />
+                  )}
+                </div>
+                <p className="text-[11px] text-[var(--color-text-muted)] m-0 mb-2" style={{ maxWidth: '78ch' }}>
+                  Label this request so it can be found and grouped &mdash; smoke, regression, prod.
+                  Tags show as chips wherever the request appears.
+                </p>
+                <TagInput tags={tags ?? []} onChange={onTagsChange!} />
+              </div>
+            )}
+
             <Row title="Follow Redirects"
                  description={`Automatically follow HTTP 3xx redirects${source('followRedirects')}.`}
                  overridden={value.followRedirects !== undefined}>
               <TriToggle value={value.followRedirects} accentColor={accentColor}
                          inheritedLabel={inheritBool('followRedirects')}
                          onChange={v => set({ followRedirects: v })} />
+            </Row>
+
+            <Row
+              title="Max Redirects"
+              description={
+                value.maxRedirects === undefined
+                  ? `Inheriting ${eff ? eff.maxRedirects : 'the value above'}${source('maxRedirects')}. `
+                    + 'Type a number to pin one here.'
+                  : 'How many redirects to follow before giving up. A redirect loop is otherwise a hang.'
+              }
+              overridden={value.maxRedirects !== undefined}
+            >
+              <div className="flex items-center gap-2">
+                <TextInputView
+                  type="number"
+                  size="md"
+                  accentColor={accentColor}
+                  value={value.maxRedirects === undefined ? '' : String(value.maxRedirects)}
+                  placeholder={eff ? String(eff.maxRedirects) : 'inherit'}
+                  onChange={e => {
+                    const raw = e.target.value.trim();
+                    set({ maxRedirects: raw === '' ? undefined : Math.max(0, parseInt(raw, 10) || 0) });
+                  }}
+                  style={{ width: 140 }}
+                />
+                {value.maxRedirects !== undefined && (
+                  <button type="button" onClick={() => set({ maxRedirects: undefined })}
+                          className="text-[11px] cursor-pointer border-none bg-transparent px-1"
+                          style={{ color: 'var(--color-text-muted)' }}>
+                    inherit
+                  </button>
+                )}
+              </div>
+            </Row>
+
+            <Row title="Forward Authorization on Redirect"
+                 description={
+                   'Send Authorization and Cookie headers on to a redirect that points at a '
+                   + `different origin${source('forwardAuthOnRedirect')}. Off by default: following one `
+                   + 'with the header attached hands your token to whatever host the response named.'
+                 }
+                 overridden={value.forwardAuthOnRedirect !== undefined}>
+              <TriToggle value={value.forwardAuthOnRedirect} accentColor={accentColor}
+                         inheritedLabel={inheritBool('forwardAuthOnRedirect')}
+                         onChange={v => set({ forwardAuthOnRedirect: v })} />
             </Row>
 
             <Row title="SSL Certificate Verification"

@@ -34,6 +34,17 @@ export interface ExecutionSettings {
   /** Milliseconds. 0 means no timeout, which is why this is not `|| default`. */
   timeout?: number;
   followRedirects?: boolean;
+  /** How many hops before we stop. A redirect loop is otherwise a hang. */
+  maxRedirects?: number;
+  /**
+   * Whether Authorization survives a redirect to a different origin.
+   *
+   * Off by default, and deliberately: following a redirect to somewhere else
+   * with the original Authorization header attached hands your token to
+   * whatever host the response pointed at. Worth having, worth being a choice,
+   * not worth being the default.
+   */
+  forwardAuthOnRedirect?: boolean;
   sslVerification?: boolean;
   saveResponseInHistory?: boolean;
   encoding?: QueryEncoding;
@@ -44,6 +55,8 @@ export interface ExecutionSettings {
 export interface EffectiveSettings {
   timeout: number;
   followRedirects: boolean;
+  maxRedirects: number;
+  forwardAuthOnRedirect: boolean;
   sslVerification: boolean;
   saveResponseInHistory: boolean;
   encoding: QueryEncoding;
@@ -54,6 +67,8 @@ export interface EffectiveSettings {
 export const SETTINGS_DEFAULTS: EffectiveSettings = {
   timeout: 0,
   followRedirects: true,
+  maxRedirects: 5,
+  forwardAuthOnRedirect: false,
   sslVerification: true,
   saveResponseInHistory: true,
   encoding: 'enable',
@@ -68,8 +83,8 @@ export interface ResolvedSettings extends EffectiveSettings {
 }
 
 const FIELDS = [
-  'timeout', 'followRedirects', 'sslVerification',
-  'saveResponseInHistory', 'encoding', 'proxy',
+  'timeout', 'followRedirects', 'maxRedirects', 'forwardAuthOnRedirect',
+  'sslVerification', 'saveResponseInHistory', 'encoding', 'proxy',
 ] as const;
 
 /**

@@ -101,6 +101,8 @@ export interface RequestTab {
    * migration.
    */
   docs?: string;
+  /** Labels for finding and grouping this request. See shared/tags. */
+  tags?: string[];
   /**
    * Saved responses, newest first.
    *
