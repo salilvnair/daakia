@@ -456,8 +456,95 @@ function _runMigrations(db: SqlJsDatabase): void {
   } catch {
     // table doesn't exist yet — schema will handle it
   }
+  // Migration 6: relabel requests a non-REST collection saved as an HTTP verb.
+  try {
+    _relabelNonRestRequests(db);
+  } catch (err) {
+    console.error('[daakia] request-label migration failed:', err);
+  }
 }
 
+/**
+ * The label a protocol’s requests carry, mirroring `getDisplayMethod` in the
+ * webview. Duplicated rather than imported because the host cannot reach into
+ * webview code, and a migration that silently disagreed with the writer would
+ * be worse than one that repeats six strings.
+ */
+const PROTOCOL_LABEL: Record<string, string> = {
+  graphql: 'GQL', grpc: 'GRPC', soap: 'SOAP', ai: 'AI', mcp: 'MCP',
+};
+
+/** The four realtime transports, as `getDisplayMethod` spells them. */
+const RT_LABEL: Record<string, string> = {
+  sse: 'SSE', socketio: 'SIO', mqtt: 'MQTT', websocket: 'WS',
+};
+
+const HTTP_VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+
+/**
+ * Relabel requests that a non-REST collection saved as an HTTP verb.
+ *
+ * See the note on Migration 6. Idempotent: a second run finds no row whose
+ * method is still a verb, so it writes nothing.
+ */
+function _relabelNonRestRequests(db: SqlJsDatabase): void {
+  const info = db.exec('PRAGMA table_info(collections)');
+  if (info.length === 0) return;
+  const cols = info[0].values.map(row => row[1]);
+  if (!cols.includes('protocol')) return;
+
+  /* The root of each collection decides the protocol: a subfolder made before
+     the protocol column existed says 'rest' while its tree is GraphQL. */
+  const rows = db.exec(`
+    WITH RECURSIVE root(id, root_id) AS (
+      SELECT id, id FROM collections WHERE parent_id IS NULL
+      UNION ALL
+      SELECT c.id, r.root_id FROM collections c JOIN root r ON c.parent_id = r.id
+    )
+    SELECT req.id, req.method, req.data, c.protocol
+      FROM collection_requests req
+      JOIN root  ON root.id = req.collection_id
+      JOIN collections c ON c.id = root.root_id
+     WHERE c.protocol IS NOT NULL AND c.protocol <> 'rest'
+  `);
+  if (rows.length === 0) return;
+
+  let changed = 0;
+  for (const row of rows[0].values) {
+    const id = String(row[0]);
+    const method = String(row[1] ?? '').toUpperCase();
+    if (!HTTP_VERBS.has(method)) continue;
+
+    const protocol = String(row[3]);
+    let label = PROTOCOL_LABEL[protocol];
+    if (!label) {
+      if (protocol !== 'websocket') continue;
+      /* The transport is in the request’s own blob, not in a column. */
+      let transport = 'websocket';
+      try {
+        const data = JSON.parse(String(row[2] ?? '{}'));
+        const rt = data?.authData?.rt_protocol ?? data?.rt_protocol;
+        if (typeof rt === 'string' && rt in RT_LABEL) transport = rt;
+      } catch {
+        // a blob we cannot read is a websocket request with nothing recorded
+      }
+      label = RT_LABEL[transport];
+    }
+
+    db.run('UPDATE collection_requests SET method = ? WHERE id = ?', [label, id]);
+    changed++;
+  }
+
+  if (changed > 0) {
+    console.log(`[daakia] relabelled ${changed} request(s) saved with an HTTP verb by a non-REST collection`);
+    scheduleSave();
+  }
+}
+
+/** Testing seam: run the relabel migration against a handle the test owns. */
+export function _relabelNonRestRequestsForTest(db: SqlJsDatabase): void {
+  _relabelNonRestRequests(db);
+}
 /** The workspace every pre-workspace row is stamped with. */
 export const DEFAULT_WORKSPACE_ID = 'ws-default';
 
