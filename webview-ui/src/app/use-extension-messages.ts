@@ -5,6 +5,7 @@
  * Extracted from App.tsx — behavior is verbatim.
  */
 import { useEffect } from 'react';
+import { wireWorkspaceMessages } from '../store/workspace-store';
 import { applyChainExtractions } from '../services/request/chaining';
 import { logUiEvent } from '../store/ui-audit-store';
 import { nameForStage, screenForStage } from '../store/ai-audit-events';
@@ -591,17 +592,36 @@ export function useExtensionMessages(ctx: ExtensionMessageCtx) {
 
     window.addEventListener('message', handler);
     getVsCodeApi().postMessage({ type: 'ready' });
-    getVsCodeApi().postMessage({ type: 'getEnvironments' });
-    // Preload URL suggestions from history + collections on startup — one request per protocol
-    // so sidebar-data-store cache is never contaminated with cross-protocol entries
-    (['rest', 'graphql', 'websocket', 'grpc', 'soap', 'mcp'] as const).forEach(p =>
-      getVsCodeApi().postMessage({ type: 'getHistory', protocol: p })
-    );
-    getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'rest' });
-    getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'graphql' });
-    getVsCodeApi().postMessage({ type: 'getCollections', protocol: 'websocket' });
+    loadWorkspaceScopedData();
+    getVsCodeApi().postMessage({ type: 'getWorkspaces' });
     getVsCodeApi().postMessage({ type: 'aiProviders:load' });
     getVsCodeApi().postMessage({ type: 'aiPromptTemplates:load' });
-    return () => window.removeEventListener('message', handler);
+
+    /* Switching workspace makes every scoped view stale at once. Re-asking here
+       rather than in each view keeps the set in one place: a view that forgot to
+       refetch would show another project's requests under this project's name,
+       and look completely normal doing it. */
+    const unwire = wireWorkspaceMessages(loadWorkspaceScopedData);
+
+    return () => { window.removeEventListener('message', handler); unwire(); };
   }, []);
+}
+
+/**
+ * Everything scoped to a workspace, asked for again.
+ *
+ * Called on startup and after every workspace switch. One list, because
+ * "loaded at boot" and "reloaded after a switch" are the same requirement, and
+ * two lists that have to stay in step is a bug waiting to happen.
+ */
+export function loadWorkspaceScopedData(): void {
+  getVsCodeApi().postMessage({ type: 'getEnvironments' });
+  // One request per protocol so the sidebar cache is never contaminated with
+  // cross-protocol entries.
+  (['rest', 'graphql', 'websocket', 'grpc', 'soap', 'mcp'] as const).forEach(p =>
+    getVsCodeApi().postMessage({ type: 'getHistory', protocol: p })
+  );
+  (['rest', 'graphql', 'websocket'] as const).forEach(p =>
+    getVsCodeApi().postMessage({ type: 'getCollections', protocol: p })
+  );
 }

@@ -30,6 +30,7 @@ export type AiScreen =
   | 'REST · Request' | 'REST · Response' | 'REST · Docs' | 'REST · Scripts'
   | 'GraphQL' | 'gRPC' | 'SOAP' | 'WebSocket' | 'MCP'
   | 'Collections' | 'Environments' | 'History' | 'Import'
+  | 'Workspace · Overview'
   | 'Mock Server' | 'Daakia AI' | 'Settings'
   | 'dk8s · Pods' | 'dk8s · Logs' | 'dk8s · Terminal' | 'dk8s · Explorer'
   | 'dk8s · Doctor' | 'dk8s · Search';

@@ -71,6 +71,11 @@ import {
   handleGetEnvironments, handleSaveEnvironments,
 } from '../src/panel/main/handlers/environment-handler';
 import {
+  handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
+  handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
+  handleWorkspaceDocsContext,
+} from '../src/panel/main/handlers/workspace-handler';
+import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
   handleGetCollectionBreadcrumb, handleCreateCollection, handleCreateFolder,
   handleRenameCollection, handleRenameRequest, handleDeleteCollection,
@@ -598,6 +603,29 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
 
     // ── Environments ──
+    // -- Workspaces --
+    case 'getWorkspaces':
+      handleGetWorkspaces(post);
+      break;
+    case 'switchWorkspace':
+      handleSwitchWorkspace(msg, post);
+      break;
+    case 'createWorkspace':
+      handleCreateWorkspace(msg, post);
+      break;
+    case 'renameWorkspace':
+      handleRenameWorkspace(msg, post);
+      break;
+    case 'deleteWorkspace':
+      handleDeleteWorkspace(msg, post);
+      break;
+    case 'saveWorkspaceDocs':
+      handleSaveWorkspaceDocs(msg, post);
+      break;
+    case 'workspaceDocsContext':
+      handleWorkspaceDocsContext(post);
+      break;
+
     case 'getEnvironments':
       handleGetEnvironments(post);
       break;

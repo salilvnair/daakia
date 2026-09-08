@@ -20,6 +20,7 @@ import { AppSidebar, SidebarSection } from './components/sidebar';
 import { SettingsPanel } from './components/sidebar/SettingsPanel';
 import { MockServerPanel } from './components/mock/MockServerPanel';
 import { K8sPanel } from './components/k8s/K8sPanel';
+import { WorkspacePage } from './components/workspace/WorkspacePage';
 import { SmStateMachineTabPage } from './components/mock/SmStateMachineTabPage';
 import { GraphQLPanel } from './components/graphql';
 import { WebSocketPanel } from './components/websocket';
@@ -50,7 +51,7 @@ import { getVsCodeApi, postMsg } from './vscode';
 import { useSMWorkspaceStore } from '@salilvnair/state-machine';
 import { DaakiaSMConsumer } from './consumer/DaakiaSMConsumer';
 import { getProtocolAccent } from './colors';
-import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, DevToolsIcon } from './icons';
+import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, DevToolsIcon, LayoutGridIcon } from './icons';
 import { DevToolsPanel } from './components/shared/devtools';
 import { DebugHud } from './components/shared/debugger';
 import { useExtensionMessages } from './app/use-extension-messages';
@@ -93,7 +94,7 @@ export default function App() {
   const activeProtocol = useTabsStore(s => s.activeProtocol);
   // Tabs that take over the whole surface, so the protocol rail should show
   // nothing as selected while one of them is open.
-  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'state-machine', 'wiki', 'daakia-ai'];
+  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
   const protocolAccent = getProtocolAccent(activeProtocol);
@@ -227,6 +228,7 @@ export default function App() {
     };
     const tabProtocol = activeTab?.protocol || activeProtocol;
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+      : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
       : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
       : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
@@ -495,6 +497,7 @@ export default function App() {
 
   const tabProtocol = activeTab?.protocol || activeProtocol;
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
+    : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
     : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
     : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
@@ -529,6 +532,19 @@ export default function App() {
           must not keep showing REST as selected underneath it. */}
       {/* Left protocol icon rail */}
       <div className="flex flex-col items-center w-12 bg-[var(--color-panel)] border-r border-[var(--color-surface-border)] py-2 gap-1 flex-shrink-0">
+        {/* Workspace sits above the protocols, behind a rule, because it is not
+            one of them — it is the box they all work inside. */}
+        <ProtocolIcon
+          active={activeTab?.type === 'workspace'}
+          open={tabs.some(t => t.type === 'workspace')}
+          accentColor="var(--color-workspace)"
+          onClick={() => useTabsStore.getState().openWorkspaceTab()}
+          title="Workspace"
+        >
+          <LayoutGridIcon size={16} strokeWidth={1.8} />
+        </ProtocolIcon>
+        <div className="w-6 h-px bg-[var(--color-surface-border)] my-1 flex-shrink-0" />
+
         <ProtocolIcon
           active={!standaloneActive && activeProtocol === 'rest'}
           accentColor="var(--color-protocol-rest)"
@@ -675,6 +691,18 @@ export default function App() {
           </div>
         )}
 
+        {/* WorkspacePage — kept mounted so a documentation draft somebody is
+            part-way through survives a tab switch. Save is a button here, so
+            unmounting the panel would throw the unsaved half away. */}
+        {tabs.some(t => t.type === 'workspace') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'workspace' ? 'flex' : 'none' }}
+          >
+            <WorkspacePage />
+          </div>
+        )}
+
         {/* DoctorPanel — kept mounted so a parsed dump and the selected analyzer
             survive Daakia tab switches instead of being re-parsed on every visit. */}
         {tabs.some(t => t.type === 'dk8s') && (
@@ -722,13 +750,13 @@ export default function App() {
           </div>
         )}
 
+        {/* Settings draws here; every other standalone tab is mounted in its own
+            keep-alive block above and renders nothing at this point. Asking
+            standaloneActive rather than re-listing the types means a new
+            standalone tab cannot end up drawn on top of the request view. */}
         {activeTab?.type === 'settings' ? (
           <SettingsPanel />
-        ) : activeTab?.type === 'mock-server' ? null
-        : activeTab?.type === 'dk8s' ? null
-        : activeTab?.type === 'state-machine' ? null
-        : activeTab?.type === 'wiki' ? null
-        : activeTab?.type === 'daakia-ai' ? null
+        ) : standaloneActive ? null
         : (activeTab?.protocol || activeProtocol) === 'rest' ? (
           !activeTab ? (
             <EmptyState protocol="rest" onNewTab={() => useTabsStore.getState().addTab()} />

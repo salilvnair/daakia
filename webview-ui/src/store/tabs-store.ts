@@ -50,7 +50,7 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'workspace';
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -503,6 +503,7 @@ interface TabsState {
   openSettingsTab: () => void;
   openMockServerTab: () => void;
   openDk8sTab: () => void;
+  openWorkspaceTab: () => void;
   openDaakiaAiTab: () => void;
   /**
    * @param page  A wiki page id to land on. The wiki keeps its own
@@ -580,6 +581,23 @@ export const useTabsStore = create<TabsState>((set, get) => {
 
     // dk8s — one tab only. It holds a live watch on a namespace, so a second
     // tab would mean a second watch on the same cluster for no benefit.
+    /* One workspace tab, reused. It is the overview of where you are working,
+       not a document — a second copy of it would be two views of one fact. */
+    openWorkspaceTab: () => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'workspace');
+      if (existing) {
+        set({ activeTabId: existing.id, previousTabId: activeTabId });
+        return;
+      }
+      const tab = createDefaultTab({ type: 'workspace', name: 'Workspace' });
+      set(s => ({
+        tabs: [...s.tabs, tab],
+        activeTabId: tab.id,
+        previousTabId: activeTabId,
+      }));
+    },
+
     openDk8sTab: () => {
       const { tabs, activeTabId } = get();
       const existing = tabs.find(t => t.type === 'dk8s');

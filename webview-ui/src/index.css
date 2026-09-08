@@ -81,6 +81,11 @@
   --color-doctor-muted: #0d9668;
   /* dk8s takes cyan: doctor holds green and mock-server holds yellow, and it
      must stay clear of the red/amber/green reserved for pod status. */
+  /* Workspaces. Not the app accent: amber is the chrome colour everywhere
+     else, and a workspace is not one more piece of chrome — it is the thing
+     all of it sits inside. A teal between dk8s cyan and success green, so it
+     reads as the parent of both without being either. */
+  --color-workspace: #2dd4bf;
   --color-dk8s: #22d3ee;
   --color-dk8s-muted: #0e9bb5;
 
@@ -340,6 +345,7 @@
   --color-doctor-muted: #065f46;
 
   /* Darker cyan so it holds contrast on a light ground. */
+  --color-workspace: #0d9488;
   --color-dk8s: #0891b2;
   --color-dk8s-muted: #0e7490;
 

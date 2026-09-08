@@ -103,8 +103,11 @@ const env = {
           const { stdout } = await run('powershell.exe',
             ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw'],
             { maxBuffer: 8 * 1024 * 1024 });
-          return stdout.replace(/
-$/, '');
+          /* Get-Clipboard -Raw appends a trailing newline of its own. Written
+             as escape sequences rather than literal characters: a real CR or
+             LF inside a regex literal is an unterminated regex, which is what
+             had been breaking `npm run local-server:build`. */
+          return stdout.replace(/\r?\n$/, '');
         }
         if (process.platform === 'darwin') {
           const { stdout } = await run('pbpaste', [], { maxBuffer: 8 * 1024 * 1024 });

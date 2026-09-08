@@ -102,6 +102,7 @@ export interface AiFeatureFlags {
   apiChangelogMonitor: boolean;
   compatibilityScorer: boolean;
   deepSecurityAudit: boolean;
+  workspaceDocGenerator: boolean;
   docAutoGenerator: boolean;
   smartTestSuiteGen: boolean;
   // ── Sprint 14 — Multi-Agent Orchestration & AI Mock Intelligence ──────────────
@@ -204,6 +205,7 @@ export const AI_FEATURE_DEFAULTS: AiFeatureFlags = {
   apiChangelogMonitor: true,
   compatibilityScorer: true,
   deepSecurityAudit: true,
+  workspaceDocGenerator: true,
   docAutoGenerator: true,
   smartTestSuiteGen: true,
   // Sprint 14
@@ -725,6 +727,12 @@ export const AI_FEATURE_LABELS: Record<keyof AiFeatureFlags, {
     description: 'Deep OWASP Top 10 scan: exposed tokens, injection surfaces, missing auth, CORS misconfig. Generates pentest checklist with PoC payloads.',
     group: 'MCP & Platform AI',
     gates: 'Collections ⋮ menu → "Security Audit" → AiDeepSecurityAuditModal',
+  },
+  workspaceDocGenerator: {
+    label: 'Workspace Documentation ✦',
+    description: 'Drafts the workspace README from what is actually in it: collection and folder names, the hosts its requests call, and the environment variable names it needs set. Names only — never a variable\'s value, a body or a header.',
+    group: 'MCP & Platform AI',
+    gates: 'Workspace tab → Documentation panel → "Generate with AI"',
   },
   docAutoGenerator: {
     label: 'Documentation Auto-Generator ✦',

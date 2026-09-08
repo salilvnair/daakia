@@ -27,6 +27,11 @@ import {
   handleExportEnvironmentsInsomnia, handleExportEnvironmentsHttpie,
 } from './handlers/environment-handler';
 import {
+  handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
+  handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
+  handleWorkspaceDocsContext,
+} from './handlers/workspace-handler';
+import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
   handleGetCollectionBreadcrumb, handleCreateCollection, handleCreateFolder,
   handleRenameCollection, handleRenameRequest, handleDeleteCollection,
@@ -989,6 +994,29 @@ export class MainPanel {
         break;
 
       // ── Environments ──
+      // -- Workspaces --
+      case 'getWorkspaces':
+        handleGetWorkspaces(this._post);
+        break;
+      case 'switchWorkspace':
+        handleSwitchWorkspace(msg, this._post);
+        break;
+      case 'createWorkspace':
+        handleCreateWorkspace(msg, this._post);
+        break;
+      case 'renameWorkspace':
+        handleRenameWorkspace(msg, this._post);
+        break;
+      case 'deleteWorkspace':
+        handleDeleteWorkspace(msg, this._post);
+        break;
+      case 'saveWorkspaceDocs':
+        handleSaveWorkspaceDocs(msg, this._post);
+        break;
+      case 'workspaceDocsContext':
+        handleWorkspaceDocsContext(this._post);
+        break;
+
       case 'getEnvironments':
         handleGetEnvironments(this._post);
         break;

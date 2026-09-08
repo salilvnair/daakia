@@ -183,6 +183,8 @@ export type AiPromptTemplateKey =
   | 'rest.body.generate'
   | 'rest.body.generate.system'
   | 'rest.docs.generate'
+  | 'workspace.docs.generate'
+  | 'workspace.docs.generate.system'
   | 'rest.docs.generate.system'
   // ── REST — Environment Extractor ──
   | 'rest.env.extract'
@@ -492,6 +494,22 @@ export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = 
     `Generate a realistic HTTP request body for this API call.\n\nRequest context:\n- Method: {method}\n- URL: {url}\n- Content-Type: {contentType}\n- User description: {description}\n\nReturn ONLY the raw request body. No explanation, no markdown fences, no preamble.\n\nFormat rules by Content-Type:\n- application/json or json: Return a valid JSON object with realistic field names and values\n- application/xml or text/xml: Return a valid XML document\n- application/x-www-form-urlencoded: Return URL-encoded key=value pairs (e.g. name=Alice&age=30)\n- text/plain: Return plain text matching the description\n- Default (unknown): Return a JSON object\n\nField values must be realistic — use real-looking names, emails, UUIDs, timestamps, amounts. Never use "string", "number", "value" as values.`,
   'rest.body.generate.system':
     `You are a precise HTTP request body generator. Return only the raw body content — no explanation, no markdown code fences, no preamble text. Output must be valid and directly usable as a request body. Generate realistic, production-looking values.`,
+  // ── Workspace — Documentation ─────────────────────────────────────────────
+  'workspace.docs.generate':
+    `Write the README for an API workspace called "{workspace}", in Markdown.
+
+What is in it:
+- Collections and folders: {collections}
+- Hosts its requests call: {hosts}
+- Environment variables that must be set (names only, values deliberately withheld): {variableNames}
+
+Cover what the project appears to be, how someone would set it up, and the
+workflows the collections suggest. Where something is not implied by the list
+above, say it is unknown rather than filling it in.`,
+
+  'workspace.docs.generate.system':
+    `You write project READMEs for API workspaces. Be concrete and brief. You are given names only — never values — so never invent an endpoint, a credential, a payload or a behaviour that the names do not imply. A short accurate README beats a long speculative one.`,
+
   // ── REST — Docs Generate ──────────────────────────────────────────────────
   'rest.docs.generate':
     `Write the documentation for this API request, in Markdown.
@@ -878,7 +896,9 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
   'rest.headers.suggest.system':   { label: 'Suggest Headers — System', description: 'Behavioral rules for the AI header suggestion assistant (format: JSON array only)' },
   'rest.body.generate':        { label: 'Generate Body', description: 'User prompt sent when the AI body generate button is clicked in the Body tab'},
   'rest.body.generate.system': { label: 'Generate Body — System', description: 'Behavioral rules for the AI body generator (format: raw body only, no fences)' },
+  'workspace.docs.generate':   { label: 'Workspace Documentation', description: 'User prompt sent when "Generate with AI" drafts the workspace README from its collections, hosts and environment variable names' },
   'rest.docs.generate':        { label: 'Generate Docs',          description: 'User prompt sent when the sparkle in the Docs tab writes a request’s documentation' },
+  'workspace.docs.generate.system': { label: 'Workspace Documentation — System', description: 'Behavioural rules for the workspace README writer: names only, never invent an endpoint or a credential the names do not imply' },
   'rest.docs.generate.system': { label: 'Generate Docs — System', description: 'Behavioral rules for the docs writer (Markdown only, document only what the request shows)' },
   'rest.env.extract':          { label: 'Extract Variables',          description: 'User prompt sent when "Extract Variables with AI" is chosen in the collection context menu' },
   'rest.env.extract.system':   { label: 'Extract Variables — System', description: 'Behavioral rules for the AI environment extractor (format: JSON array only)' },
@@ -1069,7 +1089,9 @@ export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]>
   'rest.headers.suggest.system':   [],
   'rest.body.generate':        ['{method}', '{url}', '{contentType}', '{description}'],
   'rest.body.generate.system': [],
+  'workspace.docs.generate':   ['{workspace}', '{collections}', '{hosts}', '{variableNames}'],
   'rest.docs.generate':        ['{method}', '{url}', '{headers}', '{body}', '{examples}'],
+  'workspace.docs.generate.system': [],
   'rest.docs.generate.system': [],
   'rest.env.extract':          ['{collectionName}', '{requests}'],
   'rest.env.extract.system':   [],
@@ -1383,6 +1405,8 @@ export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
   'rest.body.generate':        '#f59e0b',
   'rest.body.generate.system': '#f59e0b',
   'rest.docs.generate':        '#f59e0b',
+  'workspace.docs.generate': '#2dd4bf',
+  'workspace.docs.generate.system': '#2dd4bf',
   'rest.docs.generate.system': '#f59e0b',
   'rest.env.extract':          '#22c55e',
   'rest.env.extract.system':   '#22c55e',
