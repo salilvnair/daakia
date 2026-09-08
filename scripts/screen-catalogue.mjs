@@ -120,6 +120,8 @@ export const SCREENS = [
   ['plt04', 'platform-devtools-console',    'DevTools — Console'],
   ['plt05', 'platform-devtools-network',    'DevTools — Network'],
   ['plt06', 'platform-command-palette',     'Command Palette'],
+  ['plt07', 'platform-workspace-overview',  'Workspace — Overview'],
+  ['plt08', 'platform-workspace-collections', 'Workspace — Collections'],
   ['set01', 'settings-general',             'Settings — General'],
   ['set02', 'settings-theme',               'Settings — Theme'],
   ['set03', 'settings-mock-server',         'Settings — Mock Server'],

@@ -8,6 +8,7 @@ import { WebSocketView } from './websocket/WebSocketView';
 import { GrpcView } from './grpc/GrpcView';
 import { SoapView } from './soap/SoapView';
 import { MockServerView } from './mock-server/MockServerView';
+import { WorkspacesView } from './platform/WorkspacesView';
 import { CollectionsEnvView } from './platform/CollectionsEnvView';
 import { AiAssistantView } from './platform/AiAssistantView';
 import { SettingsView } from './platform/SettingsView';
@@ -20,7 +21,7 @@ import { Dk8sDoctorView } from './dk8s/Dk8sDoctorView';
 import { Dk8sArchiveView } from './dk8s/Dk8sArchiveView';
 import { Dk8sCommandsView } from './dk8s/Dk8sCommandsView';
 import { Dk8sViewsView } from './dk8s/Dk8sViewsView';
-import { CompassIcon,
+import { CompassIcon, LayoutGridIcon,
   DocumentIcon, ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge,
   ProtocolGrpcBadge, ProtocolSoapBadge, ServerIcon, CollectionsFolderIcon,
   GeneralAssistantIcon, SettingsIcon, Dk8sIcon, SearchIcon, StethoscopeIcon,
@@ -29,7 +30,7 @@ import { CompassIcon,
 
 // ─── Wiki tabs ──────────────────────────────────────────────────────────────
 
-export type TabId = 'daakia-tour' | 'quick-start' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views';
+export type TabId = 'daakia-tour' | 'quick-start' | 'workspaces' | 'rest' | 'gql' | 'websocket' | 'grpc' | 'soap' | 'mock-server' | 'collections-env' | 'ai-assistant' | 'settings' | 'dk8s' | 'dk8s-pod' | 'dk8s-terminal' | 'dk8s-search' | 'dk8s-doctor' | 'dk8s-archive' | 'dk8s-commands' | 'dk8s-views';
 
 interface Tab {
   id: TabId;
@@ -47,6 +48,7 @@ const TABS: Tab[] = [
   { id: 'grpc',              label: 'gRPC',              color: 'var(--color-protocol-grpc)',      icon: <ProtocolGrpcBadge size={16} /> },
   { id: 'soap',              label: 'SOAP',              color: 'var(--color-protocol-soap)',      icon: <ProtocolSoapBadge size={16} /> },
   { id: 'mock-server',       label: 'Mock Server',       color: 'var(--color-mock-server)',        icon: <ServerIcon size={15} /> },
+  { id: 'workspaces',        label: 'Workspaces',        color: 'var(--color-workspace)',          icon: <LayoutGridIcon size={15} /> },
   { id: 'collections-env',   label: 'Collections & Env', color: 'var(--color-accent)',             icon: <CollectionsFolderIcon size={15} /> },
   { id: 'ai-assistant',      label: 'AI Assistant',      color: 'var(--color-protocol-ai)',        icon: <GeneralAssistantIcon size={15} /> },
   { id: 'settings',          label: 'Settings',          color: 'var(--color-accent)',             icon: <SettingsIcon size={15} /> },
@@ -85,6 +87,8 @@ const NAV_ITEMS: SideNavItem[] = [
     { id: 'mock-server', label: TAB_BY_ID['mock-server'].label, icon: TAB_BY_ID['mock-server'].icon },
   ] },
   { id: 'g-platform', label: 'Platform', isGroup: true, children: [
+    // First: a workspace is the box the rest of the platform lives in.
+    { id: 'workspaces', label: TAB_BY_ID['workspaces'].label, icon: TAB_BY_ID['workspaces'].icon },
     { id: 'collections-env', label: TAB_BY_ID['collections-env'].label, icon: TAB_BY_ID['collections-env'].icon },
     { id: 'ai-assistant', label: TAB_BY_ID['ai-assistant'].label, icon: TAB_BY_ID['ai-assistant'].icon },
     { id: 'settings', label: TAB_BY_ID['settings'].label, icon: TAB_BY_ID['settings'].icon },
@@ -168,6 +172,7 @@ export function DaakiaViewPage({ hideNav, activeId: activeIdProp, onSelect: onSe
         {activeId === 'grpc'           && <GrpcView />}
         {activeId === 'soap'           && <SoapView />}
         {activeId === 'mock-server'    && <MockServerView />}
+        {activeId === 'workspaces' && <WorkspacesView />}
         {activeId === 'collections-env' && <CollectionsEnvView />}
         {activeId === 'ai-assistant'   && <AiAssistantView />}
         {activeId === 'settings'       && <SettingsView />}

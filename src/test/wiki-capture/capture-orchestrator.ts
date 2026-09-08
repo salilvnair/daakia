@@ -17,7 +17,7 @@
  */
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces';
   selector?: string;
   text?: string;
   ms?: number;
@@ -66,6 +66,10 @@ export interface CaptureDirective {
   sampleId?: string;
   /** seedDk8sState — a partial of the dk8s store; see CaptureBridge. */
   dk8sPatch?: Record<string, unknown>;
+  /** seedWorkspaces — the list, which one is active, and the Overview counts. */
+  workspaces?: Record<string, unknown>[];
+  activeWorkspaceId?: string;
+  workspaceStats?: Record<string, number>;
 }
 
 interface CaptureMessage { type: string; id: string; html?: string; error?: string }

@@ -144,6 +144,35 @@ const EXAMPLE_AI_AUDIT_ENTRIES = [
   },
 ];
 
+/*
+  A workspace list worth a screenshot.
+
+  The Overview counts and the switcher both come from the host, and a
+  capture run's database has one empty workspace -- so the honest screen is
+  four zeros, which teaches nobody what the screen is for. Two workspaces,
+  because the whole point is that there is more than one.
+*/
+const EXAMPLE_WORKSPACES = [
+  { id: 'ws-default', name: 'My Workspace', path: null, color: null, docs: null,
+    sort_order: 0, created_at: '2026-01-14T09:12:00.000Z', last_used_at: new Date().toISOString() },
+  { id: 'ws-payments', name: 'Payments Platform', path: null, color: null, docs: null,
+    sort_order: 1, created_at: '2026-02-02T14:40:00.000Z', last_used_at: '2026-08-30T11:05:00.000Z' },
+];
+
+const EXAMPLE_WORKSPACE_STATS = { collections: 6, environments: 3, requests: 48, history: 214 };
+
+/* A second protocol with something in it, so the Collections screen shows
+   what it is for: one tree per protocol, not one tree. */
+const EXAMPLE_GQL_COLLECTIONS = [
+  {
+    id: 'gcol-1', name: 'Catalog GraphQL', parent_id: null, sort_order: 0, children: [],
+    requests: [
+      { id: 'greq-1', collection_id: 'gcol-1', name: 'List products', method: 'GQL', url: 'https://api.example.com/graphql' },
+      { id: 'greq-2', collection_id: 'gcol-1', name: 'Product by id', method: 'GQL', url: 'https://api.example.com/graphql' },
+    ],
+  },
+];
+
 const SETTINGS_SECTIONS: Array<{ sectionId: string; captureId: string; label: string }> = [
   { sectionId: 'general', captureId: 'settings-general', label: 'Settings — General' },
   { sectionId: 'theme', captureId: 'settings-theme', label: 'Settings — Theme' },
@@ -262,6 +291,56 @@ const SCREENS: ScreenSpec[] = [
       ...openSidebarPanel('Environments'),
       { action: 'seedEnvironments', environments: EXAMPLE_ENVIRONMENTS as any, activeEnvId: 'env-1' },
       { action: 'wait', ms: 200 },
+    ],
+  },
+  {
+    id: 'platform-workspace-overview',
+    label: 'Workspace — Overview',
+    explanation: 'A workspace is the box above collections: one project\u2019s collections, environments and history, switched as a set. The Overview says how much is in this one and gives it a place to keep its own documentation.',
+    directives: [
+      { action: 'closeAllTabs' },
+      { action: 'closeAllTabs' },
+      // The Collections/History/Environments panel is left open by the three
+      // sidebar screens above, and it would take a third of a screen whose
+      // whole subject is the page behind it.
+      ...closeSidebarPanel(),
+      // The sub-tab is a pref rather than a click: WorkspacePage remembers
+      // which one you were on, so a capture that clicked would depend on
+      // whatever the previous screen left behind.
+      { action: 'setPref', prefKey: 'workspace.subtab', prefValue: 'overview' },
+      { action: 'openWorkspaceTab' },
+      // Seeded AFTER the tab is up, unlike the sidebar screens. Those panels
+      // gate their fetch on a cache flag, so seeding first stops the request
+      // ever going out; the workspace store has no such gate — it asks the
+      // host on every mount. Seeding first means the reply lands second and
+      // overwrites the fixture with an empty database, which is exactly what
+      // the first run of this screen captured.
+      { action: 'wait', ms: 700 },
+      { action: 'seedWorkspaces', workspaces: EXAMPLE_WORKSPACES as any,
+        activeWorkspaceId: 'ws-default', workspaceStats: EXAMPLE_WORKSPACE_STATS },
+      { action: 'wait', ms: 400 },
+    ],
+  },
+  {
+    id: 'platform-workspace-collections',
+    label: 'Workspace — Collections (all protocols)',
+    explanation: 'Every collection in the workspace, grouped by protocol. Each row holds the real Collections panel for that protocol \u2014 same tree, same right-click menu, same drag-and-drop as the sidebar.',
+    directives: [
+      { action: 'closeAllTabs' },
+      { action: 'closeAllTabs' },
+      ...closeSidebarPanel(),
+      { action: 'setPref', prefKey: 'workspace.subtab', prefValue: 'collections' },
+      { action: 'setPref', prefKey: 'workspace.collections.open', prefValue: 'rest' },
+      { action: 'openWorkspaceTab' },
+      // After the tab, not before — see the note on the Overview screen. This
+      // page asks the host for all seven protocols' trees on mount, so a seed
+      // that goes in first is overwritten by seven empty replies.
+      { action: 'wait', ms: 800 },
+      { action: 'seedWorkspaces', workspaces: EXAMPLE_WORKSPACES as any,
+        activeWorkspaceId: 'ws-default', workspaceStats: EXAMPLE_WORKSPACE_STATS },
+      { action: 'seedSidebarData', protocol: 'rest', collections: EXAMPLE_COLLECTIONS as any, history: EXAMPLE_HISTORY as any },
+      { action: 'seedSidebarData', protocol: 'graphql', collections: EXAMPLE_GQL_COLLECTIONS as any, history: [] },
+      { action: 'wait', ms: 600 },
     ],
   },
   {
