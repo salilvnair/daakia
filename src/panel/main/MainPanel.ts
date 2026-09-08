@@ -30,6 +30,7 @@ import {
   handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
   handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
   handleWorkspaceDocsContext,
+  handleImportWorkspace, handleOpenWorkspace, handleExportWorkspace,
 } from './handlers/workspace-handler';
 import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
@@ -1012,6 +1013,15 @@ export class MainPanel {
         break;
       case 'saveWorkspaceDocs':
         handleSaveWorkspaceDocs(msg, this._post);
+        break;
+      case 'importWorkspace':
+        void handleImportWorkspace(this._post);
+        break;
+      case 'openWorkspace':
+        void handleOpenWorkspace(this._post);
+        break;
+      case 'exportWorkspace':
+        void handleExportWorkspace(this._post);
         break;
       case 'workspaceDocsContext':
         handleWorkspaceDocsContext(this._post);

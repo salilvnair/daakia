@@ -14,6 +14,11 @@ import {
   setWorkspaceDocs, setActiveWorkspaceId, getActiveWorkspaceId, getWorkspaceStats,
 } from '../../../storage/workspaces';
 import { getAllCollectionTrees, getAllEnvironments } from '../../../storage/db';
+import * as vscode from 'vscode';
+import * as path from 'path';
+import {
+  writeWorkspaceFile, importWorkspaceFile, openWorkspaceFolder, WORKSPACE_FILE,
+} from '../../../services/workspace-transfer';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -153,4 +158,99 @@ export function handleWorkspaceDocsContext(post: PostMessage) {
     hosts: [...hosts],
     variableNames: [...variableNames],
   });
+}
+
+// ── On and off disk ──────────────────────────────────────────────────────────
+
+/**
+ * Import a workspace file into a workspace of its own.
+ *
+ * Never into the one you are in. Merging somebody else's project into yours is
+ * not a thing you can undo, so the import always creates and switches; if it
+ * fails, the workspace it created is deleted again rather than left in the
+ * switcher looking like it worked.
+ */
+export async function handleImportWorkspace(post: PostMessage) {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    filters: { 'Daakia workspace': ['json'] },
+    title: 'Import a Daakia workspace',
+  });
+  if (!picked?.[0]) return;
+
+  const result = importWorkspaceFile(picked[0].fsPath);
+  if (!result.ok) {
+    post({ type: 'workspaceError', message: result.error ?? 'The import failed.' });
+    return;
+  }
+  post({
+    type: 'workspaceChanged',
+    ...snapshot(),
+    toast: `Imported ${result.requests} request${result.requests === 1 ? '' : 's'} into "${result.workspace?.name}".`,
+  });
+}
+
+/**
+ * Open a folder that holds a workspace file.
+ *
+ * A folder rather than the file itself, because the folder is what gets shared,
+ * checked in and cloned — and remembering it on the workspace is what lets a
+ * later export write back to the same place instead of asking again.
+ */
+export async function handleOpenWorkspace(post: PostMessage) {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectFolders: true,
+    canSelectFiles: false,
+    canSelectMany: false,
+    title: `Open a folder containing ${WORKSPACE_FILE}`,
+  });
+  if (!picked?.[0]) return;
+
+  const result = openWorkspaceFolder(picked[0].fsPath);
+  if (!result.ok) {
+    post({ type: 'workspaceError', message: result.error ?? 'Could not open that folder.' });
+    return;
+  }
+  post({
+    type: 'workspaceChanged',
+    ...snapshot(),
+    toast: `Opened "${result.workspace?.name}" — ${result.requests} request${result.requests === 1 ? '' : 's'}.`,
+  });
+}
+
+/**
+ * Write the active workspace out.
+ *
+ * Secrets leave as REDACTED — the key survives so whoever opens the file knows
+ * the variable has to be filled in, and the value does not go anywhere. The
+ * dialog defaults into the workspace's own folder when it has one, so an export
+ * of an opened workspace lands back where it came from.
+ */
+export async function handleExportWorkspace(post: PostMessage) {
+  const active = getWorkspace(getActiveWorkspaceId());
+  const folder = active?.path;
+  const suggested = folder
+    ? path.join(folder, WORKSPACE_FILE)
+    : `${(active?.name ?? 'workspace').replace(/[^a-z0-9-_ ]/gi, '')}.${WORKSPACE_FILE}`;
+
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: 'Export workspace',
+    defaultUri: vscode.Uri.file(suggested),
+    filters: { 'Daakia workspace': ['json'] },
+  });
+  if (!uri) return;
+
+  try {
+    const { name } = writeWorkspaceFile(uri.fsPath);
+    post({
+      type: 'toast',
+      toastType: 'success',
+      message: `Exported "${name}" to ${path.basename(uri.fsPath)}. Secret values were redacted.`,
+    });
+  } catch (err) {
+    post({
+      type: 'workspaceError',
+      message: err instanceof Error ? err.message : 'Could not write that file.',
+    });
+  }
 }

@@ -407,3 +407,43 @@
   .ws-body { flex-direction: column; }
   .ws-docs { width: auto; border-left: none; border-top: 1px solid var(--color-surface-border); }
 }
+
+/* ── Sub-tabs ───────────────────────────────────────────────────────────── */
+
+.ws-subtabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-surface-border);
+}
+.ws-subtab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 7px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  border-bottom: 2px solid transparent;
+}
+.ws-subtab:hover { color: var(--color-text-primary); }
+.ws-subtab--on {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-workspace);
+  font-weight: 600;
+}
+.ws-subtab-n {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 16%, transparent);
+}
+
+/* The environments editor is the same one the sidebar uses — one editor, so a
+   variable edited here and a variable edited there behave identically. */
+.ws-envs { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

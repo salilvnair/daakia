@@ -16,8 +16,10 @@ import { postMsg } from '../../vscode';
 import {
   LayoutGridIcon, ChevronDownIcon, CheckIcon, PlusIcon, FolderIcon, FolderOpenIcon,
   DownloadIcon, GlobeIcon, SettingsIcon, PencilIcon, TrashIcon, CloseIcon,
+  UploadIcon, DocumentIcon,
 } from '../../icons';
 import { WorkspaceDocs } from './WorkspaceDocs';
+import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
 import './workspace.css';
 
 export function WorkspacePage() {
@@ -26,6 +28,7 @@ export function WorkspacePage() {
   const active = workspaces.find(w => w.id === activeId);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [sub, setSub] = useState<'overview' | 'environments'>('overview');
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { load(); }, [load]);
@@ -57,6 +60,9 @@ export function WorkspacePage() {
         onToggleMenu={() => setMenuOpen(o => !o)}
         onPick={(id) => { switchTo(id); setMenuOpen(false); }}
         onCreate={() => { const n = window.prompt('Name the workspace'); if (n?.trim()) create(n); setMenuOpen(false); }}
+        onOpen={() => { postMsg({ type: 'openWorkspace' }); setMenuOpen(false); }}
+        onImport={() => { postMsg({ type: 'importWorkspace' }); setMenuOpen(false); }}
+        onExport={() => { postMsg({ type: 'exportWorkspace' }); setMenuOpen(false); }}
         onRenameStart={() => { setRenaming(true); setMenuOpen(false); }}
         onRenameDone={(name) => { if (active && name.trim()) rename(active.id, name); setRenaming(false); }}
         onDelete={() => {
@@ -69,8 +75,34 @@ export function WorkspacePage() {
         }}
       />
 
+      {/* Two, not three. Git Sync already has its own settings page, and a
+          second place to set the same remote is two screens that can disagree
+          about it. */}
+      <nav className="ws-subtabs">
+        <button
+          type="button"
+          className={`ws-subtab${sub === 'overview' ? ' ws-subtab--on' : ''}`}
+          onClick={() => setSub('overview')}
+        >
+          <LayoutGridIcon size={12} /> Overview
+        </button>
+        <button
+          type="button"
+          className={`ws-subtab${sub === 'environments' ? ' ws-subtab--on' : ''}`}
+          onClick={() => setSub('environments')}
+        >
+          <GlobeIcon size={12} /> Environments
+          {stats.environments > 0 && <span className="ws-subtab-n">{stats.environments}</span>}
+        </button>
+      </nav>
+
       {error && <div className="ws-error">{error}</div>}
 
+      {sub === 'environments' ? (
+        <div className="ws-envs">
+          <EnvironmentsPanel />
+        </div>
+      ) : (
       <div className="ws-body">
         <div className="ws-main">
           <div className="ws-stats">
@@ -97,6 +129,7 @@ export function WorkspacePage() {
 
         <WorkspaceDocs workspace={active} />
       </div>
+      )}
     </div>
   );
 }
@@ -105,7 +138,8 @@ export function WorkspacePage() {
 
 function WorkspaceHeader({
   active, workspaces, menuOpen, menuRef, renaming,
-  onToggleMenu, onPick, onCreate, onRenameStart, onRenameDone, onDelete,
+  onToggleMenu, onPick, onCreate, onOpen, onImport, onExport,
+  onRenameStart, onRenameDone, onDelete,
 }: {
   active?: Workspace;
   workspaces: Workspace[];
@@ -115,6 +149,9 @@ function WorkspaceHeader({
   onToggleMenu: () => void;
   onPick: (id: string) => void;
   onCreate: () => void;
+  onOpen: () => void;
+  onImport: () => void;
+  onExport: () => void;
   onRenameStart: () => void;
   onRenameDone: (name: string) => void;
   onDelete: () => void;
@@ -183,6 +220,15 @@ function WorkspaceHeader({
           <div className="ws-menu-rule" />
           <button type="button" className="ws-menu-item" onClick={onCreate}>
             <PlusIcon size={12} /> Create workspace
+          </button>
+          <button type="button" className="ws-menu-item" onClick={onOpen}>
+            <FolderOpenIcon size={12} /> Open workspace
+          </button>
+          <button type="button" className="ws-menu-item" onClick={onImport}>
+            <DownloadIcon size={12} /> Import workspace
+          </button>
+          <button type="button" className="ws-menu-item" onClick={onExport}>
+            <UploadIcon size={12} /> Export workspace
           </button>
         </div>
       )}

@@ -14,7 +14,7 @@
  * Run: node src/test/fixtures/workspaces/workspaces.test.mjs
  */
 import { strict as assert } from 'assert';
-import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { createRequire } from 'module';
@@ -39,7 +39,8 @@ export const ExtensionMode = { Test: 3 };
 
 writeFileSync(entry, [
   `export * as db from ${JSON.stringify(resolve('src/storage/db.ts'))};`,
-  `export * as ws from ${JSON.stringify(resolve('src/storage/workspaces.ts'))};`,
+  `export * as ws from ${JSON.stringify(resolve('src/storage/workspaces.ts'))};
+  export * as xfer from ${JSON.stringify(resolve('src/services/workspace-transfer.ts'))};`,
 ].join('\n'));
 
 const esbuild = await import(pathToFileURL(resolve('node_modules/esbuild/lib/main.js')).href);
@@ -56,7 +57,7 @@ await esbuild.build({
   }],
 });
 
-const { db, ws } = createRequire(import.meta.url)(bundle);
+const { db, ws, xfer } = createRequire(import.meta.url)(bundle);
 
 let failures = 0;
 const check = (name, fn) => {
@@ -187,6 +188,75 @@ check('switching to a workspace that is gone falls back rather than emptying the
   assert.equal(ws.getActiveWorkspaceId(), db.DEFAULT_WORKSPACE_ID);
   assert.ok(db.getAllCollections().length > 0,
     'a stale active id emptied the sidebar instead of falling back');
+});
+
+console.log('\non and off disk');
+
+check('a workspace round-trips through a file', () => {
+  const source = ws.createWorkspace('Exportable');
+  ws.setActiveWorkspaceId(source.id);
+  db.upsertCollection('c-x', 'Billing', null, 'rest');
+  db.upsertCollectionRequest({
+    id: 'r-x', collection_id: 'c-x', name: 'Charge',
+    method: 'POST', url: 'https://pay.example.com/charge', data: '{}', sort_order: 0,
+  });
+  db.upsertEnvironment({
+    id: 'e-x', name: 'Staging', is_active: 0,
+    variables: JSON.stringify([
+      { key: 'baseUrl', initialValue: 'https://pay.example.com', currentValue: 'https://pay.example.com' },
+      { key: 'apiToken', initialValue: 'sk-live-REAL', currentValue: 'sk-live-REAL', isSecret: true },
+    ]),
+  });
+  ws.setWorkspaceDocs(source.id, '# Billing\n\nHow it works.');
+
+  const file = join(dir, 'exported.json');
+  xfer.writeWorkspaceFile(file);
+
+  // Back in as a workspace of its own.
+  ws.setActiveWorkspaceId(db.DEFAULT_WORKSPACE_ID);
+  const out = xfer.importWorkspaceFile(file);
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.requests, 1, `imported ${out.requests} requests`);
+  assert.equal(out.environments, 1);
+
+  // The import switches into what it created, so this reads the new one.
+  const names = db.getAllCollections().map(c => c.name);
+  assert.deepEqual(names, ['Billing'], `imported collections: ${JSON.stringify(names)}`);
+  assert.equal(ws.getWorkspace(ws.getActiveWorkspaceId()).docs, '# Billing\n\nHow it works.');
+});
+
+check('a secret does not survive the export', () => {
+  const written = JSON.parse(readFileSync(join(dir, 'exported.json'), 'utf8'));
+  const vars = written.environments[0].variables;
+  const token = vars.find(v => v.key === 'apiToken');
+  const base = vars.find(v => v.key === 'baseUrl');
+
+  assert.ok(token, 'the secret variable was dropped entirely — the name should survive');
+  assert.equal(token.currentValue, 'REDACTED', 'a secret value was written to disk');
+  assert.equal(token.initialValue, 'REDACTED', 'a secret value was written to disk');
+  assert.equal(base.currentValue, 'https://pay.example.com', 'a non-secret was redacted');
+
+  assert.ok(!readFileSync(join(dir, 'exported.json'), 'utf8').includes('sk-live-REAL'),
+    'the real token is somewhere in the exported file');
+});
+
+check('a file that is not a workspace leaves nothing behind', () => {
+  const before = ws.listWorkspaces().length;
+  const junk = join(dir, 'junk.json');
+  writeFileSync(junk, JSON.stringify({ hello: 'world' }));
+
+  const out = xfer.importWorkspaceFile(junk);
+  assert.equal(out.ok, false);
+  assert.equal(ws.listWorkspaces().length, before,
+    'a failed import left a half-made workspace in the switcher');
+});
+
+check('Open wants a folder with a workspace file in it', () => {
+  const empty = join(dir, 'not-a-workspace');
+  mkdirSync(empty, { recursive: true });
+  const out = xfer.openWorkspaceFolder(empty);
+  assert.equal(out.ok, false);
+  assert.match(out.error, /daakia-workspace\.json/);
 });
 
 rmSync(dir, { recursive: true, force: true });

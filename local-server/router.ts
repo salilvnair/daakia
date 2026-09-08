@@ -74,6 +74,7 @@ import {
   handleGetWorkspaces, handleSwitchWorkspace, handleCreateWorkspace,
   handleRenameWorkspace, handleDeleteWorkspace, handleSaveWorkspaceDocs,
   handleWorkspaceDocsContext,
+  handleImportWorkspace, handleOpenWorkspace, handleExportWorkspace,
 } from '../src/panel/main/handlers/workspace-handler';
 import {
   handleGetCollections, handleGetCollectionTree, handleGetCollectionChildren,
@@ -621,6 +622,15 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'saveWorkspaceDocs':
       handleSaveWorkspaceDocs(msg, post);
+      break;
+    case 'importWorkspace':
+      void handleImportWorkspace(post);
+      break;
+    case 'openWorkspace':
+      void handleOpenWorkspace(post);
+      break;
+    case 'exportWorkspace':
+      void handleExportWorkspace(post);
       break;
     case 'workspaceDocsContext':
       handleWorkspaceDocsContext(post);
