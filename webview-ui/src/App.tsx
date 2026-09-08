@@ -21,6 +21,7 @@ import { SettingsPanel } from './components/sidebar/SettingsPanel';
 import { MockServerPanel } from './components/mock/MockServerPanel';
 import { K8sPanel } from './components/k8s/K8sPanel';
 import { WorkspacePage } from './components/workspace/WorkspacePage';
+import { useWorkspaceStore } from './store/workspace-store';
 import { SmStateMachineTabPage } from './components/mock/SmStateMachineTabPage';
 import { GraphQLPanel } from './components/graphql';
 import { WebSocketPanel } from './components/websocket';
@@ -188,6 +189,7 @@ export default function App() {
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = tabs.find(t => t.id === activeTabId);
   const standaloneActive = !!activeTab?.type && STANDALONE_TABS.includes(activeTab.type);
+  const activeWorkspaceName = useWorkspaceStore(s => s.workspaces.find(w => w.id === s.activeId)?.name);
   // Subscribe to breakpoint changes for snapshot persistence
   const debugBreakpoints = useDebugStore(s => s.breakpoints);
   const debugDisabledBps = useDebugStore(s => s.disabledBreakpoints);
@@ -539,10 +541,26 @@ export default function App() {
           open={tabs.some(t => t.type === 'workspace')}
           accentColor="var(--color-workspace)"
           onClick={() => useTabsStore.getState().openWorkspaceTab()}
-          title="Workspace"
+          title={activeWorkspaceName ? `Workspace — ${activeWorkspaceName}` : 'Workspace'}
         >
           <LayoutGridIcon size={16} strokeWidth={1.8} />
         </ProtocolIcon>
+
+        {/* The name, down the rail. The icon alone says a workspace exists, not
+            which one, and the name is otherwise only on the workspace tab —
+            the one screen where you already know. Clipped rather than wrapped:
+            the rail is 48px and a long name has to give way to it. */}
+        {activeWorkspaceName && (
+          <button
+            type="button"
+            className="dk-rail-workspace"
+            title={activeWorkspaceName}
+            onClick={() => useTabsStore.getState().openWorkspaceTab()}
+          >
+            {activeWorkspaceName}
+          </button>
+        )}
+
         <div className="w-6 h-px bg-[var(--color-surface-border)] my-1 flex-shrink-0" />
 
         <ProtocolIcon

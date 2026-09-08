@@ -46,22 +46,3 @@
 }
 
 .dk-tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
-
-/* The chip and its remove button read as one control: the button sits against
-   the chip inside a shared outline rather than floating beside it. */
-.dk-tag-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-.dk-tag-x {
-  display: flex;
-  align-items: center;
-  border: none;
-  background: none;
-  padding: 2px;
-  margin-left: -2px;
-  cursor: pointer;
-  opacity: 0.65;
-}
-.dk-tag-x:hover { opacity: 1; }

@@ -3,19 +3,24 @@
  *
  * `TagChips` is read-only and turns up wherever a request does — the sidebar,
  * history, the workspace overview. `TagInput` is the editor in the Settings tab.
- * Both draw dui's ChipView rather than a chip of their own, so a tag looks like
- * every other chip in the app and inherits its sizing tokens.
+ * Both draw dui's ChipView, so a tag is the same object as every other chip in
+ * the app: same height, same padding, its dismiss control inside its own border
+ * and its long labels ellipsised rather than stretching the row.
  *
- * The layout is label, then a full-width input on its own row, then the chips
- * wrapping underneath. Chips inside the input box looked fine with two and fell
- * apart with eight: the box grew a line at a time and pushed the rest of the
- * settings down the page as you typed.
+ * The editor's layout is label, then a full-width input on its own row, then the
+ * chips wrapping underneath. Chips inside the input box looked fine with two and
+ * fell apart with eight: the box grew a line at a time and pushed the settings
+ * below it down the page as you typed.
  */
 import { useState } from 'react';
 import { ChipView } from '@salilvnair/dui';
 import { normaliseTag, tagColor } from './request-tags';
-import { CloseIcon, PinIcon } from '../../../icons';
+import { PinIcon } from '../../../icons';
 import './tags.css';
+
+/** Past this a tag is ellipsised. Long enough for a real tag, short enough that
+    one pasted sentence cannot take a whole row. */
+const MAX_CHIP_WIDTH = 150;
 
 export function TagChips({ tags, max, size = 'xs' }: {
   tags: string[];
@@ -31,10 +36,23 @@ export function TagChips({ tags, max, size = 'xs' }: {
   return (
     <span className="dk-tags">
       {shown.map(tag => (
-        <ChipView key={tag} label={tag} color={tagColor(tag)} size={size} rounded={false} />
+        <ChipView
+          key={tag}
+          label={tag}
+          color={tagColor(tag)}
+          size={size}
+          rounded={false}
+          maxLabelWidth={90}
+        />
       ))}
       {rest > 0 && (
-        <ChipView label={`+${rest}`} color="var(--color-text-muted)" size={size} rounded={false} />
+        <ChipView
+          label={`+${rest}`}
+          title={tags.join(', ')}
+          color="var(--color-text-muted)"
+          size={size}
+          rounded={false}
+        />
       )}
     </span>
   );
@@ -97,24 +115,16 @@ export function TagInput({ tags, onChange, placeholder = 'e.g. smoke, regression
       {tags.length > 0 && (
         <div className="dk-tag-list">
           {tags.map(tag => (
-            <span key={tag} className="dk-tag-wrap">
-              <ChipView
-                label={tag}
-                color={tagColor(tag)}
-                size="sm"
-                rounded={false}
-                icon={<PinIcon size={10} />}
-              />
-              <button
-                type="button"
-                className="dk-tag-x"
-                aria-label={`Remove ${tag}`}
-                style={{ color: tagColor(tag) }}
-                onClick={() => onChange(tags.filter(t => t !== tag))}
-              >
-                <CloseIcon size={9} />
-              </button>
-            </span>
+            <ChipView
+              key={tag}
+              label={tag}
+              color={tagColor(tag)}
+              size="sm"
+              rounded={false}
+              icon={<PinIcon size={10} />}
+              maxLabelWidth={MAX_CHIP_WIDTH}
+              onRemove={() => onChange(tags.filter(t => t !== tag))}
+            />
           ))}
         </div>
       )}
