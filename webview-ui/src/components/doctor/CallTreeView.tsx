@@ -13,6 +13,7 @@
  * down to the leaf that finally does the work.
  */
 import { useMemo, useState } from 'react';
+import { heatOf } from './heat';
 
 export interface CallNode {
   id: string;
@@ -40,6 +41,7 @@ function Row({ node, depth, total, open, toggle }: {
   const pct = total ? (node.total / total) * 100 : 0;
   const selfPct = total ? (node.self / total) * 100 : 0;
   const app = isApp(node.className);
+  const heat = heatOf(pct);
 
   /*
     Truncation, stated.
@@ -87,9 +89,12 @@ function Row({ node, depth, total, open, toggle }: {
           background: 'var(--color-surface-hover)', overflow: 'hidden',
           position: 'relative',
         }}>
+          {/* The branch's share, in the band that share falls in — so the
+              path holding the recording is red the whole way down and the
+              paths that hold nothing stay grey. */}
           <span style={{
             position: 'absolute', inset: 0, width: `${Math.max(0.5, pct)}%`,
-            borderRadius: 3, background: 'var(--color-dk8s)', opacity: 0.45,
+            borderRadius: 3, background: heat.color, opacity: 0.4,
           }} />
           {/* Self time inside the total, so a leaf that actually burns CPU
               stands out from a branch that merely contains one. */}
@@ -103,7 +108,8 @@ function Row({ node, depth, total, open, toggle }: {
           width: 44, textAlign: 'right', flexShrink: 0,
           fontFamily: 'ui-monospace, monospace', fontSize: 10,
           fontVariantNumeric: 'tabular-nums',
-          color: pct >= 10 ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+          color: heat.band === 'low' ? 'var(--color-text-muted)' : heat.color,
+          fontWeight: heat.band === 'critical' ? 600 : 400,
         }}>{pct.toFixed(1)}%</span>
 
         <span style={{

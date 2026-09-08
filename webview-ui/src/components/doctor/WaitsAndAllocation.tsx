@@ -12,6 +12,7 @@
  * carries the allocating stack.
  */
 import { useState } from 'react';
+import { heatOfMax } from './heat';
 
 const ACCENT = 'var(--color-dk8s)';
 
@@ -151,16 +152,29 @@ export function WaitsView({ waits }: {
       {waits.sites.map(s => {
         const key = `${s.kind}:${s.target}:${s.site}`;
         const isOpen = open === key;
+        /* Against the worst wait, not against the recording: one lock held for
+           four seconds is not 4% of anything meaningful, but it is the whole
+           problem relative to the others. */
+        const heat = heatOfMax(s.totalMs, worst);
         return (
           <div key={key} className="rounded-md"
-               style={{ background: isOpen ? 'var(--color-surface)' : undefined }}>
+               style={{
+                 background: isOpen ? 'var(--color-surface)' : heat.wash,
+                 borderLeft: heat.band === 'critical' || heat.band === 'high'
+                   ? `2px solid ${heat.color}` : '2px solid transparent',
+               }}>
             <button type="button"
                     className="w-full flex items-center gap-3 px-2 py-1.5 text-left rounded-md"
                     style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
                     onClick={() => setOpen(isOpen ? null : key)}>
-              <Bar percent={(s.totalMs / worst) * 100} color="var(--color-warning)" />
+              <Bar percent={(s.totalMs / worst) * 100} color={heat.color} />
               <span className="text-[11.5px] tabular-nums shrink-0"
-                    style={{ width: 62, color: 'var(--color-text-secondary)' }}>
+                    style={{
+                      width: 62,
+                      color: heat.band === 'low' ? 'var(--color-text-secondary)' : heat.color,
+                      fontWeight: heat.band === 'critical' ? 600 : 400,
+                    }}
+                    title={`${duration(s.totalMs)} — ${heat.label}`}>
                 {duration(s.totalMs)}
               </span>
               <span className="text-[10px] px-1.5 py-[1px] rounded shrink-0"
@@ -264,16 +278,26 @@ export function AllocationView({ allocation }: {
       {allocation.sites.map(s => {
         const key = `${s.objectClass}:${s.site}`;
         const isOpen = open === key;
+        const heat = heatOfMax(s.bytes, worst);
         return (
           <div key={key} className="rounded-md"
-               style={{ background: isOpen ? 'var(--color-surface)' : undefined }}>
+               style={{
+                 background: isOpen ? 'var(--color-surface)' : heat.wash,
+                 borderLeft: heat.band === 'critical' || heat.band === 'high'
+                   ? `2px solid ${heat.color}` : '2px solid transparent',
+               }}>
             <button type="button"
                     className="w-full flex items-center gap-3 px-2 py-1.5 text-left rounded-md"
                     style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
                     onClick={() => setOpen(isOpen ? null : key)}>
-              <Bar percent={(s.bytes / worst) * 100} color="var(--color-success)" />
+              <Bar percent={(s.bytes / worst) * 100} color={heat.color} />
               <span className="text-[11.5px] tabular-nums shrink-0"
-                    style={{ width: 62, color: 'var(--color-text-secondary)' }}>
+                    style={{
+                      width: 62,
+                      color: heat.band === 'low' ? 'var(--color-text-secondary)' : heat.color,
+                      fontWeight: heat.band === 'critical' ? 600 : 400,
+                    }}
+                    title={`${bytes(s.bytes)} — ${heat.label}`}>
                 {bytes(s.bytes)}
               </span>
               <span className="text-[11.5px] font-mono truncate min-w-0 flex-1"

@@ -13,6 +13,7 @@
  * through OrderValidator.check" is.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { heatOf, HEAT_LEGEND } from './heat';
 import { ButtonView, SearchInputView, SegmentedControlView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useDk8sAnalyzeStore } from '../../store/dk8s-analyze-store';
@@ -99,7 +100,28 @@ function Bar({ percent, color }: { percent: number; color: string }) {
     <div className="h-[5px] rounded-full overflow-hidden shrink-0"
          style={{ width: 84, background: 'var(--color-surface-hover)' }}>
       <div className="h-full rounded-full"
-           style={{ width: `${Math.max(percent, percent > 0 ? 2 : 0)}%`, background: color }} />
+           style={{
+             width: `${Math.max(percent, percent > 0 ? 2 : 0)}%`,
+             background: color,
+             transition: 'background 140ms',
+           }} />
+    </div>
+  );
+}
+
+/** The key. Four colours with no legend is decoration. */
+function HeatLegend() {
+  return (
+    <div className="flex items-center gap-3 flex-wrap px-2 pb-1.5">
+      <span className="text-[9px] uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>
+        share of samples
+      </span>
+      {HEAT_LEGEND.map(l => (
+        <span key={l.band} className="flex items-center gap-1">
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: l.color, display: 'inline-block' }} />
+          <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>{l.label}</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -372,6 +394,7 @@ export function CpuAnalyzerView() {
       {/* ── Hot spots ── */}
       {view === 'hotspots' && (
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+        <HeatLegend />
         <div className="flex items-center gap-3 px-2 py-1.5 text-[9.5px] uppercase tracking-wider"
              style={{ color: 'var(--color-text-muted)' }}>
           <span style={{ width: 84 }}>self</span>
@@ -389,23 +412,37 @@ export function CpuAnalyzerView() {
 
         {rows.map(h => {
           const isOpen = open === h.method;
+          const heat = heatOf(h.selfPercent);
           return (
             <div key={h.method} className="rounded-md"
-                 style={{ background: isOpen ? 'var(--color-surface)' : undefined }}>
+                 style={{
+                   /* The wash separates the rows that hold the recording from
+                      the tail that holds nothing, before a number is read. */
+                   background: isOpen ? 'var(--color-surface)' : heat.wash,
+                   borderLeft: heat.band === 'critical' || heat.band === 'high'
+                     ? `2px solid ${heat.color}` : '2px solid transparent',
+                 }}>
               <button
                 type="button"
                 className="w-full flex items-center gap-3 px-2 py-1.5 text-left rounded-md"
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
                 onClick={() => setOpen(isOpen ? null : h.method)}
               >
-                <span className="flex items-center gap-1.5" style={{ width: 84 }}>
-                  <Bar percent={h.selfPercent} color={ACCENT} />
+                <span className="flex items-center gap-1.5" style={{ width: 84 }}
+                      title={`${h.selfPercent.toFixed(1)}% of samples — ${heat.label}`}>
+                  <Bar percent={h.selfPercent} color={heat.color} />
                 </span>
                 <span className="flex items-center gap-1.5" style={{ width: 84 }}>
                   <Bar percent={h.totalPercent} color="var(--color-text-muted)" />
                 </span>
+                {/* The same colour as its own bar: two encodings of one number
+                    that disagree is worse than one. */}
                 <span className="text-[11.5px] tabular-nums shrink-0"
-                      style={{ width: 46, color: 'var(--color-text-secondary)' }}>
+                      style={{
+                        width: 46,
+                        color: heat.band === 'low' ? 'var(--color-text-secondary)' : heat.color,
+                        fontWeight: heat.band === 'critical' ? 600 : 400,
+                      }}>
                   {h.selfPercent.toFixed(1)}%
                 </span>
                 <span className="text-[11.5px] font-mono truncate min-w-0 flex-1"
