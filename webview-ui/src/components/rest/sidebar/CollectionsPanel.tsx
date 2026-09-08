@@ -3,6 +3,8 @@ import { TagChips } from '../../shared/tags/TagChips';
 import { tagsFromData } from '../../shared/tags/request-tags';
 import { postMsg } from '../../../vscode';
 import { useTabsStore } from '../../../store/tabs-store';
+import type { Protocol, RequestTab } from '../../../store/tabs-store';
+import { getDisplayMethod } from '../../../services/request/request-service';
 import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useSidebarDataStore } from '../../../store/sidebar-data-store';
 import { useUiStateStore } from '../../../store/ui-state-store';
@@ -51,6 +53,9 @@ function sortTreeAlpha(nodes: CollectionTreeNode[]): CollectionTreeNode[] {
       requests: [...n.requests].sort((a, b) => a.name.localeCompare(b.name)),
     }));
 }
+
+/** Realtime transports, which get a tree each but share one Protocol. */
+const RT_TRANSPORTS = ['websocket', 'sse', 'socketio', 'mqtt'];
 
 function ProtocolHeaderIcon({ protocol }: { protocol: string }) {
   const size = 20;
@@ -353,10 +358,16 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   };
 
   /* The caller asks for this panel's own New dialog rather than reimplementing
-     the create flow, so there is one of them. Zero is the initial value, not a
-     request — opening the dialog on mount is not what anybody asked for. */
+     the create flow, so there is one of them.
+
+     Only a *change* counts. `> 0` fires on mount as well, and the value is
+     already above zero once the button has been used, so a tab switch reopened
+     the dialog with nobody having asked. */
+  const seenCreate = useRef(createSignal);
   useEffect(() => {
-    if (createSignal > 0) openNewCollection();
+    if (createSignal === seenCreate.current) return;
+    seenCreate.current = createSignal;
+    openNewCollection();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createSignal]);
 
@@ -392,6 +403,21 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
   const handleModalSave = (name: string) => {
     const id = crypto.randomUUID();
     if (modalMode === 'request') {
+      /*
+        The label this protocol's requests carry — GQL, GRPC, SOAP, AI, MCP,
+        WS/SSE/SIO/MQTT, or the HTTP verb for REST. Derived by the same
+        function Save Request uses, so a request created from the tree and one
+        saved from a tab cannot disagree about what they are.
+
+        The realtime family needs the extra step: its trees are keyed per
+        transport, and 'sse' is not a Protocol — the tab is a websocket tab
+        that carries the transport in authData, which is where getDisplayMethod
+        reads it from.
+      */
+      const rt = RT_TRANSPORTS.includes(protocol) ? protocol : undefined;
+      const tabProtocol = (rt ? 'websocket' : protocol) as Protocol;
+      const authData: Record<string, string> = rt ? { rt_protocol: rt } : {};
+      const method = getDisplayMethod({ protocol: tabProtocol, method: 'GET', authData } as RequestTab);
       logUiEvent('collection.open', { name, collectionId: modalParentId });
       postCollMsg({
         type: 'saveRequestToCollection',
@@ -399,7 +425,7 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
         request: {
           id,
           name,
-          method: 'GET',
+          method,
           url: '',
           data: JSON.stringify({
             headers: [],
@@ -415,7 +441,11 @@ export function CollectionsPanel({ protocol = 'rest', createSignal = 0 }: {
       });
       // Also open in a tab
       const { addTab } = useTabsStore.getState();
-      addTab({ name, method: 'GET', url: '', collectionId: modalParentId ?? undefined, requestId: id });
+      /* Told, not inherited: addTab falls back to activeProtocol, which is
+         the protocol of whichever tab is in front rather than of the tree the
+         request was created in. */
+      addTab({ name, protocol: tabProtocol, authData, method: 'GET', url: '',
+               collectionId: modalParentId ?? undefined, requestId: id });
     } else {
       logUiEvent('collection.create', { name, parentId: modalParentId });
       postCollMsg({ type: 'createCollection', id, name, parentId: modalParentId });
