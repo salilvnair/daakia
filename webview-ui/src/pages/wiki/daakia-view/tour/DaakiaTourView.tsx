@@ -32,6 +32,28 @@ import './tour.css';
 /** How long each marker's card stays open while the tour plays itself. */
 const SPOT_MS = 5000;
 
+/**
+ * Each chapter's ticks wear the colour that section wears in the app.
+ *
+ * The strip is the only thing on the page that shows all 88 stops at once, and
+ * with one colour it was 88 identical dashes — the chapter labels were doing
+ * all the work. Coloured, you can see the shape of the tour without reading a
+ * word, and the colours are not decoration: they are the same ones the protocol
+ * rail uses, so the strip and the app agree about what GraphQL looks like.
+ */
+const CHAPTER_COLOR: Record<string, string> = {
+  'REST': 'var(--color-protocol-rest)',
+  'GraphQL': 'var(--color-protocol-graphql)',
+  'gRPC': 'var(--color-protocol-grpc)',
+  'SOAP': 'var(--color-protocol-soap)',
+  'Realtime': 'var(--color-protocol-websocket)',
+  'Mock Server': 'var(--color-mock-server)',
+  'Collections & Environments': 'var(--color-protocol-mcp)',
+  'DevTools & AI': 'var(--color-protocol-ai)',
+  'Settings': 'var(--color-settings)',
+  'dk8s': 'var(--color-dk8s)',
+};
+
 const DESIGN_WIDTH = 1280;
 const DESIGN_HEIGHT = 720;
 
@@ -390,6 +412,7 @@ export function DaakiaTourView() {
           <div
             key={ch.chapter}
             className={`dt-rail-group${ch.chapter === stop.chapter ? ' dt-rail-group--on' : ''}`}
+            style={{ '--dt-ch': CHAPTER_COLOR[ch.chapter] ?? 'var(--dt-marker)' } as React.CSSProperties}
           >
             <span className="dt-rail-label">{ch.chapter}</span>
             <div className="dt-rail-dots">

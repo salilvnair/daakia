@@ -143,25 +143,30 @@
   background: color-mix(in srgb, var(--dw-text, var(--color-text-primary)) 14%, transparent);
   transition: background 0.16s, width 0.16s;
 }
-.dt-rail-dot:hover { background: color-mix(in srgb, var(--dt-marker) 55%, transparent); }
+.dt-rail-dot:hover { background: color-mix(in srgb, var(--dt-ch, var(--dt-marker)) 70%, transparent); }
 
-/* Where you are, in the marker colour rather than the section accent — the
-   accent changes per wiki section, so on some of them the active tick was the
-   same value as the strip it sat in and simply disappeared. Amber is the one
-   colour on this page that means "the tour is pointing at this", which is
-   exactly what the tick says. */
+/* A chapter's ticks carry that section's own colour, at a weight that says
+   "not here yet". --dt-ch is set per group in DaakiaTourView. */
+.dt-rail-dot { background: color-mix(in srgb, var(--dt-ch, var(--dw-text)) 26%, transparent); }
+
+/* Where you are: the chapter's colour at full strength, wider, and lit. Never
+   the section accent it used to take — that changes per wiki section, so on
+   some of them the active tick was the same value as the strip it sat in and
+   simply disappeared. */
 .dt-rail-dot--on {
   width: 30px;
-  background: var(--dt-marker);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dt-marker) 40%, transparent),
-              0 0 9px color-mix(in srgb, var(--dt-marker) 55%, transparent);
+  background: var(--dt-ch, var(--dt-marker));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dt-ch, var(--dt-marker)) 45%, transparent),
+              0 0 9px color-mix(in srgb, var(--dt-ch, var(--dt-marker)) 60%, transparent);
 }
 
-/* The chapter you are in, named. The active tick can be scrolled out of view
-   inside a long chapter, and then nothing on the strip says where you are. */
-.dt-rail-group--on .dt-rail-label { color: var(--dt-marker); }
+/* The chapter you are in, named in its own colour. A long chapter can scroll
+   the active tick out of view, and then nothing on the strip says where you
+   are. */
+.dt-rail-label { color: color-mix(in srgb, var(--dt-ch, var(--dw-muted)) 55%, var(--dw-muted, var(--color-text-muted))); }
+.dt-rail-group--on .dt-rail-label { color: var(--dt-ch, var(--dt-marker)); }
 .dt-rail-group--on .dt-rail-dot:not(.dt-rail-dot--on) {
-  background: color-mix(in srgb, var(--dt-marker) 30%, transparent);
+  background: color-mix(in srgb, var(--dt-ch, var(--dt-marker)) 48%, transparent);
 }
 
 /* ── Controls (under the hero) ──────────────────────────────────────────── */
