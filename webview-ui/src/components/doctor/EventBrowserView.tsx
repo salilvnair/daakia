@@ -15,8 +15,11 @@
  * the rows for every type in a profile recording are larger than everything
  * else the analyzer sends combined, and most sessions never open this at all.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { SplitPanelView, SideNavView, BadgeChipView, IconButtonView, type SideNavItem } from '@salilvnair/dui';
+import { ChevronLeftIcon, ChevronRightIcon } from '../../icons';
 import { postMsg } from '../../vscode';
+import { useUiStateStore } from '../../store/ui-state-store';
 
 export interface EventTypeSummary {
   name: string;
@@ -91,7 +94,9 @@ export function EventBrowserView({ types, path }: {
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState<Rows | null>(null);
   const [busy, setBusy] = useState(false);
-  const [filter, setFilter] = useState('');
+  /* Remembered like every other split in the app. */
+  const storedSplit = useUiStateStore(s => s.prefs['doctor.events.split']);
+  const [railSplit, setRailSplit] = useState(() => Number(storedSplit) || 26);
 
   useEffect(() => {
     if (!selected || !path) { setData(null); return; }
@@ -109,176 +114,173 @@ export function EventBrowserView({ types, path }: {
     );
   }
 
-  const shown = filter.trim()
-    ? types.filter(t => t.name.toLowerCase().includes(filter.trim().toLowerCase()))
-    : types;
+  /* The families the JFR namespace implies, each with the types inside it.
+     SideNavView draws a group header with its count and a child per type with
+     its event count as a badge — the same shape Settings uses. */
+  const navItems: SideNavItem[] = useMemo(() => {
+    const families = new Map<string, EventTypeSummary[]>();
+    for (const t of types ?? []) {
+      const f = familyOf(t.name);
+      const list = families.get(f);
+      if (list) list.push(t); else families.set(f, [t]);
+    }
+    return [...families].map(([family, list]) => ({
+      id: `g-${family}`,
+      label: family,
+      isGroup: true,
+      count: list.length,
+      children: list.map(t => ({
+        id: t.name,
+        label: t.name.replace(/^jdk\./, ''),
+        badge: t.count,
+      })),
+    }));
+  }, [types]);
 
-  const families = new Map<string, EventTypeSummary[]>();
-  for (const t of shown) {
-    const f = familyOf(t.name);
-    const list = families.get(f);
-    if (list) list.push(t); else families.set(f, [t]);
-  }
-
-  const totalEvents = types.reduce((a, t) => a + t.count, 0);
+  const totalEvents = (types ?? []).reduce((a, t) => a + t.count, 0);
+  const current = types?.find(t => t.name === selected);
 
   return (
-    <div className="flex min-h-0" style={{ gap: 0, height: '100%' }}>
-      {/* ── the types ── */}
-      <div className="flex flex-col min-h-0" style={{ width: 268, flexShrink: 0 }}>
-        <div className="px-2 py-1.5 flex items-center gap-2">
-          <input
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-            placeholder="Filter event types…"
-            spellCheck={false}
-            className="h-[22px] px-2 rounded-md text-[10.5px] font-mono outline-none"
-            style={{
-              width: '100%', color: 'var(--color-text-primary)',
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-surface-border)',
-            }}
-          />
-        </div>
-        <div className="px-2 pb-1 text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>
-          {types.length} types · {totalEvents.toLocaleString()} events
-        </div>
-
-        <div style={{ overflowY: 'auto', minHeight: 0, paddingBottom: 8 }}>
-          {[...families].map(([family, list]) => (
-            <div key={family}>
-              <div style={{
-                fontSize: 8.5, fontWeight: 600, letterSpacing: '.08em',
-                textTransform: 'uppercase', color: 'var(--color-text-muted)',
-                padding: '7px 10px 3px', opacity: 0.75,
-              }}>{family}</div>
-              {list.map(t => {
-                const on = t.name === selected;
-                return (
-                  <button key={t.name} type="button"
-                          onClick={() => { setSelected(t.name); setOffset(0); }}
-                          title={t.fields.length ? t.fields.join(', ') : t.name}
-                          style={{
-                            font: 'inherit', cursor: 'pointer', width: '100%',
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            padding: '3px 10px', border: 'none', textAlign: 'left',
-                            background: on ? 'color-mix(in srgb, var(--color-dk8s) 14%, transparent)' : 'transparent',
-                          }}>
-                    <span style={{
-                      flex: 1, minWidth: 0, fontFamily: 'ui-monospace, monospace', fontSize: 10.5,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      color: on ? 'var(--color-dk8s)' : 'var(--color-text-secondary)',
-                    }}>{t.name.replace(/^jdk\./, '')}</span>
-                    <span style={{
-                      fontFamily: 'ui-monospace, monospace', fontSize: 9.5,
-                      fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-muted)',
-                    }}>{t.count.toLocaleString()}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── the rows ── */}
-      <div className="flex flex-col flex-1 min-w-0 min-h-0"
-           style={{ borderLeft: '1px solid var(--color-surface-border)' }}>
-        {!selected && (
-          <div className="px-4 py-6 text-[11.5px] leading-relaxed"
-               style={{ color: 'var(--color-text-muted)', maxWidth: '42em' }}>
-            Pick an event type to see what the JVM actually wrote. This is the
-            recording with nothing interpreted — the other tabs each read a
-            handful of these types and summarise them; here they are raw, in the
-            order the JVM emitted them.
+    <SplitPanelView
+      direction="horizontal"
+      split={railSplit}
+      defaultSplit={26}
+      minFirstPct={16}
+      minSecondPct={40}
+      accentColor="var(--color-dk8s)"
+      onResize={setRailSplit}
+      onResizeEnd={next => useUiStateStore.getState().setPref('doctor.events.split', String(next))}
+      style={{ height: '100%', minHeight: 0 }}
+      first={
+        <div className="flex flex-col h-full min-h-0">
+          {/* What the recording holds, before you pick anything out of it. */}
+          <div className="flex items-center gap-2 px-3 py-2 shrink-0"
+               style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+            <BadgeChipView tone="var(--color-dk8s)" size="sm">{types?.length ?? 0} types</BadgeChipView>
+            <BadgeChipView tone="var(--color-text-muted)" size="sm" style={{ textTransform: 'none' }}>
+              {totalEvents.toLocaleString()} events
+            </BadgeChipView>
           </div>
-        )}
-
-        {selected && (
-          <>
-            <div className="flex items-center gap-3 px-3 py-1.5 flex-wrap"
-                 style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-              <span style={{
-                fontFamily: 'ui-monospace, monospace', fontSize: 11.5, fontWeight: 600,
-                color: 'var(--color-text-primary)',
-              }}>{selected}</span>
-              <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-                {data ? <>{(offset + 1).toLocaleString()}–{(offset + data.rows.length).toLocaleString()} of {data.total.toLocaleString()}</> : '…'}
-              </span>
-              <span className="flex-1" />
-              <button type="button" disabled={offset === 0 || busy}
-                      onClick={() => setOffset(o => Math.max(0, o - PAGE))}
-                      style={pageBtn(offset === 0 || busy)}>← newer</button>
-              <button type="button"
-                      disabled={busy || !data || offset + PAGE >= data.total}
-                      onClick={() => setOffset(o => o + PAGE)}
-                      style={pageBtn(busy || !data || offset + PAGE >= data.total)}>older →</button>
+          <div className="flex-1 min-h-0">
+            <SideNavView
+              items={navItems}
+              activeId={selected ?? undefined}
+              onSelect={id => { setSelected(id); setOffset(0); }}
+              fillContainer
+              searchable
+              searchPlaceholder="Filter event types…"
+              emptyText="No event type matches."
+              accentColor="var(--color-dk8s)"
+              size="sm"
+              style={{ height: '100%' }}
+            />
+          </div>
+        </div>
+      }
+      second={
+        <div className="flex flex-col h-full min-w-0 min-h-0">
+          {!selected ? (
+            <div className="px-5 py-6 text-[11.5px] leading-relaxed"
+                 style={{ color: 'var(--color-text-muted)', maxWidth: '42em' }}>
+              Pick an event type to see what the JVM actually wrote. This is the
+              recording with nothing interpreted — the other tabs each read a
+              handful of these types and summarise them; here they are raw, in the
+              order the JVM emitted them.
             </div>
+          ) : (
+            <>
+              {/* Says what you are looking at, rather than leaving it to
+                  whichever row happens to be highlighted in the rail. */}
+              <div className="flex items-center gap-2.5 px-4 py-2.5 shrink-0 flex-wrap"
+                   style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
+                <span style={{
+                  fontFamily: 'ui-monospace, monospace', fontSize: 12, fontWeight: 600,
+                  color: 'var(--color-text-primary)',
+                }}>{selected}</span>
+                {current && (
+                  <BadgeChipView tone="var(--color-dk8s)" size="xs" style={{ textTransform: 'none' }}>
+                    {current.count.toLocaleString()}
+                  </BadgeChipView>
+                )}
+                <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+                  {data ? <>{(offset + 1).toLocaleString()}–{(offset + data.rows.length).toLocaleString()} of {data.total.toLocaleString()}</> : '…'}
+                </span>
+                <span className="flex-1" />
+                <IconButtonView
+                  icon={<ChevronLeftIcon size={13} />}
+                  size="sm"
+                  tooltip="Newer events"
+                  disabled={offset === 0 || busy}
+                  onClick={() => setOffset(o => Math.max(0, o - PAGE))}
+                />
+                <IconButtonView
+                  icon={<ChevronRightIcon size={13} />}
+                  size="sm"
+                  tooltip="Older events"
+                  disabled={busy || !data || offset + PAGE >= data.total}
+                  onClick={() => setOffset(o => o + PAGE)}
+                />
+              </div>
 
-            <div style={{ overflow: 'auto', minHeight: 0 }}>
-              {busy && (
-                <div className="px-3 py-3 text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
-                  reading the recording…
-                </div>
-              )}
-              {data?.error && (
-                <div className="px-3 py-3 text-[10.5px]" style={{ color: 'var(--color-error)' }}>
-                  {data.error}
-                </div>
-              )}
-              {!busy && data && !data.error && data.rows.length > 0 && (
-                <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                  <thead>
-                    <tr>
-                      {data.fields.map(f => (
-                        <th key={f} style={{
-                          position: 'sticky', top: 0, zIndex: 1,
-                          textAlign: 'left', whiteSpace: 'nowrap',
-                          fontSize: 8.5, fontWeight: 600, letterSpacing: '.06em',
-                          textTransform: 'uppercase', color: 'var(--color-text-muted)',
-                          padding: '5px 10px 5px 0', background: 'var(--color-panel)',
-                          borderBottom: '1px solid var(--color-surface-border)',
-                        }}>{f}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.rows.map((r, i) => (
-                      <tr key={i}>
-                        {data.fields.map(f => (
-                          <td key={f} title={r[f]} style={{
-                            fontFamily: 'ui-monospace, monospace', fontSize: 10,
-                            color: 'var(--color-text-secondary)',
-                            padding: '2.5px 10px 2.5px 0', whiteSpace: 'nowrap',
-                            maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis',
-                          }}>{r[f]}</td>
+              <div style={{ overflow: 'auto', minHeight: 0, flex: 1 }}>
+                {busy && (
+                  <div className="px-4 py-3 text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+                    reading the recording…
+                  </div>
+                )}
+                {data?.error && (
+                  <div className="px-4 py-3 text-[10.5px]" style={{ color: 'var(--color-error)' }}>
+                    {data.error}
+                  </div>
+                )}
+                {!busy && data && !data.error && data.rows.length > 0 && (
+                  <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                    <thead>
+                      <tr>
+                        {data.fields.map((f, i) => (
+                          <th key={f} style={{
+                            position: 'sticky', top: 0, zIndex: 1,
+                            textAlign: 'left', whiteSpace: 'nowrap',
+                            fontSize: 8.5, fontWeight: 600, letterSpacing: '.06em',
+                            textTransform: 'uppercase', color: 'var(--color-text-muted)',
+                            padding: '7px 14px 7px ' + (i === 0 ? '16px' : '14px'),
+                            background: 'var(--color-panel)',
+                            borderBottom: '1px solid var(--color-surface-border)',
+                          }}>{f}</th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              {!busy && data && !data.error && data.rows.length === 0 && (
-                <div className="px-3 py-3 text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
-                  No rows at this offset.
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+                    </thead>
+                    <tbody>
+                      {data.rows.map((r, i) => (
+                        /* Striped: these rows are wide and mostly numbers, and
+                           the eye loses the line halfway across without it. */
+                        <tr key={i} style={{
+                          background: i % 2 ? 'color-mix(in srgb, var(--color-text-primary) 2.5%, transparent)' : 'transparent',
+                        }}>
+                          {data.fields.map((f, j) => (
+                            <td key={f} title={r[f]} style={{
+                              fontFamily: 'ui-monospace, monospace', fontSize: 10.5,
+                              color: 'var(--color-text-secondary)',
+                              padding: '5px 14px 5px ' + (j === 0 ? '16px' : '14px'),
+                              whiteSpace: 'nowrap',
+                              maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis',
+                            }}>{r[f]}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {!busy && data && !data.error && data.rows.length === 0 && (
+                  <div className="px-4 py-3 text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+                    No rows at this offset.
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      }
+    />
   );
-}
-
-function pageBtn(disabled: boolean): React.CSSProperties {
-  return {
-    font: 'inherit', fontSize: 10, fontFamily: 'ui-monospace, monospace',
-    cursor: disabled ? 'default' : 'pointer',
-    padding: '2px 8px', borderRadius: 5,
-    color: disabled ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
-    background: 'transparent',
-    border: '1px solid var(--color-surface-border)',
-    opacity: disabled ? 0.45 : 1,
-  };
 }

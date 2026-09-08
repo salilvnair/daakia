@@ -149,27 +149,31 @@ export function AiScriptTranslatorModal({ onClose, initialSource, onAccept }: Pr
       footerLeft={
         <div className="flex items-center gap-2">
           <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Source</span>
-          <div style={{ width: 210 }}>
-            <SelectInputView
-              value={choice}
-              onChange={v => setChoice(String(v) as Choice)}
-              options={options}
-              size="sm"
-              width="fw"
-              accentColor={ACCENT}
-            />
+          {/* The chip sits against the dropdown, not adrift in the footer: it
+              qualifies that control and nothing else. */}
+          <div className="flex items-center gap-1.5">
+            <div style={{ width: 210 }}>
+              <SelectInputView
+                value={choice}
+                onChange={v => setChoice(String(v) as Choice)}
+                options={options}
+                size="sm"
+                width="fw"
+                accentColor={ACCENT}
+              />
+            </div>
+            {/* The evidence, not just the verdict — a wrong guess is correctable
+                only if you can see what it was reading. */}
+            {choice === 'auto' && detected.dialect !== 'unknown' && (
+              <BadgeChipView
+                tone={ACCENT}
+                size="xs"
+                title={`Matched: ${detected.signals.join(', ')}`}
+              >
+                {Math.round(detected.confidence * 100)}% sure
+              </BadgeChipView>
+            )}
           </div>
-          {/* The evidence, not just the verdict — a wrong guess is correctable
-              only if you can see what it was reading. */}
-          {choice === 'auto' && detected.dialect !== 'unknown' && (
-            <BadgeChipView
-              tone={ACCENT}
-              size="xs"
-              title={`Matched: ${detected.signals.join(', ')}`}
-            >
-              {Math.round(detected.confidence * 100)}% sure
-            </BadgeChipView>
-          )}
         </div>
       }
       footerRight={
