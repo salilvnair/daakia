@@ -507,7 +507,10 @@
   border: 1px solid var(--color-surface-border);
   outline: none;
 }
-.ws-url-input:focus { border-color: var(--color-info); }
+/* The caller sets --ws-input-accent when the dialog has an accent of its own —
+   a New Collection dialog is the protocol colour, and an indigo focus ring
+   inside a pink one reads as two accents. */
+.ws-url-input:focus { border-color: var(--ws-input-accent, var(--color-info)); }
 
 .ws-linkish {
   border: none;

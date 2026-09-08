@@ -40,6 +40,8 @@ export interface WorkspaceStats {
   collections: number;
   environments: number;
   requests: number;
+  /** Rows in this workspace's history, every protocol. */
+  history: number;
 }
 
 const ACTIVE_KEY = 'activeWorkspaceId';
@@ -179,7 +181,7 @@ export function deleteWorkspace(id: string): { ok: boolean; reason?: string } {
  */
 export function getWorkspaceStats(id = getActiveWorkspaceId()): WorkspaceStats {
   const db = getDb();
-  const zero: WorkspaceStats = { collections: 0, environments: 0, requests: 0 };
+  const zero: WorkspaceStats = { collections: 0, environments: 0, requests: 0, history: 0 };
   if (!db) return zero;
 
   const count = (sql: string): number => {
@@ -199,6 +201,7 @@ export function getWorkspaceStats(id = getActiveWorkspaceId()): WorkspaceStats {
         WHERE EXISTS (SELECT 1 FROM collections c
                        WHERE c.id = r.collection_id AND c.workspace_id = ?)`,
     ),
+    history: count('SELECT COUNT(*) FROM request_history WHERE workspace_id = ?'),
   };
 }
 

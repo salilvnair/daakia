@@ -22,10 +22,12 @@
  * sidebar cache instead, which is already fetched for every protocol, so a
  * heading can say how much is inside without the inside existing yet.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ModalView, ButtonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useSidebarDataStore } from '../../store/sidebar-data-store';
+import { useUiStateStore } from '../../store/ui-state-store';
+import { useEnvStore } from '../../store/env-store';
 import { getProtocolAccent } from '../../colors/daakia-colors';
 import { CollectionsPanel } from '../rest/sidebar/CollectionsPanel';
 import { HistoryPanel } from '../rest/sidebar/HistoryPanel';
@@ -33,6 +35,23 @@ import { EnvironmentsPanel } from '../rest/sidebar/EnvironmentsPanel';
 import { ChevronRightIcon, ChevronDownIcon, CollectionsFolderIcon, ClockIcon } from '../../icons';
 import type { Protocol } from '../../store/tabs-store';
 import './workspace.css';
+
+/**
+ * Call `onAsk` when `signal` changes — never on mount.
+ *
+ * The naive `if (signal > 0)` fires on every mount, and the value is already
+ * above zero once the button has been used, so a tab switch reopened the dialog
+ * with nobody having asked. The value present at mount is the baseline.
+ */
+function useCreateSignal(signal: number, onAsk: () => void) {
+  const seen = useRef(signal);
+  useEffect(() => {
+    if (signal === seen.current) return;
+    seen.current = signal;
+    onAsk();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signal]);
+}
 
 /** Every protocol that can own a collection, in rail order. */
 const PROTOCOLS: { id: Protocol; label: string }[] = [
@@ -64,7 +83,16 @@ function ProtocolRow({ label, accent, count, open, onToggle, children }: {
   open: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
   return (
-    <div className={`ws-proto-sec${open ? ' ws-proto-sec--open' : ''}`}>
+    /* The row re-points --color-accent at its own protocol, so everything
+       inside it -- the panel's search box, its focus rings, its scrollbars --
+       is that protocol's colour. The app sets --color-accent per tab, which on
+       this screen is the workspace's teal for all seven rows; a GraphQL panel
+       lighting up in another protocol's colour is the kind of wrong that only
+       reads as sloppiness. Set here rather than passed down because it reaches
+       every descendant through the cascade, including the ones this file does
+       not render itself. */
+    <div className={`ws-proto-sec${open ? ' ws-proto-sec--open' : ''}`}
+         style={{ '--color-accent': accent } as React.CSSProperties}>
       <button type="button" className="ws-proto-head" onClick={onToggle}>
         {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
         <span className="ws-proto-name" style={{ color: accent }}>{label}</span>
@@ -95,13 +123,23 @@ function ProtocolSections({ kind, counts, panel, empty, extra }: {
 }) {
   const withData = PROTOCOLS.filter(p => counts(p.id) > 0);
 
-  /* Open the first one that has something. A screen of closed rows makes you
-     click before you can see anything, and the common case is one protocol. */
-  const [open, setOpen] = useState<Protocol | null>(null);
-  const [touched, setTouched] = useState(false);
+  /* Which row is open survives leaving the tab: this component unmounts on a
+     tab switch, so React state alone reopened whatever you had just collapsed.
+     `''` is a real answer meaning "all closed" — distinct from never having
+     chosen, which is what picks a default below. */
+  const setPref = useUiStateStore(s => s.setPref);
+  const stored = useUiStateStore(s => s.prefs[`workspace.${kind}.open`]);
+  const open = (stored ?? null) as Protocol | '' | null;
+
+  const choose = (next: Protocol | '') => setPref(`workspace.${kind}.open`, next);
+
+  /* Open the first one that has something, but only before a choice has been
+     made. A screen of closed rows makes you click before you can see anything,
+     and the common case is one protocol. */
   useEffect(() => {
-    if (!touched && withData.length > 0 && open === null) setOpen(withData[0].id);
-  }, [withData, open, touched]);
+    if (open === null && withData.length > 0) choose(withData[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, withData.length]);
 
   if (withData.length === 0) {
     return <div className="ws-sec-empty">{empty}</div>;
@@ -118,7 +156,7 @@ function ProtocolSections({ kind, counts, panel, empty, extra }: {
             accent={getProtocolAccent(p.id)}
             count={counts(p.id)}
             open={open === p.id}
-            onToggle={() => { setTouched(true); setOpen(cur => (cur === p.id ? null : p.id)); }}
+            onToggle={() => choose(open === p.id ? '' : p.id)}
           >
             {panel(p.id)}
           </ProtocolRow>
@@ -141,8 +179,7 @@ export function WorkspaceCollections({ createSignal = 0 }: { createSignal?: numb
     for (const p of PROTOCOLS) postMsg({ type: 'getCollections', protocol: p.id });
   }, []);
 
-  /* Zero is the initial value, not a request. See CollectionsPanel. */
-  useEffect(() => { if (createSignal > 0) setCreating(true); }, [createSignal]);
+  useCreateSignal(createSignal, () => setCreating(true));
 
   const counts = (p: Protocol) =>
     ((store.getCollections(p) ?? []) as unknown as TreeNode[])
@@ -198,7 +235,28 @@ export function WorkspaceHistory() {
  * copies of one list. It is the real panel, exactly as the sidebar shows it.
  */
 export function WorkspaceEnvironments({ createSignal = 0 }: { createSignal?: number }) {
-  return <EnvironmentsPanel createSignal={createSignal} />;
+  const setPref = useUiStateStore(s => s.setPref);
+  const stored = useUiStateStore(s => s.prefs['workspace.environments.open']);
+  const open = stored !== 'closed';
+  const environments = useEnvStore(s => s.environments);
+
+  useEffect(() => { postMsg({ type: 'getEnvironments' }); }, []);
+
+  return (
+    <div className="ws-sections">
+      <div className="ws-sec-list">
+        <ProtocolRow
+          label="All protocols"
+          accent="var(--color-sidebar-environments)"
+          count={environments.length}
+          open={open}
+          onToggle={() => setPref('workspace.environments.open', open ? 'closed' : 'open')}
+        >
+          <EnvironmentsPanel createSignal={createSignal} />
+        </ProtocolRow>
+      </div>
+    </div>
+  );
 }
 
 // ── Creating one ─────────────────────────────────────────────────────────────
@@ -238,7 +296,10 @@ function NewCollectionModal({ open, onClose, onCreate }: {
         </ButtonView>
       }
     >
-      <div className="ws-new-coll">
+      <div
+        className="ws-new-coll"
+        style={{ '--ws-input-accent': getProtocolAccent(protocol) } as React.CSSProperties}
+      >
         <input
           autoFocus
           className="ws-url-input"

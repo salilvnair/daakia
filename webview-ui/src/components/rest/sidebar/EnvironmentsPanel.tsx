@@ -117,8 +117,13 @@ export function EnvironmentsPanel({ createSignal = 0 }: {
 
   /* The workspace tab asks for this panel own create flow rather than making
      a second one, so an environment is created the same way from both. */
+  /* Only a change counts — see CollectionsPanel. Firing on mount reopened the
+     dialog on every tab switch once the button had been used. */
+  const seenCreate = useRef(createSignal);
   useEffect(() => {
-    if (createSignal > 0) openCreateModal();
+    if (createSignal === seenCreate.current) return;
+    seenCreate.current = createSignal;
+    openCreateModal();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createSignal]);
 

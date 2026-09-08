@@ -32,8 +32,8 @@ import './workspace.css';
 type SubTab = 'overview' | 'collections' | 'environments' | 'history';
 
 /* The count beside a tab is the same number the Overview shows, from the same
-   place — the host. History has no count here because it is capped and rolls,
-   so a figure beside it would be a limit rather than a fact. */
+   place — the host — and it counts every protocol. Reading it off the sidebar
+   cache instead would have counted whichever protocol happened to be loaded. */
 const SUBTABS: {
   id: SubTab;
   label: string;
@@ -42,7 +42,7 @@ const SUBTABS: {
       everywhere else in the app; painting them the workspace teal here would
       make one list two colours depending on which panel you opened it from. */
   accent: string;
-  count: (s: { collections: number; environments: number; requests: number }) => number;
+  count: (s: { collections: number; environments: number; requests: number; history: number }) => number;
 }[] = [
   { id: 'overview', label: 'Overview', icon: <LayoutGridIcon size={12} />,
     accent: 'var(--color-workspace)', count: () => 0 },
@@ -51,7 +51,7 @@ const SUBTABS: {
   { id: 'environments', label: 'Environments', icon: <GlobeIcon size={12} />,
     accent: 'var(--color-sidebar-environments)', count: s => s.environments },
   { id: 'history', label: 'History', icon: <ClockIcon size={12} />,
-    accent: 'var(--color-sidebar-history)', count: () => 0 },
+    accent: 'var(--color-sidebar-history)', count: s => s.history },
 ];
 
 /**
@@ -80,18 +80,28 @@ export function WorkspacePage() {
   const active = workspaces.find(w => w.id === activeId);
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const [sub, setSub] = useState<SubTab>('overview');
+  /* Everything the workspace tab remembers.
+
+     This component unmounts on a tab switch, so React state alone reopened
+     whatever you had collapsed, sent you back to Overview and forgot the docs
+     width. useUiStateStore debounces its prefs to the host and rehydrates them
+     on launch — the same mechanism the request/response split uses — so these
+     survive a switch and a restart. */
+  const setPref = useUiStateStore(s => s.setPref);
+  const storedSub = useUiStateStore(s => s.prefs['workspace.subtab']) as SubTab | undefined;
+  const docsClosed = useUiStateStore(s => s.prefs['workspace.docsOpen']) === 'closed';
+  const storedSplit = useUiStateStore(s => s.prefs['workspace.docsSplit']);
+
+  const sub = storedSub ?? 'overview';
+  const setSub = (next: SubTab) => setPref('workspace.subtab', next);
+  const docsOpen = !docsClosed;
+  const setDocsOpen = (v: boolean) => setPref('workspace.docsOpen', v ? 'open' : 'closed');
+
   const [importing, setImporting] = useState(false);
   const [createColl, setCreateColl] = useState(0);
   const [createEnv, setCreateEnv] = useState(0);
-  const [docsOpen, setDocsOpen] = useState(true);
   const [naming, setNaming] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-
-  /* Remembered the way every other split in the app is, so the width you drag
-     to is the width you get next time. */
-  const setPref = useUiStateStore(s => s.setPref);
-  const storedSplit = useUiStateStore(s => s.prefs['workspace.docsSplit']);
   const [docsSplit, setDocsSplit] = useState(() => Number(storedSplit) || 68);
   const menuRef = useRef<HTMLDivElement>(null);
 

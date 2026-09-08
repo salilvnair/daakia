@@ -36,6 +36,8 @@ export interface WorkspaceStats {
   collections: number;
   environments: number;
   requests: number;
+  /** Rows in this workspace's history, every protocol. */
+  history: number;
 }
 
 interface WorkspaceState {
@@ -60,7 +62,7 @@ interface WorkspaceState {
   _setError: (message: string | null) => void;
 }
 
-const EMPTY_STATS: WorkspaceStats = { collections: 0, environments: 0, requests: 0 };
+const EMPTY_STATS: WorkspaceStats = { collections: 0, environments: 0, requests: 0, history: 0 };
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   workspaces: [],
