@@ -164,6 +164,30 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
     setView('report');
   }, [sourceDdl, targetDdl]);
 
+  /*
+    Test-only hook for the wiki capture pipeline.
+
+    A capture run has no database to compare and cannot type into a Monaco
+    editor, so the two DDL dumps and the resulting comparison go in directly —
+    the same pattern as the audit panel's and the realtime panels' seeds. It
+    drives the real `compareDdl`, so the captured screen is the real screen and
+    not a mock of it.
+  */
+  useEffect(() => {
+    (window as never as Record<string, unknown>).__schemaDiffCaptureSeed = (
+      seed: { source: string; target: string; view?: ViewMode; open?: string[]; analysis?: string },
+    ) => {
+      setSourceDdl(seed.source);
+      setTargetDdl(seed.target);
+      setComparison(compareDdl(seed.source, seed.target));
+      setAnalysis(seed.analysis ?? '');
+      setOpenKeys(new Set(seed.open ?? []));
+      setView(seed.view ?? 'report');
+      setError('');
+    };
+    return () => { delete (window as never as Record<string, unknown>).__schemaDiffCaptureSeed; };
+  }, []);
+
   // ── Ask the model ──────────────────────────────────────────────────────────
 
   const handleAnalyse = useCallback(() => {
@@ -303,7 +327,12 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
       }
       footerRight={
         <div className="flex items-center gap-1.5">
-          <ButtonView size="sm" variant="secondary" disabled={!canCompare} onClick={handleCompare}>
+          {/* The accent, not a grey secondary: Compare is the action this
+              screen exists for, and the two AI buttons beside it are already
+              coloured. A grey primary between two tinted ones reads as
+              disabled. */}
+          <ButtonView size="sm" variant="primary" accentColor={ACCENT}
+                      disabled={!canCompare} onClick={handleCompare}>
             Compare
           </ButtonView>
           <AIButtonView
@@ -352,7 +381,10 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
           </p>
         )}
 
-        <div className="flex gap-2" style={{ height: 150 }}>
+        {/* Tall enough to hold a real table definition without scrolling.
+            At 150px a five-column CREATE TABLE was already cut off, which made
+            the one thing you are here to read the thing you had to scroll. */}
+        <div className="flex gap-2" style={{ height: 230 }}>
           <div className="flex-1 min-w-0 flex flex-col">
             <label className="text-[10px] mb-1" style={{ color: 'var(--color-text-muted)' }}>Source DDL</label>
             <div className="flex-1 min-h-0">
@@ -407,7 +439,7 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
             </div>
 
             {view === 'report' && (
-              <div className="flex flex-col gap-1.5" style={{ maxHeight: 380, overflowY: 'auto' }}>
+              <div className="flex flex-col gap-1.5" style={{ maxHeight: 460, overflowY: 'auto' }}>
                 {visible.length === 0 ? (
                   <p className="text-[12px] m-0 py-4 text-center" style={{ color: 'var(--color-text-muted)' }}>
                     The two schemas match.

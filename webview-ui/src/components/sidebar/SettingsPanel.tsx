@@ -5,7 +5,19 @@ import { useAppSettingsStore } from '../../store/app-settings-store';
 import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
-         CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon } from '../../icons';
+         CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon,
+         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon } from '../../icons';
+import { useAiFeaturesStore, type AiFeatureKey } from '../../store/ai-features-store';
+import { AiSchemaDiffModal } from '../ai/AiSchemaDiffModal';
+import { AiOpenApiGeneratorModal } from '../ai/AiOpenApiGeneratorModal';
+import { AiSecurityAuditModal } from '../ai/AiSecurityAuditModal';
+import { AiWebhookDebuggerModal } from '../ai/AiWebhookDebuggerModal';
+import { AiPostmanTranslatorModal } from '../ai/AiPostmanTranslatorModal';
+import { AiRequestClusteringModal } from '../ai/AiRequestClusteringModal';
+import { AiCrossProtocolOrchestratorModal } from '../ai/AiCrossProtocolOrchestratorModal';
+import { AiChaosEngineeringModal } from '../ai/AiChaosEngineeringModal';
+import { AiContractNegotiatorModal } from '../ai/AiContractNegotiatorModal';
+import { AiLiveTrafficMirrorModal } from '../ai/AiLiveTrafficMirrorModal';
 import { Dk8sClusterSettings } from '../settings/Dk8sSettings';
 import { TerminalSettings } from '../settings/dk8s/TerminalSettings';
 import { LlmProviderSettings } from './LlmProviderSettings';
@@ -35,7 +47,9 @@ import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 
 type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-cluster' | 'dk8s-terminal';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
-type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load';
+type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
+  | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
+  | 'orchestrate' | 'chaos' | 'contracts' | 'traffic';
 
 type ActiveNavId = SettingsSection;
 
@@ -631,7 +645,20 @@ function MockServerSettings() {
   app, and cannot take the theme's colour. Every other row
   and card here draws from the icon set; these do too now.
 */
-const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon: React.ReactNode }[] = [
+/**
+ * A card per tool.
+ *
+ * `group` splits the grid in two. The AI half was a strip of chips on the
+ * Daakia Assistant, which is the wrong shelf: most of these have nothing to do
+ * with the conversation underneath them, and twelve chips in a row is where a
+ * feature goes to be un-findable. Each still opens the same modal, and the
+ * strip keeps its copy — two doors to one room is not duplication when the
+ * room is hard to find.
+ *
+ * `flag` gates the AI ones on the same feature switch the strip reads, so a
+ * tool turned off in AI Features does not appear here either.
+ */
+const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon: React.ReactNode; group?: 'ai'; flag?: AiFeatureKey }[] = [
   { id: 'cookies',     label: 'Cookie Manager',      description: 'View, edit, and delete cookies across all domains',   icon: <CookieIcon size={15} /> },
   { id: 'proxy',       label: 'Proxy Settings',      description: 'Configure HTTP/HTTPS/SOCKS proxy for all requests',   icon: <NetworkIcon size={15} /> },
   { id: 'certs',       label: 'Client Certificates', description: 'mTLS client certificate configuration per domain',    icon: <ShieldIcon size={15} /> },
@@ -640,6 +667,28 @@ const POWER_SUBTABS: { id: PowerSubtab; label: string; description: string; icon
   { id: 'diff',        label: 'Response Diff',       description: 'Compare two responses side-by-side with highlighting', icon: <LayersIcon size={15} /> },
   { id: 'bulk',        label: 'Bulk URL Tester',     description: 'Test multiple URLs at once, get summary table',       icon: <BulkEditIcon size={15} /> },
   { id: 'load',        label: 'Load Tester',         description: 'Concurrent load testing with p50/p95/p99 metrics',    icon: <GaugeIcon size={15} /> },
+
+  // ── AI tools ──────────────────────────────────────────────────────────────
+  { id: 'schema-diff', group: 'ai', flag: 'schemaDiff',
+    label: 'Schema Diff \u2726',        description: 'Compare two database schemas; anomalies, DDL diff and migration SQL', icon: <LayersIcon size={15} /> },
+  { id: 'openapi',     group: 'ai', flag: 'openApiGenerator',
+    label: 'OpenAPI Generator \u2726',  description: 'Generate an OpenAPI 3.1 spec from a collection',                     icon: <DocumentIcon size={15} /> },
+  { id: 'security',    group: 'ai', flag: 'securityAudit',
+    label: 'Security Audit \u2726',     description: 'Scan every open tab for auth gaps, secrets and PII',                 icon: <ShieldIcon size={15} /> },
+  { id: 'webhook',     group: 'ai', flag: 'webhookDebugger',
+    label: 'Webhook Debugger \u2726',   description: 'Explain a webhook payload and verify its HMAC signature',            icon: <ConnectIcon size={15} /> },
+  { id: 'postman',     group: 'ai', flag: 'postmanTranslator',
+    label: 'Postman \u2192 Daakia \u2726',   description: 'Translate Postman pm.* scripts into Daakia dk.*',               icon: <ClipboardCompareIcon size={15} /> },
+  { id: 'clustering',  group: 'ai', flag: 'requestClustering',
+    label: 'Request Clustering \u2726', description: 'Group loose requests into collections automatically',                icon: <FolderIcon size={15} /> },
+  { id: 'orchestrate', group: 'ai', flag: 'crossProtocolOrchestrator',
+    label: 'Cross-Protocol Flow \u2726', description: 'Plan a flow that spans REST, GraphQL, gRPC and realtime',           icon: <NetworkIcon size={15} /> },
+  { id: 'chaos',       group: 'ai', flag: 'chaosEngineeringPlanner',
+    label: 'Chaos Planner \u2726',      description: 'Design failure experiments against your mock server',                icon: <BugIcon size={15} /> },
+  { id: 'contracts',   group: 'ai', flag: 'contractNegotiator',
+    label: 'Contract Negotiator \u2726', description: 'Reconcile a producer and consumer contract',                        icon: <ClipboardCompareIcon size={15} /> },
+  { id: 'traffic',     group: 'ai', flag: 'liveTrafficMirror',
+    label: 'Live Traffic Mirror \u2726', description: 'Replay captured traffic against another environment',               icon: <FilterIcon size={15} /> },
 ];
 
 function PowerFeaturesPanel() {
@@ -655,6 +704,10 @@ function PowerFeaturesPanel() {
   const [showDiff, setShowDiff] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [showLoad, setShowLoad] = useState(false);
+  /* One slot for the AI tools rather than ten booleans: only one modal is ever
+     open, and ten flags that must all be false is ten chances to leak one. */
+  const [aiTool, setAiTool] = useState<PowerSubtab | null>(null);
+  const isEnabled = useAiFeaturesStore(s => s.isEnabled);
 
   const openTool = (id: PowerSubtab) => {
     setSubtab(id);
@@ -666,7 +719,11 @@ function PowerFeaturesPanel() {
     else if (id === 'diff') setShowDiff(true);
     else if (id === 'bulk') setShowBulk(true);
     else if (id === 'load') setShowLoad(true);
+    else setAiTool(id);
   };
+
+  const closeAi = () => setAiTool(null);
+  const tools = POWER_SUBTABS.filter(t => !t.flag || isEnabled(t.flag));
 
   return (
     <div className="px-5 py-4 flex flex-col gap-3">
@@ -674,23 +731,52 @@ function PowerFeaturesPanel() {
         <p className="text-[14px] font-semibold text-[var(--color-text-primary)]">Power Features</p>
         <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">Advanced tools — click any card to open</p>
       </div>
-      <div className="grid grid-cols-2 gap-2.5">
-        {POWER_SUBTABS.map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => openTool(t.id)}
-            className="text-left p-3.5 rounded-xl border cursor-pointer transition-all hover:border-[var(--color-settings)] hover:brightness-105 flex flex-col gap-1.5 min-h-[80px]"
-            style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-surface)' }}
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex items-center leading-none" style={{ color: 'var(--color-settings)' }}>{t.icon}</span>
-              <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{t.label}</p>
+      {/* Two groups, one card design. The AI half is tinted with the AI
+          protocol colour rather than the settings accent, so which kind of tool
+          you are looking at reads before the label does. */}
+      {([
+        { key: 'core', heading: null, tint: 'var(--color-settings)' },
+        { key: 'ai', heading: 'AI tools', tint: 'var(--color-protocol-ai)' },
+      ] as const).map(section => {
+        const items = tools.filter(t => (section.key === 'ai' ? t.group === 'ai' : !t.group));
+        if (items.length === 0) return null;
+        return (
+          <div key={section.key} className="flex flex-col gap-2.5">
+            {section.heading && (
+              <div className="flex items-center gap-2 mt-1">
+                <SparkleIcon size={13} style={{ color: section.tint }} />
+                <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: section.tint }}>
+                  {section.heading}
+                </p>
+                <span className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2.5">
+              {items.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => openTool(t.id)}
+                  className="text-left p-3.5 rounded-xl border cursor-pointer transition-all hover:brightness-105 flex flex-col gap-1.5 min-h-[80px]"
+                  style={{
+                    borderColor: 'var(--color-surface-border)',
+                    backgroundColor: 'var(--color-surface)',
+                    ['--hover-tint' as string]: section.tint,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = section.tint; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-surface-border)'; }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center leading-none" style={{ color: section.tint }}>{t.icon}</span>
+                    <p className="text-[12px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{t.label}</p>
+                  </div>
+                  <p className="text-[10.5px] leading-snug" style={{ color: 'var(--color-text-muted)' }}>{t.description}</p>
+                </button>
+              ))}
             </div>
-            <p className="text-[10.5px] leading-snug" style={{ color: 'var(--color-text-muted)' }}>{t.description}</p>
-          </button>
-        ))}
-      </div>
+          </div>
+        );
+      })}
 
       {/* Modals */}
       {showCookies && <CookieManager onClose={() => setShowCookies(false)} />}
@@ -701,6 +787,18 @@ function PowerFeaturesPanel() {
       {showDiff && <ResponseDiffModal onClose={() => setShowDiff(false)} />}
       {showBulk && <BulkUrlTester onClose={() => setShowBulk(false)} />}
       {showLoad && <LoadTester onClose={() => setShowLoad(false)} />}
+
+      {/* The same modals the Daakia Assistant strip opens. */}
+      {aiTool === 'schema-diff' && <AiSchemaDiffModal onClose={closeAi} />}
+      {aiTool === 'openapi' && <AiOpenApiGeneratorModal onClose={closeAi} />}
+      {aiTool === 'security' && <AiSecurityAuditModal onClose={closeAi} />}
+      {aiTool === 'webhook' && <AiWebhookDebuggerModal onClose={closeAi} />}
+      {aiTool === 'postman' && <AiPostmanTranslatorModal onClose={closeAi} />}
+      {aiTool === 'clustering' && <AiRequestClusteringModal onClose={closeAi} />}
+      {aiTool === 'orchestrate' && <AiCrossProtocolOrchestratorModal onClose={closeAi} />}
+      {aiTool === 'chaos' && <AiChaosEngineeringModal onClose={closeAi} />}
+      {aiTool === 'contracts' && <AiContractNegotiatorModal onClose={closeAi} />}
+      {aiTool === 'traffic' && <AiLiveTrafficMirrorModal onClose={closeAi} />}
     </div>
   );
 }

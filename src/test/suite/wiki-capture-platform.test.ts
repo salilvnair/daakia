@@ -173,6 +173,61 @@ const EXAMPLE_GQL_COLLECTIONS = [
   },
 ];
 
+/*
+  A schema drifted the way schemas actually drift.
+
+  `payments` lost a column on the target, `idx_payments_ref` never got there
+  at all, and `migration_audit` exists only there — one of each status, so
+  the graph legend has something to point at and the report is not three
+  rows of the same finding. `customers` is identical on both sides, which is
+  what makes the "in sync" count meaningful.
+*/
+const SCHEMA_SOURCE = [
+  'CREATE TABLE customers (',
+  '  id           bigserial PRIMARY KEY,',
+  '  email        text NOT NULL UNIQUE,',
+  '  created_at   timestamptz NOT NULL DEFAULT now()',
+  ');',
+  'CREATE TABLE payments (',
+  '  id           bigserial PRIMARY KEY,',
+  '  customer_id  bigint NOT NULL REFERENCES customers(id),',
+  '  amount_cents bigint NOT NULL,',
+  '  currency     char(3) NOT NULL,',
+  '  settled_at   timestamptz',
+  ');',
+  'CREATE INDEX idx_payments_ref ON payments(customer_id, settled_at);',
+].join('\n');
+
+const SCHEMA_TARGET = [
+  'CREATE TABLE customers (',
+  '  id           bigserial PRIMARY KEY,',
+  '  email        text NOT NULL UNIQUE,',
+  '  created_at   timestamptz NOT NULL DEFAULT now()',
+  ');',
+  'CREATE TABLE payments (',
+  '  id           bigserial PRIMARY KEY,',
+  '  customer_id  bigint NOT NULL REFERENCES customers(id),',
+  '  amount_cents bigint NOT NULL,',
+  '  currency     char(3) NOT NULL',
+  ');',
+  'CREATE TABLE migration_audit (',
+  '  id       bigserial PRIMARY KEY,',
+  '  applied  text NOT NULL',
+  ');',
+].join('\n');
+
+/* Stands in for the model, which a capture run has no provider for. Written
+   as the real prompt asks for it: what breaks, and the one next action. */
+const SCHEMA_ANALYSIS = [
+  '`settled_at` is gone from `payments` on the target. Anything selecting it errors immediately, and the settlement report reads it on every run — this is the finding to act on first.',
+  '',
+  '`idx_payments_ref` is absent on the target. Nothing breaks, but the customer/settled_at lookup falls back to a sequential scan, which is the usual cause of a settlement job that got slower without a code change.',
+  '',
+  '`migration_audit` exists only on the target. That is the shape of a migration applied there and never committed back — worth confirming before anything else is deployed.',
+  '',
+  '**Overall** — the target is behind the source by one partly-applied migration. Restore `settled_at` before deploying; the index can follow.',
+].join('\n');
+
 const SETTINGS_SECTIONS: Array<{ sectionId: string; captureId: string; label: string }> = [
   { sectionId: 'general', captureId: 'settings-general', label: 'Settings — General' },
   { sectionId: 'theme', captureId: 'settings-theme', label: 'Settings — Theme' },
@@ -341,6 +396,34 @@ const SCREENS: ScreenSpec[] = [
       { action: 'seedSidebarData', protocol: 'rest', collections: EXAMPLE_COLLECTIONS as any, history: EXAMPLE_HISTORY as any },
       { action: 'seedSidebarData', protocol: 'graphql', collections: EXAMPLE_GQL_COLLECTIONS as any, history: [] },
       { action: 'wait', ms: 600 },
+    ],
+  },
+  {
+    id: 'ai-schema-diff-report',
+    label: 'Schema Diff — anomaly report',
+    explanation: 'Two database schemas compared object by object. Severity is derived from the diff, not asked of the model: an object the target lacks is critical, a dropped column is critical, an added one is a warning. Each card opens the source and target definitions side by side.',
+    directives: [
+      { action: 'closeAllTabs' },
+      { action: 'closeAllTabs' },
+      ...closeSidebarPanel(),
+      { action: 'openDaakiaAiTab' },
+      { action: 'wait', ms: 700 },
+      // The modal opens from the AI tab’s platform tool strip.
+      { action: 'clickText', text: 'Schema Diff' },
+      { action: 'wait', ms: 600 },
+      { action: 'seedSchemaDiff', schemaDiffSource: SCHEMA_SOURCE, schemaDiffTarget: SCHEMA_TARGET,
+        schemaDiffView: 'report', schemaDiffOpen: ['table:payments'], schemaDiffAnalysis: SCHEMA_ANALYSIS },
+      { action: 'wait', ms: 700 },
+    ],
+  },
+  {
+    id: 'ai-schema-diff-graph',
+    label: 'Schema Diff — object graph',
+    explanation: 'The same comparison as a graph: one node per object, clustered by type, coloured by status — green in sync, amber drift, red missing from the target, grey target-only. Clicking a node opens that object’s side-by-side definitions.',
+    directives: [
+      { action: 'seedSchemaDiff', schemaDiffSource: SCHEMA_SOURCE, schemaDiffTarget: SCHEMA_TARGET,
+        schemaDiffView: 'graph' },
+      { action: 'wait', ms: 700 },
     ],
   },
   {

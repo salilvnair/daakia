@@ -95,6 +95,12 @@ export function AiSemanticDiffModal({ responseBodyA = '', responseBodyB = '', on
       title="Semantic API Diff"
       subtitle="AI understands intent — renames vs removals, breaking vs non-breaking"
       size="xl"
+      // Full-bleed on purpose: the panes run edge to edge with a divider between
+      // them. This was faked with a `-mx-4` negative margin, but the body's padding
+      // is ASYMMETRIC (18px left, 12px right) — so -16px overhung the right edge by
+      // 4px, and because the body sets overflow-y:auto the browser is forced to make
+      // overflow-x auto too, which is where the horizontal scrollbar came from.
+      noPadding
       headerColor={ACCENT}
       headerIcon={
         <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
@@ -112,7 +118,7 @@ export function AiSemanticDiffModal({ responseBodyA = '', responseBodyB = '', on
         />
       }
     >
-      <div className="flex flex-1 min-h-0 gap-0 -mx-4" style={{ minHeight: 360 }}>
+      <div className="flex flex-1 min-h-0 gap-0 min-w-0" style={{ minHeight: 360 }}>
         {/* Response A */}
         <div className="flex flex-col w-1/3 border-r" style={{ borderColor: 'var(--color-surface-border)' }}>
           <div className="px-3 py-2 border-b text-[11px] font-medium" style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)' }}>

@@ -122,6 +122,8 @@ export const SCREENS = [
   ['plt06', 'platform-command-palette',     'Command Palette'],
   ['plt07', 'platform-workspace-overview',  'Workspace — Overview'],
   ['plt08', 'platform-workspace-collections', 'Workspace — Collections'],
+  ['plt09', 'ai-schema-diff-report',      'Schema Diff — report'],
+  ['plt10', 'ai-schema-diff-graph',       'Schema Diff — graph'],
   ['set01', 'settings-general',             'Settings — General'],
   ['set02', 'settings-theme',               'Settings — Theme'],
   ['set03', 'settings-mock-server',         'Settings — Mock Server'],

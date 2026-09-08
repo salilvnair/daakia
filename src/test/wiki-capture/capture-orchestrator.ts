@@ -17,7 +17,7 @@
  */
 
 export interface CaptureDirective {
-  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces';
+  action: 'click' | 'clickText' | 'type' | 'wait' | 'setPref' | 'waitForMessage' | 'addTab' | 'updateActiveTab' | 'setActiveTabSubtab' | 'setResponseSubtab' | 'seedRealtimeState' | 'openMockServerTab' | 'addMockServer' | 'openSettingsTab' | 'closeAllTabs' | 'seedSidebarData' | 'seedEnvironments' | 'seedDevTools' | 'closeDevTools' | 'triggerDkSuggest' | 'assertNoDkTypeError' | 'closeModals' | 'seedAiAudit' | 'key' | 'openStateMachineTab' | 'seedStateMachineWorkflow' | 'openWikiTab' | 'openDk8sTab' | 'seedDk8sState' | 'openWorkspaceTab' | 'seedWorkspaces' | 'openDaakiaAiTab' | 'seedSchemaDiff';
   selector?: string;
   text?: string;
   ms?: number;
@@ -70,6 +70,14 @@ export interface CaptureDirective {
   workspaces?: Record<string, unknown>[];
   activeWorkspaceId?: string;
   workspaceStats?: Record<string, number>;
+  /** seedSchemaDiff — two DDL dumps; the modal runs the real comparison. */
+  schemaDiffSource?: string;
+  schemaDiffTarget?: string;
+  schemaDiffView?: 'report' | 'graph' | 'migration';
+  /** Anomaly keys to open the DDL pane for, e.g. ["table:users"]. */
+  schemaDiffOpen?: string[];
+  /** Stands in for the model’s write-up, which a capture run cannot produce. */
+  schemaDiffAnalysis?: string;
 }
 
 interface CaptureMessage { type: string; id: string; html?: string; error?: string }
