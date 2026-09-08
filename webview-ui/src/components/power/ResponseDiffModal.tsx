@@ -149,6 +149,10 @@ export function ResponseDiffModal({
       subtitle={showDiff ? undefined : 'Paste two responses to compare them side-by-side'}
       headerColor={ACCENT}
       size="xxl"
+      /* The same card as the schema comparison — these are the two diff
+         screens and opening one after the other should not resize the
+         window. */
+      height="64vh"
       onClose={onClose}
       footerLeft={
         <ToggleSwitchView
@@ -179,7 +183,7 @@ export function ResponseDiffModal({
         </div>
       }
     >
-      <div className="flex flex-col" style={{ height: 560 }}>
+      <div className="flex flex-col" style={{ height: '100%', minHeight: 0 }}>
         {/* Tab source pickers */}
         {responseTabs.length > 0 && (
           <div className="flex px-4 py-2 gap-4 border-b flex-shrink-0"
