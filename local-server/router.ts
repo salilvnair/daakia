@@ -108,7 +108,7 @@ import {
   handleDkghSetRepo, handleDkghBoard, handleDkghRepoOptions, handleDkghSearchRepos,
   handleDkghPinRepo, handleDkghDiagnose, handleDkghFindGh, handleDkghBrowseGh,
   handleDkghDismissOldGh, handleDkghPlanEdit, handleDkghApplyEdit, handleDkghCommands,
-  handleDkghInspectRepo, handleDkghRepoMeta,
+  handleDkghInspectRepo, handleDkghRepoMeta, handleDkghIssue, handleDkghEvidence,
 } from '../src/panel/main/handlers/dkgh-handler';
 import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
@@ -199,6 +199,12 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dkgh:repoMeta':
       await handleDkghRepoMeta(msg, post);
+      break;
+    case 'dkgh:issue':
+      await handleDkghIssue(msg, post);
+      break;
+    case 'dkgh:evidence':
+      await handleDkghEvidence(msg, post);
       break;
 
     // ── dk8s — Kubernetes. Routed here so the pod grid can be driven and

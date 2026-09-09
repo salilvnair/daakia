@@ -74,15 +74,20 @@ const SHAPE_KEY = 'dkgh.shape';
 const MEANING_KEY = 'dkgh.meaning';
 
 /**
- * The eleven columns that are on out of sixteen, in the order 05A shows them.
+ * The columns that are on by default, in the order 05A shows them.
  *
  * `number` and `title` lead because they are pinned — a row you cannot identify
  * is not a row — and the rest are ordered the way a lead reads them: what kind
  * of thing, where, how far along, how bad, whose, when.
+ *
+ * Some of these name a dimension a given repository may never have declared.
+ * That is deliberate: an unknown key is skipped rather than dropped, so a
+ * repository with a Module column keeps it in that position and one without
+ * simply closes the gap. See `arrange` in table-columns.
  */
 export const DEFAULT_COLUMNS = [
   'number', 'title', 'type', 'module', 'environment',
-  'status', 'priority', 'assignee', 'dates', 'age', 'quiet',
+  'status', 'priority', 'assignee', 'labels', 'age', 'quiet',
 ];
 
 const DEFAULT_SHAPE: ShapePrefs = {

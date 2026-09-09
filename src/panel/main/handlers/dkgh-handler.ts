@@ -17,7 +17,8 @@ import {
   probeEnvironment, setGhPath, verifyGhPath, forgetGh, probeReachability,
   searchCommonLocations, onAuthFailure, type GhEnv,
 } from '../../../services/gh/gh';
-import { fetchBoard } from '../../../services/gh/board';
+import { fetchBoard, fetchIssueDetail } from '../../../services/gh/board';
+import { fetchEvidence } from '../../../services/gh/evidence';
 import {
   guessFromWorkspace, searchRepos, summarise, inspectRepo, inspectFork,
   type RepoSummary,
@@ -383,6 +384,40 @@ export async function handleDkghBoard(
     state: (msg.state as 'open' | 'closed' | 'all') ?? 'open',
   });
   postMessage({ type: 'dkgh:board:result', ...result });
+}
+
+/**
+ * One issue in full, for the peek — screen 04D.
+ *
+ * Asked when somebody holds Space over a card, and not before. The comments on
+ * every issue in a busy repository are megabytes to fill a panel that is open
+ * for four seconds.
+ */
+export async function handleDkghIssue(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const number = Number(msg.number);
+  if (!repo || !Number.isFinite(number)) return;
+  postMessage({ type: 'dkgh:issue:result', ...(await fetchIssueDetail(repo, number)) });
+}
+
+/**
+ * A screenshot, as bytes the webview is allowed to render.
+ *
+ * The webview cannot fetch the URL itself — its content policy forbids remote
+ * images — and on a private repository the asset is behind the credential. So
+ * it comes through gh and arrives as a data URI. See `services/gh/evidence.ts`
+ * for the queue and the size cap.
+ */
+export async function handleDkghEvidence(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const url = String(msg.url ?? '').trim();
+  if (!url) return;
+  postMessage({ type: 'dkgh:evidence:result', ...(await fetchEvidence(url)) });
 }
 
 /**

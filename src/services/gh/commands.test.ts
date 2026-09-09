@@ -16,12 +16,21 @@ import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { GH_COMMANDS } from './commands';
 
-/** `run(['issue', 'list', ...])` -> `issue list`. */
+/**
+ * `run(['issue', 'list', ...])` -> `issue list`.
+ *
+ * Matches any call whose first argument is an argv literal — `run`,
+ * `runBinary`, and whatever local helper a module wraps them in. Matching by
+ * function name went stale the first time somebody added a wrapper, which is
+ * exactly the drift this file exists to catch.
+ */
 function invocationsIn(source: string): string[] {
   const out: string[] = [];
   /* Only the leading string literals: the verb and subcommand are always
-     literal, and everything after them is an argument we do not disclose. */
-  const call = /\brun\(\s*\[([^\]]*)\]/g;
+     literal, and everything after them is an argument we do not disclose. A
+     call whose array does not begin with a bare lowercase string — an array of
+     objects, `Promise.all([...])` — yields no verbs and is skipped. */
+  const call = /\b[A-Za-z_$][\w$]*(?:<[^<>()]*>)?\(\s*\[([^\]]*)\]/g;
   let m: RegExpExecArray | null;
   while ((m = call.exec(source))) {
     const verbs: string[] = [];

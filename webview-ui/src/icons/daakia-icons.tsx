@@ -2528,3 +2528,24 @@ export function CompassIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** A picture — evidence attached to an issue, on a card or in a peek. */
+export function ImageIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="8.5" cy="9.5" r="1.5" />
+      <path d="M21 16l-5-5-4.5 4.5L9 13l-6 6" />
+    </svg>
+  );
+}
+
+/** Two overlapping rectangles — a peek at one thing without leaving the rest. */
+export function PeekIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="5" width="12" height="10" rx="2" />
+      <path d="M9 19h10a2 2 0 0 0 2-2V9" />
+    </svg>
+  );
+}

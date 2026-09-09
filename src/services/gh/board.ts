@@ -12,6 +12,7 @@
 import { run } from './gh';
 import { parseIssueForms, proposeDimensions, headingMap, type ProposedDimension, type FormParseError } from './issue-forms';
 import { readDimensions } from './issue-body';
+import { imageUrls } from './evidence';
 
 /** The fields `gh issue list --json` is asked for. */
 const ISSUE_FIELDS = [
@@ -34,6 +35,22 @@ export interface BoardIssue {
   commentCount: number;
   /** Read out of the body via the field map. Absent keys are unmapped. */
   dimensions: Record<string, string>;
+  /**
+   * Image URLs found in the body, in the order they appear.
+   *
+   * URLs only. The bytes are fetched one at a time, on demand, by whichever
+   * card is actually on screen — sending sixty screenshots with the board would
+   * make the first read of a busy repository unusable to save a click.
+   */
+  evidence: string[];
+  /**
+   * The first line of prose in the body, trimmed.
+   *
+   * A card element that is off by default, and the reason the whole body is not
+   * sent: a hundred issues of markdown is megabytes through `postMessage` to
+   * render one sentence nobody asked for.
+   */
+  bodyFirstLine?: string;
   /** Days since it was opened. Computed here so the UI never does date maths. */
   ageDays: number;
   /**
@@ -92,6 +109,29 @@ interface RawIssue {
 }
 
 const DAY = 86_400_000;
+
+/** How much of a first line is worth carrying to a card. */
+const FIRST_LINE_MAX = 160;
+
+/**
+ * The first line of a body that a reader would call the description.
+ *
+ * Headings, images, checkboxes and the horizontal rules a template leaves
+ * behind are all skipped — an issue filed from a form begins with `### Summary`
+ * and a card that showed that would say the same thing on every row.
+ */
+function firstLine(body: string): string | undefined {
+  for (const raw of body.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (/^(#{1,6}\s|[-*_]{3,}$|!\[|<|>|\|)/.test(line)) continue;
+    if (/^-\s*\[[ xX]\]/.test(line)) continue;
+    const text = line.replace(/^[-*+]\s+/, '').replace(/[*_`]/g, '').trim();
+    if (!text) continue;
+    return text.length > FIRST_LINE_MAX ? `${text.slice(0, FIRST_LINE_MAX - 1)}…` : text;
+  }
+  return undefined;
+}
 
 /** How far back "closed recently" reaches, for the empty board's second line. */
 const RECENT_CLOSED_DAYS = 90;
@@ -265,6 +305,8 @@ export async function fetchBoard(
       closedAt: i.closedAt || undefined,
       commentCount: commentCount(i.comments),
       dimensions: readDimensions(i.body ?? '', map),
+      evidence: imageUrls(i.body ?? ''),
+      bodyFirstLine: firstLine(i.body ?? ''),
       ageDays: daysSince(created, now),
       /* updatedAt moves on a label change as well as a comment, so this is
          "quiet" in the loosest sense — the board says "quiet for", not
@@ -287,5 +329,57 @@ export async function fetchBoard(
     noTemplates: templates.noTemplates,
     fetchedAt: now,
     closedRecently,
+  };
+}
+
+/**
+ * One issue, in the depth a peek needs — screen 04D.
+ *
+ * Three things the card could not fit: the actual behaviour, the evidence at a
+ * readable size, and the most recent comment, which is usually the one that
+ * tells you whether anybody is on it.
+ *
+ * Fetched when somebody holds Space, not with the board. The comments alone
+ * would multiply a board read by the size of every discussion in the
+ * repository, to fill a panel that is open for four seconds at a time.
+ */
+export interface IssueDetail {
+  repo: string;
+  number: number;
+  body: string;
+  evidence: string[];
+  /** Newest last, as GitHub orders them. The peek shows the final one. */
+  comments: { author?: string; body: string; createdAt?: string }[];
+  error?: string;
+}
+
+interface RawComment { author?: { login?: string }; body?: string; createdAt?: string }
+
+export async function fetchIssueDetail(repo: string, number: number): Promise<IssueDetail> {
+  const empty = { repo, number, body: '', evidence: [], comments: [] };
+  const r = await run([
+    'issue', 'view', String(number), '--repo', repo, '--json', 'body,comments',
+  ], { timeoutMs: 30_000 });
+
+  if (!r.ok) return { ...empty, error: (r.stderr || r.failure || 'gh could not read it').trim() };
+
+  let raw: { body?: string; comments?: RawComment[] };
+  try {
+    raw = JSON.parse(r.stdout) as typeof raw;
+  } catch {
+    return { ...empty, error: 'gh returned something that is not JSON.' };
+  }
+
+  const body = raw.body ?? '';
+  return {
+    repo,
+    number,
+    body,
+    evidence: imageUrls(body),
+    comments: (raw.comments ?? []).map(c => ({
+      author: c.author?.login,
+      body: c.body ?? '',
+      createdAt: c.createdAt,
+    })),
   };
 }

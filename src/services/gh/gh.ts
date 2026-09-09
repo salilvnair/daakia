@@ -239,6 +239,54 @@ export async function run(args: string[], opts: RunOptions = {}): Promise<RunRes
 }
 
 /**
+ * The same, for a response that is not text.
+ *
+ * There is exactly one of these and it exists for evidence: a screenshot
+ * attached to an issue. The webview cannot fetch it itself — its content policy
+ * forbids remote images, and widening that to `https:` for a thumbnail would
+ * open every panel in the editor to the whole web — and on a private repository
+ * the asset needs the credential anyway, which is the one thing the webview must
+ * never hold.
+ *
+ * So the bytes come back through gh, exactly like everything else, and reach the
+ * screen as a data URI. `encoding: 'buffer'` rather than the default utf8: a PNG
+ * decoded as text is a corrupt PNG, and it corrupts silently.
+ */
+export async function runBinary(
+  args: string[],
+  opts: RunOptions = {},
+): Promise<{ ok: boolean; code: number | null; data: Buffer; stderr: string; failure?: string }> {
+  const bin = await resolveBinary();
+  return new Promise((resolve) => {
+    execFile(
+      bin,
+      args,
+      {
+        cwd: opts.cwd,
+        env: opts.env ? { ...process.env, ...opts.env } : process.env,
+        timeout: opts.timeoutMs ?? 30_000,
+        maxBuffer: opts.maxBuffer ?? 16 * 1024 * 1024,
+        windowsHide: true,
+        signal: opts.signal,
+        encoding: 'buffer',
+        // No `shell` option here either.
+      },
+      (err, stdout, stderr) => {
+        const e = err as (Error & { code?: number | string }) | null;
+        const errText = Buffer.isBuffer(stderr) ? stderr.toString('utf8') : String(stderr ?? '');
+        const data = Buffer.isBuffer(stdout) ? stdout : Buffer.from(String(stdout ?? ''));
+        if (e && typeof e.code !== 'number') {
+          resolve({ ok: false, code: null, data, stderr: errText, failure: e.message });
+          return;
+        }
+        const code = e ? (e.code as number) : 0;
+        resolve({ ok: code === 0, code, data, stderr: errText });
+      },
+    );
+  });
+}
+
+/**
  * Which features this gh can do.
  *
  * Asked by capability rather than computed from a version number: a corporate

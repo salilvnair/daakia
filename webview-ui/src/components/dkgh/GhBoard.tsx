@@ -1,78 +1,64 @@
 /**
- * The board — screen 04 (cards) and 05 (table).
+ * The board — the shell around screens 04 and 05.
  *
- * Laid out to the mock: repository head, the section tabs, a toolbar of pills,
- * the row of filters that are on, then the groups. Every piece is a dui
- * component with dkgh's accent passed in; nothing here draws its own pill,
- * chip, card, tab or group header.
+ * Repository head, the section tabs, a toolbar of pills, the row of filters
+ * that are on, an optional panel down the left, and then either the cards or
+ * the table. This file owns everything the two views share and neither of them
+ * should own twice:
  *
- * Everything shown is derived. Age, quiet-for and the grouping all come from
- * data the host computed or GitHub already had — nothing is stored, because a
- * local copy would be a cache to invalidate and a second truth to disagree
- * with.
+ * - **The read**, and the sixty-second refresh that pauses when the tab is
+ *   hidden, when the credential is gone, or when GitHub is rate-limiting us.
+ * - **The selection**, which survives a filter change and not a repository
+ *   switch — see `GhBulkBar`.
+ * - **The cursor and the keys**, because `j` has to move down whichever view is
+ *   showing, and the cursor and the selection being different things is the one
+ *   genuinely confusing part of a keyboard board. The footer says which is
+ *   which out loud — see `GhKeys`.
+ * - **The write path**, so a bulk assign and a single cell change take the same
+ *   route through the same confirm — see `edit-flow.ts`.
  *
- * The toolbar carries the mock's full set of views. The ones whose host side is
- * not built yet are drawn disabled and say so on hover, rather than being
- * hidden — the shape of the board is the thing being agreed on, and a pill that
- * looks live and does nothing is the one thing worse than a pill that is
- * plainly not ready.
+ * Everything shown is derived. Age, quiet-for and the grouping come from what
+ * the host computed or GitHub already had; nothing is stored, because a local
+ * copy would be a cache to invalidate and a second truth to disagree with.
+ *
+ * The toolbar carries the mock's full set of views. The two whose host side is
+ * not built are drawn disabled and say so on hover rather than being hidden —
+ * the shape of the board is the thing being agreed on, and a pill that looks
+ * live and does nothing is the one thing worse than a pill that is plainly not
+ * ready.
  */
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ButtonView, IconButtonView, AvatarView, BadgeChipView, DataTableView,
-  EmptyStateView, CalloutView, IssueCardView, GroupHeaderView, TogglePillView,
-  UnderlineTabsView, SearchFieldView, FilterBarView, SkeletonView,
+  ButtonView, IconButtonView, AvatarView, BadgeChipView, CalloutView, EmptyStateView,
+  TogglePillView, UnderlineTabsView, SearchFieldView, FilterBarView, SkeletonView,
   IssueCardSkeletonView, TableSkeletonView,
-  type DataTableColumn,
 } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useSettledWait } from '../../hooks/useSettledWait';
 import {
   RefreshIcon, LayoutGridIcon, TableIcon, IssueOpenedIcon, RepoIcon, PlusIcon,
-  ChartBarIcon, ColumnsIcon, TimelineIcon, FilterIcon, DownloadIcon,
-  TagIcon, ClockIcon, WarningTriangleIcon,
+  ChartBarIcon, ColumnsIcon, TimelineIcon, FilterIcon, DownloadIcon, KeyboardIcon,
+  TagIcon, ClockIcon,
 } from '../../icons';
 import { GhNoAccess } from './GhNoAccess';
-import { ACCENT, activeAccount, type GhEnv } from './types';
-
-interface Label { name: string; color: string; description?: string }
-interface BoardIssue {
-  number: number;
-  title: string;
-  state: 'OPEN' | 'CLOSED';
-  url: string;
-  author?: string;
-  assignees: string[];
-  labels: Label[];
-  milestone?: string;
-  createdAt: string;
-  commentCount: number;
-  dimensions: Record<string, string>;
-  ageDays: number;
-  quietDays: number;
-}
-interface ProposedDimension { dimension: string; heading: string; options: string[]; files: string[] }
-interface BoardData {
-  repo: string;
-  issues: BoardIssue[];
-  dimensions: ProposedDimension[];
-  formErrors: { file: string; message: string; line?: number }[];
-  noTemplates: boolean;
-  fetchedAt: number;
-  closedRecently?: number;
-  rateLimit?: { remaining: number; limit: number; resetAt: number };
-  error?: string;
-}
-
-/** Nothing is stale until a fortnight — the number the plan settled on. */
-const QUIET_DAYS = 14;
-
-/** Grouping the board always has, whatever the templates declared. */
-const NATIVE_GROUPS = [
-  { id: 'none', label: 'Nothing' },
-  { id: 'assignee', label: 'Assignee' },
-  { id: 'milestone', label: 'Milestone' },
-];
+import { GhCards, Header } from './GhCards';
+import { GhIssueTable, sortIssues } from './GhIssueTable';
+import { GhCardOptions } from './GhCardOptions';
+import { GhColumnPanel } from './GhColumnPanel';
+import { GhBulkBar } from './GhBulkBar';
+import { GhEditConfirm } from './GhEditConfirm';
+import { GhBoardEmpty, type ActiveFilter } from './GhBoardEmpty';
+import { GhPeek } from './GhPeek';
+import { GhKeys, GhKeyStatus, PEEK_HOLD_MS } from './GhKeys';
+import { useEditFlow, type EditRequest } from './edit-flow';
+import { useShapePrefs, useMeaningPrefs, type CardField } from './board-prefs';
+import { arrange, catalogue } from './table-columns';
+import {
+  QUIET_DAYS, NATIVE_GROUPS, cap, groupIssues,
+  type BoardData, type BoardIssue, type Group,
+} from './board-types';
+import { since, until, atClock } from './format';
+import { ACCENT, activeAccount, type GhEnv, type RepoMeta } from './types';
 
 /** The views the mock lays out, with the two that are built marked. */
 const VIEWS = [
@@ -107,49 +93,96 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   frozen?: boolean;
 }) {
   const [data, setData] = useState<BoardData | null>(null);
+  /**
+   * The last read that did not work, kept beside the last one that did.
+   *
+   * A failure must not blank a board somebody is reading. Rate limiting is the
+   * case that makes this matter: the right screen there is the issues you
+   * already had, with a line saying how old they are and when GitHub will
+   * answer again — not an empty list implying a clean sprint.
+   */
+  const [failure, setFailure] = useState<
+    { error?: string; rateLimit?: BoardData['rateLimit'] } | undefined
+  >();
+  const [meta, setMeta] = useState<RepoMeta | undefined>();
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [groupBy, setGroupBy] = useState('none');
-  const [view, setView] = useState('cards');
   const [section, setSection] = useState('board');
+  /** `open` until somebody asks for the closed ones — screen 04E's first state. */
+  const [issueState, setIssueState] = useState<'open' | 'all'>('open');
+  const [panel, setPanel] = useState(false);
+  const [showKeys, setShowKeys] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [cursor, setCursor] = useState<number | undefined>();
+  const [peek, setPeek] = useState<BoardIssue | undefined>();
+  /** A key asked for one of the bulk menus — see `useKeys` and screen 05D. */
+  const [autoOpen, setAutoOpen] = useState<'assign' | 'label' | 'milestone' | undefined>();
+
+  const [shape, setShape] = useShapePrefs();
+  const [meaning, setMeaning] = useMeaningPrefs(repo);
+  const view = shape.view;
+
+  const read = useCallback(() => {
+    if (frozen) return;
+    postMsg({ type: 'dkgh:board', repo, state: issueState });
+  }, [repo, frozen, issueState]);
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
       const msg = evt.data as Record<string, unknown>;
       if (msg.type === 'dkgh:board:loading') { setLoading(true); return; }
+      if (msg.type === 'dkgh:repoMeta:result') { setMeta(msg as unknown as RepoMeta); return; }
       if (msg.type !== 'dkgh:board:result') return;
       setLoading(false);
-      setData(msg as unknown as BoardData);
+      const result = msg as unknown as BoardData;
+      if (result.error || result.rateLimit) {
+        setFailure({ error: result.error, rateLimit: result.rateLimit });
+        return;
+      }
+      setFailure(undefined);
+      setData(result);
     };
     window.addEventListener('message', handler);
-    if (!frozen) postMsg({ type: 'dkgh:board', repo });
+    /* The lists a write chooses from, asked once when the board opens rather
+       than when a menu is clicked: a bulk bar that spends two seconds fetching
+       labels after you press Label is a bulk bar people stop using. */
+    if (!frozen) postMsg({ type: 'dkgh:repoMeta', repo });
     return () => window.removeEventListener('message', handler);
   }, [repo, frozen]);
+
+  /* The read itself, on mount and whenever what to read changes. Only here —
+     asking in the listener's effect too would fire two of them on every open. */
+  useEffect(() => { setLoading(true); read(); }, [read]);
 
   /*
     Auto-refresh, at the cadence the plan settled on. A refresh is one or two
     API calls against a budget of 5,000 an hour, so 60 seconds costs about 2%.
-    Paused while the tab is hidden — nobody needs a background webview polling
-    on their behalf.
+    Paused while the tab is hidden, while the credential is gone, and while
+    GitHub is refusing — a poll that cannot succeed is a poll that only spends
+    the budget it is waiting on.
   */
+  const limited = !!failure?.rateLimit;
   useEffect(() => {
-    if (frozen) return;
+    if (frozen || limited) return;
     const id = window.setInterval(() => {
-      if (document.visibilityState === 'visible') postMsg({ type: 'dkgh:board', repo });
+      if (document.visibilityState === 'visible') read();
     }, 60_000);
     return () => window.clearInterval(id);
-  }, [repo, frozen]);
+  }, [frozen, limited, read]);
+
+  /* Stable, because the edit flow re-registers its listener whenever this
+     changes and a new function on every render would do that every render. */
+  const refresh = useCallback(() => {
+    if (frozen) return;
+    setLoading(true);
+    read();
+  }, [frozen, read]);
+  const flow = useEditFlow(repo, refresh);
 
   /* Whatever the switch dialog needs to name what is being left behind. */
   useEffect(() => {
     onContext?.({ search, dimensions: (data?.dimensions ?? []).map(d => d.dimension) });
   }, [search, data, onContext]);
-
-  const refresh = () => {
-    if (frozen) return;
-    setLoading(true);
-    postMsg({ type: 'dkgh:board', repo });
-  };
 
   /** Dimensions the repository declared, plus the ones GitHub always has. */
   const groupOptions = useMemo(() => [
@@ -157,63 +190,198 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     ...(data?.dimensions ?? []).map(d => ({ id: d.dimension, label: cap(d.dimension) })),
   ], [data]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return data?.issues ?? [];
-    /* Title and number. Body search belongs with the facet work; offering it
-       here and matching only titles would be worse than not offering it. */
-    return (data?.issues ?? []).filter(i =>
-      i.title.toLowerCase().includes(q) || String(i.number).includes(q));
-  }, [data, search]);
+  const matches = useCallback((i: BoardIssue, q: string) => {
+    if (!q) return true;
+    const t = q.toLowerCase();
+    return i.title.toLowerCase().includes(t)
+      || String(i.number).includes(t)
+      || (i.bodyFirstLine ?? '').toLowerCase().includes(t);
+  }, []);
 
-  const groups = useMemo(() => groupIssues(filtered, groupBy), [filtered, groupBy]);
+  const all = data?.issues ?? [];
+  const filtered = useMemo(
+    () => all.filter(i => matches(i, search.trim())),
+    [all, search, matches],
+  );
+
+  const groups = useMemo(() => groupIssues(filtered, meaning.groupBy), [filtered, meaning.groupBy]);
+
+  /*
+    The rows as they read on screen, in that order.
+
+    The keyboard needs it — `j` moves to whatever is visually next, which in the
+    table is the sorted order and in the cards is the grouped order — and so
+    does shift-click, whose range is "everything between these two as they are
+    laid out" rather than "everything between these two issue numbers".
+  */
+  const ordered = useMemo(() => {
+    const cols = arrange(catalogue(data?.dimensions ?? []), shape.columns);
+    return groups.flatMap(g => view === 'table'
+      ? sortIssues(g.issues, meaning.sort, cols, data?.dimensions ?? [])
+      : g.issues);
+  }, [groups, view, meaning.sort, shape.columns, data]);
+
+  /* A cursor pointing at an issue that is no longer on the board is a cursor
+     pointing at nothing, and every key would then do nothing silently. */
+  useEffect(() => {
+    if (cursor !== undefined && !ordered.some(i => i.number === cursor)) {
+      setCursor(ordered[0]?.number);
+    }
+  }, [ordered, cursor]);
+
+  /* The selection survives filters and does not survive a repository. */
+  useEffect(() => { setSelected(new Set()); setCursor(undefined); }, [repo]);
+
+  const lastPicked = useRef<number | undefined>(undefined);
+
+  const toggle = useCallback((issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (mods.shift && lastPicked.current !== undefined) {
+        /* Shift extends across what is on screen in the order it is on screen,
+           which is what "between these two" means to somebody looking at it. */
+        const from = ordered.findIndex(i => i.number === lastPicked.current);
+        const to = ordered.findIndex(i => i.number === issue.number);
+        if (from >= 0 && to >= 0) {
+          const [a, b] = from < to ? [from, to] : [to, from];
+          for (let k = a; k <= b; k++) next.add(ordered[k].number);
+          return next;
+        }
+      }
+      if (next.has(issue.number)) next.delete(issue.number);
+      else next.add(issue.number);
+      return next;
+    });
+    lastPicked.current = issue.number;
+    setCursor(issue.number);
+  }, [ordered]);
+
+  const open = useCallback((issue: BoardIssue) => {
+    window.open(issue.url, '_blank');
+  }, []);
+
+  /** The issues a key acts on: the selection if there is one, else the cursor. */
+  const targets = useCallback(() => {
+    if (selected.size > 0) return [...selected];
+    return cursor === undefined ? [] : [cursor];
+  }, [selected, cursor]);
+
+  const propose = useCallback((
+    request: EditRequest,
+    showsAs?: { field: string; value: string },
+  ) => {
+    flow.propose(request, showsAs);
+  }, [flow]);
+
+  const editCell = useCallback((
+    issue: BoardIssue, field: 'assignee' | 'milestone', value: string,
+  ) => {
+    propose(
+      field === 'assignee'
+        ? {
+            repo,
+            numbers: [issue.number],
+            /* Replacing, not adding: the cell showed one name and now shows
+               another, and leaving the old assignee on would make the cell a
+               lie the moment the refresh landed. */
+            removeAssignees: issue.assignees,
+            addAssignees: [value],
+          }
+        : { repo, numbers: [issue.number], milestone: value },
+      { field, value },
+    );
+  }, [propose, repo]);
+
+  const searchRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  useKeys({
+    enabled: section === 'board' && !showKeys,
+    ordered,
+    cursor,
+    setCursor,
+    selected,
+    setSelected,
+    onOpen: open,
+    onPeek: setPeek,
+    onHelp: () => setShowKeys(true),
+    onSearch: () => searchRef.current?.querySelector('input')?.focus(),
+    onPanel: () => setPanel(p => !p),
+    onAct: (kind) => {
+      const numbers = targets();
+      if (numbers.length === 0) return;
+      if (kind === 'close') {
+        propose({ repo, numbers, state: 'close', closeReason: 'completed' });
+        return;
+      }
+      /*
+        Acts on the selection if there is one, otherwise on the row under the
+        cursor — which means the cursor's row has to become the selection first,
+        or the bar it opens would have nothing to act on.
+      */
+      if (selected.size === 0) setSelected(() => new Set(numbers));
+      setAutoOpen(kind);
+    },
+  });
 
   /*
     The first read shows the board's shape, not a panel over it.
 
-    A skeleton is the honest thing to draw here: the chrome is already known —
-    the repository, the sections, the toolbar — so only the part that depends on
-    the network is unknown, and only that part should look unknown. Nothing
-    moves when the issues land, because the cards arrive exactly where their
-    outlines stood.
+    A skeleton is the honest thing to draw here: the chrome is already known, so
+    only the part that depends on the network looks unknown, and nothing moves
+    when the issues land because the cards arrive where their outlines stood.
   */
   const pending = loading && !data;
 
   /*
-    And if the data does not come, THEN the placeholder.
-
-    Past about eight seconds a skeleton stops reassuring and starts looking
-    stuck, and the question changes from "how much is coming" to "what is it
-    doing". That is the point at which naming the calls earns its space.
+    And if the data does not come, THEN the placeholder. Past about eight
+    seconds a skeleton stops reassuring and starts looking stuck, and the
+    question changes from "how much is coming" to "what is it doing".
   */
   const stuck = useSettledWait(pending, { delayMs: 8000, minMs: 1200 });
 
   /*
     A read that failed because the repository would not resolve is screen 03B,
-    not an empty board.
-
-    gh says "could not resolve to a Repository" for a repository that does not
-    exist AND for one this account simply cannot see, which are completely
-    different problems — one is a typo, the other is an SSO authorisation
-    thirty seconds away. Showing "nothing is open" for either would be a
-    confident wrong answer about somebody else's repository.
+    not an empty board. gh says "could not resolve to a Repository" for one that
+    does not exist AND for one this account cannot see, which are completely
+    different problems — one is a typo, the other is an SSO authorisation thirty
+    seconds away.
   */
-  const unresolved = !!data?.error
-    && /could not resolve|not found|404|NOT_FOUND|no such/i.test(data.error);
+  const unresolved = !!failure?.error
+    && /could not resolve|not found|404|NOT_FOUND|no such/i.test(failure.error);
 
-  const total = data?.issues.length ?? 0;
+  const total = all.length;
   const stale = filtered.filter(i => i.quietDays >= QUIET_DAYS).length;
   const unassigned = filtered.filter(i => i.assignees.length === 0).length;
   const [owner, name] = repo.split('/');
   const account = activeAccount(env ?? null);
-  const groupLabel = groupOptions.find(g => g.id === groupBy)?.label ?? 'Nothing';
+  const groupLabel = groupOptions.find(g => g.id === meaning.groupBy)?.label ?? 'Nothing';
+
+  /** What is narrowing the board, and what dropping each would give back. */
+  const activeFilters: ActiveFilter[] = [
+    ...(search.trim() ? [{
+      key: 'search',
+      label: `the search for “${search.trim()}”`,
+      wouldShow: all.length,
+      drop: () => setSearch(''),
+    }] : []),
+    ...(issueState === 'open' && (data?.closedRecently ?? 0) > 0 ? [{
+      key: 'state',
+      label: 'open only',
+      wouldShow: data?.closedRecently ?? 0,
+      drop: () => setIssueState('all'),
+    }] : []),
+  ];
 
   if (unresolved) {
     return <GhNoAccess repo={repo} onRetry={refresh} onChangeRepo={onChangeRepo} />;
   }
 
+  const showPanel = panel && (view === 'cards' || view === 'table');
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden" ref={boardRef}
+         style={{ position: 'relative' }}>
 
       {/* Head — repository, count, when it was last read */}
       <div className="flex items-center gap-2.5 px-4 pt-3 flex-shrink-0 min-w-0">
@@ -224,14 +392,17 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         </span>
         {pending
           ? <SkeletonView variant="block" width={46} height={15} />
-          : <BadgeChipView tone={ACCENT} size="sm">{total} open</BadgeChipView>}
+          : <BadgeChipView tone={ACCENT} size="sm">
+              {total} {issueState === 'open' ? 'open' : 'issues'}
+            </BadgeChipView>}
         <span className="flex-1" />
         <span className="text-[10.5px] font-mono whitespace-nowrap"
               style={{ color: 'var(--color-text-muted)' }}>
           {frozen ? 'paused — signed out'
+            : limited ? 'paused — rate limited'
             : pending ? 'reading...'
             : loading ? 'refreshing...'
-            : `auto 60s · refreshed ${ago(data?.fetchedAt)}`}
+            : `auto 60s · refreshed ${since(data?.fetchedAt)}`}
         </span>
         {account && onOpenAccount && (
           <button
@@ -273,14 +444,22 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
       {/* Toolbar */}
       <div className="flex items-center gap-[7px] px-4 py-2 flex-wrap flex-shrink-0 min-w-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <div className="flex-1" style={{ minWidth: 200 }}>
+        <div className="flex-1" style={{ minWidth: 180 }} ref={searchRef}>
           <SearchFieldView value={search} onChange={setSearch} onClear={() => setSearch('')}
                            placeholder="Search issues" size="sm" accentColor={ACCENT}
                            width="100%" />
         </div>
-        <TogglePillView icon={<FilterIcon size={11} />} accentColor={ACCENT} disabled
-                        title="Facets come with the filter work">
-          Filters
+        <TogglePillView
+          icon={<FilterIcon size={11} />}
+          accentColor={ACCENT}
+          active={showPanel}
+          count={activeFilters.length || undefined}
+          title={view === 'table'
+            ? 'Columns, their order, and how long values behave'
+            : 'Grouping, density, and what is on each card'}
+          onClick={() => setPanel(p => !p)}
+        >
+          {view === 'table' ? 'Columns' : 'Options'}
         </TogglePillView>
         {VIEWS.map(v => (
           <TogglePillView
@@ -290,20 +469,26 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             active={view === v.id}
             disabled={!v.ready}
             title={v.ready ? undefined : `${v.label} is not built yet`}
-            onClick={() => setView(v.id)}
+            onClick={() => setShape({ view: v.id as typeof shape.view })}
           >
             {v.label}
           </TogglePillView>
         ))}
-        <GroupPill options={groupOptions} value={groupBy} label={groupLabel} onChange={setGroupBy} />
+        <TogglePillView accentColor={ACCENT} active={meaning.groupBy !== 'none'}
+                        onClick={() => setPanel(true)}>
+          Group: {groupLabel}
+        </TogglePillView>
         <TogglePillView icon={<DownloadIcon size={11} />} accentColor={ACCENT} disabled
-                        title="Export comes with the assignee view">
+                        title="Export writes exactly these columns, in this order — screen 15">
           Export
         </TogglePillView>
+        <IconButtonView icon={<KeyboardIcon size={12} />} tooltip="Keys"
+                        accentColor="var(--color-text-muted)"
+                        onClick={() => setShowKeys(true)} />
       </div>
 
       {/* What is filtering the list right now */}
-      {search.trim() !== '' && (
+      {activeFilters.length > 0 && (
         <div className="px-4 py-1.5 flex items-center gap-1.5 flex-shrink-0"
              style={{
                borderBottom: '1px solid var(--color-surface-border)',
@@ -315,10 +500,44 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           </span>
           <FilterBarView
             color={ACCENT}
-            filters={[{ key: 'search', label: `search ${search.trim()}` }]}
-            onRemove={() => setSearch('')}
-            onClearAll={() => setSearch('')}
+            filters={activeFilters.map(f => ({ key: f.key, label: f.label }))}
+            onRemove={key => activeFilters.find(f => f.key === key)?.drop()}
+            onClearAll={() => activeFilters.forEach(f => f.drop())}
           />
+        </div>
+      )}
+
+      {/* Selection, and the command it is about to run */}
+      {selected.size > 0 && (
+        <GhBulkBar
+          repo={repo}
+          selected={[...selected]}
+          total={filtered.length}
+          meta={meta}
+          autoOpen={autoOpen}
+          onAutoOpened={() => setAutoOpen(undefined)}
+          onSelectAll={() => setSelected(new Set(filtered.map(i => i.number)))}
+          onClear={() => setSelected(new Set())}
+          onPropose={propose}
+        />
+      )}
+      <GhEditConfirm flow={flow} />
+
+      {/* A read that failed while there is still a board worth reading */}
+      {failure && filtered.length > 0 && (
+        <div className="px-4 flex-shrink-0">
+          <CalloutView
+            variant="warning"
+            title={failure.rateLimit ? 'GitHub is rate-limiting us' : 'The last refresh failed'}
+            style={{ margin: '8px 0 0' }}
+          >
+            {failure.rateLimit
+              ? `${failure.rateLimit.remaining} of ${failure.rateLimit.limit} requests left. `
+                + `Auto-refresh has stopped and will work again ${until(failure.rateLimit.resetAt)}, `
+                + `at ${atClock(failure.rateLimit.resetAt)}. The board below is from `
+                + `${since(data?.fetchedAt)}.`
+              : `${failure.error} The board below is from ${since(data?.fetchedAt)}.`}
+          </CalloutView>
         </div>
       )}
 
@@ -342,47 +561,99 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         </div>
       )}
 
-      {/* The groups */}
-      <div className="flex-1 overflow-y-auto min-w-0 px-4 pt-3 pb-4">
-        {pending ? (
-          stuck
-            ? <GhBoardStalled repo={repo} onChangeRepo={onChangeRepo} />
-            : <BoardSkeleton view={view} />
-        ) : filtered.length === 0 ? (
-          <EmptyStateView
-            variant="medallion"
-            accentColor={ACCENT}
-            icon={<IssueOpenedIcon size={24} />}
-            title={search ? 'Nothing matches that' : 'Nothing is open'}
-            message={search
-              ? `No open issue in ${repo} has "${search}" in its title or number. There are ${total} altogether.`
-              : `${repo} has no open issues. Closed ones are not read yet — the state filter comes with the facets.`}
-            action={search ? { label: 'Clear the search', onClick: () => setSearch('') } : undefined}
+      {/* The board */}
+      <div className="flex-1 flex min-h-0 min-w-0">
+        {showPanel && (view === 'table' ? (
+          <GhColumnPanel
+            dimensions={data?.dimensions ?? []}
+            columns={shape.columns}
+            onColumns={columns => setShape({ columns })}
+            wrapTitles={shape.wrapTitles}
+            onWrapTitles={wrapTitles => setShape({ wrapTitles })}
           />
-        ) : view === 'cards' ? (
-          <div className="flex flex-col" style={{ gap: 17 }}>
-            {groups.map(g => (
-              <div key={g.key}>
-                {groupBy !== 'none' && <Header group={g} />}
-                <div className="grid gap-2"
-                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
-                  {g.issues.map(i => <Card key={i.number} issue={i} />)}
-                </div>
-              </div>
-            ))}
-          </div>
         ) : (
-          <IssueTable groups={groups} showGroups={groupBy !== 'none'} dims={data?.dimensions ?? []} />
-        )}
+          <GhCardOptions
+            issues={filtered}
+            dimensions={data?.dimensions ?? []}
+            groupBy={meaning.groupBy}
+            onGroupBy={groupBy => setMeaning({ groupBy })}
+            cardFields={shape.cardFields}
+            onCardFields={cardFields => setShape({ cardFields: cardFields as CardField[] })}
+            density={shape.density}
+            onDensity={density => setShape({ density })}
+            view={view}
+          />
+        ))}
+
+        <div className="flex-1 min-h-0 min-w-0"
+             style={{ overflow: view === 'table' && !pending ? 'hidden' : 'auto' }}>
+          {pending ? (
+            <div className="px-4 pt-3 pb-4">
+              {stuck
+                ? <GhBoardStalled repo={repo} onChangeRepo={onChangeRepo} />
+                : <BoardSkeleton view={view} />}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="px-4 pt-3 pb-4">
+              <GhBoardEmpty
+                repo={repo}
+                total={total}
+                closedRecently={data?.closedRecently}
+                filters={activeFilters}
+                rateLimit={failure?.rateLimit}
+                staleAt={data?.fetchedAt}
+                error={failure?.error}
+                onClearAll={() => activeFilters.forEach(f => f.drop())}
+                onShowClosed={issueState === 'open' ? () => setIssueState('all') : undefined}
+                onRetry={refresh}
+              />
+            </div>
+          ) : view === 'cards' ? (
+            <div className="px-4 pt-3 pb-4">
+              <GhCards
+                groups={groups}
+                showGroups={meaning.groupBy !== 'none'}
+                fields={shape.cardFields}
+                density={shape.density}
+                dimensions={data?.dimensions ?? []}
+                selected={selected}
+                onToggle={toggle}
+                onOpen={open}
+                cursor={cursor}
+              />
+            </div>
+          ) : (
+            <GhIssueTable
+              groups={groups}
+              showGroups={meaning.groupBy !== 'none'}
+              dimensions={data?.dimensions ?? []}
+              columns={shape.columns}
+              density={shape.density}
+              wrapTitles={shape.wrapTitles}
+              sort={meaning.sort}
+              onSort={sort => setMeaning({ sort })}
+              selected={selected}
+              onToggle={toggle}
+              onOpen={open}
+              cursor={cursor}
+              meta={meta}
+              onEdit={editCell}
+              pending={flow.optimistic}
+              renderHeader={(g: Group) => <Header group={g} dimensions={data?.dimensions ?? []} />}
+            />
+          )}
+        </div>
       </div>
 
       {/* Footer */}
       <div className="flex items-center gap-2 px-4 py-2 text-[10.5px] flex-shrink-0"
            style={{ borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
         <span>
-          {pending ? 'reading the repository' :
-            `${filtered.length}${filtered.length !== total ? ` of ${total}` : ''} shown`}
+          {pending ? 'reading the repository'
+            : `${filtered.length}${filtered.length !== total ? ` of ${total}` : ''} shown`}
         </span>
+        <span style={{ opacity: 0.5 }}>·</span>
+        <GhKeyStatus selected={[...selected]} cursor={cursor} />
         <span className="flex-1" />
         {!pending && stale > 0 && (
           <BadgeChipView tone="var(--color-warning)" size="sm">
@@ -393,252 +664,119 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           <BadgeChipView tone="var(--color-warning)" size="sm">{unassigned} unassigned</BadgeChipView>
         )}
       </div>
+
+      {peek && <GhPeek repo={repo} issue={peek} onOpen={i => { setPeek(undefined); open(i); }} />}
+      {showKeys && <GhKeys onClose={() => setShowKeys(false)} />}
     </div>
   );
 }
+
+// ── The keys ────────────────────────────────────────────────────────────────
 
 /**
- * `Group: Module`, and the list behind it.
+ * `j`, `k`, `Space` and the rest — screen 05D.
  *
- * One pill rather than a row of them, the way the mock has it: the grouping is
- * a single choice, and spelling out every dimension in the toolbar would push
- * the views off the end on a narrow panel.
+ * Bound on the window rather than on a focused element, because the board has
+ * no single thing to focus and a table that only answers the keyboard after you
+ * have clicked a row is a table nobody discovers the keyboard on. Anything
+ * typed into a real field is left alone, which is what the first check is.
  */
-function GroupPill({ options, value, label, onChange }: {
-  options: { id: string; label: string }[];
-  value: string;
-  label: string;
-  onChange: (id: string) => void;
+function useKeys({
+  enabled, ordered, cursor, setCursor, selected, setSelected,
+  onOpen, onPeek, onHelp, onSearch, onPanel, onAct,
+}: {
+  enabled: boolean;
+  ordered: BoardIssue[];
+  cursor?: number;
+  setCursor: (n: number | undefined) => void;
+  selected: Set<number>;
+  setSelected: (fn: (prev: Set<number>) => Set<number>) => void;
+  onOpen: (issue: BoardIssue) => void;
+  onPeek: (issue: BoardIssue | undefined) => void;
+  onHelp: () => void;
+  onSearch: () => void;
+  onPanel: () => void;
+  onAct: (kind: 'assign' | 'label' | 'milestone' | 'close') => void;
 }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span style={{ position: 'relative' }}>
-      <TogglePillView accentColor={ACCENT} active={value !== 'none'} onClick={() => setOpen(o => !o)}>
-        Group: {label}
-      </TogglePillView>
-      {open && (
-        <>
-          {/* Click anywhere to dismiss, without trapping focus. */}
-          <span className="fixed inset-0" style={{ zIndex: 10 }} onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-1 rounded-lg border py-1"
-               style={{
-                 zIndex: 11,
-                 minWidth: 150,
-                 borderColor: 'var(--color-surface-border)',
-                 background: 'var(--color-surface)',
-                 boxShadow: '0 8px 22px rgba(0,0,0,.35)',
-               }}>
-            {options.map(o => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => { onChange(o.id); setOpen(false); }}
-                className="w-full text-left px-3 py-1.5 text-[11px] cursor-pointer"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: o.id === value ? ACCENT : 'var(--color-text-secondary)',
-                  fontWeight: o.id === value ? 600 : 400,
-                }}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </span>
-  );
-}
+  const held = useRef<number | undefined>(undefined);
 
-// ── Grouping ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!enabled) return;
 
-interface Group { key: string; label: string; issues: BoardIssue[]; unowned?: boolean }
+    const at = () => ordered.findIndex(i => i.number === cursor);
+    const move = (by: 1 | -1, extend: boolean) => {
+      if (ordered.length === 0) return;
+      const now = at();
+      const next = now < 0 ? 0 : Math.min(ordered.length - 1, Math.max(0, now + by));
+      const issue = ordered[next];
+      setCursor(issue.number);
+      if (extend) setSelected(prev => new Set(prev).add(issue.number));
+    };
 
-function groupIssues(issues: BoardIssue[], by: string): Group[] {
-  if (by === 'none') return [{ key: 'all', label: '', issues }];
+    const down = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      /* Never steal a key from something somebody is typing into. */
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (target?.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-  const buckets = new Map<string, BoardIssue[]>();
-  for (const i of issues) {
-    const value =
-      by === 'assignee' ? (i.assignees[0] ?? '')
-      : by === 'milestone' ? (i.milestone ?? '')
-      : (i.dimensions[by] ?? '');
-    const key = value || '__none__';
-    const list = buckets.get(key) ?? [];
-    list.push(i);
-    buckets.set(key, list);
-  }
+      const current = ordered.find(i => i.number === cursor);
 
-  const named = [...buckets.entries()]
-    .filter(([k]) => k !== '__none__')
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([k, v]) => ({ key: k, label: k, issues: v }));
-
-  const none = buckets.get('__none__');
-  /*
-    The unowned pile goes FIRST, not last.
-
-    Alphabetical order would bury "nobody" in the middle and "no module" at the
-    end, and three unassigned issues is the finding a lead can act on today —
-    not a footnote after everyone's name.
-  */
-  if (!none) return named;
-  const label = by === 'assignee' ? 'Nobody' : by === 'milestone' ? 'No milestone' : `No ${by}`;
-  return [{ key: '__none__', label, issues: none, unowned: true }, ...named];
-}
-
-// ── Pieces ──────────────────────────────────────────────────────────────────
-
-function Header({ group }: { group: Group }) {
-  const worstQuiet = Math.max(...group.issues.map(i => i.quietDays), 0);
-  return (
-    <GroupHeaderView
-      name={group.label}
-      count={group.issues.length}
-      tone={group.unowned ? 'var(--color-warning)' : undefined}
-      summary={worstQuiet >= QUIET_DAYS
-        ? <BadgeChipView tone="var(--color-warning)" size="xs">oldest quiet {worstQuiet}d</BadgeChipView>
-        : undefined}
-      style={{ marginBottom: 8 }}
-    />
-  );
-}
-
-function Card({ issue }: { issue: BoardIssue }) {
-  const quiet = issue.quietDays >= QUIET_DAYS;
-  const who = issue.assignees[0];
-  return (
-    <IssueCardView
-      reference={`#${issue.number}`}
-      title={issue.title}
-      accentColor={ACCENT}
-      onClick={() => window.open(issue.url, '_blank')}
-      chips={
-        <span className="flex gap-[5px] flex-wrap items-center">
-          {Object.values(issue.dimensions).map(v => (
-            <BadgeChipView key={v} tone={ACCENT} size="xs">{v}</BadgeChipView>
-          ))}
-          {issue.labels.slice(0, 2).map(l => (
-            <BadgeChipView key={l.name} tone={`#${l.color}`} size="xs">{l.name}</BadgeChipView>
-          ))}
-        </span>
+      switch (e.key) {
+        case 'j': case 'ArrowDown': move(1, e.shiftKey); break;
+        case 'k': case 'ArrowUp': move(-1, e.shiftKey); break;
+        case 'Enter': if (current) onOpen(current); break;
+        case 'o': if (current) onOpen(current); break;
+        case 'a': onAct('assign'); break;
+        case 'l': onAct('label'); break;
+        case 'm': onAct('milestone'); break;
+        case 'c': onAct('close'); break;
+        case 'g': onPanel(); break;
+        case '/': onSearch(); break;
+        case '?': onHelp(); break;
+        case 'Escape': setSelected(() => new Set()); onPeek(undefined); break;
+        case ' ':
+          /*
+            Space is two things separated by the hold: tapped it selects,
+            held it peeks. The timer starts here and the keyup decides which
+            happened, which is why nothing is done on the way down.
+          */
+          if (!current || held.current !== undefined) break;
+          held.current = window.setTimeout(() => {
+            held.current = -1;
+            onPeek(current);
+          }, PEEK_HOLD_MS);
+          break;
+        default: return;
       }
-      owner={who
-        ? <span title={who}><AvatarView name={who} size="xs" /></span>
-        : <span style={{ color: 'var(--color-warning)' }}>unassigned</span>}
-      meta={
-        <span className="flex items-center gap-[7px]">
-          {quiet
-            ? <BadgeChipView tone="var(--color-warning)" size="xs">stale {issue.quietDays}d</BadgeChipView>
-            : <span>{issue.ageDays}d</span>}
-          {issue.commentCount > 0 && (
-            <span>{issue.commentCount} comment{issue.commentCount === 1 ? '' : 's'}</span>
-          )}
-        </span>
-      }
-    />
-  );
-}
+      if (e.key !== 'Escape' || selected.size > 0) e.preventDefault();
+    };
 
-/** A row as DataTableView wants it: a flat record it can sort, plus the issue. */
-type IssueRow = Record<string, unknown> & { issue: BoardIssue };
+    const up = (e: KeyboardEvent) => {
+      if (e.key !== ' ') return;
+      const timer = held.current;
+      held.current = undefined;
+      if (timer === undefined) return;
+      if (timer === -1) { onPeek(undefined); return; }
+      window.clearTimeout(timer);
+      const current = ordered.find(i => i.number === cursor);
+      if (current) setSelected(prev => {
+        const next = new Set(prev);
+        if (next.has(current.number)) next.delete(current.number);
+        else next.add(current.number);
+        return next;
+      });
+    };
 
-function IssueTable({ groups, showGroups, dims }: {
-  groups: Group[]; showGroups: boolean; dims: ProposedDimension[];
-}) {
-  const columns: DataTableColumn<IssueRow>[] = [
-    { key: 'number', label: '#', width: 56, sortable: true },
-    {
-      key: 'title', label: 'Title', sortable: true,
-      /* Wrapped, never clipped — an ellipsis lands exactly where the sentence
-         was about to say the useful part. */
-      renderCell: (r) => (
-        <span style={{ color: 'var(--color-text-primary)', overflowWrap: 'anywhere' }}>
-          {r.issue.title}
-        </span>
-      ),
-    },
-    ...dims.map(d => ({
-      key: d.dimension,
-      label: cap(d.dimension),
-      sortable: true,
-      renderCell: (r: IssueRow) => r.issue.dimensions[d.dimension] ?? '—',
-    })),
-    {
-      key: 'assignee', label: 'Assignee', sortable: true,
-      renderCell: (r: IssueRow) => r.issue.assignees[0]
-        ?? <span style={{ color: 'var(--color-warning)' }}>—</span>,
-    },
-    {
-      key: 'labels', label: 'Labels',
-      renderCell: (r: IssueRow) => (
-        <span className="flex gap-1 flex-wrap">
-          {r.issue.labels.slice(0, 3).map(l => (
-            <BadgeChipView key={l.name} tone={`#${l.color}`} size="xs">{l.name}</BadgeChipView>
-          ))}
-        </span>
-      ),
-    },
-    {
-      key: 'ageDays', label: 'Age', width: 64, sortable: true, align: 'right',
-      renderCell: (r: IssueRow) => `${r.issue.ageDays}d`,
-    },
-    {
-      key: 'quietDays', label: 'Quiet', width: 72, sortable: true, align: 'right',
-      renderCell: (r: IssueRow) => (
-        <span style={{ color: r.issue.quietDays >= QUIET_DAYS ? 'var(--color-warning)' : undefined }}>
-          {r.issue.quietDays}d
-        </span>
-      ),
-    },
-  ];
-
-  const rowsOf = (g: Group): IssueRow[] => g.issues.map(i => ({
-    issue: i,
-    number: i.number,
-    title: i.title,
-    assignee: i.assignees[0] ?? '',
-    labels: '',
-    ageDays: i.ageDays,
-    quietDays: i.quietDays,
-    ...Object.fromEntries(dims.map(d => [d.dimension, i.dimensions[d.dimension] ?? ''])),
-  }));
-
-  /*
-    One table per group, rather than one table with heading rows inside it.
-
-    A sortable table whose body contains section headings sorts them into the
-    middle of the data the moment anybody clicks a column. Separate tables sort
-    within their group, which is what grouping meant.
-  */
-  return (
-    <div className="flex flex-col gap-4">
-      {groups.map(g => (
-        <Fragment key={g.key}>
-          {showGroups && <Header group={g} />}
-          <DataTableView<IssueRow>
-            columns={columns}
-            rows={rowsOf(g)}
-            keyField="number"
-            size="sm"
-            compact
-            sortable
-            onRowClick={(r) => window.open(r.issue.url, '_blank')}
-          />
-        </Fragment>
-      ))}
-    </div>
-  );
-}
-
-function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
-
-function ago(at?: number) {
-  if (!at) return 'just now';
-  const s = Math.max(0, Math.floor((Date.now() - at) / 1000));
-  if (s < 60) return `${s}s ago`;
-  return `${Math.floor(s / 60)}m ago`;
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      if (typeof held.current === 'number' && held.current > 0) window.clearTimeout(held.current);
+    };
+  }, [enabled, ordered, cursor, selected, setCursor, setSelected,
+      onOpen, onPeek, onHelp, onSearch, onPanel, onAct]);
 }
 
 // ── While it reads ──────────────────────────────────────────────────────────
@@ -647,9 +785,9 @@ function ago(at?: number) {
  * The board's shape, before the board.
  *
  * Six cards rather than a number chosen to match: nobody knows how many issues
- * are coming, and a skeleton that promises twelve and delivers three is a
- * worse lie than one that plainly stands for "some". The widths vary so it
- * reads as a list of different things rather than a printed pattern.
+ * are coming, and a skeleton that promises twelve and delivers three is a worse
+ * lie than one that plainly stands for "some". The widths vary so it reads as a
+ * list of different things rather than a printed pattern.
  */
 function BoardSkeleton({ view }: { view: string }) {
   if (view === 'table') {

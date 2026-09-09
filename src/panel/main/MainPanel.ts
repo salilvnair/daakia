@@ -140,7 +140,7 @@ import {
   handleDkghSetRepo, handleDkghBoard, handleDkghRepoOptions, handleDkghSearchRepos,
   handleDkghPinRepo, handleDkghDiagnose, handleDkghFindGh, handleDkghBrowseGh,
   handleDkghDismissOldGh, handleDkghPlanEdit, handleDkghApplyEdit, handleDkghCommands,
-  handleDkghInspectRepo, handleDkghRepoMeta,
+  handleDkghInspectRepo, handleDkghRepoMeta, handleDkghIssue, handleDkghEvidence,
 } from './handlers/dkgh-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
@@ -376,6 +376,12 @@ export class MainPanel {
         break;
       case 'dkgh:repoMeta':
         handleDkghRepoMeta(msg, this._post);
+        break;
+      case 'dkgh:issue':
+        handleDkghIssue(msg, this._post);
+        break;
+      case 'dkgh:evidence':
+        handleDkghEvidence(msg, this._post);
         break;
       // Scheduled API checks. The panel has posted these since it was built;
       // until now nothing answered, so no check ever ran.
