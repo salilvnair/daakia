@@ -20,6 +20,7 @@ import { AiContractNegotiatorModal } from '../ai/AiContractNegotiatorModal';
 import { AiLiveTrafficMirrorModal } from '../ai/AiLiveTrafficMirrorModal';
 import { Dk8sClusterSettings } from '../settings/Dk8sSettings';
 import { TerminalSettings } from '../settings/dk8s/TerminalSettings';
+import { DkghSettings } from './DkghSettings';
 import { LlmProviderSettings } from './LlmProviderSettings';
 import { GitSyncSettings } from './GitSyncSettings';
 import { VaultSettings } from './VaultSettings';
@@ -45,7 +46,7 @@ import { DbExplorerTab } from '../settings/devtools/DbExplorerTab';
 import { DebugSnapshotTab } from '../settings/devtools/DebugSnapshotTab';
 import { AuditConfigTab } from '../settings/devtools/AuditConfigTab';
 
-type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-cluster' | 'dk8s-terminal';
+type SettingsSection = 'general' | 'theme' | 'keymap' | 'mock-server' | 'git-sync' | 'vault' | 'bin' | 'llm' | 'ai-features' | 'prompt-library' | 'ai-audit' | 'devtools' | 'power-features' | 'dk8s-cluster' | 'dk8s-terminal' | 'dkgh';
 type GeneralSubtab = 'general' | 'encoding' | 'proxy';
 type PowerSubtab = 'cookies' | 'proxy' | 'certs' | 'monitor' | 'interceptor' | 'diff' | 'bulk' | 'load'
   | 'schema-diff' | 'openapi' | 'security' | 'webhook' | 'postman' | 'clustering'
@@ -68,6 +69,7 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'devtools':        { label: 'Developer Tools', icon: <CodeBracketsIcon size={14} /> },
   'dk8s-cluster':    { label: 'Cluster',         icon: <Dk8sIcon size={14} /> },
   'dk8s-terminal':   { label: 'Terminal',        icon: <TerminalIcon size={14} /> },
+  'dkgh':            { label: 'GitHub CLI',      icon: <GitHubIcon size={14} /> },
   'power-features':  { label: 'Power Features',  icon: <CodeBracketsIcon size={14} /> },
 };
 
@@ -101,6 +103,9 @@ const SETTINGS_NAV_ITEMS: SideNavItem[] = [
   { id: 'g-dk8s', label: 'DK8S', isGroup: true, children: [
     { id: 'dk8s-cluster', label: SETTINGS_SECTION_META['dk8s-cluster'].label, icon: SETTINGS_SECTION_META['dk8s-cluster'].icon },
     { id: 'dk8s-terminal', label: SETTINGS_SECTION_META['dk8s-terminal'].label, icon: SETTINGS_SECTION_META['dk8s-terminal'].icon },
+  ] },
+  { id: 'g-dkgh', label: 'DKGH', isGroup: true, children: [
+    { id: 'dkgh', label: SETTINGS_SECTION_META['dkgh'].label, icon: SETTINGS_SECTION_META['dkgh'].icon },
   ] },
   { id: 'g-advanced', label: 'Advanced', isGroup: true, children: [
     { id: 'devtools', label: SETTINGS_SECTION_META.devtools.label, icon: SETTINGS_SECTION_META.devtools.icon },
@@ -178,6 +183,8 @@ export function SettingsPanel() {
               <Dk8sClusterSettings />
             ) : activeSection === 'dk8s-terminal' ? (
               <TerminalSettings />
+            ) : activeSection === 'dkgh' ? (
+              <DkghSettings />
             ) : activeSection === 'devtools' ? (
               <DevToolsSettingsPage />
             ) : activeSection === 'theme' ? (

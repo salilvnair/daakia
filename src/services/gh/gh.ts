@@ -91,15 +91,24 @@ export class GhMissing extends Error {
  */
 function candidates(): string[] {
   /*
-    An explicit path is exclusive, not merely first.
+    Three sources, in order, and the first one that exists wins outright.
 
-    Somebody who used "Locate gh manually" named a binary. If that one does not
-    work, falling back to PATH would find a different gh and appear to succeed —
-    so the setting looks honoured while something else is actually running, and
-    the next question about it is unanswerable. A named path that fails is an
-    error worth reporting.
+      1. DAAKIA_GH        — the environment, for a one-off run
+      2. Settings         — the path somebody saved in the Settings tab
+      3. PATH, then the usual install locations
+
+    The environment beats the setting deliberately: it is the temporary
+    override, set on a single launch to test something, and a saved setting
+    that quietly outranked it would make that launch a no-op. A setting is
+    what you want most of the time; an env var is what you want right now.
+
+    And a named path is EXCLUSIVE rather than merely first. If somebody points
+    at a binary and it does not work, falling back to PATH would find a
+    different gh and appear to succeed — the setting looks honoured while
+    something else runs, and the next question about it is unanswerable. Named
+    and broken is an error worth reporting.
   */
-  const explicit = binaryOverride ?? process.env.DAAKIA_GH;
+  const explicit = process.env.DAAKIA_GH || binaryOverride;
   if (explicit) return [explicit];
 
   const list: string[] = [];

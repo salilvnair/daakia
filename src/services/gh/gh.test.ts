@@ -95,3 +95,44 @@ describe('the shell is never involved', () => {
     expect(code).not.toMatch(/auth['"\s,\]]*.*token/i);
   });
 });
+
+describe('which path wins', () => {
+  const ENV_PATH = join(__dirname, 'from-env');
+  const SETTING_PATH = join(__dirname, 'from-settings');
+
+  afterEach(() => { delete process.env.DAAKIA_GH; });
+
+  it('prefers the environment over a saved setting', async () => {
+    /*
+      The env var is the temporary override — set on one launch to test
+      something, as in `DAAKIA_GH=C:\nope\gh.exe code .` to reach the
+      "not found" screen. A saved setting that outranked it would make that
+      launch silently do nothing.
+    */
+    process.env.DAAKIA_GH = ENV_PATH;
+    setGhPath(SETTING_PATH);
+    try {
+      await resolveBinary();
+      throw new Error('should not resolve');
+    } catch (err) {
+      expect((err as GhMissing).tried).toEqual([ENV_PATH]);
+    }
+  });
+
+  it('uses the saved setting when there is no environment override', async () => {
+    setGhPath(SETTING_PATH);
+    try {
+      await resolveBinary();
+      throw new Error('should not resolve');
+    } catch (err) {
+      expect((err as GhMissing).tried).toEqual([SETTING_PATH]);
+    }
+  });
+
+  it('falls back to PATH and the usual locations when neither is set', async () => {
+    setGhPath(undefined);
+    /* This machine has gh, so this resolves rather than throwing — which is
+       itself the assertion: discovery happens when nothing was named. */
+    await expect(resolveBinary()).resolves.toBeTruthy();
+  });
+});

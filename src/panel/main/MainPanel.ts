@@ -135,6 +135,9 @@ import {
   registerMonitor, pauseMonitor, removeMonitor, checkMonitorNow, disposeMonitors,
   type MonitorRule,
 } from './handlers/monitor-handler';
+import {
+  initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
+} from './handlers/dkgh-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
   initSmWorkflowStorage,
@@ -216,6 +219,9 @@ export class MainPanel {
 
     initMockLogForwarding(this._post);
     initSmWorkflowStorage();
+    // A gh path saved in Settings has to be in force before anything asks
+    // whether gh exists, or the first probe answers for the wrong binary.
+    initDkgh();
     handleGetMockServerState(this._post);
 
     handleGetEnvironments(this._post);
@@ -314,6 +320,17 @@ export class MainPanel {
         break;
       // What a request or collection would inherit, for the Inherit labels in
       // its Settings tab. Resolved on the host so there is one implementation.
+      // dkgh. One probe answers all three first-run screens; they are three
+      // states of the same question and must not be asked separately.
+      case 'dkgh:probe':
+        handleDkghProbe(this._post);
+        break;
+      case 'dkgh:recheck':
+        handleDkghRecheck(this._post);
+        break;
+      case 'dkgh:setPath':
+        handleDkghSetPath(msg, this._post);
+        break;
       // Scheduled API checks. The panel has posted these since it was built;
       // until now nothing answered, so no check ever ran.
       case 'monitor:register':
