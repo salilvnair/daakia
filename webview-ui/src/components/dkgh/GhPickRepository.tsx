@@ -15,10 +15,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ButtonView, SearchFieldView, SetupOptionView, BadgeChipView, TogglePillView,
-  LoaderView,
+  SkeletonView,
 } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { useSettledWait } from '../../hooks/useSettledWait';
 import { RepoIcon, CheckIcon, WarningTriangleIcon, LockIcon } from '../../icons';
 import { GhEmpty, GhLede, GhNote, GhCommand } from './GhShell';
 import { ACCENT, activeAccount, hasScope, type GhEnv } from './types';
@@ -59,9 +58,10 @@ export function GhPickRepository({ env, onPick }: {
   const account = activeAccount(env);
   const missingProject = !hasScope(account, 'read:project');
   const exact = VALID.test(typed.trim());
-  /* Same rule as everywhere else in the tab: a card that appears and vanishes
-     is worse than the half-second of nothing it replaced. */
-  const slowGuess = useSettledWait(guess === null);
+  /* The guess is one gh call away, so its slot holds the card's outline rather
+     than a spinner — the real card lands where the outline stood, and the two
+     options below it never move. */
+  const guessing = guess === null;
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -114,13 +114,8 @@ export function GhPickRepository({ env, onPick }: {
       <div className="w-full flex flex-col gap-2" style={{ maxWidth: 520 }}>
 
         {/* The guess */}
-        {guess === null ? (
-          slowGuess ? (
-            <SetupOptionView accentColor={ACCENT} title="Reading the open workspace" recommended
-                             note="Asking gh what this folder's git remote points at.">
-              <LoaderView size="sm" />
-            </SetupOptionView>
-          ) : null
+        {guessing ? (
+          <GuessSkeleton />
         ) : guess.repo ? (
           <SetupOptionView
             accentColor={ACCENT}
@@ -260,6 +255,33 @@ export function GhPickRepository({ env, onPick }: {
         )}
       </div>
     </GhEmpty>
+  );
+}
+
+/**
+ * The guess, before it arrives.
+ *
+ * Same border, padding and rows as the card it stands in for, and lit in the
+ * accent because the guess is the recommended route whether or not its name is
+ * known yet. Nothing below it shifts when the answer lands.
+ */
+function GuessSkeleton() {
+  return (
+    <div className="rounded-xl border p-3 flex flex-col gap-2"
+         style={{
+           borderColor: `color-mix(in srgb, ${ACCENT} 50%, transparent)`,
+           backgroundColor: `color-mix(in srgb, ${ACCENT} 7%, transparent)`,
+         }}>
+      <div className="flex items-center gap-2 animate-pulse">
+        <SkeletonView variant="block" width={132} height={12} />
+        <SkeletonView variant="block" width={78} height={12} />
+        <span className="flex-1" />
+        <SkeletonView variant="block" width={62} height={20} />
+      </div>
+      <div className="animate-pulse">
+        <SkeletonView variant="block" width="72%" height={9} />
+      </div>
+    </div>
   );
 }
 

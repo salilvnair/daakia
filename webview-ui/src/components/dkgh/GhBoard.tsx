@@ -21,7 +21,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   ButtonView, IconButtonView, AvatarView, BadgeChipView, DataTableView,
   EmptyStateView, CalloutView, IssueCardView, GroupHeaderView, TogglePillView,
-  UnderlineTabsView, SearchFieldView, FilterBarView,
+  UnderlineTabsView, SearchFieldView, FilterBarView, SkeletonView,
+  IssueCardSkeletonView, TableSkeletonView,
   type DataTableColumn,
 } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
@@ -134,40 +135,25 @@ export function GhBoard({ repo, onChangeRepo }: {
 
   const groups = useMemo(() => groupIssues(filtered, groupBy), [filtered, groupBy]);
 
-  /* The first read only. A refresh keeps the board on screen and says
-     "refreshing" in the head, which is the whole point of having one. */
-  const firstRead = useSettledWait(loading && !data);
+  /*
+    The first read shows the board's shape, not a panel over it.
+
+    A skeleton is the honest thing to draw here: the chrome is already known —
+    the repository, the sections, the toolbar — so only the part that depends on
+    the network is unknown, and only that part should look unknown. Nothing
+    moves when the issues land, because the cards arrive exactly where their
+    outlines stood.
+  */
+  const pending = loading && !data;
 
   /*
-    The placeholder waits its turn.
+    And if the data does not come, THEN the placeholder.
 
-    A repository with a dozen issues answers in well under a second, and a
-    full-screen panel that appears and vanishes in that time reads as the tab
-    breaking rather than as it working. Only a wait long enough to wonder about
-    gets explained — and once explained, it stays put long enough to be read.
+    Past about eight seconds a skeleton stops reassuring and starts looking
+    stuck, and the question changes from "how much is coming" to "what is it
+    doing". That is the point at which naming the calls earns its space.
   */
-  if (firstRead) return <GhBoardLoading repo={repo} onChangeRepo={onChangeRepo} />;
-  if (loading && !data) return <div className="flex-1" />;
-
-  if (data?.error) {
-    return (
-      <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-6 gap-3">
-        <EmptyStateView
-          variant="medallion"
-          accentColor="var(--color-error)"
-          icon={<WarningTriangleIcon size={26} />}
-          title={`Could not read ${repo}`}
-          /* gh's own words. "Validation failed" alone sends somebody to a
-             browser to guess; gh usually names the field. */
-          message={data.error}
-          action={{ label: 'Try again', onClick: refresh }}
-        />
-        <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onChangeRepo}>
-          Choose a different repository
-        </ButtonView>
-      </div>
-    );
-  }
+  const stuck = useSettledWait(pending, { delayMs: 8000, minMs: 1200 });
 
   const total = data?.issues.length ?? 0;
   const stale = filtered.filter(i => i.quietDays >= QUIET_DAYS).length;
@@ -185,11 +171,13 @@ export function GhBoard({ repo, onChangeRepo }: {
               style={{ color: 'var(--color-text-primary)' }}>
           {owner}<span style={{ color: 'var(--color-text-muted)' }}>/</span>{name}
         </span>
-        <BadgeChipView tone={ACCENT} size="sm">{total} open</BadgeChipView>
+        {pending
+          ? <SkeletonView variant="block" width={46} height={15} />
+          : <BadgeChipView tone={ACCENT} size="sm">{total} open</BadgeChipView>}
         <span className="flex-1" />
         <span className="text-[10.5px] font-mono whitespace-nowrap"
               style={{ color: 'var(--color-text-muted)' }}>
-          {loading ? 'refreshing...' : `auto 60s · refreshed ${ago(data?.fetchedAt)}`}
+          {pending ? 'reading...' : loading ? 'refreshing...' : `auto 60s · refreshed ${ago(data?.fetchedAt)}`}
         </span>
         <IconButtonView icon={<RefreshIcon size={12} />} tooltip="Read it again now"
                         accentColor={ACCENT} onClick={refresh} />
@@ -205,7 +193,8 @@ export function GhBoard({ repo, onChangeRepo }: {
           activeId={section}
           onChange={setSection}
           tabs={[
-            { id: 'board', label: 'Board', icon: <IssueOpenedIcon size={12} />, count: total },
+            { id: 'board', label: 'Board', icon: <IssueOpenedIcon size={12} />,
+              count: pending ? undefined : total },
             { id: 'new', label: 'New issue', icon: <PlusIcon size={12} />, disabled: true },
             { id: 'insights', label: 'Insights', icon: <ChartBarIcon size={12} />, disabled: true },
             { id: 'repository', label: 'Repository', icon: <RepoIcon size={12} />, disabled: true },
@@ -287,7 +276,11 @@ export function GhBoard({ repo, onChangeRepo }: {
 
       {/* The groups */}
       <div className="flex-1 overflow-y-auto min-w-0 px-4 pt-3 pb-4">
-        {filtered.length === 0 ? (
+        {pending ? (
+          stuck
+            ? <GhBoardStalled repo={repo} onChangeRepo={onChangeRepo} />
+            : <BoardSkeleton view={view} />
+        ) : filtered.length === 0 ? (
           <EmptyStateView
             variant="medallion"
             accentColor={ACCENT}
@@ -318,14 +311,17 @@ export function GhBoard({ repo, onChangeRepo }: {
       {/* Footer */}
       <div className="flex items-center gap-2 px-4 py-2 text-[10.5px] flex-shrink-0"
            style={{ borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
-        <span>{filtered.length}{filtered.length !== total ? ` of ${total}` : ''} shown</span>
+        <span>
+          {pending ? 'reading the repository' :
+            `${filtered.length}${filtered.length !== total ? ` of ${total}` : ''} shown`}
+        </span>
         <span className="flex-1" />
-        {stale > 0 && (
+        {!pending && stale > 0 && (
           <BadgeChipView tone="var(--color-warning)" size="sm">
             {stale} quiet {QUIET_DAYS}d+
           </BadgeChipView>
         )}
-        {unassigned > 0 && (
+        {!pending && unassigned > 0 && (
           <BadgeChipView tone="var(--color-warning)" size="sm">{unassigned} unassigned</BadgeChipView>
         )}
       </div>
@@ -580,31 +576,64 @@ function ago(at?: number) {
 // ── While it reads ──────────────────────────────────────────────────────────
 
 /**
- * The wait.
+ * The board's shape, before the board.
  *
- * A board is three or four `gh` calls against somebody's network, and on a cold
- * repository with a hundred issues that is a real handful of seconds. A lone
- * centred "Loading..." makes those seconds feel like something has gone wrong;
- * naming the work makes them feel like work.
- *
- * The hints are not a progress bar — nothing here knows which call is in
- * flight, and a bar that guessed would be a lie. They say what is being asked
- * for, so the wait is legible and so is the failure when one arrives.
+ * Six cards rather than a number chosen to match: nobody knows how many issues
+ * are coming, and a skeleton that promises twelve and delivers three is a
+ * worse lie than one that plainly stands for "some". The widths vary so it
+ * reads as a list of different things rather than a printed pattern.
  */
-function GhBoardLoading({ repo, onChangeRepo }: { repo: string; onChangeRepo: () => void }) {
+function BoardSkeleton({ view }: { view: string }) {
+  if (view === 'table') {
+    return (
+      <TableSkeletonView
+        rows={6}
+        leadingIcon
+        columns={[
+          { width: 40 },
+          { width: 'flex', fill: 0.8 },
+          { width: 90 },
+          { width: 120 },
+          { width: 50, align: 'right' },
+          { width: 50, align: 'right' },
+        ]}
+      />
+    );
+  }
+  /* Fixed fills, not random: a skeleton that reshuffles on every render is a
+     second animation fighting the pulse. */
+  const fills = [0.86, 0.52, 0.94, 0.68, 0.78, 0.44];
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center px-6 gap-3">
+    <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
+      {fills.map((f, i) => <IssueCardSkeletonView key={i} titleFill={f} />)}
+    </div>
+  );
+}
+
+/**
+ * The read is taking long enough to wonder about.
+ *
+ * Replaces the skeleton rather than covering the board, because at this point
+ * the skeleton has stopped reassuring and started looking stuck — the question
+ * has changed from "how much is coming" to "what is it doing", and only naming
+ * the calls answers that.
+ *
+ * The three lines are not a progress bar. Nothing here knows which call is in
+ * flight, and a bar that guessed would be a lie.
+ */
+function GhBoardStalled({ repo, onChangeRepo }: { repo: string; onChangeRepo: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-6">
       <EmptyStateView
         variant="medallion"
         accentColor={ACCENT}
         icon={<RepoIcon size={26} />}
-        title={repo}
+        title={`Still reading ${repo}`}
         message={
-          'Reading the repository through gh, using the credential it already holds. Nothing is '
-          + 'copied to disk — the issues stay in GitHub, and this board is a view of them rather '
-          + 'than a second place they live. A large repository takes a few seconds the first '
-          + 'time; after that the board re-reads every 60 seconds while this tab is on screen, '
-          + 'and stops when it is not.'
+          'Through gh, using the credential it already holds. Nothing is copied to disk — the '
+          + 'issues stay in GitHub, and this board is a view of them rather than a second place '
+          + 'they live. A large repository, a slow network or a VPN can all make this take a '
+          + 'while; it will appear as soon as it lands.'
         }
         hints={[
           {
