@@ -13,6 +13,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { postMsg } from '../../vscode';
+import { useSettledWait } from '../../hooks/useSettledWait';
 import { GhNotInstalled } from './GhNotInstalled';
 import { GhSignIn } from './GhSignIn';
 import { GhPickRepository } from './GhPickRepository';
@@ -69,6 +70,16 @@ export function DkghPanel() {
 
   const recheck = () => { setChecking(true); postMsg({ type: 'dkgh:recheck' }); };
 
+  /*
+    A longer gate than the rest of the tab, on purpose.
+
+    Finding gh is the first of two waits — the board's own read follows it —
+    and two placeholders in a row reads as the tab breaking twice on its way to
+    working. Under a second, this one stays silent and lets the board's
+    placeholder, which has more to say, be the only one.
+  */
+  const slowProbe = useSettledWait(!env, { delayMs: 900 });
+
   /* Chosen here rather than inside the screen, because picking one is what
      persists it — and the host is the only thing that can. */
   const pick = (next: string) => {
@@ -77,11 +88,21 @@ export function DkghPanel() {
   };
 
   if (!env) {
+    /*
+      Nothing at all until the probe has actually taken a moment.
+
+      Finding gh is usually two fast subprocess calls, and a line of text that
+      appears and vanishes before it can be read is pure flicker — followed, on
+      this screen, by the board's own placeholder, so the tab appeared to break
+      twice on the way to working.
+    */
     return (
       <div className="flex-1 flex items-center justify-center">
-        <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
-          Looking for the GitHub CLI…
-        </span>
+        {slowProbe && (
+          <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
+            Looking for the GitHub CLI…
+          </span>
+        )}
       </div>
     );
   }

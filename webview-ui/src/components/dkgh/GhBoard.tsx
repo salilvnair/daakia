@@ -25,6 +25,7 @@ import {
   type DataTableColumn,
 } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
+import { useSettledWait } from '../../hooks/useSettledWait';
 import {
   RefreshIcon, LayoutGridIcon, TableIcon, IssueOpenedIcon, RepoIcon, PlusIcon,
   ChartBarIcon, ColumnsIcon, TimelineIcon, FilterIcon, DownloadIcon,
@@ -133,7 +134,20 @@ export function GhBoard({ repo, onChangeRepo }: {
 
   const groups = useMemo(() => groupIssues(filtered, groupBy), [filtered, groupBy]);
 
-  if (loading && !data) return <GhBoardLoading repo={repo} onChangeRepo={onChangeRepo} />;
+  /* The first read only. A refresh keeps the board on screen and says
+     "refreshing" in the head, which is the whole point of having one. */
+  const firstRead = useSettledWait(loading && !data);
+
+  /*
+    The placeholder waits its turn.
+
+    A repository with a dozen issues answers in well under a second, and a
+    full-screen panel that appears and vanishes in that time reads as the tab
+    breaking rather than as it working. Only a wait long enough to wonder about
+    gets explained — and once explained, it stays put long enough to be read.
+  */
+  if (firstRead) return <GhBoardLoading repo={repo} onChangeRepo={onChangeRepo} />;
+  if (loading && !data) return <div className="flex-1" />;
 
   if (data?.error) {
     return (

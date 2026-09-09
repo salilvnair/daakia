@@ -18,7 +18,8 @@ import {
   LoaderView,
 } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { RepoIcon, SearchIcon, CheckIcon, WarningTriangleIcon, LockIcon } from '../../icons';
+import { useSettledWait } from '../../hooks/useSettledWait';
+import { RepoIcon, CheckIcon, WarningTriangleIcon, LockIcon } from '../../icons';
 import { GhEmpty, GhLede, GhNote, GhCommand } from './GhShell';
 import { ACCENT, activeAccount, hasScope, type GhEnv } from './types';
 
@@ -58,6 +59,9 @@ export function GhPickRepository({ env, onPick }: {
   const account = activeAccount(env);
   const missingProject = !hasScope(account, 'read:project');
   const exact = VALID.test(typed.trim());
+  /* Same rule as everywhere else in the tab: a card that appears and vanishes
+     is worse than the half-second of nothing it replaced. */
+  const slowGuess = useSettledWait(guess === null);
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -111,10 +115,12 @@ export function GhPickRepository({ env, onPick }: {
 
         {/* The guess */}
         {guess === null ? (
-          <SetupOptionView accentColor={ACCENT} title="Reading the open workspace" recommended
-                           note="Asking gh what this folder's git remote points at.">
-            <LoaderView size="sm" />
-          </SetupOptionView>
+          slowGuess ? (
+            <SetupOptionView accentColor={ACCENT} title="Reading the open workspace" recommended
+                             note="Asking gh what this folder's git remote points at.">
+              <LoaderView size="sm" />
+            </SetupOptionView>
+          ) : null
         ) : guess.repo ? (
           <SetupOptionView
             accentColor={ACCENT}
