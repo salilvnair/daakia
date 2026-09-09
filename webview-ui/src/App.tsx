@@ -96,7 +96,7 @@ export default function App() {
   const activeProtocol = useTabsStore(s => s.activeProtocol);
   // Tabs that take over the whole surface, so the protocol rail should show
   // nothing as selected while one of them is open.
-  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
+  const STANDALONE_TABS = ['settings', 'mock-server', 'dk8s', 'dkgh', 'state-machine', 'wiki', 'daakia-ai', 'workspace'];
   const switchProtocol = useTabsStore(s => s.switchProtocol);
   const devToolsOpen = useDevToolsStore(s => s.isOpen);
   const protocolAccent = getProtocolAccent(activeProtocol);

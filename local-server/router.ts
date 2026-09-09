@@ -103,6 +103,9 @@ import { handleAiSend, handleAiCancel, handleAiChat, handleAiStream, handleAiStr
 import { handleLoadStart, handleLoadStop } from '../src/panel/main/handlers/load-handler';
 import { handleBulkRun, handleBulkStop } from '../src/panel/main/handlers/bulk-handler';
 import { handleInterceptorStart, handleInterceptorStop } from '../src/panel/main/handlers/interceptor-handler';
+import {
+  initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
+} from '../src/panel/main/handlers/dkgh-handler';
 import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
 
@@ -125,6 +128,7 @@ export function sendInitialState(post: PostMessage) {
 
   initMockLogForwarding(post);
   initSmWorkflowStorage();
+  initDkgh();
   handleGetMockServerState(post);
 
   handleGetEnvironments(post);
@@ -136,6 +140,19 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
   switch (msg.type) {
     case 'ready':
       sendInitialState(post);
+      break;
+
+    // ── dkgh — GitHub. Same reason as dk8s below: the first-run screens are
+    //    the part most likely to be wrong on somebody else's machine, and
+    //    driving them in a browser is how they get looked at. ──
+    case 'dkgh:probe':
+      await handleDkghProbe(post);
+      break;
+    case 'dkgh:recheck':
+      await handleDkghRecheck(post);
+      break;
+    case 'dkgh:setPath':
+      await handleDkghSetPath(msg, post);
       break;
 
     // ── dk8s — Kubernetes. Routed here so the pod grid can be driven and
