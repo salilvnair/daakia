@@ -32,7 +32,7 @@ import {
   ChartBarIcon, ColumnsIcon, TimelineIcon, FilterIcon, DownloadIcon,
   TagIcon, ClockIcon, WarningTriangleIcon,
 } from '../../icons';
-import { ACCENT } from './types';
+import { ACCENT, activeAccount, type GhEnv } from './types';
 
 interface Label { name: string; color: string; description?: string }
 interface BoardIssue {
@@ -79,9 +79,21 @@ const VIEWS = [
   { id: 'roadmap', label: 'Roadmap', icon: <TimelineIcon size={11} />, ready: false },
 ];
 
-export function GhBoard({ repo, onChangeRepo }: {
+export function GhBoard({ repo, onChangeRepo, env, onOpenAccount, frozen = false }: {
   repo: string;
   onChangeRepo: () => void;
+  env?: GhEnv;
+  /** Opens screens 02A/B/D/E from the identity chip. */
+  onOpenAccount?: () => void;
+  /**
+   * The credential is gone, so this board is a photograph.
+   *
+   * It keeps showing what it had — blanking a board somebody is reading
+   * punishes them for a token expiring — but it stops asking for more, because
+   * every request would fail the same way and each failure would re-raise the
+   * signal that put the recovery screen on screen in the first place.
+   */
+  frozen?: boolean;
 }) {
   const [data, setData] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,9 +111,9 @@ export function GhBoard({ repo, onChangeRepo }: {
       setData(msg as unknown as BoardData);
     };
     window.addEventListener('message', handler);
-    postMsg({ type: 'dkgh:board', repo });
+    if (!frozen) postMsg({ type: 'dkgh:board', repo });
     return () => window.removeEventListener('message', handler);
-  }, [repo]);
+  }, [repo, frozen]);
 
   /*
     Auto-refresh, at the cadence the plan settled on. A refresh is one or two
@@ -110,13 +122,18 @@ export function GhBoard({ repo, onChangeRepo }: {
     on their behalf.
   */
   useEffect(() => {
+    if (frozen) return;
     const id = window.setInterval(() => {
       if (document.visibilityState === 'visible') postMsg({ type: 'dkgh:board', repo });
     }, 60_000);
     return () => window.clearInterval(id);
-  }, [repo]);
+  }, [repo, frozen]);
 
-  const refresh = () => { setLoading(true); postMsg({ type: 'dkgh:board', repo }); };
+  const refresh = () => {
+    if (frozen) return;
+    setLoading(true);
+    postMsg({ type: 'dkgh:board', repo });
+  };
 
   /** Dimensions the repository declared, plus the ones GitHub always has. */
   const groupOptions = useMemo(() => [
@@ -159,6 +176,7 @@ export function GhBoard({ repo, onChangeRepo }: {
   const stale = filtered.filter(i => i.quietDays >= QUIET_DAYS).length;
   const unassigned = filtered.filter(i => i.assignees.length === 0).length;
   const [owner, name] = repo.split('/');
+  const account = activeAccount(env ?? null);
   const groupLabel = groupOptions.find(g => g.id === groupBy)?.label ?? 'Nothing';
 
   return (
@@ -177,10 +195,27 @@ export function GhBoard({ repo, onChangeRepo }: {
         <span className="flex-1" />
         <span className="text-[10.5px] font-mono whitespace-nowrap"
               style={{ color: 'var(--color-text-muted)' }}>
-          {pending ? 'reading...' : loading ? 'refreshing...' : `auto 60s · refreshed ${ago(data?.fetchedAt)}`}
+          {frozen ? 'paused — signed out'
+            : pending ? 'reading...'
+            : loading ? 'refreshing...'
+            : `auto 60s · refreshed ${ago(data?.fetchedAt)}`}
         </span>
+        {account && onOpenAccount && (
+          <button
+            type="button"
+            onClick={onOpenAccount}
+            title="Scopes, hosts, accounts, and every command dkgh runs"
+            className="flex items-center gap-1.5 px-1.5 py-0.5 rounded cursor-pointer"
+            style={{ background: 'transparent', border: '1px solid var(--color-surface-border)' }}
+          >
+            <AvatarView name={account.login} size="xs" />
+            <span className="text-[10px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
+              {account.login}
+            </span>
+          </button>
+        )}
         <IconButtonView icon={<RefreshIcon size={12} />} tooltip="Read it again now"
-                        accentColor={ACCENT} onClick={refresh} />
+                        accentColor={ACCENT} onClick={refresh} disabled={frozen} />
         <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={onChangeRepo}>
           Switch
         </ButtonView>

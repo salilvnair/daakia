@@ -43,9 +43,11 @@ interface RepoSummary {
   templates?: number;
 }
 
-export function GhPickRepository({ env, onPick }: {
+export function GhPickRepository({ env, onPick, onOpenAccount }: {
   env: GhEnv;
   onPick: (repo: string) => void;
+  /** Screens 02A/B/D/E — reached from the scope readout at the bottom. */
+  onOpenAccount?: () => void;
 }) {
   const [typed, setTyped] = useState('');
   const [guess, setGuess] = useState<{ repo?: RepoSummary; reason?: string } | null>(null);
@@ -223,9 +225,17 @@ export function GhPickRepository({ env, onPick }: {
 
       {/* What this account can currently do */}
       <div className="w-full mt-4 flex flex-col gap-1.5" style={{ maxWidth: 520 }}>
-        <div className="text-[9.5px] font-bold uppercase tracking-wider"
-             style={{ color: 'var(--color-text-muted)' }}>
-          This account
+        <div className="flex items-center gap-2">
+          <span className="text-[9.5px] font-bold uppercase tracking-wider"
+                style={{ color: 'var(--color-text-muted)' }}>
+            This account
+          </span>
+          <span className="flex-1" />
+          {onOpenAccount && (
+            <ButtonView size="sm" variant="ghost" accentColor={ACCENT} onClick={onOpenAccount}>
+              Scopes, hosts and commands
+            </ButtonView>
+          )}
         </div>
         {SCOPES.map(s => {
           const have = hasScope(account, s.name);
