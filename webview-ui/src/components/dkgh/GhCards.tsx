@@ -20,6 +20,7 @@ import {
 } from '@salilvnair/dui';
 import { GhEvidence } from './GhEvidence';
 import { QUIET_DAYS, rankOf, type BoardIssue, type Group, type ProposedDimension } from './board-types';
+import type { SearchHit } from './filter-model';
 import type { CardField, Density } from './board-prefs';
 import { ACCENT } from './types';
 
@@ -28,7 +29,7 @@ const SHOT_HEIGHT: Record<Density, number> = { comfortable: 74, compact: 0, dens
 
 export function GhCards({
   groups, showGroups, fields, density, dimensions,
-  selected, onToggle, onOpen, cursor,
+  selected, onToggle, onOpen, cursor, hits,
 }: {
   groups: Group[];
   showGroups: boolean;
@@ -41,6 +42,8 @@ export function GhCards({
   onOpen: (issue: BoardIssue) => void;
   /** The card the keyboard is on, if any. */
   cursor?: number;
+  /** Where the search matched, per issue — screen 08C. */
+  hits?: Map<number, SearchHit>;
 }) {
   return (
     <div className="flex flex-col" style={{ gap: 17 }}>
@@ -62,6 +65,7 @@ export function GhCards({
                 selected={selected.has(i.number)}
                 anySelected={selected.size > 0}
                 cursor={cursor === i.number}
+                hit={hits?.get(i.number)}
                 onToggle={onToggle}
                 onOpen={onOpen}
               />
@@ -125,13 +129,14 @@ export function Header({ group, dimensions }: { group: Group; dimensions: Propos
   );
 }
 
-function Card({ issue, fields, density, selected, anySelected, cursor, onToggle, onOpen }: {
+function Card({ issue, fields, density, selected, anySelected, cursor, hit, onToggle, onOpen }: {
   issue: BoardIssue;
   fields: CardField[];
   density: Density;
   selected: boolean;
   anySelected: boolean;
   cursor: boolean;
+  hit?: SearchHit;
   onToggle: (issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => void;
   onOpen: (issue: BoardIssue) => void;
 }) {
@@ -200,12 +205,26 @@ function Card({ issue, fields, density, selected, anySelected, cursor, onToggle,
             )}
           </span>
         }
-        media={shot || (on('body') && issue.bodyFirstLine) ? (
+        media={shot || hit || (on('body') && issue.bodyFirstLine) ? (
           <>
             {shot && (
               <GhEvidence url={shot} height={shotHeight} alt={`Evidence on #${issue.number}`} />
             )}
-            {on('body') && issue.bodyFirstLine && (
+            {/*
+              Where the search matched, with the line — a hit in a two-year-old
+              comment and a hit in the title are different kinds of answer, and
+              a list that presents them identically makes you open all four to
+              find out which is which.
+            */}
+            {hit && (
+              <span className="block text-[9.5px]"
+                    style={{ color: 'var(--color-text-muted)', lineHeight: 1.5,
+                             marginTop: shot ? 4 : 0 }}>
+                <span style={{ color: ACCENT }}>matched in the {hit.where}</span>
+                {hit.where !== 'title' && <> — {hit.snippet}</>}
+              </span>
+            )}
+            {!hit && on('body') && issue.bodyFirstLine && (
               <span className="block text-[10px]"
                     style={{ color: 'var(--color-text-muted)', lineHeight: 1.5,
                              marginTop: shot ? 4 : 0 }}>

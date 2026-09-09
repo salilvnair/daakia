@@ -29,6 +29,7 @@ function issue(n: number, over: Partial<BoardIssue> = {}): BoardIssue {
     assignees: [],
     labels: [],
     createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-01T00:00:00Z',
     commentCount: 0,
     dimensions: {},
     evidence: [],

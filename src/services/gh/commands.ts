@@ -76,8 +76,9 @@ export const GH_COMMANDS: GhCommandRow[] = [
     kind: 'read', live: false },
   { command: 'gh project field-list', when: 'on connect, if read:project is granted',
     kind: 'read', live: false },
-  { command: 'gh search issues', when: 'only when you search past the loaded page',
-    kind: 'read', live: false },
+  { command: 'gh search issues <q> --repo <r> --match ...',
+    when: 'only when you widen the search to comments, or past the loaded page',
+    kind: 'read', live: true },
 
   // ── Writes ───────────────────────────────────────────────────────────────
   { command: 'gh issue create', when: 'the Create button', kind: 'write',

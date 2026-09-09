@@ -17,7 +17,7 @@ import {
   probeEnvironment, setGhPath, verifyGhPath, forgetGh, probeReachability,
   searchCommonLocations, onAuthFailure, type GhEnv,
 } from '../../../services/gh/gh';
-import { fetchBoard, fetchIssueDetail } from '../../../services/gh/board';
+import { fetchBoard, fetchIssueDetail, searchIssues } from '../../../services/gh/board';
 import { fetchEvidence } from '../../../services/gh/evidence';
 import {
   guessFromWorkspace, searchRepos, summarise, inspectRepo, inspectFork,
@@ -384,6 +384,25 @@ export async function handleDkghBoard(
     state: (msg.state as 'open' | 'closed' | 'all') ?? 'open',
   });
   postMessage({ type: 'dkgh:board:result', ...result });
+}
+
+/**
+ * Search the repository rather than the page — screen 08C.
+ *
+ * Asked only when the reader widens the scope to comments, or when the board is
+ * bigger than one page and they say so. Everything else the search box does
+ * runs in the webview over what it already holds.
+ */
+export async function handleDkghSearchIssues(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const query = String(msg.query ?? '').trim();
+  if (!repo || !query) return;
+  postMessage({ type: 'dkgh:searchIssues:loading', query });
+  const result = await searchIssues(repo, query, { comments: msg.comments === true });
+  postMessage({ type: 'dkgh:searchIssues:result', ...result });
 }
 
 /**

@@ -40,6 +40,7 @@ import {
 } from './board-types';
 import { arrange, catalogue, type TableColumn } from './table-columns';
 import { sinceIso } from './format';
+import type { SearchHit } from './filter-model';
 import { ACCENT, type RepoMeta } from './types';
 
 /** Past this many rows, only what fits plus a margin is rendered. */
@@ -57,7 +58,7 @@ type Row =
 
 export function GhIssueTable({
   groups, showGroups, dimensions, columns, density, wrapTitles, sort, onSort,
-  selected, onToggle, onOpen, cursor, meta, onEdit, pending, renderHeader,
+  selected, onToggle, onOpen, cursor, meta, onEdit, pending, hits, renderHeader,
 }: {
   groups: Group[];
   showGroups: boolean;
@@ -77,6 +78,8 @@ export function GhIssueTable({
   onEdit: (issue: BoardIssue, field: 'assignee' | 'milestone', value: string) => void;
   /** Issues with a write in flight: which field, and what the cell now claims. */
   pending: Map<number, { field: string; value: string }>;
+  /** Where the search matched, per issue — screen 08C. */
+  hits?: Map<number, SearchHit>;
   /** The group header, drawn by the board so both views agree on it. */
   renderHeader: (group: Group) => React.ReactNode;
 }) {
@@ -164,6 +167,7 @@ export function GhIssueTable({
             cursor={cursor === r.issue.number}
             meta={meta}
             pendingValue={pending.get(r.issue.number)}
+            hit={hits?.get(r.issue.number)}
             onToggle={onToggle}
             onOpen={onOpen}
             onEdit={onEdit}
@@ -375,12 +379,13 @@ const IssueRow = forwardRef<HTMLDivElement, {
   cursor: boolean;
   meta?: RepoMeta;
   pendingValue?: { field: string; value: string };
+  hit?: SearchHit;
   onToggle: (issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => void;
   onOpen: (issue: BoardIssue) => void;
   onEdit: (issue: BoardIssue, field: 'assignee' | 'milestone', value: string) => void;
 }>(function IssueRow({
   issue, cols, template, offsets, pad, wrapTitles, selected, anySelected,
-  cursor, meta, pendingValue, onToggle, onOpen, onEdit,
+  cursor, meta, pendingValue, hit, onToggle, onOpen, onEdit,
 }, ref) {
   const click = (e: React.MouseEvent) => {
     const mods = { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey };
@@ -432,7 +437,7 @@ const IssueRow = forwardRef<HTMLDivElement, {
             }}
           >
             <Cell col={c} issue={issue} wrapTitles={wrapTitles} meta={meta}
-                  selected={selected} anySelected={anySelected}
+                  selected={selected} anySelected={anySelected} hit={hit}
                   pendingValue={pendingValue} onToggle={onToggle} onEdit={onEdit} />
           </div>
         );
@@ -442,7 +447,7 @@ const IssueRow = forwardRef<HTMLDivElement, {
 });
 
 function Cell({
-  col, issue, wrapTitles, meta, selected, anySelected, pendingValue, onToggle, onEdit,
+  col, issue, wrapTitles, meta, selected, anySelected, pendingValue, hit, onToggle, onEdit,
 }: {
   col: TableColumn;
   issue: BoardIssue;
@@ -451,6 +456,7 @@ function Cell({
   selected: boolean;
   anySelected: boolean;
   pendingValue?: { field: string; value: string };
+  hit?: SearchHit;
   onToggle: (issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => void;
   onEdit: (issue: BoardIssue, field: 'assignee' | 'milestone', value: string) => void;
 }) {
@@ -490,6 +496,14 @@ function Cell({
           }}
         >
           {issue.title}
+          {/* Where the search matched — a hit in an old comment and a hit in
+              the title are different kinds of answer. */}
+          {hit && hit.where !== 'title' && (
+            <span className="block text-[9px]"
+                  style={{ color: 'var(--color-text-muted)', marginTop: 1 }}>
+              <span style={{ color: ACCENT }}>in the {hit.where}</span> — {hit.snippet}
+            </span>
+          )}
         </span>
       );
 

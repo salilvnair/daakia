@@ -35,6 +35,7 @@ export const BINDINGS: { keys: string[]; joiner?: string; does: string }[] = [
   { keys: ['m'], does: 'milestone…' },
   { keys: ['c'], does: 'close' },
   { keys: ['/'], does: 'jump to search' },
+  { keys: ['f'], does: 'open the filters' },
   { keys: ['g'], does: 'group by…' },
   { keys: ['?'], does: 'this list' },
   { keys: ['Esc'], does: 'clear the selection' },

@@ -27,12 +27,22 @@ export interface BoardIssue {
   labels: Label[];
   milestone?: string;
   createdAt: string;
+  updatedAt: string;
   commentCount: number;
   /** Read out of the body via the repository's own field map. */
   dimensions: Record<string, string>;
   /** Image URLs in the body. The bytes come later, one at a time. */
   evidence: string[];
   bodyFirstLine?: string;
+  /**
+   * As much of the body as the search box needs, whitespace collapsed.
+   *
+   * Truncated by the host: a hundred issues of full markdown is megabytes
+   * through `postMessage` to answer a word somebody typed. Long enough that a
+   * search for an error message finds it, short enough that the board still
+   * arrives in one go.
+   */
+  bodyText?: string;
   ageDays: number;
   quietDays: number;
 }
@@ -55,6 +65,8 @@ export interface BoardData {
   /** Counted only when the open list came back empty. */
   closedRecently?: number;
   rateLimit?: { remaining: number; limit: number; resetAt: number };
+  /** The read hit its page size, so the board is not the whole repository. */
+  truncated?: boolean;
   error?: string;
 }
 

@@ -51,6 +51,15 @@ export interface BoardIssue {
    * render one sentence nobody asked for.
    */
   bodyFirstLine?: string;
+  /**
+   * As much of the body as the search box needs, whitespace collapsed.
+   *
+   * The board's search runs in the webview over what it already has, so it is
+   * instant and works offline — but that means the text has to travel. This is
+   * the compromise: enough of it that searching for an error message finds the
+   * issue, capped so a hundred issues of markdown do not arrive as megabytes.
+   */
+  bodyText?: string;
   /** Days since it was opened. Computed here so the UI never does date maths. */
   ageDays: number;
   /**
@@ -82,6 +91,13 @@ export interface BoardData {
   closedRecently?: number;
   /** Present when GitHub is refusing calls — screen 04E's amber state. */
   rateLimit?: RateLimit;
+  /**
+   * The read hit its page size, so the board is not the whole repository.
+   *
+   * The search box says so rather than implying it searched everything, which
+   * is the difference between "no results" and "no results here".
+   */
+  truncated?: boolean;
 }
 
 export interface RateLimit {
@@ -112,6 +128,28 @@ const DAY = 86_400_000;
 
 /** How much of a first line is worth carrying to a card. */
 const FIRST_LINE_MAX = 160;
+
+/** How much of a body is worth carrying for the search box to look through. */
+const BODY_TEXT_MAX = 1500;
+
+/**
+ * The body as one searchable line.
+ *
+ * Images and headings go: the URL of a screenshot is not something anybody
+ * searches for, and every issue filed from the same template shares its
+ * headings, so leaving them in would make every issue match every template
+ * word.
+ */
+function searchableBody(body: string): string | undefined {
+  const text = body
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/<img[^>]*>/gi, ' ')
+    .replace(/^#{1,6} .*$/gm, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return undefined;
+  return text.length > BODY_TEXT_MAX ? text.slice(0, BODY_TEXT_MAX) : text;
+}
 
 /**
  * The first line of a body that a reader would call the description.
@@ -307,6 +345,7 @@ export async function fetchBoard(
       dimensions: readDimensions(i.body ?? '', map),
       evidence: imageUrls(i.body ?? ''),
       bodyFirstLine: firstLine(i.body ?? ''),
+      bodyText: searchableBody(i.body ?? ''),
       ageDays: daysSince(created, now),
       /* updatedAt moves on a label change as well as a comment, so this is
          "quiet" in the loosest sense — the board says "quiet for", not
@@ -324,6 +363,7 @@ export async function fetchBoard(
   return {
     repo,
     issues,
+    truncated: raw.length >= (opts.limit ?? 200),
     dimensions: templates.dimensions,
     formErrors: templates.errors,
     noTemplates: templates.noTemplates,
@@ -382,4 +422,71 @@ export async function fetchIssueDetail(repo: string, number: number): Promise<Is
       createdAt: c.createdAt,
     })),
   };
+}
+
+/**
+ * Search the repository, not just the page — screen 08C.
+ *
+ * The board's own search runs in the webview over what it already has, which is
+ * instant, works offline, and only sees loaded issues. Two things need more
+ * than that: a repository bigger than one page, and comments, which are not on
+ * the board at all.
+ *
+ * `gh search issues` answers both. It comes back as issue numbers rather than
+ * whole issues because the board already holds everything else it needs to draw
+ * a row — and because the ones it does not hold are exactly the case where a
+ * refresh is the honest next step rather than a second, differently-shaped list.
+ */
+export interface RepoSearchResult {
+  query: string;
+  /** Numbers that matched, including ones the board has not loaded. */
+  numbers: number[];
+  /** The subset whose match was in a comment, for "where did it match". */
+  inComments: number[];
+  error?: string;
+}
+
+export async function searchIssues(
+  repo: string,
+  query: string,
+  opts: { comments?: boolean } = {},
+): Promise<RepoSearchResult> {
+  const q = query.trim();
+  if (!q) return { query, numbers: [], inComments: [] };
+
+  const base = ['search', 'issues', q, '--repo', repo, '--limit', '100', '--json', 'number'];
+
+  const all = await run([...base, '--match', 'title,body,comments'], { timeoutMs: 45_000 });
+  if (!all.ok) {
+    return {
+      query,
+      numbers: [],
+      inComments: [],
+      error: (all.stderr || all.failure || 'gh could not run the search').trim(),
+    };
+  }
+
+  const numbers = numbersIn(all.stdout);
+  if (!opts.comments) return { query, numbers, inComments: [] };
+
+  /*
+    A second search restricted to title and body, so "matched in a comment" is
+    the difference rather than a guess. GitHub will not say which field matched,
+    and a result list that claimed a comment hit for a title hit would be wrong
+    in the one place this screen exists to be right.
+  */
+  const text = await run([...base, '--match', 'title,body'], { timeoutMs: 45_000 });
+  const textual = new Set(text.ok ? numbersIn(text.stdout) : numbers);
+  return { query, numbers, inComments: numbers.filter(n => !textual.has(n)) };
+}
+
+function numbersIn(stdout: string): number[] {
+  try {
+    const rows = JSON.parse(stdout) as { number?: number }[];
+    return Array.isArray(rows)
+      ? rows.map(r => r.number).filter((n): n is number => typeof n === 'number')
+      : [];
+  } catch {
+    return [];
+  }
 }

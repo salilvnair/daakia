@@ -30,7 +30,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ButtonView, IconButtonView, AvatarView, BadgeChipView, CalloutView, EmptyStateView,
-  TogglePillView, UnderlineTabsView, SearchFieldView, FilterBarView, SkeletonView,
+  TogglePillView, UnderlineTabsView, SearchFieldView, SkeletonView,
   IssueCardSkeletonView, TableSkeletonView,
 } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
@@ -48,6 +48,13 @@ import { GhColumnPanel } from './GhColumnPanel';
 import { GhBulkBar } from './GhBulkBar';
 import { GhEditConfirm } from './GhEditConfirm';
 import { GhBoardEmpty, type ActiveFilter } from './GhBoardEmpty';
+import { GhFilters } from './GhFilters';
+import { GhChips, GhSearchScope } from './GhChips';
+import { GhWhy } from './GhWhy';
+import {
+  EMPTY as EMPTY_FILTER, describeAll, dropField, isEmpty as filterIsEmpty,
+  matchesAll, runSearch, type FilterState, type MatchContext, type SearchHit,
+} from './filter-model';
 import { GhPeek } from './GhPeek';
 import { GhKeys, GhKeyStatus, PEEK_HOLD_MS } from './GhKeys';
 import { useEditFlow, type EditRequest } from './edit-flow';
@@ -106,11 +113,20 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   >();
   const [meta, setMeta] = useState<RepoMeta | undefined>();
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  /** Screen 08 — the one filter behind the facets, the chips and the query. */
+  const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
+  /** Numbers the host found for the current term, when the scope reached past
+      the board — comments, or a repository bigger than one page. */
+  const [remote, setRemote] = useState<{ query: string; comments: Set<number> } | undefined>();
+  const [searchingRepo, setSearchingRepo] = useState(false);
   const [section, setSection] = useState('board');
   /** `open` until somebody asks for the closed ones — screen 04E's first state. */
   const [issueState, setIssueState] = useState<'open' | 'all'>('open');
-  const [panel, setPanel] = useState(false);
+  /** Which side panel is open, if any. One at a time — three at once is a board
+      with no room left on it. */
+  const [panel, setPanel] = useState<'none' | 'filters' | 'view'>('none');
+  /** 08E, on the right rather than the left, because it is about the results. */
+  const [why, setWhy] = useState(false);
   const [showKeys, setShowKeys] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [cursor, setCursor] = useState<number | undefined>();
@@ -132,6 +148,15 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
       const msg = evt.data as Record<string, unknown>;
       if (msg.type === 'dkgh:board:loading') { setLoading(true); return; }
       if (msg.type === 'dkgh:repoMeta:result') { setMeta(msg as unknown as RepoMeta); return; }
+      if (msg.type === 'dkgh:searchIssues:loading') { setSearchingRepo(true); return; }
+      if (msg.type === 'dkgh:searchIssues:result') {
+        setSearchingRepo(false);
+        setRemote({
+          query: String(msg.query ?? ''),
+          comments: new Set((msg.inComments as number[]) ?? []),
+        });
+        return;
+      }
       if (msg.type !== 'dkgh:board:result') return;
       setLoading(false);
       const result = msg as unknown as BoardData;
@@ -177,12 +202,29 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     setLoading(true);
     read();
   }, [frozen, read]);
+
+  /**
+   * Ask the host to search the whole repository — screen 08C.
+   *
+   * Only on request. The everyday search runs here over what the board already
+   * holds, which is instant and offline; this one spends an API call, so it
+   * happens when somebody widens the scope to comments or says the board is
+   * not the whole repository.
+   */
+  const searchRepo = useCallback(() => {
+    const q = filter.search.text.trim();
+    if (!q || frozen) return;
+    postMsg({ type: 'dkgh:searchIssues', repo, query: q, comments: true });
+  }, [filter.search.text, frozen, repo]);
   const flow = useEditFlow(repo, refresh);
 
   /* Whatever the switch dialog needs to name what is being left behind. */
   useEffect(() => {
-    onContext?.({ search, dimensions: (data?.dimensions ?? []).map(d => d.dimension) });
-  }, [search, data, onContext]);
+    onContext?.({
+      search: describeAll(filter),
+      dimensions: (data?.dimensions ?? []).map(d => d.dimension),
+    });
+  }, [filter, data, onContext]);
 
   /** Dimensions the repository declared, plus the ones GitHub always has. */
   const groupOptions = useMemo(() => [
@@ -190,19 +232,54 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     ...(data?.dimensions ?? []).map(d => ({ id: d.dimension, label: cap(d.dimension) })),
   ], [data]);
 
-  const matches = useCallback((i: BoardIssue, q: string) => {
-    if (!q) return true;
-    const t = q.toLowerCase();
-    return i.title.toLowerCase().includes(t)
-      || String(i.number).includes(t)
-      || (i.bodyFirstLine ?? '').toLowerCase().includes(t);
-  }, []);
+  /**
+   * Who `@me` is, and when now is.
+   *
+   * Passed in rather than read inside the model so a saved view follows its
+   * reader — `-assignee:@me` means something different to whoever opens it,
+   * which is the whole point of sharing one.
+   */
+  const ctx: MatchContext = useMemo(
+    () => ({ me: activeAccount(env ?? null)?.login }),
+    [env],
+  );
+
+  /* Comment hits come from the host; everything else is answered locally. */
+  const commentHits = remote?.query === filter.search.text.trim()
+    ? remote.comments : undefined;
 
   const all = data?.issues ?? [];
+
+  /**
+   * The facets, then the search — in that order, and it matters.
+   *
+   * The facet counts are taken over what the search left, so the number beside
+   * a value is how many you would get if you ticked it *given what you typed*.
+   * Counting them over the whole board would put a number on screen that the
+   * next click cannot produce.
+   */
+  const searched = useMemo(() => {
+    const q = filter.search.text.trim();
+    if (!q) return all;
+    return all.filter(i => !!runSearch(i, filter.search, commentHits));
+  }, [all, filter.search, commentHits]);
+
   const filtered = useMemo(
-    () => all.filter(i => matches(i, search.trim())),
-    [all, search, matches],
+    () => searched.filter(i => matchesAll(i, filter.terms, ctx)),
+    [searched, filter.terms, ctx],
   );
+
+  /** Where each shown issue matched, for the line under it — screen 08C. */
+  const hits = useMemo(() => {
+    const q = filter.search.text.trim();
+    if (!q) return undefined;
+    const map = new Map<number, SearchHit>();
+    for (const i of filtered) {
+      const hit = runSearch(i, filter.search, commentHits);
+      if (hit) map.set(i.number, hit);
+    }
+    return map;
+  }, [filtered, filter.search, commentHits]);
 
   const groups = useMemo(() => groupIssues(filtered, meaning.groupBy), [filtered, meaning.groupBy]);
 
@@ -306,7 +383,8 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     onPeek: setPeek,
     onHelp: () => setShowKeys(true),
     onSearch: () => searchRef.current?.querySelector('input')?.focus(),
-    onPanel: () => setPanel(p => !p),
+    onFilters: () => setPanel(p => (p === 'filters' ? 'none' : 'filters')),
+    onPanel: () => setPanel(p => (p === 'view' ? 'none' : 'view')),
     onAct: (kind) => {
       const numbers = targets();
       if (numbers.length === 0) return;
@@ -357,13 +435,29 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   const account = activeAccount(env ?? null);
   const groupLabel = groupOptions.find(g => g.id === meaning.groupBy)?.label ?? 'Nothing';
 
-  /** What is narrowing the board, and what dropping each would give back. */
+  /**
+   * What is narrowing the board, and what dropping each alone would give back.
+   *
+   * The counts come from the same evaluator the board uses, so the empty
+   * state's "dropping X would show 5" is a promise it can keep rather than an
+   * estimate.
+   */
   const activeFilters: ActiveFilter[] = [
-    ...(search.trim() ? [{
+    ...filter.terms.map(t => {
+      const others = filter.terms.filter(x => x !== t);
+      const d = describeAll({ terms: [t], search: { text: '', scope: 'body' } });
+      return {
+        key: `${t.negated ? '-' : ''}${t.field}`,
+        label: d,
+        wouldShow: searched.filter(i => matchesAll(i, others, ctx)).length,
+        drop: () => setFilter(f => dropField(f, t.field)),
+      };
+    }),
+    ...(filter.search.text.trim() ? [{
       key: 'search',
-      label: `the search for “${search.trim()}”`,
-      wouldShow: all.length,
-      drop: () => setSearch(''),
+      label: `the search for “${filter.search.text.trim()}”`,
+      wouldShow: all.filter(i => matchesAll(i, filter.terms, ctx)).length,
+      drop: () => setFilter(f => ({ ...f, search: { ...f.search, text: '' } })),
     }] : []),
     ...(issueState === 'open' && (data?.closedRecently ?? 0) > 0 ? [{
       key: 'state',
@@ -377,7 +471,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     return <GhNoAccess repo={repo} onRetry={refresh} onChangeRepo={onChangeRepo} />;
   }
 
-  const showPanel = panel && (view === 'cards' || view === 'table');
+  const showPanel = panel !== 'none' && (view === 'cards' || view === 'table');
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden" ref={boardRef}
@@ -445,19 +539,34 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
       <div className="flex items-center gap-[7px] px-4 py-2 flex-wrap flex-shrink-0 min-w-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
         <div className="flex-1" style={{ minWidth: 180 }} ref={searchRef}>
-          <SearchFieldView value={search} onChange={setSearch} onClear={() => setSearch('')}
-                           placeholder="Search issues" size="sm" accentColor={ACCENT}
-                           width="100%" />
+          <SearchFieldView
+            value={filter.search.text}
+            onChange={text => setFilter(f => ({ ...f, search: { ...f.search, text } }))}
+            onClear={() => setFilter(f => ({ ...f, search: { ...f.search, text: '' } }))}
+            placeholder="Search issues"
+            size="sm"
+            accentColor={ACCENT}
+            width="100%"
+          />
         </div>
         <TogglePillView
           icon={<FilterIcon size={11} />}
           accentColor={ACCENT}
-          active={showPanel}
-          count={activeFilters.length || undefined}
+          active={panel === 'filters'}
+          count={filter.terms.length || undefined}
+          title="Every facet, with a live count"
+          onClick={() => setPanel(p => (p === 'filters' ? 'none' : 'filters'))}
+        >
+          Filters
+        </TogglePillView>
+        <TogglePillView
+          icon={view === 'table' ? <ColumnsIcon size={11} /> : <LayoutGridIcon size={11} />}
+          accentColor={ACCENT}
+          active={panel === 'view'}
           title={view === 'table'
             ? 'Columns, their order, and how long values behave'
             : 'Grouping, density, and what is on each card'}
-          onClick={() => setPanel(p => !p)}
+          onClick={() => setPanel(p => (p === 'view' ? 'none' : 'view'))}
         >
           {view === 'table' ? 'Columns' : 'Options'}
         </TogglePillView>
@@ -475,7 +584,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           </TogglePillView>
         ))}
         <TogglePillView accentColor={ACCENT} active={meaning.groupBy !== 'none'}
-                        onClick={() => setPanel(true)}>
+                        onClick={() => setPanel('view')}>
           Group: {groupLabel}
         </TogglePillView>
         <TogglePillView icon={<DownloadIcon size={11} />} accentColor={ACCENT} disabled
@@ -487,25 +596,23 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                         onClick={() => setShowKeys(true)} />
       </div>
 
-      {/* What is filtering the list right now */}
-      {activeFilters.length > 0 && (
-        <div className="px-4 py-1.5 flex items-center gap-1.5 flex-shrink-0"
-             style={{
-               borderBottom: '1px solid var(--color-surface-border)',
-               background: `color-mix(in srgb, ${ACCENT} 5%, transparent)`,
-             }}>
-          <span className="text-[9.5px] font-bold uppercase tracking-[.09em]"
-                style={{ color: 'var(--color-text-muted)' }}>
-            Showing
-          </span>
-          <FilterBarView
-            color={ACCENT}
-            filters={activeFilters.map(f => ({ key: f.key, label: f.label }))}
-            onRemove={key => activeFilters.find(f => f.key === key)?.drop()}
-            onClearAll={() => activeFilters.forEach(f => f.drop())}
-          />
-        </div>
-      )}
+      {/* What is filtering the list right now, in words — and the query behind it */}
+      <GhChips
+        state={filter}
+        onChange={setFilter}
+        explaining={why}
+        onExplain={() => setWhy(w => !w)}
+      />
+
+      {/* What the box is actually searching — screen 08C */}
+      <GhSearchScope
+        state={filter}
+        onChange={setFilter}
+        loaded={all.length}
+        truncated={data?.truncated}
+        onSearchRepo={searchRepo}
+        searching={searchingRepo}
+      />
 
       {/* Selection, and the command it is about to run */}
       {selected.size > 0 && (
@@ -563,7 +670,18 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
 
       {/* The board */}
       <div className="flex-1 flex min-h-0 min-w-0">
-        {showPanel && (view === 'table' ? (
+        {panel === 'filters' && (
+          <GhFilters
+            /* Counted over what the search left, so the number beside a value
+               is how many you would get if you ticked it given what you typed. */
+            issues={searched}
+            dimensions={data?.dimensions ?? []}
+            state={filter}
+            onChange={setFilter}
+            ctx={ctx}
+          />
+        )}
+        {showPanel && panel === 'view' && (view === 'table' ? (
           <GhColumnPanel
             dimensions={data?.dimensions ?? []}
             columns={shape.columns}
@@ -620,6 +738,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 onToggle={toggle}
                 onOpen={open}
                 cursor={cursor}
+                hits={hits}
               />
             </div>
           ) : (
@@ -639,10 +758,23 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
               meta={meta}
               onEdit={editCell}
               pending={flow.optimistic}
+              hits={hits}
               renderHeader={(g: Group) => <Header group={g} dimensions={data?.dimensions ?? []} />}
             />
           )}
         </div>
+
+        {/* 08E, on the right — it is about the results, not about the controls */}
+        {why && !pending && (
+          <GhWhy
+            all={all}
+            shown={filtered}
+            state={filter}
+            onChange={setFilter}
+            ctx={ctx}
+            onClose={() => setWhy(false)}
+          />
+        )}
       </div>
 
       {/* Footer */}
@@ -683,7 +815,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
  */
 function useKeys({
   enabled, ordered, cursor, setCursor, selected, setSelected,
-  onOpen, onPeek, onHelp, onSearch, onPanel, onAct,
+  onOpen, onPeek, onHelp, onSearch, onPanel, onFilters, onAct,
 }: {
   enabled: boolean;
   ordered: BoardIssue[];
@@ -696,6 +828,7 @@ function useKeys({
   onHelp: () => void;
   onSearch: () => void;
   onPanel: () => void;
+  onFilters: () => void;
   onAct: (kind: 'assign' | 'label' | 'milestone' | 'close') => void;
 }) {
   const held = useRef<number | undefined>(undefined);
@@ -732,6 +865,7 @@ function useKeys({
         case 'm': onAct('milestone'); break;
         case 'c': onAct('close'); break;
         case 'g': onPanel(); break;
+        case 'f': onFilters(); break;
         case '/': onSearch(); break;
         case '?': onHelp(); break;
         case 'Escape': setSelected(() => new Set()); onPeek(undefined); break;
@@ -776,7 +910,7 @@ function useKeys({
       if (typeof held.current === 'number' && held.current > 0) window.clearTimeout(held.current);
     };
   }, [enabled, ordered, cursor, selected, setCursor, setSelected,
-      onOpen, onPeek, onHelp, onSearch, onPanel, onAct]);
+      onOpen, onPeek, onHelp, onSearch, onPanel, onFilters, onAct]);
 }
 
 // ── While it reads ──────────────────────────────────────────────────────────
