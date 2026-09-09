@@ -10,17 +10,35 @@
  * its own. There is no token in it and never will be: the credential stays
  * wherever `gh` put it, and dkgh's only question is whether one exists.
  */
+import * as vscode from 'vscode';
 import { getSetting, setSetting } from '../../../storage/db';
+import { getActiveWorkspaceId } from '../../../storage/workspaces';
 import { probeEnvironment, setGhPath, verifyGhPath, forgetGh, type GhEnv } from '../../../services/gh/gh';
 import { fetchBoard } from '../../../services/gh/board';
+import { guessFromWorkspace, searchRepos, summarise } from '../../../services/gh/repos';
 
 type PostMessage = (msg: unknown) => void;
 
 const KEY = 'dkgh';
 
+/** How many repositories the Recent list keeps. Enough to be useful, few
+    enough that its counts cost four API calls rather than forty. */
+const RECENT_LIMIT = 4;
+
 /** Persisted across sessions. Deliberately small. */
 export interface DkghState {
-  /** The repository this workspace is pointed at, as `owner/name`. */
+  /**
+   * The repository each Daakia workspace is pointed at, keyed by workspace id.
+   *
+   * Per workspace rather than global because which product you are testing is
+   * exactly what a workspace already distinguishes — switching workspace should
+   * switch repository with it, not leave you filing a bug against the last
+   * project you looked at.
+   */
+  repoByWorkspace?: Record<string, string>;
+  /** The last few, per workspace. Most recent first. */
+  recentByWorkspace?: Record<string, string[]>;
+  /** Pre-workspace saves. Read once, then migrated into the map. */
   repo?: string;
   /**
    * An explicit gh path, for a machine where it is installed somewhere
@@ -34,6 +52,35 @@ export interface DkghState {
 
 function state(): DkghState {
   return getSetting<DkghState>(KEY) ?? {};
+}
+
+/** The repository this workspace is on, honouring the pre-workspace save. */
+function currentRepo(): string | undefined {
+  const s = state();
+  return s.repoByWorkspace?.[getActiveWorkspaceId()] ?? s.repo;
+}
+
+function currentRecent(): string[] {
+  return state().recentByWorkspace?.[getActiveWorkspaceId()] ?? [];
+}
+
+/**
+ * The folder whose git remote is worth guessing from.
+ *
+ * The first workspace folder, because a multi-root workspace has no single
+ * answer and picking the second one at random would be a worse guess than the
+ * first. Absent outside an editor, where the guess simply is not offered.
+ */
+function workspaceFolder(): string | undefined {
+  try {
+    const open = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+    if (open) return open;
+  } catch {
+    /* No editor — the browser dev server. */
+  }
+  /* Where the process was started. In the editor with no folder open this is
+     usually not a repository, and gh says so, which is the right answer. */
+  return process.cwd();
 }
 
 function saveState(patch: Partial<DkghState>): DkghState {
@@ -53,14 +100,65 @@ export function initDkgh(): void {
   if (saved.ghPath) setGhPath(saved.ghPath);
 }
 
-/** Remember the repository, so the tab opens where it was left. */
+/** Remember the repository for this workspace, so the tab opens where it was left. */
 export async function handleDkghSetRepo(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
   const repo = String(msg.repo ?? '').trim();
-  saveState({ repo: repo || undefined });
+  const ws = getActiveWorkspaceId();
+  const s = state();
+
+  const byWorkspace = { ...(s.repoByWorkspace ?? {}) };
+  if (repo) byWorkspace[ws] = repo;
+  else delete byWorkspace[ws];
+
+  /* The one being left goes to the front of Recent, not the one being chosen:
+     the list is where you came from, and an entry for where you already are is
+     a row that does nothing. */
+  const previous = s.repoByWorkspace?.[ws] ?? s.repo;
+  const recent = [...(s.recentByWorkspace?.[ws] ?? [])];
+  if (previous && previous !== repo) {
+    const at = recent.indexOf(previous);
+    if (at >= 0) recent.splice(at, 1);
+    recent.unshift(previous);
+  }
+  const trimmed = recent.filter(r => r !== repo).slice(0, RECENT_LIMIT);
+
+  saveState({
+    repoByWorkspace: byWorkspace,
+    recentByWorkspace: { ...(s.recentByWorkspace ?? {}), [ws]: trimmed },
+    /* The pre-workspace value is superseded the moment a workspace has its own. */
+    repo: undefined,
+  });
   postMessage({ type: 'dkgh:repo:result', repo: repo || undefined });
+}
+
+/**
+ * Everything screen 03 draws, in one message.
+ *
+ * The guess, the recents and their counts arrive together because they are one
+ * question — "which repository?" — and a screen that filled in three at
+ * different moments would reflow under the cursor of somebody about to click.
+ */
+export async function handleDkghRepoOptions(postMessage: PostMessage): Promise<void> {
+  postMessage({ type: 'dkgh:repoOptions:loading' });
+  const [guess, recent] = await Promise.all([
+    guessFromWorkspace(workspaceFolder()),
+    summarise(currentRecent()),
+  ]);
+  postMessage({ type: 'dkgh:repoOptions:result', guess, recent });
+}
+
+/** The search, run against every org this account belongs to. */
+export async function handleDkghSearchRepos(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const query = String(msg.query ?? '').trim();
+  postMessage({ type: 'dkgh:searchRepos:loading', query });
+  const result = await searchRepos(query, { includeArchived: msg.includeArchived === true });
+  postMessage({ type: 'dkgh:searchRepos:result', query, ...result });
 }
 
 /**
@@ -75,7 +173,7 @@ export async function handleDkghBoard(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? state().repo ?? '').trim();
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
   if (!repo) {
     postMessage({ type: 'dkgh:board:result', error: 'No repository is selected.' });
     return;
@@ -97,7 +195,7 @@ export async function handleDkghProbe(postMessage: PostMessage): Promise<void> {
        round trip — and so the UI can say "from the environment" when an env
        var is beating the saved setting, which is otherwise baffling. */
     configuredPath: state().ghPath,
-    repo: state().repo,
+    repo: currentRepo(),
     envOverride: process.env.DAAKIA_GH || undefined,
   });
 }

@@ -137,7 +137,7 @@ import {
 } from './handlers/monitor-handler';
 import {
   initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
-  handleDkghSetRepo, handleDkghBoard,
+  handleDkghSetRepo, handleDkghBoard, handleDkghRepoOptions, handleDkghSearchRepos,
 } from './handlers/dkgh-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
@@ -334,6 +334,12 @@ export class MainPanel {
         break;
       case 'dkgh:setRepo':
         handleDkghSetRepo(msg, this._post);
+        break;
+      case 'dkgh:repoOptions':
+        handleDkghRepoOptions(this._post);
+        break;
+      case 'dkgh:searchRepos':
+        handleDkghSearchRepos(msg, this._post);
         break;
       case 'dkgh:board':
         handleDkghBoard(msg, this._post);

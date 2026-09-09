@@ -105,7 +105,7 @@ import { handleBulkRun, handleBulkStop } from '../src/panel/main/handlers/bulk-h
 import { handleInterceptorStart, handleInterceptorStop } from '../src/panel/main/handlers/interceptor-handler';
 import {
   initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
-  handleDkghSetRepo, handleDkghBoard,
+  handleDkghSetRepo, handleDkghBoard, handleDkghRepoOptions, handleDkghSearchRepos,
 } from '../src/panel/main/handlers/dkgh-handler';
 import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
@@ -157,6 +157,12 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dkgh:setRepo':
       await handleDkghSetRepo(msg, post);
+      break;
+    case 'dkgh:repoOptions':
+      await handleDkghRepoOptions(post);
+      break;
+    case 'dkgh:searchRepos':
+      await handleDkghSearchRepos(msg, post);
       break;
     case 'dkgh:board':
       await handleDkghBoard(msg, post);
