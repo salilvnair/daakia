@@ -1,10 +1,11 @@
 /**
  * dkgh — the tab.
  *
- * Right now this is only the way in: three first-run states, chosen by one
- * probe. They are three states of the same question — is gh here, am I signed
- * in, which repository — so they come from a single `dkgh:probe` rather than
- * three calls that can disagree with each other on a slow machine.
+ * The way in, and then the board. Four states, chosen by one probe: is gh
+ * here, am I signed in, which repository, and then the issues themselves. The
+ * first three are one question asked three times, so they come from a single
+ * `dkgh:probe` rather than three calls that can disagree with each other on a
+ * slow machine.
  *
  * Each one is the whole tab. There is deliberately no Board behind an install
  * screen: an empty table teasing what you cannot have yet is worse than a
@@ -15,13 +16,20 @@ import { postMsg } from '../../vscode';
 import { GhNotInstalled } from './GhNotInstalled';
 import { GhSignIn } from './GhSignIn';
 import { GhPickRepository } from './GhPickRepository';
+import { GhBoard } from './GhBoard';
 import type { GhEnv } from './types';
 
 export function DkghPanel() {
   const [env, setEnv] = useState<GhEnv | null>(null);
   const [envOverride, setEnvOverride] = useState<string | undefined>();
   const [checking, setChecking] = useState(true);
-  /** Set once a repository is chosen. Nothing reads it yet — the board is next. */
+  /**
+   * The repository the board is reading.
+   *
+   * Hydrated from the probe, because the host is where it is persisted — the
+   * tab should open where it was left rather than asking the same question
+   * every window reload.
+   */
   const [repo, setRepo] = useState<string | undefined>();
 
   useEffect(() => {
@@ -30,6 +38,9 @@ export function DkghPanel() {
       if (msg.type !== 'dkgh:probe:result') return;
       setEnv(msg.env as GhEnv);
       setEnvOverride(msg.envOverride as string | undefined);
+      /* Only on the first probe. A recheck must not drag somebody back to the
+         saved repository after they pressed Switch. */
+      setRepo(prev => prev ?? (msg.repo as string | undefined));
       setChecking(false);
     };
     window.addEventListener('message', handler);
@@ -58,6 +69,13 @@ export function DkghPanel() {
 
   const recheck = () => { setChecking(true); postMsg({ type: 'dkgh:recheck' }); };
 
+  /* Chosen here rather than inside the screen, because picking one is what
+     persists it — and the host is the only thing that can. */
+  const pick = (next: string) => {
+    setRepo(next || undefined);
+    postMsg({ type: 'dkgh:setRepo', repo: next });
+  };
+
   if (!env) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -76,7 +94,11 @@ export function DkghPanel() {
     return <GhSignIn env={env} checking={checking} onRecheck={recheck} />;
   }
 
-  return <GhPickRepository env={env} repo={repo} onPick={setRepo} />;
+  if (repo) {
+    return <GhBoard repo={repo} onChangeRepo={() => pick('')} />;
+  }
+
+  return <GhPickRepository env={env} onPick={pick} />;
 }
 
 export default DkghPanel;

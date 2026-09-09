@@ -1203,6 +1203,46 @@ export function IssueOpenedIcon(props: IconProps) {
   );
 }
 
+/**
+ * A repository — the book-and-spine shape GitHub uses.
+ *
+ * Drawn on the same 24 grid as the rest rather than lifted from octicons at 16,
+ * so it sits at the same optical weight as the icons beside it.
+ */
+/** Insights — bars on a baseline. */
+export function ChartBarIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M3 21h18" />
+      <rect x="5" y="12" width="4" height="6" />
+      <rect x="11" y="7" width="4" height="11" />
+      <rect x="17" y="15" width="4" height="3" />
+    </svg>
+  );
+}
+
+/** A column board — three lanes with cards in them. */
+export function ColumnsIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <rect x="3" y="4" width="5" height="16" rx="1" />
+      <rect x="9.5" y="4" width="5" height="11" rx="1" />
+      <rect x="16" y="4" width="5" height="14" rx="1" />
+    </svg>
+  );
+}
+
+export function RepoIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <path d="M5 3h13a1 1 0 0 1 1 1v13" />
+      <path d="M5 3a2 2 0 0 0-2 2v12.5A3.5 3.5 0 0 0 6.5 21H19v-4" />
+      <path d="M6.5 17H19" />
+      <path d="M8 7h7" />
+    </svg>
+  );
+}
+
 export function BugIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

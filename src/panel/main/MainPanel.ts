@@ -137,6 +137,7 @@ import {
 } from './handlers/monitor-handler';
 import {
   initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
+  handleDkghSetRepo, handleDkghBoard,
 } from './handlers/dkgh-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
@@ -330,6 +331,12 @@ export class MainPanel {
         break;
       case 'dkgh:setPath':
         handleDkghSetPath(msg, this._post);
+        break;
+      case 'dkgh:setRepo':
+        handleDkghSetRepo(msg, this._post);
+        break;
+      case 'dkgh:board':
+        handleDkghBoard(msg, this._post);
         break;
       // Scheduled API checks. The panel has posted these since it was built;
       // until now nothing answered, so no check ever ran.

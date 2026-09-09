@@ -89,9 +89,11 @@
   --color-dk8s: #22d3ee;
   --color-dk8s-muted: #0e9bb5;
   /* dkgh. GitHub's mark is monochrome, so the tab needs a colour of its own:
-     a violet away from workspace teal, dk8s cyan and every protocol hue. */
-  --color-dkgh: #a371f7;
-  --color-dkgh-muted: #8957e5;
+     a warm terracotta, away from workspace teal, dk8s cyan and every protocol
+     hue — and far enough from the red used for errors to never be mistaken
+     for one. */
+  --color-dkgh: #DE7356;
+  --color-dkgh-muted: #c05a3e;
 
   /* Settings */
   --color-settings: #2a9d8f;
@@ -352,8 +354,10 @@
   --color-workspace: #0d9488;
   --color-dk8s: #0891b2;
   --color-dk8s-muted: #0e7490;
-  --color-dkgh: #8250df;
-  --color-dkgh-muted: #6639ba;
+  /* Deeper on a light ground, the way the other tab hues are — #DE7356 is
+     built for the dark panel and goes thin on white. */
+  --color-dkgh: #c0543a;
+  --color-dkgh-muted: #9c422d;
 
   --color-settings: #1f7a6e;
   --color-wiki: #b45309;

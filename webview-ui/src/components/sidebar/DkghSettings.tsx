@@ -11,10 +11,10 @@
  * roadmap empty" has a visible answer rather than needing a support thread.
  */
 import { useEffect, useState } from 'react';
-import { ButtonView, TextInputView } from '@salilvnair/dui';
+import { ButtonView, TextInputView, CalloutView, CodeBlockView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
-import { RefreshIcon, CheckIcon, WarningTriangleIcon, TerminalIcon } from '../../icons';
+import { RefreshIcon, CheckIcon, WarningTriangleIcon } from '../../icons';
 
 const ACCENT = 'var(--color-settings)';
 
@@ -111,19 +111,12 @@ export function DkghSettings() {
           for an hour, so whichever is in force is stated rather than implied.
         */}
         {envOverride && (
-          <div className="rounded-lg border px-3 py-2 text-[11px] flex items-start gap-2"
-               style={{
-                 borderColor: 'color-mix(in srgb, var(--color-warning) 40%, transparent)',
-                 backgroundColor: 'color-mix(in srgb, var(--color-warning) 8%, transparent)',
-                 color: 'var(--color-text-secondary)',
-               }}>
-            <WarningTriangleIcon size={12} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-warning)' }} />
-            <span>
-              <b style={{ color: 'var(--color-text-primary)' }}>DAAKIA_GH is set</b>, so it is being used
-              and the path below is ignored for this session.
-              <span className="font-mono block mt-1" style={{ color: 'var(--color-text-muted)' }}>{envOverride}</span>
+          <CalloutView variant="warning" title="DAAKIA_GH is set" style={{ margin: 0 }}>
+            It is being used, and the path below is ignored for this session.
+            <span className="font-mono block mt-1" style={{ color: 'var(--color-text-muted)' }}>
+              {envOverride}
             </span>
-          </div>
+          </CalloutView>
         )}
 
         <label className="text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
@@ -165,19 +158,12 @@ export function DkghSettings() {
         {!env ? (
           <p className="text-[11px] m-0" style={{ color: 'var(--color-text-muted)' }}>Checking…</p>
         ) : !env.present ? (
-          <div className="rounded-lg border p-3 flex flex-col gap-2"
-               style={{
-                 borderColor: 'color-mix(in srgb, var(--color-error) 35%, transparent)',
-                 backgroundColor: 'color-mix(in srgb, var(--color-error) 6%, transparent)',
-               }}>
-            <div className="text-[12px] font-semibold" style={{ color: 'var(--color-error)' }}>Not found</div>
-            <div className="text-[10.5px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
+          <CalloutView variant="danger" title="Not found" style={{ margin: 0 }}>
+            <span className="font-mono block" style={{ color: 'var(--color-text-muted)' }}>
               Looked in: {env.triedPaths?.join(', ')}
-            </div>
-            <div className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
-              Install it, or set the path above.
-            </div>
-          </div>
+            </span>
+            Install it, or set the path above.
+          </CalloutView>
         ) : (
           <div className="flex flex-col gap-2">
             <Row label="Binary" value={env.binary} mono />
@@ -248,23 +234,9 @@ function Row({ label, value, mono, tone }: {
  * settings page should be driving on somebody's behalf.
  */
 function CommandHint({ text, note }: { text: string; note: string }) {
-  const addToast = useToastStore(s => s.addToast);
   return (
-    <div className="rounded-lg border p-2.5 flex flex-col gap-1.5 mt-1"
-         style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
-      <div className="flex items-center gap-2">
-        <TerminalIcon size={11} style={{ color: 'var(--color-text-muted)' }} />
-        <code className="text-[10.5px] flex-1" style={{ color: 'var(--color-text-primary)', wordBreak: 'break-all' }}>
-          {text}
-        </code>
-        <ButtonView size="sm" variant="ghost" accentColor={ACCENT}
-                    onClick={() => {
-                      navigator.clipboard?.writeText(text);
-                      addToast({ type: 'success', message: 'Copied' });
-                    }}>
-          Copy
-        </ButtonView>
-      </div>
+    <div className="flex flex-col gap-1.5 mt-1">
+      <CodeBlockView code={text} language="bash" fill showCopyButton accentColor={ACCENT} />
       <p className="text-[10px] m-0" style={{ color: 'var(--color-text-muted)' }}>{note}</p>
     </div>
   );

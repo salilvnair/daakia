@@ -12,6 +12,7 @@
  */
 import { getSetting, setSetting } from '../../../storage/db';
 import { probeEnvironment, setGhPath, verifyGhPath, forgetGh, type GhEnv } from '../../../services/gh/gh';
+import { fetchBoard } from '../../../services/gh/board';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -19,6 +20,8 @@ const KEY = 'dkgh';
 
 /** Persisted across sessions. Deliberately small. */
 export interface DkghState {
+  /** The repository this workspace is pointed at, as `owner/name`. */
+  repo?: string;
   /**
    * An explicit gh path, for a machine where it is installed somewhere
    * unusual — or not on PATH at all, which is the common case on a locked-down
@@ -50,6 +53,40 @@ export function initDkgh(): void {
   if (saved.ghPath) setGhPath(saved.ghPath);
 }
 
+/** Remember the repository, so the tab opens where it was left. */
+export async function handleDkghSetRepo(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? '').trim();
+  saveState({ repo: repo || undefined });
+  postMessage({ type: 'dkgh:repo:result', repo: repo || undefined });
+}
+
+/**
+ * The board.
+ *
+ * One message carries the issues, the dimensions the templates declared and
+ * any template that would not parse — because they are read together and a UI
+ * that received them separately would render a board before it knew how to
+ * group it.
+ */
+export async function handleDkghBoard(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? state().repo ?? '').trim();
+  if (!repo) {
+    postMessage({ type: 'dkgh:board:result', error: 'No repository is selected.' });
+    return;
+  }
+  postMessage({ type: 'dkgh:board:loading', repo });
+  const result = await fetchBoard(repo, {
+    state: (msg.state as 'open' | 'closed' | 'all') ?? 'open',
+  });
+  postMessage({ type: 'dkgh:board:result', ...result });
+}
+
 /** Everything screens 01–03 render, in one message. */
 export async function handleDkghProbe(postMessage: PostMessage): Promise<void> {
   const env: GhEnv = await probeEnvironment();
@@ -60,6 +97,7 @@ export async function handleDkghProbe(postMessage: PostMessage): Promise<void> {
        round trip — and so the UI can say "from the environment" when an env
        var is beating the saved setting, which is otherwise baffling. */
     configuredPath: state().ghPath,
+    repo: state().repo,
     envOverride: process.env.DAAKIA_GH || undefined,
   });
 }

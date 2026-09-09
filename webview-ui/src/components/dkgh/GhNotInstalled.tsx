@@ -12,9 +12,9 @@
  * telling it nothing.
  */
 import { useState } from 'react';
-import { ButtonView } from '@salilvnair/dui';
-import { TerminalIcon, RefreshIcon, LockIcon, DownloadIcon } from '../../icons';
-import { GhEmpty, GhLede, GhOption, GhNote, GhActions, GhPrimary } from './GhShell';
+import { ButtonView, SegmentedControlView, SetupOptionView } from '@salilvnair/dui';
+import { TerminalIcon, RefreshIcon, DownloadIcon } from '../../icons';
+import { GhEmpty, GhLede, GhNote, GhActions, GhPrimary } from './GhShell';
 import { ACCENT, type GhEnv } from './types';
 
 type Plat = 'win32' | 'darwin' | 'linux';
@@ -84,45 +84,37 @@ export function GhNotInstalled({ env, envOverride, checking, onRecheck }: {
       */}
       {envOverride && (
         <div className="w-full mb-3">
-          <GhNote icon={<LockIcon size={12} />} tone="warn">
-            <b style={{ color: 'var(--color-text-primary)' }}>DAAKIA_GH is set</b>, so only that
-            path was tried — nothing else was looked at.
+          <GhNote title="DAAKIA_GH is set" tone="warn">
+            Only that path was tried — nothing else was looked at.
             <span className="font-mono block mt-1">{envOverride}</span>
           </GhNote>
         </div>
       )}
 
-      {/* Platform tabs — open on what the host reported. */}
-      <div className="flex gap-1 mb-3">
-        {(['win32', 'darwin', 'linux'] as Plat[]).map(p => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setPlat(p)}
-            className="text-[11px] px-3 py-1 rounded-md cursor-pointer"
-            style={{
-              border: '1px solid',
-              borderColor: p === plat ? 'var(--color-surface-border)' : 'transparent',
-              backgroundColor: p === plat ? 'var(--color-surface)' : 'transparent',
-              color: p === plat ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-              fontWeight: p === plat ? 600 : 400,
-            }}
-          >
-            {LABEL[p]}
-            {p === detected && <span style={{ color: ACCENT }}> ·</span>}
-          </button>
-        ))}
+      {/* Platform tabs — open on what the host reported, marked with a dot. */}
+      <div className="mb-3">
+        <SegmentedControlView
+          size="sm"
+          accentColor={ACCENT}
+          value={plat}
+          onChange={v => setPlat(v as Plat)}
+          options={(['win32', 'darwin', 'linux'] as Plat[]).map(p => ({
+            value: p,
+            label: p === detected ? `${LABEL[p]} ·` : LABEL[p],
+          }))}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-2 w-full">
         {ROUTES[plat].map(r => (
-          <GhOption
+          <SetupOptionView
             key={r.title}
             title={r.title}
             tag={r.tag}
             recommended={r.tag === 'recommended'}
             command={r.command}
             note={r.note}
+            accentColor={ACCENT}
             action={r.download ? (
               <ButtonView size="sm" variant="ghost" accentColor={ACCENT}
                           iconLeft={<DownloadIcon size={11} />}
@@ -135,17 +127,15 @@ export function GhNotInstalled({ env, envOverride, checking, onRecheck }: {
       </div>
 
       <div className="w-full mt-3">
-        <GhNote icon={<LockIcon size={12} />}>
-          <b style={{ color: 'var(--color-text-primary)' }}>Daakia never asks for a GitHub token.</b>
-          {' '}Signing in is the next screen and it happens inside <code>gh</code>, which stores the
+        <GhNote title="Daakia never asks for a GitHub token">
+          Signing in is the next screen and it happens inside <code>gh</code>, which stores the
           credential in your OS keychain. Nothing is written to Daakia's database.
         </GhNote>
       </div>
 
       {env.triedPaths?.length ? (
         <div className="w-full mt-2">
-          <GhNote icon={<TerminalIcon size={12} />}>
-            <b style={{ color: 'var(--color-text-primary)' }}>Looked in:</b>{' '}
+          <GhNote title="Where it looked">
             <span className="font-mono">{env.triedPaths.join(' · ')}</span>
             {!envOverride && ' — if gh is somewhere else, set the path in Settings → GitHub CLI.'}
           </GhNote>

@@ -11,10 +11,10 @@
  * costs nothing; a roadmap that is silently empty because of a permission
  * nobody mentioned costs an afternoon.
  */
-import { ButtonView } from '@salilvnair/dui';
-import { KeyIcon, RefreshIcon, LockIcon, Dk8sIcon } from '../../icons';
-import { GhEmpty, GhLede, GhOption, GhNote, GhActions, GhPrimary } from './GhShell';
-import type { GhEnv } from './types';
+import { ButtonView, SetupOptionView } from '@salilvnair/dui';
+import { KeyIcon, RefreshIcon } from '../../icons';
+import { GhEmpty, GhLede, GhNote, GhActions, GhPrimary } from './GhShell';
+import { ACCENT, type GhEnv } from './types';
 
 const LOGIN = 'gh auth login --hostname github.com --git-protocol ssh --scopes read:project --web';
 const REFRESH = 'gh auth refresh --scopes read:project';
@@ -36,7 +36,8 @@ export function GhSignIn({ env, checking, onRecheck }: {
       </GhLede>
 
       <div className="flex flex-col gap-2 w-full" style={{ maxWidth: 520 }}>
-        <GhOption
+        <SetupOptionView
+          accentColor={ACCENT}
           title="Sign in"
           tag="one time"
           recommended
@@ -44,12 +45,14 @@ export function GhSignIn({ env, checking, onRecheck }: {
           note={<>Every prompt answered but the browser step. Drop <code>--git-protocol ssh</code> for
             HTTPS, and add <code>--skip-ssh-key</code> if you have already uploaded a key.</>}
         />
-        <GhOption
+        <SetupOptionView
+          accentColor={ACCENT}
           title="Already signed in elsewhere?"
           command={REFRESH}
           note="Adds the scope to an existing credential without signing you out of anything."
         />
-        <GhOption
+        <SetupOptionView
+          accentColor={ACCENT}
           title="GitHub Enterprise Server"
           command={ENTERPRISE}
           note={<>dkgh reads the host back from <code>gh auth status</code>; you never type a
@@ -58,16 +61,14 @@ export function GhSignIn({ env, checking, onRecheck }: {
       </div>
 
       <div className="w-full mt-3 flex flex-col gap-2" style={{ maxWidth: 520 }}>
-        <GhNote icon={<Dk8sIcon size={12} />}>
-          <b style={{ color: 'var(--color-text-primary)' }}>What <code>read:project</code> is for.</b>{' '}
+        <GhNote title="What read:project is for">
           Start date, ETA and Status live on GitHub Projects, not on the issue, and the default
           login cannot see them. It is <b>read-only</b> — dkgh asks for write access separately,
           the first time you drag a card between columns. Skip it and everything still works;
           the roadmap and the date columns say what is missing instead of showing blanks.
         </GhNote>
-        <GhNote icon={<LockIcon size={12} />}>
-          <b style={{ color: 'var(--color-text-primary)' }}>Why a terminal and not a box in this
-          window.</b> A login form inside Daakia would mean Daakia handling your password or a
+        <GhNote title="Why a terminal and not a box in this window">
+          A login form inside Daakia would mean Daakia handling your password or a
           token. Handing the whole flow to <code>gh</code> means the only thing we ever learn is
           the answer to &ldquo;are you logged in?&rdquo;
         </GhNote>

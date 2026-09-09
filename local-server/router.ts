@@ -105,6 +105,7 @@ import { handleBulkRun, handleBulkStop } from '../src/panel/main/handlers/bulk-h
 import { handleInterceptorStart, handleInterceptorStop } from '../src/panel/main/handlers/interceptor-handler';
 import {
   initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
+  handleDkghSetRepo, handleDkghBoard,
 } from '../src/panel/main/handlers/dkgh-handler';
 import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
@@ -153,6 +154,12 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dkgh:setPath':
       await handleDkghSetPath(msg, post);
+      break;
+    case 'dkgh:setRepo':
+      await handleDkghSetRepo(msg, post);
+      break;
+    case 'dkgh:board':
+      await handleDkghBoard(msg, post);
       break;
 
     // ── dk8s — Kubernetes. Routed here so the pod grid can be driven and

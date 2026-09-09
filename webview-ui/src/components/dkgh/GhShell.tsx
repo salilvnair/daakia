@@ -1,16 +1,26 @@
 /**
- * The furniture the three first-run screens share.
+ * The furniture the first-run screens share.
  *
- * Pulled out because they are one screen in three states, and three copies of
- * a centred column with a mark and a title is how they drift apart — one gains
- * a heading size, another keeps the old padding, and what should read as one
- * place reads as three.
+ * Every piece here is a dui component with dkgh's accent passed in — nothing in
+ * this file draws its own card, note or command block. What remains is layout
+ * and the accent, which is the part that genuinely belongs to this tab.
+ *
+ * They exist as one file because the three screens are one screen in three
+ * states, and three copies of a centred column with a mark and a title is how
+ * they drift apart: one gains a heading size, another keeps the old padding,
+ * and what should read as one place reads as three.
  */
 import type { ReactNode } from 'react';
-import { ButtonView, CopyButtonView } from '@salilvnair/dui';
+import { ButtonView, CalloutView, CodeBlockView, EmptyStateView } from '@salilvnair/dui';
 import { ACCENT } from './types';
 
-/** A centred column with a mark, a title and one sentence. */
+/**
+ * A centred column: the dui empty state on top, everything else under it.
+ *
+ * The lede and the options are children rather than props because these screens
+ * carry real markup — commands, paths, a platform switch — and flattening that
+ * into a message string would cost the formatting that makes it readable.
+ */
 export function GhEmpty({ icon, title, titleColor, children }: {
   icon: ReactNode;
   title: string;
@@ -20,68 +30,26 @@ export function GhEmpty({ icon, title, titleColor, children }: {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto px-6 py-8 flex flex-col items-center" style={{ maxWidth: 700 }}>
-        <div className="mb-3" style={{ color: 'var(--color-text-muted)', opacity: 0.55 }}>{icon}</div>
-        <h2 className="text-[16px] font-bold m-0 mb-1.5 text-center"
-            style={{ color: titleColor ?? 'var(--color-text-primary)' }}>
-          {title}
-        </h2>
+        <EmptyStateView
+          variant="medallion"
+          accentColor={titleColor ?? ACCENT}
+          icon={icon}
+          title={title}
+          compact
+        />
         {children}
       </div>
     </div>
   );
 }
 
-/** The sentence under the title. Centred, and narrow enough to read. */
+/** The sentence under the title. Narrow enough to read, centred to match. */
 export function GhLede({ children }: { children: ReactNode }) {
   return (
     <p className="text-[11.5px] text-center m-0 mb-4"
        style={{ color: 'var(--color-text-muted)', maxWidth: '54ch', lineHeight: 1.65 }}>
       {children}
     </p>
-  );
-}
-
-/**
- * One install or sign-in route.
- *
- * `tag` marks the recommended one. `note` is what a person needs to decide
- * between this and the one beside it — not what the command does, which the
- * command already says.
- */
-export function GhOption({ title, tag, command, note, action, recommended }: {
-  title: string;
-  tag?: string;
-  command?: string;
-  note?: ReactNode;
-  action?: ReactNode;
-  recommended?: boolean;
-}) {
-  return (
-    <div className="rounded-xl border p-3 flex flex-col gap-2"
-         style={{
-           borderColor: recommended
-             ? `color-mix(in srgb, ${ACCENT} 50%, transparent)`
-             : 'var(--color-surface-border)',
-           backgroundColor: recommended
-             ? `color-mix(in srgb, ${ACCENT} 7%, transparent)`
-             : 'var(--color-surface)',
-         }}>
-      <div className="flex items-center gap-2">
-        <span className="text-[11.5px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>{title}</span>
-        {tag && (
-          <span className="text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                style={{ color: ACCENT, backgroundColor: `color-mix(in srgb, ${ACCENT} 16%, transparent)` }}>
-            {tag}
-          </span>
-        )}
-        <span className="flex-1" />
-        {action}
-      </div>
-      {command && <GhCommand text={command} />}
-      {note && (
-        <div className="text-[10px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.55 }}>{note}</div>
-      )}
-    </div>
   );
 }
 
@@ -93,37 +61,25 @@ export function GhOption({ title, tag, command, note, action, recommended }: {
  * credential flow, on somebody's behalf.
  */
 export function GhCommand({ text }: { text: string }) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg border px-2 py-1.5"
-         style={{ borderColor: 'var(--color-surface-border)', backgroundColor: 'var(--color-panel)' }}>
-      <span style={{ color: 'var(--color-success)', fontFamily: 'monospace', fontSize: 10.5 }}>&gt;</span>
-      <code className="flex-1 text-[10.5px]"
-            style={{ color: 'var(--color-text-primary)', wordBreak: 'break-all' }}>
-        {text}
-      </code>
-      <CopyButtonView text={text} />
-    </div>
-  );
+  return <CodeBlockView code={text} language="bash" fill showCopyButton accentColor={ACCENT} />;
 }
 
-/** A note that is worth saying and not worth blocking on. */
-export function GhNote({ icon, tone, children }: {
-  icon: ReactNode;
+/**
+ * A note that is worth saying and not worth blocking on.
+ *
+ * `title` is the part a reader takes at a glance; the body is what they read
+ * when the title turned out to be about them.
+ */
+export function GhNote({ title, tone, children }: {
+  title: string;
   tone?: 'warn' | 'error';
   children: ReactNode;
 }) {
-  const border = tone === 'error' ? 'var(--color-error)'
-    : tone === 'warn' ? 'var(--color-warning)'
-    : 'var(--color-surface-border)';
+  const variant = tone === 'error' ? 'danger' : tone === 'warn' ? 'warning' : 'info';
   return (
-    <div className="rounded-lg border px-3 py-2 flex items-start gap-2.5 w-full"
-         style={{
-           borderColor: tone ? `color-mix(in srgb, ${border} 40%, transparent)` : border,
-           backgroundColor: tone ? `color-mix(in srgb, ${border} 7%, transparent)` : 'var(--color-surface)',
-         }}>
-      <span className="flex-shrink-0 mt-0.5" style={{ color: tone ? border : 'var(--color-text-muted)' }}>{icon}</span>
-      <div className="text-[10.5px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.65 }}>{children}</div>
-    </div>
+    <CalloutView variant={variant} title={title} style={{ margin: 0, width: '100%' }}>
+      {children}
+    </CalloutView>
   );
 }
 
