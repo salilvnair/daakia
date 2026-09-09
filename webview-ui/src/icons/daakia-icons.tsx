@@ -1186,6 +1186,23 @@ export function NetworkIcon(props: IconProps) {
 
 // ─── Debugger Icons ──────────────────────────────────────────────────────────
 
+/**
+ * An open issue — GitHub's own glyph, a ring with a dot in it.
+ *
+ * DkGH's mark. Deliberately NOT the GitHub logo, which Git Sync already wears:
+ * the two features share a word and nothing else, and giving them one icon
+ * would undo the distinction the plan opens by making. This one says "issues",
+ * which is what the tab is.
+ */
+export function IssueOpenedIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function BugIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

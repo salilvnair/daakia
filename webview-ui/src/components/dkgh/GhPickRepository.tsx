@@ -12,7 +12,7 @@
  */
 import { useState } from 'react';
 import { ButtonView, TextInputView } from '@salilvnair/dui';
-import { GitHubIcon, SearchIcon, CheckIcon, WarningTriangleIcon } from '../../icons';
+import { IssueOpenedIcon, SearchIcon, CheckIcon, WarningTriangleIcon } from '../../icons';
 import { GhEmpty, GhLede, GhNote, GhCommand } from './GhShell';
 import { ACCENT, activeAccount, hasScope, type GhEnv } from './types';
 
@@ -36,7 +36,7 @@ export function GhPickRepository({ env, repo, onPick }: {
      hidden. */
   if (repo) {
     return (
-      <GhEmpty icon={<GitHubIcon size={38} />} title={repo}>
+      <GhEmpty icon={<IssueOpenedIcon size={38} />} title={repo}>
         <GhLede>
           Connected. The board is the next thing to be built — nothing reads this
           repository yet.
@@ -57,7 +57,7 @@ export function GhPickRepository({ env, repo, onPick }: {
   }
 
   return (
-    <GhEmpty icon={<GitHubIcon size={38} />} title="Which repository?">
+    <GhEmpty icon={<IssueOpenedIcon size={38} />} title="Which repository?">
       <GhLede>
         Signed in as <span style={{ color: 'var(--color-text-primary)' }}>{account?.login}</span>
         {' '}on {account?.host}. Pick the repository whose issues you want to read and write.

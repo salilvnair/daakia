@@ -52,7 +52,7 @@ import { getVsCodeApi, postMsg } from './vscode';
 import { useSMWorkspaceStore } from '@salilvnair/state-machine';
 import { DaakiaSMConsumer } from './consumer/DaakiaSMConsumer';
 import { getProtocolAccent } from './colors';
-import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, GitHubIcon, DevToolsIcon, LayoutGridIcon } from './icons';
+import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, IssueOpenedIcon, DevToolsIcon, LayoutGridIcon } from './icons';
 import { DevToolsPanel } from './components/shared/devtools';
 import { DkghPanel } from './components/dkgh/DkghPanel';
 import { DebugHud } from './components/shared/debugger';
@@ -640,9 +640,9 @@ export default function App() {
           open={tabs.some(t => t.type === 'dkgh')}
           accentColor="var(--color-dkgh)"
           onClick={() => useTabsStore.getState().openDkghTab()}
-          title="dkgh — Daakia GitHub"
+          title="DkGH — Daakia GitHub"
         >
-          <GitHubIcon size={16} strokeWidth={1.8} />
+          <IssueOpenedIcon size={16} strokeWidth={1.8} />
         </ProtocolIcon>
 
         {/* dk8s — Kubernetes. Sits above Doctor because that is the workflow:

@@ -6,7 +6,7 @@ import type { TabItem } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { SettingsIcon, SunIcon, ServerIcon, CpuIcon, CodeBracketsIcon, SparkleIcon, AgentIcon, GitHubIcon, LockIcon, TrashIcon, KeyboardIcon, Dk8sIcon, TerminalIcon,
          CookieIcon, NetworkIcon, ShieldIcon, UptimeIcon, FilterIcon, LayersIcon, BulkEditIcon, GaugeIcon,
-         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon } from '../../icons';
+         DocumentIcon, ConnectIcon, ClipboardCompareIcon, FolderIcon, BugIcon, IssueOpenedIcon } from '../../icons';
 import { useAiFeaturesStore, type AiFeatureKey } from '../../store/ai-features-store';
 import { AiSchemaDiffModal } from '../ai/AiSchemaDiffModal';
 import { AiOpenApiGeneratorModal } from '../ai/AiOpenApiGeneratorModal';
@@ -69,7 +69,7 @@ const SETTINGS_SECTION_META: Record<SettingsSection, { label: string; icon: Reac
   'devtools':        { label: 'Developer Tools', icon: <CodeBracketsIcon size={14} /> },
   'dk8s-cluster':    { label: 'Cluster',         icon: <Dk8sIcon size={14} /> },
   'dk8s-terminal':   { label: 'Terminal',        icon: <TerminalIcon size={14} /> },
-  'dkgh':            { label: 'GitHub CLI',      icon: <GitHubIcon size={14} /> },
+  'dkgh':            { label: 'GitHub CLI',      icon: <IssueOpenedIcon size={14} /> },
   'power-features':  { label: 'Power Features',  icon: <CodeBracketsIcon size={14} /> },
 };
 
