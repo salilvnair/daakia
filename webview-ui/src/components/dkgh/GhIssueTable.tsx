@@ -41,6 +41,7 @@ import {
 import { arrange, catalogue, type TableColumn } from './table-columns';
 import { sinceIso } from './format';
 import type { SearchHit } from './filter-model';
+import { fromMap } from './field-colour';
 import { ACCENT, type RepoMeta } from './types';
 
 /** Past this many rows, only what fits plus a margin is rendered. */
@@ -58,7 +59,7 @@ type Row =
 
 export function GhIssueTable({
   groups, showGroups, dimensions, columns, density, wrapTitles, sort, onSort,
-  selected, onToggle, onOpen, cursor, meta, onEdit, pending, hits, renderHeader,
+  selected, onToggle, onOpen, cursor, meta, onEdit, pending, hits, colours, renderHeader,
 }: {
   groups: Group[];
   showGroups: boolean;
@@ -80,6 +81,8 @@ export function GhIssueTable({
   pending: Map<number, { field: string; value: string }>;
   /** Where the search matched, per issue — screen 08C. */
   hits?: Map<number, SearchHit>;
+  /** Each dimension value's colour, by its index in its own dropdown. */
+  colours: Map<string, string>;
   /** The group header, drawn by the board so both views agree on it. */
   renderHeader: (group: Group) => React.ReactNode;
 }) {
@@ -168,6 +171,7 @@ export function GhIssueTable({
             meta={meta}
             pendingValue={pending.get(r.issue.number)}
             hit={hits?.get(r.issue.number)}
+            colours={colours}
             onToggle={onToggle}
             onOpen={onOpen}
             onEdit={onEdit}
@@ -380,12 +384,13 @@ const IssueRow = forwardRef<HTMLDivElement, {
   meta?: RepoMeta;
   pendingValue?: { field: string; value: string };
   hit?: SearchHit;
+  colours: Map<string, string>;
   onToggle: (issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => void;
   onOpen: (issue: BoardIssue) => void;
   onEdit: (issue: BoardIssue, field: 'assignee' | 'milestone', value: string) => void;
 }>(function IssueRow({
   issue, cols, template, offsets, pad, wrapTitles, selected, anySelected,
-  cursor, meta, pendingValue, hit, onToggle, onOpen, onEdit,
+  cursor, meta, pendingValue, hit, colours, onToggle, onOpen, onEdit,
 }, ref) {
   const click = (e: React.MouseEvent) => {
     const mods = { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey };
@@ -437,7 +442,7 @@ const IssueRow = forwardRef<HTMLDivElement, {
             }}
           >
             <Cell col={c} issue={issue} wrapTitles={wrapTitles} meta={meta}
-                  selected={selected} anySelected={anySelected} hit={hit}
+                  selected={selected} anySelected={anySelected} hit={hit} colours={colours}
                   pendingValue={pendingValue} onToggle={onToggle} onEdit={onEdit} />
           </div>
         );
@@ -447,7 +452,8 @@ const IssueRow = forwardRef<HTMLDivElement, {
 });
 
 function Cell({
-  col, issue, wrapTitles, meta, selected, anySelected, pendingValue, hit, onToggle, onEdit,
+  col, issue, wrapTitles, meta, selected, anySelected, pendingValue, hit, colours,
+  onToggle, onEdit,
 }: {
   col: TableColumn;
   issue: BoardIssue;
@@ -457,6 +463,7 @@ function Cell({
   anySelected: boolean;
   pendingValue?: { field: string; value: string };
   hit?: SearchHit;
+  colours: Map<string, string>;
   onToggle: (issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => void;
   onEdit: (issue: BoardIssue, field: 'assignee' | 'milestone', value: string) => void;
 }) {
@@ -607,7 +614,7 @@ function Cell({
       if (!v) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
       return (
         <span title={`${col.label} is a heading in the issue body — open the issue to change it`}>
-          <BadgeChipView tone={ACCENT} size="xs">{v}</BadgeChipView>
+          <BadgeChipView tone={fromMap(colours, col.key, v)} size="xs">{v}</BadgeChipView>
         </span>
       );
     }

@@ -38,7 +38,7 @@ import { useSettledWait } from '../../hooks/useSettledWait';
 import {
   RefreshIcon, LayoutGridIcon, TableIcon, IssueOpenedIcon, RepoIcon, PlusIcon,
   ChartBarIcon, ColumnsIcon, TimelineIcon, FilterIcon, DownloadIcon, KeyboardIcon,
-  TagIcon, ClockIcon,
+  TagIcon, ClockIcon, SaveIcon,
 } from '../../icons';
 import { GhNoAccess } from './GhNoAccess';
 import { GhCards, Header } from './GhCards';
@@ -52,9 +52,19 @@ import { GhFilters } from './GhFilters';
 import { GhChips, GhSearchScope } from './GhChips';
 import { GhWhy } from './GhWhy';
 import {
-  EMPTY as EMPTY_FILTER, describeAll, dropField, isEmpty as filterIsEmpty,
+  EMPTY as EMPTY_FILTER, describeAll, dropField, formatQuery, labelsOf,
   matchesAll, runSearch, type FilterState, type MatchContext, type SearchHit,
 } from './filter-model';
+import { GhViewBar, type ViewAction } from './GhViewBar';
+import { GhSaveView } from './GhSaveView';
+import { GhManageViews } from './GhManageViews';
+import { GhShareView } from './GhShareView';
+import { GhChart } from './GhChart';
+import { colourMap } from './field-colour';
+import {
+  capture, countFor, diffView, loadViews, orderedViews, saveViews,
+  type BoardSnapshot, type CapturePart, type SavedView, type StoredViews,
+} from './views-model';
 import { GhPeek } from './GhPeek';
 import { GhKeys, GhKeyStatus, PEEK_HOLD_MS } from './GhKeys';
 import { useEditFlow, type EditRequest } from './edit-flow';
@@ -127,6 +137,13 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   const [panel, setPanel] = useState<'none' | 'filters' | 'view'>('none');
   /** 08E, on the right rather than the left, because it is about the results. */
   const [why, setWhy] = useState(false);
+  /* Screen 09 — the views, and the four dialogs that hang off them. */
+  const [views, setViews] = useState<StoredViews>(() => loadViews(repo));
+  const [activeView, setActiveView] = useState<string | undefined>();
+  const [saving, setSaving] = useState<{ existing?: SavedView } | undefined>();
+  const [managing, setManaging] = useState(false);
+  const [sharing, setSharing] = useState<{ view?: SavedView } | undefined>();
+  const [charting, setCharting] = useState<SavedView | 'board' | undefined>();
   const [showKeys, setShowKeys] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [cursor, setCursor] = useState<number | undefined>();
@@ -243,6 +260,26 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     () => ({ me: activeAccount(env ?? null)?.login }),
     [env],
   );
+
+  /** The declared spelling of every form value, so chips agree with the board. */
+  const labels = useMemo(() => labelsOf(data?.dimensions ?? []), [data]);
+  /** Every dimension value's colour, by the option's index in its own dropdown. */
+  const colours = useMemo(() => colourMap(data?.dimensions ?? []), [data]);
+
+  /**
+   * Everything a view can freeze, as it stands right now.
+   *
+   * Assembled in one place so the save dialog, the diff and the chart all read
+   * the same board — three of them each reaching for their own pieces is how
+   * "unsaved changes" starts disagreeing with what the dialog would save.
+   */
+  const snapshot: BoardSnapshot = useMemo(() => ({
+    filters: filter,
+    layout: { view: shape.view, density: shape.density },
+    grouping: meaning.groupBy,
+    sort: meaning.sort,
+    columns: shape.columns,
+  }), [filter, shape.view, shape.density, shape.columns, meaning.groupBy, meaning.sort]);
 
   /* Comment hits come from the host; everything else is answered locally. */
   const commentHits = remote?.query === filter.search.text.trim()
@@ -368,6 +405,125 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
       { field, value },
     );
   }, [propose, repo]);
+
+  // ── Screen 09 — the views ────────────────────────────────────────────────
+
+  /* A different repository has different views; re-read rather than carry. */
+  useEffect(() => { setViews(loadViews(repo)); setActiveView(undefined); }, [repo]);
+
+  const persist = useCallback((next: StoredViews) => {
+    setViews(next);
+    saveViews(repo, next);
+  }, [repo]);
+
+  const shownViews = useMemo(() => orderedViews(views), [views]);
+  const active = shownViews.find(v => v.id === activeView);
+
+  /** How many each view holds right now, for the number on its tab. */
+  const viewCounts = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const v of views.views) out.set(v.id, countFor(v, all, ctx));
+    return out;
+  }, [views, all, ctx]);
+
+  /**
+   * What has changed since this view was opened — screen 09B.
+   *
+   * Computed rather than tracked. A flag set on every edit drifts the moment
+   * something is changed back by hand, and then the bar nags about a view that
+   * matches what is saved.
+   */
+  const viewDiff = useMemo(
+    () => (active ? diffView(active, snapshot) : undefined),
+    [active, snapshot],
+  );
+
+  /** Put a view on screen. Nothing it did not capture is touched. */
+  const openView = useCallback((id: string | undefined) => {
+    setActiveView(id);
+    const v = views.views.find(x => x.id === id);
+    if (!v) return;
+    const c = v.capture;
+    if (c.filters) {
+      setFilter(f => ({
+        terms: c.filters!.terms,
+        search: { ...f.search, text: c.searchText ?? '' },
+      }));
+    } else if (c.searchText !== undefined) {
+      setFilter(f => ({ ...f, search: { ...f.search, text: c.searchText! } }));
+    }
+    if (c.layout) setShape({ view: c.layout.view, density: c.layout.density });
+    if (c.columns) setShape({ columns: c.columns });
+    if (c.grouping !== undefined) setMeaning({ groupBy: c.grouping });
+    if (c.sort) setMeaning({ sort: c.sort });
+  }, [views, setShape, setMeaning]);
+
+  /** The first thing the board shows, when a view was pinned as the default. */
+  const openedDefault = useRef(false);
+  useEffect(() => {
+    if (openedDefault.current || !views.defaultId || !data) return;
+    openedDefault.current = true;
+    openView(views.defaultId);
+  }, [views.defaultId, data, openView]);
+
+  const saveView = useCallback((name: string, icon: string, parts: Set<CapturePart>) => {
+    const existing = saving?.existing;
+    const next: SavedView = {
+      id: existing?.id ?? `v${Date.now().toString(36)}`,
+      name,
+      icon,
+      preset: existing?.preset,
+      capture: capture(snapshot, parts),
+    };
+    persist({
+      ...views,
+      views: existing
+        ? views.views.map(v => (v.id === existing.id ? next : v))
+        : [...views.views, next],
+    });
+    setActiveView(next.id);
+    setSaving(undefined);
+  }, [saving, snapshot, views, persist]);
+
+  const onViewAction = useCallback((view: SavedView, action: ViewAction) => {
+    switch (action) {
+      case 'rename':
+        setActiveView(view.id);
+        setSaving({ existing: view });
+        break;
+      case 'duplicate':
+        persist({
+          ...views,
+          views: [...views.views, {
+            ...view,
+            id: `v${Date.now().toString(36)}`,
+            name: `${view.name} copy`,
+            preset: undefined,
+          }],
+        });
+        break;
+      case 'copy-query':
+        navigator.clipboard?.writeText(
+          formatQuery(view.capture.filters ?? EMPTY_FILTER),
+        );
+        break;
+      case 'share': setSharing({ view }); break;
+      case 'chart': setCharting(view); break;
+      case 'export': setSharing({ view }); break;
+      case 'delete':
+        /* A preset is hidden rather than deleted — it is not the reader's to
+           throw away, and Restore brings it back. */
+        if (view.preset) {
+          persist({
+            ...views,
+            views: views.views.map(v => (v.id === view.id ? { ...v, hidden: true } : v)),
+          });
+        } else {
+          setManaging(true);
+        }
+        break;
+    }
+  }, [views, persist]);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -535,6 +691,22 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         />
       </div>
 
+      {/* The views, and the bar that appears when one has been changed */}
+      <GhViewBar
+        views={shownViews}
+        activeId={activeView}
+        counts={viewCounts}
+        diff={viewDiff}
+        labels={labels}
+        onPick={openView}
+        onNew={() => setSaving({})}
+        onAction={onViewAction}
+        onManage={() => setManaging(true)}
+        onReset={() => openView(activeView)}
+        onSaveAs={() => setSaving({})}
+        onUpdate={() => setSaving({ existing: active })}
+      />
+
       {/* Toolbar */}
       <div className="flex items-center gap-[7px] px-4 py-2 flex-wrap flex-shrink-0 min-w-0"
            style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
@@ -587,6 +759,12 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                         onClick={() => setPanel('view')}>
           Group: {groupLabel}
         </TogglePillView>
+        {filter.terms.length > 0 && !activeView && (
+          <TogglePillView icon={<SaveIcon size={11} />} accentColor={ACCENT} variant="go"
+                          onClick={() => setSaving({})}>
+            Save as view
+          </TogglePillView>
+        )}
         <TogglePillView icon={<DownloadIcon size={11} />} accentColor={ACCENT} disabled
                         title="Export writes exactly these columns, in this order — screen 15">
           Export
@@ -734,6 +912,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 fields={shape.cardFields}
                 density={shape.density}
                 dimensions={data?.dimensions ?? []}
+                colours={colours}
                 selected={selected}
                 onToggle={toggle}
                 onOpen={open}
@@ -759,6 +938,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
               onEdit={editCell}
               pending={flow.optimistic}
               hits={hits}
+              colours={colours}
               renderHeader={(g: Group) => <Header group={g} dimensions={data?.dimensions ?? []} />}
             />
           )}
@@ -799,6 +979,48 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
 
       {peek && <GhPeek repo={repo} issue={peek} onOpen={i => { setPeek(undefined); open(i); }} />}
       {showKeys && <GhKeys onClose={() => setShowKeys(false)} />}
+
+      <GhSaveView
+        open={!!saving}
+        now={snapshot}
+        existing={saving?.existing}
+        matches={filtered.length}
+        onCancel={() => setSaving(undefined)}
+        onSave={saveView}
+      />
+      <GhManageViews
+        open={managing}
+        stored={views}
+        counts={viewCounts}
+        onClose={() => setManaging(false)}
+        onChange={persist}
+      />
+      <GhShareView
+        open={!!sharing}
+        repo={repo}
+        view={sharing?.view}
+        /* What is on screen is what gets shared — sharing a saved view while
+           looking at something else would hand somebody a third thing. */
+        state={sharing?.view?.capture.filters ?? filter}
+        issues={all}
+        formFields={(data?.dimensions ?? []).map(d => d.dimension)}
+        ctx={ctx}
+        onClose={() => setSharing(undefined)}
+        onApply={(next, andSave) => {
+          setFilter(next);
+          setActiveView(undefined);
+          if (andSave) setSaving({});
+        }}
+      />
+      <GhChart
+        open={!!charting}
+        title={charting === 'board' || !charting ? 'this board' : charting.name}
+        /* The rows already on screen, so the numbers match what was just read
+           rather than being a second query that might disagree. */
+        issues={filtered}
+        dimensions={data?.dimensions ?? []}
+        onClose={() => setCharting(undefined)}
+      />
     </div>
   );
 }

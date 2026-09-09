@@ -493,10 +493,28 @@ export function buildActivity(
 
 // ── Saying it in words ──────────────────────────────────────────────────────
 
+/**
+ * How a value is spelled on screen.
+ *
+ * Matching is case-insensitive, so values are lowercased inside the model — but
+ * a chip that reads `Prod` for a template that declares `PROD` is a chip
+ * disagreeing with the board beside it. The declared spelling wins wherever the
+ * repository has one, and title case is only the fallback for values GitHub
+ * supplied rather than a form.
+ */
+export function labelsOf(dimensions: ProposedDimension[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const d of dimensions) for (const o of d.options) out.set(low(o), o);
+  return out;
+}
+
 /** `not assignee me`, `type UI or Backend` — the chip's two halves. */
-export function describeTerm(term: Term): { key: string; value: string } {
+export function describeTerm(
+  term: Term,
+  labels?: Map<string, string>,
+): { key: string; value: string } {
   const join = term.mode === 'all' ? ' and ' : ' or ';
-  const value = term.values.map(prettyValue).join(join);
+  const value = term.values.map(v => labels?.get(v) ?? prettyValue(v)).join(join);
   if (term.field === 'quiet') return { key: 'quiet for', value: `${days(term.values[0])} days` };
   if (term.field === 'age') return { key: 'older than', value: `${days(term.values[0])} days` };
   if (term.field === 'created') return { key: 'opened', value: prettyPhrase(term.values[0]) };
@@ -524,9 +542,9 @@ export function prettyPhrase(p: string): string {
 }
 
 /** The sentence under the count: "open · PROD · unassigned · quiet 14 days". */
-export function describeAll(state: FilterState): string {
+export function describeAll(state: FilterState, labels?: Map<string, string>): string {
   const parts = state.terms.map(t => {
-    const d = describeTerm(t);
+    const d = describeTerm(t, labels);
     return `${d.key} ${d.value}`.trim();
   });
   if (state.search.text.trim()) parts.push(`matching “${state.search.text.trim()}”`);
@@ -561,10 +579,11 @@ export function explain(
   issue: BoardIssue,
   state: FilterState,
   ctx: MatchContext = {},
+  labels?: Map<string, string>,
 ): TermVerdict[] {
   return state.terms.map(term => ({
     term,
-    key: describeTerm(term).key,
+    key: describeTerm(term, labels).key,
     actual: actualValue(issue, term),
     passes: matchesTerm(issue, term, ctx),
   }));
@@ -607,12 +626,13 @@ export function costOf(
   issues: BoardIssue[],
   state: FilterState,
   ctx: MatchContext = {},
+  labels?: Map<string, string>,
 ): TermCost[] {
   return state.terms.map(term => {
     const others = state.terms.filter(t => t !== term);
     const withoutIt = issues.filter(i => matchesAll(i, others, ctx));
     const withIt = withoutIt.filter(i => matchesTerm(i, term, ctx));
-    const d = describeTerm(term);
+    const d = describeTerm(term, labels);
     return { term, label: `${d.key} ${d.value}`.trim(), removes: withoutIt.length - withIt.length };
   });
 }

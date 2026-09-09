@@ -21,6 +21,7 @@ import {
 import { GhEvidence } from './GhEvidence';
 import { QUIET_DAYS, rankOf, type BoardIssue, type Group, type ProposedDimension } from './board-types';
 import type { SearchHit } from './filter-model';
+import { fromMap } from './field-colour';
 import type { CardField, Density } from './board-prefs';
 import { ACCENT } from './types';
 
@@ -28,7 +29,7 @@ import { ACCENT } from './types';
 const SHOT_HEIGHT: Record<Density, number> = { comfortable: 74, compact: 0, dense: 0 };
 
 export function GhCards({
-  groups, showGroups, fields, density, dimensions,
+  groups, showGroups, fields, density, dimensions, colours,
   selected, onToggle, onOpen, cursor, hits,
 }: {
   groups: Group[];
@@ -36,6 +37,8 @@ export function GhCards({
   fields: CardField[];
   density: Density;
   dimensions: ProposedDimension[];
+  /** Each dimension value's colour, by its index in its own dropdown. */
+  colours: Map<string, string>;
   selected: Set<number>;
   /** Ctrl adds, Shift extends — the caller owns the range, the card reports the click. */
   onToggle: (issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => void;
@@ -65,6 +68,7 @@ export function GhCards({
                 selected={selected.has(i.number)}
                 anySelected={selected.size > 0}
                 cursor={cursor === i.number}
+                colours={colours}
                 hit={hits?.get(i.number)}
                 onToggle={onToggle}
                 onOpen={onOpen}
@@ -129,10 +133,13 @@ export function Header({ group, dimensions }: { group: Group; dimensions: Propos
   );
 }
 
-function Card({ issue, fields, density, selected, anySelected, cursor, hit, onToggle, onOpen }: {
+function Card({
+  issue, fields, density, selected, anySelected, cursor, hit, colours, onToggle, onOpen,
+}: {
   issue: BoardIssue;
   fields: CardField[];
   density: Density;
+  colours: Map<string, string>;
   selected: boolean;
   anySelected: boolean;
   cursor: boolean;
@@ -192,10 +199,13 @@ function Card({ issue, fields, density, selected, anySelected, cursor, hit, onTo
                 size="sm"
               />
             )}
+            {/* The colour comes from the value's index in its own dropdown —
+                see field-colour.ts. The word is always there beside it, so
+                identity never rests on the hue. */}
             {on('chips') && Object.entries(issue.dimensions)
               .filter(([k]) => on('module') || k !== 'module')
               .map(([k, v]) => (
-                <BadgeChipView key={k} tone={ACCENT} size="xs">{v}</BadgeChipView>
+                <BadgeChipView key={k} tone={fromMap(colours, k, v)} size="xs">{v}</BadgeChipView>
               ))}
             {on('labels') && issue.labels.slice(0, 2).map(l => (
               <BadgeChipView key={l.name} tone={`#${l.color}`} size="xs">{l.name}</BadgeChipView>

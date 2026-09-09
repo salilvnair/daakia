@@ -95,6 +95,30 @@
   --color-dkgh: #DE7356;
   --color-dkgh-muted: #c05a3e;
 
+  /*
+    dkgh's field-map palette — eight slots, assigned by the option's index in
+    the dropdown that declared it, and stable for the life of that field.
+
+    Fixed order, never cycled: colour follows the value, so a filter that hides
+    three modules must not repaint the ones that are left. The two sets are
+    stepped separately against their own surface rather than being one set
+    lightened — an automatic flip fails the contrast check in one direction or
+    the other.
+
+    Both sets pass the categorical checks (lightness band, chroma floor,
+    adjacent-pair CVD separation, normal-vision floor). The light set carries a
+    contrast warning on three slots, which is why every use of these is paired
+    with its own text label rather than relying on colour alone.
+  */
+  --dkgh-cat-1: #3987e5;
+  --dkgh-cat-2: #d95926;
+  --dkgh-cat-3: #199e70;
+  --dkgh-cat-4: #c98500;
+  --dkgh-cat-5: #d55181;
+  --dkgh-cat-6: #008300;
+  --dkgh-cat-7: #9085e9;
+  --dkgh-cat-8: #e66767;
+
   /* Settings */
   --color-settings: #2a9d8f;
 
@@ -358,6 +382,16 @@
      built for the dark panel and goes thin on white. */
   --color-dkgh: #c0543a;
   --color-dkgh-muted: #9c422d;
+
+  /* The same eight slots, stepped against the light surface. */
+  --dkgh-cat-1: #2a78d6;
+  --dkgh-cat-2: #eb6834;
+  --dkgh-cat-3: #1baf7a;
+  --dkgh-cat-4: #eda100;
+  --dkgh-cat-5: #e87ba4;
+  --dkgh-cat-6: #008300;
+  --dkgh-cat-7: #4a3aa7;
+  --dkgh-cat-8: #e34948;
 
   --color-settings: #1f7a6e;
   --color-wiki: #b45309;
