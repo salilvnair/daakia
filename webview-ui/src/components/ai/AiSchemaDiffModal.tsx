@@ -428,22 +428,32 @@ export function AiSchemaDiffModal({ onClose }: { onClose: () => void }) {
               {summary}
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Laid out like the Collections toolbar, because it is the same
+                kind of row: one labelled control that changes what the list
+                holds, then the two that change how much of it is unfolded.
+                Ghost was wrong for the first one -- a toggle that is currently
+                on has to look on, and a transparent button cannot. */}
+            <div className="flex items-center gap-1.5">
               <TabView tabs={tabs} activeTab={view} onChange={id => setView(id as ViewMode)}
                        variant="underline" size="sm" accentColor={ACCENT} />
               <span className="flex-1" />
               {view === 'report' && (
                 <>
-                  <ButtonView size="sm" variant="ghost" iconLeft={<LayersIcon size={12} />}
+                  <ButtonView size="sm" variant="accent" accentColor={ACCENT}
+                              iconLeft={<LayersIcon size={12} />}
                               onClick={() => setShowInSync(v => !v)}>
                     {showInSync ? 'Hide in-sync' : 'Show in-sync'}
                   </ButtonView>
+                  {/* The same two colours Collections gives these: opening is
+                      informational, collapsing hides something. */}
                   <IconButtonView
-                    icon={<ExpandAllIcon size={13} />} size="sm" tooltip="Expand every definition"
+                    icon={<ExpandAllIcon size={13} className="text-[var(--color-info)]" />}
+                    size="sm" tooltip="Expand every definition"
                     onClick={() => setOpenKeys(new Set(visible.map(a => a.key)))}
                   />
                   <IconButtonView
-                    icon={<CollapseAllIcon size={13} />} size="sm" tooltip="Collapse every definition"
+                    icon={<CollapseAllIcon size={13} className="text-[var(--color-warning)]" />}
+                    size="sm" tooltip="Collapse every definition"
                     onClick={() => setOpenKeys(new Set())}
                   />
                 </>
