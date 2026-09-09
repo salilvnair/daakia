@@ -18,6 +18,9 @@ import { GhNotInstalled } from './GhNotInstalled';
 import { GhSignIn } from './GhSignIn';
 import { GhPickRepository } from './GhPickRepository';
 import { GhBoard } from './GhBoard';
+import { GhLocate } from './GhLocate';
+import { GhOldVersion, missingFeatures, dismissOldGh } from './GhOldVersion';
+import { GhUnreachable, useReachability, diagnose } from './GhUnreachable';
 import type { GhEnv } from './types';
 
 export function DkghPanel() {
@@ -32,6 +35,13 @@ export function DkghPanel() {
    * every window reload.
    */
   const [repo, setRepo] = useState<string | undefined>();
+  /** Screen 01B, opened from the install screen or from a failed probe. */
+  const [locating, setLocating] = useState(false);
+  /** Repositories where the old-gh banner has been dismissed. */
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  /** Screen 01D — only ever entered deliberately, never guessed at. */
+  const [showNetwork, setShowNetwork] = useState(false);
+  const reach = useReachability();
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -42,6 +52,7 @@ export function DkghPanel() {
       /* Only on the first probe. A recheck must not drag somebody back to the
          saved repository after they pressed Switch. */
       setRepo(prev => prev ?? (msg.repo as string | undefined));
+      setDismissed((msg.oldGhDismissed as string[]) ?? []);
       setChecking(false);
     };
     window.addEventListener('message', handler);
@@ -107,19 +118,97 @@ export function DkghPanel() {
     );
   }
 
+  /*
+    The locate modal sits above whichever screen is showing, because the reason
+    to open it — gh is somewhere unusual — can be discovered from the install
+    screen, from Settings, or from a probe that suddenly stopped working.
+  */
+  const locate = (
+    <GhLocate open={locating} envOverride={envOverride} onClose={() => setLocating(false)} />
+  );
+
   if (!env.present) {
-    return <GhNotInstalled env={env} envOverride={envOverride} checking={checking} onRecheck={recheck} />;
+    return (
+      <>
+        <GhNotInstalled
+          env={env}
+          envOverride={envOverride}
+          checking={checking}
+          onRecheck={recheck}
+          onLocate={() => setLocating(true)}
+        />
+        {locate}
+      </>
+    );
+  }
+
+  /*
+    Screen 01D. Reached deliberately — from the sign-in screen's "gh is here but
+    nothing answers" route — rather than inferred from one slow call, because a
+    single timeout on a flaky connection is not a diagnosis.
+  */
+  if (showNetwork) {
+    return (
+      <GhUnreachable
+        account={env.auth?.accounts?.find(a => a.active)?.login}
+        data={reach.data}
+        running={reach.running}
+        onRetry={() => { diagnose(); recheck(); }}
+        onBack={() => setShowNetwork(false)}
+      />
+    );
   }
 
   if (!env.auth?.loggedIn) {
-    return <GhSignIn env={env} checking={checking} onRecheck={recheck} />;
+    return (
+      <>
+        <GhSignIn
+          env={env}
+          checking={checking}
+          onRecheck={recheck}
+          onLocate={() => setLocating(true)}
+          onDiagnose={() => { setShowNetwork(true); diagnose(); }}
+        />
+        {locate}
+      </>
+    );
   }
+
+  /*
+    The old-gh banner rides above the board and the picker alike — what it says
+    is true of both, and a warning that only appears on one of them is a warning
+    somebody meets at the worst moment.
+  */
+  const banner = missingFeatures(env).length > 0 ? (
+    <GhOldVersion
+      env={env}
+      repo={repo}
+      dismissed={dismissed}
+      onDismiss={() => {
+        if (!repo) return;
+        setDismissed(d => [...d, repo]);
+        dismissOldGh(repo);
+      }}
+    />
+  ) : null;
 
   if (repo) {
-    return <GhBoard repo={repo} onChangeRepo={() => pick('')} />;
+    return (
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+        {banner}
+        <GhBoard repo={repo} onChangeRepo={() => pick('')} />
+        {locate}
+      </div>
+    );
   }
 
-  return <GhPickRepository env={env} onPick={pick} />;
+  return (
+    <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+      {banner}
+      <GhPickRepository env={env} onPick={pick} />
+      {locate}
+    </div>
+  );
 }
 
 export default DkghPanel;

@@ -106,6 +106,8 @@ import { handleInterceptorStart, handleInterceptorStop } from '../src/panel/main
 import {
   initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
   handleDkghSetRepo, handleDkghBoard, handleDkghRepoOptions, handleDkghSearchRepos,
+  handleDkghPinRepo, handleDkghDiagnose, handleDkghFindGh, handleDkghBrowseGh,
+  handleDkghDismissOldGh,
 } from '../src/panel/main/handlers/dkgh-handler';
 import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
@@ -163,6 +165,21 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dkgh:searchRepos':
       await handleDkghSearchRepos(msg, post);
+      break;
+    case 'dkgh:pinRepo':
+      await handleDkghPinRepo(msg, post);
+      break;
+    case 'dkgh:diagnose':
+      await handleDkghDiagnose(post);
+      break;
+    case 'dkgh:findGh':
+      await handleDkghFindGh(post);
+      break;
+    case 'dkgh:browseGh':
+      await handleDkghBrowseGh(post);
+      break;
+    case 'dkgh:dismissOldGh':
+      await handleDkghDismissOldGh(msg, post);
       break;
     case 'dkgh:board':
       await handleDkghBoard(msg, post);

@@ -20,10 +20,13 @@ const LOGIN = 'gh auth login --hostname github.com --git-protocol ssh --scopes r
 const REFRESH = 'gh auth refresh --scopes read:project';
 const ENTERPRISE = 'gh auth login --hostname git.acme.internal --scopes read:project --web';
 
-export function GhSignIn({ env, checking, onRecheck }: {
+export function GhSignIn({ env, checking, onRecheck, onLocate, onDiagnose }: {
   env: GhEnv;
   checking: boolean;
   onRecheck: () => void;
+  onLocate: () => void;
+  /** Screen 01D — for when gh is here and signed in but nothing answers. */
+  onDiagnose: () => void;
 }) {
   const version = env.version?.version ?? env.version?.raw;
 
@@ -81,6 +84,17 @@ export function GhSignIn({ env, checking, onRecheck }: {
         <ButtonView size="md" accentColor="var(--color-text-muted)"
                     onClick={() => window.open('https://cli.github.com/manual/gh_auth_login', '_blank')}>
           gh auth login docs
+        </ButtonView>
+        {/*
+          Two ways this screen can be a lie. Either gh is not the gh you meant,
+          or it is and the network is eating the answer — both look exactly like
+          "not signed in" from here, and neither is fixed by signing in again.
+        */}
+        <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onDiagnose}>
+          Signed in already? Check the network
+        </ButtonView>
+        <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onLocate}>
+          Wrong gh? Locate another
         </ButtonView>
       </GhActions>
 

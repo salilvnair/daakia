@@ -13,7 +13,7 @@
  */
 import { useState } from 'react';
 import { ButtonView, SegmentedControlView, SetupOptionView } from '@salilvnair/dui';
-import { TerminalIcon, RefreshIcon, DownloadIcon } from '../../icons';
+import { TerminalIcon, RefreshIcon, DownloadIcon, FolderOpenIcon } from '../../icons';
 import { GhEmpty, GhLede, GhNote, GhActions, GhPrimary } from './GhShell';
 import { ACCENT, type GhEnv } from './types';
 
@@ -58,11 +58,13 @@ const ROUTES: Record<Plat, Route[]> = {
 
 const RELEASES = 'https://github.com/cli/cli/releases';
 
-export function GhNotInstalled({ env, envOverride, checking, onRecheck }: {
+export function GhNotInstalled({ env, envOverride, checking, onRecheck, onLocate }: {
   env: GhEnv;
   envOverride?: string;
   checking: boolean;
   onRecheck: () => void;
+  /** Screen 01B. The route that actually works on a locked-down machine. */
+  onLocate: () => void;
 }) {
   const detected = (['win32', 'darwin', 'linux'] as Plat[]).includes(env.platform as Plat)
     ? (env.platform as Plat)
@@ -146,6 +148,15 @@ export function GhNotInstalled({ env, envOverride, checking, onRecheck }: {
         <GhPrimary iconLeft={<RefreshIcon size={12} />} onClick={onRecheck}>
           {checking ? 'Checking…' : 'Check again'}
         </GhPrimary>
+        {/*
+          Placed beside "Check again" rather than buried, because the machine
+          most likely to be on this screen is the one where gh is already
+          present — unpacked somewhere nobody put on PATH.
+        */}
+        <ButtonView size="md" accentColor={ACCENT} iconLeft={<FolderOpenIcon size={12} />}
+                    onClick={onLocate}>
+          I already have it — locate gh
+        </ButtonView>
         <ButtonView size="md" accentColor="var(--color-text-muted)"
                     onClick={() => window.open('https://github.com/cli/cli#installation', '_blank')}>
           Installation docs

@@ -13,7 +13,10 @@
 import * as vscode from 'vscode';
 import { getSetting, setSetting } from '../../../storage/db';
 import { getActiveWorkspaceId } from '../../../storage/workspaces';
-import { probeEnvironment, setGhPath, verifyGhPath, forgetGh, type GhEnv } from '../../../services/gh/gh';
+import {
+  probeEnvironment, setGhPath, verifyGhPath, forgetGh, probeReachability,
+  searchCommonLocations, type GhEnv,
+} from '../../../services/gh/gh';
 import { fetchBoard } from '../../../services/gh/board';
 import { guessFromWorkspace, searchRepos, summarise } from '../../../services/gh/repos';
 
@@ -38,6 +41,16 @@ export interface DkghState {
   repoByWorkspace?: Record<string, string>;
   /** The last few, per workspace. Most recent first. */
   recentByWorkspace?: Record<string, string[]>;
+  /** Kept above the recents, in the order they were pinned. */
+  pinnedByWorkspace?: Record<string, string[]>;
+  /**
+   * Repositories where the "old gh" banner has been dismissed.
+   *
+   * Per repository because a team on a pinned corporate gh should not be
+   * nagged daily about a version they cannot change — and because the features
+   * it names only matter for the repository you are looking at.
+   */
+  oldGhDismissed?: string[];
   /** Pre-workspace saves. Read once, then migrated into the map. */
   repo?: string;
   /**
@@ -62,6 +75,10 @@ function currentRepo(): string | undefined {
 
 function currentRecent(): string[] {
   return state().recentByWorkspace?.[getActiveWorkspaceId()] ?? [];
+}
+
+function currentPinned(): string[] {
+  return state().pinnedByWorkspace?.[getActiveWorkspaceId()] ?? [];
 }
 
 /**
@@ -143,11 +160,85 @@ export async function handleDkghSetRepo(
  */
 export async function handleDkghRepoOptions(postMessage: PostMessage): Promise<void> {
   postMessage({ type: 'dkgh:repoOptions:loading' });
-  const [guess, recent] = await Promise.all([
+  const pins = currentPinned();
+  const [guess, recent, pinned] = await Promise.all([
     guessFromWorkspace(workspaceFolder()),
-    summarise(currentRecent()),
+    /* Pinned entries are lifted out of Recent rather than shown twice. */
+    summarise(currentRecent().filter(r => !pins.includes(r))),
+    summarise(pins),
   ]);
-  postMessage({ type: 'dkgh:repoOptions:result', guess, recent });
+  postMessage({ type: 'dkgh:repoOptions:result', guess, recent, pinned });
+}
+
+/** Pin or unpin a repository for this workspace. */
+export async function handleDkghPinRepo(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? '').trim();
+  if (!repo) return;
+  const ws = getActiveWorkspaceId();
+  const s = state();
+  const pins = [...(s.pinnedByWorkspace?.[ws] ?? [])];
+  const at = pins.indexOf(repo);
+  if (at >= 0) pins.splice(at, 1);
+  else pins.push(repo);
+  saveState({ pinnedByWorkspace: { ...(s.pinnedByWorkspace ?? {}), [ws]: pins } });
+  await handleDkghRepoOptions(postMessage);
+}
+
+/**
+ * Why can gh not reach GitHub?
+ *
+ * Asked only once something has already failed. The reply is a transcript, not
+ * a verdict — see `probeReachability`.
+ */
+export async function handleDkghDiagnose(postMessage: PostMessage): Promise<void> {
+  postMessage({ type: 'dkgh:diagnose:loading' });
+  postMessage({ type: 'dkgh:diagnose:result', ...(await probeReachability()) });
+}
+
+/** "Search common locations", for the machine where gh came out of a zip. */
+export async function handleDkghFindGh(postMessage: PostMessage): Promise<void> {
+  postMessage({ type: 'dkgh:findGh:loading' });
+  postMessage({ type: 'dkgh:findGh:result', found: await searchCommonLocations() });
+}
+
+/**
+ * The native file picker, for "Browse…".
+ *
+ * Opening a dialog is the editor's job; there is no browser equivalent, so the
+ * webview asks and takes what it is given. In the dev server there is no
+ * editor, and the reply says so rather than hanging.
+ */
+export async function handleDkghBrowseGh(postMessage: PostMessage): Promise<void> {
+  try {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      openLabel: 'Use this gh',
+      title: 'Locate the GitHub CLI',
+      filters: process.platform === 'win32' ? { Executable: ['exe'] } : undefined,
+    });
+    const path = picked?.[0]?.fsPath;
+    postMessage({ type: 'dkgh:browseGh:result', path });
+  } catch {
+    postMessage({
+      type: 'dkgh:browseGh:result',
+      unavailable: 'A file picker needs the editor — type the path instead.',
+    });
+  }
+}
+
+/** Stop nagging about an old gh, for this repository only. */
+export async function handleDkghDismissOldGh(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  if (!repo) return;
+  const list = state().oldGhDismissed ?? [];
+  if (!list.includes(repo)) saveState({ oldGhDismissed: [...list, repo] });
+  postMessage({ type: 'dkgh:oldGh:dismissed', repo });
 }
 
 /** The search, run against every org this account belongs to. */
@@ -196,6 +287,8 @@ export async function handleDkghProbe(postMessage: PostMessage): Promise<void> {
        var is beating the saved setting, which is otherwise baffling. */
     configuredPath: state().ghPath,
     repo: currentRepo(),
+    oldGhDismissed: state().oldGhDismissed ?? [],
+    pinned: currentPinned(),
     envOverride: process.env.DAAKIA_GH || undefined,
   });
 }

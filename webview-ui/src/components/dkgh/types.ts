@@ -25,6 +25,9 @@ export interface GhCapabilities {
   project: boolean;
   issueJson: boolean;
   searchIssues: boolean;
+  issueCreate: boolean;
+  issueEdit: boolean;
+  issueTypes: boolean;
 }
 
 export interface GhEnv {
