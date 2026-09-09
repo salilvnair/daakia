@@ -232,3 +232,43 @@ export async function summarise(names: string[]): Promise<RepoSummary[]> {
     };
   }));
 }
+
+/**
+ * Why can this account not see a repository?
+ *
+ * Screen 03B. gh reports "could not resolve to a Repository" for a repository
+ * that does not exist AND for one you simply cannot see, which are completely
+ * different problems: one is a typo, the other is an SSO authorisation you can
+ * fix in thirty seconds. Telling them apart is worth one extra call.
+ */
+export interface RepoAccess {
+  repo: string;
+  /** `visible` means it resolved. The rest are the ways it did not. */
+  verdict: 'visible' | 'sso' | 'not-found' | 'no-scope' | 'unknown';
+  /** gh's own words, kept because they usually name the org. */
+  said: string;
+  /** The organisation to authorise, when the failure names one. */
+  org?: string;
+}
+
+export async function inspectRepo(repo: string): Promise<RepoAccess> {
+  const r = await run(['repo', 'view', repo, '--json', 'nameWithOwner'], { timeoutMs: 20_000 });
+  if (r.ok) return { repo, verdict: 'visible', said: '' };
+
+  const said = (r.stderr || r.failure || '').trim();
+  const org = repo.split('/')[0];
+
+  /*
+    SSO first, because it is the recoverable one and its message is distinctive.
+    GitHub says so explicitly when a token has not been authorised for an org
+    that enforces SAML.
+  */
+  if (/SAML|single sign-on|SSO|must be authorized|authorize.*organization/i.test(said)) {
+    return { repo, verdict: 'sso', said, org };
+  }
+  if (/insufficient|scope|OAuth/i.test(said)) return { repo, verdict: 'no-scope', said, org };
+  if (/could not resolve|not found|404|NOT_FOUND/i.test(said)) {
+    return { repo, verdict: 'not-found', said, org };
+  }
+  return { repo, verdict: 'unknown', said, org };
+}

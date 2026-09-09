@@ -1232,6 +1232,18 @@ export function ColumnsIcon(props: IconProps) {
   );
 }
 
+/** Two people — an account list, a team, an assignee facet. */
+export function UsersIcon(props: IconProps) {
+  return (
+    <svg {...withDefaults(props)}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3 20a6 6 0 0 1 12 0" />
+      <path d="M16.5 5.5a3.2 3.2 0 0 1 0 5" />
+      <path d="M18 14.6A6 6 0 0 1 21 20" />
+    </svg>
+  );
+}
+
 export function RepoIcon(props: IconProps) {
   return (
     <svg {...withDefaults(props)}>

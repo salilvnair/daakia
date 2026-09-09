@@ -51,6 +51,44 @@ export interface RunResult {
   stderr: string;
   /** Set when the process could not be started, timed out, or was killed. */
   failure?: string;
+  /**
+   * The credential is gone — expired, revoked, or an SSO session that lapsed.
+   *
+   * Distinguished from every other failure because it is the only one where
+   * retrying is pointless and the fix is somewhere else entirely.
+   */
+  authFailed?: boolean;
+}
+
+/**
+ * gh's several ways of saying the credential is no longer good.
+ *
+ * Matched on the message rather than the exit code: gh exits 1 for everything,
+ * so a status code tells you nothing about whether signing in again would help.
+ */
+const AUTH_GONE = new RegExp([
+  'HTTP 401',
+  'Bad credentials',
+  'authentication required',
+  'gh auth login',
+  'not logged into',
+  'token has expired',
+  'SAML enforcement',
+  'must be authorized',
+].join('|'), 'i');
+
+type AuthFailureListener = (detail: string) => void;
+let authListener: AuthFailureListener | undefined;
+
+/**
+ * Be told, once, when a call finds the credential gone.
+ *
+ * It never happens on the sign-in screen — it happens on the third card of a
+ * triage session, from whichever call happened to be in flight. A listener here
+ * means every path reports it without each one having to remember to.
+ */
+export function onAuthFailure(fn: AuthFailureListener | undefined): void {
+  authListener = fn;
 }
 
 /** Set from the "Locate gh manually" screen, or by DAAKIA_GH in tests. */
@@ -183,9 +221,21 @@ export async function resolveBinary(): Promise<string> {
 }
 
 /** Run gh and collect its output. Never throws for a command that merely failed. */
+function flagAuth(r: RunResult): RunResult {
+  if (r.ok) return r;
+  const said = `${r.stderr}\n${r.stdout}`;
+  if (!AUTH_GONE.test(said)) return r;
+  r.authFailed = true;
+  /* Told once per call, not per retry — there are no retries here. */
+  try { authListener?.(said.trim().slice(0, 300)); } catch { /* a listener must never break a call */ }
+  return r;
+}
+
 export async function run(args: string[], opts: RunOptions = {}): Promise<RunResult> {
   const bin = await resolveBinary();
-  return runRaw(bin, args, opts);
+  /* Every call in dkgh funnels through here, which is why the credential check
+     lives here rather than in each caller that might remember to do it. */
+  return flagAuth(await runRaw(bin, args, opts));
 }
 
 /**

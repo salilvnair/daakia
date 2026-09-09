@@ -131,7 +131,7 @@ export function sendInitialState(post: PostMessage) {
 
   initMockLogForwarding(post);
   initSmWorkflowStorage();
-  initDkgh();
+  initDkgh(post);
   handleGetMockServerState(post);
 
   handleGetEnvironments(post);

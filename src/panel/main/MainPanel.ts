@@ -224,7 +224,7 @@ export class MainPanel {
     initSmWorkflowStorage();
     // A gh path saved in Settings has to be in force before anything asks
     // whether gh exists, or the first probe answers for the wrong binary.
-    initDkgh();
+    initDkgh(this._post);
     handleGetMockServerState(this._post);
 
     handleGetEnvironments(this._post);

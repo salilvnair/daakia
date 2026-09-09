@@ -21,6 +21,9 @@ import { GhBoard } from './GhBoard';
 import { GhLocate } from './GhLocate';
 import { GhOldVersion, missingFeatures, dismissOldGh } from './GhOldVersion';
 import { GhUnreachable, useReachability, diagnose } from './GhUnreachable';
+import { GhAccountPanel } from './GhAccountPanel';
+import { GhSignedOut } from './GhSignedOut';
+import { useGhSession, listenForSignOut, type HeldItem } from './session-store';
 import type { GhEnv } from './types';
 
 export function DkghPanel() {
@@ -42,6 +45,13 @@ export function DkghPanel() {
   /** Screen 01D — only ever entered deliberately, never guessed at. */
   const [showNetwork, setShowNetwork] = useState(false);
   const reach = useReachability();
+  /** Screens 02A/B/D/E, opened from the identity chip. */
+  const [account, setAccount] = useState(false);
+  const session = useGhSession();
+
+  /* One listener for the whole tab: any call that finds the credential gone
+     raises it, whichever screen happens to be showing. */
+  useEffect(() => listenForSignOut(), []);
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -179,6 +189,24 @@ export function DkghPanel() {
     is true of both, and a warning that only appears on one of them is a warning
     somebody meets at the worst moment.
   */
+  /*
+    02C rides above everything, including the board, because the board it sits
+    on is exactly what should stay visible — blanking a board somebody is
+    reading punishes them for a token expiring.
+  */
+  const signedOut = session.signedOut ? (
+    <GhSignedOut
+      repo={repo}
+      boardAge={session.at ? Date.now() - session.at : undefined}
+      onSignedBackIn={recheck}
+      onReplay={(item: HeldItem) => {
+        /* Offered, never automatic — see session-store. */
+        if (item.replay) postMsg(item.replay.request);
+        session.release(item.id);
+      }}
+    />
+  ) : null;
+
   const banner = missingFeatures(env).length > 0 ? (
     <GhOldVersion
       env={env}
@@ -192,21 +220,36 @@ export function DkghPanel() {
     />
   ) : null;
 
+  const chrome = (
+    <>
+      {locate}
+      <GhAccountPanel env={env} repo={repo} open={account} onClose={() => setAccount(false)} />
+    </>
+  );
+
   if (repo) {
     return (
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+        {signedOut}
         {banner}
-        <GhBoard repo={repo} onChangeRepo={() => pick('')} />
-        {locate}
+        <GhBoard
+          repo={repo}
+          onChangeRepo={() => pick('')}
+          env={env}
+          onOpenAccount={() => setAccount(true)}
+          frozen={session.signedOut}
+        />
+        {chrome}
       </div>
     );
   }
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+      {signedOut}
       {banner}
-      <GhPickRepository env={env} onPick={pick} />
-      {locate}
+      <GhPickRepository env={env} onPick={pick} onOpenAccount={() => setAccount(true)} />
+      {chrome}
     </div>
   );
 }

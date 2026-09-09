@@ -15,7 +15,7 @@ import { getSetting, setSetting } from '../../../storage/db';
 import { getActiveWorkspaceId } from '../../../storage/workspaces';
 import {
   probeEnvironment, setGhPath, verifyGhPath, forgetGh, probeReachability,
-  searchCommonLocations, type GhEnv,
+  searchCommonLocations, onAuthFailure, type GhEnv,
 } from '../../../services/gh/gh';
 import { fetchBoard } from '../../../services/gh/board';
 import { guessFromWorkspace, searchRepos, summarise } from '../../../services/gh/repos';
@@ -114,9 +114,20 @@ function saveState(patch: Partial<DkghState>): DkghState {
  * Called once when the panel comes up, so a path saved in Settings is in force
  * before anything asks whether gh exists.
  */
-export function initDkgh(): void {
+export function initDkgh(post?: PostMessage): void {
   const saved = state();
   if (saved.ghPath) setGhPath(saved.ghPath);
+
+  /*
+    Tell the tab the moment any call finds the credential gone.
+
+    It never happens on the sign-in screen — it happens on the third card of a
+    triage session, from whichever call was in flight. Raised from the runner
+    so every path reports it, and the webview decides what to hold on to.
+  */
+  if (post) {
+    onAuthFailure(detail => post({ type: 'dkgh:signedOut', detail, at: Date.now() }));
+  }
 }
 
 /** Remember the repository for this workspace, so the tab opens where it was left. */
