@@ -131,6 +131,10 @@ import {
 } from './handlers/files-handler';
 import { handleJfrOpen, handleJfrAnalyze, handleJfrEvents } from './handlers/jfr-handler';
 import { handleDk8sHeapInvestigate } from './handlers/heap-investigate';
+import {
+  registerMonitor, pauseMonitor, removeMonitor, checkMonitorNow, disposeMonitors,
+  type MonitorRule,
+} from './handlers/monitor-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
   initSmWorkflowStorage,
@@ -232,6 +236,7 @@ export class MainPanel {
     flushOpenSessions();
     disposeDk8s();
     stopAutoSyncTimer();
+    disposeMonitors();
     cleanupAllWsConnections();
     cleanupAllSseConnections();
     cleanupAllSocketIOConnections();
@@ -309,6 +314,20 @@ export class MainPanel {
         break;
       // What a request or collection would inherit, for the Inherit labels in
       // its Settings tab. Resolved on the host so there is one implementation.
+      // Scheduled API checks. The panel has posted these since it was built;
+      // until now nothing answered, so no check ever ran.
+      case 'monitor:register':
+        registerMonitor(msg.rule as MonitorRule, this._post);
+        break;
+      case 'monitor:pause':
+        pauseMonitor((msg.rule as MonitorRule)?.id ?? (msg.ruleId as string));
+        break;
+      case 'monitor:remove':
+        removeMonitor(msg.ruleId as string);
+        break;
+      case 'monitor:checkNow':
+        checkMonitorNow(msg.rule as MonitorRule, this._post);
+        break;
       case 'settings:getEffective':
         handleGetEffectiveSettings(msg, this._post);
         break;
