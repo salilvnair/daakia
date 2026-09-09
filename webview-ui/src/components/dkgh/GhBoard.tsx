@@ -32,6 +32,7 @@ import {
   ChartBarIcon, ColumnsIcon, TimelineIcon, FilterIcon, DownloadIcon,
   TagIcon, ClockIcon, WarningTriangleIcon,
 } from '../../icons';
+import { GhNoAccess } from './GhNoAccess';
 import { ACCENT, activeAccount, type GhEnv } from './types';
 
 interface Label { name: string; color: string; description?: string }
@@ -58,6 +59,8 @@ interface BoardData {
   formErrors: { file: string; message: string; line?: number }[];
   noTemplates: boolean;
   fetchedAt: number;
+  closedRecently?: number;
+  rateLimit?: { remaining: number; limit: number; resetAt: number };
   error?: string;
 }
 
@@ -79,9 +82,17 @@ const VIEWS = [
   { id: 'roadmap', label: 'Roadmap', icon: <TimelineIcon size={11} />, ready: false },
 ];
 
-export function GhBoard({ repo, onChangeRepo, env, onOpenAccount, frozen = false }: {
+export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, frozen = false }: {
   repo: string;
   onChangeRepo: () => void;
+  /**
+   * What is on screen, for the switch dialog to read — screen 03E.
+   *
+   * Reported upward rather than the dialog reaching down into the board,
+   * because the dialog outlives the board it is describing: it is open at the
+   * moment the board is about to be replaced.
+   */
+  onContext?: (c: { search: string; dimensions: string[] }) => void;
   env?: GhEnv;
   /** Opens screens 02A/B/D/E from the identity chip. */
   onOpenAccount?: () => void;
@@ -129,6 +140,11 @@ export function GhBoard({ repo, onChangeRepo, env, onOpenAccount, frozen = false
     return () => window.clearInterval(id);
   }, [repo, frozen]);
 
+  /* Whatever the switch dialog needs to name what is being left behind. */
+  useEffect(() => {
+    onContext?.({ search, dimensions: (data?.dimensions ?? []).map(d => d.dimension) });
+  }, [search, data, onContext]);
+
   const refresh = () => {
     if (frozen) return;
     setLoading(true);
@@ -172,12 +188,29 @@ export function GhBoard({ repo, onChangeRepo, env, onOpenAccount, frozen = false
   */
   const stuck = useSettledWait(pending, { delayMs: 8000, minMs: 1200 });
 
+  /*
+    A read that failed because the repository would not resolve is screen 03B,
+    not an empty board.
+
+    gh says "could not resolve to a Repository" for a repository that does not
+    exist AND for one this account simply cannot see, which are completely
+    different problems — one is a typo, the other is an SSO authorisation
+    thirty seconds away. Showing "nothing is open" for either would be a
+    confident wrong answer about somebody else's repository.
+  */
+  const unresolved = !!data?.error
+    && /could not resolve|not found|404|NOT_FOUND|no such/i.test(data.error);
+
   const total = data?.issues.length ?? 0;
   const stale = filtered.filter(i => i.quietDays >= QUIET_DAYS).length;
   const unassigned = filtered.filter(i => i.assignees.length === 0).length;
   const [owner, name] = repo.split('/');
   const account = activeAccount(env ?? null);
   const groupLabel = groupOptions.find(g => g.id === groupBy)?.label ?? 'Nothing';
+
+  if (unresolved) {
+    return <GhNoAccess repo={repo} onRetry={refresh} onChangeRepo={onChangeRepo} />;
+  }
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">

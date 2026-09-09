@@ -1,26 +1,47 @@
 /**
- * Screen 03 — signed in, and no repository chosen yet.
+ * Screen 03 — signed in, and no repository chosen yet. With 03C and 03D in it.
  *
  * Three ways in, ordered by how likely each is to be right. The git remote
  * guess is first because the repository you are testing is usually the
  * repository you have open, and it arrives with the two facts worth knowing
  * before you commit to it: how many issues are waiting, and whether it has
- * templates for the composer to read.
+ * templates for the composer to read. When that guess turns out to be a fork,
+ * it is replaced in place by screen 03C — the fork question IS the guess.
+ *
+ * Below it, 03D: what this workspace is on, what is pinned, and where you have
+ * been. **Recent is per workspace; pinned is global.** A lead across three
+ * products pins the three they always want and gets them everywhere; the recent
+ * list stays specific to the workspace so a QA workspace does not fill up with
+ * repositories from a different product. The counts are cached from the last
+ * read, with their age — a picker that fires four API calls to render a list is
+ * a picker that is slow every time.
+ *
+ * Typing two characters hands the whole tab to screen 03A. A search that
+ * covers every org, with the two columns that decide the choice, does not fit
+ * under a card — and half a search in a corner is how somebody concludes their
+ * repository is not there.
  *
  * The scope readout at the bottom is here rather than buried in Settings for
  * one reason: this is the last screen before the board, and "why is my roadmap
- * empty" is answered by a line on it. Saying so now costs a glance; discovering
- * it on screen 07 costs an afternoon.
+ * empty" is answered by a line on it. Saying so now costs a glance;
+ * discovering it on screen 07 costs an afternoon.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  ButtonView, SearchFieldView, SetupOptionView, BadgeChipView, TogglePillView,
+  ButtonView, IconButtonView, SearchFieldView, SetupOptionView, BadgeChipView,
   SkeletonView,
 } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { RepoIcon, CheckIcon, WarningTriangleIcon, LockIcon } from '../../icons';
+import {
+  RepoIcon, CheckIcon, WarningTriangleIcon, LockIcon, PinIcon, UnpinIcon,
+} from '../../icons';
 import { GhEmpty, GhLede, GhNote, GhCommand } from './GhShell';
-import { ACCENT, activeAccount, hasScope, type GhEnv } from './types';
+import { GhForkChoice } from './GhForkChoice';
+import { since, formsLabel } from './format';
+import {
+  ACCENT, activeAccount, hasScope,
+  type GhEnv, type RepoSummary, type ForkChoice,
+} from './types';
 
 /** `owner/name`, and nothing that would make gh reinterpret it as a URL or path. */
 const VALID = /^[^/\s]+\/[^/\s]+$/;
@@ -31,31 +52,21 @@ const SCOPES = [
   { name: 'read:project', buys: 'Status, Priority, Start date and ETA', required: false },
 ];
 
-interface RepoSummary {
-  nameWithOwner: string;
-  description?: string;
-  isPrivate: boolean;
-  isArchived: boolean;
-  isFork: boolean;
-  parent?: string;
-  openIssues: number;
-  pushedAt?: string;
-  templates?: number;
-}
-
-export function GhPickRepository({ env, onPick, onOpenAccount }: {
+export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpenAccount }: {
   env: GhEnv;
+  /** The search term, held by the tab so leaving 03A and coming back keeps it. */
+  typed: string;
+  onTyped: (v: string) => void;
+  /** Two characters is enough — hand the tab to screen 03A. */
+  onSearch: () => void;
   onPick: (repo: string) => void;
   /** Screens 02A/B/D/E — reached from the scope readout at the bottom. */
   onOpenAccount?: () => void;
 }) {
-  const [typed, setTyped] = useState('');
   const [guess, setGuess] = useState<{ repo?: RepoSummary; reason?: string } | null>(null);
+  const [fork, setFork] = useState<ForkChoice | undefined>();
   const [recent, setRecent] = useState<RepoSummary[]>([]);
-  const [results, setResults] = useState<RepoSummary[] | null>(null);
-  const [searchError, setSearchError] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [archived, setArchived] = useState(false);
+  const [pinned, setPinned] = useState<RepoSummary[]>([]);
 
   const account = activeAccount(env);
   const missingProject = !hasScope(account, 'read:project');
@@ -68,43 +79,23 @@ export function GhPickRepository({ env, onPick, onOpenAccount }: {
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
       const msg = evt.data as Record<string, unknown>;
-      if (msg.type === 'dkgh:repoOptions:result') {
-        setGuess(msg.guess as { repo?: RepoSummary; reason?: string });
-        setRecent((msg.recent as RepoSummary[]) ?? []);
-        return;
-      }
-      if (msg.type === 'dkgh:searchRepos:loading') { setSearching(true); return; }
-      if (msg.type === 'dkgh:searchRepos:result') {
-        setSearching(false);
-        setResults((msg.repos as RepoSummary[]) ?? []);
-        setSearchError((msg.error as string) ?? '');
-      }
+      if (msg.type !== 'dkgh:repoOptions:result') return;
+      setRecent((msg.recent as RepoSummary[]) ?? []);
+      setPinned((msg.pinned as RepoSummary[]) ?? []);
+      /* The cached pass carries the lists and nothing else — it is the last
+         read replayed, and it has no opinion about the guess. Letting it set
+         one would clear the real answer the moment it arrived. */
+      if (msg.cached) return;
+      setGuess(msg.guess as { repo?: RepoSummary; reason?: string });
+      setFork(msg.fork as ForkChoice | undefined);
     };
     window.addEventListener('message', handler);
     postMsg({ type: 'dkgh:repoOptions' });
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  /*
-    Search on a pause, not on a keystroke.
-
-    Each search is a repo listing plus a pair of counts per row, so firing one
-    per character would spend a hundred API calls to answer a word somebody has
-    not finished typing.
-  */
-  const timer = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    const q = typed.trim();
-    if (timer.current) window.clearTimeout(timer.current);
-    if (q.length < 2) { setResults(null); setSearchError(''); return; }
-    timer.current = window.setTimeout(
-      () => postMsg({ type: 'dkgh:searchRepos', query: q, includeArchived: archived }),
-      400,
-    );
-    return () => { if (timer.current) window.clearTimeout(timer.current); };
-  }, [typed, archived]);
-
-  const shown = useMemo(() => results ?? [], [results]);
+  const pin = (repo: string) => postMsg({ type: 'dkgh:pinRepo', repo });
+  const isPinned = (repo: string) => pinned.some(p => p.nameWithOwner === repo);
 
   return (
     <GhEmpty icon={<RepoIcon size={30} />} title="Which repository?">
@@ -115,9 +106,11 @@ export function GhPickRepository({ env, onPick, onOpenAccount }: {
 
       <div className="w-full flex flex-col gap-2" style={{ maxWidth: 520 }}>
 
-        {/* The guess */}
+        {/* The guess — or, when it is a fork, the question the fork raises */}
         {guessing ? (
           <GuessSkeleton />
+        ) : fork ? (
+          <GhForkChoice choice={fork} onPick={onPick} />
         ) : guess.repo ? (
           <SetupOptionView
             accentColor={ACCENT}
@@ -153,73 +146,47 @@ export function GhPickRepository({ env, onPick, onOpenAccount }: {
         >
           <SearchFieldView
             value={typed}
-            onChange={setTyped}
-            onClear={() => setTyped('')}
+            onChange={v => { onTyped(v); if (v.trim().length >= 2) onSearch(); }}
+            onClear={() => onTyped('')}
             /* Enter takes an exact owner/name straight through — typing a
                repository you already know and waiting for a search is a step
                nobody wants. */
-            onSearch={v => { if (VALID.test(v.trim())) onPick(v.trim()); }}
-            placeholder="owner/name"
+            onSearch={v => { if (VALID.test(v.trim())) onPick(v.trim()); else if (v.trim()) onSearch(); }}
+            placeholder="owner/name, or a word to search for"
             size="md"
             accentColor={ACCENT}
             width="100%"
           />
-
-          {typed.trim().length >= 2 && (
-            <div className="flex items-center gap-[7px] flex-wrap">
-              <TogglePillView accentColor={ACCENT} active={!archived}
-                              onClick={() => setArchived(false)}>
-                Active only
-              </TogglePillView>
-              <TogglePillView accentColor={ACCENT} active={archived}
-                              onClick={() => setArchived(true)}>
-                Include archived
-              </TogglePillView>
-              {searching && (
-                <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-                  searching…
-                </span>
-              )}
-            </div>
-          )}
-
-          {searchError && !searching && (
-            <div className="text-[10px]" style={{ color: 'var(--color-error)' }}>{searchError}</div>
-          )}
-
-          {results !== null && !searching && shown.length === 0 && !searchError && (
-            <div className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-              Nothing this account can see matches &ldquo;{typed.trim()}&rdquo;.
-              {exact && ' Press Enter to use it anyway — it may be somewhere gh can reach but not list.'}
-            </div>
-          )}
-
-          {shown.length > 0 && (
-            <div className="flex flex-col rounded-lg border overflow-hidden"
-                 style={{ borderColor: 'var(--color-surface-border)' }}>
-              {shown.map(r => <RepoRow key={r.nameWithOwner} repo={r} term={typed.trim()} onPick={onPick} />)}
-            </div>
-          )}
         </SetupOptionView>
 
-        {/* Where you have been */}
-        {recent.length > 0 && (
-          <div className="mt-2">
-            <div className="text-[9.5px] font-bold uppercase tracking-[.09em] mb-1.5"
-                 style={{ color: 'var(--color-text-muted)' }}>
-              Recent
-            </div>
-            <div className="flex flex-col rounded-lg border overflow-hidden"
-                 style={{ borderColor: 'var(--color-surface-border)' }}>
-              {recent.map(r => <RepoRow key={r.nameWithOwner} repo={r} onPick={onPick} />)}
-            </div>
-          </div>
+        {/* 03D — pinned first, because pinning is a deliberate act */}
+        {pinned.length > 0 && (
+          <RepoSection
+            title="Pinned"
+            aside="available in every workspace"
+            repos={pinned}
+            pinnedNames={pinned.map(p => p.nameWithOwner)}
+            onPick={onPick}
+            onPin={pin}
+          />
         )}
 
-        <GhNote title="Remembered per workspace">
+        {recent.length > 0 && (
+          <RepoSection
+            title="Recent"
+            aside="this workspace only"
+            repos={recent}
+            pinnedNames={pinned.map(p => p.nameWithOwner)}
+            onPick={onPick}
+            onPin={pin}
+          />
+        )}
+
+        <GhNote title="Recent is per workspace; pinned is global">
           Which product you are testing is exactly what a workspace already distinguishes, so
           switching workspace switches repository with it — rather than leaving you filing a bug
-          against the last project you looked at.
+          against the last project you looked at. Pinning is the one way out of that: it does not
+          open two boards at once, it makes switching a click instead of a search.
         </GhNote>
       </div>
 
@@ -314,58 +281,94 @@ function RepoFacts({ repo, lead }: { repo: RepoSummary; lead?: string }) {
   );
 }
 
-/** One repository in a list — search results, or the recents. */
-function RepoRow({ repo, term, onPick }: {
-  repo: RepoSummary;
-  term?: string;
+/** Pinned, or recent — the same rows under a different heading. */
+function RepoSection({ title, aside, repos, pinnedNames, onPick, onPin }: {
+  title: string;
+  aside: string;
+  repos: RepoSummary[];
+  pinnedNames: string[];
   onPick: (repo: string) => void;
+  onPin: (repo: string) => void;
 }) {
-  const t = repo.templates ?? 0;
   return (
-    <button
-      type="button"
-      onClick={() => onPick(repo.nameWithOwner)}
-      className="flex items-center gap-2 px-2.5 py-1.5 text-left cursor-pointer"
-      style={{
-        background: 'transparent',
-        border: 'none',
-        borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
-      }}
-    >
-      {repo.isPrivate
-        ? <LockIcon size={12} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-        : <RepoIcon size={12} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />}
-      <span className="text-[11px] font-mono truncate" style={{ color: 'var(--color-text-primary)' }}>
-        <Match text={repo.nameWithOwner} term={term} />
-      </span>
-      {repo.isArchived && <BadgeChipView tone="var(--color-text-muted)" size="xs">archived</BadgeChipView>}
-      {t > 0 && <BadgeChipView tone={ACCENT} size="xs">{t} form{t === 1 ? '' : 's'}</BadgeChipView>}
-      <span className="flex-1" />
-      <span className="text-[10px] font-mono whitespace-nowrap"
-            style={{ color: 'var(--color-text-muted)' }}>
-        {repo.openIssues} open
-      </span>
-    </button>
+    <div className="mt-1">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[9.5px] font-bold uppercase tracking-[.09em]"
+              style={{ color: 'var(--color-text-muted)' }}>
+          {title}
+        </span>
+        <span className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
+        <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{aside}</span>
+      </div>
+      <div className="flex flex-col rounded-lg border overflow-hidden"
+           style={{ borderColor: 'var(--color-surface-border)' }}>
+        {repos.map((r, i) => (
+          <RepoRow key={r.nameWithOwner} repo={r} first={i === 0}
+                   pinned={pinnedNames.includes(r.nameWithOwner)}
+                   onPick={onPick} onPin={onPin} />
+        ))}
+      </div>
+    </div>
   );
 }
 
-/** The searched-for part, lit — so a long list says why each row is in it. */
-function Match({ text, term }: { text: string; term?: string }) {
-  const t = (term ?? '').replace(/^.*\//, '').trim();
-  if (!t) return <>{text}</>;
-  const at = text.toLowerCase().indexOf(t.toLowerCase());
-  if (at < 0) return <>{text}</>;
+/**
+ * One repository in a list.
+ *
+ * The counts carry their age when they came from the cache. A number with no
+ * age on it claims to be current; this one says when it was true, which is the
+ * difference between a fast picker and a lying one.
+ */
+function RepoRow({ repo, first, pinned, onPick, onPin }: {
+  repo: RepoSummary;
+  first: boolean;
+  pinned: boolean;
+  onPick: (repo: string) => void;
+  onPin: (repo: string) => void;
+}) {
+  const t = repo.templates ?? 0;
   return (
-    <>
-      {text.slice(0, at)}
-      <span style={{
-        background: `color-mix(in srgb, ${ACCENT} 26%, transparent)`,
-        borderRadius: 2,
-        padding: '0 1px',
-      }}>
-        {text.slice(at, at + t.length)}
-      </span>
-      {text.slice(at + t.length)}
-    </>
+    <div
+      className="flex items-center gap-2 px-2.5 py-1.5"
+      style={{
+        borderTop: first ? 'none'
+          : '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onPick(repo.nameWithOwner)}
+        className="flex items-center gap-2 flex-1 min-w-0 text-left cursor-pointer"
+        style={{ background: 'transparent', border: 'none', padding: 0 }}
+      >
+        {repo.isPrivate
+          ? <LockIcon size={12} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+          : <RepoIcon size={12} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />}
+        <span className="text-[11px] font-mono truncate"
+              style={{ color: 'var(--color-text-primary)' }}>
+          {repo.nameWithOwner}
+        </span>
+        {repo.isArchived && (
+          <BadgeChipView tone="var(--color-text-muted)" size="xs">archived</BadgeChipView>
+        )}
+        {t > 0
+          ? <BadgeChipView tone={ACCENT} size="xs">{formsLabel(t)}</BadgeChipView>
+          : <BadgeChipView tone="var(--color-text-muted)" size="xs">no forms</BadgeChipView>}
+        <span className="flex-1" />
+        <span className="text-[10px] font-mono whitespace-nowrap"
+              style={{ color: 'var(--color-text-muted)' }}>
+          {repo.openIssues} open
+          {repo.countedAt ? ` · ${since(repo.countedAt)}` : ''}
+        </span>
+      </button>
+      <IconButtonView
+        icon={pinned ? <UnpinIcon size={11} /> : <PinIcon size={11} />}
+        tooltip={pinned
+          ? 'Unpin — it stays in this workspace’s recents'
+          : 'Pin, so it is one click away from every workspace'}
+        accentColor={pinned ? ACCENT : 'var(--color-text-muted)'}
+        onClick={() => onPin(repo.nameWithOwner)}
+      />
+    </div>
   );
 }

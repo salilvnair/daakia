@@ -17,6 +17,8 @@ import { useSettledWait } from '../../hooks/useSettledWait';
 import { GhNotInstalled } from './GhNotInstalled';
 import { GhSignIn } from './GhSignIn';
 import { GhPickRepository } from './GhPickRepository';
+import { GhRepoSearch } from './GhRepoSearch';
+import { GhSwitchRepo } from './GhSwitchRepo';
 import { GhBoard } from './GhBoard';
 import { GhLocate } from './GhLocate';
 import { GhOldVersion, missingFeatures, dismissOldGh } from './GhOldVersion';
@@ -24,6 +26,7 @@ import { GhUnreachable, useReachability, diagnose } from './GhUnreachable';
 import { GhAccountPanel } from './GhAccountPanel';
 import { GhSignedOut } from './GhSignedOut';
 import { useGhSession, listenForSignOut, type HeldItem } from './session-store';
+import { useShapePrefs } from './board-prefs';
 import type { GhEnv } from './types';
 
 export function DkghPanel() {
@@ -47,6 +50,21 @@ export function DkghPanel() {
   const reach = useReachability();
   /** Screens 02A/B/D/E, opened from the identity chip. */
   const [account, setAccount] = useState(false);
+  /**
+   * Screen 03A.
+   *
+   * The term lives here rather than in either screen, so leaving the search and
+   * coming back does not lose what was typed — and so the picker's field and
+   * the search screen's field are the same box in two places.
+   */
+  const [typed, setTyped] = useState('');
+  const [searching, setSearching] = useState(false);
+  /** Screen 03E — raised before a switch, never after. */
+  const [leaving, setLeaving] = useState(false);
+  /** What the board is showing, for the switch dialog's second list. */
+  const [context, setContext] = useState<{ search: string; dimensions: string[] }>(
+    { search: '', dimensions: [] });
+  const [shape] = useShapePrefs();
   const session = useGhSession();
 
   /* One listener for the whole tab: any call that finds the credential gone
@@ -105,6 +123,9 @@ export function DkghPanel() {
      persists it — and the host is the only thing that can. */
   const pick = (next: string) => {
     setRepo(next || undefined);
+    setSearching(false);
+    setTyped('');
+    setLeaving(false);
     postMsg({ type: 'dkgh:setRepo', repo: next });
   };
 
@@ -234,10 +255,40 @@ export function DkghPanel() {
         {banner}
         <GhBoard
           repo={repo}
-          onChangeRepo={() => pick('')}
+          /* 03E stands between the button and the switch. Everyone expects
+             filters to reset; almost nobody expects a grouping to be
+             repository-specific until it silently returns nothing. */
+          onChangeRepo={() => setLeaving(true)}
+          onContext={setContext}
           env={env}
           onOpenAccount={() => setAccount(true)}
           frozen={session.signedOut}
+        />
+        <GhSwitchRepo
+          open={leaving}
+          from={repo}
+          shape={shape}
+          search={context.search}
+          dimensions={context.dimensions}
+          onCancel={() => setLeaving(false)}
+          onConfirm={() => pick('')}
+        />
+        {chrome}
+      </div>
+    );
+  }
+
+  if (searching) {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+        {signedOut}
+        {banner}
+        <GhRepoSearch
+          env={env}
+          query={typed}
+          onQueryChange={setTyped}
+          onPick={pick}
+          onBack={() => setSearching(false)}
         />
         {chrome}
       </div>
@@ -248,7 +299,14 @@ export function DkghPanel() {
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
       {signedOut}
       {banner}
-      <GhPickRepository env={env} onPick={pick} onOpenAccount={() => setAccount(true)} />
+      <GhPickRepository
+        env={env}
+        typed={typed}
+        onTyped={setTyped}
+        onSearch={() => setSearching(true)}
+        onPick={pick}
+        onOpenAccount={() => setAccount(true)}
+      />
       {chrome}
     </div>
   );

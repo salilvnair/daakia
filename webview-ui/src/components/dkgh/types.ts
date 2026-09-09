@@ -64,3 +64,58 @@ export function hasScope(account: GhAccount | undefined, scope: string): boolean
   if (want.startsWith('read:') && account.scopes.includes(want.slice(5))) return true;
   return false;
 }
+
+/**
+ * A repository as the picker sees it.
+ *
+ * Mirrors `services/gh/repos.ts` for the same reason as everything else in this
+ * file: the two TypeScript projects cannot reach each other's source.
+ *
+ * `openIssues` counts issues and not pull requests — GitHub's own
+ * `openIssuesCount` includes PRs, so a repository with four issues and thirty
+ * PRs would advertise thirty-four and the board that opens next would show
+ * four. A number that disagrees with the next screen is worse than no number.
+ */
+export interface RepoSummary {
+  nameWithOwner: string;
+  description?: string;
+  isPrivate: boolean;
+  isArchived: boolean;
+  isFork: boolean;
+  /** The upstream, when this is a fork. */
+  parent?: string;
+  openIssues: number;
+  pushedAt?: string;
+  /** How many issue forms. `undefined` means it was not looked up. */
+  templates?: number;
+  /** Whether it has an issue tracker at all — forks have one off by default. */
+  hasIssues?: boolean;
+  /** When the counts were read, for a row served from the last visit. */
+  countedAt?: number;
+}
+
+/** Screen 03C — the fork, and where its issues really live. */
+export interface ForkChoice {
+  fork: RepoSummary;
+  upstream?: RepoSummary;
+  upstreamError?: string;
+}
+
+/** Screen 03B — why this account cannot open a repository. */
+export interface RepoAccess {
+  repo: string;
+  verdict: 'visible' | 'sso' | 'not-found' | 'no-scope' | 'unknown';
+  /** gh's own words, kept because they usually name the org. */
+  said: string;
+  org?: string;
+}
+
+/** The lists a write chooses from, read once when the board opens. */
+export interface RepoMeta {
+  repo: string;
+  labels: { name: string; color: string; description?: string }[];
+  milestones: { title: string; dueOn?: string }[];
+  assignees: string[];
+  /** What could not be read — named, rather than shown as an empty list. */
+  unavailable: string[];
+}

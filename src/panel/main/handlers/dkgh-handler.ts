@@ -18,8 +18,12 @@ import {
   searchCommonLocations, onAuthFailure, type GhEnv,
 } from '../../../services/gh/gh';
 import { fetchBoard } from '../../../services/gh/board';
-import { guessFromWorkspace, searchRepos, summarise } from '../../../services/gh/repos';
+import {
+  guessFromWorkspace, searchRepos, summarise, inspectRepo, inspectFork,
+  type RepoSummary,
+} from '../../../services/gh/repos';
 import { planEdit, applyPlan, type EditRequest } from '../../../services/gh/write';
+import { fetchRepoMeta } from '../../../services/gh/meta';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
 type PostMessage = (msg: unknown) => void;
@@ -45,6 +49,15 @@ export interface DkghState {
   recentByWorkspace?: Record<string, string[]>;
   /** Kept above the recents, in the order they were pinned. */
   pinnedByWorkspace?: Record<string, string[]>;
+  /**
+   * The last counts read for a repository, and when.
+   *
+   * Global rather than per workspace: how many issues `acme/web-console` has
+   * open is a fact about the repository, not about which workspace asked. A
+   * picker that fires four API calls to render a list is a picker that is slow
+   * every time, so the list draws from here and says how old it is.
+   */
+  counts?: Record<string, { openIssues: number; templates: number; at: number }>;
   /**
    * Repositories where the "old gh" banner has been dismissed.
    *
@@ -174,13 +187,96 @@ export async function handleDkghSetRepo(
 export async function handleDkghRepoOptions(postMessage: PostMessage): Promise<void> {
   postMessage({ type: 'dkgh:repoOptions:loading' });
   const pins = currentPinned();
+  /* Pinned entries are lifted out of Recent rather than shown twice. */
+  const recentNames = currentRecent().filter(r => !pins.includes(r));
+
+  /*
+    The lists as they were, first — then again once they have been re-read.
+
+    Every row in them costs two API calls, and a picker that waits for eight of
+    those before it draws anything is slow every single time somebody switches
+    workspace. So the cached counts go out immediately with the age attached,
+    and the fresh ones replace them in place when they land.
+  */
+  const cached = {
+    recent: recentNames.map(cachedSummary).filter((r): r is RepoSummary => !!r),
+    pinned: pins.map(cachedSummary).filter((r): r is RepoSummary => !!r),
+  };
+  if (cached.recent.length > 0 || cached.pinned.length > 0) {
+    postMessage({
+      type: 'dkgh:repoOptions:result',
+      cached: true,
+      current: currentRepo(),
+      ...cached,
+    });
+  }
+
   const [guess, recent, pinned] = await Promise.all([
     guessFromWorkspace(workspaceFolder()),
-    /* Pinned entries are lifted out of Recent rather than shown twice. */
-    summarise(currentRecent().filter(r => !pins.includes(r))),
+    summarise(recentNames),
     summarise(pins),
   ]);
-  postMessage({ type: 'dkgh:repoOptions:result', guess, recent, pinned });
+
+  /*
+    Screen 03C. Asked only when the guess is actually a fork, because it is a
+    second `gh repo view` and every other first run would pay for it.
+  */
+  const fork = guess.repo ? await inspectFork(guess.repo) : undefined;
+
+  rememberCounts([...(guess.repo ? [guess.repo] : []), ...recent, ...pinned,
+    ...(fork?.upstream ? [fork.upstream] : [])]);
+
+  postMessage({
+    type: 'dkgh:repoOptions:result',
+    guess,
+    fork,
+    recent,
+    pinned,
+    current: currentRepo(),
+  });
+}
+
+/** A repository's counts as they were last read, or nothing if never. */
+function cachedSummary(name: string): RepoSummary | undefined {
+  const hit = state().counts?.[name];
+  if (!hit) return undefined;
+  return {
+    nameWithOwner: name,
+    isPrivate: false,
+    isArchived: false,
+    isFork: false,
+    openIssues: hit.openIssues,
+    templates: hit.templates,
+    countedAt: hit.at,
+  };
+}
+
+/** Keep what was just read, so the next picker draws before it calls anything. */
+function rememberCounts(repos: RepoSummary[]): void {
+  const at = Date.now();
+  const counts = { ...(state().counts ?? {}) };
+  for (const r of repos) {
+    if (r.templates === undefined) continue;
+    counts[r.nameWithOwner] = { openIssues: r.openIssues, templates: r.templates, at };
+  }
+  saveState({ counts });
+}
+
+/**
+ * Why can this account not see a repository — screen 03B.
+ *
+ * The reply ranks the causes and never asserts one. GitHub answers 404 for a
+ * private repository you lack access to and for one that does not exist, on
+ * purpose, and a lapsed SSO grant looks identical to both from here.
+ */
+export async function handleDkghInspectRepo(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? '').trim();
+  if (!repo) return;
+  postMessage({ type: 'dkgh:inspectRepo:loading', repo });
+  postMessage({ type: 'dkgh:inspectRepo:result', ...(await inspectRepo(repo)) });
 }
 
 /** Pin or unpin a repository for this workspace. */
@@ -325,6 +421,22 @@ export async function handleDkghApplyEdit(
   postMessage({ type: 'dkgh:applyEdit:running', plan });
   const result = await applyPlan(plan);
   postMessage({ type: 'dkgh:applyEdit:result', ...result, repo: req.repo });
+}
+
+/**
+ * The lists a write chooses from — labels, milestones, assignable people.
+ *
+ * Asked once when the board opens rather than when a menu is clicked: a bulk
+ * bar that spends two seconds fetching labels after you press Label is a bulk
+ * bar people stop using.
+ */
+export async function handleDkghRepoMeta(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  if (!repo) return;
+  postMessage({ type: 'dkgh:repoMeta:result', ...(await fetchRepoMeta(repo)) });
 }
 
 /** The two static tables screens 02A and 02E render. */

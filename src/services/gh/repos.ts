@@ -26,6 +26,21 @@ export interface RepoSummary {
   pushedAt?: string;
   /** How many issue forms it has. `undefined` when it was not looked up. */
   templates?: number;
+  /**
+   * Whether the repository has an issue tracker at all.
+   *
+   * A fork has one turned off by default, which is the whole of screen 03C: a
+   * board with nothing on it and nothing wrong with it is the most confusing
+   * possible first run.
+   */
+  hasIssues?: boolean;
+  /**
+   * When these counts were taken, for a row served from the last read.
+   *
+   * A picker that fires four API calls to render a list is a picker that is
+   * slow every time, so the recents show what was true and say how long ago.
+   */
+  countedAt?: number;
 }
 
 /** What the git-remote guess returns. Absent means there is nothing to guess from. */
@@ -38,7 +53,18 @@ export interface RepoGuess {
 /** Fields `gh repo` commands are asked for, in one place so the shapes agree. */
 const REPO_FIELDS = [
   'nameWithOwner', 'description', 'isPrivate', 'isArchived', 'isFork',
-  'parent', 'pushedAt',
+  'parent', 'pushedAt', 'hasIssuesEnabled',
+].join(',');
+
+/**
+ * The same list, minus the ones `gh search repos` does not return.
+ *
+ * Asking search for a field it has never had is not a degraded answer, it is
+ * an error and an empty result — so the two commands get the fields each can
+ * actually produce rather than one list that works for only one of them.
+ */
+const SEARCH_FIELDS = [
+  'fullName', 'description', 'isPrivate', 'isArchived', 'isFork', 'pushedAt',
 ].join(',');
 
 interface RawRepo {
@@ -49,6 +75,7 @@ interface RawRepo {
   isFork?: boolean;
   parent?: { nameWithOwner?: string } | null;
   pushedAt?: string;
+  hasIssuesEnabled?: boolean;
   fullName?: string;
 }
 
@@ -64,6 +91,10 @@ function toSummary(r: RawRepo): RepoSummary | undefined {
     parent: r.parent?.nameWithOwner,
     openIssues: 0,
     pushedAt: r.pushedAt,
+    /* Undefined rather than true when the field was not asked for — `gh search
+       repos` does not return it, and defaulting to "has issues" would put a
+       fork's disabled tracker on screen as a live option. */
+    hasIssues: r.hasIssuesEnabled,
   };
 }
 
@@ -158,9 +189,9 @@ export async function guessFromWorkspace(cwd?: string): Promise<RepoGuess> {
 export async function searchRepos(
   query: string,
   opts: { includeArchived?: boolean; limit?: number } = {},
-): Promise<{ repos: RepoSummary[]; error?: string }> {
+): Promise<{ repos: RepoSummary[]; error?: string; commands: string[]; matched: number }> {
   const q = query.trim();
-  if (!q) return { repos: [] };
+  if (!q) return { repos: [], commands: [], matched: 0 };
   const limit = opts.limit ?? 20;
 
   const args: string[][] = [];
@@ -171,7 +202,7 @@ export async function searchRepos(
     args.push(['repo', 'list', q.slice(0, slash), '--limit', '100', '--json', REPO_FIELDS]);
   } else {
     args.push(['repo', 'list', '--limit', '100', '--json', REPO_FIELDS]);
-    args.push(['search', 'repos', q, '--limit', String(limit), '--json', REPO_FIELDS]);
+    args.push(['search', 'repos', q, '--limit', String(limit), '--json', SEARCH_FIELDS]);
   }
 
   const term = (slash > 0 ? q.slice(slash + 1) : q).toLowerCase();
@@ -214,8 +245,56 @@ export async function searchRepos(
   */
   const counted = await Promise.all(top.map(withCounts));
 
-  if (counted.length === 0 && firstError) return { repos: [], error: firstError };
-  return { repos: counted };
+  /* What actually ran, for the line under the results. A search that shows its
+     own command is a search somebody can repeat in a terminal when the answer
+     surprises them. */
+  const commands = args.map(a => `gh ${a.join(' ')}`);
+
+  if (counted.length === 0 && firstError) {
+    return { repos: [], error: firstError, commands, matched: 0 };
+  }
+  return { repos: counted, commands, matched: out.length };
+}
+
+/**
+ * A fork, and where its issues really live — screen 03C.
+ *
+ * Read from `parent` rather than guessed from the name. Fork names usually
+ * match their upstream, so a string comparison would be right often enough to
+ * be trusted and wrong often enough to matter.
+ *
+ * Both sides come back with their counts and their tracker state, because the
+ * choice is between two repositories and offering one of them without the
+ * numbers is offering a name.
+ */
+export interface ForkChoice {
+  fork: RepoSummary;
+  upstream?: RepoSummary;
+  /** Why upstream is not offered, when it could not be read. */
+  upstreamError?: string;
+}
+
+export async function inspectFork(repo: RepoSummary): Promise<ForkChoice | undefined> {
+  if (!repo.isFork || !repo.parent) return undefined;
+
+  const r = await run(['repo', 'view', repo.parent, '--json', REPO_FIELDS], { timeoutMs: 20_000 });
+  if (!r.ok) {
+    /* A private upstream you cannot see is a real case — somebody forked out of
+       an org they have since left. Named, so the fork is not silently the only
+       option on a screen that exists to offer two. */
+    return { fork: repo, upstreamError: (r.stderr || r.failure || '').trim() };
+  }
+
+  let raw: RawRepo;
+  try {
+    raw = JSON.parse(r.stdout) as RawRepo;
+  } catch {
+    return { fork: repo, upstreamError: 'gh returned something that is not JSON.' };
+  }
+
+  const parent = toSummary(raw);
+  if (!parent) return { fork: repo, upstreamError: 'The upstream could not be read.' };
+  return { fork: repo, upstream: await withCounts(parent) };
 }
 
 /** The counts for a known list — the recents, which already have their names. */

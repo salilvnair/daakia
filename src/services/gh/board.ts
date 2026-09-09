@@ -55,6 +55,23 @@ export interface BoardData {
   /** True when the repository has no issue forms at all. */
   noTemplates: boolean;
   fetchedAt: number;
+  /**
+   * How many closed in the last ninety days.
+   *
+   * Only counted when the open list came back empty, because that is the only
+   * screen it changes: "nothing is open" and "nothing has ever happened here"
+   * are different repositories, and the second one is usually the wrong one.
+   */
+  closedRecently?: number;
+  /** Present when GitHub is refusing calls — screen 04E's amber state. */
+  rateLimit?: RateLimit;
+}
+
+export interface RateLimit {
+  remaining: number;
+  limit: number;
+  /** Epoch millis. The UI owns the clock and renders "in 11 minutes". */
+  resetAt: number;
 }
 
 /** Raw shapes from gh's JSON, all optional because it is somebody's repo. */
@@ -75,6 +92,51 @@ interface RawIssue {
 }
 
 const DAY = 86_400_000;
+
+/** How far back "closed recently" reaches, for the empty board's second line. */
+const RECENT_CLOSED_DAYS = 90;
+
+/** Whether a gh failure is GitHub refusing rather than gh failing. */
+function looksRateLimited(said: string): boolean {
+  return /rate limit|secondary rate|abuse detection|403/i.test(said);
+}
+
+/**
+ * What is left of the hour's budget.
+ *
+ * Asked only once something has already failed. Reading it on every board
+ * refresh would spend a call to find out how many calls are left, which is the
+ * kind of accounting that pays for itself in nothing.
+ */
+export async function fetchRateLimit(): Promise<RateLimit | undefined> {
+  const r = await run(['api', '/rate_limit', '--jq',
+    '[.rate.remaining, .rate.limit, .rate.reset] | @tsv'], { timeoutMs: 15_000 });
+  if (!r.ok) return undefined;
+  const [remaining, limit, reset] = r.stdout.trim().split(/\s+/).map(Number);
+  if (!Number.isFinite(reset)) return undefined;
+  return { remaining: remaining || 0, limit: limit || 0, resetAt: reset * 1000 };
+}
+
+/**
+ * How many were closed in the last ninety days.
+ *
+ * `--search` rather than listing them and counting here: a repository with four
+ * thousand closed issues would page through all of them to produce one number.
+ */
+async function countClosedRecently(repo: string): Promise<number | undefined> {
+  const since = new Date(Date.now() - RECENT_CLOSED_DAYS * DAY).toISOString().slice(0, 10);
+  const r = await run([
+    'issue', 'list', '--repo', repo, '--state', 'closed',
+    '--search', `closed:>=${since}`, '--limit', '200', '--json', 'number',
+  ], { timeoutMs: 45_000 });
+  if (!r.ok) return undefined;
+  try {
+    const rows = JSON.parse(r.stdout) as unknown[];
+    return Array.isArray(rows) ? rows.length : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function daysSince(iso: string | undefined, now: number): number {
   if (!iso) return 0;
@@ -151,7 +213,7 @@ export async function fetchTemplates(repo: string): Promise<{
 export async function fetchBoard(
   repo: string,
   opts: { state?: 'open' | 'closed' | 'all'; limit?: number } = {},
-): Promise<BoardData | { error: string }> {
+): Promise<BoardData | { error: string; rateLimit?: RateLimit }> {
   const templates = await fetchTemplates(repo);
   const map = headingMap(templates.dimensions);
 
@@ -166,7 +228,14 @@ export async function fetchBoard(
   if (!r.ok) {
     /* gh's own message, verbatim. "Validation failed" alone sends somebody to
        a browser to guess; gh usually says which field. */
-    return { error: (r.stderr || r.failure || `gh exited with ${r.code}`).trim() };
+    const said = (r.stderr || r.failure || `gh exited with ${r.code}`).trim();
+    /*
+      One extra call, and only on the failure that earns it. A rate-limited
+      board is the one empty state that must not say "nothing matches" — it has
+      to say when it can try again, and only /rate_limit knows that.
+    */
+    const rateLimit = looksRateLimited(said) ? await fetchRateLimit() : undefined;
+    return { error: said, rateLimit };
   }
 
   let raw: RawIssue[];
@@ -204,6 +273,12 @@ export async function fetchBoard(
     };
   });
 
+  /* Only when there is nothing to show. On a board with issues on it this
+     number changes no sentence, and it costs a call. */
+  const closedRecently = issues.length === 0 && (opts.state ?? 'open') === 'open'
+    ? await countClosedRecently(repo)
+    : undefined;
+
   return {
     repo,
     issues,
@@ -211,5 +286,6 @@ export async function fetchBoard(
     formErrors: templates.errors,
     noTemplates: templates.noTemplates,
     fetchedAt: now,
+    closedRecently,
   };
 }
