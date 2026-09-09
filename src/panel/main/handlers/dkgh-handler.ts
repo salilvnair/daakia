@@ -19,6 +19,8 @@ import {
 } from '../../../services/gh/gh';
 import { fetchBoard } from '../../../services/gh/board';
 import { guessFromWorkspace, searchRepos, summarise } from '../../../services/gh/repos';
+import { planEdit, applyPlan, type EditRequest } from '../../../services/gh/write';
+import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
 type PostMessage = (msg: unknown) => void;
 
@@ -274,6 +276,49 @@ export async function handleDkghBoard(
     state: (msg.state as 'open' | 'closed' | 'all') ?? 'open',
   });
   postMessage({ type: 'dkgh:board:result', ...result });
+}
+
+/**
+ * Build the exact commands an edit would run, and send them back unrun.
+ *
+ * The half of the write path that never writes. The confirm screen renders what
+ * comes back from here, and `dkgh:applyEdit` re-plans from the same request —
+ * so the command shown and the command run are produced by one function, and a
+ * screen that displays one thing while running another is not expressible.
+ */
+export async function handleDkghPlanEdit(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const req = msg.request as EditRequest;
+  postMessage({ type: 'dkgh:planEdit:result', plan: planEdit(req), request: req });
+}
+
+/**
+ * Run a plan the reader has seen.
+ *
+ * Re-planned here from the request rather than trusting an argv sent over the
+ * wire: the webview is the one place a command could be tampered with between
+ * being shown and being run, and re-deriving it costs nothing.
+ */
+export async function handleDkghApplyEdit(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const req = msg.request as EditRequest;
+  const plan = planEdit(req);
+  if (plan.empty) {
+    postMessage({ type: 'dkgh:applyEdit:result', outcomes: [], allOk: false, partial: false });
+    return;
+  }
+  postMessage({ type: 'dkgh:applyEdit:running', plan });
+  const result = await applyPlan(plan);
+  postMessage({ type: 'dkgh:applyEdit:result', ...result, repo: req.repo });
+}
+
+/** The two static tables screens 02A and 02E render. */
+export async function handleDkghCommands(postMessage: PostMessage): Promise<void> {
+  postMessage({ type: 'dkgh:commands:result', commands: GH_COMMANDS, scopes: GH_SCOPES });
 }
 
 /** Everything screens 01–03 render, in one message. */

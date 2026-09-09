@@ -139,7 +139,7 @@ import {
   initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
   handleDkghSetRepo, handleDkghBoard, handleDkghRepoOptions, handleDkghSearchRepos,
   handleDkghPinRepo, handleDkghDiagnose, handleDkghFindGh, handleDkghBrowseGh,
-  handleDkghDismissOldGh,
+  handleDkghDismissOldGh, handleDkghPlanEdit, handleDkghApplyEdit, handleDkghCommands,
 } from './handlers/dkgh-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
 import {
@@ -357,6 +357,15 @@ export class MainPanel {
         break;
       case 'dkgh:dismissOldGh':
         handleDkghDismissOldGh(msg, this._post);
+        break;
+      case 'dkgh:planEdit':
+        handleDkghPlanEdit(msg, this._post);
+        break;
+      case 'dkgh:applyEdit':
+        handleDkghApplyEdit(msg, this._post);
+        break;
+      case 'dkgh:commands':
+        handleDkghCommands(this._post);
         break;
       case 'dkgh:board':
         handleDkghBoard(msg, this._post);

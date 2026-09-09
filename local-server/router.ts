@@ -107,7 +107,7 @@ import {
   initDkgh, handleDkghProbe, handleDkghRecheck, handleDkghSetPath,
   handleDkghSetRepo, handleDkghBoard, handleDkghRepoOptions, handleDkghSearchRepos,
   handleDkghPinRepo, handleDkghDiagnose, handleDkghFindGh, handleDkghBrowseGh,
-  handleDkghDismissOldGh,
+  handleDkghDismissOldGh, handleDkghPlanEdit, handleDkghApplyEdit, handleDkghCommands,
 } from '../src/panel/main/handlers/dkgh-handler';
 import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
@@ -180,6 +180,15 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dkgh:dismissOldGh':
       await handleDkghDismissOldGh(msg, post);
+      break;
+    case 'dkgh:planEdit':
+      await handleDkghPlanEdit(msg, post);
+      break;
+    case 'dkgh:applyEdit':
+      await handleDkghApplyEdit(msg, post);
+      break;
+    case 'dkgh:commands':
+      await handleDkghCommands(post);
       break;
     case 'dkgh:board':
       await handleDkghBoard(msg, post);
