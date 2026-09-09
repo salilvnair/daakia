@@ -52,8 +52,9 @@ import { getVsCodeApi, postMsg } from './vscode';
 import { useSMWorkspaceStore } from '@salilvnair/state-machine';
 import { DaakiaSMConsumer } from './consumer/DaakiaSMConsumer';
 import { getProtocolAccent } from './colors';
-import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, DevToolsIcon, LayoutGridIcon } from './icons';
+import { ProtocolRestBadge, ProtocolGraphQLBadge, ProtocolRealtimeBadge, ProtocolGrpcBadge, ProtocolSoapBadge, ProtocolAiBadge, ProtocolMcpBadge, ServerIcon, StethoscopeIcon, Dk8sIcon, GitHubIcon, DevToolsIcon, LayoutGridIcon } from './icons';
 import { DevToolsPanel } from './components/shared/devtools';
+import { DkghPanel } from './components/dkgh/DkghPanel';
 import { DebugHud } from './components/shared/debugger';
 import { useExtensionMessages } from './app/use-extension-messages';
 import { ProtocolIcon, EmptyState } from './app/app-shell';
@@ -231,6 +232,7 @@ export default function App() {
     const tabProtocol = activeTab?.protocol || activeProtocol;
     const accent = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
       : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
+      : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
       : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
       : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
       : activeTab?.type === 'settings' ? 'var(--color-settings)'
@@ -500,6 +502,7 @@ export default function App() {
   const tabProtocol = activeTab?.protocol || activeProtocol;
   const accentVar = activeTab?.type === 'mock-server' ? 'var(--color-mock-server)'
     : activeTab?.type === 'workspace' ? 'var(--color-workspace)'
+    : activeTab?.type === 'dkgh' ? 'var(--color-dkgh)'
     : activeTab?.type === 'dk8s' ? 'var(--color-dk8s)'
     : activeTab?.type === 'state-machine' ? 'var(--color-mock-server)'
     : activeTab?.type === 'settings' ? 'var(--color-settings)'
@@ -628,6 +631,20 @@ export default function App() {
         {/* Spacer pushes bottom icons down */}
         <div className="flex-1" />
 
+        {/* dkgh — GitHub issues. Above dk8s because that is the order the work
+            happens in: dk8s is where you go when the thing under test is
+            misbehaving, dkgh is where you go once you have decided it is a
+            defect. */}
+        <ProtocolIcon
+          active={activeTab?.type === 'dkgh'}
+          open={tabs.some(t => t.type === 'dkgh')}
+          accentColor="var(--color-dkgh)"
+          onClick={() => useTabsStore.getState().openDkghTab()}
+          title="dkgh — Daakia GitHub"
+        >
+          <GitHubIcon size={16} strokeWidth={1.8} />
+        </ProtocolIcon>
+
         {/* dk8s — Kubernetes. Sits above Doctor because that is the workflow:
             dk8s collects the artifact, Doctor analyses it. */}
         <ProtocolIcon
@@ -728,6 +745,15 @@ export default function App() {
             style={{ display: activeTab?.type === 'dk8s' ? 'flex' : 'none' }}
           >
             <K8sPanel />
+          </div>
+        )}
+
+        {tabs.some(t => t.type === 'dkgh') && (
+          <div
+            className="flex-1 flex flex-col min-w-0 overflow-hidden"
+            style={{ display: activeTab?.type === 'dkgh' ? 'flex' : 'none' }}
+          >
+            <DkghPanel />
           </div>
         )}
 

@@ -50,7 +50,7 @@ export type BodyMode = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlen
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'oauth2';
 
-export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'workspace';
+export type TabType = 'request' | 'settings' | 'mock-server' | 'daakia-ai' | 'state-machine' | 'wiki' | 'dk8s' | 'dkgh' | 'workspace';
 
 export type Protocol = 'rest' | 'graphql' | 'websocket' | 'grpc' | 'soap' | 'ai' | 'mcp';
 
@@ -530,6 +530,7 @@ interface TabsState {
   openSettingsTab: () => void;
   openMockServerTab: () => void;
   openDk8sTab: () => void;
+  openDkghTab: () => void;
   openWorkspaceTab: () => void;
   openDaakiaAiTab: () => void;
   /**
@@ -632,6 +633,21 @@ export const useTabsStore = create<TabsState>((set, get) => {
         set({ activeTabId: existing.id, previousTabId: activeTabId });
       } else {
         const tab = createDefaultTab({ type: 'dk8s', name: 'Dk8s' });
+        set(s => ({
+          tabs: [...s.tabs, tab],
+          activeTabId: tab.id,
+          previousTabId: activeTabId,
+        }));
+      }
+    },
+
+    openDkghTab: () => {
+      const { tabs, activeTabId } = get();
+      const existing = tabs.find(t => t.type === 'dkgh');
+      if (existing) {
+        set({ activeTabId: existing.id, previousTabId: activeTabId });
+      } else {
+        const tab = createDefaultTab({ type: 'dkgh', name: 'dkgh' });
         set(s => ({
           tabs: [...s.tabs, tab],
           activeTabId: tab.id,
