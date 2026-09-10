@@ -1795,3 +1795,41 @@ input[type="number"] {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/*
+  The magnifier on a facet value — take this one to the whole log, not just the
+  buffer on screen.
+
+  It was a 45%-opacity glyph with no box, which is a thing you discover by
+  accident rather than a thing you press. It has a target now: a square that
+  lights in the dk8s accent under the pointer and swells very slightly, which
+  is the cheapest way to say "this is a control" without adding a border to
+  every row in a list of forty.
+*/
+.facet-zoom {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+.facet-zoom:hover {
+  opacity: 1;
+  color: var(--color-dk8s);
+  background: color-mix(in srgb, var(--color-dk8s) 18%, transparent);
+  transform: scale(1.15);
+}
+.facet-zoom:active { transform: scale(1); }
+.facet-zoom:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--color-dk8s);
+  outline-offset: -2px;
+}

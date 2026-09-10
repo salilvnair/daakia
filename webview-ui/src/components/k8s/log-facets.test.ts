@@ -124,7 +124,22 @@ describe('filterTermFor', () => {
     matching them is both more precise and still a plain substring search.
   */
   it('brackets a thread name so it cannot match inside a word', () => {
-    expect(filterTermFor('thread', 'main')).toBe('[main]');
+    expect(filterTermFor('thread', 'main', [{ text: '12:00 [main] INFO up' }])).toBe('[main]');
+  });
+
+  /*
+    The bug this guards: a JSON log writes `"thread_name":"settle-worker-0"`
+    and has no bracket in it anywhere, so a bracketed search of one returned
+    zero matches on every structured log there is. The brackets have to be read
+    out of the text, not inferred from the field.
+  */
+  it('leaves a thread alone when the log does not bracket it', () => {
+    const json = [{ text: '{"level":"INFO","thread_name":"settle-worker-0"}' }];
+    expect(filterTermFor('thread', 'settle-worker-0', json)).toBe('settle-worker-0');
+  });
+
+  it('leaves a thread alone when there are no lines to judge by', () => {
+    expect(filterTermFor('thread', 'main')).toBe('main');
   });
 
   it('leaves a logger alone — it is already distinctive', () => {

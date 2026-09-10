@@ -38,7 +38,7 @@
  */
 import { useMemo, useState } from 'react';
 import { BadgeChipView, IconSize } from '@salilvnair/dui';
-import { ChevronDownIcon, ChevronRightIcon, FilterIcon, SearchIcon } from '../../icons';
+import { ChevronDownIcon, ChevronRightIcon, SearchIcon } from '../../icons';
 import { FilterInputView } from '@salilvnair/dui';
 import { buildFacets, type Facet } from './log-facets';
 import type { FieldFilter } from './log-view';
@@ -112,11 +112,20 @@ export function FacetRail({ lines, filters, onToggle, onClear, onSearchEverywher
         background: 'color-mix(in srgb, var(--color-surface) 55%, transparent)',
       }}
     >
+      {/*
+        The heading says what the counts below it are counts of, and nothing
+        else. It carried a filter icon of its own, directly above the search
+        box's — two of the same glyph, four pixels apart, neither of them a
+        control. The number is the part worth finding, so it is the badge.
+      */}
       <div className="flex items-center gap-1.5 px-3 py-2 shrink-0">
-        <FilterIcon size={IconSize.chip} color="var(--color-text-muted)" />
+        <span className="font-mono text-[9.5px] px-1.5 rounded-full"
+              style={{ color: ACCENT, background: ACCENT_SOFT }}>
+          {facets[0].scanned.toLocaleString()}
+        </span>
         <span className="text-[9px] uppercase tracking-wider"
               style={{ color: 'var(--color-text-muted)' }}>
-          fields · {facets[0].scanned.toLocaleString()} events on screen
+          events on screen
         </span>
       </div>
 
@@ -246,10 +255,9 @@ function FacetValues({ facet, modeOf, onToggle, onClear, onSearchEverywhere }: {
               title={`Search the whole log for ${v.value}`}
               aria-label={`Search the whole log for ${v.value}`}
               onClick={() => onSearchEverywhere(facet.field, v.value)}
-              className="border-none bg-transparent cursor-pointer shrink-0"
-              style={{ padding: 0, lineHeight: 0, opacity: 0.45, marginLeft: 4 }}
+              className="facet-zoom shrink-0"
             >
-              <SearchIcon size={IconSize.chip} color="var(--color-text-muted)" />
+              <SearchIcon size={IconSize.chip} />
             </button>
             </div>
             {/* Share of the buffer, so a value taking most of it is visible

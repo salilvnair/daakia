@@ -212,9 +212,25 @@ export function buildFacets(
  * The filter-box term for a field value.
  *
  * Bracketing a thread is not decoration: a thread called `main` appears inside
- * `domain` and `remaining` and any message containing the word, and the
- * brackets are already in the line the format parsed it out of.
+ * `domain` and `remaining` and any message containing the word, and a pattern
+ * layout writes it as `[main]`, so matching the brackets is both more precise
+ * and still a plain substring search.
+ *
+ * **But only where the log actually writes them.** A JSON log carries the same
+ * thread as `"thread_name":"settle-worker-0"`, with no bracket anywhere in the
+ * line — so bracketing it searched for a string that does not exist and came
+ * back with nothing, on every structured log there is. The brackets were being
+ * inferred from the field rather than read from the text.
+ *
+ * So the lines decide. `lines` is the buffer the facet was built from, and the
+ * question asked of it is the only one that matters: does this log, in the
+ * form it is written, contain `[value]`? If it does the brackets sharpen the
+ * search; if it does not they empty it.
  */
-export function filterTermFor(field: FacetField, value: string): string {
-  return field === 'thread' ? `[${value}]` : value;
+export function filterTermFor(
+  field: FacetField, value: string, lines: readonly { text: string }[] = [],
+): string {
+  if (field !== 'thread') return value;
+  const bracketed = `[${value}]`;
+  return lines.some(l => l.text.includes(bracketed)) ? bracketed : value;
 }

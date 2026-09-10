@@ -24,6 +24,24 @@ const SZ = 13;
 /** One row of a key-value table, in the shape every protocol stores them. */
 export interface KvRow { key: string; value: string; enabled?: boolean; description?: string }
 
+/**
+ * Which field on a request tab each `data-table` mark names.
+ *
+ * The mark in the markup is the reader's own word for the table — `params`,
+ * `headers` — and this is the only place that has to know one of them is
+ * stored as `bodyFormData`. A new table gets a right-click menu by appearing
+ * here and carrying the attribute; no panel has to be taught about it.
+ */
+export const MENU_TABLES = {
+  params: 'params',
+  headers: 'headers',
+  variables: 'variables',
+  formData: 'bodyFormData',
+  urlEncoded: 'bodyUrlEncoded',
+} as const;
+
+export type MenuTable = typeof MENU_TABLES[keyof typeof MENU_TABLES];
+
 /** What a panel has to hand the menu for the shared items to work. */
 export interface RequestMenuCtx {
   method: string;

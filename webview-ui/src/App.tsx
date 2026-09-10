@@ -34,7 +34,9 @@ import { CommandPaletteView } from './components/shared/command-palette/CommandP
 import { ApiMonitor } from './components/power/ApiMonitor';
 import { useTabsStore } from './store/tabs-store';
 import { useSurfaceMenu } from './components/shared/menu/SurfaceMenu';
-import { requestMenuItems, type KvRow as MenuKvRow } from './components/shared/menu/requestMenus';
+import {
+  MENU_TABLES, requestMenuItems, type KvRow as MenuKvRow,
+} from './components/shared/menu/requestMenus';
 import { useToastStore } from './store/toast-store';
 import { useEnvStore } from './store/env-store';
 import { useCollectionsStore } from './store/collections-store';
@@ -204,8 +206,19 @@ export default function App() {
     headers: (activeTab?.headers ?? []) as MenuKvRow[],
     params: (activeTab?.params ?? []) as MenuKvRow[],
     body: activeTab?.bodyRaw ?? '',
-    rowsOf: () => undefined,
-    setRows: () => undefined,
+    /*
+      Reads and writes the tables straight off the tab, so a protocol panel
+      gets the table menu by marking its table and nothing else — no hook, no
+      context of its own, no second copy of this wiring per protocol.
+    */
+    rowsOf: name => {
+      const field = MENU_TABLES[name as keyof typeof MENU_TABLES];
+      return field && activeTab ? (activeTab[field] as MenuKvRow[]) : undefined;
+    },
+    setRows: (name, rows) => {
+      const field = MENU_TABLES[name as keyof typeof MENU_TABLES];
+      if (field && activeTab) useTabsStore.getState().updateTab(activeTab.id, { [field]: rows });
+    },
     setUrl: url => activeTab && useTabsStore.getState().updateTab(activeTab.id, { url }),
     setBody: bodyRaw => activeTab
       && useTabsStore.getState().updateTab(activeTab.id, { bodyRaw }),

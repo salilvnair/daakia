@@ -537,7 +537,7 @@ function IconButton({ on, onClick, title, icon }: {
 
 /** The field rail's width, in the pixels that decide whether a value fits. */
 const RAIL_MIN = 208;
-const RAIL_MAX = Math.round(RAIL_MIN * 1.3);
+const RAIL_MAX = RAIL_MIN * 2;
 
 export function LogViewer() {
   const {
@@ -690,21 +690,27 @@ export function LogViewer() {
   const bodyRef = useRef<HTMLDivElement>(null);
 
   /*
-    Controlled, so the ceiling can be enforced in pixels — see the split below.
-    `undefined` until somebody drags, which lets `defaultSplit` do the first
-    layout rather than this having to guess a percentage before the row has a
-    width.
-  */
-  const [railSplit, setRailSplit] = useState<number | undefined>(17);
+    How wide the row is, so the rail's ceiling can be expressed in pixels.
 
-  /* Measured off the body row, which the split fills — `bodyRef` already
-     points at it, and a second ref on the same box is a second thing to keep
-     pointing at the right element. */
-  const clampRail = useCallback((pct: number) => {
-    const width = bodyRef.current?.clientWidth ?? 0;
-    if (!width) { setRailSplit(pct); return; }
-    const px = Math.min(Math.max((pct / 100) * width, RAIL_MIN), RAIL_MAX);
-    setRailSplit((px / width) * 100);
+    The split takes a minimum for each side and no maximum, so a cap on the
+    rail has to be written as a floor under the lines: `row - RAIL_MAX`. That
+    needs the row's width, and it has to keep needing it — the panel is
+    resizable and a number measured once is a cap that drifts the moment
+    somebody drags the window.
+
+    Clamping in `onResize` instead was the first attempt and it does not work:
+    the split follows the pointer with its own internal position during a drag
+    and only reads the controlled value back between drags, so the rail
+    stretched as far as you pulled and snapped to the limit when you let go.
+    Enforced as a minimum it never gets there in the first place.
+  */
+  const [rowWidth, setRowWidth] = useState(0);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(([entry]) => setRowWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   /** True while the ribbon is being dragged; freezes the follow logic. */
@@ -1429,22 +1435,23 @@ export function LogViewer() {
         <SplitPanelView
           direction="horizontal"
           /*
-            The rail's old fixed width is the floor and a third again is the
-            ceiling: wide enough for a long order id, never wide enough to take
-            the log down to a column. The lines are what the screen is for, and
+            The rail's old fixed width is the floor and twice it is the
+            ceiling: wide enough for the longest field value a pod is likely to
+            log, never wide enough to take the lines down to a column. The lines are what the screen is for, and
             a rail that can eat half of it is one somebody drags by accident
             once and has to drag back.
 
-            The floor is the component's own `minFirst`; the ceiling is not,
-            because it has no `maxFirst` — only minimums, on either side. So the
-            split is controlled here and `onResize` clamps in pixels. A
-            percentage cap would have been the easy version and the wrong one:
-            272px of rail is 34% of a narrow panel and 14% of a wide one, and
-            the number that matters is how many characters of `ORD-88403` fit.
+            Both bounds are the component's own minimums, so it enforces them
+            while the divider is moving rather than after. The ceiling is a
+            floor under the lines, which is the same statement read from the
+            other end. A percentage would have been the easy version and the
+            wrong one: 416px of rail is half a narrow panel and a fifth of a
+            wide one, and the number that decides this is how many characters
+            of `ORD-88403` fit.
           */
-          split={railSplit}
+          defaultSplit={17}
           minFirst={RAIL_MIN}
-          onResize={clampRail}
+          minSecond={Math.max(0, rowWidth - RAIL_MAX)}
           collapsed={!facetsOpen}
           collapsedSide="first"
           accentColor={ACCENT}
@@ -1458,12 +1465,13 @@ export function LogViewer() {
             onClear={(field, value) => removeFieldFilter(field, value)}
             /*
               Hands the value to the search that reads the pod's log rather
-              than the buffer. `filterTermFor` brackets a thread, because
-              `main` appears inside `domain` and inside any message that
-              mentions it — the same reason the selection menu brackets it.
+              than the buffer. `filterTermFor` brackets a thread where the log
+              writes it that way — the buffer is passed so it can tell, because
+              a JSON log spells the same thread `"thread_name":"..."` and a
+              bracketed search of one finds nothing at all.
             */
             onSearchEverywhere={(field, value) =>
-              useDk8sSearchStore.getState().searchEverywhere(filterTermFor(field, value))}
+              useDk8sSearchStore.getState().searchEverywhere(filterTermFor(field, value, logs))}
           />
             </div>
           }
