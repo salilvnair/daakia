@@ -47,6 +47,23 @@ export interface BoardIssue {
   quietDays: number;
 }
 
+/** Mirrors `services/gh/issue-forms.ts`, and re-exported for the composer. */
+export interface FormField {
+  type: string;
+  id?: string;
+  label: string;
+  options: string[];
+  required: boolean;
+}
+
+export interface IssueForm {
+  file: string;
+  name: string;
+  description?: string;
+  labels: string[];
+  fields: FormField[];
+}
+
 export interface ProposedDimension {
   dimension: string;
   heading: string;
@@ -59,6 +76,8 @@ export interface BoardData {
   repo: string;
   issues: BoardIssue[];
   dimensions: ProposedDimension[];
+  /** The forms in full, for the composer — screens 10 and 10A. */
+  forms: IssueForm[];
   formErrors: { file: string; message: string; line?: number }[];
   noTemplates: boolean;
   fetchedAt: number;

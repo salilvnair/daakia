@@ -60,6 +60,7 @@ import { GhSaveView } from './GhSaveView';
 import { GhManageViews } from './GhManageViews';
 import { GhShareView } from './GhShareView';
 import { GhChart } from './GhChart';
+import { GhCompose } from './GhCompose';
 import { colourMap } from './field-colour';
 import {
   capture, countFor, diffView, loadViews, orderedViews, saveViews,
@@ -684,12 +685,29 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           tabs={[
             { id: 'board', label: 'Board', icon: <IssueOpenedIcon size={12} />,
               count: pending ? undefined : total },
-            { id: 'new', label: 'New issue', icon: <PlusIcon size={12} />, disabled: true },
+            { id: 'new', label: 'New issue', icon: <PlusIcon size={12} /> },
             { id: 'insights', label: 'Insights', icon: <ChartBarIcon size={12} />, disabled: true },
             { id: 'repository', label: 'Repository', icon: <RepoIcon size={12} />, disabled: true },
           ]}
         />
       </div>
+
+      {/*
+        The composer takes the tab from here down — everything below is the
+        board's own chrome, and a filter row above a form is a filter row
+        filtering nothing.
+      */}
+      {section === 'new' ? (
+        <GhCompose
+          repo={repo}
+          forms={data?.forms ?? []}
+          noTemplates={!!data?.noTemplates}
+          meta={meta}
+          issues={all}
+          onFiled={() => { setSection('board'); refresh(); }}
+        />
+      ) : (
+        <>
 
       {/* The views, and the bar that appears when one has been changed */}
       <GhViewBar
@@ -976,6 +994,9 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           <BadgeChipView tone="var(--color-warning)" size="sm">{unassigned} unassigned</BadgeChipView>
         )}
       </div>
+
+      </>
+      )}
 
       {peek && <GhPeek repo={repo} issue={peek} onOpen={i => { setPeek(undefined); open(i); }} />}
       {showKeys && <GhKeys onClose={() => setShowKeys(false)} />}

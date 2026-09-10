@@ -168,3 +168,82 @@ export async function applyPlan(plan: EditPlan): Promise<EditResult> {
     partial: okCount > 0 && okCount < outcomes.length,
   };
 }
+
+// ── Creating one ────────────────────────────────────────────────────────────
+
+/**
+ * Filing a new issue.
+ *
+ * Same shape as every other write here: `planCreate` builds it and returns it
+ * unrun, `applyCreate` takes a plan rather than a description. A confirm screen
+ * that displays one thing and files another is not expressible.
+ *
+ * The body travels on stdin rather than in the argv. An issue body is prose
+ * with newlines, quotes and backticks in it, and every platform has a different
+ * limit on how long a command line may be — a composer that works for four
+ * paragraphs and fails silently at forty is worse than one that never worked.
+ * `--body-file -` is gh's own answer to that.
+ */
+export interface CreateRequest {
+  repo: string;
+  title: string;
+  body: string;
+  labels?: string[];
+  assignees?: string[];
+  milestone?: string;
+}
+
+export interface CreatePlan {
+  repo: string;
+  argv: string[];
+  /** What a person reads on the confirm screen — the body is shown separately. */
+  display: string;
+  body: string;
+  /** Why this cannot run, when it cannot. */
+  refusal?: string;
+}
+
+export function planCreate(req: CreateRequest): CreatePlan {
+  const argv = ['issue', 'create', '--repo', req.repo, '--title', req.title, '--body-file', '-'];
+  for (const l of req.labels ?? []) argv.push('--label', l);
+  for (const a of req.assignees ?? []) argv.push('--assignee', a);
+  if (req.milestone) argv.push('--milestone', req.milestone);
+
+  /*
+    A title is the one thing GitHub will not invent. Refused here rather than
+    at gh, so the reason arrives on the screen that can fix it instead of as a
+    subprocess error after a confirm.
+  */
+  const refusal = req.title.trim() ? undefined : 'An issue needs a title.';
+
+  return {
+    repo: req.repo,
+    argv,
+    display: `gh ${argv.join(' ')}`,
+    body: req.body,
+    refusal,
+  };
+}
+
+export interface CreateResult {
+  ok: boolean;
+  /** The new issue's URL, which is what gh prints on success. */
+  url?: string;
+  number?: number;
+  error?: string;
+}
+
+export async function applyCreate(plan: CreatePlan): Promise<CreateResult> {
+  if (plan.refusal) return { ok: false, error: plan.refusal };
+
+  const r = await run(plan.argv, { timeoutMs: 60_000, stdin: plan.body });
+  if (!r.ok) {
+    /* gh's own words. It names the label or the assignee that does not exist,
+       which is the whole difference between a fixable error and a mystery. */
+    return { ok: false, error: (r.stderr || r.failure || `exited with ${r.code}`).trim() };
+  }
+
+  const url = r.stdout.trim().split(/\r?\n/).filter(Boolean).pop() ?? '';
+  const number = Number(url.split('/').pop());
+  return { ok: true, url, number: Number.isFinite(number) ? number : undefined };
+}

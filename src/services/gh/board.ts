@@ -10,7 +10,10 @@
  * a cache to invalidate and a second truth to disagree with.
  */
 import { run } from './gh';
-import { parseIssueForms, proposeDimensions, headingMap, type ProposedDimension, type FormParseError } from './issue-forms';
+import {
+  parseIssueForms, proposeDimensions, headingMap,
+  type IssueForm, type ProposedDimension, type FormParseError,
+} from './issue-forms';
 import { readDimensions } from './issue-body';
 import { imageUrls } from './evidence';
 
@@ -76,6 +79,8 @@ export interface BoardData {
   issues: BoardIssue[];
   /** What the templates declared, for grouping and for the facet lists. */
   dimensions: ProposedDimension[];
+  /** The forms in full, for the composer — screens 10 and 10A. */
+  forms: IssueForm[];
   /** Templates that would not parse. Named, never fatal. */
   formErrors: FormParseError[];
   /** True when the repository has no issue forms at all. */
@@ -243,6 +248,15 @@ function commentCount(raw: unknown): number {
 /** Fetch the repository's issue forms. Never throws; an absent directory is fine. */
 export async function fetchTemplates(repo: string): Promise<{
   dimensions: ProposedDimension[];
+  /**
+   * The forms themselves, fields and all — what the composer fills in.
+   *
+   * Carried with the board rather than fetched again when somebody opens the
+   * composer: they were already parsed to get the dimensions, and a second read
+   * of the same four files to answer the same question is a second chance for
+   * the two to disagree.
+   */
+  forms: IssueForm[];
   errors: FormParseError[];
   noTemplates: boolean;
 }> {
@@ -259,11 +273,11 @@ export async function fetchTemplates(repo: string): Promise<{
   ], { timeoutMs: 20_000 });
 
   /* 404 is the ordinary case, not an error: most repositories have no forms. */
-  if (!listing.ok) return { dimensions: [], errors: [], noTemplates: true };
+  if (!listing.ok) return { dimensions: [], forms: [], errors: [], noTemplates: true };
 
   const names = listing.stdout.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
     .filter(n => /\.ya?ml$/i.test(n));
-  if (names.length === 0) return { dimensions: [], errors: [], noTemplates: true };
+  if (names.length === 0) return { dimensions: [], forms: [], errors: [], noTemplates: true };
 
   const files: { file: string; text: string }[] = [];
   for (const name of names) {
@@ -278,7 +292,12 @@ export async function fetchTemplates(repo: string): Promise<{
   }
 
   const { forms, errors } = parseIssueForms(files);
-  return { dimensions: proposeDimensions(forms), errors, noTemplates: forms.length === 0 };
+  return {
+    dimensions: proposeDimensions(forms),
+    forms,
+    errors,
+    noTemplates: forms.length === 0,
+  };
 }
 
 /**
@@ -365,6 +384,7 @@ export async function fetchBoard(
     issues,
     truncated: raw.length >= (opts.limit ?? 200),
     dimensions: templates.dimensions,
+    forms: templates.forms,
     formErrors: templates.errors,
     noTemplates: templates.noTemplates,
     fetchedAt: now,

@@ -81,8 +81,9 @@ export const GH_COMMANDS: GhCommandRow[] = [
     kind: 'read', live: true },
 
   // ── Writes ───────────────────────────────────────────────────────────────
-  { command: 'gh issue create', when: 'the Create button', kind: 'write',
-    confirmedBy: 'the review step', live: false },
+  { command: 'gh issue create --repo <r> --title ... --body-file -',
+    when: 'the Create button on the composer', kind: 'write',
+    confirmedBy: 'the review step', live: true },
   { command: 'gh issue edit', when: 'a cell edit, or a bulk action', kind: 'write',
     confirmedBy: 'the confirm bar', live: false },
   { command: 'gh issue close / reopen', when: 'closing an issue, or a bulk action',

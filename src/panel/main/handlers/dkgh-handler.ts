@@ -23,7 +23,10 @@ import {
   guessFromWorkspace, searchRepos, summarise, inspectRepo, inspectFork,
   type RepoSummary,
 } from '../../../services/gh/repos';
-import { planEdit, applyPlan, type EditRequest } from '../../../services/gh/write';
+import {
+  planEdit, applyPlan, planCreate, applyCreate,
+  type EditRequest, type CreateRequest,
+} from '../../../services/gh/write';
 import { fetchRepoMeta } from '../../../services/gh/meta';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
@@ -491,6 +494,36 @@ export async function handleDkghRepoMeta(
   const repo = String(msg.repo ?? currentRepo() ?? '').trim();
   if (!repo) return;
   postMessage({ type: 'dkgh:repoMeta:result', ...(await fetchRepoMeta(repo)) });
+}
+
+/**
+ * Build the `gh issue create` an issue would be filed with, unrun.
+ *
+ * The composer's half of the same rule the bulk bar keeps: the command is built
+ * here and shown before anything happens, and `dkgh:applyCreate` re-plans from
+ * the same request rather than trusting an argv sent over the wire.
+ */
+export async function handleDkghPlanCreate(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const req = msg.request as CreateRequest;
+  postMessage({ type: 'dkgh:planCreate:result', plan: planCreate(req), request: req });
+}
+
+/** File it. Re-planned here, for the same reason `applyEdit` re-plans. */
+export async function handleDkghApplyCreate(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const req = msg.request as CreateRequest;
+  const plan = planCreate(req);
+  if (plan.refusal) {
+    postMessage({ type: 'dkgh:applyCreate:result', ok: false, error: plan.refusal });
+    return;
+  }
+  postMessage({ type: 'dkgh:applyCreate:running', plan });
+  postMessage({ type: 'dkgh:applyCreate:result', ...(await applyCreate(plan)) });
 }
 
 /** The two static tables screens 02A and 02E render. */
