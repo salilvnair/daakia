@@ -13,10 +13,11 @@
  * reader's to throw away, and they come back with Restore presets.
  */
 import { useState } from 'react';
-import { BadgeChipView, ButtonView, ModalView } from '@salilvnair/dui';
+import { ModalView } from '@salilvnair/dui';
 import {
   ArrowUpIcon, ArrowDownIcon, EyeIcon, EyeOffIcon, PinIcon, TrashIcon, SettingsIcon,
 } from '../../icons';
+import { Dk } from './GhShell';
 import { presetViews, type SavedView, type StoredViews } from './views-model';
 import { ACCENT } from './types';
 
@@ -76,57 +77,46 @@ export function GhManageViews({ open, stored, counts, onClose, onChange }: {
       headerIcon={<SettingsIcon size={14} />}
       title="Manage views"
       footerLeft={
-        <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
+        <Dk><span className="sub">
           {rows.length} view{rows.length === 1 ? '' : 's'}
           {hidden > 0 ? ` · ${hidden} hidden` : ''}
-        </span>
+        </span></Dk>
       }
       footerRight={
-        <span className="flex items-center gap-2">
-          {hidden > 0 && (
-            <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={restore}>
-              Restore presets
-            </ButtonView>
-          )}
-          <ButtonView size="sm" variant="primary" accentColor={ACCENT} onClick={onClose}>
-            Done
-          </ButtonView>
-        </span>
+        <Dk>
+          <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+            {hidden > 0 && (
+              <button type="button" className="btn" onClick={restore}>Restore presets</button>
+            )}
+            <button type="button" className="btn go" onClick={onClose}>Done</button>
+          </span>
+        </Dk>
       }
     >
-      <div className="rounded-lg border flex flex-col overflow-hidden"
-           style={{ borderColor: 'var(--color-surface-border)' }}>
+      <Dk>
+      <div className="vlist" style={{ border: '1px solid var(--dk-border)', borderRadius: 9.6,
+                                      overflow: 'hidden' }}>
         {rows.map((v, at) => {
           const isConfirming = confirming === v.id;
           return (
             <div
               key={v.id}
-              className="flex items-center gap-2 px-2.5 py-1.5"
+              className="vrow"
               style={{
                 opacity: v.hidden ? 0.5 : 1,
                 background: isConfirming
-                  ? 'color-mix(in srgb, var(--color-error) 14%, transparent)'
+                  ? 'color-mix(in srgb, var(--dk-red) 14%, transparent)'
                   : 'transparent',
-                borderTop: at === 0 ? 'none'
-                  : '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
               }}
             >
-              <span style={{ fontSize: 14 }}>{v.icon ?? '•'}</span>
-              <span className="text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
-                {v.name}
-              </span>
+              <span style={{ fontSize: 16.8 }}>{v.icon ?? '•'}</span>
+              <span>{v.name}</span>
               {counts.get(v.id) !== undefined && (
-                <BadgeChipView tone="var(--color-text-muted)" size="xs">
-                  {counts.get(v.id)}
-                </BadgeChipView>
+                <span className="cx">{counts.get(v.id)}</span>
               )}
-              {stored.defaultId === v.id && (
-                <BadgeChipView tone={ACCENT} size="xs">default</BadgeChipView>
-              )}
-              {v.preset && (
-                <BadgeChipView tone="var(--color-text-muted)" size="xs">preset</BadgeChipView>
-              )}
-              <span className="flex-1" />
+              {stored.defaultId === v.id && <span className="chip c-gh">default</span>}
+              {v.preset && <span className="chip">preset</span>}
+              <span className="sp" />
 
               {isConfirming ? (
                 <>
@@ -135,17 +125,17 @@ export function GhManageViews({ open, stored, counts, onClose, onChange }: {
                     still visible. Nothing about this view leaves the screen in
                     order to ask about it.
                   */}
-                  <span className="text-[11.5px]" style={{ color: 'var(--color-error)' }}>
+                  <span className="sub" style={{ color: 'var(--dk-red)' }}>
                     Delete this view?
                   </span>
-                  <ButtonView size="sm" accentColor="var(--color-text-muted)"
-                              onClick={() => setConfirming(undefined)}>
+                  <button type="button" className="btn"
+                          onClick={() => setConfirming(undefined)}>
                     Keep
-                  </ButtonView>
-                  <ButtonView size="sm" variant="danger" accentColor="var(--color-error)"
-                              onClick={() => remove(v.id)}>
+                  </button>
+                  <button type="button" className="btn stop"
+                          onClick={() => remove(v.id)}>
                     Delete
-                  </ButtonView>
+                  </button>
                 </>
               ) : (
                 <>
@@ -185,14 +175,16 @@ export function GhManageViews({ open, stored, counts, onClose, onChange }: {
         })}
       </div>
 
-      <div className="text-[11.5px] mt-2.5" style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+      <div className="sub" style={{ marginTop: 10 }}>
         Deleting a view deletes a saved filter, never an issue. The five built-in presets can be
         hidden but not deleted.
       </div>
+      </Dk>
     </ModalView>
   );
 }
 
+/** One of the row's small verbs. The title is the only label it gets. */
 function Tiny({ label, disabled, onClick, children }: {
   label: string;
   disabled?: boolean;
@@ -200,21 +192,7 @@ function Tiny({ label, disabled, onClick, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="flex items-center justify-center rounded"
-      style={{
-        width: 18, height: 18,
-        background: 'transparent',
-        border: 'none',
-        color: 'var(--color-text-muted)',
-        opacity: disabled ? 0.3 : 1,
-        cursor: disabled ? 'default' : 'pointer',
-      }}
-    >
+    <button type="button" className="t" title={label} disabled={disabled} onClick={onClick}>
       {children}
     </button>
   );

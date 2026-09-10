@@ -1743,3 +1743,31 @@
 .dkgh .opt .fct { padding: 7.2px 12px; border-radius: 7.2px; width: 100%; text-align: left; }
 .dkgh .opt button.fct { background: transparent; border: none; font-family: inherit; color: inherit; }
 .dkgh .opt button.fct:hover { background: var(--dk-hover); color: var(--dk-text); }
+
+/*
+  The row's own small verbs. The mock draws the icons bare, because a mock
+  never hovers — but these are five buttons in a row and the reader has to be
+  able to tell which one is under the pointer before they press it.
+*/
+.dkgh .vrow .t {
+  display: inline-grid; place-items: center; width: 26.4px; height: 26.4px;
+  border-radius: 6px; border: none; background: transparent; color: var(--dk-faint);
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .vrow .t:hover:not(:disabled) { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .vrow .t:disabled { opacity: .3; cursor: default; }
+.dkgh .vrow:last-child { border-bottom: none; }
+
+/*
+  The one destructive confirm, and it is solid.
+
+  `.warn` is the muted red for a discard somebody does several times an hour;
+  this is the other kind — the button that ends something — and it should not
+  look like its neighbour at a glance.
+*/
+.dkgh button.btn.stop {
+  background: var(--dk-red); border-color: var(--dk-red); color: #fff; font-weight: 600;
+}
+.dkgh button.btn.stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dk-red) 84%, #000);
+}

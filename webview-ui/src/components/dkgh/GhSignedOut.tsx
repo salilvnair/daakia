@@ -41,6 +41,8 @@ export function GhSignedOut({ repo, boardAge, onSignedBackIn, onReplay }: {
       display: 'block', padding: 0,
       background: 'color-mix(in srgb, var(--dk-red) 7%, transparent)',
       borderBottom: '1px solid color-mix(in srgb, var(--dk-red) 35%, transparent)',
+      /* The strip's rule is amber for an unsaved view; this one is not that. */
+      borderLeftColor: 'var(--dk-red)',
     }}>
       <div className="mx-auto flex flex-col gap-3"
            style={{ maxWidth: 720, padding: '14px 20px' }}>
