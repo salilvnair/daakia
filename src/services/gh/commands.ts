@@ -75,6 +75,9 @@ export const GH_COMMANDS: GhCommandRow[] = [
     when: 'one screenshot at a time, when a card or a peek shows evidence — the '
         + 'webview may not fetch a remote image, and a private asset needs the credential',
     kind: 'read', live: true },
+  { command: 'gh api /repos/{o}/{r}/contents/.github/ISSUE_TEMPLATE/{file}',
+    when: 'importing forms from another repository — a read of that repo, never a write',
+    kind: 'read', live: true },
   { command: 'gh api /repos/{o}/{r}/labels', when: 'on the Labels tab',
     kind: 'read', live: false },
   { command: 'gh project field-list', when: 'on connect, if read:project is granted',
@@ -97,6 +100,10 @@ export const GH_COMMANDS: GhCommandRow[] = [
     when: 'pasting a screenshot', kind: 'write', confirmedBy: 'the upload preview', live: false },
   { command: 'gh project item-edit', when: 'a drag on the columns board, a date on the roadmap',
     kind: 'write', confirmedBy: 'the drag receipt', live: false },
+  { command: 'gh api --method PUT /repos/{o}/{r}/contents/.github/ISSUE_TEMPLATE/{file}',
+    when: 'committing imported issue forms — a commit on the default branch, and the '
+        + 'one action on the import screen that writes anything',
+    kind: 'write', confirmedBy: 'the commit preview', live: true },
   { command: 'gh api --method PATCH .../labels/{name}', when: 'Push on the Labels tab',
     kind: 'write', confirmedBy: 'the push preview', live: false },
 ];

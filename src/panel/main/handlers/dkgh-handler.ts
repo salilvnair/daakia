@@ -31,6 +31,11 @@ import {
 import { fetchRepoMeta } from '../../../services/gh/meta';
 import { fetchTimeline } from '../../../services/gh/timeline';
 import { workbookParts, type Sheet } from '../../../services/gh/xlsx';
+import {
+  applyTemplateCommit, fetchTemplatesFrom, isForm, planTemplateCommit, readZip, starterSet,
+  type TemplateFile, type TemplateSource,
+} from '../../../services/gh/templates';
+import { parseIssueForms, proposeDimensions } from '../../../services/gh/issue-forms';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
 type PostMessage = (msg: unknown) => void;
@@ -506,6 +511,118 @@ function writeWorkbook(path: string, sheets: Sheet[]): Promise<void> {
     zip.pipe(out);
     for (const part of workbookParts(sheets)) zip.append(part.content, { name: part.name });
     void zip.finalize();
+  });
+}
+
+
+/**
+ * Screen 18 — where the forms come from.
+ *
+ * Three sources and one shape. `parseIssueForms` in the webview does the rest,
+ * which is the same parser the board uses, so what the import screen says a
+ * file declares is what the board will read from it.
+ */
+export async function handleDkghImport(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  /*
+    Parsed here, with the parser the board uses.
+
+    The webview could not do it — `js-yaml` and `issue-forms.ts` live on this
+    side — and it should not: what the import screen says a file declares has
+    to be what the board will read from it, and one parser is how that stays
+    true.
+  */
+  const answer = (source: TemplateSource) => {
+    const parsed = parseIssueForms(source.files);
+    postMessage({
+      type: 'dkgh:import:result',
+      ...source,
+      forms: parsed.forms,
+      formErrors: parsed.errors,
+      dimensions: proposeDimensions(parsed.forms),
+    });
+  };
+
+  if (msg.source === 'starter') {
+    answer({ files: starterSet(), from: 'a starter set dkgh wrote' });
+    return;
+  }
+
+  if (msg.source === 'repo') {
+    const from = String(msg.repo ?? '').trim();
+    if (!from) { answer({ files: [], from: '', error: 'Name a repository first.' }); return; }
+    answer(await fetchTemplatesFrom(from));
+    return;
+  }
+
+  /*
+    Files on disk. A zip and a folder of `.yml` are the same gesture to the
+    person doing it, so they are one picker rather than two buttons.
+  */
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: true,
+    openLabel: 'Import',
+    filters: { 'Issue forms': ['yml', 'yaml', 'zip'] },
+    title: 'Issue forms, or a zip of them',
+  });
+  if (!picked || picked.length === 0) { answer({ files: [], from: '' }); return; }
+
+  const files: TemplateFile[] = [];
+  for (const uri of picked) {
+    const path = uri.fsPath;
+    try {
+      if (/\.zip$/i.test(path)) files.push(...readZip(fs.readFileSync(path)));
+      else if (isForm(path)) {
+        files.push({ file: path.split(/[\\/]/).pop() ?? 'form.yml',
+          text: fs.readFileSync(path, 'utf-8') });
+      }
+    } catch {
+      /* One unreadable file is not the others' problem — the screen counts
+         what arrived against what was picked. */
+    }
+  }
+  answer({ files, from: picked.length === 1 ? picked[0].fsPath : `${picked.length} files` });
+}
+
+/**
+ * What committing these would run, unrun — 18C.
+ *
+ * The other half of the rule the composer keeps: the commands are built here
+ * and shown before anything happens, and `dkgh:applyTemplates` re-plans from
+ * the same files rather than trusting an argv sent over the wire.
+ */
+export async function handleDkghPlanTemplates(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const files = (msg.files as TemplateFile[]) ?? [];
+  const message = String(msg.message ?? 'Add issue forms');
+  postMessage({
+    type: 'dkgh:planTemplates:result',
+    plan: await planTemplateCommit(repo, files, message),
+  });
+}
+
+/** Run it, re-planned here for the same reason every other apply re-plans. */
+export async function handleDkghApplyTemplates(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const files = (msg.files as TemplateFile[]) ?? [];
+  const message = String(msg.message ?? 'Add issue forms');
+  postMessage({ type: 'dkgh:applyTemplates:running' });
+  const plan = await planTemplateCommit(repo, files, message);
+  if (plan.refusal) {
+    postMessage({ type: 'dkgh:applyTemplates:result', outcomes: [], refusal: plan.refusal });
+    return;
+  }
+  postMessage({
+    type: 'dkgh:applyTemplates:result',
+    outcomes: await applyTemplateCommit(plan),
   });
 }
 

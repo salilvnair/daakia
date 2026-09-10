@@ -38,7 +38,9 @@ const NATIVE: { label: string; read: string; note: string }[] = [
   { label: 'Age · Quiet', read: 'computed', note: 'from created and last activity' },
 ];
 
-export function GhRepository({ repo, data, meta, issues, onRefresh, onChangeRepo, onExplain }: {
+export function GhRepository({
+  repo, data, meta, issues, onRefresh, onChangeRepo, onExplain, onImport,
+}: {
   repo: string;
   data?: BoardData;
   meta?: RepoMeta;
@@ -47,6 +49,8 @@ export function GhRepository({ repo, data, meta, issues, onRefresh, onChangeRepo
   onChangeRepo: () => void;
   /** 17D — show the issues a heading did not parse in. */
   onExplain: (dimension: string) => void;
+  /** Screen 18, which is where all three of the "none of this" answers go. */
+  onImport: () => void;
 }) {
   const dimensions = data?.dimensions ?? [];
   const forms = data?.forms ?? [];
@@ -191,31 +195,37 @@ export function GhRepository({ repo, data, meta, issues, onRefresh, onChangeRepo
       <div style={{ padding: '12px 16px 4px' }}>
         <div className="fl" style={{ marginBottom: 7 }}>If a repository has none of this</div>
         <div className="opts" style={{ gridTemplateColumns: 'repeat(3, 1fr)', maxWidth: 'none' }}>
-          <div className="opt" style={{ padding: '8px 10px' }}>
-            <div className="oh"><Ico name="copy" />Copy the map from another repo</div>
+          <button type="button" className="opt" style={{ padding: '8px 10px',
+                                                        textAlign: 'left', cursor: 'pointer' }}
+                  onClick={onImport}>
+            <div className="oh"><Ico name="repo" />Read another repository&rsquo;s forms</div>
             <div className="sub">
-              There is nothing to copy: the map is the repository&rsquo;s own forms, read fresh
-              every time. Point dkgh at a repository whose templates you already like and it
-              reads them — see <b>Import issue templates</b>.
+              There is no map to copy: the map <i>is</i> the repository&rsquo;s own forms, read
+              fresh every time. Point dkgh at a repository whose templates you already like and
+              it reads them.
             </div>
-          </div>
-          <div className="opt" style={{ padding: '8px 10px' }}>
-            <div className="oh"><Ico name="dl" />Import a map</div>
+          </button>
+          <button type="button" className="opt" style={{ padding: '8px 10px',
+                                                        textAlign: 'left', cursor: 'pointer' }}
+                  onClick={onImport}>
+            <div className="oh"><Ico name="dl" />Import a zip, or some files</div>
             <div className="sub">
-              Same answer, and the same screen. What travels between repositories is the
-              template file, not a mapping of it — one artefact instead of two that can
-              disagree.
+              What travels between repositories is the template file, not a mapping of it —
+              one artefact instead of two that can disagree.
             </div>
-          </div>
-          <div className="opt pick" style={{ padding: '8px 10px' }}>
+          </button>
+          <button type="button" className="opt pick" style={{ padding: '8px 10px',
+                                                             textAlign: 'left',
+                                                             cursor: 'pointer' }}
+                  onClick={onImport}>
             <div className="oh"><Ico name="pen" style={{ color: 'var(--dk-gh)' }} />
-              Generate a starter form
+              Generate a starter set
             </div>
             <div className="sub">
               dkgh writes the <code>.yml</code> and hands it to you. Committing it to{' '}
-              <code>.github/</code> stays your call — see <b>Import issue templates</b>.
+              <code>.github/</code> stays your call, and it is a separate button.
             </div>
-          </div>
+          </button>
         </div>
 
         <GhNote title="Nothing here degrades into guessing" tone="warn"
