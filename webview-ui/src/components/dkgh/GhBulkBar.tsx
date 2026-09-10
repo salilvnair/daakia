@@ -21,6 +21,7 @@
  * are different issues entirely.
  */
 import { useEffect, useState } from 'react';
+import { Ico } from './GhIcons';
 import { ButtonView, CheckboxView } from '@salilvnair/dui';
 import { UsersIcon, TagIcon, LayersIcon, CheckCircleIcon } from '../../icons';
 import type { EditRequest } from './edit-flow';
@@ -184,24 +185,29 @@ function Picker({ label, icon, options, empty, auto, onAuto, onPick }: {
                  maxHeight: 300,
                  borderColor: 'var(--color-surface-border)',
                  background: 'var(--color-surface)',
-                 boxShadow: '0 8px 22px rgba(0,0,0,.35)',
+                 boxShadow: '0 10px 28px rgba(0,0,0,.45)',
+                 overflow: 'hidden',
+                 paddingBottom: 4,
                }}>
+            {/*
+              The same search field the filter rails use — a box inset from the
+              menu's own gutter with the magnifier in it, not a bare input
+              stretched wall to wall. Flush to the edge it squared off the two
+              top corners the menu had just rounded, and there was nothing
+              about it that said it could be typed into.
+            */}
             {options.length > 6 && (
-              <input
-                autoFocus
-                value={filter}
-                onChange={e => setFilter(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
-                placeholder={`Filter ${label.toLowerCase()}s`}
-                className="text-[10.5px] px-2 py-1.5"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: '1px solid var(--color-surface-border)',
-                  color: 'var(--color-text-primary)',
-                  outline: 'none',
-                }}
-              />
+              <div className="panelsearch" style={{ margin: '8px 8px 6px' }}>
+                <Ico name="search" />
+                <input
+                  autoFocus
+                  value={filter}
+                  onChange={e => setFilter(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
+                  placeholder={`Search ${label.toLowerCase()}s…`}
+                />
+                <span className="n">{shown.length}</span>
+              </div>
             )}
             <div className="overflow-y-auto flex flex-col py-1">
               {options.length === 0 ? (
