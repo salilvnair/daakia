@@ -293,10 +293,12 @@ export async function handleDkghInspectRepo(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? '').trim();
-  if (!repo) return;
-  postMessage({ type: 'dkgh:inspectRepo:loading', repo });
-  postMessage({ type: 'dkgh:inspectRepo:result', ...(await inspectRepo(repo)) });
+  await answering(postMessage, 'dkgh:inspectRepo:result', msg, async () => {
+    const repo = String(msg.repo ?? '').trim();
+    if (!repo) return;
+    postMessage({ type: 'dkgh:inspectRepo:loading', repo });
+    postMessage({ type: 'dkgh:inspectRepo:result', ...(await inspectRepo(repo)) });
+  });
 }
 
 /** Pin or unpin a repository for this workspace. */
@@ -323,14 +325,18 @@ export async function handleDkghPinRepo(
  * a verdict — see `probeReachability`.
  */
 export async function handleDkghDiagnose(postMessage: PostMessage): Promise<void> {
-  postMessage({ type: 'dkgh:diagnose:loading' });
-  postMessage({ type: 'dkgh:diagnose:result', ...(await probeReachability()) });
+  await answering(postMessage, 'dkgh:diagnose:result', {}, async () => {
+    postMessage({ type: 'dkgh:diagnose:loading' });
+    postMessage({ type: 'dkgh:diagnose:result', ...(await probeReachability()) });
+  });
 }
 
 /** "Search common locations", for the machine where gh came out of a zip. */
 export async function handleDkghFindGh(postMessage: PostMessage): Promise<void> {
-  postMessage({ type: 'dkgh:findGh:loading' });
-  postMessage({ type: 'dkgh:findGh:result', found: await searchCommonLocations() });
+  await answering(postMessage, 'dkgh:findGh:result', {}, async () => {
+    postMessage({ type: 'dkgh:findGh:loading' });
+    postMessage({ type: 'dkgh:findGh:result', found: await searchCommonLocations() });
+  });
 }
 
 /**
@@ -375,10 +381,12 @@ export async function handleDkghSearchRepos(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const query = String(msg.query ?? '').trim();
-  postMessage({ type: 'dkgh:searchRepos:loading', query });
-  const result = await searchRepos(query, { includeArchived: msg.includeArchived === true });
-  postMessage({ type: 'dkgh:searchRepos:result', query, ...result });
+  await answering(postMessage, 'dkgh:searchRepos:result', msg, async () => {
+    const query = String(msg.query ?? '').trim();
+    postMessage({ type: 'dkgh:searchRepos:loading', query });
+    const result = await searchRepos(query, { includeArchived: msg.includeArchived === true });
+    postMessage({ type: 'dkgh:searchRepos:result', query, ...result });
+  });
 }
 
 /**
@@ -393,16 +401,18 @@ export async function handleDkghBoard(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  if (!repo) {
-    postMessage({ type: 'dkgh:board:result', error: 'No repository is selected.' });
-    return;
-  }
-  postMessage({ type: 'dkgh:board:loading', repo });
-  const result = await fetchBoard(repo, {
-    state: (msg.state as 'open' | 'closed' | 'all') ?? 'open',
+  await answering(postMessage, 'dkgh:board:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    if (!repo) {
+      postMessage({ type: 'dkgh:board:result', error: 'No repository is selected.' });
+      return;
+    }
+    postMessage({ type: 'dkgh:board:loading', repo });
+    const result = await fetchBoard(repo, {
+      state: (msg.state as 'open' | 'closed' | 'all') ?? 'open',
+    });
+    postMessage({ type: 'dkgh:board:result', ...result });
   });
-  postMessage({ type: 'dkgh:board:result', ...result });
 }
 
 /**
@@ -416,12 +426,14 @@ export async function handleDkghSearchIssues(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  const query = String(msg.query ?? '').trim();
-  if (!repo || !query) return;
-  postMessage({ type: 'dkgh:searchIssues:loading', query });
-  const result = await searchIssues(repo, query, { comments: msg.comments === true });
-  postMessage({ type: 'dkgh:searchIssues:result', ...result });
+  await answering(postMessage, 'dkgh:searchIssues:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const query = String(msg.query ?? '').trim();
+    if (!repo || !query) return;
+    postMessage({ type: 'dkgh:searchIssues:loading', query });
+    const result = await searchIssues(repo, query, { comments: msg.comments === true });
+    postMessage({ type: 'dkgh:searchIssues:result', ...result });
+  });
 }
 
 /**
@@ -435,10 +447,12 @@ export async function handleDkghIssue(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  const number = Number(msg.number);
-  if (!repo || !Number.isFinite(number)) return;
-  postMessage({ type: 'dkgh:issue:result', ...(await fetchIssueDetail(repo, number)) });
+  await answering(postMessage, 'dkgh:issue:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const number = Number(msg.number);
+    if (!repo || !Number.isFinite(number)) return;
+    postMessage({ type: 'dkgh:issue:result', ...(await fetchIssueDetail(repo, number)) });
+  });
 }
 
 /**
@@ -452,10 +466,12 @@ export async function handleDkghTimeline(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  const number = Number(msg.number);
-  if (!repo || !Number.isFinite(number)) return;
-  postMessage({ type: 'dkgh:timeline:result', ...(await fetchTimeline(repo, number)) });
+  await answering(postMessage, 'dkgh:timeline:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const number = Number(msg.number);
+    if (!repo || !Number.isFinite(number)) return;
+    postMessage({ type: 'dkgh:timeline:result', ...(await fetchTimeline(repo, number)) });
+  });
 }
 
 
@@ -476,36 +492,38 @@ export async function handleDkghExport(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const filename = String(msg.filename ?? 'export.txt');
-  const ext = filename.includes('.') ? filename.split('.').pop()! : 'txt';
+  await answering(postMessage, 'dkgh:export:result', msg, async () => {
+    const filename = String(msg.filename ?? 'export.txt');
+    const ext = filename.includes('.') ? filename.split('.').pop()! : 'txt';
 
-  const uri = await vscode.window.showSaveDialog({
-    defaultUri: vscode.Uri.file(filename),
-    filters: { [ext.toUpperCase()]: [ext], 'All Files': ['*'] },
-    saveLabel: 'Save',
-    title: 'Save the export',
-  });
-  /* Cancelling is an answer, and the screen has to hear it — a button that
-     stays on "Saving\u2026" because somebody pressed Escape is a bug report. */
-  if (!uri) { postMessage({ type: 'dkgh:export:result', cancelled: true }); return; }
-
-  try {
-    if (msg.sheets) {
-      await writeWorkbook(uri.fsPath, msg.sheets as Sheet[]);
-    } else if (msg.report) {
-      /* A PDF is bytes, not text — and it is laid out here rather than in the
-         webview because a page is a coordinate system, not a DOM. */
-      fs.writeFileSync(uri.fsPath, renderPdf(buildReport(msg.report as Report)));
-    } else {
-      fs.writeFileSync(uri.fsPath, String(msg.text ?? ''), 'utf-8');
-    }
-    postMessage({ type: 'dkgh:export:result', path: uri.fsPath });
-  } catch (err) {
-    postMessage({
-      type: 'dkgh:export:result',
-      error: err instanceof Error ? err.message : String(err),
+    const uri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(filename),
+      filters: { [ext.toUpperCase()]: [ext], 'All Files': ['*'] },
+      saveLabel: 'Save',
+      title: 'Save the export',
     });
-  }
+    /* Cancelling is an answer, and the screen has to hear it — a button that
+       stays on "Saving\u2026" because somebody pressed Escape is a bug report. */
+    if (!uri) { postMessage({ type: 'dkgh:export:result', cancelled: true }); return; }
+
+    try {
+      if (msg.sheets) {
+        await writeWorkbook(uri.fsPath, msg.sheets as Sheet[]);
+      } else if (msg.report) {
+        /* A PDF is bytes, not text — and it is laid out here rather than in the
+           webview because a page is a coordinate system, not a DOM. */
+        fs.writeFileSync(uri.fsPath, renderPdf(buildReport(msg.report as Report)));
+      } else {
+        fs.writeFileSync(uri.fsPath, String(msg.text ?? ''), 'utf-8');
+      }
+      postMessage({ type: 'dkgh:export:result', path: uri.fsPath });
+    } catch (err) {
+      postMessage({
+        type: 'dkgh:export:result',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
 }
 
 /** The parts, zipped. Resolves when the bytes are actually on disk. */
@@ -538,82 +556,84 @@ export async function handleDkghImport(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  /*
-    Parsed here, with the parser the board uses.
+  await answering(postMessage, 'dkgh:import:result', msg, async () => {
+    /*
+      Parsed here, with the parser the board uses.
 
-    The webview could not do it — `js-yaml` and `issue-forms.ts` live on this
-    side — and it should not: what the import screen says a file declares has
-    to be what the board will read from it, and one parser is how that stays
-    true.
-  */
-  const answer = (source: TemplateSource) => {
-    const parsed = parseIssueForms(source.files);
-    postMessage({
-      type: 'dkgh:import:result',
-      ...source,
-      forms: parsed.forms,
-      formErrors: parsed.errors,
-      dimensions: proposeDimensions(parsed.forms),
-    });
-  };
+      The webview could not do it — `js-yaml` and `issue-forms.ts` live on this
+      side — and it should not: what the import screen says a file declares has
+      to be what the board will read from it, and one parser is how that stays
+      true.
+    */
+    const answer = (source: TemplateSource) => {
+      const parsed = parseIssueForms(source.files);
+      postMessage({
+        type: 'dkgh:import:result',
+        ...source,
+        forms: parsed.forms,
+        formErrors: parsed.errors,
+        dimensions: proposeDimensions(parsed.forms),
+      });
+    };
 
-  if (msg.source === 'starter') {
-    answer({ files: starterSet(), from: 'a starter set dkgh wrote' });
-    return;
-  }
-
-  if (msg.source === 'repo') {
-    const from = String(msg.repo ?? '').trim();
-    if (!from) { answer({ files: [], from: '', error: 'Name a repository first.' }); return; }
-    answer(await fetchTemplatesFrom(from));
-    return;
-  }
-
-  /*
-    Files on disk. A zip and a folder of `.yml` are the same gesture to the
-    person doing it, so they are one picker rather than two buttons.
-  */
-  /*
-    "Cancelled" and "there is no picker" look identical from here, and the
-    second one makes the button look broken rather than unavailable. The
-    browser harness says which it is; a real extension host does not need to.
-  */
-  const noPicker =
-    (vscode.window as unknown as { filePickerAvailable?: boolean }).filePickerAvailable === false;
-  if (noPicker) {
-    answer({
-      files: [],
-      from: '',
-      error: 'File pickers are not available in the browser preview. Read from another '
-        + 'repository or start from a template here, and use the picker in the VS Code '
-        + 'extension.',
-    });
-    return;
-  }
-
-  const picked = await vscode.window.showOpenDialog({
-    canSelectMany: true,
-    openLabel: 'Import',
-    filters: { 'Issue forms': ['yml', 'yaml', 'zip'] },
-    title: 'Issue forms, or a zip of them',
-  });
-  if (!picked || picked.length === 0) { answer({ files: [], from: '' }); return; }
-
-  const files: TemplateFile[] = [];
-  for (const uri of picked) {
-    const path = uri.fsPath;
-    try {
-      if (/\.zip$/i.test(path)) files.push(...readZip(fs.readFileSync(path)));
-      else if (isForm(path)) {
-        files.push({ file: path.split(/[\\/]/).pop() ?? 'form.yml',
-          text: fs.readFileSync(path, 'utf-8') });
-      }
-    } catch {
-      /* One unreadable file is not the others' problem — the screen counts
-         what arrived against what was picked. */
+    if (msg.source === 'starter') {
+      answer({ files: starterSet(), from: 'a starter set dkgh wrote' });
+      return;
     }
-  }
-  answer({ files, from: picked.length === 1 ? picked[0].fsPath : `${picked.length} files` });
+
+    if (msg.source === 'repo') {
+      const from = String(msg.repo ?? '').trim();
+      if (!from) { answer({ files: [], from: '', error: 'Name a repository first.' }); return; }
+      answer(await fetchTemplatesFrom(from));
+      return;
+    }
+
+    /*
+      Files on disk. A zip and a folder of `.yml` are the same gesture to the
+      person doing it, so they are one picker rather than two buttons.
+    */
+    /*
+      "Cancelled" and "there is no picker" look identical from here, and the
+      second one makes the button look broken rather than unavailable. The
+      browser harness says which it is; a real extension host does not need to.
+    */
+    const noPicker =
+      (vscode.window as unknown as { filePickerAvailable?: boolean }).filePickerAvailable === false;
+    if (noPicker) {
+      answer({
+        files: [],
+        from: '',
+        error: 'File pickers are not available in the browser preview. Read from another '
+          + 'repository or start from a template here, and use the picker in the VS Code '
+          + 'extension.',
+      });
+      return;
+    }
+
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: true,
+      openLabel: 'Import',
+      filters: { 'Issue forms': ['yml', 'yaml', 'zip'] },
+      title: 'Issue forms, or a zip of them',
+    });
+    if (!picked || picked.length === 0) { answer({ files: [], from: '' }); return; }
+
+    const files: TemplateFile[] = [];
+    for (const uri of picked) {
+      const path = uri.fsPath;
+      try {
+        if (/\.zip$/i.test(path)) files.push(...readZip(fs.readFileSync(path)));
+        else if (isForm(path)) {
+          files.push({ file: path.split(/[\\/]/).pop() ?? 'form.yml',
+            text: fs.readFileSync(path, 'utf-8') });
+        }
+      } catch {
+        /* One unreadable file is not the others' problem — the screen counts
+           what arrived against what was picked. */
+      }
+    }
+    answer({ files, from: picked.length === 1 ? picked[0].fsPath : `${picked.length} files` });
+  });
 }
 
 /**
@@ -627,12 +647,14 @@ export async function handleDkghPlanTemplates(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  const files = (msg.files as TemplateFile[]) ?? [];
-  const message = String(msg.message ?? 'Add issue forms');
-  postMessage({
-    type: 'dkgh:planTemplates:result',
-    plan: await planTemplateCommit(repo, files, message),
+  await answering(postMessage, 'dkgh:planTemplates:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const files = (msg.files as TemplateFile[]) ?? [];
+    const message = String(msg.message ?? 'Add issue forms');
+    postMessage({
+      type: 'dkgh:planTemplates:result',
+      plan: await planTemplateCommit(repo, files, message),
+    });
   });
 }
 
@@ -641,18 +663,20 @@ export async function handleDkghApplyTemplates(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  const files = (msg.files as TemplateFile[]) ?? [];
-  const message = String(msg.message ?? 'Add issue forms');
-  postMessage({ type: 'dkgh:applyTemplates:running' });
-  const plan = await planTemplateCommit(repo, files, message);
-  if (plan.refusal) {
-    postMessage({ type: 'dkgh:applyTemplates:result', outcomes: [], refusal: plan.refusal });
-    return;
-  }
-  postMessage({
-    type: 'dkgh:applyTemplates:result',
-    outcomes: await applyTemplateCommit(plan),
+  await answering(postMessage, 'dkgh:applyTemplates:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const files = (msg.files as TemplateFile[]) ?? [];
+    const message = String(msg.message ?? 'Add issue forms');
+    postMessage({ type: 'dkgh:applyTemplates:running' });
+    const plan = await planTemplateCommit(repo, files, message);
+    if (plan.refusal) {
+      postMessage({ type: 'dkgh:applyTemplates:result', outcomes: [], refusal: plan.refusal });
+      return;
+    }
+    postMessage({
+      type: 'dkgh:applyTemplates:result',
+      outcomes: await applyTemplateCommit(plan),
+    });
   });
 }
 
@@ -668,9 +692,11 @@ export async function handleDkghPlanLabels(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  const edits = (msg.edits as LabelEdit[]) ?? [];
-  postMessage({ type: 'dkgh:planLabels:result', plan: planLabels(repo, edits) });
+  await answering(postMessage, 'dkgh:planLabels:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const edits = (msg.edits as LabelEdit[]) ?? [];
+    postMessage({ type: 'dkgh:planLabels:result', plan: planLabels(repo, edits) });
+  });
 }
 
 /** Run it, and answer with the fresh set so the screen stops guessing. */
@@ -678,25 +704,65 @@ export async function handleDkghApplyLabels(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  const edits = (msg.edits as LabelEdit[]) ?? [];
-  postMessage({ type: 'dkgh:applyLabels:running' });
+  await answering(postMessage, 'dkgh:applyLabels:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const edits = (msg.edits as LabelEdit[]) ?? [];
+    postMessage({ type: 'dkgh:applyLabels:running' });
 
-  const plan = planLabels(repo, edits);
-  if (plan.refusal) {
-    postMessage({ type: 'dkgh:applyLabels:result', outcomes: [], refusal: plan.refusal });
-    return;
-  }
-  const outcomes = await applyLabels(plan);
-  /* The set as GitHub now has it, so the screen shows what happened rather
-     than what it hoped would happen. */
-  postMessage({
-    type: 'dkgh:applyLabels:result',
-    outcomes,
-    meta: await fetchRepoMeta(repo),
+    const plan = planLabels(repo, edits);
+    if (plan.refusal) {
+      postMessage({ type: 'dkgh:applyLabels:result', outcomes: [], refusal: plan.refusal });
+      return;
+    }
+    const outcomes = await applyLabels(plan);
+    /* The set as GitHub now has it, so the screen shows what happened rather
+       than what it hoped would happen. */
+    postMessage({
+      type: 'dkgh:applyLabels:result',
+      outcomes,
+      meta: await fetchRepoMeta(repo),
+    });
   });
 }
 
+
+
+/**
+ * A handler that cannot leave the screen waiting.
+ *
+ * Every `dkgh:*` case in the panel and the router is fire-and-forget — nothing
+ * awaits them, so a throw becomes an unhandled rejection in a log nobody is
+ * reading, and the screen that asked sits on "Uploading…" until somebody
+ * reloads the window. gh failing is handled everywhere; the host itself
+ * failing was not.
+ *
+ * The reply carries the same `:result` type the screen already listens for, so
+ * no caller needs a second path for this.
+ */
+async function answering(
+  postMessage: PostMessage,
+  resultType: string,
+  msg: Record<string, unknown>,
+  work: () => Promise<void>,
+): Promise<void> {
+  try {
+    await work();
+  } catch (err) {
+    /*
+      The identity comes back with the failure.
+
+      Several screens filter their own answers — `msg.number !== issue.number`,
+      `msg.repo !== repo` — so a reply with only an error in it is a reply they
+      drop, which is the same silence this exists to end.
+    */
+    postMessage({
+      type: resultType,
+      repo: msg.repo,
+      number: msg.number,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 /**
  * What uploading these screenshots would run — screen 12.
@@ -710,9 +776,11 @@ export async function handleDkghPlanUpload(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  const files = (msg.files as EvidenceFile[]) ?? [];
-  postMessage({ type: 'dkgh:planUpload:result', plan: await planUpload(repo, files) });
+  await answering(postMessage, 'dkgh:planUpload:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const files = (msg.files as EvidenceFile[]) ?? [];
+    postMessage({ type: 'dkgh:planUpload:result', plan: await planUpload(repo, files) });
+  });
 }
 
 /** Run it, re-planned here for the same reason every other apply re-plans. */
@@ -720,16 +788,18 @@ export async function handleDkghApplyUpload(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  const files = (msg.files as EvidenceFile[]) ?? [];
-  postMessage({ type: 'dkgh:applyUpload:running' });
+  await answering(postMessage, 'dkgh:applyUpload:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const files = (msg.files as EvidenceFile[]) ?? [];
+    postMessage({ type: 'dkgh:applyUpload:running' });
 
-  const plan = await planUpload(repo, files);
-  if (plan.refusal) {
-    postMessage({ type: 'dkgh:applyUpload:result', outcomes: [], refusal: plan.refusal });
-    return;
-  }
-  postMessage({ type: 'dkgh:applyUpload:result', outcomes: await applyUpload(plan) });
+    const plan = await planUpload(repo, files);
+    if (plan.refusal) {
+      postMessage({ type: 'dkgh:applyUpload:result', outcomes: [], refusal: plan.refusal });
+      return;
+    }
+    postMessage({ type: 'dkgh:applyUpload:result', outcomes: await applyUpload(plan) });
+  });
 }
 
 
@@ -745,9 +815,11 @@ export async function handleDkghProject(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  if (!repo) return;
-  postMessage({ type: 'dkgh:project:result', ...(await fetchProject(repo)) });
+  await answering(postMessage, 'dkgh:project:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    if (!repo) return;
+    postMessage({ type: 'dkgh:project:result', ...(await fetchProject(repo)) });
+  });
 }
 
 /** What a drag would run, unrun — 06A's receipt, before the drop writes. */
@@ -755,9 +827,11 @@ export async function handleDkghPlanProject(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  postMessage({
-    type: 'dkgh:planProject:result',
-    plan: planProjectEdit(String(msg.projectId ?? ''), (msg.edits as ProjectEdit[]) ?? []),
+  await answering(postMessage, 'dkgh:planProject:result', msg, async () => {
+    postMessage({
+      type: 'dkgh:planProject:result',
+      plan: planProjectEdit(String(msg.projectId ?? ''), (msg.edits as ProjectEdit[]) ?? []),
+    });
   });
 }
 
@@ -766,16 +840,18 @@ export async function handleDkghApplyProject(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const projectId = String(msg.projectId ?? '');
-  const edits = (msg.edits as ProjectEdit[]) ?? [];
-  postMessage({ type: 'dkgh:applyProject:running' });
+  await answering(postMessage, 'dkgh:applyProject:result', msg, async () => {
+    const projectId = String(msg.projectId ?? '');
+    const edits = (msg.edits as ProjectEdit[]) ?? [];
+    postMessage({ type: 'dkgh:applyProject:running' });
 
-  const plan = planProjectEdit(projectId, edits);
-  if (plan.refusal) {
-    postMessage({ type: 'dkgh:applyProject:result', outcomes: [], refusal: plan.refusal });
-    return;
-  }
-  postMessage({ type: 'dkgh:applyProject:result', outcomes: await applyProjectEdit(plan) });
+    const plan = planProjectEdit(projectId, edits);
+    if (plan.refusal) {
+      postMessage({ type: 'dkgh:applyProject:result', outcomes: [], refusal: plan.refusal });
+      return;
+    }
+    postMessage({ type: 'dkgh:applyProject:result', outcomes: await applyProjectEdit(plan) });
+  });
 }
 
 
@@ -838,8 +914,10 @@ export async function handleDkghPlanEdit(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const req = msg.request as EditRequest;
-  postMessage({ type: 'dkgh:planEdit:result', plan: planEdit(req), request: req });
+  await answering(postMessage, 'dkgh:planEdit:result', msg, async () => {
+    const req = msg.request as EditRequest;
+    postMessage({ type: 'dkgh:planEdit:result', plan: planEdit(req), request: req });
+  });
 }
 
 /**
@@ -853,15 +931,17 @@ export async function handleDkghApplyEdit(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const req = msg.request as EditRequest;
-  const plan = planEdit(req);
-  if (plan.empty) {
-    postMessage({ type: 'dkgh:applyEdit:result', outcomes: [], allOk: false, partial: false });
-    return;
-  }
-  postMessage({ type: 'dkgh:applyEdit:running', plan });
-  const result = await applyPlan(plan);
-  postMessage({ type: 'dkgh:applyEdit:result', ...result, repo: req.repo });
+  await answering(postMessage, 'dkgh:applyEdit:result', msg, async () => {
+    const req = msg.request as EditRequest;
+    const plan = planEdit(req);
+    if (plan.empty) {
+      postMessage({ type: 'dkgh:applyEdit:result', outcomes: [], allOk: false, partial: false });
+      return;
+    }
+    postMessage({ type: 'dkgh:applyEdit:running', plan });
+    const result = await applyPlan(plan);
+    postMessage({ type: 'dkgh:applyEdit:result', ...result, repo: req.repo });
+  });
 }
 
 /**
@@ -875,9 +955,11 @@ export async function handleDkghRepoMeta(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
-  if (!repo) return;
-  postMessage({ type: 'dkgh:repoMeta:result', ...(await fetchRepoMeta(repo)) });
+  await answering(postMessage, 'dkgh:repoMeta:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    if (!repo) return;
+    postMessage({ type: 'dkgh:repoMeta:result', ...(await fetchRepoMeta(repo)) });
+  });
 }
 
 /**
@@ -891,8 +973,10 @@ export async function handleDkghPlanCreate(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const req = msg.request as CreateRequest;
-  postMessage({ type: 'dkgh:planCreate:result', plan: planCreate(req), request: req });
+  await answering(postMessage, 'dkgh:planCreate:result', msg, async () => {
+    const req = msg.request as CreateRequest;
+    postMessage({ type: 'dkgh:planCreate:result', plan: planCreate(req), request: req });
+  });
 }
 
 /**
@@ -906,18 +990,20 @@ export async function handleDkghApplyCreate(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
 ): Promise<void> {
-  const req = msg.request as CreateRequest;
-  const plan = planCreate(req);
-  if (plan.refusal) {
-    postMessage({ type: 'dkgh:applyCreate:result', outcomes: [], refusal: plan.refusal });
-    return;
-  }
-  postMessage({ type: 'dkgh:applyCreate:running', plan });
-  const result = await applyCreate(plan, {
-    only: msg.only as StepKind[] | undefined,
-    number: msg.number as number | undefined,
+  await answering(postMessage, 'dkgh:applyCreate:result', msg, async () => {
+    const req = msg.request as CreateRequest;
+    const plan = planCreate(req);
+    if (plan.refusal) {
+      postMessage({ type: 'dkgh:applyCreate:result', outcomes: [], refusal: plan.refusal });
+      return;
+    }
+    postMessage({ type: 'dkgh:applyCreate:running', plan });
+    const result = await applyCreate(plan, {
+      only: msg.only as StepKind[] | undefined,
+      number: msg.number as number | undefined,
+    });
+    postMessage({ type: 'dkgh:applyCreate:result', ...result });
   });
-  postMessage({ type: 'dkgh:applyCreate:result', ...result });
 }
 
 /** The two static tables screens 02A and 02E render. */
