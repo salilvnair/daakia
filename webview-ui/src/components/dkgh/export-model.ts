@@ -48,8 +48,8 @@ export interface FormatSpec {
 export const FORMATS: FormatSpec[] = [
   { id: 'xlsx', name: 'Excel', ext: 'xlsx', live: true,
     blurb: '.xlsx with a frozen header, filters on, and one sheet per group' },
-  { id: 'pdf', name: 'PDF', ext: 'pdf', live: false,
-    blurb: 'Landscape report for the status mail — not written yet' },
+  { id: 'pdf', name: 'PDF', ext: 'pdf', live: true,
+    blurb: 'Landscape report with a cover that says what it means' },
   { id: 'csv', name: 'CSV', ext: 'csv', live: true,
     blurb: 'UTF-8 BOM so Excel stops mangling names' },
   { id: 'md', name: 'Markdown', ext: 'md', live: true,
@@ -225,4 +225,166 @@ function valueFor(issue: BoardIssue, field: string): string {
 export function sheetName(name: string): string {
   const clean = name.replace(/[[\]:*?/\\]/g, '-').trim() || 'Sheet';
   return clean.length > 31 ? clean.slice(0, 31) : clean;
+}
+
+/* ── The PDF's own shape ──────────────────────────────────────────────────── */
+
+export type Tone = 'plain' | 'good' | 'warn' | 'bad' | 'muted';
+
+export interface Report {
+  title: string;
+  subtitle: string;
+  tiles: { n: string; label: string; tone: Tone }[];
+  sentence: string;
+  bars: { label: string; total: number; parts: { share: number; tone: Tone }[] }[];
+  ages: { label: string; count: number; tone: Tone }[];
+  columns: string[];
+  groups: { name: string; rows: { cells: string[]; tones?: Record<number, Tone> }[] }[];
+  footer: string;
+}
+
+/**
+ * The status report — screen 15B.
+ *
+ * The audience is the person who will not open a spreadsheet, so the cover
+ * carries a **sentence** and not only three numbers. It is generated from the
+ * same counts the tiles are, which is what stops it from being a nice line that
+ * disagrees with the figures beside it.
+ */
+export function report(
+  rows: BoardIssue[],
+  columns: ExportColumn[],
+  opts: {
+    repo: string;
+    view: string;
+    /** The grouping the board is on, so the sections match the screen. */
+    groupBy?: string;
+    dimensions: ProposedDimension[];
+    /** The filter, in words, for the footer. */
+    query: string;
+    on?: Date;
+  },
+): Report {
+  const open = rows.filter(i => i.state === 'OPEN');
+  const dims = opts.dimensions;
+
+  const priority = dims.find(d => /priority/i.test(d.dimension));
+  const urgent = priority
+    ? open.filter(i => i.dimensions[priority.dimension] === priority.options[0]).length
+    : 0;
+  const unowned = open.filter(i => i.assignees.length === 0).length;
+  const stale = open.filter(i => i.quietDays >= 14).length;
+
+  const tiles: Report['tiles'] = [
+    ...(priority ? [{ n: String(urgent), label: priority.options[0] ?? 'urgent',
+      tone: (urgent ? 'bad' : 'muted') as Tone }] : []),
+    { n: String(unowned), label: 'unowned', tone: (unowned ? 'warn' : 'muted') as Tone },
+    { n: String(stale), label: 'quiet 14 days', tone: (stale ? 'warn' : 'muted') as Tone },
+  ].slice(0, 3);
+
+  /* The bars are the first dimension the repository has, which is the one its
+     own templates put first — the same order the board groups by. */
+  const by = dims[0];
+  const split = dims[1];
+  const bars = by ? countBy(open, i => i.dimensions[by.dimension] || `No ${by.dimension}`)
+    .slice(0, 8)
+    .map(([label, issues]) => ({
+      label,
+      total: issues.length,
+      parts: split
+        ? countBy(issues, i => i.dimensions[split.dimension] || 'unset')
+          .map(([value, list]) => ({
+            share: list.length / issues.length,
+            tone: (split.options.indexOf(value) === split.options.length - 1
+              ? 'bad' : 'muted') as Tone,
+          }))
+        : [{ share: 1, tone: 'muted' as Tone }],
+    })) : [];
+
+  const bands: [string, (n: number) => boolean, Tone][] = [
+    ['0-3d', n => n <= 3, 'good'],
+    ['4-7d', n => n > 3 && n <= 7, 'good'],
+    ['8-14d', n => n > 7 && n <= 14, 'warn'],
+    ['15-30d', n => n > 14 && n <= 30, 'warn'],
+    ['30d+', n => n > 30, 'bad'],
+  ];
+  const ages = bands.map(([label, test, tone]) => ({
+    label, tone, count: open.filter(i => test(i.ageDays)).length,
+  }));
+
+  const grouped = opts.groupBy
+    ? sheets(rows, opts.groupBy, dims)
+    : [{ name: 'All', rows }];
+
+  return {
+    title: `${opts.repo.split('/')[1] ?? opts.repo} - ${opts.view}`,
+    subtitle: `${(opts.on ?? new Date()).toLocaleDateString(undefined, {
+      day: 'numeric', month: 'long', year: 'numeric',
+    })} · ${open.length} open issue${open.length === 1 ? '' : 's'}`,
+    tiles,
+    sentence: sentence(open.length, urgent, unowned, stale, priority?.options[0]),
+    bars,
+    ages,
+    columns: columns.map(c => c.label),
+    groups: grouped.map(g => ({
+      name: g.name,
+      rows: g.rows.map(issue => ({
+        cells: cells(issue, columns).map(String),
+        tones: tonesFor(issue, columns),
+      })),
+    })),
+    footer: `${opts.repo} · ${opts.query || 'no filter'}`,
+  };
+}
+
+/**
+ * The cover's one line.
+ *
+ * Built from the same counts as the tiles, so it cannot contradict them — which
+ * is the failure mode of a summary written by hand. It says nothing when there
+ * is nothing to say, rather than reaching for a sentence.
+ */
+function sentence(
+  open: number, urgent: number, unowned: number, stale: number, urgentWord?: string,
+): string {
+  if (open === 0) return 'Nothing is open.';
+  const parts: string[] = [];
+  if (urgent > 0) {
+    parts.push(`${urgent} ${urgent === 1 ? 'issue is' : 'issues are'} `
+      + `${(urgentWord ?? 'urgent').toLowerCase()}`);
+  }
+  if (unowned > 0) parts.push(`${unowned} ${unowned === 1 ? 'has' : 'have'} nobody on ${unowned === 1 ? 'it' : 'them'}`);
+  if (stale > 0) {
+    parts.push(`${stale} ${stale === 1 ? 'has' : 'have'} not moved in a fortnight`);
+  }
+  if (parts.length === 0) {
+    return `${open} open, all owned and all moving. Nothing here needs a decision today.`;
+  }
+  return `${capitalise(parts[0])}${parts.length > 1
+    ? `; ${parts.slice(1).join(', and ')}` : ''}.`;
+}
+
+function capitalise(s: string): string {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
+/** The cells worth colouring in a printed table: unassigned, and a stale age. */
+function tonesFor(issue: BoardIssue, columns: ExportColumn[]): Record<number, Tone> {
+  const out: Record<number, Tone> = {};
+  columns.forEach((c, i) => {
+    if (c.key === 'assignee' && issue.assignees.length === 0) out[i] = 'warn';
+    if ((c.key === 'quiet' || c.key === 'age') && issue.quietDays >= 14) out[i] = 'bad';
+  });
+  return out;
+}
+
+function countBy(
+  rows: BoardIssue[], key: (i: BoardIssue) => string,
+): [string, BoardIssue[]][] {
+  const map = new Map<string, BoardIssue[]>();
+  for (const row of rows) {
+    const k = key(row);
+    map.set(k, [...(map.get(k) ?? []), row]);
+  }
+  return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
 }

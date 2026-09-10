@@ -894,6 +894,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         columns={shape.columns}
         groupBy={meaning.groupBy === 'none' ? undefined : meaning.groupBy}
         dimensions={dimensions}
+        query={describeAll(filter)}
         onClose={() => setSection('board')}
       />
     );

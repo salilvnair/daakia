@@ -178,6 +178,46 @@ describe('the report', () => {
   });
 });
 
+describe('a long report', () => {
+  const many = (n: number, name: string) => ({
+    name,
+    rows: Array.from({ length: n }, (_, i) => ({
+      cells: [String(i), 'Login page hangs on submit when SSO is enabled', 'salilvnair',
+        '2026-08-24'],
+    })),
+  });
+
+  it('flows onto as many pages as it takes', () => {
+    const pages = buildReport({ ...report, groups: [many(90, 'Checkout')] });
+    expect(pages.length).toBeGreaterThan(3);
+  });
+
+  it('never leaves a group heading alone at the foot of a page', () => {
+    const pages = buildReport({
+      ...report,
+      groups: [many(28, 'Checkout'), many(6, 'Orders'), many(6, 'Reporting')],
+    });
+    for (const page of pages) {
+      const lines = [...page.stream.matchAll(/([\d.]+) ([\d.]+) Td \((.*?)\) Tj/g)]
+        .map(m => ({ y: Number(m[2]), text: m[3] }));
+      const heading = lines.find(l => / - \d+$/.test(l.text));
+      if (!heading) continue;
+      /* Something below the heading, and not just the footer. */
+      const under = lines.filter(l => l.y < heading.y - 20 && !/^\d+ of \d+$/.test(l.text));
+      expect(under.length, `orphan heading "${heading.text}"`).toBeGreaterThan(2);
+    }
+  });
+
+  it('keeps every row inside the page, however many there are', () => {
+    for (const page of buildReport({ ...report, groups: [many(90, 'Checkout')] })) {
+      for (const m of page.stream.matchAll(/([-\d.]+) ([-\d.]+) Td/g)) {
+        expect(Number(m[2])).toBeGreaterThan(0);
+        expect(Number(m[2])).toBeLessThan(595);
+      }
+    }
+  });
+});
+
 describe('a page', () => {
   it('flips y once, at the edge, so top-left is what a caller means', () => {
     const page = new Page().text(10, 0, 'top', { size: 10 });

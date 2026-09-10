@@ -43,6 +43,7 @@ import {
 import {
   applyProjectEdit, fetchProject, planProjectEdit, type ProjectEdit,
 } from '../../../services/gh/project';
+import { buildReport, render as renderPdf, type Report } from '../../../services/gh/pdf';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
 type PostMessage = (msg: unknown) => void;
@@ -491,6 +492,10 @@ export async function handleDkghExport(
   try {
     if (msg.sheets) {
       await writeWorkbook(uri.fsPath, msg.sheets as Sheet[]);
+    } else if (msg.report) {
+      /* A PDF is bytes, not text — and it is laid out here rather than in the
+         webview because a page is a coordinate system, not a DOM. */
+      fs.writeFileSync(uri.fsPath, renderPdf(buildReport(msg.report as Report)));
     } else {
       fs.writeFileSync(uri.fsPath, String(msg.text ?? ''), 'utf-8');
     }

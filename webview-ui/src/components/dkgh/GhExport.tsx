@@ -21,7 +21,7 @@ import { useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico, type IcoName } from './GhIcons';
 import {
-  FORMATS, cells, exportColumns, filename, sheets, toCsv, toMarkdown,
+  FORMATS, cells, exportColumns, filename, report, sheets, toCsv, toMarkdown,
   type Format, type Scope,
 } from './export-model';
 import type { BoardIssue, ProposedDimension } from './board-types';
@@ -32,7 +32,7 @@ const FORMAT_ICON: Record<Format, IcoName> = {
 };
 
 export function GhExport({
-  repo, view, rows, selected, everything, columns, groupBy, dimensions, onClose,
+  repo, view, rows, selected, everything, columns, groupBy, dimensions, query, onClose,
 }: {
   repo: string;
   /** The view or filter the rows came from, for the chip and the file name. */
@@ -47,6 +47,8 @@ export function GhExport({
   columns: string[];
   groupBy?: string;
   dimensions: ProposedDimension[];
+  /** What is filtering the board, in words — the PDF's footer. */
+  query: string;
   onClose: () => void;
 }) {
   const all = useMemo(() => exportColumns(dimensions), [dimensions]);
@@ -84,7 +86,18 @@ export function GhExport({
   const save = () => {
     setSaid('');
     setSaving(true);
-    if (format === 'xlsx') {
+    if (format === 'pdf') {
+      /* 15B — the layout is the host's, because a page is a coordinate
+         system rather than a DOM. What goes on it is decided here, from the
+         same rows and columns the preview showed. */
+      postMsg({
+        type: 'dkgh:export',
+        filename: name,
+        report: report(source, picked, {
+          repo, view, groupBy, dimensions, query,
+        }),
+      });
+    } else if (format === 'xlsx') {
       postMsg({
         type: 'dkgh:export',
         filename: name,
@@ -195,6 +208,14 @@ export function GhExport({
               </div>
             </div>
 
+            {format === 'pdf' && (
+              <div className="sub">
+                Three pages at most: a cover with the numbers <b>and one sentence saying what
+                they mean</b>, the two charts from Insights, then the table grouped the way the
+                board is. Landscape, page numbers, and the filter on every footer — so a
+                printed copy still says what it is of.
+              </div>
+            )}
             {format === 'xlsx' && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <div
