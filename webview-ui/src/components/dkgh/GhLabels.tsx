@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
 import { CopyWord, GhNote } from './GhShell';
+import { GhImportLabels } from './GhImportLabels';
 import type { BoardIssue } from './board-types';
 import type { RepoMeta } from './types';
 
@@ -65,6 +66,27 @@ export function GhLabels({ repo, meta, issues, onClose, onRefresh }: {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [running, setRunning] = useState(false);
   const [outcomes, setOutcomes] = useState<Outcome[] | null>(null);
+  /** 19D — open while another repository's set is being looked at. */
+  const [importing, setImporting] = useState(false);
+  /** The repositories dkgh knows, offered as sources. */
+  const [known, setKnown] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!importing) return;
+    const onMsg = (e: MessageEvent) => {
+      const msg = e.data as Record<string, unknown>;
+      if (msg?.type !== 'dkgh:repoOptions:result') return;
+      const rows = [
+        ...((msg.pinned as { repo?: string }[]) ?? []),
+        ...((msg.recent as { repo?: string }[]) ?? []),
+      ];
+      setKnown([...new Set(rows.map(r => r.repo)
+        .filter((x): x is string => !!x && x !== repo))]);
+    };
+    window.addEventListener('message', onMsg);
+    postMsg({ type: 'dkgh:repoOptions' });
+    return () => window.removeEventListener('message', onMsg);
+  }, [importing, repo]);
 
   useEffect(() => {
     const handler = (evt: MessageEvent) => {
@@ -126,6 +148,21 @@ export function GhLabels({ repo, meta, issues, onClose, onRefresh }: {
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
 
+      {importing && (
+        <GhImportLabels
+          repo={repo}
+          mine={live}
+          known={known}
+          onCancel={() => setImporting(false)}
+          onStage={staged => {
+            /* Merged into whatever is already staged, not replacing it. An
+               import and a hand edit go through one review and one push. */
+            setEdits(prev => ({ ...prev, ...staged }));
+            setImporting(false);
+          }}
+        />
+      )}
+
       <div className="head">
         <div className="repo">
           <Ico name="tag" />
@@ -164,6 +201,12 @@ export function GhLabels({ repo, meta, issues, onClose, onRefresh }: {
           }}
         >
           <Ico name="plus" />New label
+        </button>
+        {/* 19D. Beside New label rather than in a menu: a new repository's
+            first move on this screen is usually "get the set from next door",
+            not "type nine labels". */}
+        <button type="button" className="pill" onClick={() => setImporting(true)}>
+          <Ico name="copy" />Import a set
         </button>
       </div>
 

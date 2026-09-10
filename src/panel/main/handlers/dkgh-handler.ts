@@ -1201,6 +1201,37 @@ export async function handleDkghApplyEdit(
  * bar that spends two seconds fetching labels after you press Label is a bulk
  * bar people stop using.
  */
+/**
+ * Another repository's labels — 19D.
+ *
+ * Its own message rather than `dkgh:repoMeta` with a different repo, and that
+ * is not tidiness. The board listens for `dkgh:repoMeta:result` and does not
+ * check which repository it is about, so asking for the neighbour's meta
+ * replaced the board's own: the import dialog then compared the source against
+ * itself and reported "83 labels there, 83 here, all identical".
+ *
+ * A message nobody else is listening for cannot do that.
+ */
+export async function handleDkghLabelsFrom(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  await answering(postMessage, 'dkgh:labelsFrom:result', msg, async () => {
+    const repo = String(msg.repo ?? '').trim();
+    if (!repo) return;
+    const meta = await fetchRepoMeta(repo);
+    postMessage({
+      type: 'dkgh:labelsFrom:result',
+      repo,
+      labels: meta.labels,
+      /* `unavailable` is how fetchRepoMeta reports what it could not read. */
+      error: meta.unavailable.includes('labels')
+        ? `dkgh could not read ${repo}'s labels.`
+        : undefined,
+    });
+  });
+}
+
 export async function handleDkghRepoMeta(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
