@@ -1,0 +1,121 @@
+/*
+ * dkgh's own stylesheet, taken from `plan/daakia_wiki/dkgh-mock.html`.
+ *
+ * The mock is not a sketch — it is a rendered design with exact paddings, type
+ * sizes, icon sizes and colours, and the agreement was that what is drawn there
+ * is what gets built. So the rules below are the mock's rules, values unchanged,
+ * with every selector scoped under `.dkgh` so nothing leaks into the rest of the
+ * app.
+ *
+ * **`.dkgh` is the mock's `.body`.** The mock draws a whole editor — a rail down
+ * the left and a tab bar across the top — because it has to show where the tab
+ * lives. Daakia already has both, so only what is inside `.body` is ported, and
+ * `.body` itself becomes this file's root.
+ *
+ * The mock's `--dk-*` tokens are declared here rather than globally, for the
+ * same reason: they are dkgh's palette, not the app's. Their dark values are the
+ * mock's own; the light ones are the app's, so a light-themed editor does not
+ * get a dark panel.
+ *
+ * **One number is changed, and it is changed everywhere.** The mock is a figure
+ * in a document, drawn a few hundred pixels wide, and at that size 12px type and
+ * 12px glyphs read fine. The tab is a whole panel, and the same numbers read
+ * small in it. So every px length in this file — type, glyph, padding, gap,
+ * radius — is the mock's number times 1.2. Multiplying all of them by the same
+ * factor is the point: every proportion the mock chose survives exactly, and the
+ * result is the mock, larger. Hairlines are left at 1px, because a 1.2px border
+ * is a blurry 1px border, and `999px` is left alone because it is not a length,
+ * it is how CSS spells "a pill".
+ *
+ * The order of the three parts is load-bearing. The rules that adapt the mock to
+ * a live app come **last**: they mostly tie on specificity with the rule they are
+ * adapting, and a tie is decided by which came later. When they were first, an
+ * override like `.compose .right { width: auto }` lost silently to the mock's
+ * `238px` and the metadata column would not stretch with its split.
+ *
+ * When the mock changes, this file is regenerated from it rather than edited by
+ * hand. A stylesheet that has drifted from the design it was taken from is worse
+ * than no design.
+ */
+
+.dkgh {
+  /* The mock's palette, verbatim. */
+  --dk-panel: #1e1e1e;
+  --dk-surface: #252526;
+  --dk-raised: #2d2d30;
+  --dk-hover: #37373a;
+  --dk-border: #3c3c3c;
+  --dk-text: #cccccc;
+  --dk-muted: #858585;
+  --dk-faint: #6a6a6a;
+
+  --dk-gh: #DE7356;
+  --dk-gh-deep: #c05a3e;
+
+  --dk-cyan: #22d3ee;
+  --dk-green: #3fb950;
+  --dk-red: #f85149;
+  --dk-amber: #d29922;
+  --dk-orange: #db6d28;
+  --dk-blue: #58a6ff;
+  --dk-pink: #e535ab;
+  --dk-ws: #2dd4bf;
+
+  /* The app already ships Inter and JetBrains Mono, which is what the mock
+     was drawn in — so the type is identical without loading anything. */
+  --sans: var(--font-sans);
+  --mono: var(--font-mono);
+
+  /* From the mock's `.app`: the frame's own type scale, which everything
+     inside it is sized against. The border, radius and shadow are not here —
+     they belong to a floating card in a document, and this fills a panel. */
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dk-text);
+  background: var(--dk-panel);
+}
+
+/*
+  Light theme.
+
+  Only the greys move. The accents stay where they are apart from dkgh's own,
+  which the app already deepens for a light ground.
+*/
+[data-theme="light"] .dkgh,
+.vscode-light .dkgh {
+  --dk-panel: #ffffff;
+  --dk-surface: #f6f6f6;
+  --dk-raised: #ececec;
+  --dk-hover: #e0e0e0;
+  --dk-border: #d8d8d8;
+  --dk-text: #1f2328;
+  --dk-muted: #57606a;
+  --dk-faint: #8c959f;
+  --dk-gh: #c0543a;
+  --dk-gh-deep: #9c422d;
+}
+
+.dkgh * { box-sizing: border-box; }
+
+/*
+  A floor under every icon.
+  
+  The mock sizes its glyphs in CSS, per place — 15px in the repository line,
+  12px in the sub-tabs, 11px on a chip, all scaled with everything else — and an
+  icon in a spot it never drew has no rule at all. A `<svg>` with no width fills its container, so one
+  missing rule turns a chevron into a wall. This is the least specific rule in
+  the file, so every one of the mock's own sizes still wins.
+*/
+.dkgh svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+/* A button in the mock is a span; here it is a real button. */
+.dkgh button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+

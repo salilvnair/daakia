@@ -1,0 +1,806 @@
+/*
+  ── The one place this file adds to the mock ──
+
+  A mock is static, so it draws every control in the state that shows it best:
+  the title field is drawn focused, ringed in the accent, because that is what
+  the reader needs to see. A real field cannot be permanently focused.
+
+  So these rules take the mock's styling and attach it to the state it actually
+  belongs to. Nothing here changes a value — the focused field is the mock's
+  focused field, exactly; it just waits to be focused. The same for hover on a
+  button, and for the resets a real `<input>` needs and a `<div>` does not.
+*/
+
+.dkgh .titlein {
+  width: 100%;
+  font-family: inherit;
+  outline: none;
+  /* Unfocused, it is an ordinary field. The mock's accent border and ring are
+     below, on `:focus`, which is the state it was drawn in. */
+  border-color: var(--dk-border);
+  box-shadow: none;
+}
+.dkgh .titlein::placeholder { color: var(--dk-faint); }
+.dkgh .titlein:focus {
+  border-color: var(--dk-gh);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dk-gh) 16%, transparent);
+}
+
+.dkgh textarea.mdbody {
+  width: 100%;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+}
+.dkgh textarea.mdbody::placeholder { color: var(--dk-faint); }
+
+.dkgh button.btn,
+.dkgh button.pill,
+.dkgh button.fct,
+.dkgh button.mh,
+.dkgh button.s,
+.dkgh button.opt,
+.dkgh button.vrow,
+.dkgh button.t { cursor: pointer; }
+
+.dkgh button.btn:hover:not(:disabled) { background: var(--dk-hover); }
+.dkgh button.btn.go:hover:not(:disabled) { background: var(--dk-gh); }
+.dkgh button.btn:disabled { opacity: .5; cursor: default; }
+
+.dkgh button.fct:hover { background: var(--dk-hover); }
+
+/*
+  The mock is a figure of a fixed size; this is a panel somebody resizes. So the
+  scroll containers are named here — no value changes, only which box takes the
+  leftover height and which one scrolls when there is not enough.
+*/
+.dkgh .compose { flex: 1; min-height: 0; }
+/*
+  The split's panes are plain blocks, so the panel inside one takes its height
+  rather than stretching into it. The split draws the divider now, so `.left`
+  does not draw its own, and `.right` takes its width from the drag.
+*/
+.dkgh .compose .left { min-height: 0; height: 100%; border-right: 0; }
+.dkgh .compose .right { width: auto; height: 100%; }
+.dkgh .split .facets { height: 100%; }
+.dkgh .split .pane { height: 100%; }
+.dkgh .compose .left .editor { flex: 1; min-height: 0; overflow-y: auto; }
+.dkgh .compose .left .editor > div:has(> .mdbar) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.dkgh .compose .left .editor > div > textarea.mdbody { flex: 1; }
+.dkgh .compose .right { overflow-y: auto; }
+
+/*
+  ── Why nothing inside this tab could scroll ──
+
+  `.dkgh` is a flex item, and a flex item's `min-height` defaults to `auto`,
+  which means *never shrink below your own content*. So the root grew to the
+  full height of the board — a thousand-odd pixels of facets — and the host
+  clipped it. Every box inside was then sized against a container that was
+  already too tall, so no scroll container ever discovered it was short on room:
+  the panel simply ran off the bottom of the tab and the last two facets could
+  not be reached at all. One declaration, and the whole tab is bounded again.
+
+  The same `auto` applies to the split's own panes, which are flex items too.
+*/
+.dkgh { min-height: 0; }
+.dkgh .split > * { min-height: 0; }
+
+/*
+  The board's split fills the panel and scrolls inside it, same reason.
+
+  The child selectors here used to be `>`, which was wrong twice over: the split
+  wraps each side in a pane of its own, so nothing inside it is a direct child,
+  and the mock's `.facets` carries `overflow: hidden` because a figure never
+  scrolls. Together that meant a filter panel taller than the tab simply had its
+  bottom cut off — every facet below Dates unreachable, with no scrollbar to say
+  so.
+
+  `scrollbar-gutter: stable` is the other half. Without it the scrollbar appears
+  over the last 14px of the row, which is exactly where every facet keeps its
+  count, so turning a facet on hid the number that said what it did.
+*/
+.dkgh .split { flex: 1; min-height: 0; }
+.dkgh .split .facets { overflow: hidden auto; scrollbar-gutter: stable; }
+.dkgh .split .pane { min-height: 0; }
+
+/*
+  A left panel is draggable, so its width comes from the split rather than from
+  the mock's fixed rail — and it is the one thing here that has to change, since
+  a facet panel somebody cannot widen truncates the one label they needed.
+*/
+.dkgh .split .facets { width: auto; }
+
+/*
+  Search, and groups that collapse — the shape the app's own Settings nav uses,
+  so a panel with a search box and section headers behaves the way every other
+  one in Daakia does. The `.fh` heading keeps the mock's type and spacing; what
+  is added is the count, the chevron, and the fact that it is a button.
+*/
+.dkgh .panelsearch {
+  display: flex; align-items: center; gap: 6px; margin: 2px 10px 8px;
+  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--dk-border);
+  background: var(--dk-panel); font-size: 10.5px; color: var(--dk-text);
+}
+.dkgh .panelsearch svg { width: 11px; height: 11px; color: var(--dk-faint); flex-shrink: 0; }
+.dkgh .panelsearch input {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  color: inherit; font: inherit;
+}
+.dkgh .panelsearch input::placeholder { color: var(--dk-faint); }
+.dkgh .panelsearch .n {
+  font-family: var(--mono); font-size: 9.5px; color: var(--dk-faint);
+  padding: 0 5px; border-radius: 999px; background: var(--dk-raised);
+}
+
+/*
+  The heading's own count has to land in the same column as the counts on the
+  rows below it. The rows put theirs hard against the panel's right gutter with
+  `margin-left: auto`, so the heading's is last in the row and does the same —
+  which is why the chevron leads instead of trailing. See GhPanel.
+*/
+.dkgh .facet .fh { width: 100%; cursor: pointer; }
+/*
+  The mock only ever draws a heading inside a facet, so its "push the count to
+  the right" rule is scoped to one. The same heading is now used for a section
+  of a screen — Recent, This account — where there is no facet above it, and
+  without this the aside welds itself to the title.
+*/
+.dkgh .fh .n { margin-left: auto; }
+.dkgh .facet .fh .n { margin-left: auto; }
+.dkgh .facet .fh .clr { margin-left: auto; }
+.dkgh .facet .fh .clr + .n { margin-left: 0; }
+.dkgh .facet .fh .chev {
+  width: 10px; height: 10px; transition: transform 120ms; color: var(--dk-faint);
+}
+.dkgh .facet .fh .chev.shut { transform: rotate(-90deg); }
+.dkgh .facet .fh:hover { color: var(--dk-muted); }
+.dkgh button.pill:hover:not(:disabled) { background: var(--dk-hover); }
+.dkgh button.pill:disabled { opacity: .45; cursor: default; }
+
+/*
+  ── A tab that answers back ──
+
+  This is the part a mock cannot draw. A figure is always at rest, so hover,
+  press and keyboard focus have no state to be drawn in, and a bar without them
+  feels like a picture of a bar rather than a control. Nothing here is a new
+  colour: hover is the panel's own `--dk-hover` with the top corners rounded, so
+  the tab lifts out of the bar, and the underline previews the accent it is
+  about to commit to. The active tab is raised the same way and keeps it,
+  because the tab you are on is a tab that has been pressed.
+*/
+.dkgh .subtabs .s {
+  border-radius: 5px 5px 0 0;
+  cursor: pointer;
+  transition: color 110ms ease, background 110ms ease, border-bottom-color 110ms ease;
+}
+.dkgh .subtabs .s:hover:not(:disabled) {
+  color: var(--dk-text);
+  background: var(--dk-hover);
+  border-bottom-color: color-mix(in srgb, var(--dk-gh) 45%, transparent);
+}
+.dkgh .subtabs .s:active:not(:disabled) { background: var(--dk-raised); }
+.dkgh .subtabs .s:focus-visible { outline: 2px solid var(--dk-gh); outline-offset: -3px; }
+/* The tab you are on is raised out of the bar and lit in the accent, with its
+   count on a soft accent chip. The view strip copies this exactly — see below —
+   because the section you are in and the view you are in are the same kind of
+   fact and should not be drawn two different ways. */
+.dkgh .subtabs .s.on { background: var(--dk-hover); }
+
+/*
+  ── The saved views, as a strip rather than a second row of tabs ──
+
+  Two rows of near-identical tabs a few pixels apart is a bar nobody can read:
+  the eye cannot tell which row it is choosing from. A section is *where you are
+  in the tab*; a saved view is *which question the board is answering* — two
+  different kinds of choice, so they get two different kinds of control. Tabs
+  above; here, a segmented strip recessed into the row, the same shape the rest
+  of the app uses for a filter like this.
+
+  **Two colours, doing two jobs.** The segment itself is the accent — the same
+  accent hovered and selected, so the strip reads as one control rather than as
+  two competing highlights, and the difference between the two states is weight
+  and fill rather than hue. The count wears the accent too, and never changes
+  under the pointer — it is the number the row exists for, and it is the one
+  thing here that should hold still while everything around it reacts.
+*/
+.dkgh .viewbar {
+  gap: 10px;
+  padding: 9px 14px;
+  background: var(--dk-surface);
+}
+.dkgh .viewbar .vseg {
+  display: flex; align-items: center; gap: 2px;
+  padding: 3px; border-radius: 9px;
+  border: 1px solid var(--dk-border); background: var(--dk-panel);
+}
+.dkgh .viewbar .vs {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 6px;
+  font-size: 11px; color: var(--dk-muted); white-space: nowrap; cursor: pointer;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .viewbar .vs:hover {
+  color: var(--dk-gh);
+  background: color-mix(in srgb, var(--dk-gh) 14%, transparent);
+}
+/* The same on-state as a section tab, minus the underline: raised on the panel
+   grey, accent text, accent chip. */
+.dkgh .viewbar .vs.on {
+  color: var(--dk-gh); font-weight: 600;
+  background: var(--dk-hover);
+}
+.dkgh .viewbar .vs .cnt {
+  font-family: var(--mono); font-size: 9px; line-height: 1.7;
+  padding: 0 6px; border-radius: 999px;
+  color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 20%, transparent);
+}
+.dkgh .viewbar .vs .dot {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--dk-amber); flex-shrink: 0;
+}
+
+/*
+  `New view` closes the strip, separated by a hairline rather than by being
+  moved outside it: it makes the next segment in this row, so it belongs at the
+  end of the row — the same place a browser puts `+`.
+*/
+.dkgh .viewbar .vs.add {
+  color: var(--dk-faint);
+  margin-left: 3px;
+  padding-left: 12px;
+  border-left: 1px solid var(--dk-border);
+  border-radius: 0 6px 6px 0;
+}
+.dkgh .viewbar .vs.add svg { width: 10px; height: 10px; }
+/*
+  `New view` is the one button in this strip that makes something, so its hover
+  commits — the solid accent the badges use, white on it — rather than the wash
+  the segments beside it get. A wash says "you are pointing at a choice"; this
+  is not a choice, it is an action.
+*/
+.dkgh .viewbar .vs.add:hover { background: var(--dk-gh-deep); color: #fff; }
+.dkgh .viewbar .vs.add:hover svg { color: #fff; }
+
+/* Housekeeping, not a view — so it is a gear with nothing drawn around it. */
+.dkgh .viewbar .vgear {
+  display: grid; place-items: center; width: 26px; height: 26px;
+  border-radius: 7px; color: var(--dk-faint); cursor: pointer;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .viewbar .vgear:hover {
+  color: var(--dk-gh);
+  background: color-mix(in srgb, var(--dk-gh) 14%, transparent);
+}
+.dkgh .viewbar .vgear svg { width: 14px; height: 14px; }
+
+
+/*
+  ── Everything you can press, pressable ──
+
+  The mock draws its controls as spans, so nothing in it has a cursor or a
+  hover: a figure is a picture of a toolbar and a picture needs neither. Ported
+  literally, that produced screen after screen of text that does something when
+  you click it and gives no sign beforehand that it would.
+
+  So this is the floor, once, for the whole tab: anything that is a button or
+  says it is one gets the hand and a hover, and anything disabled gets neither.
+  The rules further up that name a particular control are for tuning what its
+  hover looks like, not for deciding whether it has one.
+*/
+.dkgh button:not(:disabled),
+.dkgh [role="button"]:not([aria-disabled="true"]),
+.dkgh summary,
+.dkgh label:has(input[type="checkbox"]) { cursor: pointer; }
+.dkgh button:disabled, .dkgh [aria-disabled="true"] { cursor: default; }
+
+/* The two in the chip row the mock left as plain words. */
+.dkgh .chiprow .clr,
+.dkgh .fchip .x {
+  border-radius: 5px;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .chiprow .clr { padding: 2px 7px; }
+.dkgh .chiprow .clr:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .fchip .x { padding: 0 3px; }
+.dkgh .fchip .x:hover { color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 16%, transparent); }
+.dkgh .chiprow .adv:hover { color: var(--dk-text); background: var(--dk-hover); }
+
+
+/*
+  ── A row in a panel is a row, not a stripe ──
+
+  The mock's `.fct` is drawn inside a fixed rail, so its full-bleed hover ends
+  neatly at the rail's edge. In a panel somebody drags wider, the same rule
+  paints a stripe from one side of the screen to the other with square corners.
+  So the hover is inset to the panel's own gutter and rounded — the same
+  highlight, given an edge to stop at.
+*/
+/*
+  The gutter moves to the section, so a row and its heading are the same box.
+
+  It was margin on the row, which read fine until you noticed the numbers: a
+  heading's count and its rows' counts both sit at `margin-left: auto`, so they
+  land in one column only if both boxes end at the same x. They did not — and
+  worse, several of these rows carry an inline `width: 100%`, which with a
+  margin resolves to *wider than the space available*, so the panel was quietly
+  overflowing sideways and every row count was pushed out past its heading's.
+
+  Giving `.facet` the padding fixes both at once: one containing block, both
+  boxes filling it exactly, `100%` meaning what it says.
+*/
+.dkgh .facet { padding: 0 6px; }
+.dkgh .facet .fh { padding-left: 6px; padding-right: 6px; }
+/* The heading is tracked out; its count must not be, or the last digit sits a
+   pixel short of the digits below it. */
+.dkgh .facet .fh .n { letter-spacing: normal; }
+.dkgh .fct {
+  padding-left: 6px;
+  padding-right: 6px;
+  border-radius: 5px;
+}
+
+/*
+  A word that acts like a link, and behaves like one. The mock draws these as
+  coloured text — `assign yourself`, `search this repository`, `see the command`
+  — and coloured text with no cursor and no hover is a thing people read rather
+  than press.
+
+  Not `.lnk`: the mock already spends that name on the absolutely-positioned
+  hairlines that connect a callout to what it is pointing at, and a word wearing
+  `position: absolute` lands on top of the sentence it belongs to.
+*/
+.dkgh .textlink {
+  color: var(--dk-blue); cursor: pointer; border-radius: 4px; padding: 0 2px;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .textlink:hover {
+  text-decoration: underline;
+  background: color-mix(in srgb, var(--dk-blue) 14%, transparent);
+}
+
+/*
+  `clear` on a section heading is an icon, not a word: the heading already
+  carries a title, a count and a chevron, and a fourth piece of text in the same
+  row is the one you read last and the one you meant to press.
+*/
+.dkgh .facet .fh .clr {
+  display: grid; place-items: center; width: 15px; height: 15px; margin-left: 4px;
+  border-radius: 4px; color: var(--dk-faint); cursor: pointer; flex-shrink: 0;
+}
+.dkgh .facet .fh .clr svg { width: 9px; height: 9px; }
+.dkgh .facet .fh .clr:hover { background: var(--dk-hover); color: var(--dk-red); }
+
+/*
+  Pinning a column. The pin is the app's own — the same drawing pin the tab bar
+  uses — because a reader who has pinned a request tab already knows what it
+  means, and a second pin glyph would be a second thing to learn.
+*/
+.dkgh .colrow .pin {
+  display: grid; place-items: center; width: 15px; height: 15px; border-radius: 4px;
+  color: var(--dk-faint); cursor: pointer; flex-shrink: 0;
+  opacity: 0; transition: opacity 110ms ease, color 110ms ease, background 110ms ease;
+}
+.dkgh .colrow:hover .pin, .dkgh .colrow .pin.on { opacity: 1; }
+.dkgh .colrow .pin.on { color: var(--dk-gh); }
+.dkgh .colrow .pin:hover { background: var(--dk-hover); color: var(--dk-text); }
+.dkgh .colrow .pin svg { width: 11px; height: 11px; }
+
+/*
+  Copied.
+
+  The button is the icon alone — the word "Copy" beside a copy glyph says the
+  same thing twice — and the feedback is the icon becoming a green tick for a
+  moment. A press with no answer is a press people make twice.
+*/
+/* Row, not grid: this is also worn by a button that has a label beside its
+   icon, and `grid` stacked the two. Centring an icon-only button is what
+   `inline-flex` with centred items does anyway. */
+.dkgh button.copyb { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.dkgh button.copyb svg { transition: transform 140ms ease, color 140ms ease; }
+.dkgh button.copyb.done { color: var(--dk-green); border-color: color-mix(in srgb, var(--dk-green) 45%, transparent); }
+.dkgh button.copyb.done svg { animation: dkgh-pop 260ms ease; }
+@keyframes dkgh-pop {
+  0% { transform: scale(.5); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/*
+  `only` and `except` — two verbs on a facet row, and the two words most likely
+  to be wanted there. The mock draws them as text with a middot between; here
+  they are buttons with room to be pressed, and the separator is a gap rather
+  than a character, because a middot between two buttons looks like a third one.
+*/
+.dkgh .fct .only { display: flex; align-items: center; gap: 4px; }
+.dkgh .fct .only .v {
+  padding: 1px 5px; border-radius: 4px; color: var(--dk-gh); cursor: pointer;
+  transition: background 110ms ease, color 110ms ease;
+}
+.dkgh .fct .only .v:hover { background: color-mix(in srgb, var(--dk-gh) 20%, transparent); }
+.dkgh .fct .only .v:last-child { color: var(--dk-red); }
+.dkgh .fct .only .v:last-child:hover { background: color-mix(in srgb, var(--dk-red) 20%, transparent); }
+
+/*
+  The metadata pane's pick rows, under the pointer.
+
+  Everywhere else in the tab a hover is the panel's own grey, because those rows
+  sit in a rail you are scanning. These are the opposite: a short list you opened
+  on purpose, to press one thing in. So the hover is the accent itself, half
+  transparent — enough that the row you are about to commit to is unmistakable
+  across a pane of nine sections, and still dark enough behind white text to
+  read.
+*/
+.dkgh .compose .right button.fct:hover {
+  background: color-mix(in srgb, var(--dk-gh) 55%, transparent);
+  color: #fff;
+}
+.dkgh .compose .right button.fct:hover .bx { border-color: rgba(255, 255, 255, .6); }
+
+/*
+  The keyboard sheet's keys.
+
+  `KbdView` writes its metrics inline, so a stylesheet cannot reach them without
+  saying so. The size prop only goes so far and these have to read as keys —
+  something with a face you could press — beside 13px prose, which is the whole
+  point of the sheet.
+*/
+.dkgh .dkkeys kbd {
+  min-width: 30px !important;
+  height: 26px !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+  border-radius: 7px !important;
+}
+
+/*
+  A scrollbar you can see.
+
+  The panel scrolls, and until you know that, a facet list that ends at Author
+  looks like a facet list that has no Dates in it. The overlay bar this webview
+  draws by default appears for a moment on a wheel event and is invisible the
+  rest of the time, which is exactly no use to somebody wondering whether there
+  is more. So it is always there, sized to the gutter already reserved for it,
+  and it darkens under the pointer.
+*/
+.dkgh ::-webkit-scrollbar { width: 9px; height: 9px; }
+.dkgh ::-webkit-scrollbar-track { background: transparent; }
+.dkgh ::-webkit-scrollbar-thumb {
+  background: var(--dk-border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.dkgh ::-webkit-scrollbar-thumb:hover { background: var(--dk-muted); background-clip: content-box; }
+.dkgh ::-webkit-scrollbar-corner { background: transparent; }
+
+/*
+  A number on a toolbar pill is the same kind of number as a count on a tab, so
+  it wears the same badge. As a bare bold digit it read as part of the word —
+  `Filters 1` looked like the pill was named that.
+*/
+.dkgh .toolbar .pill .cnt {
+  font-family: var(--mono); font-size: 9px; line-height: 1.7;
+  padding: 0 6px; border-radius: 999px;
+  color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 20%, transparent);
+}
+/*
+  A count on the thing you are currently in is inverted rather than tinted —
+  solid accent, white on it. Everywhere else the badge is a soft accent wash,
+  which reads well on the panel; on a control that is itself lit, a second wash
+  of the same colour is a number you have to hunt for. One rule for all three
+  places that have counts: the section tabs, the view strip, the toolbar pills.
+*/
+.dkgh .toolbar .pill.on .cnt,
+.dkgh .subtabs .s.on .cnt,
+.dkgh .viewbar .vs.on .cnt { background: var(--dk-gh-deep); color: #fff; }
+
+/*
+  Hover must not undo the active state. The mock's generic pill hover is the
+  panel grey and it is declared after `.pill.on`, so hovering an open Filters
+  pill turned it from accent back to grey — the one control on the toolbar that
+  is currently doing something, going quiet under the pointer.
+*/
+.dkgh button.pill.on:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dk-gh) 22%, transparent);
+}
+
+/*
+  A button that throws work away and a button that keeps it should not look the
+  same. In the changed-view bar, `Reset to saved` discards what you changed and
+  `Save as new view` keeps it under another name — opposite acts, drawn in
+  opposite colours, with `Update` left holding the accent because it is what
+  the bar exists to offer.
+*/
+/*
+  The strip itself first. The mock washes it in amber, and amber over a near-
+  black panel comes out olive — a wide dull band across the whole tab, which is
+  a lot of screen to spend on a message that says one view has unsaved changes.
+  It keeps the amber, but as a single line down the left edge, the way an
+  editor marks a changed file, over the ordinary raised surface.
+*/
+.dkgh .dirtybar {
+  background: var(--dk-surface);
+  border-left: 2px solid var(--dk-amber);
+}
+
+/*
+  Discard is red, but a muted one: a button people press several times an hour
+  should not look like deleting the repository. Colour enough to be told apart
+  from its neighbour, not enough to flinch at.
+*/
+.dkgh button.btn.warn {
+  color: color-mix(in srgb, var(--dk-red) 72%, var(--dk-text));
+  border-color: var(--dk-border);
+  background: transparent;
+}
+.dkgh button.btn.warn:hover:not(:disabled) {
+  color: var(--dk-red);
+  border-color: color-mix(in srgb, var(--dk-red) 40%, transparent);
+  background: color-mix(in srgb, var(--dk-red) 14%, transparent);
+}
+.dkgh button.btn.alt {
+  color: color-mix(in srgb, var(--dk-cyan) 72%, var(--dk-text));
+  border-color: var(--dk-border);
+  background: transparent;
+}
+.dkgh button.btn.alt:hover:not(:disabled) {
+  color: var(--dk-cyan);
+  border-color: color-mix(in srgb, var(--dk-cyan) 40%, transparent);
+  background: color-mix(in srgb, var(--dk-cyan) 14%, transparent);
+}
+
+/*
+  ── Rendered markdown, at a peek's size ──
+
+  `MarkdownView` is built for a document: its own type scale, its own margins,
+  a heading that opens with 20px of air above it. Dropped into a panel that is
+  on screen for four seconds it swamps the panel.
+
+  So the wrapper hands it dkgh's own size to inherit and pulls the vertical
+  rhythm in. Nothing about how it renders changes — a fence is still a fence
+  with its own background, a list is still a list — only how much room each
+  takes, which is the whole difference between a document and a glance.
+*/
+.dkgh .dkgh-md { font-size: inherit; line-height: 1.6; color: var(--dk-text); }
+.dkgh .dkgh-md > :first-child { margin-top: 0; }
+.dkgh .dkgh-md > :last-child { margin-bottom: 0; }
+.dkgh .dkgh-md p,
+.dkgh .dkgh-md ul,
+.dkgh .dkgh-md ol,
+.dkgh .dkgh-md blockquote,
+.dkgh .dkgh-md table { margin: 0 0 7px; font-size: inherit; }
+.dkgh .dkgh-md h1,
+.dkgh .dkgh-md h2,
+.dkgh .dkgh-md h3,
+.dkgh .dkgh-md h4 {
+  margin: 10px 0 4px; font-size: 1.05em; font-weight: 700; color: var(--dk-text);
+}
+.dkgh .dkgh-md ul, .dkgh .dkgh-md ol { padding-left: 18px; }
+.dkgh .dkgh-md li { margin: 1px 0; }
+.dkgh .dkgh-md code {
+  font-family: var(--mono); font-size: .92em;
+  padding: 1px 4px; border-radius: 4px;
+  background: var(--dk-raised); color: var(--dk-cyan);
+}
+.dkgh .dkgh-md pre {
+  margin: 0 0 7px; padding: 8px 10px; border-radius: 7px;
+  border: 1px solid var(--dk-border); background: var(--dk-panel);
+  overflow-x: auto; font-size: .92em; line-height: 1.55;
+}
+/* Inside a fence the chip styling is wrong — it is already on its own ground. */
+.dkgh .dkgh-md pre code { padding: 0; background: none; color: var(--dk-text); font-size: 1em; }
+.dkgh .dkgh-md blockquote {
+  padding-left: 9px; border-left: 2px solid var(--dk-border); color: var(--dk-muted);
+}
+.dkgh .dkgh-md a { color: var(--dk-blue); }
+.dkgh .dkgh-md a:hover { text-decoration: underline; }
+.dkgh .dkgh-md img { max-width: 100%; border-radius: 6px; }
+.dkgh .dkgh-md hr { border: 0; border-top: 1px solid var(--dk-border); margin: 9px 0; }
+.dkgh .dkgh-md table { border-collapse: collapse; }
+.dkgh .dkgh-md th, .dkgh .dkgh-md td {
+  border: 1px solid var(--dk-border); padding: 3px 7px; text-align: left;
+}
+
+/*
+  The peek's close. It only appears when the peek can be closed at all — a held
+  one is dismissed by letting go — so it sits at the end of the header rather
+  than reserving a slot the status word would otherwise have.
+*/
+.dkgh .peek .pkx {
+  display: grid; place-items: center; width: 20px; height: 20px; margin-left: 4px;
+  border-radius: 5px; color: var(--dk-faint); cursor: pointer; flex-shrink: 0;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .peek .pkx svg { width: 11px; height: 11px; }
+.dkgh .peek .pkx:hover { color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 16%, transparent); }
+
+/*
+  ── The peek, inside the app's own dialog ──
+
+  `ModalView` portals to the body and takes `noPadding`, so the peek keeps its
+  own `.pkb` gutter. It is widened here rather than in the mock's rule because
+  the dialog is wider than the mock's 330px card and the mock's gutter looks
+  pinched at that width.
+*/
+.dkgh .pkb { padding: 14px 16px 16px; }
+.dkgh .pkb > .dkgh-md:first-child { margin-top: 0; }
+
+/* A footer button is a row, never two. Squeezed by the dialog's own flex, the
+   icon was wrapping above its label. */
+.dkgh .footbar .btn,
+.dkgh button.btn { white-space: nowrap; flex-shrink: 0; }
+
+/*
+  ── A code fence in rendered markdown ──
+
+  `MarkdownView` lays its `<pre>` out flush to the block's edge, which reads as
+  a payload spilling out of its own box — and a JSON body is the commonest
+  thing in an issue comment. It gets a gutter, and the header above it gets the
+  same one so the language pill and the Copy line up with the code under them.
+
+  Copy answers with a green tick. dui already swaps the icon and adds
+  `dui-mdv-copied` for two seconds; what it does not do is make that read as
+  success at a glance, which is the whole point of answering.
+*/
+.dkgh .dkgh-md .dui-mdv-code-block {
+  border: 1px solid var(--dk-border); border-radius: 8px; overflow: hidden;
+  margin: 0 0 8px;
+}
+.dkgh .dkgh-md .dui-mdv-code-header {
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--dk-border);
+  background: var(--dk-raised);
+}
+.dkgh .dkgh-md .dui-mdv-code-block pre { margin: 0; border: 0; border-radius: 0; padding: 10px 14px; }
+.dkgh .dkgh-md .dui-mdv-copy-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 7px; border-radius: 5px; cursor: pointer;
+  color: var(--dk-muted);
+  transition: color 140ms ease, background 140ms ease;
+}
+.dkgh .dkgh-md .dui-mdv-copy-btn:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .dkgh-md .dui-mdv-copy-btn.dui-mdv-copied {
+  color: var(--dk-green);
+  background: color-mix(in srgb, var(--dk-green) 16%, transparent);
+}
+.dkgh .dkgh-md .dui-mdv-copy-btn.dui-mdv-copied svg { animation: dkgh-pop 260ms ease; }
+
+/*
+  A row in a picker. The mock has no dropdown of its own, so this borrows the
+  shape every other list in the tab uses: inset from the panel's gutter, rounded
+  so the highlight has an edge to stop at, and an accent wash on hover because
+  it is a list you opened to press one thing in.
+*/
+.dkgh .pick-row {
+  margin: 0 5px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  transition: background 110ms ease;
+}
+.dkgh .pick-row:hover { background: color-mix(in srgb, var(--dk-gh) 50%, transparent); }
+.dkgh .pick-row:hover span { color: #fff !important; }
+
+/*
+  ── The first-run screens, made pressable ──
+
+  The mock draws these as spans, so the platform tabs and every `copy` in a
+  command block are text that happens to do something. They are buttons here,
+  and these are the states a static figure has nothing to say about.
+*/
+.dkgh .plat button {
+  font-size: 10.5px; padding: 4px 12px; border-radius: 6px;
+  color: var(--dk-muted); border: 1px solid transparent; background: transparent;
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .plat button:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .plat button.on {
+  color: var(--dk-text); background: var(--dk-raised);
+  border-color: var(--dk-border); font-weight: 600;
+}
+
+.dkgh .cmd .copy {
+  padding: 1px 6px; border-radius: 4px; cursor: pointer;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .cmd .copy:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .cmd .copy.done {
+  color: var(--dk-green);
+  background: color-mix(in srgb, var(--dk-green) 16%, transparent);
+}
+
+/*
+  A note stacks under the one above it. The mock draws one at a time, so its
+  rule has no bottom margin and two of them ended up welded together.
+*/
+.dkgh .empty .note + .note { margin-top: 8px; }
+/*
+  The mock's own `code` rule is drawn against the wiki page's `--ink`, which
+  does not exist here. It is the same rule in dkgh's tokens, and it is not
+  confined to the empty states: a dialog quotes a path or a command too.
+*/
+.dkgh code {
+  font-family: var(--mono); font-size: .92em; padding: 1px 4px; border-radius: 3px;
+  background: var(--dk-raised); color: var(--dk-text);
+}
+
+/*
+  `.sub` is the mock's small grey line. It draws it only inside an `.opt`, so
+  that is where the rule sits — but the line itself is not about option cards,
+  and every screen that wants one outside a card was getting body text.
+*/
+.dkgh .sub { font-size: 12px; color: var(--dk-faint); line-height: 1.5; }
+
+/*
+  The mock's `.inp` is a `<div>` with a fake placeholder inside it, because a
+  mock never types. A real one is an `<input>`, which arrives with the
+  browser's font and its own focus ring, and `.inp.focus` — a class a mock can
+  hand-apply — has to become the real `:focus`.
+*/
+.dkgh input.inp, .dkgh textarea.inp {
+  width: 100%; font-family: inherit; outline: none;
+  transition: border-color 110ms ease, box-shadow 110ms ease;
+}
+.dkgh textarea.inp { resize: vertical; line-height: 1.6; }
+.dkgh input.inp.mono, .dkgh textarea.inp.mono { font-family: var(--mono); }
+.dkgh input.inp::placeholder, .dkgh textarea.inp::placeholder { color: var(--dk-faint); }
+.dkgh input.inp:focus, .dkgh textarea.inp:focus {
+  border-color: var(--dk-gh);
+  box-shadow: 0 0 0 3.6px color-mix(in srgb, var(--dk-gh) 16%, transparent);
+}
+
+/*
+  A row of paths, of held items, of anything the reader picks from: the mock's
+  own filter row, borrowed. Outside the filter panel it needs the hover it
+  never had there, because there it is a checkbox and here it is a button.
+*/
+.dkgh .opt .fct { padding: 6px 10px; border-radius: 6px; width: 100%; text-align: left; }
+.dkgh .opt button.fct { background: transparent; border: none; font-family: inherit; color: inherit; }
+.dkgh .opt button.fct:hover { background: var(--dk-hover); color: var(--dk-text); }
+/* A `<button>` needs its background reset, and the reset then outranks `.on`. */
+.dkgh .opt button.fct.on {
+  color: var(--dk-text); background: color-mix(in srgb, var(--dk-gh) 10%, transparent);
+}
+
+/*
+  The row's own small verbs. The mock draws the icons bare, because a mock
+  never hovers — but these are five buttons in a row and the reader has to be
+  able to tell which one is under the pointer before they press it.
+*/
+.dkgh .vrow .t {
+  display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 5px; border: none; background: transparent; color: var(--dk-faint);
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .vrow .t:hover:not(:disabled) { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .vrow .t:disabled { opacity: .3; cursor: default; }
+.dkgh .vrow:last-child { border-bottom: none; }
+
+/*
+  The one destructive confirm, and it is solid.
+
+  `.warn` is the muted red for a discard somebody does several times an hour;
+  this is the other kind — the button that ends something — and it should not
+  look like its neighbour at a glance.
+*/
+.dkgh button.btn.stop {
+  background: var(--dk-red); border-color: var(--dk-red); color: #fff; font-weight: 600;
+}
+.dkgh button.btn.stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--dk-red) 84%, #000);
+}
+
+/*
+  A table of sentences, rather than of values.
+
+  The board's table holds short things — a number, a state, a name — so the
+  mock makes every cell `nowrap` and that is right there. A table that explains
+  something is a different object: it has to wrap, or a dialog grows a
+  horizontal scrollbar for the sake of one column that could have been two
+  lines.
+*/
+.dkgh .tblw.prose table.tbl th,
+.dkgh .tblw.prose table.tbl td {
+  white-space: normal; padding-left: 8px; padding-right: 8px;
+}
+.dkgh .tblw.prose table.tbl td.dt { white-space: nowrap; }
