@@ -113,6 +113,7 @@ import {
   handleDkghTimeline, handleDkghExport,
   handleDkghImport, handleDkghPlanTemplates, handleDkghApplyTemplates,
   handleDkghPlanLabels, handleDkghApplyLabels,
+  handleDkghPlanUpload, handleDkghApplyUpload,
 } from '../src/panel/main/handlers/dkgh-handler';
 import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
@@ -227,6 +228,12 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dkgh:applyLabels':
       await handleDkghApplyLabels(msg, post);
+      break;
+    case 'dkgh:planUpload':
+      await handleDkghPlanUpload(msg, post);
+      break;
+    case 'dkgh:applyUpload':
+      await handleDkghApplyUpload(msg, post);
       break;
     case 'dkgh:searchIssues':
       await handleDkghSearchIssues(msg, post);

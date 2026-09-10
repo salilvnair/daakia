@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SplitPanelView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
+import { GhUpload } from './GhUpload';
 import {
   discardDraft, draftNote, hasContent, loadDraft, proposeTemplate, saveDraft,
   type Draft, type FormField, type IssueForm,
@@ -165,6 +166,9 @@ export function GhCompose({
           </div>
 
           <Dropzone draft={draft} onChange={patch} />
+
+          {/* Screen 12 — the images are local until this says otherwise. */}
+          <GhUpload repo={repo} draft={draft} onDraft={patch} />
 
           {noTemplates && <NoTemplates />}
         </div>
@@ -458,12 +462,16 @@ function Dropzone({ draft, onChange }: {
             <div key={u} style={{ position: 'relative' }}>
               <div
                 className="shot"
-                title={u.startsWith('data:') ? 'Uploads with screen 12' : u}
+                title={u.startsWith('data:')
+                  ? 'Still on this machine — upload it below, or file without it'
+                  : u}
                 style={u.startsWith('data:')
                   ? { backgroundImage: `url(${u})`, backgroundSize: 'cover' }
                   : undefined}
               />
-              {u.startsWith('data:') && <span className="chip c-stale">uploading</span>}
+              {/* Not "uploading" — nothing is, and will not be until somebody
+                  presses the button below. See GhUpload. */}
+              {u.startsWith('data:') && <span className="chip c-stale">local</span>}
               <button
                 type="button"
                 className="btn"

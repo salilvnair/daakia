@@ -75,6 +75,9 @@ export const GH_COMMANDS: GhCommandRow[] = [
     when: 'one screenshot at a time, when a card or a peek shows evidence — the '
         + 'webview may not fetch a remote image, and a private asset needs the credential',
     kind: 'read', live: true },
+  { command: 'gh api /repos/{o}/{r}/git/ref/heads/{branch}',
+    when: 'before the first screenshot upload, to see whether the evidence branch exists',
+    kind: 'read', live: true },
   { command: 'gh api /repos/{o}/{r}/contents/.github/ISSUE_TEMPLATE/{file}',
     when: 'importing forms from another repository — a read of that repo, never a write',
     kind: 'read', live: true },
@@ -98,8 +101,13 @@ export const GH_COMMANDS: GhCommandRow[] = [
     when: 'writing a comment, and alongside a close — the body goes in through stdin, '
         + 'never as an argument',
     kind: 'write', confirmedBy: 'the confirm bar', live: true },
-  { command: 'gh api --method PUT .../contents/.dkgh/evidence/...',
-    when: 'pasting a screenshot', kind: 'write', confirmedBy: 'the upload preview', live: false },
+  { command: 'gh api --method PUT /repos/{o}/{r}/contents/.dkgh/evidence/{name}',
+    when: 'uploading a pasted screenshot — a commit on the dkgh-evidence branch, never on '
+        + 'the default one',
+    kind: 'write', confirmedBy: 'the upload preview', live: true },
+  { command: 'gh api --method POST /repos/{o}/{r}/git/refs',
+    when: 'the first screenshot on a repository, to make the evidence branch',
+    kind: 'write', confirmedBy: 'the upload preview', live: true },
   { command: 'gh project item-edit', when: 'a drag on the columns board, a date on the roadmap',
     kind: 'write', confirmedBy: 'the drag receipt', live: false },
   { command: 'gh api --method PUT /repos/{o}/{r}/contents/.github/ISSUE_TEMPLATE/{file}',

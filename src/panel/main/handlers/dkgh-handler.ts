@@ -37,6 +37,9 @@ import {
 } from '../../../services/gh/templates';
 import { parseIssueForms, proposeDimensions } from '../../../services/gh/issue-forms';
 import { applyLabels, planLabels, type LabelEdit } from '../../../services/gh/labels';
+import {
+  applyUpload, planUpload, type EvidenceFile,
+} from '../../../services/gh/evidence-upload';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
 type PostMessage = (msg: unknown) => void;
@@ -666,6 +669,41 @@ export async function handleDkghApplyLabels(
     outcomes,
     meta: await fetchRepoMeta(repo),
   });
+}
+
+
+/**
+ * What uploading these screenshots would run — screen 12.
+ *
+ * The images arrive as base64 because a webview holds them as data URLs and
+ * there is no file on disk to point at. Sizes are checked here rather than
+ * there: the screen can offer a resize, but only the plan knows what the
+ * contents API is about to be asked to swallow.
+ */
+export async function handleDkghPlanUpload(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const files = (msg.files as EvidenceFile[]) ?? [];
+  postMessage({ type: 'dkgh:planUpload:result', plan: await planUpload(repo, files) });
+}
+
+/** Run it, re-planned here for the same reason every other apply re-plans. */
+export async function handleDkghApplyUpload(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const files = (msg.files as EvidenceFile[]) ?? [];
+  postMessage({ type: 'dkgh:applyUpload:running' });
+
+  const plan = await planUpload(repo, files);
+  if (plan.refusal) {
+    postMessage({ type: 'dkgh:applyUpload:result', outcomes: [], refusal: plan.refusal });
+    return;
+  }
+  postMessage({ type: 'dkgh:applyUpload:result', outcomes: await applyUpload(plan) });
 }
 
 /**
