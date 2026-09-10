@@ -11,12 +11,17 @@
  * open. The key is Space, which is also how a keyboard user selects a row; the
  * difference is the hold, and the footer says so out loud.
  *
- * It also opens from the right-click menu, and that is why it has a close now.
- * A spring-loaded panel needs no way out because the way out is letting go —
- * but nobody is holding anything after choosing `Peek` from a menu, and a panel
- * you opened with the mouse and cannot close with the mouse is a trap. So: an
- * X in the header, Escape, and the backdrop, which are the three things every
- * other dialog in the app answers to. The footer says which one applies.
+ * It also opens from the right-click menu, and that is why it is a dialog. A
+ * spring-loaded panel needs no way out — the way out is letting go — but nobody
+ * is holding anything after choosing `Peek` from a menu, and a panel you opened
+ * with the mouse and cannot close with the mouse is a trap.
+ *
+ * So it is `ModalView`, the same dialog every protocol in Daakia opens: the
+ * same backdrop, the same X in the same corner reddening under the pointer, the
+ * same Escape. A peek is a rare enough thing to want a bespoke close for, and
+ * one that behaved differently from every other dialog in the app would be a
+ * close people have to find. The footer still says which gesture applies,
+ * because the held peek genuinely has a different one.
  *
  * The panel is the three things the card could not fit: the actual behaviour,
  * the evidence at a readable size, and the most recent comment, which is
@@ -31,13 +36,14 @@
  * they matter most was the one place they were shown as literal backticks.
  */
 import { useEffect, useState } from 'react';
-import { MarkdownView, SkeletonView } from '@salilvnair/dui';
+import { MarkdownView, ModalView, SkeletonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
 import { GhEvidence } from './GhEvidence';
 import { avClass } from './GhCards';
 import { sinceIso } from './format';
 import type { BoardIssue } from './board-types';
+import { ACCENT } from './types';
 
 interface Detail {
   number: number;
@@ -95,49 +101,49 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
   const status = (issue.dimensions.status ?? '').toLowerCase();
 
   return (
-    <>
-      {/* The backdrop dims the board and takes a click to dismiss. It is only
-          drawn for a peek that can be closed — a held one is gone before a
-          click could land, and dimming for it would flicker on every hold. */}
-      {onClose && (
-        <div className="absolute inset-0" style={{ zIndex: 29, background: 'rgba(0,0,0,.45)' }}
-             onClick={onClose} />
-      )}
-    <div
-      className="peek"
-      style={{
-        /* Centred over the board rather than anchored to the card. The mock
-           pins it beside the card it belongs to, which is right in a figure of
-           a fixed size; in a panel somebody drags narrow the same rule lands it
-           half off-screen, and this is on screen for four seconds. */
-        left: '50%',
-        top: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: 'min(520px, 90%)',
-        maxHeight: '78%',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
+    <ModalView
+      open
+      onClose={onClose ?? (() => undefined)}
+      size="md"
+      headerColor={ACCENT}
+      showCloseIcon={!!onClose}
+      className="dkgh"
+      noPadding
+      title={
+        <Dk>
+          <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8 }}>
+            <span className="num">#{issue.number}</span>
+            <b style={{ color: 'var(--dk-text)' }}>{issue.title}</b>
+          </span>
+        </Dk>
+      }
+      headerRight={status
+        ? (
+          <Dk>
+            <span className={`st ${STATE_CLASS[status] ?? 'st-todo'}`}>
+              <b />{issue.dimensions.status}
+            </span>
+          </Dk>
+        )
+        : undefined}
+      footerLeft={
+        <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
+          {onClose ? 'Esc to dismiss' : 'release Space to dismiss'}
+        </span>
+      }
+      footerRight={
+        <Dk>
+          <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+            <button type="button" className="btn go" onClick={() => onOpen(issue)}>
+              <Ico name="link" />Open
+            </button>
+            <CopyLink url={issue.url} />
+          </span>
+        </Dk>
+      }
     >
-      <div className="pkh">
-        <span className="num">#{issue.number}</span>
-        <b style={{ color: 'var(--dk-text)', overflow: 'hidden', textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap' }}>
-          {issue.title}
-        </b>
-        <span className="sp" style={{ flex: 1 }} />
-        {status && (
-          <span className={`st ${STATE_CLASS[status] ?? 'st-todo'}`}><b />{issue.dimensions.status}</span>
-        )}
-        {onClose && (
-          <button type="button" className="pkx" title="Close" aria-label="Close"
-                  onClick={onClose}>
-            <Ico name="x" />
-          </button>
-        )}
-      </div>
-
-      <div className="pkb" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      <Dk>
+      <div className="pkb">
         <Label>Actual</Label>
         {detail === null ? (
           <div className="animate-pulse" style={{ display: 'grid', gap: 5 }}>
@@ -189,31 +195,55 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
         )}
       </div>
 
-      <div className="footbar" style={{ padding: '8px 13px', flexShrink: 0 }}>
-        <span style={{ fontSize: 11, color: 'var(--dk-faint)' }}>
-          {onClose ? 'Esc to dismiss' : 'release Space to dismiss'}
-        </span>
-        <span className="sp" />
-        <button type="button" className="btn go" onClick={() => onOpen(issue)}>
-          <Ico name="link" />Open
-        </button>
-        <button type="button" className="btn" title="Copy the link"
-                onClick={() => navigator.clipboard?.writeText(issue.url)}>
-          <Ico name="copy" />Link
-        </button>
-      </div>
-    </div>
-    </>
+      </Dk>
+    </ModalView>
   );
 }
 
 /**
- * Rendered markdown, in the peek's own type.
+ * The `--dk-*` palette, where the dialog cannot carry it.
  *
- * `MarkdownView` brings its own sizing, which is meant for a document; this is
- * a four-second panel, so the wrapper hands it the peek's font size to inherit
- * and lets everything inside scale off that.
+ * `ModalView` portals to the body and does not put its `className` on the card,
+ * so nothing dkgh renders inside it has `.dkgh` above it — and every rule in
+ * `dkgh.css` is scoped under `.dkgh`. Unstyled, the buttons came out as bare
+ * text and the icons at their natural size, which is roughly a thumbnail.
+ *
+ * `display: contents` is what makes this free: the element stays in the tree so
+ * descendant selectors match and the custom properties inherit, but it lays out
+ * nothing of its own, so the modal's own flexbox is untouched.
  */
+function Dk({ children }: { children: React.ReactNode }) {
+  return <span className="dkgh" style={{ display: 'contents' }}>{children}</span>;
+}
+
+/**
+ * Copy the link, and prove it.
+ *
+ * The same green tick the query bar answers with — a press with no answer is a
+ * press people make twice, and the second one is the one where they wonder
+ * whether it worked at all.
+ */
+function CopyLink({ url }: { url: string }) {
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (!done) return undefined;
+    const t = window.setTimeout(() => setDone(false), 1500);
+    return () => window.clearTimeout(t);
+  }, [done]);
+
+  return (
+    <button
+      type="button"
+      className={`btn copyb${done ? ' done' : ''}`}
+      title={done ? 'Copied' : 'Copy the link'}
+      onClick={() => { navigator.clipboard?.writeText(url); setDone(true); }}
+    >
+      <Ico name={done ? 'check' : 'copy'} />{done ? 'Copied' : 'Link'}
+    </button>
+  );
+}
+
 function Md({ content, empty }: { content: string; empty: string }) {
   if (!content.trim()) return <span style={{ color: 'var(--dk-faint)' }}>{empty}</span>;
   return (

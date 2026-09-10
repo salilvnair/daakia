@@ -1370,7 +1370,10 @@
   same thing twice — and the feedback is the icon becoming a green tick for a
   moment. A press with no answer is a press people make twice.
 */
-.dkgh button.copyb { display: grid; place-items: center; cursor: pointer; }
+/* Row, not grid: this is also worn by a button that has a label beside its
+   icon, and `grid` stacked the two. Centring an icon-only button is what
+   `inline-flex` with centred items does anyway. */
+.dkgh button.copyb { display: inline-flex; align-items: center; gap: 7.2px; cursor: pointer; }
 .dkgh button.copyb svg { transition: transform 140ms ease, color 140ms ease; }
 .dkgh button.copyb.done { color: var(--dk-green); border-color: color-mix(in srgb, var(--dk-green) 45%, transparent); }
 .dkgh button.copyb.done svg { animation: dkgh-pop 260ms ease; }
@@ -1588,3 +1591,54 @@
 }
 .dkgh .peek .pkx svg { width: 13.2px; height: 13.2px; }
 .dkgh .peek .pkx:hover { color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 16%, transparent); }
+
+/*
+  ── The peek, inside the app's own dialog ──
+
+  `ModalView` portals to the body and takes `noPadding`, so the peek keeps its
+  own `.pkb` gutter. It is widened here rather than in the mock's rule because
+  the dialog is wider than the mock's 396px card and the mock's gutter looks
+  pinched at that width.
+*/
+.dkgh .pkb { padding: 16.8px 19.2px 19.2px; }
+.dkgh .pkb > .dkgh-md:first-child { margin-top: 0; }
+
+/* A footer button is a row, never two. Squeezed by the dialog's own flex, the
+   icon was wrapping above its label. */
+.dkgh .footbar .btn,
+.dkgh button.btn { white-space: nowrap; flex-shrink: 0; }
+
+/*
+  ── A code fence in rendered markdown ──
+
+  `MarkdownView` lays its `<pre>` out flush to the block's edge, which reads as
+  a payload spilling out of its own box — and a JSON body is the commonest
+  thing in an issue comment. It gets a gutter, and the header above it gets the
+  same one so the language pill and the Copy line up with the code under them.
+
+  Copy answers with a green tick. dui already swaps the icon and adds
+  `dui-mdv-copied` for two seconds; what it does not do is make that read as
+  success at a glance, which is the whole point of answering.
+*/
+.dkgh .dkgh-md .dui-mdv-code-block {
+  border: 1px solid var(--dk-border); border-radius: 9.6px; overflow: hidden;
+  margin: 0 0 9.6px;
+}
+.dkgh .dkgh-md .dui-mdv-code-header {
+  padding: 6px 14.4px;
+  border-bottom: 1px solid var(--dk-border);
+  background: var(--dk-raised);
+}
+.dkgh .dkgh-md .dui-mdv-code-block pre { margin: 0; border: 0; border-radius: 0; padding: 12px 16.8px; }
+.dkgh .dkgh-md .dui-mdv-copy-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2.4px 8.4px; border-radius: 6px; cursor: pointer;
+  color: var(--dk-muted);
+  transition: color 140ms ease, background 140ms ease;
+}
+.dkgh .dkgh-md .dui-mdv-copy-btn:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .dkgh-md .dui-mdv-copy-btn.dui-mdv-copied {
+  color: var(--dk-green);
+  background: color-mix(in srgb, var(--dk-green) 16%, transparent);
+}
+.dkgh .dkgh-md .dui-mdv-copy-btn.dui-mdv-copied svg { animation: dkgh-pop 260ms ease; }
