@@ -68,6 +68,7 @@ import { GhShareView } from './GhShareView';
 import { GhChart } from './GhChart';
 import { GhCompose } from './GhCompose';
 import { GhReview } from './GhReview';
+import { GhIssue } from './GhIssue';
 import { Ico, type IcoName } from './GhIcons';
 import {
   assembleBody, discardDraft, emptyDraft, type Draft,
@@ -151,6 +152,8 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   const [remote, setRemote] = useState<{ query: string; comments: Set<number> } | undefined>();
   const [searchingRepo, setSearchingRepo] = useState(false);
   const [section, setSection] = useState('board');
+  /** The issue screen 14 is showing, and what Back returns from. */
+  const [viewing, setViewing] = useState<BoardIssue | undefined>();
   /** `open` until somebody asks for the closed ones — screen 04E's first state. */
   const [issueState, setIssueState] = useState<'open' | 'all'>('open');
   /** Which side panel is open, if any. One at a time — three at once is a board
@@ -407,8 +410,17 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     setCursor(issue.number);
   }, [ordered]);
 
+  /**
+   * Open one issue — here, not in a browser tab.
+   *
+   * It used to be `window.open`, which is the one move that takes somebody out
+   * of the tab they came to for triage. Screen 14 is the whole issue, and the
+   * external link is still one click away on the page itself and on the
+   * right-click menu, where somebody asking for github.com asks for it.
+   */
   const open = useCallback((issue: BoardIssue) => {
-    window.open(issue.url, '_blank');
+    setViewing(issue);
+    setSection('issue');
   }, []);
 
   /** The issues a key acts on: the selection if there is one, else the cursor. */
@@ -740,6 +752,25 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
 
   if (unresolved) {
     return <GhNoAccess repo={repo} onRetry={refresh} onChangeRepo={onChangeRepo} />;
+  }
+
+  /*
+    Screen 14 takes the whole tab, head included.
+
+    It draws its own — the repository, this issue's state, and the way back —
+    because a board's head above one issue would be a filter row filtering
+    nothing, and the sub-tabs would offer four places none of which is where
+    the reader is.
+  */
+  if (section === 'issue' && viewing) {
+    return (
+      <GhIssue
+        repo={repo}
+        issue={all.find(i => i.number === viewing.number) ?? viewing}
+        dimensions={data?.dimensions ?? []}
+        onBack={() => { setViewing(undefined); setSection('board'); }}
+      />
+    );
   }
 
   const showPanel = panel !== 'none' && (view === 'cards' || view === 'table');

@@ -28,6 +28,7 @@ import {
   type EditRequest, type CreateRequest, type StepKind,
 } from '../../../services/gh/write';
 import { fetchRepoMeta } from '../../../services/gh/meta';
+import { fetchTimeline } from '../../../services/gh/timeline';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
 type PostMessage = (msg: unknown) => void;
@@ -423,6 +424,23 @@ export async function handleDkghIssue(
   const number = Number(msg.number);
   if (!repo || !Number.isFinite(number)) return;
   postMessage({ type: 'dkgh:issue:result', ...(await fetchIssueDetail(repo, number)) });
+}
+
+/**
+ * What happened to one issue, in order — screen 14's timeline.
+ *
+ * A second call, and only the full issue page makes it. The board does not
+ * want a timeline and the peek does not want one: it is forty rows on a
+ * three-week-old issue, and the peek is open for four seconds.
+ */
+export async function handleDkghTimeline(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const number = Number(msg.number);
+  if (!repo || !Number.isFinite(number)) return;
+  postMessage({ type: 'dkgh:timeline:result', ...(await fetchTimeline(repo, number)) });
 }
 
 /**
