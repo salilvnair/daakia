@@ -57,7 +57,14 @@ export const FORMATS: FormatSpec[] = [
 ];
 
 /** Which rows the file gets. */
-export type Scope = 'view' | 'selected' | 'all';
+/**
+ * Where the rows come from.
+ *
+ * The first three are all off what the board already holds. `repository` is
+ * 15D: everything there has ever been, which no board read has, so it is paged
+ * from GitHub before the file can be written.
+ */
+export type Scope = 'view' | 'selected' | 'all' | 'repository';
 
 /**
  * The columns available to an export, in the table's own order.

@@ -87,6 +87,15 @@ export const GH_COMMANDS: GhCommandRow[] = [
     when: 'on connect, if read:project is granted — the Status, Priority and dates the '
         + 'columns and roadmap views are made of, in one call',
     kind: 'read', live: true },
+  { command: 'gh api /repos/{o}/{r}/issues?state=all&per_page=100&page=N',
+    when: 'exporting a whole repository rather than the current view — the only issues '
+        + 'endpoint that pages, walked one page at a time with a pause when the hourly '
+        + 'budget drops under a tenth',
+    kind: 'read', live: true },
+  { command: 'gh api graphql (repository → issues → totalCount)',
+    when: 'once before that walk, so the progress bar has a denominator that counts '
+        + 'issues and not pull requests',
+    kind: 'read', live: true },
   { command: 'gh api graphql (repository → issue → blockedBy, subIssues, timelineItems)',
     when: 'opening an issue — what it blocks, what blocks it, its sub-issues and every '
         + 'place it was referenced from, in one call',

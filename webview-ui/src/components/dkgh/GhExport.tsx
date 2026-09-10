@@ -24,6 +24,7 @@ import {
   FORMATS, cells, exportColumns, filename, report, sheets, toCsv, toMarkdown,
   type Format, type Scope,
 } from './export-model';
+import { GhHarvest, useHarvest } from './GhHarvest';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 /** The mock's own glyph per format. */
@@ -63,13 +64,26 @@ export function GhExport({
   const [perGroup, setPerGroup] = useState(true);
   const [saving, setSaving] = useState(false);
   const [said, setSaid] = useState('');
+  /*
+    15D — the whole repository, which is not on the board.
+
+    Reading it is a walk of dozens of calls, so it starts when the scope is
+    picked rather than when Save is pressed: by the time somebody has chosen
+    their columns and their format the rows are usually already there.
+  */
+  const [harvesting, setHarvesting] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const { progress, result } = useHarvest(repo, harvesting);
 
   const picked = useMemo(
     () => chosen.map(k => all.find(c => c.key === k)).filter(Boolean) as typeof all,
     [chosen, all],
   );
 
-  const source = scope === 'selected' ? selected : scope === 'all' ? everything : rows;
+  const source = scope === 'selected' ? selected
+    : scope === 'repository' ? (result?.issues ?? [])
+    : scope === 'all' ? everything
+    : rows;
   const spec = FORMATS.find(f => f.id === format)!;
   const book = useMemo(
     () => sheets(source, format === 'xlsx' && perGroup ? groupBy : undefined, dimensions),
@@ -133,6 +147,18 @@ export function GhExport({
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
 
+      {harvesting && !result && !hidden && (
+        <GhHarvest
+          repo={repo}
+          progress={progress}
+          onCancel={() => {
+            postMsg({ type: 'dkgh:harvest:cancel', repo });
+            setHidden(true);
+          }}
+          onHide={() => setHidden(true)}
+        />
+      )}
+
       <div className="head">
         <div className="repo">
           <Ico name="dl" />
@@ -163,6 +189,34 @@ export function GhExport({
             <Row on={scope === 'all'} count={everything.length} onClick={() => setScope('all')}>
               All issues read
             </Row>
+            {/* 15D. The count is what the walk has produced so far, so the row
+                fills in while somebody is still choosing their columns. */}
+            <Row
+              on={scope === 'repository'}
+              count={result?.issues.length ?? progress.done}
+              onClick={() => { setScope('repository'); setHarvesting(true); setHidden(false); }}
+            >
+              Every issue in the repository
+            </Row>
+            {scope === 'repository' && (
+              <div className="sub" style={{ padding: '2px 14px 0' }}>
+                {result?.error
+                  ? result.error
+                  : result?.cancelled
+                    ? 'Stopped. What was read is still here.'
+                    : result
+                      ? `${result.issues.length} read, including closed`
+                      : 'Reading the whole history…'}
+                {!result && (
+                  <>
+                    {' '}
+                    <button type="button" className="textlink" onClick={() => setHidden(false)}>
+                      show progress
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="facet">

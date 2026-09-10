@@ -112,8 +112,15 @@ export interface RateLimit {
   resetAt: number;
 }
 
-/** Raw shapes from gh's JSON, all optional because it is somebody's repo. */
-interface RawIssue {
+/**
+ * Raw shapes from gh's JSON, all optional because it is somebody's repo.
+ *
+ * Exported because there are two sources for it now: `gh issue list --json`,
+ * which is what a board read uses, and the REST issues endpoint, which is the
+ * only one that pages — 15D normalises REST into this shape so both go through
+ * one mapping and cannot drift apart.
+ */
+export interface RawIssue {
   number?: number;
   title?: string;
   body?: string;
@@ -307,6 +314,47 @@ export async function fetchTemplates(repo: string): Promise<{
  * issues and then discarding closed ones would page through a repository's
  * whole history to show twelve rows.
  */
+/**
+ * One raw issue, as the board's own shape.
+ *
+ * Named rather than inline because 15D reads the same issues through a
+ * different endpoint. Two mappings of the same fields would eventually
+ * disagree about one of them, and the one that disagreed would be the export.
+ */
+export function toBoardIssue(
+  i: RawIssue,
+  map: ReturnType<typeof headingMap>,
+  now: number,
+): BoardIssue {
+  const created = i.createdAt;
+  const updated = i.updatedAt;
+  return {
+    number: i.number ?? 0,
+    title: i.title ?? '',
+    state: (i.state === 'CLOSED' ? 'CLOSED' : 'OPEN'),
+    url: i.url ?? '',
+    author: i.author?.login,
+    assignees: (i.assignees ?? []).map(a => a.login).filter((l): l is string => !!l),
+    labels: (i.labels ?? []).map(l => ({
+      name: l.name ?? '', color: l.color ?? '888888', description: l.description,
+    })).filter(l => l.name),
+    milestone: i.milestone?.title,
+    createdAt: created ?? '',
+    updatedAt: updated ?? '',
+    closedAt: i.closedAt || undefined,
+    commentCount: commentCount(i.comments),
+    dimensions: readDimensions(i.body ?? '', map),
+    evidence: imageUrls(i.body ?? ''),
+    bodyFirstLine: firstLine(i.body ?? ''),
+    bodyText: searchableBody(i.body ?? ''),
+    ageDays: daysSince(created, now),
+    /* updatedAt moves on a label change as well as a comment, so this is
+       "quiet" in the loosest sense — the board says "quiet for", not
+       "no comment in", because that is what the number actually means. */
+    quietDays: daysSince(updated ?? created, now),
+  };
+}
+
 export async function fetchBoard(
   repo: string,
   opts: { state?: 'open' | 'closed' | 'all'; limit?: number } = {},
@@ -343,36 +391,7 @@ export async function fetchBoard(
   }
 
   const now = Date.now();
-  const issues: BoardIssue[] = raw.map(i => {
-    const created = i.createdAt;
-    const updated = i.updatedAt;
-    return {
-      number: i.number ?? 0,
-      title: i.title ?? '',
-      state: (i.state === 'CLOSED' ? 'CLOSED' : 'OPEN'),
-      url: i.url ?? '',
-      author: i.author?.login,
-      assignees: (i.assignees ?? []).map(a => a.login).filter((l): l is string => !!l),
-      labels: (i.labels ?? []).map(l => ({
-        name: l.name ?? '', color: l.color ?? '888888', description: l.description,
-      })).filter(l => l.name),
-      milestone: i.milestone?.title,
-      createdAt: created ?? '',
-      updatedAt: updated ?? '',
-      closedAt: i.closedAt || undefined,
-      commentCount: commentCount(i.comments),
-      dimensions: readDimensions(i.body ?? '', map),
-      evidence: imageUrls(i.body ?? ''),
-      bodyFirstLine: firstLine(i.body ?? ''),
-      bodyText: searchableBody(i.body ?? ''),
-      ageDays: daysSince(created, now),
-      /* updatedAt moves on a label change as well as a comment, so this is
-         "quiet" in the loosest sense — the board says "quiet for", not
-         "no comment in", because that is what the number actually means. */
-      quietDays: daysSince(updated ?? created, now),
-    };
-  });
-
+  const issues: BoardIssue[] = raw.map(i => toBoardIssue(i, map, now));
   /* Only when there is nothing to show. On a board with issues on it this
      number changes no sentence, and it costs a call. */
   const closedRecently = issues.length === 0 && (opts.state ?? 'open') === 'open'

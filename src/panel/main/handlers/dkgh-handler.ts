@@ -29,6 +29,7 @@ import {
   type EditRequest, type CreateRequest, type StepKind,
 } from '../../../services/gh/write';
 import { fetchRepoMeta } from '../../../services/gh/meta';
+import { harvest } from '../../../services/gh/harvest';
 import { fetchRelations } from '../../../services/gh/relations';
 import { fetchTimeline } from '../../../services/gh/timeline';
 import { workbookParts, type Sheet } from '../../../services/gh/xlsx';
@@ -508,6 +509,55 @@ export async function handleDkghTimeline(
  * here. That file is pure functions for the same reason the plan/apply split
  * exists elsewhere — a format nobody can test is a format nobody can trust.
  */
+/**
+ * The whole repository, paged — 15D.
+ *
+ * Runs in the background and reports every page, because the alternative on a
+ * repository with two thousand issues is a spinner for two minutes. The
+ * progress messages are fire-and-forget; the one that carries `done: true` is
+ * the answer the screen waits on.
+ *
+ * **Cancel is a message, not a promise rejection.** The walk checks a flag
+ * between pages, so pressing Cancel stops at a page boundary rather than
+ * abandoning a request that GitHub has already been charged for.
+ */
+const harvesting = new Map<string, { cancelled: boolean }>();
+
+export async function handleDkghHarvest(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  await answering(postMessage, 'dkgh:harvest:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    if (!repo) return;
+
+    /* One walk per repository. Starting a second would double the rate spend
+       to produce the same file twice. */
+    const running = harvesting.get(repo);
+    if (running) { running.cancelled = true; }
+    const token = { cancelled: false };
+    harvesting.set(repo, token);
+
+    const out = await harvest(repo, {
+      cancelled: () => token.cancelled,
+      onProgress: p => postMessage({ type: 'dkgh:harvest:progress', repo, ...p }),
+    });
+
+    harvesting.delete(repo);
+    postMessage({ type: 'dkgh:harvest:result', ...out });
+  });
+}
+
+/** Stop a walk that is already going. */
+export async function handleDkghHarvestCancel(
+  msg: Record<string, unknown>,
+  _postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const running = harvesting.get(repo);
+  if (running) running.cancelled = true;
+}
+
 export async function handleDkghExport(
   msg: Record<string, unknown>,
   postMessage: PostMessage,

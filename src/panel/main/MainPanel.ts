@@ -147,6 +147,7 @@ import {
   handleDkghPlanUpload, handleDkghApplyUpload,
   handleDkghProject, handleDkghPlanProject, handleDkghApplyProject,
   handleDkghTerminal, handleDkghRelations,
+  handleDkghHarvest, handleDkghHarvestCancel,
   handleDkghSearchIssues, handleDkghPlanCreate, handleDkghApplyCreate,
 } from './handlers/dkgh-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
@@ -386,6 +387,12 @@ export class MainPanel {
         break;
       case 'dkgh:issue':
         handleDkghIssue(msg, this._post);
+        break;
+      case 'dkgh:harvest':
+        handleDkghHarvest(msg, this._post);
+        break;
+      case 'dkgh:harvest:cancel':
+        handleDkghHarvestCancel(msg, this._post);
         break;
       case 'dkgh:relations':
         handleDkghRelations(msg, this._post);
