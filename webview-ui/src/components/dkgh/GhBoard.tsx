@@ -70,6 +70,7 @@ import { GhCompose } from './GhCompose';
 import { GhReview } from './GhReview';
 import { GhIssue } from './GhIssue';
 import { GhExport } from './GhExport';
+import { GhInsights } from './GhInsights';
 import { Ico, type IcoName } from './GhIcons';
 import {
   assembleBody, discardDraft, emptyDraft, type Draft,
@@ -96,7 +97,7 @@ import { ACCENT, activeAccount, type GhEnv, type RepoMeta } from './types';
 const SECTIONS: { id: string; label: string; icon: IcoName; disabled?: boolean }[] = [
   { id: 'board', label: 'Board', icon: 'board' },
   { id: 'new', label: 'New issue', icon: 'plus' },
-  { id: 'insights', label: 'Insights', icon: 'chart', disabled: true },
+  { id: 'insights', label: 'Insights', icon: 'chart' },
   { id: 'repository', label: 'Repository', icon: 'repo', disabled: true },
 ];
 
@@ -155,6 +156,8 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   const [section, setSection] = useState('board');
   /** The issue screen 14 is showing, and what Back returns from. */
   const [viewing, setViewing] = useState<BoardIssue | undefined>();
+  /** How far back screen 16's weekly chart looks. */
+  const [weeks, setWeeks] = useState(12);
   /** `open` until somebody asks for the closed ones — screen 04E's first state. */
   const [issueState, setIssueState] = useState<'open' | 'all'>('open');
   /** Which side panel is open, if any. One at a time — three at once is a board
@@ -867,7 +870,30 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         the board's own chrome, and a filter row above a form is a filter row
         filtering nothing.
       */}
-      {section === 'new' ? (
+      {section === 'insights' ? (
+        <GhInsights
+          issues={filtered}
+          dimensions={data?.dimensions ?? []}
+          weeks={weeks}
+          onWeeks={setWeeks}
+          /*
+            16A — a bar is a filter you have not applied yet. It lands on the
+            board with that one value ticked, which is the move somebody makes
+            ten seconds after seeing a bar they did not expect.
+          */
+          onFilter={(field, value) => {
+            if (field === 'age') {
+              /* The age chart's buckets are a band, not a value; the honest
+                 move is the board with nothing added rather than a filter
+                 that does not mean what the bar meant. */
+              setSection('board');
+              return;
+            }
+            setFilter(f => only(f, field, value));
+            setSection('board');
+          }}
+        />
+      ) : section === 'new' ? (
         <GhCompose
           repo={repo}
           forms={data?.forms ?? []}

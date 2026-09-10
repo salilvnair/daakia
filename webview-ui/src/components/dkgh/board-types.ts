@@ -28,6 +28,14 @@ export interface BoardIssue {
   milestone?: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * When it was closed, on a board that is showing closed issues.
+   *
+   * The host has always read it; the type had not declared it, so the weekly
+   * chart on screen 16 had no close date to count and would have had to guess
+   * one from last activity.
+   */
+  closedAt?: string;
   commentCount: number;
   /** Read out of the body via the repository's own field map. */
   dimensions: Record<string, string>;
