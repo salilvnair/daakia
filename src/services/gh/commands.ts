@@ -79,7 +79,7 @@ export const GH_COMMANDS: GhCommandRow[] = [
     when: 'importing forms from another repository — a read of that repo, never a write',
     kind: 'read', live: true },
   { command: 'gh api /repos/{o}/{r}/labels', when: 'on the Labels tab',
-    kind: 'read', live: false },
+    kind: 'read', live: true },
   { command: 'gh project field-list', when: 'on connect, if read:project is granted',
     kind: 'read', live: false },
   { command: 'gh search issues <q> --repo <r> --match ...',
@@ -104,8 +104,15 @@ export const GH_COMMANDS: GhCommandRow[] = [
     when: 'committing imported issue forms — a commit on the default branch, and the '
         + 'one action on the import screen that writes anything',
     kind: 'write', confirmedBy: 'the commit preview', live: true },
-  { command: 'gh api --method PATCH .../labels/{name}', when: 'Push on the Labels tab',
-    kind: 'write', confirmedBy: 'the push preview', live: false },
+  { command: 'gh api --method PATCH /repos/{o}/{r}/labels/{name}',
+    when: 'Push on the Labels tab — a rename reaches every issue carrying the label',
+    kind: 'write', confirmedBy: 'the push preview', live: true },
+  { command: 'gh api --method POST /repos/{o}/{r}/labels',
+    when: 'Push, for a label created on the Labels tab',
+    kind: 'write', confirmedBy: 'the push preview', live: true },
+  { command: 'gh api --method DELETE /repos/{o}/{r}/labels/{name}',
+    when: 'Push, for a label deleted on the Labels tab',
+    kind: 'write', confirmedBy: 'the push preview', live: true },
 ];
 
 /** What each scope buys, and what is lost without it. Screen 02A. */

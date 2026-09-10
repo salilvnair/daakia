@@ -36,6 +36,7 @@ import {
   type TemplateFile, type TemplateSource,
 } from '../../../services/gh/templates';
 import { parseIssueForms, proposeDimensions } from '../../../services/gh/issue-forms';
+import { applyLabels, planLabels, type LabelEdit } from '../../../services/gh/labels';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
 type PostMessage = (msg: unknown) => void;
@@ -623,6 +624,47 @@ export async function handleDkghApplyTemplates(
   postMessage({
     type: 'dkgh:applyTemplates:result',
     outcomes: await applyTemplateCommit(plan),
+  });
+}
+
+
+/**
+ * What pushing the staged label edits would run — screen 19.
+ *
+ * The same plan/apply split the composer and the import screen use: built
+ * here, shown before anything happens, and re-planned on apply rather than
+ * running an argv that came over the wire.
+ */
+export async function handleDkghPlanLabels(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const edits = (msg.edits as LabelEdit[]) ?? [];
+  postMessage({ type: 'dkgh:planLabels:result', plan: planLabels(repo, edits) });
+}
+
+/** Run it, and answer with the fresh set so the screen stops guessing. */
+export async function handleDkghApplyLabels(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+  const edits = (msg.edits as LabelEdit[]) ?? [];
+  postMessage({ type: 'dkgh:applyLabels:running' });
+
+  const plan = planLabels(repo, edits);
+  if (plan.refusal) {
+    postMessage({ type: 'dkgh:applyLabels:result', outcomes: [], refusal: plan.refusal });
+    return;
+  }
+  const outcomes = await applyLabels(plan);
+  /* The set as GitHub now has it, so the screen shows what happened rather
+     than what it hoped would happen. */
+  postMessage({
+    type: 'dkgh:applyLabels:result',
+    outcomes,
+    meta: await fetchRepoMeta(repo),
   });
 }
 

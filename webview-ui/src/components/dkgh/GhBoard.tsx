@@ -73,6 +73,7 @@ import { GhExport } from './GhExport';
 import { GhInsights } from './GhInsights';
 import { GhRepository } from './GhRepository';
 import { GhImport } from './GhImport';
+import { GhLabels } from './GhLabels';
 import { Ico, type IcoName } from './GhIcons';
 import {
   assembleBody, discardDraft, emptyDraft, type Draft,
@@ -872,7 +873,15 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         the board's own chrome, and a filter row above a form is a filter row
         filtering nothing.
       */}
-      {section === 'import' ? (
+      {section === 'labels' ? (
+        <GhLabels
+          repo={repo}
+          meta={meta}
+          issues={all}
+          onClose={() => setSection('repository')}
+          onRefresh={refresh}
+        />
+      ) : section === 'import' ? (
         <GhImport
           repo={repo}
           existing={data?.forms ?? []}
@@ -896,6 +905,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             setSection('board');
           }}
           onImport={() => setSection('import')}
+          onLabels={() => setSection('labels')}
         />
       ) : section === 'insights' ? (
         <GhInsights

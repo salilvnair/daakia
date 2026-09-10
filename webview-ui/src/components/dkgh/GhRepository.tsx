@@ -39,7 +39,7 @@ const NATIVE: { label: string; read: string; note: string }[] = [
 ];
 
 export function GhRepository({
-  repo, data, meta, issues, onRefresh, onChangeRepo, onExplain, onImport,
+  repo, data, meta, issues, onRefresh, onChangeRepo, onExplain, onImport, onLabels,
 }: {
   repo: string;
   data?: BoardData;
@@ -51,6 +51,8 @@ export function GhRepository({
   onExplain: (dimension: string) => void;
   /** Screen 18, which is where all three of the "none of this" answers go. */
   onImport: () => void;
+  /** Screen 19 — the label set, which is the one part of this map you can edit. */
+  onLabels: () => void;
 }) {
   const dimensions = data?.dimensions ?? [];
   const forms = data?.forms ?? [];
@@ -112,6 +114,7 @@ export function GhRepository({
             detail={prefixNote(meta)}
             ok={(meta?.labels.length ?? 0) > 0}
             said="used as a fallback, and as a dimension when there are no forms"
+            onClick={onLabels}
           />
         </div>
       </div>
@@ -253,7 +256,7 @@ export function GhRepository({
 }
 
 /** One thing discovery looked for, and what it found. */
-function Source({ icon, colour, title, badge, badgeClass, where, detail, ok, said }: {
+function Source({ icon, colour, title, badge, badgeClass, where, detail, ok, said, onClick }: {
   icon: IcoName;
   colour: string;
   title: string;
@@ -263,7 +266,24 @@ function Source({ icon, colour, title, badge, badgeClass, where, detail, ok, sai
   detail: string;
   ok: boolean;
   said: string;
+  /** Set on the one card that leads somewhere — the labels are editable. */
+  onClick?: () => void;
 }) {
+  if (onClick) {
+    return (
+      <button type="button" className="srcc" style={{ textAlign: 'left', cursor: 'pointer' }}
+              onClick={onClick}>
+        <div className="sh">
+          <Ico name={icon} style={{ color: colour }} />
+          {title}
+          <span className={`bsrc ${badgeClass}`}>{badge}</span>
+        </div>
+        <div className="sl">{where}</div>
+        <div className="sl" style={{ color: 'var(--dk-muted)' }}>{detail}</div>
+        <div className={ok ? 'stat-ok' : 'stat-warn'}>{said} — edit them</div>
+      </button>
+    );
+  }
   return (
     <div className="srcc">
       <div className="sh">
