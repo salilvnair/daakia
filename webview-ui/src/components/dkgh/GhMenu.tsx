@@ -30,8 +30,38 @@ import {
 import type { BoardIssue } from './board-types';
 import type { SavedView } from './views-model';
 
-const SZ = 12;
+const SZ = 13;
 
+/**
+ * A colour per verb, from the app's own context-menu palette.
+ *
+ * Not decoration. A menu of ten grey rows is ten rows you read; the same ten
+ * with a red close, a green tick and an amber pin are three you find without
+ * reading and seven you skip.
+ *
+ * These are the `--color-ctx-*` tokens the rest of Daakia's menus use — the
+ * tab bar picks its Rename cyan and its Pin amber out of the same set — so a
+ * colour means one thing across the whole app, and both themes are already
+ * accounted for. Note they are *not* dkgh's `--dk-*` palette: this menu is
+ * portalled to the body, outside `.dkgh`, where those tokens do not exist and
+ * every icon comes out the default grey.
+ */
+const C = {
+  /** Look at it, without changing it. */
+  read: 'var(--color-ctx-rename)',
+  /** Take a copy of something. */
+  copy: 'var(--color-ctx-duplicate)',
+  /** Fix something in place. */
+  pin: 'var(--color-ctx-pin)',
+  /** Destroys or excludes. */
+  destroy: 'var(--color-ctx-close)',
+  /** Confirms, adds, or creates. */
+  make: 'var(--color-ctx-close-saved)',
+  /** Narrows what is on screen. */
+  narrow: 'var(--color-ctx-close-batch)',
+  /** Housekeeping, and the rows that should not compete. */
+  quiet: 'var(--color-text-muted)',
+};
 /** Everything the menu can ask the board to do. */
 export interface MenuCtx {
   repo: string;
@@ -104,7 +134,7 @@ export function useBoardMenu(ctx: MenuCtx) {
       position={placed ? { x: placed.x, y: placed.y } : undefined}
       onClose={() => setPlaced(undefined)}
       items={placed?.items ?? []}
-      width="md"
+      width={272}
     />
   );
 
@@ -178,6 +208,7 @@ function issueItems(issue: BoardIssue, ctx: MenuCtx): ContextMenuItem[] {
       label: 'Peek',
       shortcut: 'Space',
       icon: <IssueOpenedIcon size={SZ} />,
+      iconColor: C.read,
       onClick: () => ctx.onPeek(issue),
     },
     {
@@ -185,6 +216,7 @@ function issueItems(issue: BoardIssue, ctx: MenuCtx): ContextMenuItem[] {
       label: 'Open on github.com',
       shortcut: 'O',
       icon: <LinkIcon size={SZ} />,
+      iconColor: C.read,
       onClick: () => ctx.onOpenExternal(issue),
     },
     {
@@ -192,6 +224,7 @@ function issueItems(issue: BoardIssue, ctx: MenuCtx): ContextMenuItem[] {
       label: inSelection ? 'Take out of the selection' : 'Add to the selection',
       shortcut: 'Space',
       icon: <CheckIcon size={SZ} />,
+      iconColor: C.make,
       onClick: () => ctx.onSelect(issue),
     },
     sep('s1'),
@@ -200,6 +233,7 @@ function issueItems(issue: BoardIssue, ctx: MenuCtx): ContextMenuItem[] {
       label: `Assign…${suffix}`,
       shortcut: 'A',
       icon: <UsersIcon size={SZ} />,
+      iconColor: C.read,
       onClick: () => ctx.onAct('assign', numbers),
     },
     {
@@ -207,6 +241,7 @@ function issueItems(issue: BoardIssue, ctx: MenuCtx): ContextMenuItem[] {
       label: `Label…${suffix}`,
       shortcut: 'L',
       icon: <TagIcon size={SZ} />,
+      iconColor: C.copy,
       onClick: () => ctx.onAct('label', numbers),
     },
     {
@@ -214,6 +249,7 @@ function issueItems(issue: BoardIssue, ctx: MenuCtx): ContextMenuItem[] {
       label: `Milestone…${suffix}`,
       shortcut: 'M',
       icon: <ClockIcon size={SZ} />,
+      iconColor: C.pin,
       onClick: () => ctx.onAct('milestone', numbers),
     },
     sep('s2'),
@@ -221,18 +257,21 @@ function issueItems(issue: BoardIssue, ctx: MenuCtx): ContextMenuItem[] {
       id: 'copy-number',
       label: `Copy #${issue.number}`,
       icon: <CopyIcon size={SZ} />,
+      iconColor: C.copy,
       onClick: () => copy(`#${issue.number}`),
     },
     {
       id: 'copy-title',
       label: 'Copy the title',
       icon: <CopyIcon size={SZ} />,
+      iconColor: C.copy,
       onClick: () => copy(issue.title),
     },
     {
       id: 'copy-link',
       label: 'Copy the link',
       icon: <LinkIcon size={SZ} />,
+      iconColor: C.copy,
       onClick: () => copy(issue.url),
     },
     sep('s3'),
@@ -245,6 +284,7 @@ function issueItems(issue: BoardIssue, ctx: MenuCtx): ContextMenuItem[] {
          does — the menu proposes it, it does not do it. */
       description: many ? 'Shows the commands before it runs any of them' : undefined,
       icon: <IssueOpenedIcon size={SZ} />,
+      iconColor: C.destroy,
       onClick: () => ctx.onAct('close', numbers),
     },
   ];
@@ -260,6 +300,7 @@ function viewItems(view: SavedView, ctx: MenuCtx): ContextMenuItem[] {
       id: 'open',
       label: on ? 'Leave this view' : `Open “${view.name}”`,
       icon: <CheckIcon size={SZ} />,
+      iconColor: C.read,
       onClick: () => ctx.onOpenView(on ? undefined : view.id),
     },
     sep('s1'),
@@ -267,12 +308,14 @@ function viewItems(view: SavedView, ctx: MenuCtx): ContextMenuItem[] {
       id: 'edit',
       label: 'Rename and re-capture…',
       icon: <PencilIcon size={SZ} />,
+      iconColor: C.read,
       onClick: () => ctx.onEditView(view),
     },
     {
       id: 'default',
       label: isDefault ? 'Stop opening on this' : 'Open the board on this',
       icon: isDefault ? <UnpinIcon size={SZ} /> : <PinIcon size={SZ} />,
+      iconColor: C.narrow,
       onClick: () => ctx.onDefaultView(view),
     },
     sep('s2'),
@@ -280,12 +323,14 @@ function viewItems(view: SavedView, ctx: MenuCtx): ContextMenuItem[] {
       id: 'new',
       label: 'Save what is on screen as a view…',
       icon: <PlusIcon size={SZ} />,
+      iconColor: C.make,
       onClick: ctx.onNewView,
     },
     {
       id: 'manage',
       label: 'Manage views…',
       icon: <SettingsIcon size={SZ} />,
+      iconColor: C.quiet,
       onClick: ctx.onManageViews,
     },
     sep('s3'),
@@ -297,6 +342,7 @@ function viewItems(view: SavedView, ctx: MenuCtx): ContextMenuItem[] {
         ? 'A built-in view is hidden rather than deleted'
         : 'Deletes a saved filter, never an issue',
       icon: view.preset ? <EyeOffIcon size={SZ} /> : <TrashIcon size={SZ} />,
+      iconColor: C.destroy,
       onClick: () => ctx.onDeleteView(view),
     },
   ];
@@ -310,6 +356,7 @@ function facetItems(field: string, value: string, ctx: MenuCtx): ContextMenuItem
       id: 'only',
       label: `Only ${name}`,
       icon: <FilterIcon size={SZ} />,
+      iconColor: C.narrow,
       onClick: () => ctx.onOnly(field, value),
     },
     {
@@ -317,6 +364,7 @@ function facetItems(field: string, value: string, ctx: MenuCtx): ContextMenuItem
       label: `Everything except ${name}`,
       danger: true,
       icon: <FilterIcon size={SZ} />,
+      iconColor: C.destroy,
       onClick: () => ctx.onExcept(field, value),
     },
     sep('s1'),
@@ -324,6 +372,7 @@ function facetItems(field: string, value: string, ctx: MenuCtx): ContextMenuItem
       id: 'copy',
       label: `Copy “${name}”`,
       icon: <CopyIcon size={SZ} />,
+      iconColor: C.copy,
       onClick: () => copy(value),
     },
     sep('s2'),
@@ -331,6 +380,7 @@ function facetItems(field: string, value: string, ctx: MenuCtx): ContextMenuItem
       id: 'clear-field',
       label: `Clear ${field}`,
       icon: <RefreshIcon size={SZ} />,
+      iconColor: C.pin,
       onClick: () => ctx.onClearField(field),
     },
     {
@@ -338,6 +388,7 @@ function facetItems(field: string, value: string, ctx: MenuCtx): ContextMenuItem
       label: 'Clear every filter',
       disabled: !ctx.hasFilters,
       icon: <RefreshIcon size={SZ} />,
+      iconColor: C.pin,
       onClick: ctx.onClearFilters,
     },
   ];
@@ -350,12 +401,14 @@ function chipItems(field: string, ctx: MenuCtx): ContextMenuItem[] {
       id: 'drop',
       label: `Take ${field} off`,
       icon: <TrashIcon size={SZ} />,
+      iconColor: C.destroy,
       onClick: () => ctx.onClearField(field),
     },
     {
       id: 'clear-all',
       label: 'Clear every filter',
       icon: <RefreshIcon size={SZ} />,
+      iconColor: C.pin,
       onClick: ctx.onClearFilters,
     },
     sep('s1'),
@@ -364,6 +417,7 @@ function chipItems(field: string, ctx: MenuCtx): ContextMenuItem[] {
       label: 'Copy the query',
       description: ctx.query || 'nothing is filtering the list',
       icon: <CopyIcon size={SZ} />,
+      iconColor: C.copy,
       disabled: !ctx.query,
       onClick: () => copy(ctx.query),
     },
@@ -371,6 +425,7 @@ function chipItems(field: string, ctx: MenuCtx): ContextMenuItem[] {
       id: 'save',
       label: 'Save this as a view…',
       icon: <PlusIcon size={SZ} />,
+      iconColor: C.make,
       onClick: ctx.onNewView,
     },
   ];
@@ -385,12 +440,14 @@ function columnItems(key: string, ctx: MenuCtx): ContextMenuItem[] {
       id: 'asc',
       label: 'Sort ascending',
       icon: <ArrowUpIcon size={SZ} />,
+      iconColor: C.read,
       onClick: () => ctx.onSort(key, 'asc'),
     },
     {
       id: 'desc',
       label: 'Sort descending',
       icon: <ArrowDownIcon size={SZ} />,
+      iconColor: C.read,
       onClick: () => ctx.onSort(key, 'desc'),
     },
     sep('s1'),
@@ -398,6 +455,7 @@ function columnItems(key: string, ctx: MenuCtx): ContextMenuItem[] {
       id: 'pin',
       label: pinned ? `Unpin ${label}` : `Pin ${label} to the left`,
       icon: pinned ? <UnpinIcon size={SZ} /> : <PinIcon size={SZ} />,
+      iconColor: C.narrow,
       onClick: () => ctx.onPinColumn(key),
     },
     {
@@ -406,6 +464,7 @@ function columnItems(key: string, ctx: MenuCtx): ContextMenuItem[] {
       disabled: pinned,
       description: pinned ? 'A pinned column has to be unpinned first' : undefined,
       icon: <EyeOffIcon size={SZ} />,
+      iconColor: C.quiet,
       onClick: () => ctx.onHideColumn(key),
     },
     sep('s2'),
@@ -414,6 +473,7 @@ function columnItems(key: string, ctx: MenuCtx): ContextMenuItem[] {
       label: 'Choose columns…',
       description: 'The same list the export writes',
       icon: <SettingsIcon size={SZ} />,
+      iconColor: C.quiet,
       onClick: () => ctx.onPanel('view'),
     },
   ];
@@ -426,6 +486,7 @@ function sectionItems(id: string, ctx: MenuCtx): ContextMenuItem[] {
       id: 'go',
       label: `Go to ${ctx.sectionLabel(id)}`,
       icon: <CheckIcon size={SZ} />,
+      iconColor: C.make,
       onClick: () => ctx.onSection(id),
     },
     sep('s1'),
@@ -440,6 +501,7 @@ function boardItems(ctx: MenuCtx): ContextMenuItem[] {
       id: 'refresh',
       label: 'Read it again now',
       icon: <RefreshIcon size={SZ} />,
+      iconColor: C.make,
       onClick: ctx.onRefresh,
     },
     {
@@ -447,6 +509,7 @@ function boardItems(ctx: MenuCtx): ContextMenuItem[] {
       label: 'Filters',
       shortcut: 'F',
       icon: <FilterIcon size={SZ} />,
+      iconColor: C.narrow,
       onClick: () => ctx.onPanel('filters'),
     },
     sep('s1'),
@@ -456,6 +519,7 @@ function boardItems(ctx: MenuCtx): ContextMenuItem[] {
       description: ctx.query || 'nothing is filtering the list',
       disabled: !ctx.query,
       icon: <CopyIcon size={SZ} />,
+      iconColor: C.copy,
       onClick: () => copy(ctx.query),
     },
     {
@@ -463,6 +527,7 @@ function boardItems(ctx: MenuCtx): ContextMenuItem[] {
       label: 'Clear every filter',
       disabled: !ctx.hasFilters,
       icon: <RefreshIcon size={SZ} />,
+      iconColor: C.pin,
       onClick: ctx.onClearFilters,
     },
     sep('s2'),
@@ -471,6 +536,7 @@ function boardItems(ctx: MenuCtx): ContextMenuItem[] {
       label: 'Keyboard shortcuts',
       shortcut: '?',
       icon: <KeyboardIcon size={SZ} />,
+      iconColor: C.read,
       onClick: ctx.onKeys,
     },
   ];
