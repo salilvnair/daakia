@@ -15,10 +15,13 @@
  * you is written under them: they are the issues that were read, in the window
  * chosen, and neither of those is "everything that happened".
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Ico } from './GhIcons';
 import { colourOf } from './field-colour';
-import { ages, byAssignee, headline, stacked, weekly, type StackedRow } from './insights-model';
+import {
+  ages, byAssignee, compare, headline, stacked, weekly, type StackedRow,
+} from './insights-model';
+import { GhCompare } from './GhCompare';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 const TONE = {
@@ -54,6 +57,16 @@ export function GhInsights({ issues, dimensions, weeks, onWeeks, onFilter }: {
     : stacked(open, i => i.labels[0]?.name ?? 'no label')
   ), [open, primary, secondary]);
 
+  /* 16B — this window against the one before it. Off by default: a comparison
+     is a second question, and the four charts answer the first one. */
+  const [comparing, setComparing] = useState(false);
+  const versus = useMemo(
+    () => compare(issues, weeks, primary
+      ? i => i.dimensions[primary] || `No ${primary}`
+      : i => i.labels[0]?.name ?? 'no label'),
+    [issues, weeks, primary],
+  );
+
   const buckets = useMemo(() => ages(open), [open]);
   const people = useMemo(() => byAssignee(
     open,
@@ -76,7 +89,13 @@ export function GhInsights({ issues, dimensions, weeks, onWeeks, onFilter }: {
             {w} weeks
           </button>
         ))}
+        <button type="button" className={`pill${comparing ? ' on' : ''}`}
+                onClick={() => setComparing(c => !c)}>
+          Compare
+        </button>
       </div>
+
+      {comparing && <GhCompare versus={versus} weeks={weeks} />}
 
       <div className="charts">
         {/* 1 — the backlog, over time */}

@@ -182,3 +182,177 @@ export function headline(issues: BoardIssue[], quietDays = 14): string {
   if (old) parts.push(`${old} older than ${quietDays} days`);
   return `${parts.join(' · ')}.`;
 }
+
+/*
+  ── 16B, against the period before ──
+
+  A number on its own is not a finding. "Twelve open" is neither good nor bad
+  until you know it was nine.
+*/
+
+/**
+ * Which way a number moved, and **whether that is good**.
+ *
+ * These are not the same question, and conflating them is how dashboards start
+ * lying cheerfully. Closed rising is good; opened rising is not; median age
+ * rising is not. So a metric declares its own `betterWhen` and the colour comes
+ * from that, never from the sign of the delta.
+ */
+export type Better = 'up' | 'down';
+
+export interface Metric {
+  label: string;
+  /** This period. */
+  now: number;
+  /** The one before it. */
+  was: number;
+  betterWhen: Better;
+  /** `d` on the age metric, nothing on a count. */
+  unit?: string;
+  /** Set when the metric's own value deserves colour, not just its delta. */
+  tone?: 'red' | 'amber';
+}
+
+/** `+5`, `-3`, or nothing at all when it did not move. */
+export function delta(m: Metric): number {
+  return m.now - m.was;
+}
+
+/**
+ * The colour a delta wears.
+ *
+ * Grey when nothing moved — a period identical to the last one is not a
+ * finding either, and painting a zero green or red invents one.
+ */
+export function deltaTone(m: Metric): 'green' | 'red' | 'flat' {
+  const d = delta(m);
+  if (d === 0) return 'flat';
+  const rose = d > 0;
+  return rose === (m.betterWhen === 'up') ? 'green' : 'red';
+}
+
+/** Issues opened inside a window. */
+function openedIn(issues: BoardIssue[], from: number, to: number): BoardIssue[] {
+  return issues.filter(i => {
+    const at = Date.parse(i.createdAt);
+    return Number.isFinite(at) && at >= from && at < to;
+  });
+}
+
+/** Issues closed inside a window. Only those the board actually loaded. */
+function closedIn(issues: BoardIssue[], from: number, to: number): BoardIssue[] {
+  return issues.filter(i => {
+    if (!i.closedAt) return false;
+    const at = Date.parse(i.closedAt);
+    return Number.isFinite(at) && at >= from && at < to;
+  });
+}
+
+/** The middle value, or 0 for nothing. Median rather than mean: one
+    two-year-old issue should not move the number a team reads weekly. */
+export function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+export interface Comparison {
+  /** "Last 12 weeks", "The 12 before" — what the two pills say. */
+  thisLabel: string;
+  lastLabel: string;
+  metrics: Metric[];
+  /** By module, both periods, for the overlaid bars. */
+  bars: { label: string; now: number; was: number }[];
+  /** Whether close dates are loaded at all. Two of the four depend on them. */
+  closedKnown: boolean;
+}
+
+const WEEK = 7 * 86_400_000;
+
+/**
+ * This window against the one before it — 16B.
+ *
+ * Two equal windows, back to back, so the comparison is like for like. The
+ * previous window ends exactly where this one begins: an overlap would count
+ * the same issue in both and make every number look better than it is.
+ */
+export function compare(
+  issues: BoardIssue[],
+  weeks: number,
+  by: (i: BoardIssue) => string,
+  now = Date.now(),
+): Comparison {
+  const span = weeks * WEEK;
+  const thisFrom = now - span;
+  const lastFrom = thisFrom - span;
+
+  const openedNow = openedIn(issues, thisFrom, now);
+  const openedWas = openedIn(issues, lastFrom, thisFrom);
+  const closedNow = closedIn(issues, thisFrom, now);
+  const closedWas = closedIn(issues, lastFrom, thisFrom);
+  const closedKnown = issues.some(i => !!i.closedAt);
+
+  /* Open at the end of each window: filed by then, and not closed by then. */
+  const stillNow = issues.filter(i => Date.parse(i.createdAt) < now
+    && (!i.closedAt || Date.parse(i.closedAt) >= now)).length;
+  const stillWas = issues.filter(i => Date.parse(i.createdAt) < thisFrom
+    && (!i.closedAt || Date.parse(i.closedAt) >= thisFrom)).length;
+
+  const ageAtClose = (rows: BoardIssue[]) => median(rows
+    .map(i => (Date.parse(i.closedAt!) - Date.parse(i.createdAt)) / 86_400_000)
+    .filter(d => Number.isFinite(d) && d >= 0)
+    .map(d => Math.round(d)));
+
+  const metrics: Metric[] = [
+    { label: 'Opened', now: openedNow.length, was: openedWas.length, betterWhen: 'down' },
+    { label: 'Closed', now: closedNow.length, was: closedWas.length, betterWhen: 'up' },
+    { label: 'Still open', now: stillNow, was: stillWas, betterWhen: 'down', tone: 'red' },
+    {
+      label: 'Median age at close',
+      now: ageAtClose(closedNow), was: ageAtClose(closedWas),
+      betterWhen: 'down', unit: 'd', tone: 'amber',
+    },
+  ];
+
+  /* The bars count what was *opened* in each window, which is the question
+     "where did the work come from" — the one a module split can answer. */
+  const tally = (rows: BoardIssue[]) => {
+    const out = new Map<string, number>();
+    for (const r of rows) out.set(by(r), (out.get(by(r)) ?? 0) + 1);
+    return out;
+  };
+  const a = tally(openedNow);
+  const b = tally(openedWas);
+  const bars = [...new Set([...a.keys(), ...b.keys()])]
+    .map(label => ({ label, now: a.get(label) ?? 0, was: b.get(label) ?? 0 }))
+    .sort((x, y) => (y.now + y.was) - (x.now + x.was) || x.label.localeCompare(y.label));
+
+  return {
+    thisLabel: `Last ${weeks} weeks`,
+    lastLabel: `The ${weeks} before`,
+    metrics,
+    bars,
+    closedKnown,
+  };
+}
+
+/**
+ * The one sentence worth taking out of the screen, or nothing.
+ *
+ * "Reporting tripled and everything else is flat" is invisible on a
+ * single-period chart where all four modules read as an unremarkable three. It
+ * is only said when one row moved and the others did not — an observation that
+ * holds, rather than a caption on every screen.
+ */
+export function standout(bars: Comparison['bars']): string {
+  const moved = bars.filter(b => b.was > 0 && b.now >= b.was * 2 && b.now - b.was >= 2);
+  if (moved.length !== 1) return '';
+  const [only] = moved;
+  const rest = bars.filter(b => b !== only);
+  const flat = rest.every(b => Math.abs(b.now - b.was) <= 1);
+  if (!flat || rest.length === 0) return '';
+  const times = only.now / only.was;
+  const word = times >= 3 ? 'tripled' : times >= 2 ? 'doubled' : 'rose';
+  return `${only.label} ${word} and everything else is flat.`;
+}
