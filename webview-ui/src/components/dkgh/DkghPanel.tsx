@@ -31,6 +31,26 @@ import './dkgh.css';
 import { useShapePrefs } from './board-prefs';
 import type { GhEnv } from './types';
 
+/**
+ * The tab's root, for the screens that come before the board.
+ *
+ * Every rule in `dkgh.css` is scoped under `.dkgh` and every glyph comes out of
+ * a sprite that has to be in the document — and the first-run screens were
+ * returning neither. It did not show while they were built out of app-level
+ * components, because those bring their own colours; the moment they moved onto
+ * the mock's own classes they rendered as unstyled text with no icons at all.
+ *
+ * So there is one wrapper, and every early return goes through it.
+ */
+function Dkgh({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="dkgh">
+      <GhSprite />
+      {children}
+    </div>
+  );
+}
+
 export function DkghPanel() {
   const [env, setEnv] = useState<GhEnv | null>(null);
   const [envOverride, setEnvOverride] = useState<string | undefined>();
@@ -141,13 +161,15 @@ export function DkghPanel() {
       twice on the way to working.
     */
     return (
-      <div className="flex-1 flex items-center justify-center">
-        {slowProbe && (
-          <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
-            Looking for the GitHub CLI…
-          </span>
-        )}
-      </div>
+      <Dkgh>
+        <div className="flex-1 flex items-center justify-center">
+          {slowProbe && (
+            <span style={{ fontSize: 13, color: 'var(--dk-faint)' }}>
+              Looking for the GitHub CLI…
+            </span>
+          )}
+        </div>
+      </Dkgh>
     );
   }
 
@@ -162,7 +184,7 @@ export function DkghPanel() {
 
   if (!env.present) {
     return (
-      <>
+      <Dkgh>
         <GhNotInstalled
           env={env}
           envOverride={envOverride}
@@ -171,7 +193,7 @@ export function DkghPanel() {
           onLocate={() => setLocating(true)}
         />
         {locate}
-      </>
+      </Dkgh>
     );
   }
 
@@ -182,19 +204,21 @@ export function DkghPanel() {
   */
   if (showNetwork) {
     return (
-      <GhUnreachable
-        account={env.auth?.accounts?.find(a => a.active)?.login}
-        data={reach.data}
-        running={reach.running}
-        onRetry={() => { diagnose(); recheck(); }}
-        onBack={() => setShowNetwork(false)}
-      />
+      <Dkgh>
+        <GhUnreachable
+          account={env.auth?.accounts?.find(a => a.active)?.login}
+          data={reach.data}
+          running={reach.running}
+          onRetry={() => { diagnose(); recheck(); }}
+          onBack={() => setShowNetwork(false)}
+        />
+      </Dkgh>
     );
   }
 
   if (!env.auth?.loggedIn) {
     return (
-      <>
+      <Dkgh>
         <GhSignIn
           env={env}
           checking={checking}
@@ -203,7 +227,7 @@ export function DkghPanel() {
           onDiagnose={() => { setShowNetwork(true); diagnose(); }}
         />
         {locate}
-      </>
+      </Dkgh>
     );
   }
 

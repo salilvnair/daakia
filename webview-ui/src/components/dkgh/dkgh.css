@@ -1659,3 +1659,41 @@
 }
 .dkgh .pick-row:hover { background: color-mix(in srgb, var(--dk-gh) 50%, transparent); }
 .dkgh .pick-row:hover span { color: #fff !important; }
+
+/*
+  ── The first-run screens, made pressable ──
+
+  The mock draws these as spans, so the platform tabs and every `copy` in a
+  command block are text that happens to do something. They are buttons here,
+  and these are the states a static figure has nothing to say about.
+*/
+.dkgh .plat button {
+  font-size: 12.6px; padding: 4.8px 14.4px; border-radius: 7.2px;
+  color: var(--dk-muted); border: 1px solid transparent; background: transparent;
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .plat button:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .plat button.on {
+  color: var(--dk-text); background: var(--dk-raised);
+  border-color: var(--dk-border); font-weight: 600;
+}
+
+.dkgh .cmd .copy {
+  padding: 1px 7.2px; border-radius: 4.8px; cursor: pointer;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .cmd .copy:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .cmd .copy.done {
+  color: var(--dk-green);
+  background: color-mix(in srgb, var(--dk-green) 16%, transparent);
+}
+
+/*
+  A note stacks under the one above it. The mock draws one at a time, so its
+  rule has no bottom margin and two of them ended up welded together.
+*/
+.dkgh .empty .note + .note { margin-top: 9.6px; }
+.dkgh .empty code {
+  font-family: var(--mono); font-size: .92em; padding: 1px 4.8px; border-radius: 3.6px;
+  background: var(--dk-raised); color: var(--dk-text);
+}

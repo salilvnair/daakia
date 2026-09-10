@@ -98,7 +98,7 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
   const isPinned = (repo: string) => pinned.some(p => p.nameWithOwner === repo);
 
   return (
-    <GhEmpty icon={<RepoIcon size={30} />} title="Which repository?">
+    <GhEmpty icon="repo" title="Which repository?">
       <GhLede>
         Signed in as <span style={{ color: 'var(--color-text-primary)' }}>{account?.login}</span>
         {' '}on {account?.host}. Pick the repository whose issues you want to read and write.

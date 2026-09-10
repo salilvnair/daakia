@@ -80,7 +80,7 @@ export function GhNoAccess({ repo, onRetry, onChangeRepo }: {
   })();
 
   return (
-    <GhEmpty icon={<LockIcon size={30} />} title={`Cannot open ${repo}`} titleColor="var(--color-warning)">
+    <GhEmpty icon="lock" title={`Cannot open ${repo}`}>
       <GhLede>
         GitHub answered <b>404</b>. For a private repository that means the same thing as
         &ldquo;no access&rdquo; — it does not distinguish, on purpose.

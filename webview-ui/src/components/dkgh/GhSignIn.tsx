@@ -11,10 +11,10 @@
  * costs nothing; a roadmap that is silently empty because of a permission
  * nobody mentioned costs an afternoon.
  */
-import { ButtonView, SetupOptionView } from '@salilvnair/dui';
-import { KeyIcon, RefreshIcon } from '../../icons';
-import { GhEmpty, GhLede, GhNote, GhActions, GhPrimary } from './GhShell';
-import { ACCENT, type GhEnv } from './types';
+import {
+  GhEmpty, GhLede, GhNote, GhActions, GhPrimary, GhButton, GhCommand,
+} from './GhShell';
+import type { GhEnv } from './types';
 
 const LOGIN = 'gh auth login --hostname github.com --git-protocol ssh --scopes read:project --web';
 const REFRESH = 'gh auth refresh --scopes read:project';
@@ -31,39 +31,42 @@ export function GhSignIn({ env, checking, onRecheck, onLocate, onDiagnose }: {
   const version = env.version?.version ?? env.version?.raw;
 
   return (
-    <GhEmpty icon={<KeyIcon size={38} />} title="Sign in to GitHub">
+    <GhEmpty icon="lock" title="Sign in to GitHub">
       <GhLede>
-        <span style={{ color: 'var(--color-success)' }}>gh {version} found.</span>{' '}
+        <span style={{ color: 'var(--dk-green)' }}>gh {version} found.</span>{' '}
         Run the login once in any terminal — it opens your browser, handles SSO and
         hardware keys, and hands the credential to the OS keychain.
       </GhLede>
 
-      <div className="flex flex-col gap-2 w-full" style={{ maxWidth: 520 }}>
-        <SetupOptionView
-          accentColor={ACCENT}
-          title="Sign in"
-          tag="one time"
-          recommended
-          command={LOGIN}
-          note={<>Every prompt answered but the browser step. Drop <code>--git-protocol ssh</code> for
-            HTTPS, and add <code>--skip-ssh-key</code> if you have already uploaded a key.</>}
-        />
-        <SetupOptionView
-          accentColor={ACCENT}
-          title="Already signed in elsewhere?"
-          command={REFRESH}
-          note="Adds the scope to an existing credential without signing you out of anything."
-        />
-        <SetupOptionView
-          accentColor={ACCENT}
-          title="GitHub Enterprise Server"
-          command={ENTERPRISE}
-          note={<>dkgh reads the host back from <code>gh auth status</code>; you never type a
-            URL into Daakia, and Daakia never stores one.</>}
-        />
+      {/* One column, not two: these are three things to read in order, not
+          three alternatives to choose between. */}
+      <div className="opts" style={{ gridTemplateColumns: '1fr' }}>
+        <div className="opt pick">
+          <div className="oh">Sign in<span className="tag">one time</span><span className="sp" /></div>
+          <GhCommand text={LOGIN} prompt="$" />
+          <div className="sub">
+            Every prompt answered but the browser step. Drop <code>--git-protocol ssh</code> for
+            HTTPS, and add <code>--skip-ssh-key</code> if you have already uploaded a key.
+          </div>
+        </div>
+        <div className="opt">
+          <div className="oh">Already signed in elsewhere?<span className="sp" /></div>
+          <GhCommand text={REFRESH} prompt="$" />
+          <div className="sub">
+            Adds the scope to an existing credential without signing you out of anything.
+          </div>
+        </div>
+        <div className="opt">
+          <div className="oh">GitHub Enterprise Server<span className="sp" /></div>
+          <GhCommand text={ENTERPRISE} prompt="$" />
+          <div className="sub">
+            dkgh reads the host back from <code>gh auth status</code>; you never type a URL into
+            Daakia, and Daakia never stores one.
+          </div>
+        </div>
       </div>
 
-      <div className="w-full mt-3 flex flex-col gap-2" style={{ maxWidth: 520 }}>
+      <>
         <GhNote title="What read:project is for">
           Start date, ETA and Status live on GitHub Projects, not on the issue, and the default
           login cannot see them. It is <b>read-only</b> — dkgh asks for write access separately,
@@ -75,32 +78,29 @@ export function GhSignIn({ env, checking, onRecheck, onLocate, onDiagnose }: {
           token. Handing the whole flow to <code>gh</code> means the only thing we ever learn is
           the answer to &ldquo;are you logged in?&rdquo;
         </GhNote>
-      </div>
+      </>
 
       <GhActions>
-        <GhPrimary iconLeft={<RefreshIcon size={12} />} onClick={onRecheck}>
+        <GhPrimary icon="refresh" onClick={onRecheck}>
           {checking ? 'Checking…' : 'I have signed in'}
         </GhPrimary>
-        <ButtonView size="md" accentColor="var(--color-text-muted)"
-                    onClick={() => window.open('https://cli.github.com/manual/gh_auth_login', '_blank')}>
+        <GhButton
+          onClick={() => window.open('https://cli.github.com/manual/gh_auth_login', '_blank')}
+        >
           gh auth login docs
-        </ButtonView>
+        </GhButton>
         {/*
           Two ways this screen can be a lie. Either gh is not the gh you meant,
           or it is and the network is eating the answer — both look exactly like
           "not signed in" from here, and neither is fixed by signing in again.
         */}
-        <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onDiagnose}>
-          Signed in already? Check the network
-        </ButtonView>
-        <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onLocate}>
-          Wrong gh? Locate another
-        </ButtonView>
+        <GhButton onClick={onDiagnose}>Signed in already? Check the network</GhButton>
+        <GhButton onClick={onLocate}>Wrong gh? Locate another</GhButton>
       </GhActions>
 
-      <p className="text-[10px] mt-3" style={{ color: 'var(--color-text-muted)' }}>
+      <div style={{ textAlign: 'center', marginTop: 14, fontSize: 11, color: 'var(--dk-faint)' }}>
         Checking every few seconds while this screen is open.
-      </p>
+      </div>
     </GhEmpty>
   );
 }

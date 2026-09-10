@@ -12,21 +12,24 @@
  * telling it nothing.
  */
 import { useState } from 'react';
-import { ButtonView, SegmentedControlView, SetupOptionView } from '@salilvnair/dui';
-import { TerminalIcon, RefreshIcon, DownloadIcon, FolderOpenIcon } from '../../icons';
-import { GhEmpty, GhLede, GhNote, GhActions, GhPrimary } from './GhShell';
-import { ACCENT, type GhEnv } from './types';
+import { Ico } from './GhIcons';
+import {
+  GhEmpty, GhLede, GhNote, GhActions, GhPrimary, GhButton, CopyWord,
+} from './GhShell';
+import type { GhEnv } from './types';
 
 type Plat = 'win32' | 'darwin' | 'linux';
 
 const LABEL: Record<Plat, string> = { win32: 'Windows', darwin: 'macOS', linux: 'Linux' };
+const PLATS: Plat[] = ['win32', 'darwin', 'linux'];
 
 interface Route {
   title: string;
   tag?: string;
   command?: string;
+  /** The file to fetch, when there is no package manager to ask. */
+  file?: string;
   note?: string;
-  download?: boolean;
 }
 
 const ROUTES: Record<Plat, Route[]> = {
@@ -37,26 +40,29 @@ const ROUTES: Record<Plat, Route[]> = {
       note: 'If you already use Scoop for your dev tools.' },
     { title: 'Chocolatey', command: 'choco install gh',
       note: 'Needs an elevated shell.' },
-    { title: 'Download', download: true,
+    { title: 'Download', file: 'gh_2.x_windows_amd64.zip',
       note: 'Installer and portable zip at github.com/cli/cli/releases — for a locked-down machine with no package manager.' },
   ],
   darwin: [
     { title: 'Homebrew', tag: 'recommended', command: 'brew install gh',
       note: 'What almost every Mac dev machine already has.' },
-    { title: 'MacPorts', command: 'sudo port install gh' },
-    { title: 'Download', download: true,
+    { title: 'MacPorts', command: 'sudo port install gh',
+      note: 'If Homebrew is not the one you keep up to date.' },
+    { title: 'Download', file: 'gh_2.x_macOS_universal.pkg',
       note: 'The .pkg at github.com/cli/cli/releases. Gatekeeper will quarantine it on first open.' },
   ],
   linux: [
-    { title: 'Debian · Ubuntu', tag: 'apt', command: 'sudo apt install gh' },
+    { title: 'Debian · Ubuntu', tag: 'apt', command: 'sudo apt install gh',
+      note: 'Several distros ship an old gh — see 01C if it installs but cannot do everything.' },
     { title: 'Fedora · RHEL', command: 'sudo dnf install gh' },
     { title: 'Arch', command: 'sudo pacman -S github-cli' },
-    { title: 'Download', download: true,
-      note: 'The tarball at github.com/cli/cli/releases — for a container, or a machine with no sudo. Several distros ship an old gh in their default repos.' },
+    { title: 'Download', file: 'gh_2.x_linux_amd64.tar.gz',
+      note: 'The tarball at github.com/cli/cli/releases — for a container, or a machine with no sudo.' },
   ],
 };
 
 const RELEASES = 'https://github.com/cli/cli/releases';
+const DOCS = 'https://github.com/cli/cli#installation';
 
 export function GhNotInstalled({ env, envOverride, checking, onRecheck, onLocate }: {
   env: GhEnv;
@@ -66,13 +72,11 @@ export function GhNotInstalled({ env, envOverride, checking, onRecheck, onLocate
   /** Screen 01B. The route that actually works on a locked-down machine. */
   onLocate: () => void;
 }) {
-  const detected = (['win32', 'darwin', 'linux'] as Plat[]).includes(env.platform as Plat)
-    ? (env.platform as Plat)
-    : 'linux';
+  const detected = PLATS.includes(env.platform as Plat) ? (env.platform as Plat) : 'linux';
   const [plat, setPlat] = useState<Plat>(detected);
 
   return (
-    <GhEmpty icon={<TerminalIcon size={38} />} title="GitHub CLI not found">
+    <GhEmpty icon="term" title="GitHub CLI not found">
       <GhLede>
         dkgh drives the official <code>gh</code> command, so your GitHub credential
         stays in the OS keychain and never reaches Daakia. Install it once, then
@@ -85,87 +89,88 @@ export function GhNotInstalled({ env, envOverride, checking, onRecheck, onLocate
         install list is advice for a problem you do not have.
       */}
       {envOverride && (
-        <div className="w-full mb-3">
-          <GhNote title="DAAKIA_GH is set" tone="warn">
-            Only that path was tried — nothing else was looked at.
-            <span className="font-mono block mt-1">{envOverride}</span>
-          </GhNote>
-        </div>
+        <GhNote title="DAAKIA_GH is set" tone="warn">
+          Only that path was tried — nothing else was looked at.
+          <div style={{ fontFamily: 'var(--mono)', marginTop: 4, color: 'var(--dk-muted)' }}>
+            {envOverride}
+          </div>
+        </GhNote>
       )}
 
-      {/* Platform tabs — open on what the host reported, marked with a dot. */}
-      <div className="mb-3">
-        <SegmentedControlView
-          size="sm"
-          accentColor={ACCENT}
-          value={plat}
-          onChange={v => setPlat(v as Plat)}
-          options={(['win32', 'darwin', 'linux'] as Plat[]).map(p => ({
-            value: p,
-            label: p === detected ? `${LABEL[p]} ·` : LABEL[p],
-          }))}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 w-full">
-        {ROUTES[plat].map(r => (
-          <SetupOptionView
-            key={r.title}
-            title={r.title}
-            tag={r.tag}
-            recommended={r.tag === 'recommended'}
-            command={r.command}
-            note={r.note}
-            accentColor={ACCENT}
-            action={r.download ? (
-              <ButtonView size="sm" variant="ghost" accentColor={ACCENT}
-                          iconLeft={<DownloadIcon size={11} />}
-                          onClick={() => window.open(RELEASES, '_blank')}>
-                Open releases
-              </ButtonView>
-            ) : undefined}
-          />
+      {/* The platform tabs, open on what the host reported. */}
+      <div className="plat">
+        {PLATS.map(p => (
+          <button
+            key={p}
+            type="button"
+            className={p === plat ? 'on' : undefined}
+            onClick={() => setPlat(p)}
+            title={p === detected ? 'What this machine reports' : undefined}
+          >
+            {LABEL[p]}{p === detected ? ' ·' : ''}
+          </button>
         ))}
       </div>
 
-      <div className="w-full mt-3">
-        <GhNote title="Daakia never asks for a GitHub token">
-          Signing in is the next screen and it happens inside <code>gh</code>, which stores the
-          credential in your OS keychain. Nothing is written to Daakia's database.
-        </GhNote>
+      <div className="opts">
+        {ROUTES[plat].map(r => (
+          <div key={r.title} className={`opt${r.tag === 'recommended' ? ' pick' : ''}`}>
+            <div className="oh">
+              {r.title}
+              {r.tag && <span className="tag">{r.tag}</span>}
+              <span className="sp" />
+            </div>
+            {r.command ? (
+              <div className="cmd">
+                <span className="p">{plat === 'win32' ? '>' : '$'}</span>
+                {r.command}
+                <span className="sp" />
+                <CopyWord text={r.command} />
+              </div>
+            ) : (
+              <div className="cmd">
+                <Ico name="dl" style={{ color: 'var(--dk-muted)' }} />
+                {r.file}
+                <span className="sp" />
+                <button type="button" className="copy"
+                        onClick={() => window.open(RELEASES, '_blank')}>
+                  open
+                </button>
+              </div>
+            )}
+            {r.note && <div className="sub">{r.note}</div>}
+          </div>
+        ))}
       </div>
 
+      <GhNote title="Daakia never asks for a GitHub token">
+        Signing in is the next screen and it happens inside <code>gh</code>, which stores the
+        credential in your OS keychain. Nothing is written to Daakia&rsquo;s database.
+      </GhNote>
+
       {env.triedPaths?.length ? (
-        <div className="w-full mt-2">
-          <GhNote title="Where it looked">
-            <span className="font-mono">{env.triedPaths.join(' · ')}</span>
-            {!envOverride && ' — if gh is somewhere else, set the path in Settings → GitHub CLI.'}
-          </GhNote>
-        </div>
+        <GhNote title="Where it looked" icon="search">
+          <span style={{ fontFamily: 'var(--mono)' }}>{env.triedPaths.join(' · ')}</span>
+          {!envOverride && ' — if gh is somewhere else, point at it below.'}
+        </GhNote>
       ) : null}
 
       <GhActions>
-        <GhPrimary iconLeft={<RefreshIcon size={12} />} onClick={onRecheck}>
+        <GhPrimary icon="refresh" onClick={onRecheck}>
           {checking ? 'Checking…' : 'Check again'}
         </GhPrimary>
         {/*
-          Placed beside "Check again" rather than buried, because the machine
-          most likely to be on this screen is the one where gh is already
-          present — unpacked somewhere nobody put on PATH.
+          Beside "Check again" rather than buried, because the machine most
+          likely to be on this screen is the one where gh is already present —
+          unpacked somewhere nobody put on PATH.
         */}
-        <ButtonView size="md" accentColor={ACCENT} iconLeft={<FolderOpenIcon size={12} />}
-                    onClick={onLocate}>
-          I already have it — locate gh
-        </ButtonView>
-        <ButtonView size="md" accentColor="var(--color-text-muted)"
-                    onClick={() => window.open('https://github.com/cli/cli#installation', '_blank')}>
-          Installation docs
-        </ButtonView>
+        <GhButton icon="repo" onClick={onLocate}>I already have it — locate gh</GhButton>
+        <GhButton onClick={() => window.open(DOCS, '_blank')}>Installation docs</GhButton>
       </GhActions>
 
-      <p className="text-[10px] mt-3" style={{ color: 'var(--color-text-muted)' }}>
+      <div style={{ textAlign: 'center', marginTop: 14, fontSize: 11, color: 'var(--dk-faint)' }}>
         Checking every few seconds while this screen is open.
-      </p>
+      </div>
     </GhEmpty>
   );
 }
