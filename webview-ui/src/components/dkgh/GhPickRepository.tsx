@@ -36,6 +36,7 @@ import {
   RepoIcon, CheckIcon, WarningTriangleIcon, LockIcon, PinIcon, UnpinIcon,
 } from '../../icons';
 import { GhEmpty, GhLede, GhNote, GhCommand } from './GhShell';
+import { Ico } from './GhIcons';
 import { GhForkChoice } from './GhForkChoice';
 import { since, formsLabel } from './format';
 import {
@@ -100,11 +101,13 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
   return (
     <GhEmpty icon="repo" title="Which repository?">
       <GhLede>
-        Signed in as <span style={{ color: 'var(--color-text-primary)' }}>{account?.login}</span>
+        Signed in as <span style={{ color: 'var(--dk-text)' }}>{account?.login}</span>
         {' '}on {account?.host}. Pick the repository whose issues you want to read and write.
       </GhLede>
 
-      <div className="w-full flex flex-col gap-2" style={{ maxWidth: 520 }}>
+      {/* One column at the mock's width: these are ways in, ordered by how
+          likely each is to be right, not a grid of equals. */}
+      <div className="opts" style={{ gridTemplateColumns: '1fr', maxWidth: 470 }}>
 
         {/* The guess — or, when it is a fork, the question the fork raises */}
         {guessing ? (
@@ -112,19 +115,21 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
         ) : fork ? (
           <GhForkChoice choice={fork} onPick={onPick} />
         ) : guess.repo ? (
-          <SetupOptionView
-            accentColor={ACCENT}
-            recommended
-            title={guess.repo.nameWithOwner}
-            tag="from git remote"
-            note={<RepoFacts repo={guess.repo} lead="Detected in the open workspace" />}
-            action={
-              <ButtonView size="sm" variant="primary" accentColor={ACCENT}
-                          onClick={() => onPick(guess.repo!.nameWithOwner)}>
+          <div className="opt pick">
+            <div className="oh">
+              <Ico name="repo" style={{ color: 'var(--dk-gh)' }} />
+              {guess.repo.nameWithOwner}
+              <span className="tag">from git remote</span>
+              <span className="sp" />
+              <button type="button" className="btn go" style={{ padding: '3px 10px' }}
+                      onClick={() => onPick(guess.repo!.nameWithOwner)}>
                 Use this
-              </ButtonView>
-            }
-          />
+              </button>
+            </div>
+            <div className="sub">
+              <RepoFacts repo={guess.repo} lead="Detected in the open workspace" />
+            </div>
+          </div>
         ) : (
           /* Named, not swallowed: "no remote" and "you cannot see this
              repository" are different problems with different fixes. */
@@ -132,32 +137,45 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
         )}
 
         {/* The search */}
-        <SetupOptionView
-          accentColor={ACCENT}
-          title="Search your repositories"
-          note={<>Anything <code>gh repo list</code> can see, including private and organisation
-            repos.</>}
-          action={exact ? (
-            <ButtonView size="sm" variant="primary" accentColor={ACCENT}
-                        onClick={() => onPick(typed.trim())}>
-              Use this
-            </ButtonView>
-          ) : undefined}
-        >
-          <SearchFieldView
-            value={typed}
-            onChange={v => { onTyped(v); if (v.trim().length >= 2) onSearch(); }}
-            onClear={() => onTyped('')}
-            /* Enter takes an exact owner/name straight through — typing a
-               repository you already know and waiting for a search is a step
-               nobody wants. */
-            onSearch={v => { if (VALID.test(v.trim())) onPick(v.trim()); else if (v.trim()) onSearch(); }}
-            placeholder="owner/name, or a word to search for"
-            size="md"
-            accentColor={ACCENT}
-            width="100%"
-          />
-        </SetupOptionView>
+        <div className="opt">
+          <div className="oh">
+            <Ico name="search" style={{ color: 'var(--dk-muted)' }} />
+            Search your repositories
+            <span className="sp" />
+            {exact && (
+              <button type="button" className="btn go" style={{ padding: '3px 10px' }}
+                      onClick={() => onPick(typed.trim())}>
+                Use this
+              </button>
+            )}
+          </div>
+          <div className="cmd">
+            <Ico name="search" style={{ color: 'var(--dk-faint)' }} />
+            <input
+              value={typed}
+              onChange={e => {
+                onTyped(e.target.value);
+                if (e.target.value.trim().length >= 2) onSearch();
+              }}
+              /* Enter takes an exact owner/name straight through — typing a
+                 repository you already know and waiting for a search is a step
+                 nobody wants. */
+              onKeyDown={e => {
+                if (e.key !== 'Enter') return;
+                const v = typed.trim();
+                if (VALID.test(v)) onPick(v); else if (v) onSearch();
+              }}
+              placeholder="owner/name, or a word to search for"
+              style={{
+                flex: 1, minWidth: 0, background: 'transparent', border: 'none',
+                outline: 'none', color: 'inherit', font: 'inherit',
+              }}
+            />
+          </div>
+          <div className="sub">
+            Anything <code>gh repo list</code> can see, including private and organisation repos.
+          </div>
+        </div>
 
         {/* 03D — pinned first, because pinning is a deliberate act */}
         {pinned.length > 0 && (
@@ -191,39 +209,37 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
       </div>
 
       {/* What this account can currently do */}
-      <div className="w-full mt-4 flex flex-col gap-1.5" style={{ maxWidth: 520 }}>
-        <div className="flex items-center gap-2">
-          <span className="text-[9.5px] font-bold uppercase tracking-wider"
-                style={{ color: 'var(--color-text-muted)' }}>
-            This account
-          </span>
-          <span className="flex-1" />
+      <div className="facet" style={{ maxWidth: 470, margin: '16px auto 0', textAlign: 'left' }}>
+        <div className="fh" style={{ padding: '4px 0 6px' }}>
+          This account
           {onOpenAccount && (
-            <ButtonView size="sm" variant="ghost" accentColor={ACCENT} onClick={onOpenAccount}>
-              Scopes, hosts and commands
-            </ButtonView>
+            <button type="button" className="only" style={{ opacity: 1, marginLeft: 'auto' }}
+                    onClick={onOpenAccount}>
+              scopes, hosts and commands
+            </button>
           )}
         </div>
-        {SCOPES.map(s => {
-          const have = hasScope(account, s.name);
+        {SCOPES.map(sc => {
+          const have = hasScope(account, sc.name);
           return (
-            <div key={s.name} className="flex items-center gap-2 text-[11px]">
-              {have
-                ? <CheckIcon size={11} style={{ color: 'var(--color-success)' }} />
-                : <WarningTriangleIcon size={11}
-                    style={{ color: s.required ? 'var(--color-error)' : 'var(--color-warning)' }} />}
-              <code style={{ color: have ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}>
-                {s.name}
-              </code>
-              <span style={{ color: 'var(--color-text-muted)' }}>{s.buys}</span>
+            <div key={sc.name} className="fct" style={{ cursor: 'default' }}>
+              <Ico
+                name={have ? 'check' : 'warn'}
+                style={{
+                  color: have ? 'var(--dk-green)'
+                    : sc.required ? 'var(--dk-red)' : 'var(--dk-amber)',
+                }}
+              />
+              <code style={{ color: have ? 'var(--dk-text)' : 'var(--dk-muted)' }}>{sc.name}</code>
+              <span style={{ color: 'var(--dk-faint)' }}>{sc.buys}</span>
             </div>
           );
         })}
 
         {missingProject && (
-          <div className="mt-1.5 flex flex-col gap-1.5">
-            <GhCommand text="gh auth refresh --scopes read:project" />
-            <div className="text-[10px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+          <div style={{ marginTop: 8 }}>
+            <GhCommand text="gh auth refresh --scopes read:project" prompt="$" />
+            <div className="sub" style={{ marginTop: 6 }}>
               Adds the scope in place — keeps your account, your protocol and your existing
               scopes. Without it the board still works; the roadmap and the date columns say
               what is missing rather than showing blanks.
@@ -244,15 +260,11 @@ export function GhPickRepository({ env, typed, onTyped, onSearch, onPick, onOpen
  */
 function GuessSkeleton() {
   return (
-    <div className="rounded-xl border p-3 flex flex-col gap-2"
-         style={{
-           borderColor: `color-mix(in srgb, ${ACCENT} 50%, transparent)`,
-           backgroundColor: `color-mix(in srgb, ${ACCENT} 7%, transparent)`,
-         }}>
-      <div className="flex items-center gap-2 animate-pulse">
+    <div className="opt pick">
+      <div className="oh animate-pulse" style={{ gap: 8 }}>
         <SkeletonView variant="block" width={132} height={12} />
         <SkeletonView variant="block" width={78} height={12} />
-        <span className="flex-1" />
+        <span className="sp" />
         <SkeletonView variant="block" width={62} height={20} />
       </div>
       <div className="animate-pulse">
@@ -262,13 +274,7 @@ function GuessSkeleton() {
   );
 }
 
-/**
- * The two numbers worth knowing before you commit to a repository.
- *
- * Templates rather than "has templates", because three forms and one form are
- * different amounts of structure for the board to group by, and zero is the
- * case that explains an empty Module column before anybody has to ask.
- */
+/** What is worth knowing about a repository before you commit to it. */
 function RepoFacts({ repo, lead }: { repo: RepoSummary; lead?: string }) {
   const t = repo.templates ?? 0;
   return (
@@ -291,19 +297,17 @@ function RepoSection({ title, aside, repos, pinnedNames, onPick, onPin }: {
   onPin: (repo: string) => void;
 }) {
   return (
-    <div className="mt-1">
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[9.5px] font-bold uppercase tracking-[.09em]"
-              style={{ color: 'var(--color-text-muted)' }}>
-          {title}
-        </span>
-        <span className="flex-1 h-px" style={{ background: 'var(--color-surface-border)' }} />
-        <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{aside}</span>
+    <div className="facet" style={{ marginTop: 12, textAlign: 'left' }}>
+      <div className="fh" style={{ padding: '4px 0 6px' }}>
+        {title}
+        <span className="n" style={{ textTransform: 'none', letterSpacing: 0 }}>{aside}</span>
       </div>
-      <div className="flex flex-col rounded-lg border overflow-hidden"
-           style={{ borderColor: 'var(--color-surface-border)' }}>
-        {repos.map((r, i) => (
-          <RepoRow key={r.nameWithOwner} repo={r} first={i === 0}
+      {/* The mock's own list: an `.opt` shell with no padding of its own, and
+          `.fct` rows inside it, so a repository reads the same way a facet
+          value does everywhere else in the tab. */}
+      <div className="opt" style={{ gap: 0, padding: 0 }}>
+        {repos.map(r => (
+          <RepoRow key={r.nameWithOwner} repo={r}
                    pinned={pinnedNames.includes(r.nameWithOwner)}
                    onPick={onPick} onPin={onPin} />
         ))}
@@ -319,56 +323,52 @@ function RepoSection({ title, aside, repos, pinnedNames, onPick, onPin }: {
  * age on it claims to be current; this one says when it was true, which is the
  * difference between a fast picker and a lying one.
  */
-function RepoRow({ repo, first, pinned, onPick, onPin }: {
+function RepoRow({ repo, pinned, onPick, onPin }: {
   repo: RepoSummary;
-  first: boolean;
   pinned: boolean;
   onPick: (repo: string) => void;
   onPin: (repo: string) => void;
 }) {
   const t = repo.templates ?? 0;
   return (
-    <div
-      className="flex items-center gap-2 px-2.5 py-1.5"
-      style={{
-        borderTop: first ? 'none'
-          : '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
-      }}
-    >
+    <div className="fct" style={{ padding: '6px 11px' }}>
       <button
         type="button"
         onClick={() => onPick(repo.nameWithOwner)}
-        className="flex items-center gap-2 flex-1 min-w-0 text-left cursor-pointer"
-        style={{ background: 'transparent', border: 'none', padding: 0 }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0,
+          background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
+          color: 'inherit', font: 'inherit', textAlign: 'left',
+        }}
       >
-        {repo.isPrivate
-          ? <LockIcon size={12} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-          : <RepoIcon size={12} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />}
-        <span className="text-[11px] font-mono truncate"
-              style={{ color: 'var(--color-text-primary)' }}>
+        <Ico name={repo.isPrivate ? 'lock' : 'repo'} />
+        <span style={{
+          fontFamily: 'var(--mono)', color: 'var(--dk-text)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
           {repo.nameWithOwner}
         </span>
-        {repo.isArchived && (
-          <BadgeChipView tone="var(--color-text-muted)" size="xs">archived</BadgeChipView>
-        )}
-        {t > 0
-          ? <BadgeChipView tone={ACCENT} size="xs">{formsLabel(t)}</BadgeChipView>
-          : <BadgeChipView tone="var(--color-text-muted)" size="xs">no forms</BadgeChipView>}
-        <span className="flex-1" />
-        <span className="text-[10px] font-mono whitespace-nowrap"
-              style={{ color: 'var(--color-text-muted)' }}>
-          {repo.openIssues} open
-          {repo.countedAt ? ` · ${since(repo.countedAt)}` : ''}
+        {repo.isArchived && <span className="chip">archived</span>}
+        <span className={t > 0 ? 'chip c-gh' : 'chip'}>
+          {t > 0 ? formsLabel(t) : 'no forms'}
+        </span>
+        {/* The count carries its age when it came from the cache. A number with
+            no age on it claims to be current; this one says when it was true,
+            which is the difference between a fast picker and a lying one. */}
+        <span className="n">
+          {repo.openIssues} open{repo.countedAt ? ` · ${since(repo.countedAt)}` : ''}
         </span>
       </button>
-      <IconButtonView
-        icon={pinned ? <UnpinIcon size={11} /> : <PinIcon size={11} />}
-        tooltip={pinned
+      <button
+        type="button"
+        className={`pin${pinned ? ' on' : ''}`}
+        title={pinned
           ? 'Unpin — it stays in this workspace’s recents'
           : 'Pin, so it is one click away from every workspace'}
-        accentColor={pinned ? ACCENT : 'var(--color-text-muted)'}
         onClick={() => onPin(repo.nameWithOwner)}
-      />
+      >
+        {pinned ? <UnpinIcon size={11} /> : <PinIcon size={11} />}
+      </button>
     </div>
   );
 }

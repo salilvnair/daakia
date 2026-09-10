@@ -1125,6 +1125,13 @@
   which is why the chevron leads instead of trailing. See GhPanel.
 */
 .dkgh .facet .fh { width: 100%; cursor: pointer; }
+/*
+  The mock only ever draws a heading inside a facet, so its "push the count to
+  the right" rule is scoped to one. The same heading is now used for a section
+  of a screen — Recent, This account — where there is no facet above it, and
+  without this the aside welds itself to the title.
+*/
+.dkgh .fh .n { margin-left: auto; }
 .dkgh .facet .fh .n { margin-left: auto; }
 .dkgh .facet .fh .clr { margin-left: auto; }
 .dkgh .facet .fh .clr + .n { margin-left: 0; }
