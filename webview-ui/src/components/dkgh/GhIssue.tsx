@@ -34,6 +34,8 @@ import { GhEditConfirm } from './GhEditConfirm';
 import { GhCloseIssue } from './GhCloseIssue';
 import { GhMarkdown } from './GhMarkdown';
 import { useEditFlow } from './edit-flow';
+import { GhRelations, useRelations } from './GhRelations';
+import type { ProjectField } from './project-store';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 interface Detail {
@@ -85,12 +87,20 @@ const STATE_CLASS: Record<string, string> = {
   blocked: 'st-block',
 };
 
-export function GhIssue({ repo, issue, dimensions, closed, onBack, onWrote }: {
+export function GhIssue({
+  repo, issue, dimensions, closed, all, end, onOpen, onBack, onWrote,
+}: {
   repo: string;
   issue: BoardIssue;
   dimensions: ProposedDimension[];
   /** The closed issues the board holds — 14E reads its reasons off them. */
   closed: BoardIssue[];
+  /** The whole board, so 14D can give a blocker its chips and its ETA. */
+  all: BoardIssue[];
+  /** The Project's target-date field — where a blocker's ETA lives. */
+  end?: ProjectField;
+  /** Follow a relationship to the issue on the other end of it. */
+  onOpen: (n: number) => void;
   onBack: () => void;
   /** After a write lands, so the board and this page re-read. */
   onWrote: () => void;
@@ -105,6 +115,8 @@ export function GhIssue({ repo, issue, dimensions, closed, onBack, onWrote }: {
   const [closing, setClosing] = useState(false);
   /** How many times a write has landed, to re-read this page's own two calls. */
   const [wrote, setWrote] = useState(0);
+  /** 14D — what this issue is attached to. A third call, and the cheapest. */
+  const relations = useRelations(repo, issue.number, wrote);
 
   /*
     This page's own write flow.
@@ -315,6 +327,9 @@ export function GhIssue({ repo, issue, dimensions, closed, onBack, onWrote }: {
                   )}
                 </div>
               )}
+
+              {/* 14D — sub-issues, blockers, and where this was referenced from */}
+              <GhRelations rel={relations} issues={all} end={end} onOpen={onOpen} />
 
               {/* The discussion */}
               {(detail?.comments ?? []).map((c, at) => (

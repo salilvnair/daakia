@@ -87,6 +87,10 @@ export const GH_COMMANDS: GhCommandRow[] = [
     when: 'on connect, if read:project is granted — the Status, Priority and dates the '
         + 'columns and roadmap views are made of, in one call',
     kind: 'read', live: true },
+  { command: 'gh api graphql (repository → issue → blockedBy, subIssues, timelineItems)',
+    when: 'opening an issue — what it blocks, what blocks it, its sub-issues and every '
+        + 'place it was referenced from, in one call',
+    kind: 'read', live: true },
   { command: 'gh search issues <q> --repo <r> --match ...',
     when: 'only when you widen the search to comments, or past the loaded page',
     kind: 'read', live: true },

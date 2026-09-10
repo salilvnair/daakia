@@ -29,6 +29,7 @@ import {
   type EditRequest, type CreateRequest, type StepKind,
 } from '../../../services/gh/write';
 import { fetchRepoMeta } from '../../../services/gh/meta';
+import { fetchRelations } from '../../../services/gh/relations';
 import { fetchTimeline } from '../../../services/gh/timeline';
 import { workbookParts, type Sheet } from '../../../services/gh/xlsx';
 import {
@@ -452,6 +453,25 @@ export async function handleDkghIssue(
     const number = Number(msg.number);
     if (!repo || !Number.isFinite(number)) return;
     postMessage({ type: 'dkgh:issue:result', ...(await fetchIssueDetail(repo, number)) });
+  });
+}
+
+/**
+ * What one issue is attached to — 14D.
+ *
+ * Answers even when it fails, because the panel is drawn under the timeline
+ * and a silent failure there reads as "this issue is attached to nothing",
+ * which is a different and much worse claim than "I could not ask".
+ */
+export async function handleDkghRelations(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  await answering(postMessage, 'dkgh:relations:result', msg, async () => {
+    const repo = String(msg.repo ?? currentRepo() ?? '').trim();
+    const number = Number(msg.number);
+    if (!repo || !Number.isFinite(number)) return;
+    postMessage({ type: 'dkgh:relations:result', ...(await fetchRelations(repo, number)) });
   });
 }
 

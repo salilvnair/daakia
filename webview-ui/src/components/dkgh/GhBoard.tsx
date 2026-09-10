@@ -944,6 +944,9 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         issue={all.find(i => i.number === viewing.number) ?? viewing}
         dimensions={dimensions}
         closed={all.filter(i => i.state === 'CLOSED')}
+        all={all}
+        end={endField}
+        onOpen={n => setViewing(all.find(i => i.number === n) ?? viewing)}
         onBack={() => { setViewing(undefined); setSection('board'); }}
         onWrote={refresh}
       />
