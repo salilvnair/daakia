@@ -69,6 +69,7 @@ import { GhChart } from './GhChart';
 import { GhCompose } from './GhCompose';
 import { GhReview } from './GhReview';
 import { GhIssue } from './GhIssue';
+import { GhExport } from './GhExport';
 import { Ico, type IcoName } from './GhIcons';
 import {
   assembleBody, discardDraft, emptyDraft, type Draft,
@@ -762,6 +763,29 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     nothing, and the sub-tabs would offer four places none of which is where
     the reader is.
   */
+  /*
+    Screen 15 takes the tab the same way screen 14 does.
+
+    It is about the rows the board is showing, not about the board — and a
+    filter row above an export screen is a filter row that changes what the
+    export would write without saying so.
+  */
+  if (section === 'export') {
+    return (
+      <GhExport
+        repo={repo}
+        view={active?.name ?? (filter.terms.length ? 'filtered' : 'all open')}
+        rows={filtered}
+        selected={filtered.filter(i => selected.has(i.number))}
+        everything={all}
+        columns={shape.columns}
+        groupBy={meaning.groupBy === 'none' ? undefined : meaning.groupBy}
+        dimensions={data?.dimensions ?? []}
+        onClose={() => setSection('board')}
+      />
+    );
+  }
+
   if (section === 'issue' && viewing) {
     return (
       <GhIssue
@@ -1033,8 +1057,9 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             Save as view
           </button>
         )}
-        <button type="button" className="pill" disabled
-                title="Export writes exactly these columns, in this order — screen 15">
+        <button type="button" className="pill"
+                title="Export writes exactly these columns, in this order"
+                onClick={() => setSection('export')}>
           <Ico name="dl" />Export
         </button>
         <button type="button" className="pill" onClick={() => setShowKeys(true)} title="Keys">

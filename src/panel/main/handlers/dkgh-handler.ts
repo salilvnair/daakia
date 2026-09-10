@@ -11,6 +11,7 @@
  * wherever `gh` put it, and dkgh's only question is whether one exists.
  */
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { getSetting, setSetting } from '../../../storage/db';
 import { getActiveWorkspaceId } from '../../../storage/workspaces';
 import {
@@ -29,6 +30,7 @@ import {
 } from '../../../services/gh/write';
 import { fetchRepoMeta } from '../../../services/gh/meta';
 import { fetchTimeline } from '../../../services/gh/timeline';
+import { workbookParts, type Sheet } from '../../../services/gh/xlsx';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
 
 type PostMessage = (msg: unknown) => void;
@@ -441,6 +443,70 @@ export async function handleDkghTimeline(
   const number = Number(msg.number);
   if (!repo || !Number.isFinite(number)) return;
   postMessage({ type: 'dkgh:timeline:result', ...(await fetchTimeline(repo, number)) });
+}
+
+
+/**
+ * Write the file screen 15 previewed.
+ *
+ * Text formats arrive already serialised — the CSV and the Markdown table are
+ * built in the webview beside the preview that showed them, so what is written
+ * is what was on screen rather than a second serialisation that can disagree
+ * with the first.
+ *
+ * A workbook cannot work that way: it is a zip, and a webview has no zip. So
+ * the sheets arrive as data and `services/gh/xlsx.ts` turns them into parts
+ * here. That file is pure functions for the same reason the plan/apply split
+ * exists elsewhere — a format nobody can test is a format nobody can trust.
+ */
+export async function handleDkghExport(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const filename = String(msg.filename ?? 'export.txt');
+  const ext = filename.includes('.') ? filename.split('.').pop()! : 'txt';
+
+  const uri = await vscode.window.showSaveDialog({
+    defaultUri: vscode.Uri.file(filename),
+    filters: { [ext.toUpperCase()]: [ext], 'All Files': ['*'] },
+    saveLabel: 'Save',
+    title: 'Save the export',
+  });
+  /* Cancelling is an answer, and the screen has to hear it — a button that
+     stays on "Saving\u2026" because somebody pressed Escape is a bug report. */
+  if (!uri) { postMessage({ type: 'dkgh:export:result', cancelled: true }); return; }
+
+  try {
+    if (msg.sheets) {
+      await writeWorkbook(uri.fsPath, msg.sheets as Sheet[]);
+    } else {
+      fs.writeFileSync(uri.fsPath, String(msg.text ?? ''), 'utf-8');
+    }
+    postMessage({ type: 'dkgh:export:result', path: uri.fsPath });
+  } catch (err) {
+    postMessage({
+      type: 'dkgh:export:result',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/** The parts, zipped. Resolves when the bytes are actually on disk. */
+function writeWorkbook(path: string, sheets: Sheet[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    /* archiver 8 exports classes rather than the factory the older docs show:
+       `archiver('zip')` is not a function here. */
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { ZipArchive } = require('archiver');
+    const out = fs.createWriteStream(path);
+    const zip = new ZipArchive({ zlib: { level: 9 } });
+    out.on('close', () => resolve());
+    out.on('error', reject);
+    zip.on('error', reject);
+    zip.pipe(out);
+    for (const part of workbookParts(sheets)) zip.append(part.content, { name: part.name });
+    void zip.finalize();
+  });
 }
 
 /**
