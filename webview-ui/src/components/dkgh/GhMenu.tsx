@@ -26,6 +26,7 @@ import {
   CopyIcon, LinkIcon, PinIcon, UnpinIcon, EyeOffIcon, TrashIcon, RefreshIcon,
   KeyboardIcon, FilterIcon, SettingsIcon, PlusIcon, PencilIcon, CheckIcon,
   ArrowUpIcon, ArrowDownIcon, IssueOpenedIcon, TagIcon, UsersIcon, ClockIcon,
+  ChartBarIcon as ChartIcon, CodeIcon,
 } from '../../icons';
 import type { BoardIssue } from './board-types';
 import type { SavedView } from './views-model';
@@ -80,6 +81,18 @@ export interface MenuCtx {
   onEditView: (view: SavedView) => void;
   onDefaultView: (view: SavedView) => void;
   onDeleteView: (view: SavedView) => void;
+  /**
+   * The verbs that used to live on the view bar's own menu.
+   *
+   * They outlived it: the bar became a segmented strip with no room for a
+   * per-view menu, and duplicating a view, copying its query or charting it
+   * are all things people still want. Right-click is where a per-item menu
+   * belongs anyway.
+   */
+  onDuplicateView: (view: SavedView) => void;
+  onCopyViewQuery: (view: SavedView) => void;
+  onShareView: (view: SavedView) => void;
+  onChartView: (view: SavedView) => void;
   onNewView: () => void;
   onManageViews: () => void;
 
@@ -321,7 +334,37 @@ function viewItems(view: SavedView, ctx: MenuCtx): ContextMenuItem[] {
       iconColor: C.narrow,
       onClick: () => ctx.onDefaultView(view),
     },
+    {
+      id: 'duplicate',
+      label: 'Duplicate',
+      icon: <CopyIcon size={SZ} />,
+      iconColor: C.copy,
+      onClick: () => ctx.onDuplicateView(view),
+    },
     sep('s2'),
+    {
+      id: 'copy-view-query',
+      label: 'Copy its query',
+      description: 'The filter this view captured, as text you can paste back in',
+      icon: <CodeIcon size={SZ} />,
+      iconColor: C.copy,
+      onClick: () => ctx.onCopyViewQuery(view),
+    },
+    {
+      id: 'share',
+      label: 'Share or export…',
+      icon: <LinkIcon size={SZ} />,
+      iconColor: C.copy,
+      onClick: () => ctx.onShareView(view),
+    },
+    {
+      id: 'chart',
+      label: 'Chart it…',
+      icon: <ChartIcon size={SZ} />,
+      iconColor: C.read,
+      onClick: () => ctx.onChartView(view),
+    },
+    sep('s3'),
     {
       id: 'new',
       label: 'Save what is on screen as a view…',
@@ -336,7 +379,7 @@ function viewItems(view: SavedView, ctx: MenuCtx): ContextMenuItem[] {
       iconColor: C.quiet,
       onClick: ctx.onManageViews,
     },
-    sep('s3'),
+    sep('s4'),
     {
       id: 'delete',
       label: view.preset ? 'Hide this view' : 'Delete this view',

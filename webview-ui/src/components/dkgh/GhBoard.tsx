@@ -54,7 +54,14 @@ import {
   EMPTY as EMPTY_FILTER, describeAll, dropField, except, formatQuery, labelsOf,
   matchesAll, only, runSearch, type FilterState, type MatchContext, type SearchHit,
 } from './filter-model';
-import { GhViewBar, type ViewAction } from './GhViewBar';
+/**
+ * What the per-view menu can ask for.
+ *
+ * It lived in `GhViewBar` until the bar became a segmented strip with no room
+ * for a menu of its own. The verbs did not go away with it — see `GhMenu`.
+ */
+export type ViewAction =
+  | 'rename' | 'duplicate' | 'copy-query' | 'share' | 'chart' | 'export' | 'delete';
 import { GhSaveView } from './GhSaveView';
 import { GhManageViews } from './GhManageViews';
 import { GhShareView } from './GhShareView';
@@ -616,6 +623,10 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         views: views.views.filter(x => x.id !== v.id),
         defaultId: views.defaultId === v.id ? undefined : views.defaultId,
       }),
+    onDuplicateView: v => onViewAction(v, 'duplicate'),
+    onCopyViewQuery: v => onViewAction(v, 'copy-query'),
+    onShareView: v => onViewAction(v, 'share'),
+    onChartView: v => onViewAction(v, 'chart'),
     onNewView: () => setSaving({}),
     onManageViews: () => setManaging(true),
 
