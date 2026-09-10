@@ -69,6 +69,7 @@ import { GhChart } from './GhChart';
 import { GhCompose } from './GhCompose';
 import { GhReview } from './GhReview';
 import { GhIssue } from './GhIssue';
+import { useScheduleRunner, type RunFailure } from './schedule-runner';
 import { GhExport } from './GhExport';
 import { GhInsights } from './GhInsights';
 import { GhRepository } from './GhRepository';
@@ -615,6 +616,21 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   }, [repo]);
 
   const shownViews = useMemo(() => orderedViews(views), [views]);
+
+  /*
+    15E. A scheduled run comes due on the host's clock and lands here, because
+    this is where the rows and the saved views are. It writes a file and says
+    nothing; the only thing that reaches the screen is a failure.
+  */
+  const [runFailed, setRunFailed] = useState<RunFailure | undefined>();
+  useScheduleRunner({
+    repo,
+    all,
+    views: shownViews,
+    dimensions,
+    query: describeAll(filter),
+    onFailed: setRunFailed,
+  });
   const active = shownViews.find(v => v.id === activeView);
 
   /** How many each view holds right now, for the number on its tab. */
@@ -960,6 +976,27 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
          style={{ position: 'relative' }}
          onContextMenu={menu.onContextMenu}>
       {menu.node}
+
+      {/* 15E. A scheduled run says nothing when it works — the file is the
+          answer. A run that could not happen has to be said, or the week it
+          mattered is the week nobody notices it is missing. */}
+      {runFailed && (
+        <div className="chiprow" style={{
+          background: 'color-mix(in srgb, var(--dk-amber) 8%, transparent)',
+        }}>
+          <span className="lead" style={{ color: 'var(--dk-amber)' }}>
+            Scheduled export
+          </span>
+          <span style={{ fontSize: 12.6, color: 'var(--dk-text)' }}>
+            {runFailed.why} It was due for {runFailed.forDay}.
+          </span>
+          <span className="spacer" style={{ flex: 1 }} />
+          <button type="button" className="btn" style={{ padding: '2.4px 9.6px' }}
+                  onClick={() => setRunFailed(undefined)}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Head — repository, count, when it was last read */}
       <div className="head">

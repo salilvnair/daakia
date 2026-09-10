@@ -148,6 +148,8 @@ import {
   handleDkghProject, handleDkghPlanProject, handleDkghApplyProject,
   handleDkghTerminal, handleDkghRelations,
   handleDkghHarvest, handleDkghHarvestCancel,
+  handleDkghSchedules, handleDkghSaveSchedule, handleDkghDeleteSchedule,
+  handleDkghScheduleRan, disposeDkgh,
   handleDkghSearchIssues, handleDkghPlanCreate, handleDkghApplyCreate,
 } from './handlers/dkgh-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
@@ -253,6 +255,7 @@ export class MainPanel {
     // coming, and the long-lived ones are the most worth having recorded.
     flushOpenSessions();
     disposeDk8s();
+    disposeDkgh();
     stopAutoSyncTimer();
     disposeMonitors();
     cleanupAllWsConnections();
@@ -387,6 +390,18 @@ export class MainPanel {
         break;
       case 'dkgh:issue':
         handleDkghIssue(msg, this._post);
+        break;
+      case 'dkgh:schedules':
+        handleDkghSchedules(msg, this._post);
+        break;
+      case 'dkgh:schedule:save':
+        handleDkghSaveSchedule(msg, this._post);
+        break;
+      case 'dkgh:schedule:delete':
+        handleDkghDeleteSchedule(msg, this._post);
+        break;
+      case 'dkgh:schedule:ran':
+        handleDkghScheduleRan(msg, this._post);
         break;
       case 'dkgh:harvest':
         handleDkghHarvest(msg, this._post);

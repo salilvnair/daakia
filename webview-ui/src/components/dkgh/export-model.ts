@@ -184,7 +184,18 @@ function mdCell(v: string | number): string {
  * somebody needs when they find it in Downloads a fortnight later.
  */
 export function filename(repo: string, view: string, ext: string, on = new Date()): string {
-  const day = on.toISOString().slice(0, 10);
+  return filenameForDay(repo, view, on.toISOString().slice(0, 10), ext);
+}
+
+/**
+ * The same name, for a day that is already decided.
+ *
+ * 15E needs this: a scheduled file is named for the occurrence it is *for*,
+ * which is a local date the host worked out, not whatever `toISOString` makes
+ * of the moment the file happens to be written. A Friday report produced at
+ * 00:30 on Saturday would otherwise be named for Saturday.
+ */
+export function filenameForDay(repo: string, view: string, day: string, ext: string): string {
   const name = [repo.split('/')[1] || repo, view, day]
     .map(part => part.trim())
     .filter(Boolean)
@@ -214,6 +225,31 @@ export function sheets(
   return order
     .filter(k => groups.has(k))
     .map(name => ({ name: sheetName(name), rows: groups.get(name)! }));
+}
+
+/**
+ * The sheets, as the host's writer wants them.
+ *
+ * Lifted out of the export screen because 15E builds the same file without
+ * anybody looking at that screen, and two spellings of a workbook is two
+ * things to keep in step.
+ */
+export function workbook(
+  rows: BoardIssue[],
+  columns: ExportColumn[],
+  by: string | undefined,
+  dimensions: ProposedDimension[],
+): { name: string; columns: { label: string; type: string; width: number }[];
+     rows: { cells: (string | number)[] }[] }[] {
+  return sheets(rows, by, dimensions).map(s => ({
+    name: s.name,
+    columns: columns.map(c => ({
+      label: c.label,
+      type: c.type,
+      width: c.key === 'title' ? 52 : c.type === 'text' ? 18 : 12,
+    })),
+    rows: s.rows.map(r => ({ cells: cells(r, columns) })),
+  }));
 }
 
 function valueFor(issue: BoardIssue, field: string): string {

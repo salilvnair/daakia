@@ -12,6 +12,7 @@
  */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import * as path from 'path';
 import { getSetting, setSetting } from '../../../storage/db';
 import { getActiveWorkspaceId } from '../../../storage/workspaces';
 import {
@@ -30,6 +31,7 @@ import {
 } from '../../../services/gh/write';
 import { fetchRepoMeta } from '../../../services/gh/meta';
 import { harvest } from '../../../services/gh/harvest';
+import { due, isoDay, type Schedule } from '../../../services/gh/schedule';
 import { fetchRelations } from '../../../services/gh/relations';
 import { fetchTimeline } from '../../../services/gh/timeline';
 import { workbookParts, type Sheet } from '../../../services/gh/xlsx';
@@ -98,6 +100,14 @@ export interface DkghState {
    * Outranked by the DAAKIA_GH environment variable. See `candidates()`.
    */
   ghPath?: string;
+  /**
+   * The scheduled exports — 15E.
+   *
+   * Global rather than per workspace: a schedule names its own repository, and
+   * a report that stopped running because somebody opened a different folder
+   * is a report nobody trusts again.
+   */
+  schedules?: Schedule[];
 }
 
 function state(): DkghState {
@@ -163,6 +173,32 @@ export function initDkgh(post?: PostMessage): void {
   if (post) {
     onAuthFailure(detail => post({ type: 'dkgh:signedOut', detail, at: Date.now() }));
   }
+
+  /*
+    15E's clock.
+
+    There is no daemon, and this does not pretend to be one: it ticks on launch
+    — which is where the catch-up for a missed Friday happens — and once a
+    minute after that, for as long as the panel is up. A minute is fine because
+    the thing being watched moves in hours.
+  */
+  if (post) {
+    if (scheduleTimer) clearInterval(scheduleTimer);
+    tickSchedules(post);
+    scheduleTimer = setInterval(() => tickSchedules(post), 60_000);
+    /* Node keeps the process alive for a pending interval, which in the browser
+       dev build means the server never exits on Ctrl-C. */
+    scheduleTimer.unref?.();
+  }
+}
+
+/** Cleared and replaced on every init, so two panels do not tick twice. */
+let scheduleTimer: ReturnType<typeof setInterval> | undefined;
+
+/** Stop the clock. Called when the panel goes away. */
+export function disposeDkgh(): void {
+  if (scheduleTimer) clearInterval(scheduleTimer);
+  scheduleTimer = undefined;
 }
 
 /** Remember the repository for this workspace, so the tab opens where it was left. */
@@ -558,6 +594,85 @@ export async function handleDkghHarvestCancel(
   if (running) running.cancelled = true;
 }
 
+/**
+ * The schedules this machine keeps — 15E.
+ *
+ * Per repository, in the same small settings blob as everything else. There is
+ * no daemon: `tick` is called on launch and once a minute while the panel is
+ * up, and anything `due` returns is a run that was owed.
+ */
+export async function handleDkghSchedules(
+  _msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  postMessage({ type: 'dkgh:schedules:result', schedules: state().schedules ?? [] });
+}
+
+/** Save one, replacing any schedule already on the same repository and view. */
+export async function handleDkghSaveSchedule(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const next = msg.schedule as Schedule | undefined;
+  if (!next?.repo) return;
+  const rest = (state().schedules ?? [])
+    .filter(s => !(s.repo === next.repo && s.view === next.view));
+  const schedules = [...rest, next];
+  saveState({ schedules });
+  postMessage({ type: 'dkgh:schedules:result', schedules });
+  /* A schedule turned on after its hour is owed straight away, and somebody
+     who just pressed Schedule is expecting this week's file, not next week's. */
+  tickSchedules(postMessage);
+}
+
+export async function handleDkghDeleteSchedule(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? '');
+  const view = String(msg.view ?? '');
+  const schedules = (state().schedules ?? [])
+    .filter(s => !(s.repo === repo && s.view === view));
+  saveState({ schedules });
+  postMessage({ type: 'dkgh:schedules:result', schedules });
+}
+
+/**
+ * A scheduled run has produced its file — record which occurrence it was for.
+ *
+ * Recorded on success rather than when the run was handed out, so a failed
+ * write is owed again on the next tick instead of being silently skipped.
+ */
+export async function handleDkghScheduleRan(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  const repo = String(msg.repo ?? '');
+  const view = String(msg.view ?? '');
+  const forDay = String(msg.forDay ?? '');
+  if (!repo || !forDay) return;
+  const schedules = (state().schedules ?? []).map(s => (
+    s.repo === repo && s.view === view ? { ...s, lastRunFor: forDay } : s
+  ));
+  saveState({ schedules });
+  postMessage({ type: 'dkgh:schedules:result', schedules });
+}
+
+/**
+ * Hand out every run that is owed.
+ *
+ * The webview builds the file, because the columns and the sheet shaping are
+ * the same code a manual export uses and a second implementation of them here
+ * would be a second thing to keep in step.
+ */
+export function tickSchedules(postMessage: PostMessage, now = new Date()): void {
+  for (const s of state().schedules ?? []) {
+    const forDay = due(s, now);
+    if (!forDay) continue;
+    postMessage({ type: 'dkgh:schedule:due', schedule: s, forDay: isoDay(forDay) });
+  }
+}
+
 export async function handleDkghExport(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
@@ -565,6 +680,32 @@ export async function handleDkghExport(
   await answering(postMessage, 'dkgh:export:result', msg, async () => {
     const filename = String(msg.filename ?? 'export.txt');
     const ext = filename.includes('.') ? filename.split('.').pop()! : 'txt';
+
+    /*
+      15E writes without asking.
+
+      A scheduled export that opened a save dialog would be a scheduled export
+      that blocks on somebody being at the keyboard on a Friday afternoon,
+      which is the chore it exists to remove. The folder was chosen when the
+      schedule was made, and the name never collides — see `unclashed`.
+    */
+    const given = typeof msg.path === 'string' ? msg.path.trim() : '';
+    if (given) {
+      try {
+        fs.mkdirSync(path.dirname(given), { recursive: true });
+        if (msg.sheets) await writeWorkbook(given, msg.sheets as Sheet[]);
+        else if (msg.report) fs.writeFileSync(given, renderPdf(buildReport(msg.report as Report)));
+        else fs.writeFileSync(given, String(msg.text ?? ''), 'utf-8');
+        postMessage({ type: 'dkgh:export:result', path: given, scheduled: true });
+      } catch (err) {
+        postMessage({
+          type: 'dkgh:export:result',
+          scheduled: true,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      return;
+    }
 
     const uri = await vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(filename),

@@ -17,14 +17,15 @@
  * hidden: somebody who came for the status-mail PDF should find out here, in
  * one word, rather than by not finding it and wondering where it went.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { Ico, type IcoName } from './GhIcons';
 import {
-  FORMATS, cells, exportColumns, filename, report, sheets, toCsv, toMarkdown,
+  FORMATS, cells, exportColumns, filename, report, sheets, toCsv, toMarkdown, workbook,
   type Format, type Scope,
 } from './export-model';
 import { GhHarvest, useHarvest } from './GhHarvest';
+import { GhSchedule, type Schedule } from './GhSchedule';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 /** The mock's own glyph per format. */
@@ -71,6 +72,9 @@ export function GhExport({
     picked rather than when Save is pressed: by the time somebody has chosen
     their columns and their format the rows are usually already there.
   */
+  /** 15E — open while a recurring run is being described. */
+  const [scheduling, setScheduling] = useState(false);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [harvesting, setHarvesting] = useState(false);
   const [hidden, setHidden] = useState(false);
   const { progress, result } = useHarvest(repo, harvesting);
@@ -115,15 +119,8 @@ export function GhExport({
       postMsg({
         type: 'dkgh:export',
         filename: name,
-        sheets: book.map(s => ({
-          name: s.name,
-          columns: picked.map(c => ({
-            label: c.label,
-            type: c.type,
-            width: c.key === 'title' ? 52 : c.type === 'text' ? 18 : 12,
-          })),
-          rows: s.rows.map(r => ({ cells: cells(r, picked) })),
-        })),
+        sheets: workbook(source, picked, format === 'xlsx' && perGroup ? groupBy : undefined,
+                         dimensions),
       });
     } else {
       postMsg({ type: 'dkgh:export', filename: name, text: text() });
@@ -143,9 +140,35 @@ export function GhExport({
      the file is the view. The rest is counted rather than squeezed in. */
   const preview = picked.slice(0, 6);
   const previewRows = (book[0]?.rows ?? []).slice(0, 5);
+  const schedule = schedules.find(s => s.repo === repo && s.view === view);
+
+  /* What this machine already has running, so the button can say "change" and
+     the dialog can open on the existing settings rather than the defaults. */
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const msg = e.data as Record<string, unknown>;
+      if (msg?.type === 'dkgh:schedules:result') {
+        setSchedules((msg.schedules as Schedule[]) ?? []);
+      }
+    };
+    window.addEventListener('message', onMsg);
+    postMsg({ type: 'dkgh:schedules' });
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+
+      {scheduling && (
+        <GhSchedule
+          repo={repo}
+          view={view}
+          count={rows.length}
+          existing={schedule}
+          onCancel={() => setScheduling(false)}
+          onSaved={() => setScheduling(false)}
+        />
+      )}
 
       {harvesting && !result && !hidden && (
         <GhHarvest
@@ -347,6 +370,12 @@ export function GhExport({
                 <Ico name="copy" />Copy to clipboard
               </button>
             )}
+            {/* 15E. Beside Save rather than behind a menu: somebody who has
+                just built the right export is exactly the person who wants it
+                every Friday. */}
+            <button type="button" className="btn" onClick={() => setScheduling(true)}>
+              <Ico name="cal" />{schedule ? 'Change the schedule' : 'Every Friday…'}
+            </button>
             <button type="button" className="btn go" disabled={saving || picked.length === 0}
                     onClick={save}>
               <Ico name="dl" />{saving ? 'Saving…' : 'Save file'}
