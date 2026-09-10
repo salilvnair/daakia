@@ -39,7 +39,7 @@ const NATIVE: { label: string; read: string; note: string }[] = [
 ];
 
 export function GhRepository({
-  repo, data, meta, issues, onRefresh, onChangeRepo, onExplain, onImport, onLabels,
+  repo, data, meta, issues, onRefresh, onChangeRepo, onExplain, onImport, onLabels, onCopyMap,
 }: {
   repo: string;
   data?: BoardData;
@@ -53,6 +53,8 @@ export function GhRepository({
   onImport: () => void;
   /** Screen 19 — the label set, which is the one part of this map you can edit. */
   onLabels: () => void;
+  /** 17E — take another repository's map, checked against this one first. */
+  onCopyMap: () => void;
 }) {
   const dimensions = data?.dimensions ?? [];
   const forms = data?.forms ?? [];
@@ -200,12 +202,12 @@ export function GhRepository({
         <div className="opts" style={{ gridTemplateColumns: 'repeat(3, 1fr)', maxWidth: 'none' }}>
           <button type="button" className="opt" style={{ padding: '8px 10px',
                                                         textAlign: 'left', cursor: 'pointer' }}
-                  onClick={onImport}>
-            <div className="oh"><Ico name="repo" />Read another repository&rsquo;s forms</div>
+                  onClick={onCopyMap}>
+            <div className="oh"><Ico name="copy" />Copy another repository&rsquo;s map</div>
             <div className="sub">
-              There is no map to copy: the map <i>is</i> the repository&rsquo;s own forms, read
-              fresh every time. Point dkgh at a repository whose templates you already like and
-              it reads them.
+              17E. Checked against this repository dimension by dimension before anything is
+              applied, and it reports how many of them fit rather than claiming success.
+              Copied, not linked &mdash; a later change over there does not reach here.
             </div>
           </button>
           <button type="button" className="opt" style={{ padding: '8px 10px',

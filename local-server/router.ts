@@ -118,7 +118,7 @@ import {
   handleDkghTerminal, handleDkghRelations,
   handleDkghHarvest, handleDkghHarvestCancel,
   handleDkghSchedules, handleDkghSaveSchedule, handleDkghDeleteSchedule,
-  handleDkghScheduleRan,
+  handleDkghScheduleRan, handleDkghFieldMap,
 } from '../src/panel/main/handlers/dkgh-handler';
 import { window as vscodeWindow, Uri, env as vscodeEnv } from './vscode-shim';
 import * as fs from 'fs';
@@ -212,6 +212,9 @@ export async function routeMessage(msg: { type: string; [key: string]: unknown }
       break;
     case 'dkgh:issue':
       await handleDkghIssue(msg, post);
+      break;
+    case 'dkgh:fieldMap':
+      await handleDkghFieldMap(msg, post);
       break;
     case 'dkgh:schedules':
       await handleDkghSchedules(msg, post);

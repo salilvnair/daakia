@@ -70,6 +70,8 @@ import { GhCompose } from './GhCompose';
 import { GhReview } from './GhReview';
 import { GhIssue } from './GhIssue';
 import { useScheduleRunner, rowsFor, type RunFailure } from './schedule-runner';
+import { GhCopyMap } from './GhCopyMap';
+import { loadFieldMap, merged, saveFieldMap, type MapField } from './field-map';
 import { GhExport } from './GhExport';
 import { GhInsights } from './GhInsights';
 import { GhRepository } from './GhRepository';
@@ -282,11 +284,38 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   }, [project, addToast]);
 
   /** The repository's own, plus whatever the Project adds. */
+  /* 17E — a map copied from another repository, if one was. */
+  const [copiedMap, setCopiedMap] = useState<MapField[]>(() => loadFieldMap(repo));
+  const [copyingMap, setCopyingMap] = useState(false);
+  /* The repositories dkgh already knows, which are the ones worth offering as
+     a source. Asked for only when the dialog opens: it is a settings read the
+     board has no other use for. */
+  const [known, setKnown] = useState<string[]>([]);
+  useEffect(() => {
+    if (!copyingMap) return;
+    const onMsg = (e: MessageEvent) => {
+      const msg = e.data as Record<string, unknown>;
+      if (msg?.type !== 'dkgh:repoOptions:result') return;
+      const rows = [
+        ...((msg.pinned as { repo?: string }[]) ?? []),
+        ...((msg.recent as { repo?: string }[]) ?? []),
+      ];
+      setKnown([...new Set(rows.map(r => r.repo).filter((x): x is string => !!x))]);
+    };
+    window.addEventListener('message', onMsg);
+    postMsg({ type: 'dkgh:repoOptions' });
+    return () => window.removeEventListener('message', onMsg);
+  }, [copyingMap]);
+
   const dimensions = useMemo(() => {
     const fromForms = data?.dimensions ?? [];
     const known = new Set(fromForms.map(d => d.dimension));
-    return [...fromForms, ...projectDimensions(project).filter(d => !known.has(d.dimension))];
-  }, [data?.dimensions, project]);
+    const all = [
+      ...fromForms,
+      ...projectDimensions(project).filter(d => !known.has(d.dimension)),
+    ];
+    return merged(all, copiedMap);
+  }, [data?.dimensions, project, copiedMap]);
 
   /** `open` until somebody asks for the closed ones — screen 04E's first state. */
   const [issueState, setIssueState] = useState<'open' | 'all'>('open');
@@ -977,6 +1006,23 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
          onContextMenu={menu.onContextMenu}>
       {menu.node}
 
+      {copyingMap && (
+        <GhCopyMap
+          repo={repo}
+          recent={known.filter(r => r !== repo)}
+          dimensions={data?.dimensions ?? []}
+          project={(project?.fields ?? [])
+            .filter(f => f.dataType === 'SINGLE_SELECT')
+            .map(f => ({ name: f.name, options: (f.options ?? []).map(o => o.name) }))}
+          onCancel={() => setCopyingMap(false)}
+          onCopy={fields => {
+            setCopiedMap(fields);
+            saveFieldMap(repo, fields);
+            setCopyingMap(false);
+          }}
+        />
+      )}
+
       {/* 15E. A scheduled run says nothing when it works — the file is the
           answer. A run that could not happen has to be said, or the week it
           mattered is the week nobody notices it is missing. */}
@@ -1083,6 +1129,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           issues={all}
           onRefresh={refresh}
           onChangeRepo={onChangeRepo}
+          onCopyMap={() => setCopyingMap(true)}
           /*
             17D — the unmapped count is a link to the rows behind it, which is
             the only way to find out why a heading stopped parsing.

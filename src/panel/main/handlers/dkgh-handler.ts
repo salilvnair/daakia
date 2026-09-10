@@ -763,6 +763,45 @@ function writeWorkbook(path: string, sheets: Sheet[]): Promise<void> {
  * which is the same parser the board uses, so what the import screen says a
  * file declares is what the board will read from it.
  */
+/**
+ * Another repository's field map, for 17E.
+ *
+ * The two halves of a map come from two places — the dimensions from its issue
+ * forms, the Project fields from its board — and 17E has to report on both,
+ * because "this repo has no Project" is one of the reasons a dimension cannot
+ * be copied. Read together so the dialog cannot show a map that is half a
+ * repository behind.
+ *
+ * Read-only on the source. Copying a map never touches the repository it came
+ * from, and this is the call that guarantees that.
+ */
+export async function handleDkghFieldMap(
+  msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  await answering(postMessage, 'dkgh:fieldMap:result', msg, async () => {
+    const repo = String(msg.repo ?? '').trim();
+    if (!repo) return;
+
+    const source = await fetchTemplatesFrom(repo);
+    const parsed = parseIssueForms(source.files);
+    const board = await fetchProject(repo);
+
+    postMessage({
+      type: 'dkgh:fieldMap:result',
+      repo,
+      dimensions: proposeDimensions(parsed.forms),
+      /* Single-selects only. A date or a number is a Project field a board can
+         read, but it is not a dimension anything groups by. */
+      project: board.fields
+        .filter(f => f.dataType === 'SINGLE_SELECT')
+        .map(f => ({ name: f.name, options: (f.options ?? []).map(o => o.name) })),
+      projectAbsent: board.absent,
+      error: source.error,
+    });
+  });
+}
+
 export async function handleDkghImport(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
