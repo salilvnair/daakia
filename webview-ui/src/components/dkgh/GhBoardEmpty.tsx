@@ -19,13 +19,10 @@
  * that appears fully formed after a blank pause feels slower than one that
  * fills in.
  */
-import { ButtonView, EmptyStateView } from '@salilvnair/dui';
 import {
-  IssueOpenedIcon, FilterClearIcon, GaugeIcon, KeyIcon, CheckCircleIcon,
-} from '../../icons';
-import { GhCommand } from './GhShell';
+  GhEmpty, GhLede, GhActions, GhPrimary, GhButton, GhOption, GhOptions,
+} from './GhShell';
 import { atClock, until, since } from './format';
-import { ACCENT } from './types';
 
 /** One thing narrowing the board, and what dropping it would give back. */
 export interface ActiveFilter {
@@ -62,18 +59,18 @@ export function GhBoardEmpty({
   */
   if (rateLimit) {
     return (
-      <EmptyStateView
-        variant="medallion"
-        accentColor="var(--color-warning)"
-        icon={<GaugeIcon size={24} />}
-        title="GitHub is rate-limiting us"
-        message={
-          `${rateLimit.remaining} of ${rateLimit.limit} requests left. The limit resets at `
-          + `${atClock(rateLimit.resetAt)}, ${until(rateLimit.resetAt)}. Auto-refresh has stopped`
-          + (staleAt ? `; the board is from ${since(staleAt)}.` : '.')
-        }
-        action={{ label: `Retry at ${atClock(rateLimit.resetAt)}`, onClick: onRetry }}
-      />
+      <GhEmpty icon="warn" title="GitHub is rate-limiting us">
+        <GhLede>
+          {rateLimit.remaining} of {rateLimit.limit} requests left. The limit resets at{' '}
+          {atClock(rateLimit.resetAt)}, {until(rateLimit.resetAt)}. Auto-refresh has stopped
+          {staleAt ? `; the board is from ${since(staleAt)}.` : '.'}
+        </GhLede>
+        <GhActions>
+          <GhPrimary icon="refresh" onClick={onRetry}>
+            Retry at {atClock(rateLimit.resetAt)}
+          </GhPrimary>
+        </GhActions>
+      </GhEmpty>
     );
   }
 
@@ -85,33 +82,27 @@ export function GhBoardEmpty({
   */
   if (error && /auth|credential|token|login|401/i.test(error)) {
     return (
-      <div className="flex flex-col items-center gap-3 py-6">
-        <EmptyStateView
-          variant="medallion"
-          accentColor="var(--color-error)"
-          icon={<KeyIcon size={24} />}
-          title="gh is signed out"
-          message="Your credential expired or was revoked. Nothing is wrong with the repository."
-        />
-        <div style={{ width: 'min(420px, 90%)' }}>
-          <GhCommand text="gh auth login" />
-        </div>
-      </div>
+      <GhEmpty icon="lock" title="gh is signed out">
+        <GhLede>
+          Your credential expired or was revoked. Nothing is wrong with the repository.
+        </GhLede>
+        <GhOptions>
+          <GhOption pick title="Sign in again" command="gh auth login" />
+        </GhOptions>
+      </GhEmpty>
     );
   }
 
   if (error) {
     return (
-      <EmptyStateView
-        variant="medallion"
-        accentColor="var(--color-error)"
-        icon={<IssueOpenedIcon size={24} />}
-        title={`gh could not read ${repo}`}
-        /* gh's own words. It usually names the field or the permission, which
-           is the whole difference between a fixable error and a mystery. */
-        message={error}
-        action={{ label: 'Try again', onClick: onRetry }}
-      />
+      <GhEmpty icon="warn" title={`gh could not read ${repo}`}>
+        {/* gh's own words. It usually names the field or the permission, which
+            is the whole difference between a fixable error and a mystery. */}
+        <GhLede>{error}</GhLede>
+        <GhActions>
+          <GhPrimary icon="refresh" onClick={onRetry}>Try again</GhPrimary>
+        </GhActions>
+      </GhEmpty>
     );
   }
 
@@ -125,54 +116,40 @@ export function GhBoardEmpty({
   if (filters.length > 0) {
     const best = [...filters].sort((a, b) => b.wouldShow - a.wouldShow)[0];
     return (
-      <div className="flex flex-col items-center gap-3 py-6">
-        <EmptyStateView
-          variant="medallion"
-          accentColor={ACCENT}
-          icon={<FilterClearIcon size={24} />}
-          title="No issue matches these filters"
-          message={
-            `${filters.length} filter${filters.length === 1 ? ' is' : 's are'} on.`
-            + (best.wouldShow > 0
-              ? ` Dropping ${best.label} would show ${best.wouldShow}.`
-              : ` ${repo} has ${total} issue${total === 1 ? '' : 's'} altogether.`)
-          }
-        />
-        <div className="flex gap-2 flex-wrap justify-center">
+      <GhEmpty icon="filter" title="No issue matches these filters">
+        <GhLede>
+          {filters.length} filter{filters.length === 1 ? ' is' : 's are'} on.
+          {best.wouldShow > 0
+            ? ` Dropping ${best.label} would show ${best.wouldShow}.`
+            : ` ${repo} has ${total} issue${total === 1 ? '' : 's'} altogether.`}
+        </GhLede>
+        <GhActions>
           {best.wouldShow > 0 && (
-            <ButtonView size="md" variant="primary" accentColor={ACCENT} onClick={best.drop}>
-              Drop {best.label}
-            </ButtonView>
+            <GhPrimary onClick={best.drop}>Drop {best.label}</GhPrimary>
           )}
-          {filters.length > 1 && (
-            <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onClearAll}>
-              Clear all
-            </ButtonView>
-          )}
-        </div>
-      </div>
+          {filters.length > 1 && <GhButton onClick={onClearAll}>Clear all</GhButton>}
+        </GhActions>
+      </GhEmpty>
     );
   }
 
   /* Nothing filtered, nothing there. A clean sprint, and it should look like
      one rather than like a failure. */
   return (
-    <div className="flex flex-col items-center gap-3 py-6">
-      <EmptyStateView
-        variant="medallion"
-        accentColor="var(--color-success)"
-        icon={<CheckCircleIcon size={24} />}
-        title="Nothing is open"
-        message={
-          `Every issue in ${repo} is closed.`
-          + (closedRecently !== undefined && closedRecently > 0
-            ? ` ${closedRecently} ${closedRecently === 1 ? 'was' : 'were'} closed in the last 90 days.`
-            : closedRecently === 0
-              ? ' Nothing has been closed in the last 90 days either — this repository is quiet.'
-              : '')
-        }
-        action={onShowClosed ? { label: 'Show closed', onClick: onShowClosed } : undefined}
-      />
-    </div>
+    <GhEmpty icon="closed" title="Nothing is open">
+      <GhLede>
+        Every issue in {repo} is closed.
+        {closedRecently !== undefined && closedRecently > 0
+          ? ` ${closedRecently} ${closedRecently === 1 ? 'was' : 'were'} closed in the last 90 days.`
+          : closedRecently === 0
+            ? ' Nothing has been closed in the last 90 days either — this repository is quiet.'
+            : ''}
+      </GhLede>
+      {onShowClosed && (
+        <GhActions>
+          <GhPrimary icon="closed" onClick={onShowClosed}>Show closed</GhPrimary>
+        </GhActions>
+      )}
+    </GhEmpty>
   );
 }

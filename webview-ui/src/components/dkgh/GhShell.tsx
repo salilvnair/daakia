@@ -111,6 +111,52 @@ export function GhNote({ title, icon = 'lock', tone, children }: {
   );
 }
 
+/**
+ * One of the mock's `.opt` cards: a heading, an optional command, a note.
+ *
+ * `pick` is the route the screen is recommending, and it is the only one the
+ * accent is spent on — a list where three of four cards are lit is a list with
+ * no recommendation in it.
+ */
+export function GhOption({ title, icon, tag, pick, command, action, note, children }: {
+  title: ReactNode;
+  icon?: IcoName;
+  tag?: string;
+  pick?: boolean;
+  command?: string;
+  /** A button in the heading row, where the mock puts `Use this`. */
+  action?: ReactNode;
+  note?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className={`opt${pick ? ' pick' : ''}`}>
+      <div className="oh">
+        {icon && <Ico name={icon} style={{ color: pick ? 'var(--dk-gh)' : 'var(--dk-muted)' }} />}
+        {title}
+        {tag && <span className="tag">{tag}</span>}
+        <span className="sp" />
+        {action}
+      </div>
+      {command && <GhCommand text={command} prompt="$" />}
+      {children}
+      {note && <div className="sub">{note}</div>}
+    </div>
+  );
+}
+
+/** A column of `.opt` cards at the mock's own width. */
+export function GhOptions({ children, columns = 1 }: {
+  children: ReactNode;
+  columns?: 1 | 2;
+}) {
+  return (
+    <div className="opts" style={{ gridTemplateColumns: columns === 1 ? '1fr' : undefined }}>
+      {children}
+    </div>
+  );
+}
+
 /** The row of actions at the bottom of an empty state. */
 export function GhActions({ children }: { children: ReactNode }) {
   return <div className="actions">{children}</div>;

@@ -16,9 +16,8 @@
  * the search and the recents behind a question about a repository the reader
  * may not want either of.
  */
-import { ButtonView, SetupOptionView } from '@salilvnair/dui';
-import { GhNote } from './GhShell';
-import { ACCENT, type ForkChoice, type RepoSummary } from './types';
+import { GhNote, GhOption, GhOptions } from './GhShell';
+import type { ForkChoice, RepoSummary } from './types';
 
 export function GhForkChoice({ choice, onPick }: {
   choice: ForkChoice;
@@ -35,60 +34,63 @@ export function GhForkChoice({ choice, onPick }: {
   const preferUpstream = !!upstream && !forkHasIssues;
 
   return (
-    <div className="w-full flex flex-col gap-2">
-      <div className="text-[11px] px-0.5" style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+    <>
+      <div className="sub" style={{ padding: '0 2px 6px' }}>
         <code>{fork.nameWithOwner}</code> is a fork of{' '}
         <code>{fork.parent}</code>. Which one&rsquo;s issues do you want?
       </div>
 
-      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))' }}>
+      <GhOptions>
         {upstream ? (
-          <SetupOptionView
-            accentColor={ACCENT}
-            recommended={preferUpstream}
+          <GhOption
+            pick={preferUpstream}
+            icon="repo"
             title={upstream.nameWithOwner}
             tag="upstream"
             note={<Facts repo={upstream} lead="Where the team files and reads." />}
             action={
-              <ButtonView size="sm" variant={preferUpstream ? 'primary' : 'secondary'}
-                          accentColor={ACCENT}
-                          onClick={() => onPick(upstream.nameWithOwner)}>
+              <button type="button" className={preferUpstream ? 'btn go' : 'btn'}
+                      style={{ padding: '3px 10px' }}
+                      onClick={() => onPick(upstream.nameWithOwner)}>
                 Use this
-              </ButtonView>
+              </button>
             }
           />
         ) : (
-          <SetupOptionView
-            accentColor={ACCENT}
+          <GhOption
+            icon="repo"
             title={fork.parent ?? 'The upstream'}
             tag="upstream"
-            note={<span style={{ color: 'var(--color-warning)' }}>
+            note={<span style={{ color: 'var(--dk-amber)' }}>
               {upstreamError || 'This account cannot read the upstream.'}
             </span>}
           />
         )}
 
-        <SetupOptionView
-          accentColor={ACCENT}
+        <GhOption
+          icon="repo"
           title={fork.nameWithOwner}
           tag="your fork"
           note={forkHasIssues
             ? <Facts repo={fork} lead="This fork has its own issue tracker." />
-            : <span style={{ color: 'var(--color-warning)' }}>
+            : <span style={{ color: 'var(--dk-amber)' }}>
                 Issues are disabled on this fork. GitHub turns them off by default —
                 there is nothing to read here.
               </span>}
           action={
-            <ButtonView size="sm" variant={forkHasIssues && !preferUpstream ? 'primary' : 'secondary'}
-                        accentColor={forkHasIssues ? ACCENT : 'var(--color-text-muted)'}
-                        title={forkHasIssues ? undefined
-                          : 'The board would be empty, and the composer could not file anything'}
-                        onClick={() => onPick(fork.nameWithOwner)}>
+            <button
+              type="button"
+              className={forkHasIssues && !preferUpstream ? 'btn go' : 'btn'}
+              style={{ padding: '3px 10px', opacity: forkHasIssues ? 1 : 0.6 }}
+              title={forkHasIssues ? undefined
+                : 'The board would be empty, and the composer could not file anything'}
+              onClick={() => onPick(fork.nameWithOwner)}
+            >
               {forkHasIssues ? 'Use this' : 'Use it anyway'}
-            </ButtonView>
+            </button>
           }
         />
-      </div>
+      </GhOptions>
 
       {preferUpstream ? (
         <GhNote title="Upstream is pre-selected, and the reason is stated" tone="warn">
@@ -101,7 +103,7 @@ export function GhForkChoice({ choice, onPick }: {
           not overrule it.
         </GhNote>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -110,7 +112,7 @@ function Facts({ repo, lead }: { repo: RepoSummary; lead: string }) {
   const t = repo.templates ?? 0;
   return (
     <>
-      <b style={{ color: 'var(--color-text-primary)' }}>
+      <b style={{ color: 'var(--dk-text)' }}>
         {repo.openIssues} open issue{repo.openIssues === 1 ? '' : 's'} ·{' '}
         {t === 0 ? 'no issue forms' : `${t} issue form${t === 1 ? '' : 's'}`}
       </b>

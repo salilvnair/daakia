@@ -16,11 +16,12 @@
  * often enough to reorder by and not often enough to trust alone.
  */
 import { useEffect, useState } from 'react';
-import { ButtonView, SetupOptionView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { LockIcon, RefreshIcon } from '../../icons';
-import { GhEmpty, GhLede, GhNote, GhActions } from './GhShell';
-import { ACCENT, type RepoAccess } from './types';
+import type { RepoAccess } from './types';
+import {
+  GhEmpty, GhLede, GhNote, GhActions, GhOption, GhOptions, GhPrimary, GhButton,
+} from './GhShell';
+
 
 /**
  * The four causes, in the order they are worth checking.
@@ -34,7 +35,7 @@ function causes(org: string) {
     { id: 'team', text: <>You are not a member of the team that owns it</> },
     {
       id: 'sso',
-      text: <>Your SSO session for <b style={{ color: 'var(--color-text-primary)' }}>{org}</b>{' '}
+      text: <>Your SSO session for <b style={{ color: 'var(--dk-text)' }}>{org}</b>{' '}
         has lapsed — this is the common one</>,
     },
     { id: 'name', text: <>The name is wrong, or it was renamed</> },
@@ -86,30 +87,28 @@ export function GhNoAccess({ repo, onRetry, onChangeRepo }: {
         &ldquo;no access&rdquo; — it does not distinguish, on purpose.
       </GhLede>
 
-      <div className="w-full flex flex-col gap-2" style={{ maxWidth: 520 }}>
-
-        <SetupOptionView
-          accentColor={ACCENT}
+      <GhOptions>
+        <GhOption
           title="Most likely, in order"
-          tag={verdict === 'sso' ? 'reordered by gh' : verdict === 'not-found' ? 'reordered by gh' : undefined}
+          tag={verdict === 'sso' || verdict === 'not-found' ? 'reordered by gh' : undefined}
         >
-          <ol className="m-0 pl-4 flex flex-col gap-1 text-[10.5px]"
-              style={{ color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
+          <ol style={{
+            margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3,
+            fontSize: 12, color: 'var(--dk-faint)', lineHeight: 1.7,
+          }}>
             {ranked.map(c => <li key={c.id}>{c.text}</li>)}
           </ol>
-        </SetupOptionView>
+        </GhOption>
 
-        <SetupOptionView
-          accentColor={ACCENT}
-          recommended
+        <GhOption
+          pick
           title="If it is SSO"
           tag="try first"
           command="gh auth refresh"
           note="Re-authorises the org. An expired SSO grant looks exactly like no access."
         />
 
-        <SetupOptionView
-          accentColor={ACCENT}
+        <GhOption
           title="Check what you can see"
           command={`gh repo list ${org} --limit 100`}
           note={<>If this comes back empty, it is access. If it lists repositories and not this
@@ -117,27 +116,21 @@ export function GhNoAccess({ repo, onRetry, onChangeRepo }: {
         />
 
         {access?.said && (
-          <SetupOptionView
-            accentColor={ACCENT}
+          <GhOption
             title="What gh said"
             note={<code style={{ overflowWrap: 'anywhere' }}>{access.said}</code>}
           />
         )}
+      </GhOptions>
 
-        <GhNote title="dkgh does not guess which of the four it is" tone="warn">
-          Ranking them is useful; asserting one would be a confident wrong answer, and the second
-          cause looks identical to the first from here.
-        </GhNote>
-      </div>
+      <GhNote title="dkgh does not guess which of the four it is" tone="warn">
+        Ranking them is useful; asserting one would be a confident wrong answer, and the second
+        cause looks identical to the first from here.
+      </GhNote>
 
       <GhActions>
-        <ButtonView size="md" variant="primary" accentColor={ACCENT}
-                    iconLeft={<RefreshIcon size={12} />} onClick={onRetry}>
-          Try again
-        </ButtonView>
-        <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onChangeRepo}>
-          Pick a different repository
-        </ButtonView>
+        <GhPrimary icon="refresh" onClick={onRetry}>Try again</GhPrimary>
+        <GhButton onClick={onChangeRepo}>Pick a different repository</GhButton>
       </GhActions>
     </GhEmpty>
   );
