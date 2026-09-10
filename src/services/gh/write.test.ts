@@ -131,3 +131,47 @@ describe('planning a create', () => {
     expect(plan.steps[1].argv).toContain('needs info; rm -rf ~');
   });
 });
+
+/**
+ * A comment is a write like any other.
+ *
+ * The two rules worth pinning: the body goes in through stdin rather than an
+ * argv, and on a close the comment is ordered first — GitHub notifies on both,
+ * and an explanation that lands after the close reads as an afterthought to
+ * everybody watching.
+ */
+describe('a comment', () => {
+  const base = { repo: 'acme/app', numbers: [41] };
+
+  it('goes in through stdin, not as an argument', () => {
+    const [cmd] = planEdit({ ...base, comment: 'Fixed in v2.4.1' }).commands;
+    expect(cmd.argv).toEqual([
+      'issue', 'comment', '41', '--repo', 'acme/app', '--body-file', '-',
+    ]);
+    expect(cmd.stdin).toBe('Fixed in v2.4.1');
+    expect(cmd.argv.join(' ')).not.toContain('Fixed');
+  });
+
+  it('is ordered before the close it explains', () => {
+    const plan = planEdit({
+      ...base, comment: 'Fixed', state: 'close', closeReason: 'completed',
+    });
+    expect(plan.commands.map(c => c.argv[1])).toEqual(['comment', 'close']);
+  });
+
+  it('is not planned for whitespace somebody left in the box', () => {
+    expect(planEdit({ ...base, comment: '   ' }).commands).toEqual([]);
+    expect(planEdit({ ...base, comment: '   ' }).empty).toBe(true);
+  });
+
+  it('says so in the summary, on its own and alongside a close', () => {
+    expect(planEdit({ ...base, comment: 'hi' }).summary).toMatch(/leave a comment/);
+    expect(planEdit({ ...base, comment: 'hi', state: 'close' }).summary)
+      .toBe('Close issue #41, with a comment');
+  });
+
+  it('is one comment per issue on a bulk close', () => {
+    const plan = planEdit({ repo: 'a/b', numbers: [1, 2], comment: 'hi', state: 'close' });
+    expect(plan.commands.filter(c => c.argv[1] === 'comment')).toHaveLength(2);
+  });
+});

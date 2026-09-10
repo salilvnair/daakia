@@ -28,6 +28,9 @@ import { Ico, type IcoName } from './GhIcons';
 import { avClass, chipOf, prClass } from './GhCards';
 import { GhEvidence } from './GhEvidence';
 import { sinceIso as since } from './format';
+import { GhEditConfirm } from './GhEditConfirm';
+import { GhCloseIssue } from './GhCloseIssue';
+import { useEditFlow } from './edit-flow';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 interface Detail {
@@ -79,18 +82,40 @@ const STATE_CLASS: Record<string, string> = {
   blocked: 'st-block',
 };
 
-export function GhIssue({ repo, issue, dimensions, onBack, onClose }: {
+export function GhIssue({ repo, issue, dimensions, closed, onBack, onWrote }: {
   repo: string;
   issue: BoardIssue;
   dimensions: ProposedDimension[];
+  /** The closed issues the board holds — 14E reads its reasons off them. */
+  closed: BoardIssue[];
   onBack: () => void;
-  /** 14E. Undefined while the write path has nothing to confirm against. */
-  onClose?: (issue: BoardIssue) => void;
+  /** After a write lands, so the board and this page re-read. */
+  onWrote: () => void;
 }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   /** 14A — the label churn, dropped without being lost. */
   const [muted, setMuted] = useState<Set<TimelineKind>>(new Set());
+  /** 14B — what is in the box, until it is proposed. */
+  const [draft, setDraft] = useState('');
+  /** 14E — open while the close is being explained. */
+  const [closing, setClosing] = useState(false);
+  /** How many times a write has landed, to re-read this page's own two calls. */
+  const [wrote, setWrote] = useState(0);
+
+  /*
+    This page's own write flow.
+
+    The board's lives on the board, and the board is not rendered while screen
+    14 is — so a comment written here would have had nowhere to show its
+    confirm. Same hook, same host functions, same strip.
+  */
+  const flow = useEditFlow(repo, () => {
+    setDraft('');
+    setClosing(false);
+    setWrote(n => n + 1);
+    onWrote();
+  });
 
   useEffect(() => {
     setDetail(null);
@@ -105,7 +130,9 @@ export function GhIssue({ repo, issue, dimensions, onBack, onClose }: {
     postMsg({ type: 'dkgh:issue', repo, number: issue.number });
     postMsg({ type: 'dkgh:timeline', repo, number: issue.number });
     return () => window.removeEventListener('message', handler);
-  }, [repo, issue.number]);
+    /* `wrote` is in the list on purpose: a comment that landed is a comment
+       this page should be showing, and re-reading is the only way it can. */
+  }, [repo, issue.number, wrote]);
 
   const status = (issue.dimensions.status ?? '').toLowerCase();
   const shots = detail?.evidence ?? issue.evidence;
@@ -146,9 +173,17 @@ export function GhIssue({ repo, issue, dimensions, onBack, onClose }: {
         <button type="button" className="btn" onClick={() => window.open(issue.url, '_blank')}>
           <Ico name="link" />Open on github.com
         </button>
-        {onClose && issue.state === 'OPEN' && (
-          <button type="button" className="btn ok" onClick={() => onClose(issue)}>
+        {issue.state === 'OPEN' ? (
+          <button type="button" className="btn ok" onClick={() => setClosing(true)}>
             <Ico name="closed" />Close issue
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => flow.propose({ repo, numbers: [issue.number], state: 'reopen' })}
+          >
+            <Ico name="issue" />Reopen
           </button>
         )}
       </div>
@@ -286,19 +321,46 @@ export function GhIssue({ repo, issue, dimensions, onBack, onClose }: {
                 </Comment>
               ))}
 
-              {/* 14B. The box is here; sending is a write, and the write path
-                  confirms before it runs — see GhEditConfirm. */}
+              {/*
+                14B — writing a comment without leaving.
+
+                It goes through the board's own confirm flow rather than
+                sending on Enter: a comment is a write, everybody watching gets
+                a notification, and there is no unsend. The strip below shows
+                the exact call.
+              */}
               <div className="cmt">
                 <div className="ch">
                   <span className="av av-s">Y</span>
                   <b>You</b>
-                  <span style={{ marginLeft: 'auto' }}>
-                    commenting arrives with the write path
-                  </span>
+                  <span style={{ marginLeft: 'auto' }}>Markdown · #43 links</span>
                 </div>
-                <div className="cb" style={{ color: 'var(--dk-faint)' }}>
-                  Leave a comment…
+                <div className="cb" style={{ padding: 0 }}>
+                  <textarea
+                    className="mdbody"
+                    style={{ minHeight: 76, border: 'none', borderRadius: 0 }}
+                    value={draft}
+                    onChange={e => setDraft(e.target.value)}
+                    placeholder="Leave a comment…"
+                  />
                 </div>
+                {draft.trim() && (
+                  <div className="actions" style={{ margin: 0, padding: '0 12px 10px',
+                                                    justifyContent: 'flex-start' }}>
+                    <button
+                      type="button"
+                      className="btn go"
+                      onClick={() => flow.propose({
+                        repo, numbers: [issue.number], comment: draft,
+                      })}
+                    >
+                      <Ico name="cmt" />Comment
+                    </button>
+                    <button type="button" className="btn" onClick={() => setDraft('')}>
+                      Discard
+                    </button>
+                  </div>
+                )}
               </div>
 
               {detail?.error && (
@@ -371,6 +433,19 @@ export function GhIssue({ repo, issue, dimensions, onBack, onClose }: {
           </div>
         }
       />
+
+      {/* Every write from this page, confirmed the way the board's are. */}
+      <GhEditConfirm flow={flow} />
+
+      {closing && (
+        <GhCloseIssue
+          repo={repo}
+          issue={issue}
+          closed={closed}
+          onCancel={() => setClosing(false)}
+          onClose={request => { setClosing(false); flow.propose(request); }}
+        />
+      )}
     </div>
   );
 }

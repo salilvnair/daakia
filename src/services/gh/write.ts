@@ -34,6 +34,14 @@ export interface EditRequest {
   state?: 'close' | 'reopen';
   /** Required with `close`, and only meaningful there. */
   closeReason?: 'completed' | 'not planned';
+  /**
+   * A comment to leave, on its own or alongside a close.
+   *
+   * It is planned as its own call and ordered **before** the close, because a
+   * closed issue whose explanation arrives a second later is one that notified
+   * everybody watching twice, in the wrong order.
+   */
+  comment?: string;
 }
 
 export interface PlannedCommand {
@@ -43,6 +51,14 @@ export interface PlannedCommand {
   argv: string[];
   /** The same thing, joined, for a human to read on the confirm screen. */
   display: string;
+  /**
+   * Fed to the command's stdin.
+   *
+   * A comment body goes in through `--body-file -` rather than as an argument:
+   * it is multi-line prose somebody wrote, and an argv is the wrong place for
+   * that on any platform.
+   */
+  stdin?: string;
 }
 
 export interface EditPlan {
@@ -59,6 +75,22 @@ export function planEdit(req: EditRequest): EditPlan {
   const commands: PlannedCommand[] = [];
 
   for (const number of req.numbers) {
+    /*
+      The comment first, whatever else is happening.
+
+      On a close it has to be: GitHub notifies on both, and an explanation that
+      lands after the close reads as an afterthought to everybody watching.
+    */
+    if (req.comment?.trim()) {
+      const argv = ['issue', 'comment', String(number), '--repo', req.repo, '--body-file', '-'];
+      commands.push({
+        number,
+        argv,
+        display: `gh ${argv.join(' ')}`,
+        stdin: req.comment,
+      });
+    }
+
     if (req.state) {
       const argv = ['issue', req.state, String(number), '--repo', req.repo];
       /* gh only accepts a reason on close, and rejects it on reopen. */
@@ -100,11 +132,15 @@ function describe(req: EditRequest): string {
   const n = req.numbers.length;
   const subject = n === 1 ? `issue #${req.numbers[0]}` : `${n} issues`;
   if (req.state === 'close') {
-    return `Close ${subject}${req.closeReason ? ` as ${req.closeReason}` : ''}`;
+    return `Close ${subject}${req.closeReason ? ` as ${req.closeReason}` : ''}`
+      + (req.comment?.trim() ? ', with a comment' : '');
   }
-  if (req.state === 'reopen') return `Reopen ${subject}`;
+  if (req.state === 'reopen') {
+    return `Reopen ${subject}${req.comment?.trim() ? ', with a comment' : ''}`;
+  }
 
   const parts: string[] = [];
+  if (req.comment?.trim()) parts.push('leave a comment');
   if (req.addLabels?.length) parts.push(`add ${req.addLabels.join(', ')}`);
   if (req.removeLabels?.length) parts.push(`remove ${req.removeLabels.join(', ')}`);
   if (req.addAssignees?.length) parts.push(`assign ${req.addAssignees.join(', ')}`);
@@ -149,7 +185,7 @@ export async function applyPlan(plan: EditPlan): Promise<EditResult> {
   const outcomes: EditOutcome[] = [];
 
   for (const c of plan.commands) {
-    const r = await run(c.argv, { timeoutMs: 30_000 });
+    const r = await run(c.argv, { timeoutMs: 30_000, stdin: c.stdin });
     outcomes.push({
       number: c.number,
       command: c.display,

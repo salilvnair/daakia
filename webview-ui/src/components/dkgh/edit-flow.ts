@@ -29,6 +29,13 @@ export interface EditRequest {
   milestone?: string;
   state?: 'close' | 'reopen';
   closeReason?: 'completed' | 'not planned';
+  /**
+   * A comment to leave, on its own or alongside a close.
+   *
+   * Planned as its own call and ordered first — see `services/gh/write.ts`.
+   */
+  comment?: string;
+  removeLabels?: string[];
 }
 
 export interface PlannedCommand { number: number; display: string }
