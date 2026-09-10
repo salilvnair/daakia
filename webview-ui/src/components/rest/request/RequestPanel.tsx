@@ -5,6 +5,8 @@ import { useScrollRestore } from '../../../hooks/useScrollRestore';
 import { useToastStore } from '../../../store/toast-store';
 import { useDebugStore } from '../../../store/debug-store';
 import { KeyValueTable, AuthEditor, ScriptsEditor } from '../../shared';
+import { useSurfaceMenu } from '../../shared/menu/SurfaceMenu';
+import { requestMenuItems, type KvRow } from '../../shared/menu/requestMenus';
 import { TabView, type TabItem, KeyValueTableView, type KeyValueTableRow, MarkdownView, ButtonView } from '@salilvnair/dui';
 import { postMsg } from '../../../vscode';
 import { computeAuthRows } from './requestUtils';
@@ -107,6 +109,23 @@ function RequestDocsTab({ tab }: { tab: RequestTab }) {
     </div>
   );
 }
+
+/**
+ * Which field on the tab each `data-table` mark names.
+ *
+ * The mark in the markup is the reader's own word for the table — `params`,
+ * `headers` — and this is the only place that has to know one of them is
+ * stored as `bodyFormData`. A new table gets a right-click menu by appearing
+ * here and carrying the attribute.
+ */
+const TABLES: Record<string, 'params' | 'headers' | 'variables'
+  | 'bodyFormData' | 'bodyUrlEncoded'> = {
+  params: 'params',
+  headers: 'headers',
+  variables: 'variables',
+  formData: 'bodyFormData',
+  urlEncoded: 'bodyUrlEncoded',
+};
 
 export function RequestPanel() {
   const { tabs, activeTabId, updateTab } = useTabsStore();
@@ -240,8 +259,34 @@ export function RequestPanel() {
     }
   });
 
+  /*
+    Right-click, and get a menu about what is under the pointer rather than the
+    browser's Copy and Select All. One handler on the root; the parts below say
+    what they are with `data-menu`, and the shared builder decides what each
+    one offers. See `shared/menu/SurfaceMenu`.
+  */
+  const menu = useSurfaceMenu(surface => requestMenuItems(surface, {
+    method: tab.method,
+    url: tab.url,
+    headers: tab.headers as KvRow[],
+    params: tab.params as KvRow[],
+    body: tab.bodyRaw,
+    rowsOf: name => {
+      const field = TABLES[name];
+      return field ? (tab[field] as KvRow[]) : undefined;
+    },
+    setRows: (name, rows) => {
+      const field = TABLES[name];
+      if (field) updateTab(tab.id, { [field]: rows });
+    },
+    setUrl: url => updateTab(tab.id, { url }),
+    setBody: bodyRaw => updateTab(tab.id, { bodyRaw }),
+  }));
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-[var(--color-surface)]">
+    <div className="flex flex-col flex-1 min-h-0 bg-[var(--color-surface)]"
+         data-menu="panel" onContextMenu={menu.onContextMenu}>
+      {menu.node}
       <div className="flex items-center px-3 pt-2.5 pb-0 border-b border-[var(--color-surface-border)]">
         <div className="flex-1">
           <TabView
@@ -257,20 +302,27 @@ export function RequestPanel() {
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-3 py-2 flex flex-col min-h-0">
         {activeSection === 'params' && (
-          <KeyValueTable
-            rows={tab.params}
-            onChange={(rows) => updateTab(tab.id, { params: rows })}
-            placeholder={{ key: 'Parameter', value: 'Value' }}
-            label="Query Parameters"
-          />
+          <div data-menu="kv" data-table="params" data-label="the query parameters">
+            <KeyValueTable
+              rows={tab.params}
+              onChange={(rows) => updateTab(tab.id, { params: rows })}
+              placeholder={{ key: 'Parameter', value: 'Value' }}
+              label="Query Parameters"
+            />
+          </div>
         )}
 
         {activeSection === 'headers' && (
-          <HeadersTab tab={tab} cookieJarRows={cookieJarRows} />
+          <div data-menu="kv" data-table="headers" data-label="the headers">
+            <HeadersTab tab={tab} cookieJarRows={cookieJarRows} />
+          </div>
         )}
 
         {activeSection === 'body' && (
-          <BodyEditor tab={tab} showFuzzer={showFuzzer} onCloseFuzzer={() => setShowFuzzer(false)} />
+          <div data-menu="body" className="flex flex-col flex-1 min-h-0">
+            <BodyEditor tab={tab} showFuzzer={showFuzzer}
+                        onCloseFuzzer={() => setShowFuzzer(false)} />
+          </div>
         )}
 
         {activeSection === 'auth' && (

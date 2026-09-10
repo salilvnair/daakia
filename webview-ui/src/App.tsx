@@ -33,6 +33,8 @@ import { McpPanel } from './components/mcp/McpPanel';
 import { CommandPaletteView } from './components/shared/command-palette/CommandPaletteView';
 import { ApiMonitor } from './components/power/ApiMonitor';
 import { useTabsStore } from './store/tabs-store';
+import { useSurfaceMenu } from './components/shared/menu/SurfaceMenu';
+import { requestMenuItems, type KvRow as MenuKvRow } from './components/shared/menu/requestMenus';
 import { useToastStore } from './store/toast-store';
 import { useEnvStore } from './store/env-store';
 import { useCollectionsStore } from './store/collections-store';
@@ -189,6 +191,25 @@ export default function App() {
   // Track response arrival → auto-maximize response
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = tabs.find(t => t.id === activeTabId);
+
+  /*
+    The request-shaped menu, for whichever protocol tab is on screen. A tab that
+    is not a request — a wiki page, the settings — has no URL and no headers, so
+    the builder is handed an empty request and returns nothing, which leaves the
+    browser's own menu where it belongs.
+  */
+  const appMenu = useSurfaceMenu(surface => requestMenuItems(surface, {
+    method: activeTab?.method ?? 'GET',
+    url: activeTab?.url ?? '',
+    headers: (activeTab?.headers ?? []) as MenuKvRow[],
+    params: (activeTab?.params ?? []) as MenuKvRow[],
+    body: activeTab?.bodyRaw ?? '',
+    rowsOf: () => undefined,
+    setRows: () => undefined,
+    setUrl: url => activeTab && useTabsStore.getState().updateTab(activeTab.id, { url }),
+    setBody: bodyRaw => activeTab
+      && useTabsStore.getState().updateTab(activeTab.id, { bodyRaw }),
+  }));
   const standaloneActive = !!activeTab?.type && STANDALONE_TABS.includes(activeTab.type);
   const activeWorkspaceName = useWorkspaceStore(s => s.workspaces.find(w => w.id === s.activeId)?.name);
   // Subscribe to breakpoint changes for snapshot persistence
@@ -705,8 +726,18 @@ export default function App() {
       {/* Main content + sidebar (flex row: content | splitter | sidebar) */}
       <div className="flex-1 min-w-0 overflow-hidden" style={{ height: '100%', display: 'flex' }}>
 
-        {/* Main content */}
-        <div className="flex flex-col h-full flex-1 min-w-0 overflow-hidden">
+        {/*
+          Main content, and the right-click menu over all of it.
+
+          Every protocol panel is somewhere under here, so one handler gives
+          them all a menu; the parts inside say what they are with `data-menu`
+          and the shared builder decides what each offers. A panel that has
+          marked nothing yet still gets the request-level items rather than the
+          browser's Copy and Select All. See `components/shared/menu`.
+        */}
+        <div className="flex flex-col h-full flex-1 min-w-0 overflow-hidden"
+             data-menu="panel" onContextMenu={appMenu.onContextMenu}>
+        {appMenu.node}
         {/* SQLite status banner */}
         <SqliteBanner sqliteOk={sqliteStatus.ok} error={sqliteStatus.error} />
 

@@ -3,6 +3,8 @@ import { useTabsStore, type HttpMethod } from '../../../store/tabs-store';
 import { useUrlSuggestionsStore } from '../../../store/url-suggestions-store';
 import { useDebugStore } from '../../../store/debug-store';
 import { GenerateCodeModal, ImportCurlModal, AnchoredMenu } from '../../shared';
+import { useSurfaceMenu } from '../../shared/menu/SurfaceMenu';
+import { requestMenuItems, type KvRow } from '../../shared/menu/requestMenus';
 import { SelectTextInputView, DropDownButtonView, ButtonView, IconButtonView, type ContextMenuItem } from '@salilvnair/dui';
 import { useMockSuggestions } from '../../../hooks/useMockSuggestions';
 import { postMsg } from '../../../vscode';
@@ -133,11 +135,29 @@ export function UrlBar() {
       : 'Pre-flight';
  const preflightIcon = hasErr || hasWarn ? '': '✓';
 
+  /*
+    The bar carries its own menu rather than inheriting the request panel's:
+    it is a sibling of that panel, not a child, so a handler down there never
+    sees a right-click up here. See `shared/menu/SurfaceMenu`.
+  */
+  const menu = useSurfaceMenu(surface => requestMenuItems(surface, {
+    method: tab.method,
+    url: tab.url,
+    headers: tab.headers as KvRow[],
+    params: tab.params as KvRow[],
+    body: tab.bodyRaw,
+    rowsOf: () => undefined,
+    setRows: () => undefined,
+    setUrl: url => updateTab(tab.id, { url }),
+    setBody: bodyRaw => updateTab(tab.id, { bodyRaw }),
+  }));
+
   return (
-    <div className="url-bar">
+    <div className="url-bar" onContextMenu={menu.onContextMenu}>
+      {menu.node}
       {/* Method + URL — unified DUI component. Shrinks down to minWidth; past that the
           bar scrolls horizontally rather than squeezing this illegibly small. */}
-      <div className="flex-[2] min-w-0" style={{ minWidth: 160 }}>
+      <div className="flex-[2] min-w-0" style={{ minWidth: 160 }} data-menu="url">
         <SelectTextInputView
           selectOptions={METHOD_OPTIONS}
           selectValue={tab.method}

@@ -134,7 +134,10 @@ export function useBoardMenu(ctx: MenuCtx) {
       position={placed ? { x: placed.x, y: placed.y } : undefined}
       onClose={() => setPlaced(undefined)}
       items={placed?.items ?? []}
-      width={272}
+      /* `auto` is `max-content`: the menu is exactly as wide as its longest
+         label, so nothing is ever cut and nothing is padded to a guessed
+         number. */
+      width="auto"
     />
   );
 
