@@ -15,9 +15,10 @@
  * exists. The number in the table is for the reader.
  */
 import { useState } from 'react';
-import { ButtonView, BadgeChipView, ModalView } from '@salilvnair/dui';
+import { ModalView } from '@salilvnair/dui';
+import { Ico } from './GhIcons';
+import { Dk } from './GhShell';
 import { postMsg } from '../../vscode';
-import { WarningTriangleIcon, CloseIcon } from '../../icons';
 import { ACCENT, type GhEnv } from './types';
 
 interface Feature {
@@ -73,28 +74,26 @@ export function GhOldVersion({ env, repo, dismissed, onDismiss }: {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-4 py-1.5 flex-shrink-0 flex-wrap"
-           style={{
-             borderBottom: '1px solid var(--color-surface-border)',
-             background: 'color-mix(in srgb, var(--color-warning) 8%, transparent)',
-           }}>
-        <WarningTriangleIcon size={12} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
-        <BadgeChipView tone="var(--color-warning)" size="xs">old gh</BadgeChipView>
-        <span className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
-          <b style={{ color: 'var(--color-text-primary)' }}>gh {version}</b>
+      {/* The mock's own changed-view strip: an amber rule down the left edge
+          rather than a wash across the tab, which is a lot of screen to spend
+          on something that blocks nothing. */}
+      <div className="dirtybar">
+        <Ico name="warn" style={{ color: 'var(--dk-amber)' }} />
+        <span className="chip c-stale">old gh</span>
+        <span>
+          <b style={{ color: 'var(--dk-text)' }}>gh {version}</b>
           {' '}— the board and the composer work.{' '}
           {n === 1 ? 'One feature does not.' : `${n} features do not.`}
         </span>
-        <span className="flex-1" />
-        <ButtonView size="sm" variant="ghost" accentColor={ACCENT} onClick={() => setOpen(true)}>
+        <span className="sp" style={{ flex: 1 }} />
+        <button type="button" className="btn" onClick={() => setOpen(true)}>
           What is missing
-        </ButtonView>
+        </button>
         {/* Per repository, and only when there is one to key it to. */}
         {repo && (
-          <ButtonView size="sm" accentColor="var(--color-text-muted)"
-                      iconLeft={<CloseIcon size={10} />} onClick={onDismiss}>
-            Dismiss for this repo
-          </ButtonView>
+          <button type="button" className="btn" onClick={onDismiss}>
+            <Ico name="x" />Dismiss for this repo
+          </button>
         )}
       </div>
 
@@ -106,61 +105,50 @@ export function GhOldVersion({ env, repo, dismissed, onDismiss }: {
         size="md"
         headerColor={ACCENT}
         footerRight={
-          <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={() => setOpen(false)}>
-            Close
-          </ButtonView>
+          <Dk>
+            <button type="button" className="btn" onClick={() => setOpen(false)}>Close</button>
+          </Dk>
         }
       >
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[11.5px]">
-            <thead>
-              <tr>
-                {['Feature', 'Needs', 'You have', 'Now'].map(h => (
-                  <th key={h}
-                      className="text-left px-2.5 py-1.5 text-[9.5px] font-semibold uppercase tracking-wider whitespace-nowrap"
-                      style={{ color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-surface-border)' }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {FEATURES.map(f => {
-                const ok = env.capabilities ? f.has(env.capabilities) : false;
-                return (
-                  <tr key={f.what}>
-                    <td className="px-2.5 py-1.5" style={cell(ok)}>{f.what}</td>
-                    <td className="px-2.5 py-1.5 font-mono whitespace-nowrap" style={cell(ok)}>{f.needs}</td>
-                    <td className="px-2.5 py-1.5 font-mono whitespace-nowrap" style={cell(ok)}>{version}</td>
-                    <td className="px-2.5 py-1.5 whitespace-nowrap" style={cell(ok)}>
-                      {ok
-                        ? <span style={{ color: 'var(--color-success)' }}>works</span>
-                        : <span style={{ color: 'var(--color-warning)' }}>{f.degraded}</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Dk>
+          <div className="tblw">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  {['Feature', 'Needs', 'You have', 'Now'].map(h => <th key={h}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {FEATURES.map(f => {
+                  const ok = env.capabilities ? f.has(env.capabilities) : false;
+                  return (
+                    <tr key={f.what} style={ok ? undefined : { color: 'var(--dk-text)' }}>
+                      <td>{f.what}</td>
+                      <td className="dt">{f.needs}</td>
+                      <td className="dt">{version}</td>
+                      <td>
+                        {ok
+                          ? <span style={{ color: 'var(--dk-green)' }}>works</span>
+                          : <span className="late">{f.degraded}</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-        <p className="text-[11px] mt-3 mb-0" style={{ color: 'var(--color-text-muted)', lineHeight: 1.65 }}>
-          Nothing is blocked. The screens that need what is missing go quiet and say why; the
-          rest runs exactly as it would on the newest gh. Upgrading is
-          {' '}<code>winget upgrade GitHub.cli</code>, <code>brew upgrade gh</code> or your
-          package manager's equivalent — and if the image is locked, the rows above are the
-          specific ask.
-        </p>
+          <div className="sub" style={{ marginTop: 12 }}>
+            Nothing is blocked. The screens that need what is missing go quiet and say why; the
+            rest runs exactly as it would on the newest gh. Upgrading is
+            {' '}<code>winget upgrade GitHub.cli</code>, <code>brew upgrade gh</code> or your
+            package manager&rsquo;s equivalent — and if the image is locked, the rows above are
+            the specific ask.
+          </div>
+        </Dk>
       </ModalView>
     </>
   );
-}
-
-function cell(ok: boolean) {
-  return {
-    borderBottom: '1px solid color-mix(in srgb, var(--color-surface-border) 55%, transparent)',
-    color: ok ? 'var(--color-text-secondary)' : 'var(--color-text-primary)',
-  } as const;
 }
 
 /** Dismiss, and remember it against this repository. */
