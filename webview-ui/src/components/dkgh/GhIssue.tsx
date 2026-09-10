@@ -30,6 +30,7 @@ import { GhEvidence } from './GhEvidence';
 import { sinceIso as since } from './format';
 import { GhEditConfirm } from './GhEditConfirm';
 import { GhCloseIssue } from './GhCloseIssue';
+import { GhMarkdown } from './GhMarkdown';
 import { useEditFlow } from './edit-flow';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
@@ -336,11 +337,13 @@ export function GhIssue({ repo, issue, dimensions, closed, onBack, onWrote }: {
                   <span style={{ marginLeft: 'auto' }}>Markdown · #43 links</span>
                 </div>
                 <div className="cb" style={{ padding: 0 }}>
-                  <textarea
-                    className="mdbody"
-                    style={{ minHeight: 76, border: 'none', borderRadius: 0 }}
+                  {/* The same box the composer files in. On github.com the
+                      reply box is the filing box, and two different ones here
+                      is how somebody learns that one of them cannot do bold. */}
+                  <GhMarkdown
                     value={draft}
-                    onChange={e => setDraft(e.target.value)}
+                    onChange={setDraft}
+                    minHeight={84}
                     placeholder="Leave a comment…"
                   />
                 </div>

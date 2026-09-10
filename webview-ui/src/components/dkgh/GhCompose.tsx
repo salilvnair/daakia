@@ -22,6 +22,7 @@ import { SplitPanelView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
 import { GhUpload } from './GhUpload';
 import { GhGenerate } from './GhGenerate';
+import { GhMarkdown } from './GhMarkdown';
 import {
   discardDraft, draftNote, hasContent, loadDraft, proposeTemplate, saveDraft,
   type Draft, type FormField, type IssueForm,
@@ -143,27 +144,9 @@ export function GhCompose({
 
           <div className="lbl-s">What went wrong</div>
           <div>
-            <div className="mdbar">
-              <span className="tg">
-                <span className="on">Write</span>
-                <span>Preview</span>
-              </span>
-              <span className="ic"><Ico name="h" /></span>
-              <span className="ic"><Ico name="b" /></span>
-              <span className="ic"><Ico name="i" /></span>
-              <span className="ic"><Ico name="code" /></span>
-              <span className="ic"><Ico name="link" /></span>
-              <span className="sep" />
-              <span className="ic"><Ico name="list" /></span>
-              <span className="ic"><Ico name="task" /></span>
-              <span className="sep" />
-              <span className="ic"><Ico name="at" /></span>
-              <span className="ic"><Ico name="img" /></span>
-            </div>
-            <textarea
-              className="mdbody"
+            <GhMarkdown
               value={draft.description}
-              onChange={e => patch({ description: e.target.value })}
+              onChange={description => patch({ description })}
               placeholder="Describe it in a sentence. You can write the whole thing here."
             />
           </div>

@@ -1790,3 +1790,38 @@
   white-space: normal; padding-left: 9.6px; padding-right: 9.6px;
 }
 .dkgh .tblw.prose table.tbl td.dt { white-space: nowrap; }
+
+/*
+  The markdown bar does something now.
+
+  It was drawn as spans, because a mock never presses anything — so Write and
+  Preview did not switch and the nine buttons were decoration. They are real
+  controls, and a control with no cursor and no hover is one nobody discovers.
+*/
+.dkgh .mdbar .tg span {
+  cursor: pointer; transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .mdbar .tg span:hover:not(.on) { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .mdbar button.ic {
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .mdbar button.ic:hover { color: var(--dk-text); background: var(--dk-hover); }
+.dkgh .mdbar button.ic:active { background: var(--dk-raised); }
+.dkgh .mdbar .sp { flex: 1; }
+
+/* The box says which one has the caret, the way every other field here does. */
+.dkgh textarea.mdbody:focus {
+  border-color: var(--dk-gh);
+  box-shadow: 0 0 0 3.6px color-mix(in srgb, var(--dk-gh) 14%, transparent);
+}
+
+/*
+  Preview is the same box, rendered.
+
+  It borrows `.mdbody` for its frame so switching tabs does not move anything,
+  and `.dkgh-md` for the markdown itself — one set of type sizes across the
+  peek, the issue page and this.
+*/
+.dkgh .mdbody.dkgh-md > *:first-child { margin-top: 0; }
+.dkgh .mdbody.dkgh-md > *:last-child { margin-bottom: 0; }

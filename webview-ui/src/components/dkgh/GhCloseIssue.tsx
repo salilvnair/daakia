@@ -21,6 +21,7 @@ import { useMemo, useState } from 'react';
 import { ModalView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
 import { Dk, GhNote } from './GhShell';
+import { GhMarkdown } from './GhMarkdown';
 import { ACCENT } from './types';
 import type { BoardIssue } from './board-types';
 import type { EditRequest } from './edit-flow';
@@ -146,13 +147,12 @@ export function GhCloseIssue({ repo, issue, closed, onCancel, onClose }: {
 
           <div className="fieldrow">
             <label className="fl" htmlFor="dkgh-close-comment">Comment</label>
-            <textarea
+            <GhMarkdown
               id="dkgh-close-comment"
-              className="mdbody"
-              autoFocus
-              style={{ minHeight: 84 }}
               value={comment}
-              onChange={e => setComment(e.target.value)}
+              onChange={setComment}
+              autoFocus
+              minHeight={84}
               placeholder="What actually happened. Markdown, and #43 links."
             />
           </div>

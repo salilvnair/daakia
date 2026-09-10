@@ -243,7 +243,10 @@ export async function handleAiSend(
       onError: (error) => {
         clearTimeout(timeoutId);
         cleanupAiRequest(tabId);
-        postMessage({ type: 'ai:error', stage: auditStage, ...error });
+        /* `tabId` last: it is the only field that says which request this
+           belongs to, and a spread that happened to carry an undefined one
+           would silently unaddress the error again. */
+        postMessage({ type: 'ai:error', stage: auditStage, ...error, tabId });
         try {
           insertAudit({
             conversation_id: tabId,
@@ -338,7 +341,10 @@ export async function handleAiSend(
       if (error.diagnostics) {
         console.error('[AI Handler Diagnostics]', JSON.stringify(error.diagnostics, null, 2));
       }
-      postMessage({ type: 'ai:error', stage: auditStage, ...error });
+      /* `tabId` last: it is the only field that says which request this
+           belongs to, and a spread that happened to carry an undefined one
+           would silently unaddress the error again. */
+        postMessage({ type: 'ai:error', stage: auditStage, ...error, tabId });
 
       // AI errors are tracked in the AI Audit panel — not in HTTP request history
       // Save error to AI audit log
@@ -453,7 +459,10 @@ async function handleMcpToolCallLoop(
       if (error.diagnostics) {
         console.error('[AI MCP Follow-up Diagnostics]', JSON.stringify(error.diagnostics, null, 2));
       }
-      postMessage({ type: 'ai:error', stage: auditStage, ...error });
+      /* `tabId` last: it is the only field that says which request this
+           belongs to, and a spread that happened to carry an undefined one
+           would silently unaddress the error again. */
+        postMessage({ type: 'ai:error', stage: auditStage, ...error, tabId });
     },
   });
 }
