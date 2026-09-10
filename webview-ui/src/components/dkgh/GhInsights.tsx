@@ -22,6 +22,8 @@ import {
   ages, byAssignee, compare, headline, stacked, weekly, type StackedRow,
 } from './insights-model';
 import { GhCompare } from './GhCompare';
+import { GhNewChart, GhNewChartTile, GhOwnChart } from './GhOwnCharts';
+import { loadCharts, saveCharts, type PinnedChart } from './charts-model';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 const TONE = {
@@ -30,15 +32,39 @@ const TONE = {
   bad: 'var(--dk-red)',
 } as const;
 
-export function GhInsights({ issues, dimensions, weeks, onWeeks, onFilter }: {
+export function GhInsights({
+  repo, issues, dimensions, weeks, onWeeks, onFilter, views, currentView, rowsForView, who,
+}: {
   /** What the board is showing. The charts follow the filters, deliberately. */
   issues: BoardIssue[];
+  repo: string;
   dimensions: ProposedDimension[];
   weeks: number;
   onWeeks: (weeks: number) => void;
   /** 16A — a bar is a filter. */
   onFilter: (field: string, value: string) => void;
+  /** 16D — the saved views a pinned chart can be a chart *of*. */
+  views: string[];
+  currentView: string;
+  /** The rows one of those views holds, or nothing if it has been renamed away. */
+  rowsForView: (name: string) => BoardIssue[] | undefined;
+  who?: string;
 }) {
+  /* 16D. Per repository, in the browser's own storage — the same place the
+     saved views live, because a chart is one of them charted. */
+  const [charts, setCharts] = useState<PinnedChart[]>(() => loadCharts(repo));
+  const [making, setMaking] = useState(false);
+  const pin = (c: PinnedChart) => {
+    const next = [...charts, c];
+    setCharts(next);
+    saveCharts(repo, next);
+    setMaking(false);
+  };
+  const unpin = (id: string) => {
+    const next = charts.filter(c => c.id !== id);
+    setCharts(next);
+    saveCharts(repo, next);
+  };
   const open = useMemo(() => issues.filter(i => i.state === 'OPEN'), [issues]);
 
   const series = useMemo(() => weekly(issues, weeks), [issues, weeks]);
@@ -92,6 +118,9 @@ export function GhInsights({ issues, dimensions, weeks, onWeeks, onFilter }: {
         <button type="button" className={`pill${comparing ? ' on' : ''}`}
                 onClick={() => setComparing(c => !c)}>
           Compare
+        </button>
+        <button type="button" className="pill" onClick={() => setMaking(true)}>
+          <Ico name="plus" />New chart
         </button>
       </div>
 
@@ -187,7 +216,45 @@ export function GhInsights({ issues, dimensions, weeks, onWeeks, onFilter }: {
             onPick={label => onFilter('assignee', label === 'unassigned' ? '' : label)}
           />
         </div>
+
+        {/* 16D — among the built-in four, marked but not segregated. */}
+        {charts.map(c => (
+          <GhOwnChart
+            key={c.id}
+            chart={c}
+            rows={c.view ? rowsForView(c.view) ?? [] : issues}
+            options={dimensions.find(d => d.dimension === (c.splitBy ?? c.groupBy))?.options}
+            missing={!!c.view && rowsForView(c.view) === undefined}
+            onFilter={onFilter}
+            onRemove={() => unpin(c.id)}
+          />
+        ))}
+        <GhNewChartTile onClick={() => setMaking(true)} />
       </div>
+
+      {charts.length > 0 && (
+        <div className="note" style={{ maxWidth: 'none', margin: 0, borderRadius: 0,
+                                       borderLeft: 0, borderRight: 0, borderBottom: 0 }}>
+          <Ico name="filter" />
+          <div>
+            <b>A pinned chart carries its view with it.</b> Editing that view changes the
+            chart, and clicking a bar opens the view&rsquo;s issues. A chart is a saved
+            question, not a saved picture.
+          </div>
+        </div>
+      )}
+
+      {making && (
+        <GhNewChart
+          repo={repo}
+          views={views}
+          currentView={currentView}
+          dimensions={dimensions}
+          who={who}
+          onCancel={() => setMaking(false)}
+          onPin={pin}
+        />
+      )}
 
       {/* 16E, on the screen rather than in a footnote */}
       <div className="note" style={{ margin: '0 19px 20px' }}>

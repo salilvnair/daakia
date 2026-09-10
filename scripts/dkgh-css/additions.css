@@ -875,3 +875,18 @@
   color: var(--dk-faint);
 }
 .dkgh .fh .n { margin-left: auto; font-family: var(--mono); font-weight: 500; }
+
+/*
+  ── An icon inside a chart card ──
+
+  The mock gives `.chartc svg` `width: 100%`, because the only `<svg>` it ever
+  draws in one is the line chart, which should fill the card. 16D puts a real
+  control in the card's heading — unpin — and its 12px glyph inherited that
+  rule and came out the size of the chart.
+
+  Scoped to a button rather than undoing the mock's rule: the line chart still
+  fills its card, and anything pressable keeps the size the rest of the tab
+  uses for the same glyph.
+*/
+.dkgh .chartc button svg { width: 12px; height: 12px; }
+.dkgh .chartc .barrow svg { width: 12px; height: 12px; }

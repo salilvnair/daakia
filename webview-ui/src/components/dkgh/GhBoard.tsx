@@ -69,7 +69,7 @@ import { GhChart } from './GhChart';
 import { GhCompose } from './GhCompose';
 import { GhReview } from './GhReview';
 import { GhIssue } from './GhIssue';
-import { useScheduleRunner, type RunFailure } from './schedule-runner';
+import { useScheduleRunner, rowsFor, type RunFailure } from './schedule-runner';
 import { GhExport } from './GhExport';
 import { GhInsights } from './GhInsights';
 import { GhRepository } from './GhRepository';
@@ -1096,8 +1096,15 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         />
       ) : section === 'insights' ? (
         <GhInsights
+          repo={repo}
           issues={filtered}
           dimensions={dimensions}
+          /* 16D — a pinned chart is a chart *of* a saved view, so it needs the
+             names and a way to ask each one for its rows. */
+          views={shownViews.map(v => v.name)}
+          currentView={active?.name ?? ''}
+          rowsForView={name => rowsFor(name, shownViews, all)}
+          who={account?.login}
           weeks={weeks}
           onWeeks={setWeeks}
           /*
