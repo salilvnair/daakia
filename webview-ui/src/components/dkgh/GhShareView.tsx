@@ -19,10 +19,10 @@
  * a term is quietly ignored and you spend ten minutes reading the wrong list.
  */
 import { useMemo, useState } from 'react';
-import {
-  BadgeChipView, ButtonView, CopyButtonView, ModalView, TogglePillView,
-} from '@salilvnair/dui';
-import { ShareIcon, WarningTriangleIcon, CheckCircleIcon, GitHubIcon } from '../../icons';
+import { ModalView } from '@salilvnair/dui';
+import { ShareIcon } from '../../icons';
+import { Ico, type IcoName } from './GhIcons';
+import { CopyWord, Dk, GhNote } from './GhShell';
 import { formatQuery, type FilterState, type MatchContext } from './filter-model';
 import {
   daakiaLink, importQuery, toGithubQuery, widening, type SavedView,
@@ -74,30 +74,31 @@ export function GhShareView({
       headerIcon={<ShareIcon size={14} />}
       title={view ? `Share “${view.name}”` : 'Share this filter'}
       footerLeft={
-        <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+        <Dk><span className="sub">
           {spread.here} issue{spread.here === 1 ? '' : 's'} · {state.terms.length} filter
           {state.terms.length === 1 ? '' : 's'}
           {link.dropped.length > 0 && (
-            <> · <span style={{ color: 'var(--color-warning)' }}>
+            <> · <span style={{ color: 'var(--dk-amber)' }}>
               {link.dropped.length} will not survive the github.com link
             </span></>
           )}
-        </span>
+        </span></Dk>
       }
       footerRight={
-        <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={onClose}>
-          Close
-        </ButtonView>
+        <Dk><button type="button" className="btn" onClick={onClose}>Close</button></Dk>
       }
     >
+      <Dk>
       <div className="flex flex-col gap-3">
-        <div className="flex gap-1">
-          <TogglePillView accentColor={ACCENT} active={tab === 'out'} onClick={() => setTab('out')}>
+        <div className="flex gap-1 flex-wrap">
+          <button type="button" className={`pill${tab === 'out' ? ' on' : ''}`}
+                  onClick={() => setTab('out')}>
             Send one
-          </TogglePillView>
-          <TogglePillView accentColor={ACCENT} active={tab === 'in'} onClick={() => setTab('in')}>
+          </button>
+          <button type="button" className={`pill${tab === 'in' ? ' on' : ''}`}
+                  onClick={() => setTab('in')}>
             Somebody sent you one
-          </TogglePillView>
+          </button>
         </div>
 
         {tab === 'out' ? (
@@ -106,7 +107,7 @@ export function GhShareView({
               title="A github.com link"
               note="Works for anyone with repository access — nothing installed."
               value={link.url}
-              icon={<GitHubIcon size={11} />}
+              icon="gh"
             >
               {link.dropped.length > 0 ? (
                 <Warn>
@@ -117,7 +118,7 @@ export function GhShareView({
                   {link.dropped.length === 1 ? ', which is a heading' : ', which are headings'} in
                   your issue template and not something GitHub can search. The link drops
                   {link.dropped.length === 1 ? ' it' : ' them'} and would show{' '}
-                  <b style={{ color: 'var(--color-text-primary)' }}>
+                  <b>
                     {spread.there} issue{spread.there === 1 ? '' : 's'} instead of {spread.here}
                   </b>{' '}
                   — said here rather than letting somebody act on a wider list than the one you
@@ -151,27 +152,18 @@ export function GhShareView({
           <div className="flex flex-col gap-2">
             <textarea
               autoFocus
+              className="inp mono"
               value={pasted}
               onChange={e => setPasted(e.target.value)}
               placeholder="state:open module:checkout priority:urgent"
               rows={2}
               spellCheck={false}
-              className="text-[10.5px] font-mono px-2 py-1.5 rounded"
-              style={{
-                background: 'var(--color-panel)',
-                border: '1px solid var(--color-surface-border)',
-                color: 'var(--color-text-primary)',
-                outline: 'none',
-                resize: 'vertical',
-              }}
             />
 
             {taken && (
               <>
-                <div className="flex flex-col gap-1 rounded-lg border px-2.5 py-2"
-                     style={{ borderColor: 'var(--color-surface-border)',
-                              background: 'var(--color-panel)' }}>
-                  <span className="text-[10.5px]" style={{ color: 'var(--color-text-primary)' }}>
+                <div className="opt">
+                  <span style={{ color: 'var(--dk-text)' }}>
                     Understood{' '}
                     <b>{taken.understood.length} filter
                       {taken.understood.length === 1 ? '' : 's'}</b>. Matches{' '}
@@ -179,9 +171,9 @@ export function GhShareView({
                   </span>
                   <span className="flex gap-1 flex-wrap">
                     {taken.understood.map(t => (
-                      <BadgeChipView key={t.field} tone={ACCENT} size="xs">
+                      <span key={t.field} className="chip c-gh">
                         {t.field}: {t.values.join(', ')}
-                      </BadgeChipView>
+                      </span>
                     ))}
                   </span>
                 </div>
@@ -198,77 +190,60 @@ export function GhShareView({
                 )}
 
                 <div className="flex items-center gap-2">
-                  <span className="flex-1" />
-                  <ButtonView size="sm" accentColor={ACCENT}
-                              onClick={() => { onApply(taken.state, false); onClose(); }}>
+                  <span className="sp" style={{ flex: 1 }} />
+                  <button type="button" className="btn"
+                          onClick={() => { onApply(taken.state, false); onClose(); }}>
                     Just apply it
-                  </ButtonView>
-                  <ButtonView size="sm" variant="primary" accentColor={ACCENT}
-                              onClick={() => { onApply(taken.state, true); onClose(); }}>
+                  </button>
+                  <button type="button" className="btn go"
+                          onClick={() => { onApply(taken.state, true); onClose(); }}>
                     Apply and save as a view
-                  </ButtonView>
+                  </button>
                 </div>
               </>
             )}
           </div>
         )}
       </div>
+      </Dk>
     </ModalView>
   );
 }
 
+/** One link, its caveat, and the copy that is the whole point of the screen. */
 function Row({ title, note, value, icon, children }: {
   title: string;
   note: string;
   value: string;
-  icon?: React.ReactNode;
+  icon?: IcoName;
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span className="flex items-center gap-1.5 text-[10.5px]"
-            style={{ color: 'var(--color-text-primary)' }}>
-        {icon}
-        <b>{title}</b>
-        <span style={{ color: 'var(--color-text-muted)' }}>— {note}</span>
-      </span>
-      <div className="flex items-center gap-1.5">
-        <code className="flex-1 text-[10px] px-2 py-1 rounded truncate"
-              style={{
-                background: 'var(--color-panel)',
-                border: '1px solid var(--color-surface-border)',
-                color: 'var(--color-text-secondary)',
-              }}>
-          {value}
-        </code>
-        <CopyButtonView text={value} accentColor={ACCENT} size="sm" />
+    <div className="opt">
+      <div className="oh">
+        {icon && <Ico name={icon} style={{ color: 'var(--dk-muted)' }} />}
+        {title}
+        <span className="sub" style={{ fontWeight: 400 }}>— {note}</span>
+      </div>
+      <div className="cmd">
+        <span className="truncate" style={{ flex: 1 }}>{value}</span>
+        <CopyWord text={value} />
       </div>
       {children}
     </div>
   );
 }
 
+/** A caveat that changes what the reader is about to send. */
 function Warn({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="flex items-start gap-1.5 text-[10px] rounded px-2 py-1.5"
-          style={{
-            color: 'var(--color-text-muted)',
-            lineHeight: 1.6,
-            background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--color-warning) 30%, transparent)',
-          }}>
-      <WarningTriangleIcon size={11}
-                           style={{ marginTop: 2, flexShrink: 0, color: 'var(--color-warning)' }} />
-      <span>{children}</span>
-    </span>
-  );
+  return <GhNote tone="warn" style={{ margin: 0 }}>{children}</GhNote>;
 }
 
+/** The other answer, and it is worth saying out loud. */
 function Good({ children }: { children: React.ReactNode }) {
   return (
-    <span className="flex items-center gap-1.5 text-[10px]"
-          style={{ color: 'var(--color-text-muted)' }}>
-      <CheckCircleIcon size={11} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
+    <span className="flex items-center gap-1.5 sub">
+      <Ico name="check" style={{ color: 'var(--dk-green)', flexShrink: 0 }} />
       {children}
     </span>
   );

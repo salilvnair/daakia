@@ -1743,6 +1743,10 @@
 .dkgh .opt .fct { padding: 7.2px 12px; border-radius: 7.2px; width: 100%; text-align: left; }
 .dkgh .opt button.fct { background: transparent; border: none; font-family: inherit; color: inherit; }
 .dkgh .opt button.fct:hover { background: var(--dk-hover); color: var(--dk-text); }
+/* A `<button>` needs its background reset, and the reset then outranks `.on`. */
+.dkgh .opt button.fct.on {
+  color: var(--dk-text); background: color-mix(in srgb, var(--dk-gh) 10%, transparent);
+}
 
 /*
   The row's own small verbs. The mock draws the icons bare, because a mock

@@ -18,8 +18,7 @@
  */
 import { useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
-import { ImageIcon } from '../../icons';
-import { ACCENT } from './types';
+import { Ico } from './GhIcons';
 
 interface Answer { dataUri?: string; error?: string }
 
@@ -79,7 +78,7 @@ export function GhEvidence({ url, height, alt }: {
     height,
     borderRadius: 5,
     overflow: 'hidden',
-    border: '1px solid var(--color-surface-border)',
+    border: '1px solid var(--dk-border)',
   } as const;
 
   if (answer?.dataUri) {
@@ -111,14 +110,14 @@ export function GhEvidence({ url, height, alt }: {
         justifyContent: 'center',
         gap: 5,
         background: answer?.error
-          ? 'var(--color-panel)'
-          : `color-mix(in srgb, ${ACCENT} 8%, var(--color-panel))`,
-        color: 'var(--color-text-muted)',
-        fontSize: 9.5,
+          ? 'var(--dk-panel)'
+          : 'color-mix(in srgb, var(--dk-gh) 8%, var(--dk-panel))',
+        color: 'var(--dk-faint)',
+        fontSize: 11.4,
       }}
       className={answer?.error ? undefined : 'animate-pulse'}
     >
-      <ImageIcon size={12} />
+      <Ico name="img" />
       {answer?.error && <span>screenshot on github.com</span>}
     </div>
   );

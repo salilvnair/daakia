@@ -26,7 +26,7 @@
  */
 import { useEffect } from 'react';
 import { KbdView } from '@salilvnair/dui';
-import { ACCENT } from './types';
+import { Ico } from './GhIcons';
 
 /** How long Space has to be down before it is a peek rather than a select. */
 export const PEEK_HOLD_MS = 220;
@@ -95,38 +95,27 @@ export function GhKeys({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <div className="absolute inset-0" style={{ zIndex: 40, background: 'rgba(0,0,0,.5)' }}
-           onClick={onClose} />
+      {/* The mock's own dialog: its scrim, its card, its header and footer
+          rules. A sheet of keys is not a different kind of dialog. */}
+      <div className="scrim" onClick={onClose} />
       <div
-        className="absolute rounded-xl border overflow-hidden"
+        className="dlg"
         role="dialog"
         aria-label="Keyboard shortcuts"
         style={{
-          left: '50%',
           top: '50%',
           transform: 'translate(-50%, -50%)',
           width: 'min(680px, 92%)',
           maxHeight: '86%',
           display: 'flex',
           flexDirection: 'column',
-          zIndex: 41,
-          borderColor: 'var(--color-surface-border)',
-          background: 'var(--color-surface)',
-          boxShadow: '0 18px 56px rgba(0,0,0,.55)',
         }}
       >
-        <div
-          className="flex items-center gap-2 px-4 py-3"
-          style={{
-            borderBottom: '1px solid var(--color-surface-border)',
-            background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`,
-          }}
-        >
-          <span className="text-[14px] font-semibold" style={{ color: ACCENT }}>
-            Keyboard shortcuts
-          </span>
-          <span className="flex-1" />
-          <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="dh">
+          <Ico name="board" />
+          Keyboard shortcuts
+          <span className="sp" />
+          <span className="sub">
             press <KbdView keys="Esc" size="md" /> to close
           </span>
         </div>
@@ -137,31 +126,20 @@ export function GhKeys({ onClose }: { onClose: () => void }) {
           the bottom of the first column with its keys at the top of the second.
         */}
         <div
-          className="p-5 overflow-y-auto"
-          style={{ columnCount: 2, columnGap: 32 }}
+          className="db overflow-y-auto"
+          style={{ display: 'block', columnCount: 2, columnGap: 32, padding: 20 }}
         >
           {KEY_GROUPS.map(g => (
             <section key={g.title} style={{ breakInside: 'avoid', marginBottom: 18 }}>
-              <h3
-                className="text-[10px] font-bold uppercase mb-1.5"
-                style={{ letterSpacing: '.09em', color: 'var(--color-text-muted)' }}
-              >
-                {g.title}
-              </h3>
+              <div className="fl" style={{ marginBottom: 6 }}>{g.title}</div>
               {g.keys.map(b => <Row key={b.keys.join('+')} binding={b} />)}
             </section>
           ))}
         </div>
 
-        <div
-          className="px-4 py-3 text-[11.5px]"
-          style={{
-            color: 'var(--color-text-secondary)',
-            borderTop: '1px solid var(--color-surface-border)',
-            lineHeight: 1.55,
-          }}
-        >
-          Every one of these acts on <b style={{ color: 'var(--color-text-primary)' }}>the
+        <div className="df" style={{ display: 'block', lineHeight: 1.55,
+                                     fontSize: 13.2, color: 'var(--dk-muted)' }}>
+          Every one of these acts on <b style={{ color: 'var(--dk-text)' }}>the
           selection if there is one</b>, otherwise on the row under the cursor.
         </div>
       </div>
@@ -181,12 +159,10 @@ function Row({ binding }: { binding: Binding }) {
   const { keys, joiner, does } = binding;
   return (
     <div className="flex items-center gap-2.5 py-[5px]">
-      <span className="text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
-        {does}
-      </span>
+      <span style={{ fontSize: 13.2, color: 'var(--dk-muted)' }}>{does}</span>
       <span
         className="flex-1"
-        style={{ borderBottom: '1px dotted var(--color-surface-border)', minWidth: 8 }}
+        style={{ borderBottom: '1px dotted var(--dk-border)', minWidth: 8 }}
       />
       {/*
         Real keys, at the size a key is. `xs` chips beside 13px prose read as
@@ -213,7 +189,7 @@ export function GhKeyStatus({ selected, cursor }: { selected: number[]; cursor?:
   if (selected.length === 0) {
     return cursor === undefined ? null : (
       <span>
-        cursor on <b style={{ color: 'var(--color-text-primary)' }}>#{cursor}</b> — keys act on it
+        cursor on <b style={{ color: 'var(--dk-text)' }}>#{cursor}</b> — keys act on it
       </span>
     );
   }
@@ -223,7 +199,7 @@ export function GhKeyStatus({ selected, cursor }: { selected: number[]; cursor?:
     <span>
       {selected.length} selected
       {cursor !== undefined && !selected.includes(cursor) && <> · cursor on #{cursor}</>} —{' '}
-      <b style={{ color: 'var(--color-text-primary)' }}>a</b> would assign {list}{more}
+      <b style={{ color: 'var(--dk-text)' }}>a</b> would assign {list}{more}
       {cursor !== undefined && !selected.includes(cursor) && <>, not #{cursor}</>}
     </span>
   );

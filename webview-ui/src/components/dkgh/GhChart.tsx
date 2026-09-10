@@ -22,7 +22,8 @@
  * here.
  */
 import { useMemo, useState } from 'react';
-import { ButtonView, ModalView, TogglePillView, BadgeChipView } from '@salilvnair/dui';
+import { ModalView } from '@salilvnair/dui';
+import { Dk } from './GhShell';
 import { ChartBarIcon } from '../../icons';
 import { cap, valueOf, type BoardIssue, type ProposedDimension } from './board-types';
 import { colourOf } from './field-colour';
@@ -111,17 +112,18 @@ export function GhChart({ open, title, issues, dimensions, onClose }: {
       title="Chart"
       subtitle={`from view: ${title}`}
       footerLeft={
-        <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+        <Dk><span className="sub">
           Charting <b>{issues.length} issue{issues.length === 1 ? '' : 's'}</b> — the view&rsquo;s
           own rows. Change the filters and the chart follows.
-        </span>
+        </span></Dk>
       }
       footerRight={
-        <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={onClose}>
-          Close
-        </ButtonView>
+        <Dk>
+          <button type="button" className="btn" onClick={onClose}>Close</button>
+        </Dk>
       }
     >
+      <Dk>
       <div className="flex gap-3" style={{ minHeight: 260 }}>
 
         {/* The two questions that matter */}
@@ -133,27 +135,27 @@ export function GhChart({ open, title, issues, dimensions, onClose }: {
           <div className="flex flex-col gap-1">
             <Head>Measure</Head>
             <div className="flex gap-1 flex-wrap">
-              <TogglePillView accentColor={ACCENT} active={measure === 'count'}
-                              onClick={() => setMeasure('count')}>
+              <button type="button" className={`pill${measure === 'count' ? ' on' : ''}`}
+                      onClick={() => setMeasure('count')}>
                 Count
-              </TogglePillView>
-              <TogglePillView accentColor={ACCENT} active={measure === 'days'}
-                              onClick={() => setMeasure('days')}>
+              </button>
+              <button type="button" className={`pill${measure === 'days' ? ' on' : ''}`}
+                      onClick={() => setMeasure('days')}>
                 Sum of days open
-              </TogglePillView>
+              </button>
             </div>
           </div>
           <div className="flex flex-col gap-1">
             <Head>Options</Head>
             <div className="flex gap-1 flex-wrap">
-              <TogglePillView accentColor={ACCENT} active={showValues}
-                              onClick={() => setShowValues(v => !v)}>
+              <button type="button" className={`pill${showValues ? ' on' : ''}`}
+                      onClick={() => setShowValues(v => !v)}>
                 Show values
-              </TogglePillView>
-              <TogglePillView accentColor={ACCENT} active={sortBySize}
-                              onClick={() => setSortBySize(v => !v)}>
+              </button>
+              <button type="button" className={`pill${sortBySize ? ' on' : ''}`}
+                      onClick={() => setSortBySize(v => !v)}>
                 Sort by size
-              </TogglePillView>
+              </button>
             </div>
           </div>
         </div>
@@ -161,25 +163,23 @@ export function GhChart({ open, title, issues, dimensions, onClose }: {
         {/* The chart */}
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           <div>
-            <div className="text-[11.5px]" style={{ color: 'var(--color-text-primary)' }}>
+            <div style={{ fontSize: 13.8, color: 'var(--dk-text)' }}>
               {measure === 'count' ? 'Issues' : 'Days open'} by {groupBy}
               {splitBy ? `, split by ${splitBy}` : ''}
             </div>
-            <div className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>
+            <div className="sub">
               {title} · {issues.length} issue{issues.length === 1 ? '' : 's'}
             </div>
           </div>
 
           {data.rows.length === 0 ? (
-            <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
-              Nothing to chart — this view is empty.
-            </span>
+            <span className="sub">Nothing to chart — this view is empty.</span>
           ) : (
             <div className="flex flex-col gap-1.5">
               {data.rows.map(row => (
                 <div key={row.label} className="flex items-center gap-2">
-                  <span className="text-[10px] truncate text-right flex-shrink-0"
-                        style={{ width: 96, color: 'var(--color-text-secondary)' }}
+                  <span className="truncate text-right flex-shrink-0"
+                        style={{ width: 96, fontSize: 12, color: 'var(--dk-muted)' }}
                         title={row.label}>
                     {row.label}
                   </span>
@@ -203,8 +203,9 @@ export function GhChart({ open, title, issues, dimensions, onClose }: {
                       />
                     ))}
                     {showValues && (
-                      <span className="text-[9.5px] font-mono flex-shrink-0"
-                            style={{ color: 'var(--color-text-muted)', paddingLeft: 4 }}>
+                      <span className="flex-shrink-0"
+                            style={{ fontFamily: 'var(--mono)', fontSize: 11.4,
+                                     color: 'var(--dk-faint)', paddingLeft: 4 }}>
                         {row.total}
                       </span>
                     )}
@@ -222,8 +223,7 @@ export function GhChart({ open, title, issues, dimensions, onClose }: {
           {splitBy && data.splits.length > 1 && (
             <div className="flex gap-2 flex-wrap pt-1">
               {data.splits.map(s => (
-                <span key={s || 'none'} className="flex items-center gap-1 text-[9.5px]"
-                      style={{ color: 'var(--color-text-muted)' }}>
+                <span key={s || 'none'} className="flex items-center gap-1 sub">
                   <span style={{ width: 8, height: 8, borderRadius: 2,
                                  background: colourFor(s), flexShrink: 0 }} />
                   {s || `No ${splitBy}`}
@@ -232,19 +232,19 @@ export function GhChart({ open, title, issues, dimensions, onClose }: {
             </div>
           )}
 
-          <div className="text-[9.5px] pt-1" style={{ color: 'var(--color-text-muted)' }}>
+          <div className="sub" style={{ paddingTop: 4 }}>
             Colours come from the field map, so a chart of {splitBy || groupBy} looks like the
             board&rsquo;s {splitBy || groupBy}.
           </div>
 
           {/* The table view, so every number is readable without the colours */}
-          <details className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+          <details className="sub">
             <summary className="cursor-pointer">The same numbers as a table</summary>
             <div className="flex flex-col gap-0.5 pt-1">
               {data.rows.map(r => (
                 <span key={r.label} className="flex gap-2">
                   <span style={{ width: 110 }}>{r.label}</span>
-                  <span style={{ color: 'var(--color-text-primary)' }}>{r.total}</span>
+                  <span style={{ color: 'var(--dk-text)' }}>{r.total}</span>
                   {splitBy && (
                     <span>
                       ({r.parts.map(([s, n]) => `${s || 'none'} ${n}`).join(', ')})
@@ -255,24 +255,20 @@ export function GhChart({ open, title, issues, dimensions, onClose }: {
             </div>
           </details>
 
-          <span className="flex items-center gap-1.5 pt-1">
-            <BadgeChipView tone="var(--color-text-muted)" size="xs">
-              Add to Insights comes with screen 16
-            </BadgeChipView>
+          <span className="flex items-center gap-1.5 sub" style={{ paddingTop: 4 }}>
+            <span className="chip">soon</span>
+            Add to Insights comes with screen 16.
           </span>
         </div>
       </div>
+      </Dk>
     </ModalView>
   );
 }
 
+/** A field label, the mock's own. */
 function Head({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[9px] font-bold uppercase tracking-[.09em]"
-          style={{ color: 'var(--color-text-muted)' }}>
-      {children}
-    </span>
-  );
+  return <span className="fl">{children}</span>;
 }
 
 function Picker({ label, value, options, onChange }: {
@@ -284,20 +280,13 @@ function Picker({ label, value, options, onChange }: {
   return (
     <div className="flex flex-col gap-1">
       <Head>{label}</Head>
-      <div className="flex flex-col">
+      <div className="opt" style={{ gap: 1, padding: 3 }}>
         {options.map(o => (
           <button
             key={o.id || 'none'}
             type="button"
+            className={`fct${value === o.id ? ' on' : ''}`}
             onClick={() => onChange(o.id)}
-            className="text-left px-1.5 py-[3px] rounded text-[10.5px] cursor-pointer"
-            style={{
-              background: value === o.id
-                ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'transparent',
-              border: 'none',
-              color: value === o.id ? ACCENT : 'var(--color-text-secondary)',
-              fontWeight: value === o.id ? 600 : 400,
-            }}
           >
             {o.label}
           </button>
