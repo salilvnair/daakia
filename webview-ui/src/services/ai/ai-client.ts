@@ -33,7 +33,8 @@ export type AiScreen =
   | 'Workspace · Overview'
   | 'Mock Server' | 'Daakia AI' | 'Settings'
   | 'dk8s · Pods' | 'dk8s · Logs' | 'dk8s · Terminal' | 'dk8s · Explorer'
-  | 'dk8s · Doctor' | 'dk8s · Search';
+  | 'dk8s · Doctor' | 'dk8s · Search'
+  | 'dkgh · New issue';
 
 /** The model knobs. Anything omitted takes the default below. */
 export interface AiSettingsOverrides {

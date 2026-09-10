@@ -357,6 +357,9 @@ export type AiPromptTemplateKey =
   // ── AI Enrich Captured Traffic ────────────────────────────────────────────
   | 'mock.traffic.enrich'
   | 'mock.traffic.enrich.system'
+  // ── dkgh ────────────────────────────────────────────────────────────────
+  | 'dkgh.compose'
+  | 'dkgh.compose.system'
   // ── dk8s ──────────────────────────────────────────────────────────────────
   // The text for these lives in the extension host's own prompt registry and
   // is imported, not copied. See the alias in vite.config.ts.
@@ -434,7 +437,60 @@ export function systemKeyFor(key: AiPromptTemplateKey): AiPromptTemplateKey | un
   return candidates.find(c => c in AI_PROMPT_TEMPLATE_DEFAULTS) as AiPromptTemplateKey | undefined;
 }
 
+/**
+ * dkgh's composer prompt — screen 11.
+ *
+ * The fields are the repository's own, read from its `ISSUE_TEMPLATE` YAML
+ * and passed in; nothing here knows what a Module is. That is what makes a
+ * repository which adds a field get asked about it without dkgh changing.
+ *
+ * The instruction that matters is the first one: a value it cannot find is
+ * unanswered, never guessed. A confident wrong Module costs somebody a
+ * mis-filed issue and costs the next reader their trust in every other value
+ * on the board — see screen 11B.
+ */
+const DKGH_COMPOSE_SYSTEM = `You fill in a GitHub issue form from what a tester wrote.
+
+You are given the repository's own issue-form fields, read from its YAML, and a
+description somebody typed. Your job is to work out which of the fields the
+description already answers, and to say which ones it does not.
+
+Rules, in order of importance:
+
+1. Never invent a value. If the description does not say which module was
+   involved, the module is unanswered. A confident wrong answer costs somebody
+   a mis-filed issue and costs the next reader their trust in every other value
+   on the board.
+2. For a dropdown, answer only with one of the options given, spelled exactly
+   as given. If none of them fits, leave it unanswered and say why.
+3. Quote, do not paraphrase. When a field's answer is in the description, use
+   the reporter's own words for it.
+4. A short title, in the reporter's register: what broke, where. Not a summary
+   of your reasoning.
+
+Answer with JSON and nothing else:
+
+{
+  "title": "one line",
+  "answers": { "<field label>": "<value>" },
+  "unanswered": [ { "label": "<field label>", "why": "<what is missing>" } ],
+  "notes": "one sentence, or empty"
+}
+`;
+
+const DKGH_COMPOSE_USER = `Repository: {{repo}}
+Template: {{template}}
+
+Fields:
+{{fields}}
+
+What the reporter wrote:
+{{description}}
+`;
+
 export const AI_PROMPT_TEMPLATE_DEFAULTS: Record<AiPromptTemplateKey, string> = {
+  'dkgh.compose': DKGH_COMPOSE_USER,
+  'dkgh.compose.system': DKGH_COMPOSE_SYSTEM,
   'dk8s.log.askWhy': DK8S_USER['dk8s.log.askWhy'] ?? '',
   'dk8s.log.askWhy.system': DK8S_SYSTEM['dk8s.log.askWhy'] ?? '',
   'dk8s.log.explainError': DK8S_USER['dk8s.log.explainError'] ?? '',
@@ -915,6 +971,11 @@ Return ONLY a JSON array of stub objects — no explanation, no markdown fences.
 // ─── Labels for UI ────────────────────────────────────────────────────────────
 
 export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: string; description: string }> = {
+  'dkgh.compose': { label: 'Generate with AI (dkgh)',
+    description: 'A description and the repository\u2019s own form fields \u2014 which of them it '
+      + 'already answers, and which it does not' },
+  'dkgh.compose.system': { label: 'Generate with AI (dkgh) \u2014 system',
+    description: 'Instruction block: answer only from the description, never invent a value' },
   'dk8s.log.askWhy': { label: 'Ask AI why (logs)', description: 'A highlighted stretch of pod log — what it means and why it is happening' },
   'dk8s.log.askWhy.system': { label: 'Ask AI why (logs) — system', description: 'Instruction block: who the model is and how it must answer' },
   'dk8s.log.explainError': { label: 'Explain this error', description: 'An exception in a log: what it means and whether it matters' },
@@ -1113,6 +1174,8 @@ export const AI_PROMPT_TEMPLATE_LABELS: Record<AiPromptTemplateKey, { label: str
 export const AI_PROMPT_TEMPLATE_VARIABLES: Record<AiPromptTemplateKey, string[]> = {
   // The user halves interpolate; the system halves are instructions and take
   // no variables, the same as every other `.system` entry here.
+  'dkgh.compose': ['repo', 'template', 'fields', 'description'],
+  'dkgh.compose.system': [],
   'dk8s.log.askWhy': [...DK8S_USER_VARIABLES],
   'dk8s.log.askWhy.system': [],
   'dk8s.log.explainError': [...DK8S_USER_VARIABLES],
@@ -1396,6 +1459,12 @@ export const AI_TEMPLATE_CATEGORIES: {
   },
   // ── dk8s ──────────────────────────────────────────────────────────────────
   {
+    id: 'dkgh',
+    label: 'dkgh',
+    kind: 'mock',
+    keys: ['dkgh.compose'],
+  },
+  {
     id: 'dk8s',
     label: 'dk8s',
     kind: 'mock',
@@ -1434,6 +1503,8 @@ export const AI_TEMPLATE_CATEGORIES: {
 ];
 
 export const AI_TEMPLATE_COLORS: Record<AiPromptTemplateKey, string> = {
+  'dkgh.compose': '#de7356',
+  'dkgh.compose.system': '#de7356',
   'dk8s.log.askWhy': '#22d3ee',
   'dk8s.log.askWhy.system': '#22d3ee',
   'dk8s.log.explainError': '#ef4444',

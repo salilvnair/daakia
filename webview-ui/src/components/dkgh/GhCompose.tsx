@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { SplitPanelView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
 import { GhUpload } from './GhUpload';
+import { GhGenerate } from './GhGenerate';
 import {
   discardDraft, draftNote, hasContent, loadDraft, proposeTemplate, saveDraft,
   type Draft, type FormField, type IssueForm,
@@ -71,6 +72,8 @@ export function GhCompose({
   const [restored, setRestored] = useState<Draft | undefined>();
   const [open, setOpen] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
+  /** Screen 11 — open while the AI composer is being used. */
+  const [generating, setGenerating] = useState(false);
 
   /*
     A draft left behind is offered, never silently reopened. Somebody who came
@@ -170,13 +173,29 @@ export function GhCompose({
           {/* Screen 12 — the images are local until this says otherwise. */}
           <GhUpload repo={repo} draft={draft} onDraft={patch} />
 
+          {/* Screen 11 — the template's own fields, and what you left out. */}
+          {generating && (
+            <GhGenerate
+              repo={repo}
+              form={forms.find(f => f.file === draft.templateFile) ?? forms[0]}
+              draft={draft}
+              onDraft={patch}
+              onClose={() => setGenerating(false)}
+            />
+          )}
+
           {noTemplates && <NoTemplates />}
         </div>
 
         <div className="footbar">
-          <span className="btn ai" title="The AI composer is screen 11 — not built yet">
+          <button
+            type="button"
+            className={`btn ai${generating ? ' go' : ''}`}
+            title="Reads this repository's own form fields and asks about what you left out"
+            onClick={() => setGenerating(g => !g)}
+          >
             <Ico name="ai" />Generate with AI
-          </span>
+          </button>
           <span className="sp" />
           <button
             type="button"

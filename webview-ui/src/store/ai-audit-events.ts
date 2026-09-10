@@ -51,6 +51,7 @@ const SCREEN_OVERRIDES: Record<string, string> = {
 
 /** Prefix → screen, longest match first. */
 const SCREEN_PREFIXES: [string, string][] = [
+  ['dkgh', 'dkgh · New issue'],
   ['dk8s.log', 'dk8s · Logs'],
   ['dk8s.file', 'dk8s · Explorer'],
   ['dk8s.terminal', 'dk8s · Terminal'],
