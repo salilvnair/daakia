@@ -111,7 +111,7 @@ export function GhOldVersion({ env, repo, dismissed, onDismiss }: {
         }
       >
         <Dk>
-          <div className="tblw">
+          <div className="tblw prose">
             <table className="tbl">
               <thead>
                 <tr>

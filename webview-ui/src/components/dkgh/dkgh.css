@@ -1775,3 +1775,18 @@
 .dkgh button.btn.stop:hover:not(:disabled) {
   background: color-mix(in srgb, var(--dk-red) 84%, #000);
 }
+
+/*
+  A table of sentences, rather than of values.
+
+  The board's table holds short things — a number, a state, a name — so the
+  mock makes every cell `nowrap` and that is right there. A table that explains
+  something is a different object: it has to wrap, or a dialog grows a
+  horizontal scrollbar for the sake of one column that could have been two
+  lines.
+*/
+.dkgh .tblw.prose table.tbl th,
+.dkgh .tblw.prose table.tbl td {
+  white-space: normal; padding-left: 9.6px; padding-right: 9.6px;
+}
+.dkgh .tblw.prose table.tbl td.dt { white-space: nowrap; }

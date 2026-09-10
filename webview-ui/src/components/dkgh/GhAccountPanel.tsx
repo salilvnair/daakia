@@ -11,15 +11,11 @@
  * to find out more.
  */
 import { useEffect, useState } from 'react';
-import {
-  ModalView, ButtonView, UnderlineTabsView, BadgeChipView, CalloutView,
-  CodeBlockView, TogglePillView,
-} from '@salilvnair/dui';
+import { ModalView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
-import {
-  CheckIcon, CloseIcon, LockIcon, CopyIcon, KeyIcon, UsersIcon, TerminalIcon,
-} from '../../icons';
+import { Ico, type IcoName } from './GhIcons';
+import { Dk, GhCommand, GhNote } from './GhShell';
 import { ACCENT, activeAccount, hasScope, type GhEnv, type GhAccount } from './types';
 
 interface ScopeRow { scope: string; unlocks: string; without: string; need: string }
@@ -64,23 +60,26 @@ export function GhAccountPanel({ env, repo, open, onClose }: {
       size="lg"
       headerColor={ACCENT}
       footerRight={
-        <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onClose}>
-          Close
-        </ButtonView>
+        <Dk><button type="button" className="btn" onClick={onClose}>Close</button></Dk>
       }
     >
+      <Dk>
       <div className="flex flex-col gap-3" style={{ minWidth: 520 }}>
-        <UnderlineTabsView
-          accentColor={ACCENT}
-          activeId={tab}
-          onChange={setTab}
-          tabs={[
-            { id: 'scopes', label: 'Scopes', icon: <KeyIcon size={12} /> },
-            { id: 'hosts', label: 'Hosts', icon: <LockIcon size={12} />, count: hosts.length },
-            { id: 'accounts', label: 'Accounts', icon: <UsersIcon size={12} />, count: accounts.length },
-            { id: 'commands', label: 'Commands', icon: <TerminalIcon size={12} />, count: commands.length },
-          ]}
-        />
+        {/* The board's own sub-tab row, which is what these four are. */}
+        <div className="subtabs" style={{ padding: 0 }}>
+          {([
+            { id: 'scopes', label: 'Scopes', icon: 'lock' as IcoName },
+            { id: 'hosts', label: 'Hosts', icon: 'repo' as IcoName, count: hosts.length },
+            { id: 'accounts', label: 'Accounts', icon: 'person' as IcoName, count: accounts.length },
+            { id: 'commands', label: 'Commands', icon: 'term' as IcoName, count: commands.length },
+          ]).map(t => (
+            <button key={t.id} type="button" className={`s${tab === t.id ? ' on' : ''}`}
+                    onClick={() => setTab(t.id)}>
+              <Ico name={t.icon} />{t.label}
+              {t.count !== undefined && t.count > 0 && <span className="cnt">{t.count}</span>}
+            </button>
+          ))}
+        </div>
 
         {/*
           One height for all four tabs.
@@ -99,6 +98,7 @@ export function GhAccountPanel({ env, repo, open, onClose }: {
           {tab === 'commands' && <Commands rows={commands} />}
         </div>
       </div>
+      </Dk>
     </ModalView>
   );
 }
@@ -113,36 +113,27 @@ export function GhAccountPanel({ env, repo, open, onClose }: {
 function Scopes({ rows, account }: { rows: ScopeRow[]; account?: GhAccount }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[11.5px]">
+      <div className="tblw prose">
+        <table className="tbl">
           <thead>
-            <tr>
-              {['Scope', 'Unlocks', 'Without it', ''].map(h => (
-                <th key={h} className="text-left px-2.5 py-1.5 text-[9.5px] font-semibold uppercase tracking-wider whitespace-nowrap"
-                    style={{ color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-surface-border)' }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
+            <tr>{['Scope', 'Unlocks', 'Without it', ''].map(h => <th key={h}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {rows.map(r => {
               const have = hasScope(account, r.scope);
               return (
                 <tr key={r.scope}>
-                  <td className="px-2.5 py-1.5 font-mono whitespace-nowrap" style={cell()}>{r.scope}</td>
-                  <td className="px-2.5 py-1.5" style={{ ...cell(), color: 'var(--color-text-primary)' }}>
-                    {r.unlocks}
-                  </td>
-                  <td className="px-2.5 py-1.5" style={cell()}>{r.without}</td>
-                  <td className="px-2.5 py-1.5 whitespace-nowrap" style={cell()}>
+                  <td className="dt">{r.scope}</td>
+                  <td style={{ color: 'var(--dk-text)' }}>{r.unlocks}</td>
+                  <td>{r.without}</td>
+                  <td>
                     {have
-                      ? <BadgeChipView tone="var(--color-success)" size="xs">granted</BadgeChipView>
+                      ? <span className="chip c-xl">granted</span>
                       : r.need === 'required'
-                        ? <BadgeChipView tone="var(--color-error)" size="xs">required</BadgeChipView>
+                        ? <span className="chip c-prod">required</span>
                         : r.need === 'on-demand'
-                          ? <BadgeChipView tone="var(--color-text-muted)" size="xs">when needed</BadgeChipView>
-                          : <BadgeChipView tone="var(--color-text-muted)" size="xs">optional</BadgeChipView>}
+                          ? <span className="chip">when needed</span>
+                          : <span className="chip">optional</span>}
                   </td>
                 </tr>
               );
@@ -152,24 +143,22 @@ function Scopes({ rows, account }: { rows: ScopeRow[]; account?: GhAccount }) {
       </div>
 
       <Labelled title="Add one later">
-        <CodeBlockView code="gh auth refresh --scopes project" language="bash" fill
-                       showCopyButton accentColor={ACCENT} />
+        <GhCommand text="gh auth refresh --scopes project" prompt="$" />
         <Note>Adds a scope to the existing credential. It does not sign you out and does not
           touch the others.</Note>
       </Labelled>
 
       <Labelled title="See what you have">
-        <CodeBlockView code="gh auth status" language="bash" fill showCopyButton accentColor={ACCENT} />
+        <GhCommand text="gh auth status" prompt="$" />
         <Note>The same command dkgh runs. The table above is its output, not our record of what
           we asked for.</Note>
       </Labelled>
 
-      <CalloutView variant="tip" title="Write access is asked for when it is needed"
-                   style={{ margin: 0 }}>
+      <GhNote title="Write access is asked for when it is needed" style={{ margin: 0 }}>
         Never at sign-in. A board that only reads should not have been holding the ability to
-        edit somebody's Project since Tuesday — the first drag is what asks, and the drag
-        completes once it is granted rather than being thrown away.
-      </CalloutView>
+        edit somebody&rsquo;s Project since Tuesday — the first drag is what asks, and the
+        drag completes once it is granted rather than being thrown away.
+      </GhNote>
     </div>
   );
 }
@@ -186,27 +175,25 @@ function Hosts({ hosts, accounts, repo }: {
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col rounded-lg border overflow-hidden"
-           style={{ borderColor: 'var(--color-surface-border)' }}>
+      <div className="opt" style={{ gap: 10 }}>
         {hosts.map(h => {
           const on = accounts.filter(a => a.host === h);
           const enterprise = h !== 'github.com';
           return (
-            <div key={h} className="px-3 py-2 flex flex-col gap-1"
-                 style={{ borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 55%, transparent)' }}>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11.5px] font-mono font-semibold"
-                      style={{ color: 'var(--color-text-primary)' }}>{h}</span>
-                {enterprise && <BadgeChipView tone="var(--color-text-muted)" size="xs">enterprise</BadgeChipView>}
-                {on.some(a => a.active) && <BadgeChipView tone={ACCENT} size="xs">active</BadgeChipView>}
+            <div key={h} className="flex flex-col gap-1">
+              <div className="oh">
+                <span style={{ fontFamily: 'var(--mono)' }}>{h}</span>
+                {enterprise && <span className="chip">enterprise</span>}
+                {on.some(a => a.active) && <span className="chip c-gh">active</span>}
               </div>
               {on.map(a => (
-                <div key={a.login} className="flex items-center gap-2 text-[10.5px]"
-                     style={{ color: 'var(--color-text-muted)' }}>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>{a.login}</span>
-                  <span className="font-mono">{a.scopes.join(' · ') || 'no scopes reported'}</span>
+                <div key={a.login} className="flex items-center gap-2 sub">
+                  <span style={{ color: 'var(--dk-muted)' }}>{a.login}</span>
+                  <span style={{ fontFamily: 'var(--mono)' }}>
+                    {a.scopes.join(' · ') || 'no scopes reported'}
+                  </span>
                   {!hasScope(a, 'read:project') && (
-                    <span style={{ color: 'var(--color-warning)' }}>— dates unavailable there</span>
+                    <span style={{ color: 'var(--dk-amber)' }}>— dates unavailable there</span>
                   )}
                 </div>
               ))}
@@ -215,15 +202,15 @@ function Hosts({ hosts, accounts, repo }: {
         })}
       </div>
 
-      <CalloutView variant="info" title="The host is chosen by the repository" style={{ margin: 0 }}>
+      <GhNote title="The host is chosen by the repository" icon="repo" style={{ margin: 0 }}>
         {repo ? <><code>{repo}</code> uses whichever host can see it.</> : 'Whichever host can see it.'}
         {' '}Not by a setting — nobody has to remember to switch, and there is no way to
         accidentally file a work bug with a personal account.
-      </CalloutView>
+      </GhNote>
 
       <Labelled title="Signing into an Enterprise host">
-        <CodeBlockView code="gh auth login --hostname git.acme.internal --scopes read:project"
-                       language="bash" fill showCopyButton accentColor={ACCENT} />
+        <GhCommand text="gh auth login --hostname git.acme.internal --scopes read:project"
+                   prompt="$" />
         <Note>dkgh reads the host list back from <code>gh auth status</code> — you never type a
           URL into Daakia, and Daakia never stores one.</Note>
       </Labelled>
@@ -252,43 +239,31 @@ function Accounts({ accounts, repo }: { accounts: GhAccount[]; repo?: string }) 
   return (
     <div className="flex flex-col gap-3">
       {[...byHost.entries()].map(([host, list]) => (
-        <div key={host} className="flex flex-col gap-1.5">
-          <div className="text-[9.5px] font-bold uppercase tracking-wider"
-               style={{ color: 'var(--color-text-muted)' }}>
-            Accounts on {host}
-          </div>
-          <div className="flex flex-col rounded-lg border overflow-hidden"
-               style={{ borderColor: 'var(--color-surface-border)' }}>
+        <Labelled key={host} title={`Accounts on ${host}`}>
+          <div className="opt" style={{ gap: 2, padding: 4 }}>
             {list.map(a => (
-              <div key={a.login} className="flex items-center gap-2 px-3 py-2 flex-wrap"
-                   style={{ borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 55%, transparent)' }}>
-                {a.active
-                  ? <CheckIcon size={11} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
-                  : <CloseIcon size={11} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />}
-                <span className="text-[11.5px] font-semibold"
-                      style={{ color: 'var(--color-text-primary)' }}>{a.login}</span>
-                {a.active && repo && (
-                  <BadgeChipView tone={ACCENT} size="xs">active for {repo}</BadgeChipView>
-                )}
-                <span className="flex-1" />
-                <span className="text-[10px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
-                  {a.scopes.join(' · ') || 'no scopes reported'}
-                </span>
+              <div key={a.login} className="fct" style={{ cursor: 'default' }}>
+                <Ico name={a.active ? 'check' : 'x'}
+                     style={{ color: a.active ? 'var(--dk-green)' : 'var(--dk-faint)',
+                              flexShrink: 0 }} />
+                <span style={{ color: 'var(--dk-text)', fontWeight: 600 }}>{a.login}</span>
+                {a.active && repo && <span className="chip c-gh">active for {repo}</span>}
+                <span className="n">{a.scopes.join(' · ') || 'no scopes reported'}</span>
               </div>
             ))}
           </div>
-        </div>
+        </Labelled>
       ))}
 
-      <CalloutView variant="info" title="Chosen by access, not by preference" style={{ margin: 0 }}>
+      <GhNote title="Chosen by access, not by preference" icon="person" style={{ margin: 0 }}>
         The account used is the one that can see the repository. When only one can, there is no
-        decision to make and no way to get it wrong. When both can — two accounts with access to
-        the same public repo — dkgh asks, once, per repository, because guessing there means an
-        issue filed under a name the reporter did not intend.
-      </CalloutView>
+        decision to make and no way to get it wrong. When both can — two accounts with access
+        to the same public repo — dkgh asks, once, per repository, because guessing there
+        means an issue filed under a name the reporter did not intend.
+      </GhNote>
 
       <Labelled title="Add another account">
-        <CodeBlockView code="gh auth login" language="bash" fill showCopyButton accentColor={ACCENT} />
+        <GhCommand text="gh auth login" prompt="$" />
         <Note>gh keeps them side by side; dkgh reads the list and never switches the active one
           on your behalf.</Note>
       </Labelled>
@@ -313,59 +288,62 @@ function Commands({ rows }: { rows: CommandRow[] }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-[7px] flex-wrap">
-        <TogglePillView accentColor={ACCENT} active={kind === 'all'} onClick={() => setKind('all')}>
+        <button type="button" className={`pill${kind === 'all' ? ' on' : ''}`}
+                onClick={() => setKind('all')}>
           All
-        </TogglePillView>
-        <TogglePillView accentColor={ACCENT} active={kind === 'read'} count={reads}
-                        onClick={() => setKind('read')}>
-          Reads
-        </TogglePillView>
-        <TogglePillView accentColor={ACCENT} active={kind === 'write'} count={writes}
-                        onClick={() => setKind('write')}>
-          Writes
-        </TogglePillView>
-        <span className="flex-1" />
-        <ButtonView size="sm" variant="ghost" accentColor={ACCENT} iconLeft={<CopyIcon size={11} />}
-                    onClick={() => {
-                      navigator.clipboard?.writeText(
-                        rows.map(r => `${r.kind.toUpperCase().padEnd(5)} ${r.command}  — ${r.when}`).join('\n'));
-                      addToast({ type: 'success', message: 'Command list copied' });
-                    }}>
-          Copy the list
-        </ButtonView>
+        </button>
+        <button type="button" className={`pill${kind === 'read' ? ' on' : ''}`}
+                onClick={() => setKind('read')}>
+          Reads<b>{reads}</b>
+        </button>
+        <button type="button" className={`pill${kind === 'write' ? ' on' : ''}`}
+                onClick={() => setKind('write')}>
+          Writes<b>{writes}</b>
+        </button>
+        <span className="sp" style={{ flex: 1 }} />
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            navigator.clipboard?.writeText(
+              rows.map(r => `${r.kind.toUpperCase().padEnd(5)} ${r.command}  — ${r.when}`).join('\n'));
+            addToast({ type: 'success', message: 'Command list copied' });
+          }}
+        >
+          <Ico name="copy" />Copy the list
+        </button>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[11px]">
+      <div className="tblw prose">
+        {/*
+          Fixed layout, and the widths are declared.
+
+          Auto layout hands the width to whichever column cannot wrap — the
+          mono commands — and leaves `When` a three-line ribbon beside a column
+          of short strings with room to spare.
+        */}
+        <table className="tbl" style={{ tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              {['Command', 'When', 'Kind', ''].map(h => (
-                <th key={h} className="text-left px-2.5 py-1.5 text-[9.5px] font-semibold uppercase tracking-wider whitespace-nowrap"
-                    style={{ color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-surface-border)' }}>
-                  {h}
-                </th>
-              ))}
+              <th style={{ width: '44%' }}>Command</th>
+              <th style={{ width: '38%' }}>When</th>
+              <th style={{ width: '10%' }}>Kind</th>
+              <th />
             </tr>
           </thead>
           <tbody>
             {shown.map(r => (
               <tr key={r.command}>
-                <td className="px-2.5 py-1.5 font-mono" style={{ ...cell(), color: 'var(--color-text-primary)' }}>
+                <td style={{ fontFamily: 'var(--mono)', fontSize: 12,
+                             color: 'var(--dk-text)', overflowWrap: 'anywhere' }}>
                   {r.command}
                 </td>
-                <td className="px-2.5 py-1.5" style={cell()}>{r.when}</td>
-                <td className="px-2.5 py-1.5 whitespace-nowrap" style={cell()}>
-                  <BadgeChipView tone={r.kind === 'write' ? 'var(--color-warning)' : 'var(--color-text-muted)'}
-                                 size="xs">
-                    {r.kind}
-                  </BadgeChipView>
-                </td>
-                <td className="px-2.5 py-1.5 whitespace-nowrap" style={cell()}>
+                <td>{r.when}</td>
+                <td><span className={r.kind === 'write' ? 'chip c-stale' : 'chip'}>{r.kind}</span></td>
+                <td>
                   {/* A list that mixed what runs today with what is planned would
                       be the same kind of lie as one that was simply wrong. */}
-                  {!r.live && (
-                    <BadgeChipView tone="var(--color-text-muted)" size="xs">not built yet</BadgeChipView>
-                  )}
+                  {!r.live && <span className="chip">not built yet</span>}
                 </td>
               </tr>
             ))}
@@ -373,48 +351,35 @@ function Commands({ rows }: { rows: CommandRow[] }) {
         </table>
       </div>
 
-      <CalloutView variant="tip" title="Every write is preceded by a screen showing it"
-                   style={{ margin: 0 }}>
+      <GhNote title="Every write is preceded by a screen showing it" icon="check"
+              style={{ margin: 0 }}>
         There is no row here that can happen without you having read it first. The command shown
         and the command run come out of one function, so a confirmation that displays one thing
         and runs another is not something this code can express.
-      </CalloutView>
+      </GhNote>
 
-      <CalloutView variant="info" title="What is not on this list" style={{ margin: 0 }}>
+      <GhNote title="What is not on this list" style={{ margin: 0 }}>
         <code>gh auth token</code>, ever. There is no code path in dkgh that reads your
-        credential — the whole reason it shells out to gh rather than calling the API itself is
-        that the token stays in the OS keychain where gh put it. A test asserts this.
-      </CalloutView>
+        credential — the whole reason it shells out to gh rather than calling the API itself
+        is that the token stays in the OS keychain where gh put it. A test asserts this.
+      </GhNote>
     </div>
   );
 }
 
 // ── small shared bits ───────────────────────────────────────────────────────
 
-function cell() {
-  return {
-    borderBottom: '1px solid color-mix(in srgb, var(--color-surface-border) 55%, transparent)',
-    color: 'var(--color-text-secondary)',
-    verticalAlign: 'top' as const,
-  };
-}
-
+/** A heading and the thing it names. */
 function Labelled({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="text-[9.5px] font-bold uppercase tracking-wider"
-           style={{ color: 'var(--color-text-muted)' }}>
-        {title}
-      </div>
+      <div className="fl">{title}</div>
       {children}
     </div>
   );
 }
 
+/** The small grey line under a command. */
 function Note({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[10px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-      {children}
-    </div>
-  );
+  return <div className="sub" style={{ lineHeight: 1.6 }}>{children}</div>;
 }
