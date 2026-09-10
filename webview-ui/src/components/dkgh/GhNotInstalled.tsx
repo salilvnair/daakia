@@ -12,6 +12,7 @@
  * telling it nothing.
  */
 import { useState } from 'react';
+import { openExternal } from './open-external';
 import { Ico } from './GhIcons';
 import {
   GhEmpty, GhLede, GhNote, GhActions, GhPrimary, GhButton, CopyWord,
@@ -133,7 +134,7 @@ export function GhNotInstalled({ env, envOverride, checking, onRecheck, onLocate
                 {r.file}
                 <span className="sp" />
                 <button type="button" className="copy"
-                        onClick={() => window.open(RELEASES, '_blank')}>
+                        onClick={() => openExternal(RELEASES)}>
                   open
                 </button>
               </div>
@@ -165,7 +166,7 @@ export function GhNotInstalled({ env, envOverride, checking, onRecheck, onLocate
           unpacked somewhere nobody put on PATH.
         */}
         <GhButton icon="repo" onClick={onLocate}>I already have it — locate gh</GhButton>
-        <GhButton onClick={() => window.open(DOCS, '_blank')}>Installation docs</GhButton>
+        <GhButton onClick={() => openExternal(DOCS)}>Installation docs</GhButton>
       </GhActions>
 
       <div style={{ textAlign: 'center', marginTop: 14, fontSize: 11, color: 'var(--dk-faint)' }}>

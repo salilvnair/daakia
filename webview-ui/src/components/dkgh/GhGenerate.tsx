@@ -33,6 +33,23 @@ import { useAiPromptTemplatesStore } from '../../store/prompt-template';
 import type { Draft } from './composer-model';
 import type { FormField, IssueForm } from './board-types';
 
+/**
+ * The last failure, kept outside the component's lifetime.
+ *
+ * The panel is toggled shut and open again constantly — it is a disclosure on
+ * the composer, not a screen — and a failure that lives in its state is a
+ * failure the reader loses by closing the thing that was telling them about
+ * it. Then the audit knows and nobody else does, which is exactly the
+ * complaint. Module-level, because it is one composer at a time and it should
+ * not outlive the tab.
+ */
+let lastFailure = '';
+
+/** Whether there is a failure worth showing on the button that opens this. */
+export function aiFailed(): string {
+  return lastFailure;
+}
+
 interface Proposal {
   title?: string;
   answers?: Record<string, string>;
@@ -52,7 +69,7 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose }: {
   const templates = useAiPromptTemplatesStore(s => s.templates);
 
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(lastFailure);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [asking, setAsking] = useState(0);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -93,7 +110,8 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose }: {
       if (msg.type === 'ai:chunk') { acc.current += String(msg.text ?? ''); return; }
       if (msg.type === 'ai:error') {
         setRunning(false);
-        setError(String(msg.message ?? 'The model did not answer.'));
+        lastFailure = String(msg.message ?? 'The model did not answer.');
+        setError(lastFailure);
         return;
       }
       if (msg.type !== 'ai:complete') return;
@@ -103,12 +121,14 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose }: {
         || '';
       const parsed = readJson(text);
       if (!parsed) {
-        setError('The model answered with something that is not the JSON this screen asked '
-          + 'for. Nothing has been filled in.');
+        lastFailure = 'The model answered with something that is not the JSON this screen '
+          + 'asked for. Nothing has been filled in.';
+        setError(lastFailure);
         return;
       }
       /* An answer that arrived clears whatever the last attempt said. A stale
          error above a fresh proposal reads as a warning about the proposal. */
+      lastFailure = '';
       setError('');
       setProposal(parsed);
       setAsking(0);
@@ -118,6 +138,7 @@ export function GhGenerate({ repo, form, draft, onDraft, onClose }: {
   }, []);
 
   const ask = () => {
+    lastFailure = '';
     setError('');
     setProposal(null);
     acc.current = '';

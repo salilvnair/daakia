@@ -1,3 +1,4 @@
+import { openExternal } from './open-external';
 /**
  * Screen 02 — gh is here, nobody is signed in.
  *
@@ -85,7 +86,7 @@ export function GhSignIn({ env, checking, onRecheck, onLocate, onDiagnose }: {
           {checking ? 'Checking…' : 'I have signed in'}
         </GhPrimary>
         <GhButton
-          onClick={() => window.open('https://cli.github.com/manual/gh_auth_login', '_blank')}
+          onClick={() => openExternal('https://cli.github.com/manual/gh_auth_login')}
         >
           gh auth login docs
         </GhButton>

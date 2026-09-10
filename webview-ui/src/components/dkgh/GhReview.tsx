@@ -17,6 +17,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { postMsg } from '../../vscode';
+import { openExternal } from './open-external';
 import { Ico } from './GhIcons';
 import { GhNote } from './GhShell';
 import {
@@ -335,11 +336,11 @@ function Duplicates({ candidates, ignored, onIgnore }: {
           <span className="sub" style={{ lineHeight: 1.55 }}>{c.reasons.join('. ')}.</span>
           <span className="flex gap-1.5">
             <button type="button" className="btn"
-                    onClick={() => window.open(c.issue.url, '_blank')}>
+                    onClick={() => openExternal(c.issue.url)}>
               <Ico name="link" />Open it
             </button>
             <button type="button" className="btn alt"
-                    onClick={() => window.open(`${c.issue.url}#new_comment_field`, '_blank')}>
+                    onClick={() => openExternal(`${c.issue.url}#new_comment_field`)}>
               <Ico name="cmt" />Comment on it instead
             </button>
           </span>
@@ -402,7 +403,7 @@ function GhCreated({
                       onClick={() => navigator.clipboard?.writeText(url)}>
                 <Ico name="copy" />Copy the link
               </button>
-              <button type="button" className="btn" onClick={() => window.open(url, '_blank')}>
+              <button type="button" className="btn" onClick={() => openExternal(url)}>
                 <Ico name="link" />Open on github.com
               </button>
               <button type="button" className="btn" onClick={onAnother}>
@@ -472,7 +473,7 @@ function GhCreated({
                 {running ? 'Retrying…' : `Retry those ${canRetry.length}`}
               </button>
               {exists && (
-                <button type="button" className="btn" onClick={() => window.open(url, '_blank')}>
+                <button type="button" className="btn" onClick={() => openExternal(url)}>
                   Open #{result.number}
                 </button>
               )}

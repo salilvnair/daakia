@@ -13,7 +13,8 @@
  * they drift apart: one gains a heading size, another keeps the old padding,
  * and what should read as one place reads as three.
  */
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { postMsg } from '../../vscode';
 import { Ico, type IcoName } from './GhIcons';
 
 /**
@@ -212,5 +213,42 @@ export function GhButton({ children, onClick, icon, disabled, title }: {
     <button type="button" className="btn" onClick={onClick} disabled={disabled} title={title}>
       {icon && <Ico name={icon} />}{children}
     </button>
+  );
+}
+
+/**
+ * "Open a terminal here", and what happens when there is not one.
+ *
+ * The three screens that offer this all show a command and ask the reader to
+ * run it — installing software and authenticating are their actions, not ours.
+ * What it must not do is nothing, which is what it did: the webview posted
+ * `terminal:open` and neither the extension host nor the browser router had
+ * ever heard of that message, so the button had been inert everywhere since it
+ * was written.
+ */
+export function GhTerminalButton() {
+  const [said, setSaid] = useState('');
+
+  useEffect(() => {
+    const handler = (evt: MessageEvent) => {
+      const msg = evt.data as Record<string, unknown>;
+      if (msg.type !== 'dkgh:terminal:result') return;
+      setSaid(msg.ok ? '' : String(msg.error ?? 'No terminal here.'));
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => { setSaid(''); postMsg({ type: 'dkgh:terminal' }); }}
+      >
+        <Ico name="term" />Open a terminal here
+      </button>
+      {said && <span className="sub" style={{ color: 'var(--dk-amber)' }}>{said}</span>}
+    </>
   );
 }

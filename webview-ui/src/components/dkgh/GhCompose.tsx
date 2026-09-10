@@ -21,7 +21,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { SplitPanelView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
 import { GhUpload } from './GhUpload';
-import { GhGenerate } from './GhGenerate';
+import { GhGenerate, aiFailed } from './GhGenerate';
 import { GhMarkdown } from './GhMarkdown';
 import {
   discardDraft, draftNote, hasContent, loadDraft, proposeTemplate, saveDraft,
@@ -171,13 +171,28 @@ export function GhCompose({
         </div>
 
         <div className="footbar">
+          {/*
+            The button carries the last failure.
+
+            The panel is a disclosure, so it spends most of its life shut — and
+            a model that could not be reached is exactly the thing somebody
+            needs to know while it is. Otherwise the audit knows and nobody
+            else does.
+          */}
           <button
             type="button"
             className={`btn ai${generating ? ' go' : ''}`}
-            title="Reads this repository's own form fields and asks about what you left out"
+            title={aiFailed()
+              ? aiFailed()
+              : "Reads this repository's own form fields and asks about what you left out"}
+            style={aiFailed() && !generating
+              ? { borderColor: 'color-mix(in srgb, var(--dk-amber) 55%, transparent)',
+                  color: 'var(--dk-amber)' }
+              : undefined}
             onClick={() => setGenerating(g => !g)}
           >
-            <Ico name="ai" />Generate with AI
+            <Ico name={aiFailed() && !generating ? 'warn' : 'ai'} />Generate with AI
+            {aiFailed() && !generating && <span className="chip c-stale">failed</span>}
           </button>
           <span className="sp" />
           <button

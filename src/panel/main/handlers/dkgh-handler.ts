@@ -573,6 +573,24 @@ export async function handleDkghImport(
     Files on disk. A zip and a folder of `.yml` are the same gesture to the
     person doing it, so they are one picker rather than two buttons.
   */
+  /*
+    "Cancelled" and "there is no picker" look identical from here, and the
+    second one makes the button look broken rather than unavailable. The
+    browser harness says which it is; a real extension host does not need to.
+  */
+  const noPicker =
+    (vscode.window as unknown as { filePickerAvailable?: boolean }).filePickerAvailable === false;
+  if (noPicker) {
+    answer({
+      files: [],
+      from: '',
+      error: 'File pickers are not available in the browser preview. Read from another '
+        + 'repository or start from a template here, and use the picker in the VS Code '
+        + 'extension.',
+    });
+    return;
+  }
+
   const picked = await vscode.window.showOpenDialog({
     canSelectMany: true,
     openLabel: 'Import',
@@ -758,6 +776,37 @@ export async function handleDkghApplyProject(
     return;
   }
   postMessage({ type: 'dkgh:applyProject:result', outcomes: await applyProjectEdit(plan) });
+}
+
+
+/**
+ * A terminal, where `gh` can be run by hand.
+ *
+ * The three screens that offer this — the network diagnosis, the mid-session
+ * sign-out, the connection panel — all show a command and ask the reader to
+ * run it. Installing software and authenticating are their actions, not ours,
+ * so this opens a shell in the workspace and types nothing into it.
+ *
+ * It answers either way. A button that silently does nothing is what this was
+ * before: the webview posted `terminal:open` and neither the panel nor the
+ * router had ever heard of it.
+ */
+export async function handleDkghTerminal(
+  _msg: Record<string, unknown>,
+  postMessage: PostMessage,
+): Promise<void> {
+  try {
+    const cwd = vscode.workspace.workspaceFolders?.[0]?.uri;
+    const term = vscode.window.createTerminal({ name: 'gh', cwd });
+    term.show();
+    postMessage({ type: 'dkgh:terminal:result', ok: true });
+  } catch (err) {
+    postMessage({
+      type: 'dkgh:terminal:result',
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /**

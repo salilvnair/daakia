@@ -42,7 +42,8 @@
  * they matter most was the one place they were shown as literal backticks.
  */
 import { useEffect, useState } from 'react';
-import { MarkdownView, ModalView, SkeletonView } from '@salilvnair/dui';
+import { ModalView, SkeletonView } from '@salilvnair/dui';
+import { GhProse } from './GhProse';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
 import { Dk } from './GhShell';
@@ -259,7 +260,7 @@ function Md({ content, empty }: { content: string; empty: string }) {
   if (!content.trim()) return <span style={{ color: 'var(--dk-faint)' }}>{empty}</span>;
   return (
     <div className="dkgh-md" style={{ fontSize: 'inherit' }}>
-      <MarkdownView content={content} />
+      <GhProse content={content} height={64} />
     </div>
   );
 }

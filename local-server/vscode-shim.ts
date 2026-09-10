@@ -91,6 +91,31 @@ const Uri = {
 
 // ─── env ──────────────────────────────────────────────────────────────────────
 const env = {
+  /*
+    A link out.
+
+    The extension host hands this to the OS; out here there is no VS Code, so
+    ask the platform directly — otherwise "Open on github.com" behaves
+    differently in dev than it does shipped, which is the sort of difference a
+    user finds first.
+  */
+  async openExternal(uri: { toString(): string }): Promise<boolean> {
+    const { execFile } = await import('child_process');
+    const url = uri.toString();
+    try {
+      if (process.platform === 'win32') {
+        execFile('cmd', ['/c', 'start', '', url], () => undefined);
+      } else if (process.platform === 'darwin') {
+        execFile('open', [url], () => undefined);
+      } else {
+        execFile('xdg-open', [url], () => undefined);
+      }
+      return true;
+    } catch {
+      console.log(`[vscode-shim] could not open ${url}`);
+      return false;
+    }
+  },
   clipboard: {
     async writeText(text: string) {
       console.log(`[vscode-shim] clipboard.writeText (no real clipboard here): ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`);
@@ -189,7 +214,20 @@ class CancellationTokenSource {
 }
 
 // ─── ExtensionContext-adjacent (unused today, present for future handlers) ────
+/*
+  There is no VS Code here, so there is no terminal to open.
+
+  Throwing is the right answer rather than a silent no-op: the caller reports
+  the failure to the screen, which is how the dev build stays honest about
+  being a dev build.
+*/
+function createTerminal(_opts?: unknown): never {
+  throw new Error('There is no VS Code terminal in the browser build \u2014 '
+    + 'run the command in your own shell.');
+}
+
 export const window = {
+  createTerminal,
   showSaveDialog,
   showOpenDialog,
   filePickerAvailable,

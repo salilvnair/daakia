@@ -73,6 +73,7 @@ import { GhExport } from './GhExport';
 import { GhInsights } from './GhInsights';
 import { GhRepository } from './GhRepository';
 import { GhImport } from './GhImport';
+import { openExternal } from './open-external';
 import { GhLabels } from './GhLabels';
 import { useToastStore } from '../../store/toast-store';
 import { GhColumns, GhColumnControls, type Move } from './GhColumns';
@@ -758,7 +759,14 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     selected,
     /* Chosen from a menu: nothing is being held, so it gets a way out. */
     onPeek: next => { setPeekHeld(false); setPeek(next); },
-    onOpenExternal: open,
+    /*
+      The menu item says "Open on github.com" and has to mean it.
+
+      `open` used to be `window.open` and now opens screen 14 inside the tab,
+      so wiring the menu to it made that item quietly do something else — and
+      `window.open` would have done nothing at all in the shipped extension.
+    */
+    onOpenExternal: (issue: BoardIssue) => openExternal(issue.url),
     onSelect: issue => toggle(issue, { ctrl: true, shift: false }),
     onAct: act,
 

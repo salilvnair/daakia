@@ -146,6 +146,7 @@ import {
   handleDkghPlanLabels, handleDkghApplyLabels,
   handleDkghPlanUpload, handleDkghApplyUpload,
   handleDkghProject, handleDkghPlanProject, handleDkghApplyProject,
+  handleDkghTerminal,
   handleDkghSearchIssues, handleDkghPlanCreate, handleDkghApplyCreate,
 } from './handlers/dkgh-handler';
 import { scheduleAutoExport, COLLECTION_MUTATION_TYPES, startAutoSyncTimer, stopAutoSyncTimer } from '../../services/git-sync';
@@ -412,6 +413,9 @@ export class MainPanel {
         break;
       case 'dkgh:applyUpload':
         handleDkghApplyUpload(msg, this._post);
+        break;
+      case 'dkgh:terminal':
+        handleDkghTerminal(msg, this._post);
         break;
       case 'dkgh:project':
         handleDkghProject(msg, this._post);

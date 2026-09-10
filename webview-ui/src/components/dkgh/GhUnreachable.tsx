@@ -18,7 +18,9 @@ import { useEffect, useState } from 'react';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
 import { Ico } from './GhIcons';
-import { GhActions, GhButton, GhCommand, GhEmpty, GhLede, GhNote, GhPrimary } from './GhShell';
+import {
+  GhActions, GhButton, GhCommand, GhEmpty, GhLede, GhNote, GhPrimary, GhTerminalButton,
+} from './GhShell';
 
 interface Step { command: string; ok: boolean; output: string; ms: number }
 export interface Reachability {
@@ -154,9 +156,7 @@ export function GhUnreachable({ account, data, running, onRetry, onBack }: {
           {running ? 'Trying…' : 'Try again'}
         </GhPrimary>
         <GhButton icon="copy" onClick={copy}>Copy the diagnostics</GhButton>
-        <GhButton icon="term" onClick={() => postMsg({ type: 'terminal:open' })}>
-          Open a terminal here
-        </GhButton>
+        <GhTerminalButton />
         {onBack && <GhButton onClick={onBack}>Back</GhButton>}
       </GhActions>
     </GhEmpty>

@@ -22,11 +22,13 @@
  * never quietly claims to be complete.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { SplitPanelView, MarkdownView } from '@salilvnair/dui';
+import { SplitPanelView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
+import { openExternal } from './open-external';
 import { Ico, type IcoName } from './GhIcons';
 import { avClass, chipOf, prClass } from './GhCards';
 import { GhEvidence } from './GhEvidence';
+import { GhProse } from './GhProse';
 import { sinceIso as since } from './format';
 import { GhEditConfirm } from './GhEditConfirm';
 import { GhCloseIssue } from './GhCloseIssue';
@@ -171,7 +173,7 @@ export function GhIssue({ repo, issue, dimensions, closed, onBack, onWrote }: {
             ? <span className={`st ${STATE_CLASS[status] ?? 'st-todo'}`}><b />{cap(status)}</span>
             : <span className="st st-todo"><b />Open</span>}
         <span className="spacer" />
-        <button type="button" className="btn" onClick={() => window.open(issue.url, '_blank')}>
+        <button type="button" className="btn" onClick={() => openExternal(issue.url)}>
           <Ico name="link" />Open on github.com
         </button>
         {issue.state === 'OPEN' ? (
@@ -224,7 +226,7 @@ export function GhIssue({ repo, issue, dimensions, closed, onBack, onWrote }: {
               <Comment who={issue.author} when={issue.createdAt} verb="opened this">
                 {detail
                   ? (body.trim()
-                    ? <div className="dkgh-md"><MarkdownView content={body} /></div>
+                    ? <GhProse content={body} gallery={false} />
                     : <span style={{ color: 'var(--dk-faint)' }}>No description.</span>)
                   : <span style={{ color: 'var(--dk-faint)' }}>Reading it…</span>}
               </Comment>
@@ -244,7 +246,7 @@ export function GhIssue({ repo, issue, dimensions, closed, onBack, onWrote }: {
                         style={{ background: 'none', border: 'none', padding: 0,
                                  cursor: 'pointer' }}
                         title="Open it on github.com"
-                        onClick={() => window.open(url, '_blank')}
+                        onClick={() => openExternal(url)}
                       >
                         <GhEvidence url={url} height={84} />
                       </button>
@@ -318,7 +320,10 @@ export function GhIssue({ repo, issue, dimensions, closed, onBack, onWrote }: {
               {(detail?.comments ?? []).map((c, at) => (
                 <Comment key={`${c.author}-${c.createdAt}-${at}`}
                          who={c.author} when={c.createdAt} verb="commented">
-                  <div className="dkgh-md"><MarkdownView content={c.body} /></div>
+                  {/* A comment's screenshots are blocked by the webview's own
+                      content policy, so they come through the host — see
+                      GhProse. */}
+                  <GhProse content={c.body} />
                 </Comment>
               ))}
 

@@ -19,7 +19,7 @@
  */
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
-import { GhCommand, GhNote } from './GhShell';
+import { GhCommand, GhNote, GhTerminalButton } from './GhShell';
 import { useGhSession, type HeldItem } from './session-store';
 
 export function GhSignedOut({ repo, boardAge, onSignedBackIn, onReplay }: {
@@ -105,10 +105,7 @@ export function GhSignedOut({ repo, boardAge, onSignedBackIn, onReplay }: {
                   onClick={() => { resumed(); onSignedBackIn(); }}>
             <Ico name="refresh" />I have signed back in
           </button>
-          <button type="button" className="btn"
-                  onClick={() => postMsg({ type: 'terminal:open' })}>
-            <Ico name="term" />Open a terminal here
-          </button>
+          <GhTerminalButton />
         </div>
       </div>
     </div>
