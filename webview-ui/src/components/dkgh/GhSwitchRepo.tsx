@@ -108,12 +108,12 @@ export function GhSwitchRepo({ open, from, to, shape, search, dimensions, onCanc
       headerIcon={<RepoIcon size={14} />}
       title={to ? `Switch to ${to.nameWithOwner}` : `Leave ${from}`}
       footerLeft={
-        <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
+        <Dk><span className="sub">
           {to
             ? `${to.nameWithOwner}: ${to.openIssues} open · ${formsLabel(to.templates)}`
               + (to.countedAt ? ` · read ${since(to.countedAt)}` : '')
             : 'The picker opens next — nothing is chosen yet.'}
-        </span>
+        </span></Dk>
       }
       footerRight={
         <Dk>

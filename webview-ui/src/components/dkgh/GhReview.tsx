@@ -16,12 +16,9 @@
  * the gap later on the board.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { BadgeChipView, ButtonView, MarkdownEditorView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import {
-  ChevronLeftIcon, CheckCircleIcon, WarningTriangleIcon, SparkleIcon,
-  ExternalLinkIcon, CopyIcon, DuplicateIcon, IssueOpenedIcon,
-} from '../../icons';
+import { Ico } from './GhIcons';
+import { GhNote } from './GhShell';
 import {
   created, findDuplicates, provenanceSummary, readProvenance, retryable,
   type DuplicateCandidate, type StepOutcome,
@@ -29,7 +26,6 @@ import {
 import { colourOf } from './field-colour';
 import type { BoardIssue, ProposedDimension } from './board-types';
 import type { Draft } from './composer-model';
-import { ACCENT } from './types';
 
 interface CreateStep {
   kind: StepOutcome['kind'];
@@ -127,11 +123,8 @@ export function GhReview({
       {/* The body, editable — the last cheap moment */}
       <div className="flex-1 min-w-0 overflow-y-auto px-4 py-3 flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <ButtonView size="sm" variant="ghost" accentColor="var(--color-text-muted)"
-                      iconLeft={<ChevronLeftIcon size={12} />} onClick={onBack}>
-            Back to editing
-          </ButtonView>
-          <span className="text-[12px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
+          <button type="button" className="btn" onClick={onBack}>Back to editing</button>
+          <span style={{ fontSize: 14.4, fontWeight: 500, color: 'var(--dk-text)' }}>
             Review before it is created
           </span>
         </div>
@@ -147,38 +140,37 @@ export function GhReview({
 
         <div className="flex flex-col gap-1">
           <Head>Issue body — editable, this is the Markdown that will be posted</Head>
-          <MarkdownEditorView
+          {/*
+            The composer's own editor, not a second one.
+
+            This is the same box, two screens apart — the reader has just
+            spent five minutes in it. A different editor here, with a
+            different toolbar and a different font, reads as a different
+            document rather than the one they wrote.
+          */}
+          <textarea
+            className="mdbody"
             value={request.body}
-            onChange={onBody}
-            accentColor={ACCENT}
-            size="sm"
+            onChange={e => onBody(e.target.value)}
             style={{ minHeight: 260 }}
           />
-          <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>
-            Editing here does not re-run anything. Your words, final.
-          </span>
+          <span className="sub">Editing here does not re-run anything. Your words, final.</span>
         </div>
 
         {/* 13A — where each part came from */}
         <div className="flex flex-col gap-1">
           <Head>Two things to look at</Head>
-          <div className="rounded-lg border px-2.5 py-2 flex flex-col gap-1.5"
-               style={{ borderColor: 'var(--color-surface-border)',
-                        background: 'var(--color-panel)' }}>
-            <span className="flex items-start gap-1.5 text-[10px]"
-                  style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-              <SparkleIcon size={10} style={{ marginTop: 2, flexShrink: 0, color: ACCENT }} />
+          <div className="opt">
+            <span className="flex items-start gap-1.5 sub" style={{ lineHeight: 1.6 }}>
+              <Ico name="ai" style={{ marginTop: 2, flexShrink: 0, color: 'var(--dk-gh)' }} />
               <span>{provenanceSummary(parts)}</span>
             </span>
             {parts.filter(p => p.provenance !== 'you').map(p => (
-              <span key={p.heading} className="flex items-start gap-1.5 text-[10px]"
-                    style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-                <BadgeChipView
-                  tone={p.provenance === 'model' ? ACCENT : 'var(--color-text-muted)'}
-                  size="xs"
-                >
+              <span key={p.heading} className="flex items-start gap-1.5 sub"
+                    style={{ lineHeight: 1.6 }}>
+                <span className={p.provenance === 'model' ? 'chip c-gh' : 'chip'}>
                   {p.heading || 'body'}
-                </BadgeChipView>
+                </span>
                 <span>{p.note}</span>
               </span>
             ))}
@@ -190,21 +182,18 @@ export function GhReview({
       <div className="flex-shrink-0 overflow-y-auto flex flex-col gap-3"
            style={{
              width: 300,
-             borderLeft: '1px solid var(--color-surface-border)',
+             borderLeft: '1px solid var(--dk-border)',
              padding: '12px 10px',
            }}>
 
         <div className="flex flex-col gap-1">
           <Head>Will be set</Head>
-          <div className="rounded-lg border flex flex-col overflow-hidden"
-               style={{ borderColor: 'var(--color-surface-border)' }}>
+          <div className="opt" style={{ gap: 0, padding: 0 }}>
             <Row label="Title">{request.title || <Amber>not set</Amber>}</Row>
             <Row label="Labels">
               {request.labels.length
                 ? <span className="flex gap-1 flex-wrap">
-                    {request.labels.map(l => (
-                      <BadgeChipView key={l} tone={ACCENT} size="xs">{l}</BadgeChipView>
-                    ))}
+                    {request.labels.map(l => <span key={l} className="chip c-gh">{l}</span>)}
                   </span>
                 : '—'}
             </Row>
@@ -212,13 +201,7 @@ export function GhReview({
             <Row label="Milestone">{request.milestone ?? '—'}</Row>
             {Object.entries(draft.answers).filter(([, v]) => v.trim()).map(([label, value]) => (
               <Row key={label} label={label}>
-                <BadgeChipView
-                  tone={colourOf(value, dimensions.find(d =>
-                    label.toLowerCase().includes(d.dimension))?.options)}
-                  size="xs"
-                >
-                  {value}
-                </BadgeChipView>
+                <Swatch value={value} dimensions={dimensions} label={label} />
               </Row>
             ))}
             <Row label="Evidence">
@@ -238,69 +221,60 @@ export function GhReview({
                 <div key={`${step.kind}-${at}`} className="flex flex-col gap-0.5"
                      style={{ opacity: step.unavailable ? 0.6 : 1 }}>
                   <span className="flex items-center gap-1.5">
-                    <span className="flex items-center justify-center text-[9px] font-mono"
+                    <span className="flex items-center justify-center"
                           style={{
-                            width: 14, height: 14, borderRadius: 4,
+                            width: 16.8, height: 16.8, borderRadius: 4.8,
+                            fontFamily: 'var(--mono)', fontSize: 10.8,
                             background: step.unavailable
-                              ? 'var(--color-surface-border)'
-                              : `color-mix(in srgb, ${ACCENT} 22%, transparent)`,
-                            color: step.unavailable ? 'var(--color-text-muted)' : ACCENT,
+                              ? 'var(--dk-raised)'
+                              : 'color-mix(in srgb, var(--dk-gh) 22%, transparent)',
+                            color: step.unavailable ? 'var(--dk-faint)' : 'var(--dk-gh)',
                           }}>
                       {at + 1}
                     </span>
-                    <span className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>
-                      {step.does}
-                    </span>
+                    <span className="sub">{step.does}</span>
                   </span>
-                  <code className="text-[9px] px-1.5 py-1 rounded truncate"
-                        title={step.display}
-                        style={{
-                          background: 'var(--color-panel)',
-                          border: '1px solid var(--color-surface-border)',
-                          color: 'var(--color-text-muted)',
-                        }}>
+                  <code className="truncate" title={step.display}
+                        style={{ display: 'block', fontSize: 11.4, padding: '3px 6px' }}>
                     {step.display}
                   </code>
                   {step.unavailable && (
-                    <span className="text-[9px]" style={{ color: 'var(--color-warning)', lineHeight: 1.5 }}>
+                    <span className="sub" style={{ color: 'var(--dk-amber)' }}>
                       {step.unavailable}
                     </span>
                   )}
                 </div>
               ))}
-              <span className="text-[9px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.55 }}>
+              <span className="sub" style={{ lineHeight: 1.55 }}>
                 Step 1 is the one that matters and it goes first. If a later step fails the issue
                 still exists with its title, body and evidence — and the result says which fields
                 did not land, with a button to retry just those.
               </span>
             </div>
           ) : (
-            <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-              Working out what it would run…
-            </span>
+            <span className="sub">Working out what it would run…</span>
           )}
         </div>
 
         {plan?.refusal && (
-          <span className="text-[10px]" style={{ color: 'var(--color-error)' }}>{plan.refusal}</span>
+          <span className="sub" style={{ color: 'var(--dk-red)' }}>{plan.refusal}</span>
         )}
 
         <span className="flex-1" />
 
         <div className="flex flex-col gap-1.5">
-          <ButtonView
-            size="md"
-            variant="primary"
-            accentColor={ACCENT}
+          <button
+            type="button"
+            className="btn go"
             disabled={!plan || !!plan.refusal || running || blocking}
-            iconLeft={<CheckCircleIcon size={12} />}
             onClick={() => postMsg({ type: 'dkgh:applyCreate', request })}
           >
+            <Ico name="check" />
             {running ? 'Creating…'
-              : `Create issue${plan ? ` · ${plan.steps.filter(s => !s.unavailable).length} calls` : ''}`}
-          </ButtonView>
+              : `Create issue${plan ? ` · ${callCount(plan)}` : ''}`}
+          </button>
           {blocking && (
-            <span className="text-[9px]" style={{ color: 'var(--color-warning)', lineHeight: 1.5 }}>
+            <span className="sub" style={{ color: 'var(--dk-amber)' }}>
               Something close to this is already open. Nothing is blocked for long — press
               “Ignore and create” above if it is genuinely different.
             </span>
@@ -325,61 +299,49 @@ function Duplicates({ candidates, ignored, onIgnore }: {
   onIgnore: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg px-2.5 py-2"
-         style={{
-           border: '1px solid color-mix(in srgb, var(--color-warning) 34%, transparent)',
-           background: 'color-mix(in srgb, var(--color-warning) 8%, transparent)',
-         }}>
+    <div className="opt" style={{
+      border: '1px solid color-mix(in srgb, var(--dk-amber) 34%, transparent)',
+      background: 'color-mix(in srgb, var(--dk-amber) 8%, transparent)',
+    }}>
       <span className="flex items-center gap-1.5">
-        <DuplicateIcon size={11} style={{ color: 'var(--color-warning)' }} />
-        <span className="text-[10.5px]" style={{ color: 'var(--color-text-primary)' }}>
+        <Ico name="copy" style={{ color: 'var(--dk-amber)' }} />
+        <span style={{ color: 'var(--dk-text)' }}>
           <b>Possibly already filed.</b>{' '}
-          <span style={{ color: 'var(--color-text-muted)' }}>
+          <span style={{ color: 'var(--dk-faint)' }}>
             {candidates.length === 1 ? 'One open issue describes' : `${candidates.length} issues describe`}
             {' '}something close to this.
           </span>
         </span>
-        <span className="flex-1" />
+        <span className="sp" style={{ flex: 1 }} />
         {!ignored && (
-          <ButtonView size="sm" variant="ghost" accentColor="var(--color-text-muted)"
-                      onClick={onIgnore}>
-            Ignore and create
-          </ButtonView>
+          <button type="button" className="btn" onClick={onIgnore}>Ignore and create</button>
         )}
       </span>
 
       {candidates.map(c => (
         <div key={c.issue.number} className="flex flex-col gap-1 rounded px-2 py-1.5"
-             style={{ background: 'var(--color-panel)' }}>
+             style={{ background: 'var(--dk-panel)', borderRadius: 7.2 }}>
           <span className="flex items-center gap-1.5">
-            <span className="text-[10px] font-mono" style={{ color: ACCENT }}>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--dk-gh)' }}>
               #{c.issue.number}
             </span>
-            <span className="text-[10.5px] truncate" style={{ color: 'var(--color-text-primary)' }}>
-              {c.issue.title}
-            </span>
-            <span className="flex-1" />
-            <BadgeChipView
-              tone={c.strength === 'strong' ? 'var(--color-warning)' : 'var(--color-text-muted)'}
-              size="xs"
-            >
+            <span className="truncate" style={{ color: 'var(--dk-text)' }}>{c.issue.title}</span>
+            <span className="sp" style={{ flex: 1 }} />
+            <span className={c.strength === 'strong' ? 'chip c-stale' : 'chip'}>
               {c.strength} match
-            </BadgeChipView>
+            </span>
           </span>
           {/* The explanation, not a score. "92% similar" is unfalsifiable. */}
-          <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.55 }}>
-            {c.reasons.join('. ')}.
-          </span>
+          <span className="sub" style={{ lineHeight: 1.55 }}>{c.reasons.join('. ')}.</span>
           <span className="flex gap-1.5">
-            <ButtonView size="sm" accentColor="var(--color-text-muted)"
-                        iconLeft={<ExternalLinkIcon size={10} />}
-                        onClick={() => window.open(c.issue.url, '_blank')}>
-              Open it
-            </ButtonView>
-            <ButtonView size="sm" accentColor={ACCENT}
-                        onClick={() => window.open(`${c.issue.url}#new_comment_field`, '_blank')}>
-              Comment on it instead
-            </ButtonView>
+            <button type="button" className="btn"
+                    onClick={() => window.open(c.issue.url, '_blank')}>
+              <Ico name="link" />Open it
+            </button>
+            <button type="button" className="btn alt"
+                    onClick={() => window.open(`${c.issue.url}#new_comment_field`, '_blank')}>
+              <Ico name="cmt" />Comment on it instead
+            </button>
           </span>
         </div>
       ))}
@@ -417,109 +379,81 @@ function GhCreated({
       <div className="w-full flex flex-col gap-3" style={{ maxWidth: 560 }}>
 
         {exists ? (
-          <div className="flex flex-col gap-2 rounded-xl px-3 py-3"
-               style={{
-                 border: `1px solid color-mix(in srgb, ${ACCENT} 40%, transparent)`,
-                 background: `color-mix(in srgb, ${ACCENT} 7%, transparent)`,
-               }}>
+          <div className="opt pick">
             {/* The card is what got created, not a checkmark — every chip is a
                 value you chose, shown back so a wrong one is caught in the two
                 seconds you are still looking. */}
-            <span className="flex items-center gap-2">
-              <span className="text-[12px] font-mono" style={{ color: ACCENT }}>
+            <span className="oh">
+              <span style={{ fontFamily: 'var(--mono)', color: 'var(--dk-gh)' }}>
                 #{result.number}
               </span>
-              <span className="text-[12px]" style={{ color: 'var(--color-text-primary)' }}>
-                {request.title}
-              </span>
+              {request.title}
             </span>
             <span className="flex gap-1 flex-wrap">
-              {request.labels.map(l => (
-                <BadgeChipView key={l} tone={ACCENT} size="xs">{l}</BadgeChipView>
-              ))}
+              {request.labels.map(l => <span key={l} className="chip c-gh">{l}</span>)}
               {Object.entries(draft.answers).filter(([, v]) => v.trim()).map(([label, v]) => (
-                <BadgeChipView
-                  key={label}
-                  tone={colourOf(v, dimensions.find(d =>
-                    label.toLowerCase().includes(d.dimension))?.options)}
-                  size="xs"
-                >
-                  {v}
-                </BadgeChipView>
+                <Swatch key={label} value={v} dimensions={dimensions} label={label} />
               ))}
-              {request.assignees.map(a => (
-                <BadgeChipView key={a} tone="var(--color-text-muted)" size="xs">{a}</BadgeChipView>
-              ))}
+              {request.assignees.map(a => <span key={a} className="chip">{a}</span>)}
             </span>
             <span className="flex gap-1.5 flex-wrap">
               {/* Telling somebody is what happens next about nine times in ten. */}
-              <ButtonView size="sm" variant="primary" accentColor={ACCENT}
-                          iconLeft={<CopyIcon size={11} />}
-                          onClick={() => navigator.clipboard?.writeText(url)}>
-                Copy the link
-              </ButtonView>
-              <ButtonView size="sm" accentColor="var(--color-text-muted)"
-                          iconLeft={<ExternalLinkIcon size={11} />}
-                          onClick={() => window.open(url, '_blank')}>
-                Open on github.com
-              </ButtonView>
-              <ButtonView size="sm" accentColor="var(--color-text-muted)"
-                          iconLeft={<IssueOpenedIcon size={11} />}
-                          onClick={onAnother}>
-                File another like this
-              </ButtonView>
+              <button type="button" className="btn go"
+                      onClick={() => navigator.clipboard?.writeText(url)}>
+                <Ico name="copy" />Copy the link
+              </button>
+              <button type="button" className="btn" onClick={() => window.open(url, '_blank')}>
+                <Ico name="link" />Open on github.com
+              </button>
+              <button type="button" className="btn" onClick={onAnother}>
+                <Ico name="issue" />File another like this
+              </button>
             </span>
-            <span className="text-[9px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+            <span className="sub">
               “File another like this” keeps the module, environment, type, labels and assignee,
               and clears the title, body and evidence.
             </span>
           </div>
         ) : (
-          <div className="flex flex-col gap-1.5 rounded-xl px-3 py-3"
-               style={{
-                 border: '1px solid color-mix(in srgb, var(--color-error) 40%, transparent)',
-                 background: 'color-mix(in srgb, var(--color-error) 7%, transparent)',
-               }}>
-            <span className="text-[12px]" style={{ color: 'var(--color-text-primary)' }}>
-              <b>Nothing was created.</b>
+          <div className="opt" style={{
+            border: '1px solid color-mix(in srgb, var(--dk-red) 40%, transparent)',
+            background: 'color-mix(in srgb, var(--dk-red) 7%, transparent)',
+          }}>
+            <span className="oh"><Ico name="warn" style={{ color: 'var(--dk-red)' }} />
+              Nothing was created.
             </span>
-            <span className="text-[10.5px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+            <span className="sub" style={{ lineHeight: 1.6 }}>
               Step 1 failed. Your draft is untouched and every image you added is still on it.
             </span>
-            <ButtonView size="sm" variant="primary" accentColor={ACCENT} onClick={onBack}>
-              Back to editing
-            </ButtonView>
+            <span>
+              <button type="button" className="btn go" onClick={onBack}>Back to editing</button>
+            </span>
           </div>
         )}
 
         {/* Where things went, step by step */}
         <div className="flex flex-col gap-1">
           <Head>{exists ? 'Where things went' : 'What happened'}</Head>
-          <div className="rounded-lg border flex flex-col overflow-hidden"
-               style={{ borderColor: 'var(--color-surface-border)' }}>
+          <div className="opt" style={{ gap: 2, padding: 4 }}>
             {result.outcomes.map((o, at) => (
-              <div key={`${o.kind}-${at}`} className="flex items-start gap-1.5 px-2.5 py-1.5"
-                   style={{
-                     borderTop: at === 0 ? 'none'
-                       : '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
-                   }}>
+              <div key={`${o.kind}-${at}`} className="fct"
+                   style={{ alignItems: 'flex-start', cursor: 'default' }}>
                 <span style={{
                   marginTop: 2,
                   flexShrink: 0,
-                  color: o.ok ? 'var(--color-success)'
-                    : o.skipped ? 'var(--color-text-muted)' : 'var(--color-error)',
+                  color: o.ok ? 'var(--dk-green)'
+                    : o.skipped ? 'var(--dk-faint)' : 'var(--dk-red)',
                 }}>
-                  {o.ok ? <CheckCircleIcon size={10} />
-                    : o.skipped ? '·' : <WarningTriangleIcon size={10} />}
+                  {o.skipped ? '·' : <Ico name={o.ok ? 'check' : 'warn'} />}
                 </span>
-                <span className="text-[10px]" style={{ lineHeight: 1.5 }}>
-                  <span style={{ color: 'var(--color-text-primary)' }}>{o.does}</span>
+                <span style={{ lineHeight: 1.5 }}>
+                  <span style={{ color: 'var(--dk-text)' }}>{o.does}</span>
                   {o.error && (
                     <>
-                      <span style={{ color: 'var(--color-text-muted)' }}> — </span>
+                      <span> — </span>
                       {/* gh's own words, verbatim and with its field. "Validation
                           Failed" alone sends people to a browser to guess. */}
-                      <span style={{ color: o.skipped ? 'var(--color-text-muted)' : 'var(--color-error)' }}>
+                      <span style={{ color: o.skipped ? 'var(--dk-faint)' : 'var(--dk-red)' }}>
                         {o.error}
                       </span>
                     </>
@@ -533,33 +467,28 @@ function GhCreated({
         {canRetry.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <span className="flex items-center gap-2">
-              <ButtonView size="sm" variant="primary" accentColor={ACCENT}
-                          disabled={running}
-                          onClick={() => onRetry(canRetry)}>
+              <button type="button" className="btn go" disabled={running}
+                      onClick={() => onRetry(canRetry)}>
                 {running ? 'Retrying…' : `Retry those ${canRetry.length}`}
-              </ButtonView>
+              </button>
               {exists && (
-                <ButtonView size="sm" accentColor="var(--color-text-muted)"
-                            onClick={() => window.open(url, '_blank')}>
+                <button type="button" className="btn" onClick={() => window.open(url, '_blank')}>
                   Open #{result.number}
-                </ButtonView>
+                </button>
               )}
-              <ButtonView size="sm" variant="ghost" accentColor="var(--color-text-muted)"
-                          onClick={onDismiss}>
-                Leave it
-              </ButtonView>
+              <button type="button" className="btn" onClick={onDismiss}>Leave it</button>
             </span>
             {/* The reason there is no blanket "try again". */}
-            <span className="text-[9px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-              Retry is per failed step, never the whole sequence — re-running step 1 would file a
-              second copy of an issue that already exists.
+            <span className="sub">
+              Retry is per failed step, never the whole sequence — re-running step 1 would file
+              a second copy of an issue that already exists.
             </span>
           </div>
         )}
 
-        <div className="text-[9.5px]" style={{ color: 'var(--color-text-muted)', lineHeight: 1.55 }}>
-          Filed against <code>{repo}</code>. It is an ordinary issue with an ordinary URL — every
-          screen in dkgh links out to it.
+        <div className="sub" style={{ lineHeight: 1.55 }}>
+          Filed against <code>{repo}</code>. It is an ordinary issue with an ordinary URL —
+          every screen in dkgh links out to it.
         </div>
       </div>
     </div>
@@ -574,31 +503,61 @@ function merge(before: StepOutcome[], after: StepOutcome[]): StepOutcome[] {
   return before.map(o => byKind.get(o.kind) ?? o);
 }
 
-function Head({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[9px] font-bold uppercase tracking-[.09em]"
-          style={{ color: 'var(--color-text-muted)' }}>
-      {children}
-    </span>
-  );
+/** "1 call", not "1 calls" — it is the first thing read on this screen. */
+function callCount(plan: CreatePlan): string {
+  const n = plan.steps.filter(s => !s.unavailable).length;
+  return `${n} call${n === 1 ? '' : 's'}`;
 }
 
+/** A field label, the mock's own. */
+function Head({ children }: { children: React.ReactNode }) {
+  return <span className="fl">{children}</span>;
+}
+
+/** One thing that will be set, and what it will be set to. */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <span className="flex items-start gap-2 px-2.5 py-1.5"
-          style={{ borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)' }}>
-      <span className="text-[9.5px] flex-shrink-0"
-            style={{ color: 'var(--color-text-muted)', width: 74 }}>
+    <span className="fct" style={{ alignItems: 'flex-start', cursor: 'default' }}>
+      <span className="flex-shrink-0" style={{ width: 74, color: 'var(--dk-faint)' }}>
         {label}
       </span>
-      <span className="text-[10px] flex-1 min-w-0"
-            style={{ color: 'var(--color-text-primary)', overflowWrap: 'anywhere' }}>
+      <span className="flex-1 min-w-0"
+            style={{ color: 'var(--dk-text)', overflowWrap: 'anywhere' }}>
         {children}
       </span>
     </span>
   );
 }
 
+/**
+ * A dimension's value, in the colour the board gives it.
+ *
+ * The colour is the point: the chip here and the chip on the card that appears
+ * a second later have to be the same one, or the board looks like it filed
+ * something else.
+ */
+function Swatch({ value, label, dimensions }: {
+  value: string;
+  label: string;
+  dimensions: ProposedDimension[];
+}) {
+  const tone = colourOf(value, dimensions.find(d =>
+    label.toLowerCase().includes(d.dimension))?.options);
+  return (
+    <span
+      className="chip"
+      style={{
+        color: tone,
+        borderColor: `color-mix(in srgb, ${tone} 45%, transparent)`,
+        background: `color-mix(in srgb, ${tone} 13%, transparent)`,
+      }}
+    >
+      {value}
+    </span>
+  );
+}
+
+/** Something not set that probably should be. */
 function Amber({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: 'var(--color-warning)' }}>{children}</span>;
+  return <span style={{ color: 'var(--dk-amber)' }}>{children}</span>;
 }

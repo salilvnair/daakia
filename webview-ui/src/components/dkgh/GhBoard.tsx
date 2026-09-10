@@ -1476,9 +1476,9 @@ function GhBoardStalled({ repo, onChangeRepo }: { repo: string; onChangeRepo: ()
           },
         ]}
       />
-      <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onChangeRepo}>
+      <button type="button" className="btn" onClick={onChangeRepo}>
         Choose a different repository
-      </ButtonView>
+      </button>
     </div>
   );
 }

@@ -151,9 +151,9 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
         )
         : undefined}
       footerLeft={
-        <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
+        <Dk><span className="sub">
           {onClose ? 'Esc to dismiss' : 'release Space to dismiss'}
-        </span>
+        </span></Dk>
       }
       footerRight={
         <Dk>
