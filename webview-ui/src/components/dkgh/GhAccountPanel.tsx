@@ -82,10 +82,22 @@ export function GhAccountPanel({ env, repo, open, onClose }: {
           ]}
         />
 
-        {tab === 'scopes' && <Scopes rows={scopes} account={account} />}
-        {tab === 'hosts' && <Hosts hosts={hosts} accounts={accounts} repo={repo} />}
-        {tab === 'accounts' && <Accounts accounts={accounts} repo={repo} />}
-        {tab === 'commands' && <Commands rows={commands} />}
+        {/*
+          One height for all four tabs.
+
+          Scopes is a table and two commands; Commands is twenty-four rows. Left
+          to size themselves, the dialog jumped by several hundred pixels every
+          time somebody moved between them — the tab strip walking up the screen
+          under the pointer that was still on it, which is how you click the
+          wrong tab. So the body is a fixed pane that scrolls, and the tab you
+          came from is still where you left it when you come back.
+        */}
+        <div className="overflow-y-auto" style={{ height: 460 }}>
+          {tab === 'scopes' && <Scopes rows={scopes} account={account} />}
+          {tab === 'hosts' && <Hosts hosts={hosts} accounts={accounts} repo={repo} />}
+          {tab === 'accounts' && <Accounts accounts={accounts} repo={repo} />}
+          {tab === 'commands' && <Commands rows={commands} />}
+        </div>
       </div>
     </ModalView>
   );

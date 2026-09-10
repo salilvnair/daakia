@@ -1296,6 +1296,9 @@
 */
 .dkgh .facet { padding: 0 7.2px; }
 .dkgh .facet .fh { padding-left: 7.2px; padding-right: 7.2px; }
+/* The heading is tracked out; its count must not be, or the last digit sits a
+   pixel short of the digits below it. */
+.dkgh .facet .fh .n { letter-spacing: normal; }
 .dkgh .fct {
   padding-left: 7.2px;
   padding-right: 7.2px;
