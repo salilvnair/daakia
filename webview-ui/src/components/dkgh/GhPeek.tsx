@@ -17,11 +17,17 @@
  * with the mouse and cannot close with the mouse is a trap.
  *
  * So it is `ModalView`, the same dialog every protocol in Daakia opens: the
- * same backdrop, the same X in the same corner reddening under the pointer, the
- * same Escape. A peek is a rare enough thing to want a bespoke close for, and
- * one that behaved differently from every other dialog in the app would be a
- * close people have to find. The footer still says which gesture applies,
- * because the held peek genuinely has a different one.
+ * same card, the same X in the same corner reddening under the pointer, the
+ * same Escape. A peek is not rare enough to be worth a close people have to
+ * find. The footer still says which gesture applies, because the held peek
+ * genuinely has a different one.
+ *
+ * **`inline`, not `popout`.** The default mode portals the card to
+ * `document.body`, and the board stays mounted when you switch to another
+ * Daakia tab — so a peek left open followed you to the cluster view and sat on
+ * top of it. Inline keeps the card inside the board's own DOM, where it
+ * disappears with the thing it is about, and the backdrop below is drawn over
+ * the board rather than over the window.
  *
  * The panel is the three things the card could not fit: the actual behaviour,
  * the evidence at a readable size, and the most recent comment, which is
@@ -101,13 +107,30 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
   const status = (issue.dimensions.status ?? '').toLowerCase();
 
   return (
+    <>
+      {/* Dims the board, not the window — the peek is about one card on this
+          screen, and nothing outside it needs to go quiet. Only drawn when the
+          peek can be clicked away; a held one is gone before a click lands and
+          dimming for it would flash on every hold. */}
+      {onClose && (
+        <div className="absolute inset-0" style={{ zIndex: 29, background: 'rgba(0,0,0,.45)' }}
+             onClick={onClose} />
+      )}
+      <div
+        className="absolute"
+        style={{
+          left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+          width: 'min(560px, 92%)', maxHeight: '82%', zIndex: 30,
+          display: 'flex', flexDirection: 'column',
+        }}
+      >
     <ModalView
       open
       onClose={onClose ?? (() => undefined)}
+      mode="inline"
       size="md"
       headerColor={ACCENT}
       showCloseIcon={!!onClose}
-      className="dkgh"
       noPadding
       title={
         <Dk>
@@ -197,6 +220,8 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
 
       </Dk>
     </ModalView>
+      </div>
+    </>
   );
 }
 

@@ -22,14 +22,28 @@
  * Clicking cycles include → exclude → off, because "everything except this
  * thread" is the filter the search box could never express and the reason
  * field filters exist at all.
+ *
+ * ── The box at the top, and the number beside each heading ──
+ *
+ * Both are borrowed from dkgh's filter rail, deliberately: a panel of nine
+ * groups is a panel somebody scrolls, and one with a box they can type into is
+ * a panel they can answer a question with. A pod that logs an `orderId` per
+ * request has hundreds of values under one heading, and finding `ORD-88403`
+ * by eye is not a thing anybody should be asked to do.
+ *
+ * The count on a heading is how many values are under it — after the box, so
+ * it says what searching left rather than what the log holds. A group the
+ * search emptied is hidden rather than shown as a heading with nothing under
+ * it, which is a heading that looks like a bug.
  */
 import { useMemo, useState } from 'react';
 import { BadgeChipView, IconSize } from '@salilvnair/dui';
 import { ChevronDownIcon, ChevronRightIcon, FilterIcon, SearchIcon } from '../../icons';
+import { FilterInputView } from '@salilvnair/dui';
 import { buildFacets, type Facet } from './log-facets';
 import type { FieldFilter } from './log-view';
 import type { LogLine } from '../../store/k8s-store';
-import { ACCENT, BAD, MUTED } from './tone';
+import { ACCENT, ACCENT_SOFT, BAD, MUTED } from './tone';
 
 export function FacetRail({ lines, filters, onToggle, onClear, onSearchEverywhere }: {
   lines: LogLine[];
@@ -56,6 +70,25 @@ export function FacetRail({ lines, filters, onToggle, onClear, onSearchEverywher
   */
   const facets = useMemo(() => buildFacets(lines), [lines]);
   const [closed, setClosed] = useState<string[]>([]);
+  const [term, setTerm] = useState('');
+
+  /*
+    The search reads the value AND the heading, so `tenant` finds the whole
+    group and `eu-west` finds the one row — which is how somebody who half
+    remembers a field name gets to it without knowing which of the two they
+    are half remembering.
+  */
+  const shown = useMemo(() => {
+    const q = term.trim().toLowerCase();
+    if (!q) return facets;
+    return facets
+      .map(f => (f.label.toLowerCase().includes(q)
+        ? f
+        : { ...f, values: f.values.filter(v => v.value.toLowerCase().includes(q)) }))
+      .filter(f => f.values.length > 0);
+  }, [facets, term]);
+
+  const showing = shown.reduce((n, f) => n + f.values.length, 0);
 
   // Nothing honest to show: no format is configured, or one is and no line
   // parsed. Saying "no facets" would imply the log has no structure, when
@@ -87,7 +120,33 @@ export function FacetRail({ lines, filters, onToggle, onClear, onSearchEverywher
         </span>
       </div>
 
-      {facets.map(facet => {
+      {/* The box, with what it left showing. An empty result is visible before
+          anybody goes looking for the rows that are no longer there. */}
+      <div className="px-2.5 pb-2 shrink-0">
+        <FilterInputView
+          value={term}
+          onChange={setTerm}
+          placeholder="Search fields…"
+          size="sm"
+          width="100%"
+          accentColor={ACCENT}
+          suffix={
+            <span className="font-mono text-[9.5px] px-1.5 rounded-full"
+                  style={{ color: ACCENT, background: ACCENT_SOFT }}>
+              {showing}
+            </span>
+          }
+        />
+      </div>
+
+      {shown.length === 0 && (
+        <div className="px-3 py-2 text-[10.5px] shrink-0"
+             style={{ color: 'var(--color-text-muted)' }}>
+          No field matches “{term.trim()}”.
+        </div>
+      )}
+
+      {shown.map(facet => {
         const open = !closed.includes(facet.field);
         return (
           <div key={facet.field} className="shrink-0" style={{ marginBottom: 6 }}>
@@ -109,6 +168,12 @@ export function FacetRail({ lines, filters, onToggle, onClear, onSearchEverywher
               {!facet.named && (
                 <BadgeChipView tone={MUTED} size="2xs" style={{ opacity: 0.8 }}>mdc</BadgeChipView>
               )}
+              {/* How many values are under it — after the search, so it is what
+                  is there to look at rather than what the log holds. */}
+              <span className="ml-auto font-mono text-[9.5px] px-1.5 rounded-full shrink-0"
+                    style={{ color: ACCENT, background: ACCENT_SOFT }}>
+                {facet.values.length}
+              </span>
             </button>
 
             {open && (

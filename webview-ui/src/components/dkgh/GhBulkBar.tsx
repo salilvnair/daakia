@@ -65,7 +65,7 @@ export function GhBulkBar({
         auto={autoOpen === 'assign'}
         onAuto={onAutoOpened}
         icon={<UsersIcon size={11} />}
-        options={meta?.assignees ?? []}
+        options={(meta?.assignees ?? []).map(a => ({ value: a, avatar: true }))}
         empty="Nobody on this repository can be assigned — or listing them needs a permission this account lacks."
         onPick={v => onPropose({ repo, numbers: selected, addAssignees: [v] })}
       />
@@ -74,7 +74,18 @@ export function GhBulkBar({
         auto={autoOpen === 'label'}
         onAuto={onAutoOpened}
         icon={<TagIcon size={11} />}
-        options={(meta?.labels ?? []).map(l => l.name)}
+        /*
+          The colour and the description are the repository's own, straight off
+          `gh label list` — a label list without them is nine grey words, and
+          the colour is how people actually recognise the one they mean. The
+          description is the half nobody remembers: `wontfix` and `invalid`
+          differ by a sentence somebody wrote once.
+        */
+        options={(meta?.labels ?? []).map(l => ({
+          value: l.name,
+          colour: hexOf(l.color),
+          note: l.description,
+        }))}
         empty="This repository has no labels."
         onPick={v => onPropose({ repo, numbers: selected, addLabels: [v] })}
       />
@@ -83,7 +94,7 @@ export function GhBulkBar({
         auto={autoOpen === 'milestone'}
         onAuto={onAutoOpened}
         icon={<LayersIcon size={11} />}
-        options={(meta?.milestones ?? []).map(m => m.title)}
+        options={(meta?.milestones ?? []).map(m => ({ value: m.title }))}
         empty="This repository has no open milestones."
         onPick={v => onPropose({ repo, numbers: selected, milestone: v })}
       />
@@ -107,11 +118,35 @@ function Link({ onClick, children }: { onClick: () => void; children: React.Reac
   );
 }
 
-/** A short list, opened from a button. Filterable once it stops being short. */
+/** GitHub gives a label's colour as bare hex; CSS wants the hash. */
+function hexOf(colour?: string): string | undefined {
+  if (!colour) return undefined;
+  return colour.startsWith('#') ? colour : `#${colour}`;
+}
+
+/** One row of a picker — the name, and whatever else is known about it. */
+export interface PickOption {
+  value: string;
+  /** A label's own colour, as the repository set it. */
+  colour?: string;
+  /** The sentence somebody wrote when they made it. */
+  note?: string;
+  /** Draw the initial in a circle, for a person. */
+  avatar?: boolean;
+}
+
+/**
+ * A short list, opened from a button.
+ *
+ * It used to take plain strings and draw them as plain strings, which threw
+ * away everything `gh` had already said about each one — a label's colour and
+ * its description, both fetched, both dropped on the floor. A list of nine grey
+ * words is a list you read; a list of nine coloured labels is one you point at.
+ */
 function Picker({ label, icon, options, empty, auto, onAuto, onPick }: {
   label: string;
   icon: React.ReactNode;
-  options: string[];
+  options: PickOption[];
   empty: string;
   auto?: boolean;
   onAuto?: () => void;
@@ -126,7 +161,12 @@ function Picker({ label, icon, options, empty, auto, onAuto, onPick }: {
     setFilter('');
     onAuto?.();
   }, [auto, onAuto]);
-  const shown = options.filter(o => o.toLowerCase().includes(filter.toLowerCase())).slice(0, 40);
+  /* The description is searched too: somebody looking for the "not planned"
+     one does not necessarily remember it is spelled `wontfix`. */
+  const q = filter.trim().toLowerCase();
+  const shown = options
+    .filter(o => !q || o.value.toLowerCase().includes(q) || (o.note ?? '').toLowerCase().includes(q))
+    .slice(0, 40);
 
   return (
     <span style={{ position: 'relative' }}>
@@ -140,13 +180,13 @@ function Picker({ label, icon, options, empty, auto, onAuto, onPick }: {
           <div className="absolute right-0 mt-1 rounded-lg border flex flex-col"
                style={{
                  zIndex: 21,
-                 width: 210,
-                 maxHeight: 260,
+                 width: 268,
+                 maxHeight: 300,
                  borderColor: 'var(--color-surface-border)',
                  background: 'var(--color-surface)',
                  boxShadow: '0 8px 22px rgba(0,0,0,.35)',
                }}>
-            {options.length > 8 && (
+            {options.length > 6 && (
               <input
                 autoFocus
                 value={filter}
@@ -174,14 +214,44 @@ function Picker({ label, icon, options, empty, auto, onAuto, onPick }: {
                 </span>
               ) : shown.map(o => (
                 <button
-                  key={o}
+                  key={o.value}
                   type="button"
-                  onClick={() => { setOpen(false); onPick(o); }}
-                  className="text-left px-2.5 py-1 text-[10.5px] cursor-pointer"
-                  style={{ background: 'transparent', border: 'none',
-                           color: 'var(--color-text-secondary)' }}
+                  onClick={() => { setOpen(false); onPick(o.value); }}
+                  className="pick-row text-left cursor-pointer flex items-start gap-2"
                 >
-                  {o}
+                  {o.colour && (
+                    <span
+                      className="shrink-0 rounded-full"
+                      style={{
+                        width: 10, height: 10, marginTop: 3, background: o.colour,
+                        /* A label the repository set to near-black or near-white
+                           still has to be visible on this surface. */
+                        boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-text-primary) 25%, transparent)',
+                      }}
+                    />
+                  )}
+                  {o.avatar && (
+                    <span className="shrink-0 rounded-full grid place-items-center"
+                          style={{
+                            width: 16, height: 16, marginTop: 0, fontSize: 9, fontWeight: 700,
+                            color: ACCENT,
+                            background: `color-mix(in srgb, ${ACCENT} 20%, transparent)`,
+                          }}>
+                      {o.value[0]?.toUpperCase()}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex flex-col">
+                    <span className="text-[11.5px] truncate"
+                          style={{ color: 'var(--color-text-primary)' }}>
+                      {o.value}
+                    </span>
+                    {o.note && (
+                      <span className="text-[10px]"
+                            style={{ color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
+                        {o.note}
+                      </span>
+                    )}
+                  </span>
                 </button>
               ))}
             </div>

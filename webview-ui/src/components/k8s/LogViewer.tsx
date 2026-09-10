@@ -535,6 +535,10 @@ function IconButton({ on, onClick, title, icon }: {
 
 // ── The viewer ──────────────────────────────────────────────────────────────
 
+/** The field rail's width, in the pixels that decide whether a value fits. */
+const RAIL_MIN = 208;
+const RAIL_MAX = Math.round(RAIL_MIN * 1.3);
+
 export function LogViewer() {
   const {
     logs, logStatus, logDetail, logDropped, logFilter, logLevels, logRequestedAt,
@@ -684,6 +688,25 @@ export function LogViewer() {
     setScrollEl(el);
   }, []);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  /*
+    Controlled, so the ceiling can be enforced in pixels — see the split below.
+    `undefined` until somebody drags, which lets `defaultSplit` do the first
+    layout rather than this having to guess a percentage before the row has a
+    width.
+  */
+  const [railSplit, setRailSplit] = useState<number | undefined>(17);
+
+  /* Measured off the body row, which the split fills — `bodyRef` already
+     points at it, and a second ref on the same box is a second thing to keep
+     pointing at the right element. */
+  const clampRail = useCallback((pct: number) => {
+    const width = bodyRef.current?.clientWidth ?? 0;
+    if (!width) { setRailSplit(pct); return; }
+    const px = Math.min(Math.max((pct / 100) * width, RAIL_MIN), RAIL_MAX);
+    setRailSplit((px / width) * 100);
+  }, []);
+
   /** True while the ribbon is being dragged; freezes the follow logic. */
   const draggingRef = useRef(false);
   const [scrollTop, setScrollTop] = useState(0);
@@ -1405,12 +1428,26 @@ export function LogViewer() {
         */}
         <SplitPanelView
           direction="horizontal"
-          defaultSplit={17}
-          minFirstPct={8}
-          minSecondPct={45}
-          accentColor="var(--color-primary)"
+          /*
+            The rail's old fixed width is the floor and a third again is the
+            ceiling: wide enough for a long order id, never wide enough to take
+            the log down to a column. The lines are what the screen is for, and
+            a rail that can eat half of it is one somebody drags by accident
+            once and has to drag back.
+
+            The floor is the component's own `minFirst`; the ceiling is not,
+            because it has no `maxFirst` — only minimums, on either side. So the
+            split is controlled here and `onResize` clamps in pixels. A
+            percentage cap would have been the easy version and the wrong one:
+            272px of rail is 34% of a narrow panel and 14% of a wide one, and
+            the number that matters is how many characters of `ORD-88403` fit.
+          */
+          split={railSplit}
+          minFirst={RAIL_MIN}
+          onResize={clampRail}
           collapsed={!facetsOpen}
           collapsedSide="first"
+          accentColor={ACCENT}
           style={{ flex: 1, minWidth: 0, minHeight: 0 }}
           first={
             <div className="flex flex-col h-full min-h-0">

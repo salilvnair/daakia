@@ -1642,3 +1642,20 @@
   background: color-mix(in srgb, var(--dk-green) 16%, transparent);
 }
 .dkgh .dkgh-md .dui-mdv-copy-btn.dui-mdv-copied svg { animation: dkgh-pop 260ms ease; }
+
+/*
+  A row in a picker. The mock has no dropdown of its own, so this borrows the
+  shape every other list in the tab uses: inset from the panel's gutter, rounded
+  so the highlight has an edge to stop at, and an accent wash on hover because
+  it is a list you opened to press one thing in.
+*/
+.dkgh .pick-row {
+  margin: 0 6px;
+  padding: 6px 8.4px;
+  border-radius: 7.2px;
+  background: transparent;
+  border: none;
+  transition: background 110ms ease;
+}
+.dkgh .pick-row:hover { background: color-mix(in srgb, var(--dk-gh) 50%, transparent); }
+.dkgh .pick-row:hover span { color: #fff !important; }
