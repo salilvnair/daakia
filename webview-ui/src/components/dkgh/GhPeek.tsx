@@ -45,6 +45,7 @@ import { useEffect, useState } from 'react';
 import { MarkdownView, ModalView, SkeletonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { Ico } from './GhIcons';
+import { Dk } from './GhShell';
 import { GhEvidence } from './GhEvidence';
 import { avClass } from './GhCards';
 import { sinceIso } from './format';
@@ -225,21 +226,6 @@ export function GhPeek({ repo, issue, onOpen, onClose }: {
   );
 }
 
-/**
- * The `--dk-*` palette, where the dialog cannot carry it.
- *
- * `ModalView` portals to the body and does not put its `className` on the card,
- * so nothing dkgh renders inside it has `.dkgh` above it — and every rule in
- * `dkgh.css` is scoped under `.dkgh`. Unstyled, the buttons came out as bare
- * text and the icons at their natural size, which is roughly a thumbnail.
- *
- * `display: contents` is what makes this free: the element stays in the tree so
- * descendant selectors match and the custom properties inherit, but it lays out
- * nothing of its own, so the modal's own flexbox is untouched.
- */
-function Dk({ children }: { children: React.ReactNode }) {
-  return <span className="dkgh" style={{ display: 'contents' }}>{children}</span>;
-}
 
 /**
  * Copy the link, and prove it.

@@ -17,6 +17,22 @@ import type { ReactNode } from 'react';
 import { Ico, type IcoName } from './GhIcons';
 
 /**
+ * dkgh's palette, where a dialog cannot carry it.
+ *
+ * `ModalView` portals to the body and does not put its `className` on the card,
+ * so nothing rendered inside one has `.dkgh` above it — and every rule in
+ * `dkgh.css` is scoped under `.dkgh`. Unstyled, the buttons come out as bare
+ * text and the icons at their natural size, which is roughly a thumbnail.
+ *
+ * `display: contents` is what makes this free: the element stays in the tree so
+ * descendant selectors match and the custom properties inherit, but it lays out
+ * nothing of its own, so the dialog's own flexbox is untouched.
+ */
+export function Dk({ children }: { children: ReactNode }) {
+  return <span className="dkgh" style={{ display: 'contents' }}>{children}</span>;
+}
+
+/**
  * A centred column: the mark, the title, and everything the screen adds.
  *
  * The lede and the options are children rather than props because these screens
