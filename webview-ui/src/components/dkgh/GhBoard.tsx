@@ -936,8 +936,8 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         </div>
       )}
 
-      {/* The board */}
-      <div className="flex-1 flex min-h-0 min-w-0">
+      {/* The board — the mock's `.split`: panels on the left, the pane beside them */}
+      <div className="split">
         {panel === 'filters' && (
           <GhFilters
             /* Counted over what the search left, so the number beside a value
@@ -971,16 +971,16 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           />
         ))}
 
-        <div className="flex-1 min-h-0 min-w-0"
+        <div className="pane"
              style={{ overflow: view === 'table' && !pending ? 'hidden' : 'auto' }}>
           {pending ? (
-            <div className="px-4 pt-3 pb-4">
+            <div className="groups">
               {stuck
                 ? <GhBoardStalled repo={repo} onChangeRepo={onChangeRepo} />
                 : <BoardSkeleton view={view} />}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="px-4 pt-3 pb-4">
+            <div className="groups">
               <GhBoardEmpty
                 repo={repo}
                 total={total}
@@ -995,7 +995,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
               />
             </div>
           ) : view === 'cards' ? (
-            <div className="px-4 pt-3 pb-4">
+            <>
               <GhCards
                 groups={groups}
                 showGroups={meaning.groupBy !== 'none'}
@@ -1008,7 +1008,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 cursor={cursor}
                 hits={hits}
               />
-            </div>
+            </>
           ) : (
             <GhIssueTable
               groups={groups}
@@ -1027,7 +1027,6 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
               onEdit={editCell}
               pending={flow.optimistic}
               hits={hits}
-              colours={colours}
               renderHeader={(g: Group) => <Header group={g} dimensions={data?.dimensions ?? []} />}
             />
           )}

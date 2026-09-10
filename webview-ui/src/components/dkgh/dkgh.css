@@ -154,6 +154,11 @@
 .dkgh .compose .left .editor > div:has(> .mdbar) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .dkgh .compose .left .editor > div > textarea.mdbody { flex: 1; }
 .dkgh .compose .right { overflow-y: auto; }
+
+/* The board's split fills the panel and scrolls inside it, same reason. */
+.dkgh .split { flex: 1; min-height: 0; }
+.dkgh .split > .facets { overflow-y: auto; }
+.dkgh .split > .pane { min-height: 0; }
 .dkgh button.pill:hover:not(:disabled) { background: var(--dk-hover); }
 .dkgh button.pill:disabled { opacity: .45; cursor: default; }
 

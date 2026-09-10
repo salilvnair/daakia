@@ -1,39 +1,40 @@
 /**
- * Screen 05 — the table, and 05B through 05E with it.
+ * Screen 05 — the table, and 05B to 05E with it.
+ *
+ * The markup is the mock's: a `.tblw` that scrolls sideways around a
+ * `table.tbl`, `th` per column, and per row `td.num`, `td.ttl`, chips, `.st`,
+ * `.pr`, `.who` and `td.dt` — with `.late` on a date that has gone by.
  *
  * The same issues as rows, dense enough to scan a hundred. This is also the
  * shape the export writes: what is in these columns is what lands in the
  * spreadsheet, in this order.
  *
- * It is built here rather than on the shared `DataTableView` because the four
- * things this table has to do are the four that one deliberately does not:
+ * Four things it has to do that a plain table does not:
  *
- * - **A long title wraps; it is never cut.** The shared table clips every cell
- *   to one line with an ellipsis, which lands exactly where the sentence was
- *   about to say the useful part. That row is taller than the others and that
- *   is correct. Dense tightens the padding, not the content.
- * - **Two-level sort.** "Urgent first, and within that oldest first" is how a
- *   lead reads a backlog, and it is two sorts. One click sets the primary,
- *   shift-click adds the tiebreak, and the header numbers say which is which —
- *   two arrows without an order is a table you cannot trust.
+ * - **A long title wraps; it is never cut.** `td.ttl` clips by default in the
+ *   mock, which is right for a fixed figure of tidy data; with wrapping on, the
+ *   ellipsis goes and the row grows. That row is taller and that is correct —
+ *   the alternative cuts the sentence exactly where it was about to say the
+ *   useful part.
+ * - **Two-level sort.** One click sets the primary, shift-click adds the
+ *   tiebreak, and the header carries its number — two arrows without an order
+ *   is a table you cannot trust.
  * - **Pinned identity columns.** `#` and `Title` stay while the rest scrolls
- *   sideways, so at row 190 of 214 you can still tell which row the amber value
- *   is in. The header stays too.
+ *   sideways, so at row 190 of 214 you can still tell which row you are on.
  * - **Rows are virtualised past about sixty.** 214 issues is one `gh issue
  *   list`; 214 rows of DOM is not.
  *
  * Sorting and filtering happen over the full set, never over what is on screen.
  *
  * On the virtualisation, honestly: rows are not a fixed height, because titles
- * wrap. So the spacers above and below the rendered window are sized from a
- * running average of the rows actually measured, which makes the scrollbar
- * accurate to within a row or two rather than exact, and converges as you
- * scroll. The alternative — a fixed row height — buys an exact thumb by cutting
- * the titles, which is the trade this screen exists to refuse.
+ * wrap. So the spacers are sized from a running average of the rows actually
+ * measured, which makes the scrollbar accurate to within a row or two and
+ * converges as you scroll. A fixed row height would buy an exact thumb by
+ * cutting the titles, which is the trade this screen exists to refuse.
  */
 import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AvatarView, BadgeChipView, CheckboxView } from '@salilvnair/dui';
-import { ArrowUpIcon, ArrowDownIcon } from '../../icons';
+import { Ico } from './GhIcons';
+import { avClass, chipOf, prClass } from './GhCards';
 import { DENSITY_PAD, type Density, type SortLevel } from './board-prefs';
 import {
   QUIET_DAYS, rankOf, type BoardIssue, type Group, type ProposedDimension,
@@ -41,8 +42,7 @@ import {
 import { arrange, catalogue, type TableColumn } from './table-columns';
 import { sinceIso } from './format';
 import type { SearchHit } from './filter-model';
-import { fromMap } from './field-colour';
-import { ACCENT, type RepoMeta } from './types';
+import type { RepoMeta } from './types';
 
 /** Past this many rows, only what fits plus a margin is rendered. */
 const VIRTUALISE_ABOVE = 60;
@@ -59,12 +59,11 @@ type Row =
 
 export function GhIssueTable({
   groups, showGroups, dimensions, columns, density, wrapTitles, sort, onSort,
-  selected, onToggle, onOpen, cursor, meta, onEdit, pending, hits, colours, renderHeader,
+  selected, onToggle, onOpen, cursor, meta, onEdit, pending, hits, renderHeader,
 }: {
   groups: Group[];
   showGroups: boolean;
   dimensions: ProposedDimension[];
-  /** The columns that are on, in the order they were arranged. */
   columns: string[];
   density: Density;
   wrapTitles: boolean;
@@ -75,21 +74,12 @@ export function GhIssueTable({
   onOpen: (issue: BoardIssue) => void;
   cursor?: number;
   meta?: RepoMeta;
-  /** A cell was changed — the caller shows the command and runs it. */
   onEdit: (issue: BoardIssue, field: 'assignee' | 'milestone', value: string) => void;
-  /** Issues with a write in flight: which field, and what the cell now claims. */
   pending: Map<number, { field: string; value: string }>;
-  /** Where the search matched, per issue — screen 08C. */
   hits?: Map<number, SearchHit>;
-  /** Each dimension value's colour, by its index in its own dropdown. */
-  colours: Map<string, string>;
-  /** The group header, drawn by the board so both views agree on it. */
   renderHeader: (group: Group) => React.ReactNode;
 }) {
-  const cols = useMemo(
-    () => arrange(catalogue(dimensions), columns),
-    [dimensions, columns],
-  );
+  const cols = useMemo(() => arrange(catalogue(dimensions), columns), [dimensions, columns]);
 
   /* One flat list, headers included, so the window can be taken over the whole
      thing rather than per group. Sorting stays inside each group, which is what
@@ -106,13 +96,7 @@ export function GhIssueTable({
   }, [groups, showGroups, sort, cols, dimensions]);
 
   const { scrollRef, start, end, padTop, padBottom, measure } = useWindow(rows.length);
-
-  const template = cols
-    .map(c => `${c.width}px`)
-    .join(' ')
-    /* The last column absorbs the slack, so a narrow set of columns does not
-       leave a ragged strip of background down the right of every row. */
-    .replace(/(\d+px)$/, 'minmax($1, 1fr)');
+  const visible = rows.slice(start, end);
 
   /* Where each pinned column starts, for `position: sticky`. Cumulative,
      because the second pinned column has to clear the first. */
@@ -125,61 +109,58 @@ export function GhIssueTable({
   }
 
   const pad = DENSITY_PAD[density];
-  const visible = rows.slice(start, end);
 
   return (
-    <div ref={scrollRef} className="h-full" style={{ overflow: 'auto' }}>
-      <div style={{ minWidth: 'max-content' }}>
+    <div className="tblw" ref={scrollRef} style={{ overflow: 'auto', height: '100%' }}>
+      <table className="tbl">
+        <thead>
+          <tr>
+            {cols.map(c => (
+              <HeaderCell key={c.key} col={c} sort={sort} onSort={onSort}
+                          left={offsets.get(c.key)} pad={pad} />
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {padTop > 0 && (
+            <tr><td colSpan={cols.length} style={{ height: padTop, padding: 0, border: 0 }} /></tr>
+          )}
 
-        {/* The header stays. */}
-        <div className="grid"
-             style={{
-               gridTemplateColumns: template,
-               position: 'sticky',
-               top: 0,
-               zIndex: 3,
-               background: 'var(--color-panel)',
-               borderBottom: '1px solid var(--color-surface-border)',
-             }}>
-          {cols.map(c => (
-            <HeaderCell key={c.key} col={c} sort={sort} onSort={onSort} pad={pad}
-                        left={offsets.get(c.key)} />
+          {visible.map((r, i) => r.kind === 'header' ? (
+            <tr key={r.key} ref={el => measure(start + i, el)}>
+              <td colSpan={cols.length} style={{ padding: '10px 12px 4px', border: 0 }}>
+                {/* Inside a `.group`, because that is what the mock's `.gh`
+                    rules are written against. */}
+                <div className="group">{renderHeader(r.group)}</div>
+              </td>
+            </tr>
+          ) : (
+            <IssueRow
+              key={r.key}
+              ref={el => measure(start + i, el)}
+              issue={r.issue}
+              cols={cols}
+              offsets={offsets}
+              pad={pad}
+              wrapTitles={wrapTitles}
+              dimensions={dimensions}
+              selected={selected.has(r.issue.number)}
+              anySelected={selected.size > 0}
+              cursor={cursor === r.issue.number}
+              meta={meta}
+              pendingValue={pending.get(r.issue.number)}
+              hit={hits?.get(r.issue.number)}
+              onToggle={onToggle}
+              onOpen={onOpen}
+              onEdit={onEdit}
+            />
           ))}
-        </div>
 
-        {padTop > 0 && <div style={{ height: padTop }} />}
-
-        {visible.map((r, i) => r.kind === 'header' ? (
-          <div key={r.key}
-               ref={el => measure(start + i, el)}
-               style={{ padding: '10px 10px 6px' }}>
-            {renderHeader(r.group)}
-          </div>
-        ) : (
-          <IssueRow
-            key={r.key}
-            ref={el => measure(start + i, el)}
-            issue={r.issue}
-            cols={cols}
-            template={template}
-            offsets={offsets}
-            pad={pad}
-            wrapTitles={wrapTitles}
-            selected={selected.has(r.issue.number)}
-            anySelected={selected.size > 0}
-            cursor={cursor === r.issue.number}
-            meta={meta}
-            pendingValue={pending.get(r.issue.number)}
-            hit={hits?.get(r.issue.number)}
-            colours={colours}
-            onToggle={onToggle}
-            onOpen={onOpen}
-            onEdit={onEdit}
-          />
-        ))}
-
-        {padBottom > 0 && <div style={{ height: padBottom }} />}
-      </div>
+          {padBottom > 0 && (
+            <tr><td colSpan={cols.length} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -212,8 +193,7 @@ function useWindow(count: number) {
   useEffect(() => { heights.current = []; }, [count]);
 
   const measure = (index: number, el: HTMLElement | null) => {
-    if (!el) return;
-    heights.current[index] = el.offsetHeight;
+    if (el) heights.current[index] = el.offsetHeight;
   };
 
   useLayoutEffect(() => {
@@ -250,7 +230,7 @@ function useWindow(count: number) {
  * **Priority sorts by rank, not alphabetically.** Urgent, High, Medium, Low is
  * the order the form declares, and sorting it as text would put High above Low
  * above Medium above Urgent — wrong in a way that looks plausible enough to go
- * unnoticed. Any single-select sorts by its declared order; see `rankOf`.
+ * unnoticed.
  */
 export function sortIssues(
   issues: BoardIssue[],
@@ -319,78 +299,63 @@ export function nextSort(sort: SortLevel[], key: string, shift: boolean): SortLe
 
 // ── Cells ───────────────────────────────────────────────────────────────────
 
-function HeaderCell({ col, sort, onSort, pad, left }: {
+function HeaderCell({ col, sort, onSort, left, pad }: {
   col: TableColumn;
   sort: SortLevel[];
   onSort: (next: SortLevel[]) => void;
-  pad: string;
   left?: number;
+  pad: string;
 }) {
   const at = sort.findIndex(s => s.key === col.key);
   const level = at >= 0 ? sort[at] : undefined;
 
   return (
-    <button
-      type="button"
+    <th
+      className={level ? 'sorted' : undefined}
       onClick={e => onSort(nextSort(sort, col.key, e.shiftKey))}
       title={`Sort by ${col.label} — shift-click to add it as a tiebreak`}
-      className="flex items-center gap-1 cursor-pointer text-left"
       style={{
+        cursor: 'pointer',
         padding: pad,
-        background: 'var(--color-panel)',
-        border: 'none',
-        borderRight: left !== undefined ? '1px solid var(--color-surface-border)' : undefined,
+        textAlign: col.align === 'right' ? 'right' : 'left',
         position: left !== undefined ? 'sticky' : undefined,
         left,
-        zIndex: left !== undefined ? 4 : undefined,
-        justifyContent: col.align === 'right' ? 'flex-end' : 'flex-start',
-        fontSize: 9.5,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '.06em',
-        color: level ? ACCENT : 'var(--color-text-muted)',
+        zIndex: left !== undefined ? 3 : 2,
+        minWidth: col.width,
       }}
     >
       {col.label}
       {level && (
-        <span className="flex items-center" style={{ gap: 1 }}>
-          {level.dir === 'asc' ? <ArrowUpIcon size={9} /> : <ArrowDownIcon size={9} />}
-          {/* The number, always — a two-level sort you cannot read is one you
-              cannot trust, and one arrow alone does not say which came first. */}
-          {sort.length > 1 && <span style={{ fontSize: 8 }}>{at + 1}</span>}
+        <span className="sortmark">
+          {level.dir === 'asc' ? '▲' : '▼'}
+          {/* The number, always when there is more than one — a two-level sort
+              you cannot read is one you cannot trust. */}
+          {sort.length > 1 && at + 1}
         </span>
       )}
-    </button>
+    </th>
   );
 }
 
-/**
- * One issue.
- *
- * A grid row rather than a `<tr>`, because the pinned columns need
- * `position: sticky` against a horizontally scrolling container and a table
- * cell cannot be made to do that without the layout fighting back.
- */
-const IssueRow = forwardRef<HTMLDivElement, {
+const IssueRow = forwardRef<HTMLTableRowElement, {
   issue: BoardIssue;
   cols: TableColumn[];
-  template: string;
   offsets: Map<string, number>;
   pad: string;
   wrapTitles: boolean;
+  dimensions: ProposedDimension[];
   selected: boolean;
   anySelected: boolean;
   cursor: boolean;
   meta?: RepoMeta;
   pendingValue?: { field: string; value: string };
   hit?: SearchHit;
-  colours: Map<string, string>;
   onToggle: (issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => void;
   onOpen: (issue: BoardIssue) => void;
   onEdit: (issue: BoardIssue, field: 'assignee' | 'milestone', value: string) => void;
 }>(function IssueRow({
-  issue, cols, template, offsets, pad, wrapTitles, selected, anySelected,
-  cursor, meta, pendingValue, hit, colours, onToggle, onOpen, onEdit,
+  issue, cols, offsets, pad, wrapTitles, dimensions, selected, anySelected,
+  cursor, meta, pendingValue, hit, onToggle, onOpen, onEdit,
 }, ref) {
   const click = (e: React.MouseEvent) => {
     const mods = { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey };
@@ -398,151 +363,139 @@ const IssueRow = forwardRef<HTMLDivElement, {
     onOpen(issue);
   };
 
-  const ground = selected
-    ? `color-mix(in srgb, ${ACCENT} 13%, var(--color-surface))`
-    : 'var(--color-surface)';
-
   return (
-    <div
+    <tr
       ref={ref}
       data-issue={issue.number}
+      className={selected ? 'rowsel' : undefined}
       onClick={click}
-      className="grid"
       style={{
-        gridTemplateColumns: template,
         cursor: 'pointer',
-        background: ground,
-        borderBottom: '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
-        outline: cursor ? `1px solid ${ACCENT}` : undefined,
-        outlineOffset: -1,
+        ...(cursor ? { outline: '1px solid var(--dk-gh)', outlineOffset: -1 } : {}),
       }}
     >
-      {cols.map(c => {
-        const left = offsets.get(c.key);
-        return (
-          <div
-            key={c.key}
-            style={{
-              padding: pad,
-              fontSize: 10.5,
-              color: 'var(--color-text-secondary)',
-              display: 'flex',
-              alignItems: c.key === 'title' && wrapTitles ? 'flex-start' : 'center',
-              justifyContent: c.align === 'right' ? 'flex-end' : 'flex-start',
-              minWidth: 0,
-              /* Pinned cells carry the row's own ground, or the columns behind
-                 them show through as they scroll underneath. */
-              position: left !== undefined ? 'sticky' : undefined,
-              left,
-              zIndex: left !== undefined ? 2 : undefined,
-              background: left !== undefined ? ground : undefined,
-              borderRight: left !== undefined
-                ? '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)'
-                : undefined,
-            }}
-          >
-            <Cell col={c} issue={issue} wrapTitles={wrapTitles} meta={meta}
-                  selected={selected} anySelected={anySelected} hit={hit} colours={colours}
-                  pendingValue={pendingValue} onToggle={onToggle} onEdit={onEdit} />
-          </div>
-        );
-      })}
-    </div>
+      {cols.map(c => (
+        <Cell
+          key={c.key}
+          col={c}
+          issue={issue}
+          pad={pad}
+          left={offsets.get(c.key)}
+          wrapTitles={wrapTitles}
+          dimensions={dimensions}
+          selected={selected}
+          anySelected={anySelected}
+          meta={meta}
+          pendingValue={pendingValue}
+          hit={hit}
+          onToggle={onToggle}
+          onEdit={onEdit}
+        />
+      ))}
+    </tr>
   );
 });
 
 function Cell({
-  col, issue, wrapTitles, meta, selected, anySelected, pendingValue, hit, colours,
-  onToggle, onEdit,
+  col, issue, pad, left, wrapTitles, dimensions, selected, anySelected,
+  meta, pendingValue, hit, onToggle, onEdit,
 }: {
   col: TableColumn;
   issue: BoardIssue;
+  pad: string;
+  left?: number;
   wrapTitles: boolean;
-  meta?: RepoMeta;
+  dimensions: ProposedDimension[];
   selected: boolean;
   anySelected: boolean;
+  meta?: RepoMeta;
   pendingValue?: { field: string; value: string };
   hit?: SearchHit;
-  colours: Map<string, string>;
   onToggle: (issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => void;
   onEdit: (issue: BoardIssue, field: 'assignee' | 'milestone', value: string) => void;
 }) {
   const claimed = (field: string) =>
     (pendingValue && pendingValue.field === field ? pendingValue.value : undefined);
+  const optionsOf = (key: string) => dimensions.find(d => d.dimension === key)?.options;
+
+  /* Pinned cells carry their own ground, or the columns behind them show
+     through as they scroll underneath. */
+  const style: React.CSSProperties = {
+    padding: pad,
+    textAlign: col.align === 'right' ? 'right' : 'left',
+    ...(left !== undefined
+      ? { position: 'sticky', left, zIndex: 1, background: 'var(--dk-panel)' }
+      : {}),
+  };
 
   switch (col.key) {
     case 'number':
       return (
-        <span className="flex items-center gap-1.5">
-          {(anySelected || selected) && (
-            <span onClick={e => e.stopPropagation()}>
-              <CheckboxView
-                checked={selected}
-                onChange={() => onToggle(issue, { ctrl: true, shift: false })}
-                accentColor={ACCENT}
-                size="sm"
-              />
-            </span>
-          )}
-          <span className="font-mono" style={{ color: ACCENT }}>{issue.number}</span>
-        </span>
+        <td className="num" style={style}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {(anySelected || selected) && (
+              <span
+                className={`sel${selected ? ' on' : ''}`}
+                onClick={e => { e.stopPropagation(); onToggle(issue, { ctrl: true, shift: false }); }}
+              >
+                {selected && <Ico name="check" />}
+              </span>
+            )}
+            {issue.number}
+          </span>
+        </td>
       );
 
     case 'title':
       return (
-        <span
+        <td
+          className="ttl"
           style={{
-            color: 'var(--color-text-primary)',
+            ...style,
             /* Wrapped, never clipped. An ellipsis lands exactly where the
                sentence was about to say the useful part. */
-            whiteSpace: wrapTitles ? 'normal' : 'nowrap',
-            overflow: wrapTitles ? undefined : 'hidden',
-            textOverflow: wrapTitles ? undefined : 'ellipsis',
-            overflowWrap: 'anywhere',
-            lineHeight: 1.45,
+            ...(wrapTitles
+              ? { whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip',
+                  overflowWrap: 'anywhere', maxWidth: 420 }
+              : {}),
           }}
         >
           {issue.title}
-          {/* Where the search matched — a hit in an old comment and a hit in
-              the title are different kinds of answer. */}
           {hit && hit.where !== 'title' && (
-            <span className="block text-[9px]"
-                  style={{ color: 'var(--color-text-muted)', marginTop: 1 }}>
-              <span style={{ color: ACCENT }}>in the {hit.where}</span> — {hit.snippet}
-            </span>
+            <div style={{ fontSize: 9, color: 'var(--dk-faint)', fontWeight: 400, marginTop: 1 }}>
+              <span style={{ color: 'var(--dk-gh)' }}>in the {hit.where}</span> — {hit.snippet}
+            </div>
           )}
-        </span>
+        </td>
       );
 
     case 'state':
       return (
-        <BadgeChipView
-          tone={issue.state === 'OPEN' ? 'var(--color-success)' : 'var(--color-text-muted)'}
-          size="xs"
-        >
-          {issue.state === 'OPEN' ? 'Open' : 'Closed'}
-        </BadgeChipView>
+        <td style={style}>
+          <span className={`st ${issue.state === 'OPEN' ? 'st-todo' : 'st-done'}`}>
+            <b />{issue.state === 'OPEN' ? 'Open' : 'Closed'}
+          </span>
+        </td>
       );
 
     case 'assignee': {
       const claim = claimed('assignee');
       const who = claim ?? issue.assignees[0] ?? '';
       return (
-        <EditableCell
-          what="assignee"
-          value={who}
-          pending={claim !== undefined}
-          options={meta?.assignees ?? []}
-          unavailable="Nobody on this repository can be assigned from here."
-          onPick={v => onEdit(issue, 'assignee', v)}
-        >
-          {who
-            ? <span className="flex items-center gap-1.5 min-w-0">
-                <AvatarView name={who} size="xs" />
-                <span className="truncate">{who}</span>
-              </span>
-            : <span style={{ color: 'var(--color-warning)' }}>unassigned</span>}
-        </EditableCell>
+        <td style={style}>
+          <Editable
+            what="assignee"
+            value={who}
+            pending={claim !== undefined}
+            options={meta?.assignees ?? []}
+            unavailable="Nobody on this repository can be assigned from here."
+            onPick={v => onEdit(issue, 'assignee', v)}
+          >
+            {who
+              ? <span className="who"><span className={avClass(who)}>{who[0].toUpperCase()}</span>{who}</span>
+              : <span className="who" style={{ color: 'var(--dk-amber)' }}>unassigned</span>}
+          </Editable>
+        </td>
       );
     }
 
@@ -550,72 +503,85 @@ function Cell({
       const claim = claimed('milestone');
       const title = claim ?? issue.milestone ?? '';
       return (
-        <EditableCell
-          what="milestone"
-          value={title}
-          pending={claim !== undefined}
-          options={(meta?.milestones ?? []).map(m => m.title)}
-          unavailable="This repository has no open milestones."
-          onPick={v => onEdit(issue, 'milestone', v)}
-        >
-          <span className="truncate">{title || '—'}</span>
-        </EditableCell>
+        <td style={style}>
+          <Editable
+            what="milestone"
+            value={title}
+            pending={claim !== undefined}
+            options={(meta?.milestones ?? []).map(m => m.title)}
+            unavailable="This repository has no open milestones."
+            onPick={v => onEdit(issue, 'milestone', v)}
+          >
+            <span>{title || '—'}</span>
+          </Editable>
+        </td>
       );
     }
 
     case 'labels':
       return (
-        <span className="flex gap-1 flex-wrap">
-          {issue.labels.slice(0, 3).map(l => (
-            <BadgeChipView key={l.name} tone={`#${l.color}`} size="xs">{l.name}</BadgeChipView>
-          ))}
-          {issue.labels.length > 3 && (
-            <span style={{ color: 'var(--color-text-muted)' }}>+{issue.labels.length - 3}</span>
-          )}
-        </span>
+        <td style={style}>
+          <span className="chips">
+            {issue.labels.slice(0, 3).map(l => (
+              <span key={l.name} className="chip"
+                    style={{
+                      color: `#${l.color}`,
+                      borderColor: `color-mix(in srgb, #${l.color} 45%, transparent)`,
+                      background: `color-mix(in srgb, #${l.color} 13%, transparent)`,
+                    }}>
+                {l.name}
+              </span>
+            ))}
+          </span>
+        </td>
       );
 
     case 'author':
-      return <span className="truncate">{issue.author ?? '—'}</span>;
+      return <td style={style}>{issue.author ?? '—'}</td>;
 
     case 'comments':
-      return <span className="font-mono">{issue.commentCount || '—'}</span>;
+      return <td className="dt" style={style}>{issue.commentCount || '—'}</td>;
 
     case 'age':
-      return <span className="font-mono">{issue.ageDays}d</span>;
+      return <td className="dt" style={style}>{issue.ageDays}d</td>;
 
     case 'quiet':
       return (
-        <span
-          className="font-mono"
-          style={{ color: issue.quietDays >= QUIET_DAYS ? 'var(--color-warning)' : undefined }}
-        >
+        <td className={`dt${issue.quietDays >= QUIET_DAYS ? ' late' : ''}`} style={style}>
           {issue.quietDays}d
-        </span>
+        </td>
       );
 
     case 'created':
-      return <span className="font-mono">{sinceIso(issue.createdAt)}</span>;
+      return <td className="dt" style={style}>{sinceIso(issue.createdAt)}</td>;
 
     case 'url':
-      return (
-        <span className="truncate font-mono" style={{ color: 'var(--color-text-muted)' }}>
-          {issue.url}
-        </span>
-      );
+      return <td className="dt" style={style}>{issue.url}</td>;
 
     default: {
       /*
-        A form dimension. Read-only, and it says why: the value lives in a
-        heading inside the issue body, so changing it means rewriting prose
-        somebody wrote — which is the detail screen's job, not a table cell's.
+        A form dimension. Read-only, and the tooltip says why: the value lives
+        in a heading inside the issue body, so changing it means rewriting prose
+        somebody wrote — the detail screen's job, not a table cell's.
       */
       const v = issue.dimensions[col.key];
-      if (!v) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>;
+      if (!v) return <td style={style}>—</td>;
+      const options = optionsOf(col.key);
+      const c = chipOf(v, options);
+      /* A priority-like field reads as a `.pr` dot rather than a chip, which is
+         how the mock draws it. */
+      if (/priority|severity|impact/i.test(col.key)) {
+        return (
+          <td style={style}>
+            <span className={prClass(v, options)}><b />{v}</span>
+          </td>
+        );
+      }
       return (
-        <span title={`${col.label} is a heading in the issue body — open the issue to change it`}>
-          <BadgeChipView tone={fromMap(colours, col.key, v)} size="xs">{v}</BadgeChipView>
-        </span>
+        <td style={style}
+            title={`${col.label} is a heading in the issue body — open the issue to change it`}>
+          <span className={c.className} style={c.style}>{v}</span>
+        </td>
       );
     }
   }
@@ -627,14 +593,13 @@ function Cell({
  * **Only fields that have a defined set are editable inline.** Assignee and
  * milestone each have a list, so there is nothing to get wrong. Title and body
  * are not: editing prose in a table cell is how you end up with a truncated
- * title nobody meant to save, and those open the detail screen instead.
+ * title nobody meant to save.
  *
  * The cell shows the new value immediately and marks it pending. If the write
- * fails the old value comes back with the reason attached to the row — rather
- * than the cell having quietly said something untrue for four minutes until the
- * next refresh corrected it.
+ * fails the old value comes back with the reason attached — rather than the
+ * cell having quietly said something untrue until the next refresh corrected it.
  */
-function EditableCell({ what, value, pending, options, unavailable, onPick, children }: {
+function Editable({ what, value, pending, options, unavailable, onPick, children }: {
   what: string;
   value: string;
   pending: boolean;
@@ -644,76 +609,29 @@ function EditableCell({ what, value, pending, options, unavailable, onPick, chil
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [filter, setFilter] = useState('');
-  const shown = options.filter(o => o.toLowerCase().includes(filter.toLowerCase())).slice(0, 30);
 
   return (
-    <span
-      style={{ position: 'relative', minWidth: 0, width: '100%' }}
-      onClick={e => e.stopPropagation()}
-    >
-      <span
-        onClick={() => { setOpen(o => !o); setFilter(''); }}
-        title={`Click to change the ${what}`}
-        className="flex items-center gap-1 min-w-0 cursor-pointer rounded"
-        style={{ opacity: pending ? 0.65 : 1 }}
-      >
+    <span style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+      <span onClick={() => setOpen(o => !o)} title={`Click to change the ${what}`}
+            style={{ cursor: 'pointer', opacity: pending ? 0.65 : 1, display: 'inline-flex',
+                     alignItems: 'center', gap: 5 }}>
         {children}
-        {pending && <BadgeChipView tone="var(--color-warning)" size="xs">saving</BadgeChipView>}
+        {pending && <span className="chip c-stale">saving</span>}
       </span>
       {open && (
         <>
-          <span className="fixed inset-0" style={{ zIndex: 20 }} onClick={() => setOpen(false)} />
-          <div
-            className="absolute left-0 mt-1 rounded-lg border flex flex-col"
-            style={{
-              zIndex: 21,
-              width: 190,
-              maxHeight: 220,
-              borderColor: 'var(--color-surface-border)',
-              background: 'var(--color-surface)',
-              boxShadow: '0 8px 22px rgba(0,0,0,.35)',
-            }}
-          >
-            {options.length > 8 && (
-              <input
-                autoFocus
-                value={filter}
-                onChange={e => setFilter(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
-                placeholder="Filter"
-                className="text-[10.5px] px-2 py-1.5"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: '1px solid var(--color-surface-border)',
-                  color: 'var(--color-text-primary)',
-                  outline: 'none',
-                }}
-              />
-            )}
-            <div className="overflow-y-auto flex flex-col py-1">
-              {options.length === 0 ? (
-                <span className="px-2.5 py-2 text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-                  {unavailable}
-                </span>
-              ) : shown.map(o => (
-                <button
-                  key={o}
-                  type="button"
-                  onClick={() => { setOpen(false); onPick(o); }}
-                  className="text-left px-2.5 py-1 text-[10.5px] cursor-pointer"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: o === value ? ACCENT : 'var(--color-text-secondary)',
-                    fontWeight: o === value ? 600 : 400,
-                  }}
-                >
-                  {o}
-                </button>
-              ))}
-            </div>
+          <span style={{ position: 'fixed', inset: 0, zIndex: 20 }} onClick={() => setOpen(false)} />
+          <div className="menu" style={{ position: 'absolute', left: 0, top: '100%', zIndex: 21 }}>
+            {options.length === 0 ? (
+              <div className="fct">{unavailable}</div>
+            ) : options.map(o => (
+              <button key={o} type="button" className={`fct${o === value ? ' on' : ''}`}
+                      style={{ width: '100%' }}
+                      onClick={() => { setOpen(false); onPick(o); }}>
+                <span className="bx">{o === value && <Ico name="check" />}</span>
+                {o}
+              </button>
+            ))}
           </div>
         </>
       )}
