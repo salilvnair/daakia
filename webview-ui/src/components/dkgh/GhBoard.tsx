@@ -61,6 +61,11 @@ import { GhManageViews } from './GhManageViews';
 import { GhShareView } from './GhShareView';
 import { GhChart } from './GhChart';
 import { GhCompose } from './GhCompose';
+import { GhReview } from './GhReview';
+import { Ico, type IcoName } from './GhIcons';
+import {
+  assembleBody, discardDraft, emptyDraft, type Draft,
+} from './composer-model';
 import { colourMap } from './field-colour';
 import {
   capture, countFor, diffView, loadViews, orderedViews, saveViews,
@@ -77,6 +82,14 @@ import {
 } from './board-types';
 import { since, until, atClock } from './format';
 import { ACCENT, activeAccount, type GhEnv, type RepoMeta } from './types';
+
+/** The four sections of the tab, in the order a lead uses them. */
+const SECTIONS: { id: string; label: string; icon: IcoName; disabled?: boolean }[] = [
+  { id: 'board', label: 'Board', icon: 'board' },
+  { id: 'new', label: 'New issue', icon: 'plus' },
+  { id: 'insights', label: 'Insights', icon: 'chart', disabled: true },
+  { id: 'repository', label: 'Repository', icon: 'repo', disabled: true },
+];
 
 /** The views the mock lays out, with the two that are built marked. */
 const VIEWS = [
@@ -151,6 +164,14 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   const [peek, setPeek] = useState<BoardIssue | undefined>();
   /** A key asked for one of the bulk menus — see `useKeys` and screen 05D. */
   const [autoOpen, setAutoOpen] = useState<'assign' | 'label' | 'milestone' | undefined>();
+  /**
+   * The composer's draft, held here rather than inside it.
+   *
+   * The composer and the review screen are two views of one draft, and the tab
+   * moves between them — so the draft outlives both, and going back to the
+   * board and returning does not lose what was written.
+   */
+  const [draft, setDraft] = useState<Draft>(() => emptyDraft(repo));
 
   const [shape, setShape] = useShapePrefs();
   const [meaning, setMeaning] = useMeaningPrefs(repo);
@@ -409,8 +430,13 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
 
   // ── Screen 09 — the views ────────────────────────────────────────────────
 
-  /* A different repository has different views; re-read rather than carry. */
-  useEffect(() => { setViews(loadViews(repo)); setActiveView(undefined); }, [repo]);
+  /* A different repository has different views; re-read rather than carry.
+     A draft belongs to the repository it was written against, too. */
+  useEffect(() => {
+    setViews(loadViews(repo));
+    setActiveView(undefined);
+    setDraft(emptyDraft(repo));
+  }, [repo]);
 
   const persist = useCallback((next: StoredViews) => {
     setViews(next);
@@ -635,66 +661,62 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
          style={{ position: 'relative' }}>
 
       {/* Head — repository, count, when it was last read */}
-      <div className="flex items-center gap-2.5 px-4 pt-3 flex-shrink-0 min-w-0">
-        <RepoIcon size={15} style={{ color: ACCENT, flexShrink: 0 }} />
-        <span className="text-[13px] font-medium font-mono truncate"
-              style={{ color: 'var(--color-text-primary)' }}>
-          {owner}<span style={{ color: 'var(--color-text-muted)' }}>/</span>{name}
-        </span>
-        {pending
-          ? <SkeletonView variant="block" width={46} height={15} />
-          : <BadgeChipView tone={ACCENT} size="sm">
-              {total} {issueState === 'open' ? 'open' : 'issues'}
-            </BadgeChipView>}
-        <span className="flex-1" />
-        <span className="text-[10.5px] font-mono whitespace-nowrap"
-              style={{ color: 'var(--color-text-muted)' }}>
+      <div className="head">
+        <div className="repo">
+          <Ico name="repo" />
+          <span className="path">{owner}<span>/</span>{name}</span>
+        </div>
+        {!pending && (
+          <span className="chip c-gh">
+            {total} {issueState === 'open' ? 'open' : 'issues'}
+          </span>
+        )}
+        <span className="spacer" />
+        <span className="ago">
           {frozen ? 'paused — signed out'
             : limited ? 'paused — rate limited'
-            : pending ? 'reading...'
-            : loading ? 'refreshing...'
+            : pending ? 'reading…'
+            : loading ? 'refreshing…'
             : `auto 60s · refreshed ${since(data?.fetchedAt)}`}
         </span>
         {account && onOpenAccount && (
-          <button
-            type="button"
-            onClick={onOpenAccount}
-            title="Scopes, hosts, accounts, and every command dkgh runs"
-            className="flex items-center gap-1.5 px-1.5 py-0.5 rounded cursor-pointer"
-            style={{ background: 'transparent', border: '1px solid var(--color-surface-border)' }}
-          >
-            <AvatarView name={account.login} size="xs" />
-            <span className="text-[10px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
-              {account.login}
+          <button type="button" className="btn" onClick={onOpenAccount}
+                  title="Scopes, hosts, accounts, and every command dkgh runs">
+            <span className={`av av-${account.login[0].toLowerCase()}`}>
+              {account.login[0].toUpperCase()}
             </span>
+            {account.login}
           </button>
         )}
-        <IconButtonView icon={<RefreshIcon size={12} />} tooltip="Read it again now"
-                        accentColor={ACCENT} onClick={refresh} disabled={frozen} />
-        <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={onChangeRepo}>
-          Switch
-        </ButtonView>
+        <button type="button" className="btn" onClick={refresh} disabled={frozen}
+                title="Read it again now">
+          <Ico name="refresh" />
+        </button>
+        <button type="button" className="btn" onClick={onChangeRepo}>Switch</button>
       </div>
 
       {/* The sections of the tab */}
-      <div className="px-4 pt-2.5 flex-shrink-0">
-        <UnderlineTabsView
-          accentColor={ACCENT}
-          activeId={section}
-          onChange={setSection}
-          tabs={[
-            { id: 'board', label: 'Board', icon: <IssueOpenedIcon size={12} />,
-              count: pending ? undefined : total },
-            { id: 'new', label: 'New issue', icon: <PlusIcon size={12} /> },
-            { id: 'insights', label: 'Insights', icon: <ChartBarIcon size={12} />, disabled: true },
-            { id: 'repository', label: 'Repository', icon: <RepoIcon size={12} />, disabled: true },
-          ]}
-        />
+      <div className="subtabs">
+        {SECTIONS.map(sec => (
+          <button
+            key={sec.id}
+            type="button"
+            className={`s${section === sec.id ? ' on' : ''}`}
+            disabled={sec.disabled}
+            title={sec.disabled ? `${sec.label} is not built yet` : undefined}
+            style={sec.disabled ? { opacity: 0.45, cursor: 'default' } : undefined}
+            onClick={() => { if (!sec.disabled) setSection(sec.id); }}
+          >
+            <Ico name={sec.icon} />
+            {sec.label}
+            {sec.id === 'board' && !pending && <span className="cnt">{total}</span>}
+          </button>
+        ))}
       </div>
 
       {/*
-        The composer takes the tab from here down — everything below is the
-        board's own chrome, and a filter row above a form is a filter row
+        The composer takes the tab from the sub-tabs down — everything below is
+        the board's own chrome, and a filter row above a form is a filter row
         filtering nothing.
       */}
       {section === 'new' ? (
@@ -703,8 +725,49 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           forms={data?.forms ?? []}
           noTemplates={!!data?.noTemplates}
           meta={meta}
+          draft={draft}
+          onDraft={setDraft}
+          onReview={() => setSection('review')}
+        />
+      ) : section === 'review' ? (
+        <GhReview
+          repo={repo}
+          draft={draft}
+          request={{
+            repo,
+            title: draft.title,
+            body: assembleBody(draft, (data?.forms ?? []).find(f => f.file === draft.templateFile)),
+            labels: [...new Set([
+              ...((data?.forms ?? []).find(f => f.file === draft.templateFile)?.labels ?? []),
+              ...draft.labels,
+            ])],
+            assignees: draft.assignees,
+            milestone: draft.milestone,
+          }}
+          dimensions={data?.dimensions ?? []}
           issues={all}
-          onFiled={() => { setSection('board'); refresh(); }}
+          onBack={() => setSection('new')}
+          onBody={() => undefined}
+          onFiled={() => {
+            discardDraft(repo);
+            setDraft(emptyDraft(repo));
+            setSection('board');
+            refresh();
+          }}
+          onAnother={() => {
+            /* Keeps the classification, clears the words — filing four related
+               bugs after a test run is the normal case, and re-answering the
+               same dropdowns each time is why people batch them and never
+               write them. */
+            setDraft({
+              ...emptyDraft(repo),
+              templateFile: draft.templateFile,
+              answers: draft.answers,
+              labels: draft.labels,
+              assignees: draft.assignees,
+            });
+            setSection('new');
+          }}
         />
       ) : (
         <>

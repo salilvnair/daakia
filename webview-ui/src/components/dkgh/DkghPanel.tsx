@@ -26,6 +26,8 @@ import { GhUnreachable, useReachability, diagnose } from './GhUnreachable';
 import { GhAccountPanel } from './GhAccountPanel';
 import { GhSignedOut } from './GhSignedOut';
 import { useGhSession, listenForSignOut, type HeldItem } from './session-store';
+import { GhSprite } from './GhIcons';
+import './dkgh.css';
 import { useShapePrefs } from './board-prefs';
 import type { GhEnv } from './types';
 
@@ -243,6 +245,8 @@ export function DkghPanel() {
 
   const chrome = (
     <>
+      {/* The icon sprite, mounted for as long as any dkgh screen is. */}
+      <GhSprite />
       {locate}
       <GhAccountPanel env={env} repo={repo} open={account} onClose={() => setAccount(false)} />
     </>
@@ -250,7 +254,7 @@ export function DkghPanel() {
 
   if (repo) {
     return (
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+      <div className="dkgh">
         {signedOut}
         {banner}
         <GhBoard
@@ -280,7 +284,7 @@ export function DkghPanel() {
 
   if (searching) {
     return (
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+      <div className="dkgh">
         {signedOut}
         {banner}
         <GhRepoSearch
@@ -296,7 +300,7 @@ export function DkghPanel() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+    <div className="dkgh">
       {signedOut}
       {banner}
       <GhPickRepository
