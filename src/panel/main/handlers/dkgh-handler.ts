@@ -25,7 +25,7 @@ import {
 } from '../../../services/gh/repos';
 import {
   planEdit, applyPlan, planCreate, applyCreate,
-  type EditRequest, type CreateRequest,
+  type EditRequest, type CreateRequest, type StepKind,
 } from '../../../services/gh/write';
 import { fetchRepoMeta } from '../../../services/gh/meta';
 import { GH_COMMANDS, GH_SCOPES } from '../../../services/gh/commands';
@@ -511,7 +511,13 @@ export async function handleDkghPlanCreate(
   postMessage({ type: 'dkgh:planCreate:result', plan: planCreate(req), request: req });
 }
 
-/** File it. Re-planned here, for the same reason `applyEdit` re-plans. */
+/**
+ * Run the sequence. Re-planned here, for the same reason `applyEdit` re-plans.
+ *
+ * `only` and `number` carry the retry from screen 13D — a subset of the steps,
+ * against an issue that already exists. The create is never among them however
+ * the request is shaped; see `applyCreate`.
+ */
 export async function handleDkghApplyCreate(
   msg: Record<string, unknown>,
   postMessage: PostMessage,
@@ -519,11 +525,15 @@ export async function handleDkghApplyCreate(
   const req = msg.request as CreateRequest;
   const plan = planCreate(req);
   if (plan.refusal) {
-    postMessage({ type: 'dkgh:applyCreate:result', ok: false, error: plan.refusal });
+    postMessage({ type: 'dkgh:applyCreate:result', outcomes: [], refusal: plan.refusal });
     return;
   }
   postMessage({ type: 'dkgh:applyCreate:running', plan });
-  postMessage({ type: 'dkgh:applyCreate:result', ...(await applyCreate(plan)) });
+  const result = await applyCreate(plan, {
+    only: msg.only as StepKind[] | undefined,
+    number: msg.number as number | undefined,
+  });
+  postMessage({ type: 'dkgh:applyCreate:result', ...result });
 }
 
 /** The two static tables screens 02A and 02E render. */

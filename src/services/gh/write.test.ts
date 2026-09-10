@@ -7,7 +7,7 @@
  * object — so what is asserted here is the argv itself, not a description of it.
  */
 import { describe, it, expect } from 'vitest';
-import { planEdit } from './write';
+import { planCreate, planEdit } from './write';
 
 const R = 'acme/orders-service';
 
@@ -80,5 +80,54 @@ describe('planning an edit', () => {
     for (const c of planEdit({ repo: R, numbers: [1, 2], addLabels: ['x'] }).commands) {
       expect(c.display).toBe(`gh ${c.argv.join(' ')}`);
     }
+  });
+});
+
+describe('planning a create', () => {
+  const base = { repo: R, title: 'It hangs', body: '### Summary\n\nIt hangs.' };
+
+  it('files first and edits after, so a bad milestone cannot lose the body', () => {
+    const plan = planCreate({ ...base, labels: ['bug'], milestone: 'v2.4' });
+    expect(plan.steps.map(s => s.kind)).toEqual(['create', 'labels', 'milestone']);
+    expect(plan.steps[0].argv).toEqual([
+      'issue', 'create', '--repo', R, '--title', 'It hangs', '--body-file', '-',
+    ]);
+  });
+
+  it('leaves the issue number as a placeholder, because nobody knows it yet', () => {
+    const plan = planCreate({ ...base, labels: ['bug'] });
+    expect(plan.steps[1].argv).toEqual([
+      'issue', 'edit', '{n}', '--repo', R, '--add-label', 'bug',
+    ]);
+  });
+
+  it('takes the body on stdin rather than in the argv', () => {
+    /* An issue body is prose with newlines and backticks in it, and every
+       platform caps its command line differently. */
+    const plan = planCreate(base);
+    expect(plan.steps[0].argv).toContain('--body-file');
+    expect(plan.steps[0].argv).toContain('-');
+    expect(plan.body).toBe(base.body);
+  });
+
+  it('adds no step for a field nobody set', () => {
+    expect(planCreate(base).steps.map(s => s.kind)).toEqual(['create']);
+  });
+
+  it('draws a Project step and marks it unavailable rather than hiding it', () => {
+    /* Somebody who set a priority has to see, before pressing anything, that it
+       will not be written — otherwise the gap is discovered on the board. */
+    const plan = planCreate({ ...base, project: { priority: 'Urgent' } });
+    const project = plan.steps.find(s => s.kind === 'project')!;
+    expect(project.unavailable).toMatch(/project scope/);
+  });
+
+  it('refuses a create with no title, on the screen that can fix it', () => {
+    expect(planCreate({ ...base, title: '  ' }).refusal).toBe('An issue needs a title.');
+  });
+
+  it('never puts a label through a shell', () => {
+    const plan = planCreate({ ...base, labels: ['needs info; rm -rf ~'] });
+    expect(plan.steps[1].argv).toContain('needs info; rm -rf ~');
   });
 });

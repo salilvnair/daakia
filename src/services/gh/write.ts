@@ -172,18 +172,40 @@ export async function applyPlan(plan: EditPlan): Promise<EditResult> {
 // ── Creating one ────────────────────────────────────────────────────────────
 
 /**
- * Filing a new issue.
+ * Filing a new issue, as a numbered sequence rather than one call.
  *
- * Same shape as every other write here: `planCreate` builds it and returns it
- * unrun, `applyCreate` takes a plan rather than a description. A confirm screen
- * that displays one thing and files another is not expressible.
+ * **Step one is the one that matters and it goes first.** Everything else —
+ * labels, the assignee, the milestone, and one day the Project fields — is a
+ * follow-up against an issue that already exists. If a follow-up fails the
+ * issue is still filed with its title, body and evidence, and the result screen
+ * says which fields did not land.
  *
- * The body travels on stdin rather than in the argv. An issue body is prose
- * with newlines, quotes and backticks in it, and every platform has a different
- * limit on how long a command line may be — a composer that works for four
- * paragraphs and fails silently at forty is worse than one that never worked.
- * `--body-file -` is gh's own answer to that.
+ * The alternative is what most tools do: put every flag on `gh issue create`
+ * and let GitHub validate them all at once. That is one call instead of four,
+ * and it means a milestone somebody closed while you were writing loses the
+ * whole issue. A network blip should not cost somebody four paragraphs.
+ *
+ * The whole sequence is on screen before it runs — the same promise every other
+ * write in dkgh makes, and the only honest way to present an operation that is
+ * not atomic.
  */
+export type StepKind = 'create' | 'labels' | 'assignees' | 'milestone' | 'project';
+
+export interface CreateStep {
+  kind: StepKind;
+  /** What it does, in the reader's terms. */
+  does: string;
+  /**
+   * The argv, with `{n}` where the new issue's number goes.
+   *
+   * Substituted after step one returns, because until then nobody knows it.
+   */
+  argv: string[];
+  display: string;
+  /** Set when this step cannot run here, with the reason. Never attempted. */
+  unavailable?: string;
+}
+
 export interface CreateRequest {
   repo: string;
   title: string;
@@ -191,59 +213,208 @@ export interface CreateRequest {
   labels?: string[];
   assignees?: string[];
   milestone?: string;
+  /** Project fields, for when the scope exists. Currently always skipped. */
+  project?: { status?: string; priority?: string; target?: string };
 }
 
 export interface CreatePlan {
   repo: string;
-  argv: string[];
-  /** What a person reads on the confirm screen — the body is shown separately. */
-  display: string;
+  steps: CreateStep[];
   body: string;
-  /** Why this cannot run, when it cannot. */
+  /** Why this cannot run at all, when it cannot. */
   refusal?: string;
 }
 
+/** What a Project step would need, said once rather than per row. */
+const NO_PROJECT =
+  'Needs the writable project scope, and dkgh does not write Projects yet — '
+  + 'skipped entirely rather than attempted and failed.';
+
 export function planCreate(req: CreateRequest): CreatePlan {
-  const argv = ['issue', 'create', '--repo', req.repo, '--title', req.title, '--body-file', '-'];
-  for (const l of req.labels ?? []) argv.push('--label', l);
-  for (const a of req.assignees ?? []) argv.push('--assignee', a);
-  if (req.milestone) argv.push('--milestone', req.milestone);
+  const steps: CreateStep[] = [];
+
+  const create = [
+    'issue', 'create', '--repo', req.repo, '--title', req.title, '--body-file', '-',
+  ];
+  steps.push({
+    kind: 'create',
+    does: 'Files the issue with its title and body',
+    argv: create,
+    display: `gh ${create.join(' ')}`,
+  });
+
+  const edit = (flag: string, values: string[]) => {
+    const argv = ['issue', 'edit', '{n}', '--repo', req.repo];
+    for (const v of values) argv.push(flag, v);
+    return argv;
+  };
+
+  if (req.labels?.length) {
+    const argv = edit('--add-label', req.labels);
+    steps.push({
+      kind: 'labels',
+      does: `Adds ${req.labels.join(', ')}`,
+      argv,
+      display: `gh ${argv.join(' ')}`,
+    });
+  }
+  if (req.assignees?.length) {
+    const argv = edit('--add-assignee', req.assignees);
+    steps.push({
+      kind: 'assignees',
+      does: `Assigns ${req.assignees.join(', ')}`,
+      argv,
+      display: `gh ${argv.join(' ')}`,
+    });
+  }
+  if (req.milestone) {
+    const argv = edit('--milestone', [req.milestone]);
+    steps.push({
+      kind: 'milestone',
+      does: `Sets the milestone to ${req.milestone}`,
+      argv,
+      display: `gh ${argv.join(' ')}`,
+    });
+  }
 
   /*
-    A title is the one thing GitHub will not invent. Refused here rather than
-    at gh, so the reason arrives on the screen that can fix it instead of as a
-    subprocess error after a confirm.
+    The Project rows are drawn and greyed rather than hidden. Somebody who set a
+    priority in the composer needs to see, before pressing anything, that it is
+    not going to be written — otherwise the issue is created under a false
+    expectation and the gap is discovered later on the board.
   */
-  const refusal = req.title.trim() ? undefined : 'An issue needs a title.';
+  for (const [field, value] of Object.entries(req.project ?? {})) {
+    if (!value) continue;
+    steps.push({
+      kind: 'project',
+      does: `Sets ${field} to ${value} on the Project`,
+      argv: ['project', 'item-edit', '--field', field, '--value', value],
+      display: `gh project item-edit --field ${field} --value ${value}`,
+      unavailable: NO_PROJECT,
+    });
+  }
 
   return {
     repo: req.repo,
-    argv,
-    display: `gh ${argv.join(' ')}`,
+    steps,
     body: req.body,
-    refusal,
+    /* A title is the one thing GitHub will not invent. Refused here so the
+       reason arrives on the screen that can fix it. */
+    refusal: req.title.trim() ? undefined : 'An issue needs a title.',
   };
 }
 
-export interface CreateResult {
+export interface StepOutcome {
+  kind: StepKind;
+  does: string;
+  command: string;
   ok: boolean;
-  /** The new issue's URL, which is what gh prints on success. */
-  url?: string;
-  number?: number;
+  /**
+   * True when it was never attempted — a Project step, or one after a failed
+   * create. Distinct from having failed, and the result screen says so.
+   */
+  skipped?: boolean;
   error?: string;
 }
 
-export async function applyCreate(plan: CreatePlan): Promise<CreateResult> {
-  if (plan.refusal) return { ok: false, error: plan.refusal };
+export interface CreateResult {
+  outcomes: StepOutcome[];
+  /** The new issue, when step one worked. */
+  url?: string;
+  number?: number;
+  /** True when step one worked and something after it did not. */
+  partial: boolean;
+}
 
-  const r = await run(plan.argv, { timeoutMs: 60_000, stdin: plan.body });
-  if (!r.ok) {
-    /* gh's own words. It names the label or the assignee that does not exist,
-       which is the whole difference between a fixable error and a mystery. */
-    return { ok: false, error: (r.stderr || r.failure || `exited with ${r.code}`).trim() };
+/**
+ * Run a sequence that has already been shown.
+ *
+ * Stops after step one if step one fails: there is nothing to edit. Carries on
+ * past any later failure, because a milestone that would not set is no reason
+ * to skip the assignee.
+ *
+ * `only` re-runs a subset — the retry on screen 13D. **Never step one**, which
+ * is why the retry is per failed step rather than a blanket "try again": a
+ * second create would file a second copy of an issue that already exists, which
+ * is the specific bug that screen exists to prevent.
+ */
+export async function applyCreate(
+  plan: CreatePlan,
+  opts: { only?: StepKind[]; number?: number } = {},
+): Promise<CreateResult> {
+  if (plan.refusal) return { outcomes: [], partial: false };
+
+  const outcomes: StepOutcome[] = [];
+  let number = opts.number;
+  let url: string | undefined;
+
+  const skip = (step: CreateStep, why: string | undefined) => outcomes.push({
+    kind: step.kind,
+    does: step.does,
+    command: step.display,
+    ok: false,
+    skipped: true,
+    error: why,
+  });
+
+  for (let at = 0; at < plan.steps.length; at++) {
+    const step = plan.steps[at];
+    const retrying = !!opts.only;
+    const wanted = !opts.only || opts.only.includes(step.kind);
+
+    /* A retry never re-runs the create, whatever it was asked for. */
+    if (step.unavailable || !wanted || (retrying && step.kind === 'create')) {
+      skip(step, step.unavailable);
+      continue;
+    }
+
+    if (step.kind === 'create') {
+      const r = await run(step.argv, { timeoutMs: 60_000, stdin: plan.body });
+      if (!r.ok) {
+        outcomes.push({
+          kind: 'create',
+          does: step.does,
+          command: step.display,
+          ok: false,
+          /* gh's own words, with the field it names. "Validation Failed" alone
+             sends somebody to a browser to guess. */
+          error: (r.stderr || r.failure || `exited with ${r.code}`).trim(),
+        });
+        /* Nothing exists, so nothing after this has anything to edit. */
+        for (const rest of plan.steps.slice(at + 1)) {
+          skip(rest, 'Not attempted — the issue was never created.');
+        }
+        return { outcomes, partial: false };
+      }
+      url = r.stdout.trim().split(/\r?\n/).filter(Boolean).pop() ?? '';
+      const parsed = Number(url.split('/').pop());
+      number = Number.isFinite(parsed) ? parsed : undefined;
+      outcomes.push({ kind: 'create', does: step.does, command: step.display, ok: true });
+      continue;
+    }
+
+    if (number === undefined) {
+      skip(step, 'Not attempted — no issue number to edit.');
+      continue;
+    }
+
+    const argv = step.argv.map(a => (a === '{n}' ? String(number) : a));
+    const r = await run(argv, { timeoutMs: 30_000 });
+    outcomes.push({
+      kind: step.kind,
+      does: step.does,
+      command: `gh ${argv.join(' ')}`,
+      ok: r.ok,
+      error: r.ok ? undefined : (r.stderr || r.failure || `exited with ${r.code}`).trim(),
+    });
   }
 
-  const url = r.stdout.trim().split(/\r?\n/).filter(Boolean).pop() ?? '';
-  const number = Number(url.split('/').pop());
-  return { ok: true, url, number: Number.isFinite(number) ? number : undefined };
+  const created = outcomes.find(o => o.kind === 'create');
+  const failedAfter = outcomes.some(o => o.kind !== 'create' && !o.ok && !o.skipped);
+  return {
+    outcomes,
+    url,
+    number,
+    partial: (created?.ok ?? !!opts.number) && failedAfter,
+  };
 }
