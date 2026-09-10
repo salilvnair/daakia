@@ -131,13 +131,47 @@ export function GhChips({ state, labels, onChange, onExplain, explaining }: {
           <span className="hint">
             {error || 'edit it, paste one in, or copy it to a colleague — a leading minus is “not”'}
           </span>
-          <button type="button" className="btn"
-                  onClick={() => navigator.clipboard?.writeText(query)}>
-            <Ico name="copy" />Copy
-          </button>
+          <CopyButton text={query} />
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Copy, and the proof that it happened.
+ *
+ * The icon alone: the word `Copy` beside a copy glyph says the same thing
+ * twice, in a row that is already carrying a query and a sentence of help. What
+ * the word was doing is done better by the answer — the glyph becomes a green
+ * tick for a second and a half. A press with no answer is a press people make
+ * twice, and the second one is the one where they wonder whether it worked.
+ *
+ * The timer is cleared on unmount, because a chip that closes while the tick is
+ * showing would otherwise set state on a component that is gone.
+ */
+function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (!done) return undefined;
+    const t = window.setTimeout(() => setDone(false), 1500);
+    return () => window.clearTimeout(t);
+  }, [done]);
+
+  return (
+    <button
+      type="button"
+      className={`btn copyb${done ? ' done' : ''}`}
+      title={done ? 'Copied' : 'Copy the query'}
+      aria-label={done ? 'Copied' : 'Copy the query'}
+      onClick={() => {
+        navigator.clipboard?.writeText(text);
+        setDone(true);
+      }}
+    >
+      <Ico name={done ? 'check' : 'copy'} />
+    </button>
   );
 }
 

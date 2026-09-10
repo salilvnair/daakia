@@ -54,12 +54,14 @@ const SIDEBAR: {
 ];
 
 export function GhCompose({
-  repo, forms, noTemplates, meta, draft, onDraft, onReview,
+  repo, forms, noTemplates, meta, me, draft, onDraft, onReview,
 }: {
   repo: string;
   forms: IssueForm[];
   noTemplates: boolean;
   meta?: RepoMeta;
+  /** Whoever is signed in, so `assign yourself` has somebody to assign. */
+  me?: string;
   /** Held by the tab, so leaving for the board and coming back keeps it. */
   draft: Draft;
   onDraft: (next: Draft) => void;
@@ -206,7 +208,27 @@ export function GhCompose({
                     value={draft.assignees.length
                       ? <div className="val set">{draft.assignees.join(', ')}</div>
                       : <div className="val">
-                          No one — <span style={{ color: 'var(--dk-blue)' }}>assign yourself</span>
+                          No one{me && <>
+                            {' — '}
+                            {/*
+                              The commonest assignment there is, and it was a
+                              blue word that did nothing. It is a button now, and
+                              it opens the section as well as filling it, so the
+                              change is visible where the change happened rather
+                              than only in this line.
+                            */}
+                            <button
+                              type="button"
+                              className="textlink"
+                              onClick={e => {
+                                e.stopPropagation();
+                                patch({ assignees: [...draft.assignees, me] });
+                                setOpen('assignees');
+                              }}
+                            >
+                              assign yourself
+                            </button>
+                          </>}
                         </div>}>
                 <Picks options={meta?.assignees ?? []} chosen={draft.assignees}
                        empty="Nobody on this repository can be assigned from here."
@@ -263,9 +285,24 @@ export function GhCompose({
           }
 
           if (row.key === 'dates') {
+            /*
+              Start and ETA are Project fields, not issue fields — GitHub keeps
+              them on the item's row in a Project, and dkgh has not asked for
+              the project scope. So the row says so, in the same words Priority
+              and Project use, rather than showing two dashes and letting
+              somebody work out for themselves why nothing happens when they
+              press it. See screen 02B for the scope this is waiting on.
+            */
             return (
               <Msec key={row.key} row={row} last={last}
-                    value={<div className="val">Start — · ETA —</div>} />
+                    value={
+                      <div className="val">
+                        Start — · ETA —
+                        <span style={{ color: 'var(--dk-faint)' }}>
+                          · needs the project scope
+                        </span>
+                      </div>
+                    } />
             );
           }
 
@@ -362,7 +399,7 @@ function Picks({ options, chosen, empty, note, onPick }: {
   onPick: (value: string) => void;
 }) {
   return (
-    <div style={{ margin: '6px -12px 0' }}>
+    <div style={{ margin: '6px -6px 0' }}>
       {options.length === 0 ? (
         <div className="val" style={{ padding: '0 12px' }}>{empty}</div>
       ) : options.map(o => (

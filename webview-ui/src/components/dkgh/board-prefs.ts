@@ -24,6 +24,7 @@
  * toggle.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { DEFAULT_PINNED } from './table-columns';
 
 /** Everything on a card that can be switched off. The title cannot. */
 export const CARD_FIELDS = [
@@ -60,6 +61,8 @@ export interface ShapePrefs {
   cardFields: CardField[];
   /** Ordered, and the export writes them in this order. See screen 05A. */
   columns: string[];
+  /** Frozen at the left while the rest scrolls sideways. See screen 05A. */
+  pinnedColumns: string[];
   /** A long title wraps rather than being cut. See screen 05E. */
   wrapTitles: boolean;
 }
@@ -95,6 +98,7 @@ const DEFAULT_SHAPE: ShapePrefs = {
   density: 'comfortable',
   cardFields: DEFAULT_CARD_FIELDS,
   columns: DEFAULT_COLUMNS,
+  pinnedColumns: DEFAULT_PINNED,
   wrapTitles: true,
 };
 

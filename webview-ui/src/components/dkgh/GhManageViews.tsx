@@ -76,7 +76,7 @@ export function GhManageViews({ open, stored, counts, onClose, onChange }: {
       headerIcon={<SettingsIcon size={14} />}
       title="Manage views"
       footerLeft={
-        <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+        <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
           {rows.length} view{rows.length === 1 ? '' : 's'}
           {hidden > 0 ? ` · ${hidden} hidden` : ''}
         </span>
@@ -111,8 +111,8 @@ export function GhManageViews({ open, stored, counts, onClose, onChange }: {
                   : '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
               }}
             >
-              <span style={{ fontSize: 12 }}>{v.icon ?? '•'}</span>
-              <span className="text-[11px]" style={{ color: 'var(--color-text-primary)' }}>
+              <span style={{ fontSize: 14 }}>{v.icon ?? '•'}</span>
+              <span className="text-[13px]" style={{ color: 'var(--color-text-primary)' }}>
                 {v.name}
               </span>
               {counts.get(v.id) !== undefined && (
@@ -135,7 +135,7 @@ export function GhManageViews({ open, stored, counts, onClose, onChange }: {
                     still visible. Nothing about this view leaves the screen in
                     order to ask about it.
                   */}
-                  <span className="text-[10px]" style={{ color: 'var(--color-error)' }}>
+                  <span className="text-[11.5px]" style={{ color: 'var(--color-error)' }}>
                     Delete this view?
                   </span>
                   <ButtonView size="sm" accentColor="var(--color-text-muted)"
@@ -185,7 +185,7 @@ export function GhManageViews({ open, stored, counts, onClose, onChange }: {
         })}
       </div>
 
-      <div className="text-[10px] mt-2.5" style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+      <div className="text-[11.5px] mt-2.5" style={{ color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
         Deleting a view deletes a saved filter, never an issue. The five built-in presets can be
         hidden but not deleted.
       </div>

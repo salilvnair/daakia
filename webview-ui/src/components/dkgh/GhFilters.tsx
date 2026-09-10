@@ -286,9 +286,15 @@ function FctRow({
       {label}
       {hover && !disabled && onOnly && onExcept ? (
         <span className="only">
-          <span onClick={e => { e.stopPropagation(); onOnly(); }}>only</span>
-          {' · '}
-          <span onClick={e => { e.stopPropagation(); onExcept(); }}>except</span>
+          {/*
+            Two verbs, and two real buttons. They were spans, so the two words a
+            reader is most likely to want on this row were the two with no
+            cursor and nothing under the pointer to say they could be pressed.
+          */}
+          <button type="button" className="v" title={`Only ${label}`}
+                  onClick={e => { e.stopPropagation(); onOnly(); }}>only</button>
+          <button type="button" className="v" title={`Everything except ${label}`}
+                  onClick={e => { e.stopPropagation(); onExcept(); }}>except</button>
         </span>
       ) : excluded ? (
         <span className="n" style={{ color: 'var(--dk-red)' }}>excluded</span>

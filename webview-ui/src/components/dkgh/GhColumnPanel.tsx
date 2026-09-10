@@ -1,10 +1,10 @@
 /**
  * Screen 05A — the columns, and the order they are in.
  *
- * The markup is the mock's `.colpick` of `.colrow`: a drag grip, a `.sel`
- * tick, the name, and on the right either `pinned` or a `.bsrc` badge saying
- * where the column comes from — inside the `.facets` rail every dkgh panel
- * uses, with its search box and collapsible headings.
+ * The markup is the mock's `.colpick` of `.colrow`: a drag grip, a `.sel` tick,
+ * the name, and on the right the pin and a `.bsrc` badge saying where the
+ * column comes from — inside the `.facets` rail every dkgh panel uses, with its
+ * search box and collapsible headings.
  *
  * The column set is the table's whole personality, and it is also what the
  * export writes. Picking, ordering and pinning are one panel because they are
@@ -15,14 +15,21 @@
  * repository with no issue forms, seeing that five of your eleven columns are
  * form-sourced is what explains an otherwise baffling row of dashes.
  *
- * `#` and `Title` are pinned and cannot be moved or hidden. A row you cannot
- * identify is not a row.
+ * **Pinning is a toggle, not a verdict.** `#` and `Title` start pinned, because
+ * a row you cannot identify is not a row — but the pin beside every name says
+ * so in a way you can argue with, and it is the app's own drawing pin, the one
+ * that pins a request tab. The single rule it keeps is that a pinned column
+ * cannot be hidden: freezing a column you cannot see is not a state worth being
+ * able to reach, so the row asks you to unpin it first.
  */
 import { useState } from 'react';
 import { Ico } from './GhIcons';
+import { PinIcon, UnpinIcon } from '../../icons';
 import { PanelSearch, PanelSection, matches } from './GhPanel';
 import { DEFAULT_COLUMNS } from './board-prefs';
-import { arrange, catalogue, SOURCE_LABEL, type TableColumn } from './table-columns';
+import {
+  arrange, catalogue, DEFAULT_PINNED, SOURCE_LABEL, type TableColumn,
+} from './table-columns';
 import type { ProposedDimension } from './board-types';
 
 const SOURCE_CLASS: Record<string, string> = {
@@ -32,18 +39,20 @@ const SOURCE_CLASS: Record<string, string> = {
 };
 
 export function GhColumnPanel({
-  dimensions, columns, onColumns, wrapTitles, onWrapTitles,
+  dimensions, columns, onColumns, pinned, onPinned, wrapTitles, onWrapTitles,
 }: {
   dimensions: ProposedDimension[];
   columns: string[];
   onColumns: (next: string[]) => void;
+  pinned: string[];
+  onPinned: (next: string[]) => void;
   wrapTitles: boolean;
   onWrapTitles: (next: boolean) => void;
 }) {
   const [term, setTerm] = useState('');
 
   const all = catalogue(dimensions);
-  const shown = arrange(all, columns);
+  const shown = arrange(all, columns, pinned);
   const shownKeys = new Set(shown.map(c => c.key));
   const hidden = all.filter(c => !shownKeys.has(c.key));
 
@@ -67,6 +76,17 @@ export function GhColumnPanel({
     onColumns(merge(columns, order));
   };
 
+  /* Pinning a hidden column shows it: a frozen column nobody can see is not a
+     state worth being able to reach, and neither is the click that reaches it. */
+  const togglePin = (key: string) => {
+    if (pinned.includes(key)) {
+      onPinned(pinned.filter(k => k !== key));
+      return;
+    }
+    onPinned([...pinned, key]);
+    if (!columns.includes(key)) onColumns([...merge(columns, shown.map(c => c.key)), key]);
+  };
+
   return (
     <div className="facets">
       <PanelSearch value={term} onChange={setTerm} placeholder="Search columns…" count={showing} />
@@ -75,7 +95,8 @@ export function GhColumnPanel({
         <PanelSection
           title="Shown — in this order"
           note={`${shown.length} of ${all.length}`}
-          onClear={() => onColumns(DEFAULT_COLUMNS)}
+          clearTitle="Back to the default columns"
+          onClear={() => { onColumns(DEFAULT_COLUMNS); onPinned(DEFAULT_PINNED); }}
         >
           <div className="colpick">
             {visibleShown.map((c, i) => (
@@ -84,22 +105,19 @@ export function GhColumnPanel({
                 <span className="sel on"><Ico name="check" /></span>
                 {c.label}
                 <span className="sp" />
-                {c.pinned ? (
-                  <span style={{ fontSize: 9, color: 'var(--dk-gh)' }}>pinned</span>
-                ) : (
-                  <>
-                    <span className={`bsrc ${SOURCE_CLASS[c.source]}`}>
-                      {SOURCE_LABEL[c.source]}
-                    </span>
-                    <Tiny label="Move up" disabled={i === 0 || visibleShown[i - 1].pinned}
-                          onClick={() => move(c.key, -1)} name="chev"
-                          style={{ transform: 'rotate(180deg)' }} />
-                    <Tiny label="Move down" disabled={i === visibleShown.length - 1}
-                          onClick={() => move(c.key, 1)} name="chev" />
-                    <Tiny label="Hide" name="check"
-                          onClick={() => onColumns(columns.filter(k => k !== c.key))} />
-                  </>
-                )}
+                <span className={`bsrc ${SOURCE_CLASS[c.source]}`}>
+                  {SOURCE_LABEL[c.source]}
+                </span>
+                <Pin on={!!c.pinned} label={c.label} onClick={() => togglePin(c.key)} />
+                <Tiny label="Move up" name="chev" style={{ transform: 'rotate(180deg)' }}
+                      disabled={c.pinned || i === 0 || !!visibleShown[i - 1]?.pinned}
+                      onClick={() => move(c.key, -1)} />
+                <Tiny label="Move down" name="chev"
+                      disabled={c.pinned || i === visibleShown.length - 1}
+                      onClick={() => move(c.key, 1)} />
+                <Tiny label={c.pinned ? 'Unpin it before hiding it' : 'Hide'} name="x"
+                      disabled={c.pinned}
+                      onClick={() => onColumns(columns.filter(k => k !== c.key))} />
               </div>
             ))}
           </div>
@@ -116,6 +134,7 @@ export function GhColumnPanel({
                 {c.label}
                 <span className="sp" />
                 <span className={`bsrc ${SOURCE_CLASS[c.source]}`}>{SOURCE_LABEL[c.source]}</span>
+                <Pin on={false} label={c.label} onClick={() => togglePin(c.key)} />
                 <Tiny label="Show" name="plus"
                       onClick={() => onColumns([...merge(columns, shown.map(x => x.key)), c.key])} />
               </div>
@@ -161,11 +180,33 @@ function merge(stored: string[], order: string[]): string[] {
   return [...order, ...stored.filter(k => !known.has(k))];
 }
 
+/**
+ * The pin, and the same pin the app pins a tab with.
+ *
+ * It only appears on hover unless the column is pinned, so a panel at rest is a
+ * list of column names rather than a column of identical icons — but a pinned
+ * column keeps its pin lit, because that is the state you need to see without
+ * hunting for it.
+ */
+function Pin({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`pin${on ? ' on' : ''}`}
+      title={on ? `Unpin ${label}` : `Pin ${label} to the left`}
+      aria-pressed={on}
+      onClick={onClick}
+    >
+      {on ? <UnpinIcon size={11} /> : <PinIcon size={11} />}
+    </button>
+  );
+}
+
 function Tiny({ label, disabled, onClick, name, style }: {
   label: string;
   disabled?: boolean;
   onClick: () => void;
-  name: 'chev' | 'check' | 'plus';
+  name: 'chev' | 'x' | 'plus';
   style?: React.CSSProperties;
 }) {
   return (

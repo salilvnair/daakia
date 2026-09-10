@@ -16,6 +16,13 @@
  * `Space` is also the peek: held, it opens the panel; tapped, it selects. One
  * key with two meanings separated by the hold, which is how a spring-loaded
  * gesture is supposed to work — see screen 04D.
+ *
+ * **The sheet is grouped, and reads left to right.** Fourteen bindings in one
+ * ragged column with the keys right-aligned against a wall is a list you scan
+ * three times to find `m`. They are four short groups instead — where you are,
+ * what you open, what you do to it, what you go looking for — in two columns,
+ * each row reading *name, then key*, the order somebody thinks in when they
+ * already know what they want to do and are only after the shortcut for it.
  */
 import { useEffect } from 'react';
 import { KbdView } from '@salilvnair/dui';
@@ -24,22 +31,53 @@ import { ACCENT } from './types';
 /** How long Space has to be down before it is a peek rather than a select. */
 export const PEEK_HOLD_MS = 220;
 
-export const BINDINGS: { keys: string[]; joiner?: string; does: string }[] = [
-  { keys: ['j', 'k'], joiner: ' ', does: 'move the cursor' },
-  { keys: ['Space'], does: 'select this row · hold to peek' },
-  { keys: ['Shift', 'j'], joiner: '+', does: 'extend the selection' },
-  { keys: ['Enter'], does: 'open the issue' },
-  { keys: ['o'], does: 'open it on github.com' },
-  { keys: ['a'], does: 'assign…' },
-  { keys: ['l'], does: 'label…' },
-  { keys: ['m'], does: 'milestone…' },
-  { keys: ['c'], does: 'close' },
-  { keys: ['/'], does: 'jump to search' },
-  { keys: ['f'], does: 'open the filters' },
-  { keys: ['g'], does: 'group by…' },
-  { keys: ['?'], does: 'this list' },
-  { keys: ['Esc'], does: 'clear the selection' },
+export interface Binding { keys: string[]; joiner?: string; does: string }
+
+/**
+ * The bindings, in the four groups the sheet shows them in.
+ *
+ * `BINDINGS` below is still the flat list, because everything else that reads
+ * this file — the status line, the tests — wants one list and does not care
+ * which heading a key sits under.
+ */
+export const KEY_GROUPS: { title: string; keys: Binding[] }[] = [
+  {
+    title: 'Move and select',
+    keys: [
+      { keys: ['j', 'k'], joiner: ' ', does: 'move the cursor' },
+      { keys: ['Space'], does: 'select this row · hold to peek' },
+      { keys: ['Shift', 'j'], joiner: '+', does: 'extend the selection' },
+      { keys: ['Esc'], does: 'clear the selection' },
+    ],
+  },
+  {
+    title: 'Open',
+    keys: [
+      { keys: ['Enter'], does: 'open the issue' },
+      { keys: ['o'], does: 'open it on github.com' },
+    ],
+  },
+  {
+    title: 'Act on it',
+    keys: [
+      { keys: ['a'], does: 'assign…' },
+      { keys: ['l'], does: 'label…' },
+      { keys: ['m'], does: 'milestone…' },
+      { keys: ['c'], does: 'close' },
+    ],
+  },
+  {
+    title: 'Find',
+    keys: [
+      { keys: ['/'], does: 'jump to search' },
+      { keys: ['f'], does: 'open the filters' },
+      { keys: ['g'], does: 'group by…' },
+      { keys: ['?'], does: 'this list' },
+    ],
+  },
 ];
+
+export const BINDINGS: Binding[] = KEY_GROUPS.flatMap(g => g.keys);
 
 export function GhKeys({ onClose }: { onClose: () => void }) {
   /*
@@ -57,39 +95,72 @@ export function GhKeys({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <div className="absolute inset-0" style={{ zIndex: 40, background: 'rgba(0,0,0,.45)' }}
+      <div className="absolute inset-0" style={{ zIndex: 40, background: 'rgba(0,0,0,.5)' }}
            onClick={onClose} />
-      <div className="absolute rounded-xl border overflow-hidden"
-           style={{
-             left: '50%',
-             top: '50%',
-             transform: 'translate(-50%, -50%)',
-             width: 'min(400px, 88%)',
-             zIndex: 41,
-             borderColor: 'var(--color-surface-border)',
-             background: 'var(--color-surface)',
-             boxShadow: '0 14px 42px rgba(0,0,0,.5)',
-           }}>
-        <div className="px-3 py-2 text-[11px] font-medium"
-             style={{
-               color: 'var(--color-text-primary)',
-               borderBottom: '1px solid var(--color-surface-border)',
-               background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`,
-             }}>
-          Keys
+      <div
+        className="absolute rounded-xl border overflow-hidden"
+        role="dialog"
+        aria-label="Keyboard shortcuts"
+        style={{
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 'min(680px, 92%)',
+          maxHeight: '86%',
+          display: 'flex',
+          flexDirection: 'column',
+          zIndex: 41,
+          borderColor: 'var(--color-surface-border)',
+          background: 'var(--color-surface)',
+          boxShadow: '0 18px 56px rgba(0,0,0,.55)',
+        }}
+      >
+        <div
+          className="flex items-center gap-2 px-4 py-3"
+          style={{
+            borderBottom: '1px solid var(--color-surface-border)',
+            background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`,
+          }}
+        >
+          <span className="text-[14px] font-semibold" style={{ color: ACCENT }}>
+            Keyboard shortcuts
+          </span>
+          <span className="flex-1" />
+          <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+            press <KbdView keys="Esc" size="xs" /> to close
+          </span>
         </div>
-        <div className="p-2 grid gap-x-3 gap-y-1"
-             style={{ gridTemplateColumns: 'auto 1fr' }}>
-          {BINDINGS.map(b => (
-            <Fragmentish key={b.keys.join('+')} keys={b.keys} joiner={b.joiner} does={b.does} />
+
+        {/*
+          Two columns on anything but a narrow panel, and the groups flow down
+          them. `break-inside: avoid` is what keeps a heading from ending up at
+          the bottom of the first column with its keys at the top of the second.
+        */}
+        <div
+          className="p-4 overflow-y-auto"
+          style={{ columnCount: 2, columnGap: 28 }}
+        >
+          {KEY_GROUPS.map(g => (
+            <section key={g.title} style={{ breakInside: 'avoid', marginBottom: 18 }}>
+              <h3
+                className="text-[10px] font-bold uppercase mb-1.5"
+                style={{ letterSpacing: '.09em', color: 'var(--color-text-muted)' }}
+              >
+                {g.title}
+              </h3>
+              {g.keys.map(b => <Row key={b.keys.join('+')} binding={b} />)}
+            </section>
           ))}
         </div>
-        <div className="px-3 py-2 text-[9.5px]"
-             style={{
-               color: 'var(--color-text-muted)',
-               borderTop: '1px solid var(--color-surface-border)',
-               lineHeight: 1.55,
-             }}>
+
+        <div
+          className="px-4 py-3 text-[11.5px]"
+          style={{
+            color: 'var(--color-text-secondary)',
+            borderTop: '1px solid var(--color-surface-border)',
+            lineHeight: 1.55,
+          }}
+        >
           Every one of these acts on <b style={{ color: 'var(--color-text-primary)' }}>the
           selection if there is one</b>, otherwise on the row under the cursor.
         </div>
@@ -98,22 +169,31 @@ export function GhKeys({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** One binding, as two grid cells rather than a row, so the keys line up. */
-function Fragmentish({ keys, joiner, does }: { keys: string[]; joiner?: string; does: string }) {
+/**
+ * One binding: what it does, then the key.
+ *
+ * The name leads because that is the half you are searching for — you arrive
+ * knowing you want to set a milestone and leave knowing it is `m`. The dotted
+ * rule between them is there so the eye can cross a wide column without losing
+ * the line.
+ */
+function Row({ binding }: { binding: Binding }) {
+  const { keys, joiner, does } = binding;
   return (
-    <>
-      <span className="flex items-center gap-1 justify-end">
-        {joiner === '+' ? (
-          <KbdView keys={keys} size="xs" />
-        ) : (
-          keys.map(k => <KbdView key={k} keys={k} size="xs" />)
-        )}
-      </span>
-      <span className="text-[10.5px] flex items-center"
-            style={{ color: 'var(--color-text-secondary)' }}>
+    <div className="flex items-baseline gap-2 py-[3px]">
+      <span className="text-[12.5px]" style={{ color: 'var(--color-text-secondary)' }}>
         {does}
       </span>
-    </>
+      <span
+        className="flex-1"
+        style={{ borderBottom: '1px dotted var(--color-surface-border)', minWidth: 8 }}
+      />
+      <span className="flex items-center gap-1 shrink-0">
+        {joiner === '+'
+          ? <KbdView keys={keys} size="xs" />
+          : keys.map(k => <KbdView key={k} keys={k} size="xs" />)}
+      </span>
+    </div>
   );
 }
 

@@ -7,9 +7,14 @@
  * glance that five of your eleven columns come from templates this repository
  * never declared explains an otherwise baffling row of dashes.
  *
- * **`#` and `Title` are pinned.** They stay while the rest scrolls sideways,
- * because a row you cannot identify is not a row. They are also the only two
- * that cannot be switched off, for the same reason.
+ * **`#` and `Title` start pinned.** They stay put while the rest scrolls
+ * sideways, because a row you cannot identify is not a row — but that is a
+ * default, not a law. Any column can be pinned and any pinned column can be
+ * unpinned, from the pin beside its name in the picker.
+ *
+ * What pinning still decides is that a pinned column cannot be hidden. Freezing
+ * a column you cannot see is not a state worth being able to reach, so the
+ * picker asks you to unpin it first rather than quietly doing both.
  *
  * The catalogue is built per repository, because the form-sourced half of it is
  * whatever that repository's templates happened to declare. `Project`-sourced
@@ -25,7 +30,11 @@ export interface TableColumn {
   key: string;
   label: string;
   source: ColumnSource;
-  /** Stays put while the rest scrolls sideways, and cannot be hidden. */
+  /**
+   * Stays put while the rest scrolls sideways, and cannot be hidden while it
+   * does. Set by `arrange` from the reader's own list, not by the catalogue —
+   * the flag on `BASE` below is only what a fresh install starts with.
+   */
   pinned?: boolean;
   width: number;
   align?: 'left' | 'right';
@@ -82,9 +91,23 @@ export function catalogue(dimensions: ProposedDimension[]): TableColumn[] {
   return [BASE[0], BASE[1], ...fromForms, ...BASE.slice(2)];
 }
 
-/** The columns that are on, in the order they were arranged. */
-export function arrange(all: TableColumn[], chosen: string[]): TableColumn[] {
-  const byKey = new Map(all.map(c => [c.key, c]));
+/** Which columns are pinned when nobody has said otherwise. */
+export const DEFAULT_PINNED = ['number', 'title'];
+
+/**
+ * The columns that are on, in the order they were arranged — pinned ones first.
+ *
+ * `pinned` is the reader's list, and it wins over the flag in the catalogue: a
+ * column they unpinned scrolls with the rest even though it shipped frozen.
+ * Pinned columns are lifted to the front in the order the reader pinned them,
+ * because a frozen column in the middle of the table is a column that overlaps
+ * whatever is to its left the moment anybody scrolls.
+ */
+export function arrange(
+  all: TableColumn[], chosen: string[], pinned: string[] = DEFAULT_PINNED,
+): TableColumn[] {
+  const isPinned = new Set(pinned);
+  const byKey = new Map(all.map(c => [c.key, { ...c, pinned: isPinned.has(c.key) }]));
   const out: TableColumn[] = [];
   const seen = new Set<string>();
 
@@ -100,12 +123,15 @@ export function arrange(all: TableColumn[], chosen: string[]): TableColumn[] {
     out.push(col);
   }
 
-  /* The pinned pair is not optional. An arrangement that lost them — an old
-     preference, a hand-edited store — still renders a table you can read. */
-  for (const col of all) {
-    if (col.pinned && !seen.has(col.key)) out.unshift(col);
+  /* A pinned column is on, whatever the arrangement says. An arrangement that
+     lost one — an old preference, a hand-edited store — still renders a table
+     you can read. */
+  for (const key of pinned) {
+    const col = byKey.get(key);
+    if (col && !seen.has(key)) { seen.add(key); out.push(col); }
   }
-  return out;
+
+  return [...out.filter(c => c.pinned), ...out.filter(c => !c.pinned)];
 }
 
 export const SOURCE_LABEL: Record<ColumnSource, string> = {

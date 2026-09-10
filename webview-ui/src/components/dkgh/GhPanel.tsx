@@ -47,7 +47,9 @@ export function PanelSearch({ value, onChange, placeholder, count }: {
  * Open by default: a panel that starts folded up hides the thing it exists to
  * show, and the reader has to open every section to find out what is in them.
  */
-export function PanelSection({ title, count, note, defaultOpen = true, onClear, children }: {
+export function PanelSection({
+  title, count, note, defaultOpen = true, onClear, clearTitle, children,
+}: {
   title: string;
   /** The number beside the heading — how many rows are under it. */
   count?: number | string;
@@ -55,25 +57,43 @@ export function PanelSection({ title, count, note, defaultOpen = true, onClear, 
   note?: string;
   defaultOpen?: boolean;
   onClear?: () => void;
+  /** What clearing this section actually does, for the pointer to say. */
+  clearTitle?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
     <div className="facet">
+      {/*
+        The chevron leads, and the count is last.
+
+        It sat on the right, after the count — which put the heading's number in
+        a different column from the numbers on every row beneath it, two of the
+        same thing at two different x positions. Leading it is what a disclosure
+        triangle does everywhere else anyway, and it leaves the count where the
+        rows put theirs: hard against the same right gutter, one column, top to
+        bottom.
+      */}
       <button type="button" className="fh" onClick={() => setOpen(o => !o)}>
+        <Ico name="chev" className={`chev${open ? '' : ' shut'}`} />
         {title}
+        {/*
+          Reset is an icon, not the word `clear`. The heading already carries a
+          chevron, a title and a count; a fourth piece of text in the same row is
+          the one you read last and the one you meant to press.
+        */}
         {onClear && open && (
           <span
-            className="only"
-            style={{ opacity: 1, marginLeft: 6 }}
+            className="clr"
+            role="button"
+            title={clearTitle ?? 'Reset this section'}
             onClick={e => { e.stopPropagation(); onClear(); }}
           >
-            clear
+            <Ico name="x" />
           </span>
         )}
         <span className="n">{note ?? count ?? ''}</span>
-        <Ico name="chev" className={`chev${open ? '' : ' shut'}`} />
       </button>
       {open && children}
     </div>

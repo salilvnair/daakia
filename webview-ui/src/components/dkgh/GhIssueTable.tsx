@@ -58,13 +58,15 @@ type Row =
   | { kind: 'issue'; key: string; issue: BoardIssue };
 
 export function GhIssueTable({
-  groups, showGroups, dimensions, columns, density, wrapTitles, sort, onSort,
+  groups, showGroups, dimensions, columns, pinned, density, wrapTitles, sort, onSort,
   selected, onToggle, onOpen, cursor, meta, onEdit, pending, hits, renderHeader,
 }: {
   groups: Group[];
   showGroups: boolean;
   dimensions: ProposedDimension[];
   columns: string[];
+  /** Frozen at the left while the rest scrolls sideways — the reader's own list. */
+  pinned: string[];
   density: Density;
   wrapTitles: boolean;
   sort: SortLevel[];
@@ -79,7 +81,9 @@ export function GhIssueTable({
   hits?: Map<number, SearchHit>;
   renderHeader: (group: Group) => React.ReactNode;
 }) {
-  const cols = useMemo(() => arrange(catalogue(dimensions), columns), [dimensions, columns]);
+  const cols = useMemo(
+    () => arrange(catalogue(dimensions), columns, pinned), [dimensions, columns, pinned],
+  );
 
   /* One flat list, headers included, so the window can be taken over the whole
      thing rather than per group. Sorting stays inside each group, which is what

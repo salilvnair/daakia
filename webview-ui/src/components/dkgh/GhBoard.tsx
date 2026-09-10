@@ -37,7 +37,7 @@ import { useSettledWait } from '../../hooks/useSettledWait';
 import {
   RefreshIcon, LayoutGridIcon, TableIcon, IssueOpenedIcon, RepoIcon, PlusIcon,
   ChartBarIcon, ColumnsIcon, TimelineIcon, FilterIcon, DownloadIcon, KeyboardIcon,
-  TagIcon, ClockIcon, SaveIcon,
+  TagIcon, ClockIcon, SaveIcon, SettingsIcon,
 } from '../../icons';
 import { GhNoAccess } from './GhNoAccess';
 import { GhCards, Header } from './GhCards';
@@ -350,7 +350,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     laid out" rather than "everything between these two issue numbers".
   */
   const ordered = useMemo(() => {
-    const cols = arrange(catalogue(data?.dimensions ?? []), shape.columns);
+    const cols = arrange(catalogue(data?.dimensions ?? []), shape.columns, shape.pinnedColumns);
     return groups.flatMap(g => view === 'table'
       ? sortIssues(g.issues, meaning.sort, cols, data?.dimensions ?? [])
       : g.issues);
@@ -724,6 +724,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
           forms={data?.forms ?? []}
           noTemplates={!!data?.noTemplates}
           meta={meta}
+          me={ctx.me}
           draft={draft}
           onDraft={setDraft}
           onReview={() => setSection('review')}
@@ -771,24 +772,64 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
       ) : (
         <>
 
-      {/* The views — screen 09's `.viewbar` */}
+      {/*
+        The saved views — screen 09's `.viewbar`, as a segmented control.
+
+        They were a second row of tabs directly under the section tabs, and two
+        rows of near-identical tabs a few pixels apart is a bar nobody can read:
+        the eye cannot tell which row it is choosing from. A section is *where
+        you are in the tab*; a saved view is *which question the board is
+        answering*. Two different kinds of choice, so they get two different
+        kinds of control — tabs above, and the same recessed segmented strip
+        dk8s uses for its artifact filter here.
+
+        The strip is built here rather than taken from the shared control,
+        because a segment has to carry a count. `Stale & unowned 0` is the whole
+        reason to look at this row — a view that is empty right now is one you
+        can stop reading — and the shared control takes a string, which would
+        have left the number loose in the label instead of in a badge you can
+        find without reading.
+      */}
       <div className="viewbar">
-        {shownViews.map(v => (
-          <button
-            key={v.id}
-            type="button"
-            className={`v${v.id === activeView ? ' on' : ''}`}
-            onClick={() => openView(v.id === activeView ? undefined : v.id)}
-          >
-            <Ico name="cards" />
-            {v.name}
-            {viewDiff?.dirty && v.id === activeView && <span className="dot" />}
-            <span className="cx">{viewCounts.get(v.id) ?? 0}</span>
+        <div className="vseg" role="tablist" aria-label="Saved views">
+          {shownViews.map(v => {
+            const on = v.id === activeView;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                className={`vs${on ? ' on' : ''}`}
+                title={on ? 'Click again to leave this view' : v.name}
+                onClick={() => openView(on ? undefined : v.id)}
+              >
+                {v.name}
+                <span className="cnt">{viewCounts.get(v.id) ?? 0}</span>
+                {viewDiff?.dirty && on && <span className="dot" title="Changed since saved" />}
+              </button>
+            );
+          })}
+          {/*
+            `New view` is the last segment rather than a button beside the
+            strip. Saving the filters you are looking at is how the next tab in
+            this row comes to exist, so it belongs at the end of the row it will
+            join — the same place a browser puts `+`.
+          */}
+          <button type="button" className="vs add" onClick={() => setSaving({})}>
+            <Ico name="plus" />New view
           </button>
-        ))}
-        <button type="button" className="add" onClick={() => setSaving({})}>+ New view</button>
+        </div>
         <span className="sp" style={{ flex: 1 }} />
-        <button type="button" className="add" onClick={() => setManaging(true)}>Manage</button>
+        {/*
+          Managing views is housekeeping, not a view — so it is a gear with no
+          button around it, sitting apart from the strip rather than looking
+          like one more thing to choose from.
+        */}
+        <button type="button" className="vgear" title="Manage views"
+                aria-label="Manage views" onClick={() => setManaging(true)}>
+          <SettingsIcon size={14} />
+        </button>
       </div>
 
       {/* 09B — the view has been changed, and nothing is saved until you say so */}
@@ -957,6 +998,8 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             dimensions={data?.dimensions ?? []}
             columns={shape.columns}
             onColumns={columns => setShape({ columns })}
+            pinned={shape.pinnedColumns}
+            onPinned={pinnedColumns => setShape({ pinnedColumns })}
             wrapTitles={shape.wrapTitles}
             onWrapTitles={wrapTitles => setShape({ wrapTitles })}
           />
@@ -1026,6 +1069,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 showGroups={meaning.groupBy !== 'none'}
                 dimensions={data?.dimensions ?? []}
                 columns={shape.columns}
+                pinned={shape.pinnedColumns}
                 density={shape.density}
                 wrapTitles={shape.wrapTitles}
                 sort={meaning.sort}
