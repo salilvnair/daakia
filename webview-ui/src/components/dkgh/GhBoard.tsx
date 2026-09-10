@@ -68,7 +68,7 @@ import {
 } from './composer-model';
 import { colourMap } from './field-colour';
 import {
-  capture, countFor, diffView, loadViews, orderedViews, saveViews,
+  capture, countFor, describeDiff, diffView, loadViews, orderedViews, saveViews,
   type BoardSnapshot, type CapturePart, type SavedView, type StoredViews,
 } from './views-model';
 import { GhPeek } from './GhPeek';
@@ -92,11 +92,11 @@ const SECTIONS: { id: string; label: string; icon: IcoName; disabled?: boolean }
 ];
 
 /** The views the mock lays out, with the two that are built marked. */
-const VIEWS = [
-  { id: 'cards', label: 'Cards', icon: <LayoutGridIcon size={11} />, ready: true },
-  { id: 'table', label: 'Table', icon: <TableIcon size={11} />, ready: true },
-  { id: 'columns', label: 'Columns', icon: <ColumnsIcon size={11} />, ready: false },
-  { id: 'roadmap', label: 'Roadmap', icon: <TimelineIcon size={11} />, ready: false },
+const VIEWS: { id: string; label: string; icon: IcoName; ready: boolean }[] = [
+  { id: 'cards', label: 'Cards', icon: 'cards', ready: true },
+  { id: 'table', label: 'Table', icon: 'table', ready: true },
+  { id: 'columns', label: 'Columns', icon: 'board', ready: false },
+  { id: 'roadmap', label: 'Roadmap', icon: 'tl', ready: false },
 ];
 
 export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, frozen = false }: {
@@ -772,92 +772,101 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
       ) : (
         <>
 
-      {/* The views, and the bar that appears when one has been changed */}
-      <GhViewBar
-        views={shownViews}
-        activeId={activeView}
-        counts={viewCounts}
-        diff={viewDiff}
-        labels={labels}
-        onPick={openView}
-        onNew={() => setSaving({})}
-        onAction={onViewAction}
-        onManage={() => setManaging(true)}
-        onReset={() => openView(activeView)}
-        onSaveAs={() => setSaving({})}
-        onUpdate={() => setSaving({ existing: active })}
-      />
+      {/* The views — screen 09's `.viewbar` */}
+      <div className="viewbar">
+        {shownViews.map(v => (
+          <button
+            key={v.id}
+            type="button"
+            className={`v${v.id === activeView ? ' on' : ''}`}
+            onClick={() => openView(v.id === activeView ? undefined : v.id)}
+          >
+            <Ico name="cards" />
+            {v.name}
+            {viewDiff?.dirty && v.id === activeView && <span className="dot" />}
+            <span className="cx">{viewCounts.get(v.id) ?? 0}</span>
+          </button>
+        ))}
+        <button type="button" className="add" onClick={() => setSaving({})}>+ New view</button>
+        <span className="sp" style={{ flex: 1 }} />
+        <button type="button" className="add" onClick={() => setManaging(true)}>Manage</button>
+      </div>
+
+      {/* 09B — the view has been changed, and nothing is saved until you say so */}
+      {viewDiff?.dirty && active && (
+        <div className="dirtybar">
+          <b>You have changed this view.</b> {describeDiff(viewDiff, labels)}
+          <span className="sp" style={{ flex: 1 }} />
+          <button type="button" className="btn" onClick={() => openView(activeView)}>
+            Reset to saved
+          </button>
+          <button type="button" className="btn" onClick={() => setSaving({})}>
+            Save as new view
+          </button>
+          <button type="button" className="btn go" onClick={() => setSaving({ existing: active })}>
+            Update “{active.name}”
+          </button>
+        </div>
+      )}
 
       {/* Toolbar */}
-      <div className="flex items-center gap-[7px] px-4 py-2 flex-wrap flex-shrink-0 min-w-0"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <div className="flex-1" style={{ minWidth: 180 }} ref={searchRef}>
-          <SearchFieldView
+      <div className="toolbar">
+        <span className="search" ref={searchRef}>
+          <Ico name="search" />
+          <input
             value={filter.search.text}
-            onChange={text => setFilter(f => ({ ...f, search: { ...f.search, text } }))}
-            onClear={() => setFilter(f => ({ ...f, search: { ...f.search, text: '' } }))}
+            onChange={e => setFilter(f => ({ ...f, search: { ...f.search, text: e.target.value } }))}
             placeholder="Search issues"
-            size="sm"
-            accentColor={ACCENT}
-            width="100%"
+            style={{
+              flex: 1, background: 'transparent', border: 'none', outline: 'none',
+              color: 'var(--dk-text)', font: 'inherit',
+            }}
           />
-        </div>
-        <TogglePillView
-          icon={<FilterIcon size={11} />}
-          accentColor={ACCENT}
-          active={panel === 'filters'}
-          count={filter.terms.length || undefined}
-          title="Every facet, with a live count"
+        </span>
+        <button
+          type="button"
+          className={`pill${panel === 'filters' ? ' on' : ''}`}
           onClick={() => setPanel(p => (p === 'filters' ? 'none' : 'filters'))}
         >
-          Filters
-        </TogglePillView>
-        <TogglePillView
-          icon={view === 'table' ? <ColumnsIcon size={11} /> : <LayoutGridIcon size={11} />}
-          accentColor={ACCENT}
-          active={panel === 'view'}
-          title={view === 'table'
-            ? 'Columns, their order, and how long values behave'
-            : 'Grouping, density, and what is on each card'}
-          onClick={() => setPanel(p => (p === 'view' ? 'none' : 'view'))}
-        >
-          {view === 'table' ? 'Columns' : 'Options'}
-        </TogglePillView>
+          <Ico name="filter" />Filters {filter.terms.length > 0 && <b>{filter.terms.length}</b>}
+        </button>
         {VIEWS.map(v => (
-          <TogglePillView
+          <button
             key={v.id}
-            icon={v.icon}
-            accentColor={ACCENT}
-            active={view === v.id}
+            type="button"
+            className={`pill${view === v.id ? ' on' : ''}`}
             disabled={!v.ready}
             title={v.ready ? undefined : `${v.label} is not built yet`}
             onClick={() => setShape({ view: v.id as typeof shape.view })}
           >
-            {v.label}
-          </TogglePillView>
+            <Ico name={v.icon} />{v.label}
+          </button>
         ))}
-        <TogglePillView accentColor={ACCENT} active={meaning.groupBy !== 'none'}
-                        onClick={() => setPanel('view')}>
+        <button
+          type="button"
+          className={`pill${meaning.groupBy !== 'none' ? ' on' : ''}`}
+          onClick={() => setPanel(p => (p === 'view' ? 'none' : 'view'))}
+        >
           Group: {groupLabel}
-        </TogglePillView>
+        </button>
         {filter.terms.length > 0 && !activeView && (
-          <TogglePillView icon={<SaveIcon size={11} />} accentColor={ACCENT} variant="go"
-                          onClick={() => setSaving({})}>
+          <button type="button" className="pill go" onClick={() => setSaving({})}>
             Save as view
-          </TogglePillView>
+          </button>
         )}
-        <TogglePillView icon={<DownloadIcon size={11} />} accentColor={ACCENT} disabled
-                        title="Export writes exactly these columns, in this order — screen 15">
-          Export
-        </TogglePillView>
-        <IconButtonView icon={<KeyboardIcon size={12} />} tooltip="Keys"
-                        accentColor="var(--color-text-muted)"
-                        onClick={() => setShowKeys(true)} />
+        <button type="button" className="pill" disabled
+                title="Export writes exactly these columns, in this order — screen 15">
+          <Ico name="dl" />Export
+        </button>
+        <button type="button" className="pill" onClick={() => setShowKeys(true)} title="Keys">
+          <Ico name="term" />
+        </button>
       </div>
 
       {/* What is filtering the list right now, in words — and the query behind it */}
       <GhChips
         state={filter}
+        labels={labels}
         onChange={setFilter}
         explaining={why}
         onExplain={() => setWhy(w => !w)}
@@ -993,7 +1002,6 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 fields={shape.cardFields}
                 density={shape.density}
                 dimensions={data?.dimensions ?? []}
-                colours={colours}
                 selected={selected}
                 onToggle={toggle}
                 onOpen={open}

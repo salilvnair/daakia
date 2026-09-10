@@ -1,35 +1,82 @@
 /**
  * Screen 04 — the cards, and the group headers above them.
  *
+ * The markup is the mock's: `.groups` of `.group`, each a `.gh` header over a
+ * `.cards` grid of `.card`, and each card the same four rows — the number and
+ * its chips, the title, the evidence strip, the footer.
+ *
  * A card rather than a row, because a screenshot in the list is worth more than
- * any three fields beside it: it is how a reader recognises the bug they
- * already know about.
+ * any three fields beside it: it is how a reader recognises the bug they already
+ * know about.
  *
- * Every element on a card earns its place by answering a question somebody asks
- * while scanning, and every one of them can be switched off — except the title,
- * which is never truncated. A card whose title ends in an ellipsis makes you
- * open it to find out whether you cared, which is the one thing a board exists
- * to save you. Compact and dense tighten the padding and drop the evidence
- * strip; they never cut the sentence.
- *
- * The group header carries the summary you would otherwise count by eye: how
- * big, how bad, how long it has been true.
+ * **The title is never truncated.** A card whose title ends in an ellipsis makes
+ * you open it to find out whether you cared, which is the one thing a board
+ * exists to save you.
  */
-import {
-  AvatarView, BadgeChipView, CheckboxView, GroupHeaderView, IssueCardView,
-} from '@salilvnair/dui';
+import { Ico } from './GhIcons';
 import { GhEvidence } from './GhEvidence';
-import { QUIET_DAYS, rankOf, type BoardIssue, type Group, type ProposedDimension } from './board-types';
+import {
+  QUIET_DAYS, rankOf, type BoardIssue, type Group, type ProposedDimension,
+} from './board-types';
 import type { SearchHit } from './filter-model';
-import { fromMap } from './field-colour';
+import { colourOf } from './field-colour';
 import type { CardField, Density } from './board-prefs';
-import { ACCENT } from './types';
 
-/** How tall the evidence strip is, by how much room the density leaves for it. */
-const SHOT_HEIGHT: Record<Density, number> = { comfortable: 74, compact: 0, dense: 0 };
+/**
+ * The chip class for a value.
+ *
+ * The mock names these directly — UI is blue, API cyan, Backend pink, Excel
+ * green, PROD red, DEV grey — and those are the semantic overrides the plan
+ * describes, written as classes. Anything the mock did not name falls back to
+ * the field map's own colour, by the value's index in its own dropdown.
+ */
+const CHIP_CLASS: [RegExp, string][] = [
+  [/^(ui|front|frontend)$/i, 'c-ui'],
+  [/^api$/i, 'c-api'],
+  [/^(backend|be|server)$/i, 'c-be'],
+  [/^(excel|xl|excel processing|reporting)$/i, 'c-xl'],
+  [/^prod(uction)?$/i, 'c-prod'],
+  [/^(dev|development|staging|stage|local|test)$/i, 'c-dev'],
+];
+
+export function chipOf(value: string, options?: string[]): {
+  className: string;
+  style?: React.CSSProperties;
+} {
+  for (const [match, cls] of CHIP_CLASS) {
+    if (match.test(value.trim())) return { className: `chip ${cls}` };
+  }
+  const colour = colourOf(value, options);
+  return {
+    className: 'chip',
+    style: {
+      color: colour,
+      borderColor: `color-mix(in srgb, ${colour} 45%, transparent)`,
+      background: `color-mix(in srgb, ${colour} 13%, transparent)`,
+    },
+  };
+}
+
+/** The mock's five avatar tints, picked from the name so one person keeps one. */
+const AV = ['s', 'r', 'm', 'k', 't'];
+
+export function avClass(login: string): string {
+  let sum = 0;
+  for (const ch of login) sum = (sum + ch.charCodeAt(0)) % 997;
+  return `av av-${AV[sum % AV.length]}`;
+}
+
+/** `pr-urgent` … `pr-low`, from where the value sits in its own declared scale. */
+export function prClass(value: string, options?: string[]): string {
+  if (!options || options.length === 0) return 'pr';
+  const at = rankOf(value, options);
+  if (at >= options.length) return 'pr';
+  const step = Math.floor((at / Math.max(1, options.length - 1)) * 3);
+  return `pr ${['pr-urgent', 'pr-high', 'pr-med', 'pr-low'][Math.min(3, step)]}`;
+}
 
 export function GhCards({
-  groups, showGroups, fields, density, dimensions, colours,
+  groups, showGroups, fields, density, dimensions,
   selected, onToggle, onOpen, cursor, hits,
 }: {
   groups: Group[];
@@ -37,38 +84,28 @@ export function GhCards({
   fields: CardField[];
   density: Density;
   dimensions: ProposedDimension[];
-  /** Each dimension value's colour, by its index in its own dropdown. */
-  colours: Map<string, string>;
   selected: Set<number>;
-  /** Ctrl adds, Shift extends — the caller owns the range, the card reports the click. */
   onToggle: (issue: BoardIssue, mods: { ctrl: boolean; shift: boolean }) => void;
   onOpen: (issue: BoardIssue) => void;
-  /** The card the keyboard is on, if any. */
   cursor?: number;
-  /** Where the search matched, per issue — screen 08C. */
   hits?: Map<number, SearchHit>;
 }) {
   return (
-    <div className="flex flex-col" style={{ gap: 17 }}>
+    <div className="groups">
       {groups.map(g => (
-        <div key={g.key}>
+        <div className="group" key={g.key}>
           {showGroups && <Header group={g} dimensions={dimensions} />}
-          <div className="grid gap-2"
-               style={{
-                 gridTemplateColumns: density === 'comfortable'
-                   ? 'repeat(auto-fill, minmax(250px, 1fr))'
-                   : 'repeat(auto-fill, minmax(200px, 1fr))',
-               }}>
+          <div className="cards">
             {g.issues.map(i => (
               <Card
                 key={i.number}
                 issue={i}
                 fields={fields}
                 density={density}
+                dimensions={dimensions}
                 selected={selected.has(i.number)}
                 anySelected={selected.size > 0}
                 cursor={cursor === i.number}
-                colours={colours}
                 hit={hits?.get(i.number)}
                 onToggle={onToggle}
                 onOpen={onOpen}
@@ -82,22 +119,16 @@ export function GhCards({
 }
 
 /**
- * The three summaries a group header carries.
+ * The group header — name, count, rule, and the summaries worth carrying.
  *
- * Count says how big, the worst value along the priority-like dimension says
- * how bad, and the oldest quiet time says how long it has been true. Chosen
- * because those are the three things a lead would otherwise count by eye
- * before deciding whether this group is today's problem.
+ * The rule between the count and the summaries is what puts every summary in
+ * the same place, so a column of headers can be read straight down.
  */
-export function Header({ group, dimensions }: { group: Group; dimensions: ProposedDimension[] }) {
+export function Header({ group, dimensions }: {
+  group: Group;
+  dimensions: ProposedDimension[];
+}) {
   const worstQuiet = Math.max(...group.issues.map(i => i.quietDays), 0);
-  const oldest = Math.max(...group.issues.map(i => i.ageDays), 0);
-
-  /*
-    "Worst" only means anything for a field whose values are ordered, and the
-    only ordering that exists is the one the form declared. A dimension with no
-    declared options has no worst value, so the header does not invent one.
-  */
   const ranked = dimensions.find(d => /priority|severity|impact/i.test(d.dimension));
   const worst = ranked
     ? group.issues
@@ -110,36 +141,31 @@ export function Header({ group, dimensions }: { group: Group; dimensions: Propos
     : 0;
 
   return (
-    <GroupHeaderView
-      name={group.label}
-      count={group.issues.length}
-      tone={group.unowned ? 'var(--color-warning)' : undefined}
-      summary={
-        <span className="flex items-center gap-1.5">
-          {worst && (
-            <BadgeChipView tone={ACCENT} size="xs">{worstCount} {worst.toLowerCase()}</BadgeChipView>
-          )}
-          {worstQuiet >= QUIET_DAYS
-            ? <BadgeChipView tone="var(--color-warning)" size="xs">
-                oldest quiet {worstQuiet}d
-              </BadgeChipView>
-            : <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>
-                oldest {oldest}d
-              </span>}
+    <div className="gh">
+      <span className="name" style={group.unowned ? { color: 'var(--dk-amber)' } : undefined}>
+        {group.label}
+      </span>
+      <span className="n">{group.issues.length}</span>
+      <span className="rule" />
+      {worst && (
+        <span className={prClass(worst, ranked?.options)}>
+          <b />{worstCount} {worst.toLowerCase()}
         </span>
-      }
-      style={{ marginBottom: 8 }}
-    />
+      )}
+      {worstQuiet >= QUIET_DAYS && (
+        <span className="chip c-stale">oldest quiet {worstQuiet}d</span>
+      )}
+    </div>
   );
 }
 
 function Card({
-  issue, fields, density, selected, anySelected, cursor, hit, colours, onToggle, onOpen,
+  issue, fields, density, dimensions, selected, anySelected, cursor, hit, onToggle, onOpen,
 }: {
   issue: BoardIssue;
   fields: CardField[];
   density: Density;
-  colours: Map<string, string>;
+  dimensions: ProposedDimension[];
   selected: boolean;
   anySelected: boolean;
   cursor: boolean;
@@ -150,122 +176,108 @@ function Card({
   const on = (f: CardField) => fields.includes(f);
   const quiet = issue.quietDays >= QUIET_DAYS;
   const who = issue.assignees[0];
-  const shotHeight = SHOT_HEIGHT[density];
-  const shot = on('evidence') && shotHeight > 0 ? issue.evidence[0] : undefined;
+  /* Compact and dense drop the evidence strip, as the mock has it — they
+     tighten the padding, never the sentence. */
+  const shot = on('evidence') && density === 'comfortable' ? issue.evidence[0] : undefined;
 
-  /*
-    One click handler for the whole card, on a wrapper rather than on the card
-    component, because the decision needs the modifier keys and a card's own
-    onClick has no event to read them from.
+  const ranked = dimensions.find(d => /priority|severity|impact/i.test(d.dimension));
+  const priority = ranked ? issue.dimensions[ranked.dimension] : undefined;
+  const optionsOf = (key: string) => dimensions.find(d => d.dimension === key)?.options;
 
-    Once anything is selected, a plain click extends the selection rather than
-    opening an issue. Triage is a bulk activity, and a board where the fourth
-    click of a selection navigates away is a board that loses the first three.
-  */
   const click = (e: React.MouseEvent) => {
     const mods = { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey };
+    /* Once anything is selected a plain click extends the selection rather than
+       opening an issue — triage is a bulk activity, and a board whose fourth
+       click navigates away has lost the first three. */
     if (anySelected || mods.ctrl || mods.shift) { onToggle(issue, mods); return; }
     onOpen(issue);
   };
 
   return (
     <div
-      onClick={click}
+      className={`card${selected ? ' picked' : ''}`}
       data-issue={issue.number}
-      style={{ cursor: 'pointer', position: 'relative' }}
-      title={anySelected ? 'Click to add to the selection' : 'Click to open · hold Space to peek'}
+      onClick={click}
+      style={{
+        cursor: 'pointer',
+        ...(cursor ? { outline: '1px solid var(--dk-gh)' } : {}),
+        ...(density === 'compact' ? { padding: '6px 8px', gap: 4 } : {}),
+        ...(density === 'dense' ? { padding: '4px 7px', gap: 3 } : {}),
+      }}
     >
-      <IssueCardView
-        reference={on('number') ? `#${issue.number}` : undefined}
-        title={issue.title}
-        accentColor={ACCENT}
-        selected={selected || cursor}
-        style={{
-          outline: cursor ? `1px solid ${ACCENT}` : undefined,
-          outlineOffset: cursor ? 1 : undefined,
-          padding: density === 'comfortable' ? undefined
-            : density === 'compact' ? '6px 8px' : '4px 7px',
-          gap: density === 'comfortable' ? undefined : 4,
-        }}
-        chips={
-          <span className="flex gap-[5px] flex-wrap items-center">
-            {/* The select box, shown once anything is selected — a checkbox on
-                every card of an untouched board is chrome nobody asked for. */}
-            {(anySelected || selected) && (
-              <CheckboxView
-                checked={selected}
-                onChange={() => onToggle(issue, { ctrl: true, shift: false })}
-                accentColor={ACCENT}
-                size="sm"
-              />
-            )}
-            {/* The colour comes from the value's index in its own dropdown —
-                see field-colour.ts. The word is always there beside it, so
-                identity never rests on the hue. */}
-            {on('chips') && Object.entries(issue.dimensions)
-              .filter(([k]) => on('module') || k !== 'module')
-              .map(([k, v]) => (
-                <BadgeChipView key={k} tone={fromMap(colours, k, v)} size="xs">{v}</BadgeChipView>
-              ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        {(anySelected || selected) && (
+          <span
+            className={`sel${selected ? ' on' : ''}`}
+            onClick={e => { e.stopPropagation(); onToggle(issue, { ctrl: true, shift: false }); }}
+          >
+            {selected && <Ico name="check" />}
+          </span>
+        )}
+        {on('number') && <span className="num">#{issue.number}</span>}
+        {on('chips') && (
+          <span className="chips">
+            {Object.entries(issue.dimensions)
+              .filter(([k]) => on('module') || !/module|screen|area/i.test(k))
+              .map(([k, v]) => {
+                const c = chipOf(v, optionsOf(k));
+                return <span key={k} className={c.className} style={c.style}>{v}</span>;
+              })}
             {on('labels') && issue.labels.slice(0, 2).map(l => (
-              <BadgeChipView key={l.name} tone={`#${l.color}`} size="xs">{l.name}</BadgeChipView>
+              <span
+                key={l.name}
+                className="chip"
+                style={{
+                  color: `#${l.color}`,
+                  borderColor: `color-mix(in srgb, #${l.color} 45%, transparent)`,
+                  background: `color-mix(in srgb, #${l.color} 13%, transparent)`,
+                }}
+              >
+                {l.name}
+              </span>
             ))}
-            {on('milestone') && issue.milestone && (
-              <BadgeChipView tone="var(--color-text-muted)" size="xs">{issue.milestone}</BadgeChipView>
-            )}
           </span>
-        }
-        media={shot || hit || (on('body') && issue.bodyFirstLine) ? (
-          <>
-            {shot && (
-              <GhEvidence url={shot} height={shotHeight} alt={`Evidence on #${issue.number}`} />
-            )}
-            {/*
-              Where the search matched, with the line — a hit in a two-year-old
-              comment and a hit in the title are different kinds of answer, and
-              a list that presents them identically makes you open all four to
-              find out which is which.
-            */}
-            {hit && (
-              <span className="block text-[9.5px]"
-                    style={{ color: 'var(--color-text-muted)', lineHeight: 1.5,
-                             marginTop: shot ? 4 : 0 }}>
-                <span style={{ color: ACCENT }}>matched in the {hit.where}</span>
-                {hit.where !== 'title' && <> — {hit.snippet}</>}
-              </span>
-            )}
-            {!hit && on('body') && issue.bodyFirstLine && (
-              <span className="block text-[10px]"
-                    style={{ color: 'var(--color-text-muted)', lineHeight: 1.5,
-                             marginTop: shot ? 4 : 0 }}>
-                {issue.bodyFirstLine}
-              </span>
-            )}
-          </>
-        ) : undefined}
-        owner={on('assignee')
-          ? (who
-              ? <span title={who}><AvatarView name={who} size="xs" /></span>
-              : <span style={{ color: 'var(--color-warning)' }}>unassigned</span>)
-          : undefined}
-        meta={
-          <span className="flex items-center gap-[7px]">
-            {on('age') && (quiet
-              ? <BadgeChipView tone="var(--color-warning)" size="xs">
-                  stale {issue.quietDays}d
-                </BadgeChipView>
-              : <span>{issue.ageDays}d</span>)}
-            {on('comments') && issue.commentCount > 0 && (
-              <span>{issue.commentCount} comment{issue.commentCount === 1 ? '' : 's'}</span>
-            )}
-            {on('evidence') && shotHeight === 0 && issue.evidence.length > 0 && (
-              <BadgeChipView tone={ACCENT} size="xs">
-                {issue.evidence.length} shot{issue.evidence.length === 1 ? '' : 's'}
-              </BadgeChipView>
-            )}
+        )}
+      </div>
+
+      <div className="title">{issue.title}</div>
+
+      {shot && <GhEvidence url={shot} height={54} alt={`Evidence on #${issue.number}`} />}
+
+      {/* Where the search matched — a hit in an old comment and a hit in the
+          title are different kinds of answer. */}
+      {hit && hit.where !== 'title' && (
+        <div style={{ fontSize: 9.5, color: 'var(--dk-faint)', lineHeight: 1.5 }}>
+          <span style={{ color: 'var(--dk-gh)' }}>in the {hit.where}</span> — {hit.snippet}
+        </div>
+      )}
+
+      {!hit && on('body') && issue.bodyFirstLine && (
+        <div style={{ fontSize: 10, color: 'var(--dk-faint)', lineHeight: 1.5 }}>
+          {issue.bodyFirstLine}
+        </div>
+      )}
+
+      <div className="foot">
+        {on('assignee') && (who
+          ? <span className={avClass(who)} title={who}>{who[0].toUpperCase()}</span>
+          : <span style={{ color: 'var(--dk-amber)' }}>unassigned</span>)}
+        {on('priority') && priority && (
+          <span className={prClass(priority, ranked?.options)}><b />{priority}</span>
+        )}
+        <span className="sp" />
+        {on('age') && (quiet
+          ? <span className="chip c-stale">stale {issue.quietDays}d</span>
+          : <span>{issue.ageDays}d</span>)}
+        {on('comments') && issue.commentCount > 0 && (
+          <span>{issue.commentCount} comment{issue.commentCount === 1 ? '' : 's'}</span>
+        )}
+        {on('evidence') && !shot && issue.evidence.length > 0 && (
+          <span className="chip c-gh">
+            {issue.evidence.length} shot{issue.evidence.length === 1 ? '' : 's'}
           </span>
-        }
-      />
+        )}
+      </div>
     </div>
   );
 }
