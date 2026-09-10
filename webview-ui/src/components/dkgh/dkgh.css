@@ -1575,3 +1575,16 @@
 .dkgh .dkgh-md th, .dkgh .dkgh-md td {
   border: 1px solid var(--dk-border); padding: 3.6px 8.4px; text-align: left;
 }
+
+/*
+  The peek's close. It only appears when the peek can be closed at all — a held
+  one is dismissed by letting go — so it sits at the end of the header rather
+  than reserving a slot the status word would otherwise have.
+*/
+.dkgh .peek .pkx {
+  display: grid; place-items: center; width: 24px; height: 24px; margin-left: 4.8px;
+  border-radius: 6px; color: var(--dk-faint); cursor: pointer; flex-shrink: 0;
+  transition: color 110ms ease, background 110ms ease;
+}
+.dkgh .peek .pkx svg { width: 13.2px; height: 13.2px; }
+.dkgh .peek .pkx:hover { color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 16%, transparent); }

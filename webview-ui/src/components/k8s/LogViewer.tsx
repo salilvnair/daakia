@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   FilterInputView, SelectInputView, SegmentedControlView, CheckboxView, ButtonView,
-  BadgeChipView, IconSize } from '@salilvnair/dui';
+  BadgeChipView, IconSize, SplitPanelView } from '@salilvnair/dui';
 import {
   SparkleIcon, ChevronRightIcon, ChevronDownIcon,
   WrapLinesIcon, LayersIcon, RefreshIcon, DownloadIcon, FilterClearIcon, CloseIcon,
@@ -1388,7 +1388,32 @@ export function LogViewer() {
             beside the log and takes its height from this row. Inside a split's
             pane it had none, so it drew at the height of the whole document
             and stopped scrolling with the lines it indexes. */}
-        {facetsOpen && (
+        {/*
+          The rail and the lines, as a split somebody can drag.
+
+          It was a fixed 208px, which is the width that fits `settle-worker-0`
+          and not the width that fits an order id or a tenant name — and the
+          values in this rail are exactly the kind of thing that runs long. The
+          ribbon stays a sibling of the split rather than a third pane: it is a
+          column beside the log and takes its height from this row, and inside
+          a pane it had none, so it drew at the height of the whole document
+          and stopped scrolling with the lines it indexes.
+
+          The split is always mounted and collapses instead of unmounting, so
+          closing the rail and opening it again returns it to the width you
+          dragged it to rather than to the default.
+        */}
+        <SplitPanelView
+          direction="horizontal"
+          defaultSplit={17}
+          minFirstPct={8}
+          minSecondPct={45}
+          accentColor="var(--color-primary)"
+          collapsed={!facetsOpen}
+          collapsedSide="first"
+          style={{ flex: 1, minWidth: 0, minHeight: 0 }}
+          first={
+            <div className="flex flex-col h-full min-h-0">
           <FacetRail
             lines={logs}
             filters={logFieldFilters}
@@ -1403,20 +1428,10 @@ export function LogViewer() {
             onSearchEverywhere={(field, value) =>
               useDk8sSearchStore.getState().searchEverywhere(filterTermFor(field, value))}
           />
-        )}
-
-        {/*
-          Applied filters sit over the rows they act on, not over the toolbar.
-
-          They were a row in the header, which meant the header grew by 36px
-          the moment a filter existed and shrank again when the last one went
-          — moving everything below it, including the facet panel whose value
-          you had just clicked. A list that moves when you click it is unusable
-          however correct the filtering is. Down here the rail's top edge is
-          fixed to the body, the toolbar never moves, and the only thing that
-          shifts is the log itself, which was about to change anyway.
-        */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+            </div>
+          }
+          second={
+            <div className="flex flex-col h-full min-w-0 min-h-0">
           <FieldFilterStrip
             filters={logFieldFilters}
             onFlip={f => addFieldFilter(f)}
@@ -1609,7 +1624,10 @@ export function LogViewer() {
               </div>
             )}
           </div>
-        </div>
+            </div>
+          }
+        />
+
 
         <DensityRibbon
           lines={visible}

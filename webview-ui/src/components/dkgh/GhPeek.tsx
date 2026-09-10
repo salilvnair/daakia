@@ -11,6 +11,13 @@
  * open. The key is Space, which is also how a keyboard user selects a row; the
  * difference is the hold, and the footer says so out loud.
  *
+ * It also opens from the right-click menu, and that is why it has a close now.
+ * A spring-loaded panel needs no way out because the way out is letting go —
+ * but nobody is holding anything after choosing `Peek` from a menu, and a panel
+ * you opened with the mouse and cannot close with the mouse is a trap. So: an
+ * X in the header, Escape, and the backdrop, which are the three things every
+ * other dialog in the app answers to. The footer says which one applies.
+ *
  * The panel is the three things the card could not fit: the actual behaviour,
  * the evidence at a readable size, and the most recent comment, which is
  * usually the one that tells you whether anybody is on it. It is fetched when
@@ -51,12 +58,24 @@ const STATE_CLASS: Record<string, string> = {
   blocked: 'st-block',
 };
 
-export function GhPeek({ repo, issue, onOpen }: {
+export function GhPeek({ repo, issue, onOpen, onClose }: {
   repo: string;
   issue: BoardIssue;
   onOpen: (issue: BoardIssue) => void;
+  /** Undefined while a key is being held — then releasing it is the close. */
+  onClose?: () => void;
 }) {
   const [detail, setDetail] = useState<Detail | null>(null);
+
+  /* Escape, for a peek that was opened by clicking rather than by holding. */
+  useEffect(() => {
+    if (!onClose) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   useEffect(() => {
     setDetail(null);
@@ -76,6 +95,14 @@ export function GhPeek({ repo, issue, onOpen }: {
   const status = (issue.dimensions.status ?? '').toLowerCase();
 
   return (
+    <>
+      {/* The backdrop dims the board and takes a click to dismiss. It is only
+          drawn for a peek that can be closed — a held one is gone before a
+          click could land, and dimming for it would flicker on every hold. */}
+      {onClose && (
+        <div className="absolute inset-0" style={{ zIndex: 29, background: 'rgba(0,0,0,.45)' }}
+             onClick={onClose} />
+      )}
     <div
       className="peek"
       style={{
@@ -101,6 +128,12 @@ export function GhPeek({ repo, issue, onOpen }: {
         <span className="sp" style={{ flex: 1 }} />
         {status && (
           <span className={`st ${STATE_CLASS[status] ?? 'st-todo'}`}><b />{issue.dimensions.status}</span>
+        )}
+        {onClose && (
+          <button type="button" className="pkx" title="Close" aria-label="Close"
+                  onClick={onClose}>
+            <Ico name="x" />
+          </button>
         )}
       </div>
 
@@ -157,7 +190,9 @@ export function GhPeek({ repo, issue, onOpen }: {
       </div>
 
       <div className="footbar" style={{ padding: '8px 13px', flexShrink: 0 }}>
-        <span style={{ fontSize: 11, color: 'var(--dk-faint)' }}>release Space to dismiss</span>
+        <span style={{ fontSize: 11, color: 'var(--dk-faint)' }}>
+          {onClose ? 'Esc to dismiss' : 'release Space to dismiss'}
+        </span>
         <span className="sp" />
         <button type="button" className="btn go" onClick={() => onOpen(issue)}>
           <Ico name="link" />Open
@@ -168,6 +203,7 @@ export function GhPeek({ repo, issue, onOpen }: {
         </button>
       </div>
     </div>
+    </>
   );
 }
 

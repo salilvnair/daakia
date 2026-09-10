@@ -67,10 +67,15 @@ export function FacetRail({ lines, filters, onToggle, onClear, onSearchEverywher
 
   return (
     <div
-      className="flex flex-col shrink-0 overflow-auto dk8s-no-scrollbar"
+      className="flex flex-col overflow-auto dk8s-no-scrollbar"
       style={{
-        width: 208,
-        borderRight: '1px solid var(--color-surface-border)',
+        /*
+          The width is the split's now, not the rail's — see LogViewer. A rail
+          nobody can widen truncates the one field value they were reading, and
+          `orderId` values are exactly the kind of thing that runs long.
+        */
+        width: '100%',
+        height: '100%',
         background: 'color-mix(in srgb, var(--color-surface) 55%, transparent)',
       }}
     >

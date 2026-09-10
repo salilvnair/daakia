@@ -162,6 +162,14 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [cursor, setCursor] = useState<number | undefined>();
   const [peek, setPeek] = useState<BoardIssue | undefined>();
+  /*
+    How the peek was opened, because it decides how it closes. Held with Space
+    it needs no close — letting go is the close, and drawing an X and a backdrop
+    for something that lives for four seconds would flicker on every hold.
+    Chosen from the right-click menu there is nothing being held, so it gets the
+    X, Escape and the backdrop that every other dialog here answers to.
+  */
+  const [peekHeld, setPeekHeld] = useState(false);
   /** A key asked for one of the bulk menus — see `useKeys` and screen 05D. */
   const [autoOpen, setAutoOpen] = useState<'assign' | 'label' | 'milestone' | undefined>();
   /**
@@ -586,7 +594,8 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     repo,
     issueAt: n => all.find(i => i.number === n),
     selected,
-    onPeek: setPeek,
+    /* Chosen from a menu: nothing is being held, so it gets a way out. */
+    onPeek: next => { setPeekHeld(false); setPeek(next); },
     onOpenExternal: open,
     onSelect: issue => toggle(issue, { ctrl: true, shift: false }),
     onAct: act,
@@ -643,7 +652,8 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
     selected,
     setSelected,
     onOpen: open,
-    onPeek: setPeek,
+    /* Held with Space: letting go is the close. */
+    onPeek: next => { setPeekHeld(true); setPeek(next); },
     onHelp: () => setShowKeys(true),
     onSearch: () => searchRef.current?.querySelector('input')?.focus(),
     onFilters: () => setPanel(p => (p === 'filters' ? 'none' : 'filters')),
@@ -1210,7 +1220,14 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
       </>
       )}
 
-      {peek && <GhPeek repo={repo} issue={peek} onOpen={i => { setPeek(undefined); open(i); }} />}
+      {peek && (
+        <GhPeek
+          repo={repo}
+          issue={peek}
+          onOpen={i => { setPeek(undefined); open(i); }}
+          onClose={peekHeld ? undefined : () => setPeek(undefined)}
+        />
+      )}
       {showKeys && <GhKeys onClose={() => setShowKeys(false)} />}
 
       <GhSaveView
