@@ -18,6 +18,7 @@
  * is about to fill in, so shouting about them would be premature.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { SplitPanelView } from '@salilvnair/dui';
 import { Ico } from './GhIcons';
 import {
   discardDraft, draftNote, hasContent, loadDraft, proposeTemplate, saveDraft,
@@ -91,7 +92,18 @@ export function GhCompose({
     : undefined;
 
   return (
-    <div className="compose">
+    /*
+      The metadata column is draggable for the same reason the board's facet
+      rail is: a fixed 238px is right until somebody's label is 240px long.
+    */
+    <SplitPanelView
+      className="compose"
+      direction="horizontal"
+      defaultSplit={72}
+      minFirstPct={45}
+      minSecondPct={16}
+      accentColor="var(--dk-gh)"
+      first={
       <div className="left">
         <div className="editor">
 
@@ -177,7 +189,8 @@ export function GhCompose({
           </button>
         </div>
       </div>
-
+      }
+      second={
       <div className="right">
         <div className="paneh"><Ico name="tag" />Metadata</div>
 
@@ -310,7 +323,8 @@ export function GhCompose({
           );
         })}
       </div>
-    </div>
+      }
+    />
   );
 }
 

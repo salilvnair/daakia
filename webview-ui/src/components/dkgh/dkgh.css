@@ -82,6 +82,17 @@
 
 .dkgh * { box-sizing: border-box; }
 
+/*
+  A floor under every icon.
+  
+  The mock sizes its glyphs in CSS, per place — 15px in the repository line,
+  12px in the sub-tabs, 11px on a chip — and an icon in a spot it never drew
+  has no rule at all. A `<svg>` with no width fills its container, so one
+  missing rule turns a chevron into a wall. This is the least specific rule in
+  the file, so every one of the mock's own sizes still wins.
+*/
+.dkgh svg { width: 12px; height: 12px; flex-shrink: 0; }
+
 /* A button in the mock is a span; here it is a real button. */
 .dkgh button {
   font: inherit;
@@ -149,7 +160,15 @@
   leftover height and which one scrolls when there is not enough.
 */
 .dkgh .compose { flex: 1; min-height: 0; }
-.dkgh .compose .left { min-height: 0; }
+/*
+  The split's panes are plain blocks, so the panel inside one takes its height
+  rather than stretching into it. The split draws the divider now, so `.left`
+  does not draw its own, and `.right` takes its width from the drag.
+*/
+.dkgh .compose .left { min-height: 0; height: 100%; border-right: 0; }
+.dkgh .compose .right { width: auto; height: 100%; }
+.dkgh .split .facets { height: 100%; }
+.dkgh .split .pane { height: 100%; }
 .dkgh .compose .left .editor { flex: 1; min-height: 0; overflow-y: auto; }
 .dkgh .compose .left .editor > div:has(> .mdbar) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .dkgh .compose .left .editor > div > textarea.mdbody { flex: 1; }
@@ -159,6 +178,42 @@
 .dkgh .split { flex: 1; min-height: 0; }
 .dkgh .split > .facets { overflow-y: auto; }
 .dkgh .split > .pane { min-height: 0; }
+
+/*
+  A left panel is draggable, so its width comes from the split rather than from
+  the mock's fixed rail — and it is the one thing here that has to change, since
+  a facet panel somebody cannot widen truncates the one label they needed.
+*/
+.dkgh .split .facets { width: auto; }
+
+/*
+  Search, and groups that collapse — the shape the app's own Settings nav uses,
+  so a panel with a search box and section headers behaves the way every other
+  one in Daakia does. The `.fh` heading keeps the mock's type and spacing; what
+  is added is the count, the chevron, and the fact that it is a button.
+*/
+.dkgh .panelsearch {
+  display: flex; align-items: center; gap: 6px; margin: 2px 10px 8px;
+  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--dk-border);
+  background: var(--dk-panel); font-size: 10.5px; color: var(--dk-text);
+}
+.dkgh .panelsearch svg { width: 11px; height: 11px; color: var(--dk-faint); flex-shrink: 0; }
+.dkgh .panelsearch input {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  color: inherit; font: inherit;
+}
+.dkgh .panelsearch input::placeholder { color: var(--dk-faint); }
+.dkgh .panelsearch .n {
+  font-family: var(--mono); font-size: 9.5px; color: var(--dk-faint);
+  padding: 0 5px; border-radius: 999px; background: var(--dk-raised);
+}
+
+.dkgh .facet .fh { width: 100%; cursor: pointer; }
+.dkgh .facet .fh .chev {
+  width: 10px; height: 10px; transition: transform 120ms; color: var(--dk-faint);
+}
+.dkgh .facet .fh .chev.shut { transform: rotate(-90deg); }
+.dkgh .facet .fh:hover { color: var(--dk-muted); }
 .dkgh button.pill:hover:not(:disabled) { background: var(--dk-hover); }
 .dkgh button.pill:disabled { opacity: .45; cursor: default; }
 

@@ -29,6 +29,7 @@ import {
   setMode, termFor, toggleValue,
   type Facet, type FilterState, type MatchContext,
 } from './filter-model';
+import { PanelSearch, PanelSection, matches } from './GhPanel';
 import type { BoardIssue, ProposedDimension } from './board-types';
 
 /** Above this many values a facet gets its own search box. */
@@ -62,6 +63,8 @@ export function GhFilters({ issues, dimensions, state, onChange, ctx }: {
   onChange: (next: FilterState) => void;
   ctx: MatchContext;
 }) {
+  const [term, setTerm] = useState('');
+
   const facets = useMemo(
     () => buildFacets(issues, state, dimensions, ctx),
     [issues, state, dimensions, ctx],
@@ -72,8 +75,30 @@ export function GhFilters({ issues, dimensions, state, onChange, ctx }: {
     [dimensions],
   );
 
+  /*
+    The search covers both halves of a row — the section it is in and the value
+    itself — so "prod" finds the value and "environment" finds the whole
+    section. Matching only one of those makes half the searches somebody tries
+    come back empty.
+  */
+  const shownActivity = activity.filter(a => matches(a.label, term) || matches('activity', term));
+  const shownFacets = facets
+    .map(f => matches(f.label, term)
+      ? f
+      : { ...f, values: f.values.filter(v => matches(v.label, term)) })
+    .filter(f => f.values.length > 0);
+  const showing = shownActivity.length
+    + shownFacets.reduce((n, f) => n + f.values.length, 0);
+
   return (
     <div className="facets">
+      <PanelSearch
+        value={term}
+        onChange={setTerm}
+        placeholder="Search filters…"
+        count={showing}
+      />
+
       {/*
         The rule, stated. Everybody gets this wrong at some point and then stops
         trusting the counts, which is worse than the sentence costing two lines.
@@ -84,9 +109,9 @@ export function GhFilters({ issues, dimensions, state, onChange, ctx }: {
         Two facets mean <b style={{ color: 'var(--dk-text)' }}>both</b>.
       </div>
 
-      <div className="facet">
-        <div className="fh">Activity<span className="n">no github equivalent</span></div>
-        {activity.map(a => (
+      {shownActivity.length > 0 && (
+      <PanelSection title="Activity" note="no github equivalent">
+        {shownActivity.map(a => (
           <FctRow
             key={a.id}
             label={a.label}
@@ -98,9 +123,10 @@ export function GhFilters({ issues, dimensions, state, onChange, ctx }: {
               : { ...state, terms: [...state.terms.filter(t => t.field !== a.term.field), a.term] })}
           />
         ))}
-      </div>
+      </PanelSection>
+      )}
 
-      {facets.map(f => (
+      {shownFacets.map(f => (
         <FacetBlock
           key={f.field}
           facet={f}
@@ -109,6 +135,12 @@ export function GhFilters({ issues, dimensions, state, onChange, ctx }: {
           onChange={onChange}
         />
       ))}
+
+      {showing === 0 && (
+        <div className="fct" style={{ color: 'var(--dk-faint)' }}>
+          Nothing here matches “{term.trim()}”.
+        </div>
+      )}
 
       <Dates issues={issues} state={state} onChange={onChange} ctx={ctx} />
     </div>
@@ -145,12 +177,12 @@ function FacetBlock({ facet, state, options, onChange }: {
   const swatch = facet.kind === 'form';
 
   return (
-    <div className="facet">
-      <div className="fh">
-        {facet.label}
-        {on > 0 && <span className="n">{on} of {facet.values.length}</span>}
-      </div>
-
+    <PanelSection
+      title={facet.label}
+      note={on > 0 ? `${on} of ${facet.values.length}` : undefined}
+      count={facet.values.length}
+      onClear={on > 0 ? () => onChange(dropField(state, facet.field)) : undefined}
+    >
       {on > 1 && (
         <div className="andor">
           <span className={term?.mode !== 'all' ? 'on' : undefined}
@@ -204,7 +236,7 @@ function FacetBlock({ facet, state, options, onChange }: {
           {search ? `Nothing matches “${search}”.` : 'No value for this field here.'}
         </div>
       )}
-    </div>
+    </PanelSection>
   );
 }
 
@@ -304,8 +336,7 @@ function Dates({ issues, state, onChange, ctx }: {
   }).length;
 
   return (
-    <div className="facet">
-      <div className="fh">Dates</div>
+    <PanelSection title="Dates" onClear={term ? () => set(undefined) : undefined}>
       <div className="andor">
         {DATE_FIELDS.map(d => (
           <span key={d.field} className={field === d.field ? 'on' : undefined}
@@ -348,6 +379,6 @@ function Dates({ issues, state, onChange, ctx }: {
           )}
         </>
       )}
-    </div>
+    </PanelSection>
   );
 }

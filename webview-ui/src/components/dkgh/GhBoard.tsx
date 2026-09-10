@@ -29,8 +29,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ButtonView, IconButtonView, AvatarView, BadgeChipView, CalloutView, EmptyStateView,
-  TogglePillView, UnderlineTabsView, SearchFieldView, SkeletonView,
+  ButtonView, CalloutView, EmptyStateView, SplitPanelView,
   IssueCardSkeletonView, TableSkeletonView,
 } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
@@ -936,20 +935,24 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         </div>
       )}
 
-      {/* The board — the mock's `.split`: panels on the left, the pane beside them */}
-      <div className="split">
-        {panel === 'filters' && (
-          <GhFilters
-            /* Counted over what the search left, so the number beside a value
-               is how many you would get if you ticked it given what you typed. */
-            issues={searched}
-            dimensions={data?.dimensions ?? []}
-            state={filter}
-            onChange={setFilter}
-            ctx={ctx}
-          />
-        )}
-        {showPanel && panel === 'view' && (view === 'table' ? (
+      {/*
+        The board — the mock's `.split`, made draggable.
+
+        `SplitPanelView` rather than a fixed rail: a facet panel somebody cannot
+        widen is a facet panel that truncates the one label they needed. The
+        panel stays mounted when it is closed (`collapsed`, not unmounted), so
+        its search box and its scroll position survive the toggle.
+      */}
+      <SplitPanelView
+        className="split"
+        direction="horizontal"
+        defaultSplit={22}
+        minFirstPct={11}
+        minSecondPct={45}
+        accentColor="var(--dk-gh)"
+        collapsed={panel === 'none'}
+        collapsedSide="first"
+        first={panel === 'view' && view === 'table' ? (
           <GhColumnPanel
             dimensions={data?.dimensions ?? []}
             columns={shape.columns}
@@ -957,7 +960,7 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             wrapTitles={shape.wrapTitles}
             onWrapTitles={wrapTitles => setShape({ wrapTitles })}
           />
-        ) : (
+        ) : panel === 'view' ? (
           <GhCardOptions
             issues={filtered}
             dimensions={data?.dimensions ?? []}
@@ -969,33 +972,42 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             onDensity={density => setShape({ density })}
             view={view}
           />
-        ))}
-
-        <div className="pane"
-             style={{ overflow: view === 'table' && !pending ? 'hidden' : 'auto' }}>
-          {pending ? (
-            <div className="groups">
-              {stuck
-                ? <GhBoardStalled repo={repo} onChangeRepo={onChangeRepo} />
-                : <BoardSkeleton view={view} />}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="groups">
-              <GhBoardEmpty
-                repo={repo}
-                total={total}
-                closedRecently={data?.closedRecently}
-                filters={activeFilters}
-                rateLimit={failure?.rateLimit}
-                staleAt={data?.fetchedAt}
-                error={failure?.error}
-                onClearAll={() => activeFilters.forEach(f => f.drop())}
-                onShowClosed={issueState === 'open' ? () => setIssueState('all') : undefined}
-                onRetry={refresh}
-              />
-            </div>
-          ) : view === 'cards' ? (
-            <>
+        ) : (
+          <GhFilters
+            /* Counted over what the search left, so the number beside a value
+               is how many you would get if you ticked it given what you typed. */
+            issues={searched}
+            dimensions={data?.dimensions ?? []}
+            state={filter}
+            onChange={setFilter}
+            ctx={ctx}
+          />
+        )}
+        second={
+          <div className="pane"
+               style={{ overflow: view === 'table' && !pending ? 'hidden' : 'auto' }}>
+            {pending ? (
+              <div className="groups">
+                {stuck
+                  ? <GhBoardStalled repo={repo} onChangeRepo={onChangeRepo} />
+                  : <BoardSkeleton view={view} />}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="groups">
+                <GhBoardEmpty
+                  repo={repo}
+                  total={total}
+                  closedRecently={data?.closedRecently}
+                  filters={activeFilters}
+                  rateLimit={failure?.rateLimit}
+                  staleAt={data?.fetchedAt}
+                  error={failure?.error}
+                  onClearAll={() => activeFilters.forEach(f => f.drop())}
+                  onShowClosed={issueState === 'open' ? () => setIssueState('all') : undefined}
+                  onRetry={refresh}
+                />
+              </div>
+            ) : view === 'cards' ? (
               <GhCards
                 groups={groups}
                 showGroups={meaning.groupBy !== 'none'}
@@ -1008,32 +1020,35 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
                 cursor={cursor}
                 hits={hits}
               />
-            </>
-          ) : (
-            <GhIssueTable
-              groups={groups}
-              showGroups={meaning.groupBy !== 'none'}
-              dimensions={data?.dimensions ?? []}
-              columns={shape.columns}
-              density={shape.density}
-              wrapTitles={shape.wrapTitles}
-              sort={meaning.sort}
-              onSort={sort => setMeaning({ sort })}
-              selected={selected}
-              onToggle={toggle}
-              onOpen={open}
-              cursor={cursor}
-              meta={meta}
-              onEdit={editCell}
-              pending={flow.optimistic}
-              hits={hits}
-              renderHeader={(g: Group) => <Header group={g} dimensions={data?.dimensions ?? []} />}
-            />
-          )}
-        </div>
+            ) : (
+              <GhIssueTable
+                groups={groups}
+                showGroups={meaning.groupBy !== 'none'}
+                dimensions={data?.dimensions ?? []}
+                columns={shape.columns}
+                density={shape.density}
+                wrapTitles={shape.wrapTitles}
+                sort={meaning.sort}
+                onSort={sort => setMeaning({ sort })}
+                selected={selected}
+                onToggle={toggle}
+                onOpen={open}
+                cursor={cursor}
+                meta={meta}
+                onEdit={editCell}
+                pending={flow.optimistic}
+                hits={hits}
+                renderHeader={(g: Group) => (
+                  <Header group={g} dimensions={data?.dimensions ?? []} />
+                )}
+              />
+            )}
+          </div>
+        }
+      />
 
-        {/* 08E, on the right — it is about the results, not about the controls */}
-        {why && !pending && (
+      {/* 08E, on the right — it is about the results, not about the controls */}
+      {why && !pending && (
           <GhWhy
             all={all}
             shown={filtered}
@@ -1043,25 +1058,21 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
             onClose={() => setWhy(false)}
           />
         )}
-      </div>
 
-      {/* Footer */}
-      <div className="flex items-center gap-2 px-4 py-2 text-[10.5px] flex-shrink-0"
-           style={{ borderTop: '1px solid var(--color-surface-border)', color: 'var(--color-text-muted)' }}>
+      {/* Footer — the mock's `.footbar` */}
+      <div className="footbar">
         <span>
           {pending ? 'reading the repository'
             : `${filtered.length}${filtered.length !== total ? ` of ${total}` : ''} shown`}
         </span>
         <span style={{ opacity: 0.5 }}>·</span>
         <GhKeyStatus selected={[...selected]} cursor={cursor} />
-        <span className="flex-1" />
+        <span className="sp" />
         {!pending && stale > 0 && (
-          <BadgeChipView tone="var(--color-warning)" size="sm">
-            {stale} quiet {QUIET_DAYS}d+
-          </BadgeChipView>
+          <span className="chip c-stale">{stale} quiet {QUIET_DAYS}d+</span>
         )}
         {!pending && unassigned > 0 && (
-          <BadgeChipView tone="var(--color-warning)" size="sm">{unassigned} unassigned</BadgeChipView>
+          <span className="chip c-stale">{unassigned} unassigned</span>
         )}
       </div>
 
