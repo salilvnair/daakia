@@ -15,8 +15,10 @@
  * being left and is waiting when you come back. It is not shown as broken on
  * the other side, because it is not broken — it is somewhere else.
  */
-import { ButtonView, ModalView, BadgeChipView } from '@salilvnair/dui';
-import { CheckIcon, CloseIcon, RepoIcon } from '../../icons';
+import { ModalView } from '@salilvnair/dui';
+import { RepoIcon } from '../../icons';
+import { Ico, type IcoName } from './GhIcons';
+import { Dk, GhNote } from './GhShell';
 import { since, formsLabel } from './format';
 import { meaningFor, type ShapePrefs } from './board-prefs';
 import { ACCENT, type RepoSummary } from './types';
@@ -106,7 +108,7 @@ export function GhSwitchRepo({ open, from, to, shape, search, dimensions, onCanc
       headerIcon={<RepoIcon size={14} />}
       title={to ? `Switch to ${to.nameWithOwner}` : `Leave ${from}`}
       footerLeft={
-        <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+        <span style={{ fontSize: 11.5, color: 'var(--color-text-muted)' }}>
           {to
             ? `${to.nameWithOwner}: ${to.openIssues} open · ${formsLabel(to.templates)}`
               + (to.countedAt ? ` · read ${since(to.countedAt)}` : '')
@@ -114,75 +116,58 @@ export function GhSwitchRepo({ open, from, to, shape, search, dimensions, onCanc
         </span>
       }
       footerRight={
-        <span className="flex items-center gap-2">
-          <ButtonView size="sm" accentColor="var(--color-text-muted)" onClick={onCancel}>
-            Stay here
-          </ButtonView>
-          <ButtonView size="sm" variant="primary" accentColor={ACCENT} onClick={onConfirm}>
-            {to ? 'Switch' : 'Choose another'}
-          </ButtonView>
-        </span>
+        <Dk>
+          <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+            <button type="button" className="btn" onClick={onCancel}>Stay here</button>
+            <button type="button" className="btn go" onClick={onConfirm}>
+              {to ? 'Switch' : 'Choose another'}
+            </button>
+          </span>
+        </Dk>
       }
     >
-      <div className="flex flex-col gap-3">
-        <List title="Comes with you" tone="var(--color-success)" mark={<CheckIcon size={10} />}
-              rows={keeps} />
-        <List title="Does not, and why" tone="var(--color-warning)" mark={<CloseIcon size={10} />}
-              rows={loses} />
-        <div className="flex items-start gap-2 text-[10px] rounded-lg px-2.5 py-2"
-             style={{
-               color: 'var(--color-text-muted)',
-               lineHeight: 1.65,
-               border: '1px solid var(--color-surface-border)',
-               background: `color-mix(in srgb, ${ACCENT} 5%, transparent)`,
-             }}>
-          <BadgeChipView tone="var(--color-success)" size="xs">kept</BadgeChipView>
-          <span>
-            <b style={{ color: 'var(--color-text-primary)' }}>Nothing is deleted.</b> What is
-            listed above stays attached to <code>{from}</code> and is waiting when you come
-            back. It is not shown as broken on the other side, because it is not broken — it is
-            somewhere else.
-          </span>
-        </div>
-      </div>
+      <Dk>
+        <List title="Comes with you" tone="var(--dk-green)" mark="check" rows={keeps} />
+        <List title="Does not, and why" tone="var(--dk-amber)" mark="x" rows={loses} />
+        <GhNote title="Nothing is deleted" icon="check">
+          What is listed above stays attached to <code>{from}</code> and is waiting when you
+          come back. It is not shown as broken on the other side, because it is not broken —
+          it is somewhere else.
+        </GhNote>
+      </Dk>
     </ModalView>
   );
 }
 
+/** One side of the ledger — a facet heading and the mock's own rows under it. */
 function List({ title, tone, mark, rows }: {
   title: string;
   tone: string;
-  mark: React.ReactNode;
+  mark: IcoName;
   rows: { key: string; title: string; note: string }[];
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[9.5px] font-bold uppercase tracking-[.09em]"
-            style={{ color: 'var(--color-text-muted)' }}>
-        {title}
-      </span>
-      <div className="rounded-lg border flex flex-col"
-           style={{ borderColor: 'var(--color-surface-border)', background: 'var(--color-panel)' }}>
+    <div className="facet">
+      <div className="fh" style={{ padding: '4px 0 6px' }}>{title}</div>
+      <div className="opt" style={{ gap: 0, padding: 0 }}>
         {rows.length === 0 ? (
-          <span className="px-2.5 py-2 text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+          <div className="fct" style={{ color: 'var(--dk-faint)', cursor: 'default' }}>
             Nothing — this board is on its defaults.
-          </span>
-        ) : rows.map((r, i) => (
-          <span key={r.key} className="flex items-start gap-2 px-2.5 py-1.5"
-                style={{
-                  borderTop: i === 0 ? 'none'
-                    : '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
-                }}>
-            <span className="flex items-center justify-center flex-shrink-0"
-                  style={{ width: 14, height: 14, borderRadius: 4, color: tone,
-                           background: `color-mix(in srgb, ${tone} 15%, transparent)`, marginTop: 1 }}>
-              {mark}
+          </div>
+        ) : rows.map(r => (
+          <div key={r.key} className="fct" style={{ alignItems: 'flex-start', cursor: 'default' }}>
+            <span
+              className="bx"
+              style={{ color: tone, borderColor: 'transparent', marginTop: 2,
+                       background: `color-mix(in srgb, ${tone} 16%, transparent)` }}
+            >
+              <Ico name={mark} />
             </span>
-            <span className="text-[10.5px]" style={{ lineHeight: 1.55 }}>
-              <b style={{ color: 'var(--color-text-primary)' }}>{r.title}</b>
-              <span style={{ color: 'var(--color-text-muted)' }}> — {r.note}</span>
+            <span style={{ lineHeight: 1.55 }}>
+              <b style={{ color: 'var(--dk-text)' }}>{r.title}</b>
+              <span style={{ color: 'var(--dk-faint)' }}> — {r.note}</span>
             </span>
-          </span>
+          </div>
         ))}
       </div>
     </div>
