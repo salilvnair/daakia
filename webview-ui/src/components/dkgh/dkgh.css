@@ -1523,3 +1523,55 @@
   border-color: color-mix(in srgb, var(--dk-cyan) 40%, transparent);
   background: color-mix(in srgb, var(--dk-cyan) 14%, transparent);
 }
+
+/*
+  ── Rendered markdown, at a peek's size ──
+
+  `MarkdownView` is built for a document: its own type scale, its own margins,
+  a heading that opens with 24px of air above it. Dropped into a panel that is
+  on screen for four seconds it swamps the panel.
+
+  So the wrapper hands it dkgh's own size to inherit and pulls the vertical
+  rhythm in. Nothing about how it renders changes — a fence is still a fence
+  with its own background, a list is still a list — only how much room each
+  takes, which is the whole difference between a document and a glance.
+*/
+.dkgh .dkgh-md { font-size: inherit; line-height: 1.6; color: var(--dk-text); }
+.dkgh .dkgh-md > :first-child { margin-top: 0; }
+.dkgh .dkgh-md > :last-child { margin-bottom: 0; }
+.dkgh .dkgh-md p,
+.dkgh .dkgh-md ul,
+.dkgh .dkgh-md ol,
+.dkgh .dkgh-md blockquote,
+.dkgh .dkgh-md table { margin: 0 0 8.4px; font-size: inherit; }
+.dkgh .dkgh-md h1,
+.dkgh .dkgh-md h2,
+.dkgh .dkgh-md h3,
+.dkgh .dkgh-md h4 {
+  margin: 12px 0 4.8px; font-size: 1.05em; font-weight: 700; color: var(--dk-text);
+}
+.dkgh .dkgh-md ul, .dkgh .dkgh-md ol { padding-left: 21.6px; }
+.dkgh .dkgh-md li { margin: 1px 0; }
+.dkgh .dkgh-md code {
+  font-family: var(--mono); font-size: .92em;
+  padding: 1px 4.8px; border-radius: 4.8px;
+  background: var(--dk-raised); color: var(--dk-cyan);
+}
+.dkgh .dkgh-md pre {
+  margin: 0 0 8.4px; padding: 9.6px 12px; border-radius: 8.4px;
+  border: 1px solid var(--dk-border); background: var(--dk-panel);
+  overflow-x: auto; font-size: .92em; line-height: 1.55;
+}
+/* Inside a fence the chip styling is wrong — it is already on its own ground. */
+.dkgh .dkgh-md pre code { padding: 0; background: none; color: var(--dk-text); font-size: 1em; }
+.dkgh .dkgh-md blockquote {
+  padding-left: 10.8px; border-left: 2.4px solid var(--dk-border); color: var(--dk-muted);
+}
+.dkgh .dkgh-md a { color: var(--dk-blue); }
+.dkgh .dkgh-md a:hover { text-decoration: underline; }
+.dkgh .dkgh-md img { max-width: 100%; border-radius: 7.2px; }
+.dkgh .dkgh-md hr { border: 0; border-top: 1px solid var(--dk-border); margin: 10.8px 0; }
+.dkgh .dkgh-md table { border-collapse: collapse; }
+.dkgh .dkgh-md th, .dkgh .dkgh-md td {
+  border: 1px solid var(--dk-border); padding: 3.6px 8.4px; text-align: left;
+}

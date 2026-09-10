@@ -16,15 +16,21 @@
  * usually the one that tells you whether anybody is on it. It is fetched when
  * the key goes down, not with the board — the comments on every issue in a busy
  * repository are megabytes to fill something open for four seconds.
+ *
+ * **The body is rendered, not printed.** An issue body is markdown, and a
+ * comment is markdown, and showing them raw put ```` ```json ```` in the middle
+ * of the one sentence somebody was reading. Code fences are exactly what a bug
+ * report is full of — a stack trace, a payload, the log line — so the one place
+ * they matter most was the one place they were shown as literal backticks.
  */
 import { useEffect, useState } from 'react';
-import { AvatarView, BadgeChipView, ButtonView, SkeletonView } from '@salilvnair/dui';
+import { MarkdownView, SkeletonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import { ExternalLinkIcon, CopyIcon } from '../../icons';
+import { Ico } from './GhIcons';
 import { GhEvidence } from './GhEvidence';
+import { avClass } from './GhCards';
 import { sinceIso } from './format';
 import type { BoardIssue } from './board-types';
-import { ACCENT } from './types';
 
 interface Detail {
   number: number;
@@ -35,7 +41,15 @@ interface Detail {
 }
 
 /** How much of a body is worth showing before it stops being a peek. */
-const BODY_MAX = 420;
+const BODY_MAX = 700;
+
+/** The status word, in the mock's own five colours. */
+const STATE_CLASS: Record<string, string> = {
+  'in progress': 'st-prog',
+  'in review': 'st-review',
+  done: 'st-done',
+  blocked: 'st-block',
+};
 
 export function GhPeek({ repo, issue, onOpen }: {
   repo: string;
@@ -59,117 +73,130 @@ export function GhPeek({ repo, issue, onOpen }: {
 
   const last = detail?.comments[detail.comments.length - 1];
   const shots = (detail?.evidence ?? issue.evidence).slice(0, 3);
+  const status = (issue.dimensions.status ?? '').toLowerCase();
 
   return (
     <div
-      className="absolute rounded-xl border overflow-hidden flex flex-col"
+      className="peek"
       style={{
-        /* Centred over the board rather than anchored to the card. A panel that
-           follows the cursor is a panel that lands half off-screen at the edge
-           of the grid, and this one is on screen for four seconds. */
+        /* Centred over the board rather than anchored to the card. The mock
+           pins it beside the card it belongs to, which is right in a figure of
+           a fixed size; in a panel somebody drags narrow the same rule lands it
+           half off-screen, and this is on screen for four seconds. */
         left: '50%',
         top: '50%',
         transform: 'translate(-50%, -50%)',
-        width: 'min(440px, 88%)',
-        maxHeight: '72%',
-        zIndex: 30,
-        borderColor: `color-mix(in srgb, ${ACCENT} 45%, transparent)`,
-        background: 'var(--color-surface)',
-        boxShadow: '0 14px 42px rgba(0,0,0,.5)',
+        width: 'min(520px, 90%)',
+        maxHeight: '78%',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
-           style={{
-             borderBottom: '1px solid var(--color-surface-border)',
-             background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`,
-           }}>
-        <span className="text-[11px] font-mono" style={{ color: ACCENT }}>#{issue.number}</span>
-        <span className="text-[11px] font-medium truncate"
-              style={{ color: 'var(--color-text-primary)' }}>
+      <div className="pkh">
+        <span className="num">#{issue.number}</span>
+        <b style={{ color: 'var(--dk-text)', overflow: 'hidden', textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap' }}>
           {issue.title}
-        </span>
-        <span className="flex-1" />
-        {Object.values(issue.dimensions).slice(0, 2).map(v => (
-          <BadgeChipView key={v} tone={ACCENT} size="xs">{v}</BadgeChipView>
-        ))}
+        </b>
+        <span className="sp" style={{ flex: 1 }} />
+        {status && (
+          <span className={`st ${STATE_CLASS[status] ?? 'st-todo'}`}><b />{issue.dimensions.status}</span>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-2.5 flex flex-col gap-2">
-        <Section title="Actual">
-          {detail === null ? (
-            <span className="flex flex-col gap-1 animate-pulse">
-              <SkeletonView variant="block" width="100%" height={9} />
-              <SkeletonView variant="block" width="72%" height={9} />
-            </span>
-          ) : detail.error ? (
-            <span style={{ color: 'var(--color-error)' }}>{detail.error}</span>
-          ) : (
-            <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              {plain(detail.body) || 'This issue has an empty body.'}
-            </span>
-          )}
-        </Section>
+      <div className="pkb" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <Label>Actual</Label>
+        {detail === null ? (
+          <div className="animate-pulse" style={{ display: 'grid', gap: 5 }}>
+            <SkeletonView variant="block" width="100%" height={10} />
+            <SkeletonView variant="block" width="72%" height={10} />
+          </div>
+        ) : detail.error ? (
+          <div style={{ color: 'var(--dk-red)' }}>{detail.error}</div>
+        ) : (
+          <Md content={trim(detail.body)} empty="This issue has an empty body." />
+        )}
 
         {shots.length > 0 && (
-          <Section title={`Evidence${shots.length > 1 ? ` · ${shots.length}` : ''}`}>
-            <span className="grid gap-1.5"
-                  style={{ gridTemplateColumns: `repeat(${Math.min(shots.length, 3)}, 1fr)` }}>
+          <>
+            <Label top>Evidence{shots.length > 1 ? ` · ${shots.length}` : ''}</Label>
+            <div className="gallery" style={{ display: 'grid', gap: 7,
+                                              gridTemplateColumns: `repeat(${Math.min(shots.length, 3)}, 1fr)` }}>
               {shots.map(u => (
-                <GhEvidence key={u} url={u} height={92} alt={`Evidence on #${issue.number}`} />
+                <GhEvidence key={u} url={u} height={104} alt={`Evidence on #${issue.number}`} />
               ))}
-            </span>
-          </Section>
+            </div>
+          </>
         )}
 
         {last && (
-          <Section title="Last comment">
-            <span className="flex items-start gap-2">
-              {last.author && <AvatarView name={last.author} size="xs" />}
-              <span style={{ overflowWrap: 'anywhere' }}>
-                <b style={{ color: 'var(--color-text-primary)' }}>{last.author ?? 'someone'}</b>
-                {last.createdAt ? `, ${sinceIso(last.createdAt)}` : ''}: {plain(last.body, 200)}
-              </span>
-            </span>
-          </Section>
+          <>
+            <Label top>Last comment</Label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              {last.author && (
+                <span className={avClass(last.author)} style={{ flexShrink: 0, marginTop: 2 }}>
+                  {last.author[0].toUpperCase()}
+                </span>
+              )}
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ color: 'var(--dk-muted)', marginBottom: 2 }}>
+                  <b style={{ color: 'var(--dk-text)' }}>{last.author ?? 'someone'}</b>
+                  {last.createdAt ? `, ${sinceIso(last.createdAt)}` : ''}
+                </div>
+                <Md content={trim(last.body, 400)} empty="An empty comment." />
+              </div>
+            </div>
+          </>
         )}
 
         {detail && !detail.error && detail.comments.length === 0 && (
-          <span className="text-[10px]" style={{ color: 'var(--color-warning)' }}>
+          <div style={{ marginTop: 10, color: 'var(--dk-amber)' }}>
             Nobody has commented. {issue.quietDays}d since anything happened on it.
-          </span>
+          </div>
         )}
       </div>
 
-      <div className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
-           style={{ borderTop: '1px solid var(--color-surface-border)' }}>
-        <span className="text-[9.5px]" style={{ color: 'var(--color-text-muted)' }}>
-          release Space to dismiss
-        </span>
-        <span className="flex-1" />
-        <ButtonView size="sm" accentColor={ACCENT} iconLeft={<ExternalLinkIcon size={11} />}
-                    onClick={() => onOpen(issue)}>
-          Open
-        </ButtonView>
-        <ButtonView size="sm" accentColor="var(--color-text-muted)"
-                    iconLeft={<CopyIcon size={11} />}
-                    onClick={() => navigator.clipboard?.writeText(issue.url)}>
-          Link
-        </ButtonView>
+      <div className="footbar" style={{ padding: '8px 13px', flexShrink: 0 }}>
+        <span style={{ fontSize: 11, color: 'var(--dk-faint)' }}>release Space to dismiss</span>
+        <span className="sp" />
+        <button type="button" className="btn go" onClick={() => onOpen(issue)}>
+          <Ico name="link" />Open
+        </button>
+        <button type="button" className="btn" title="Copy the link"
+                onClick={() => navigator.clipboard?.writeText(issue.url)}>
+          <Ico name="copy" />Link
+        </button>
       </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/**
+ * Rendered markdown, in the peek's own type.
+ *
+ * `MarkdownView` brings its own sizing, which is meant for a document; this is
+ * a four-second panel, so the wrapper hands it the peek's font size to inherit
+ * and lets everything inside scale off that.
+ */
+function Md({ content, empty }: { content: string; empty: string }) {
+  if (!content.trim()) return <span style={{ color: 'var(--dk-faint)' }}>{empty}</span>;
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[9px] font-bold uppercase tracking-[.08em]"
-            style={{ color: 'var(--color-text-muted)' }}>
-        {title}
-      </span>
-      <span className="text-[10.5px]" style={{ color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-        {children}
-      </span>
+    <div className="dkgh-md" style={{ fontSize: 'inherit' }}>
+      <MarkdownView content={content} />
+    </div>
+  );
+}
+
+function Label({ children, top }: { children: React.ReactNode; top?: boolean }) {
+  return (
+    <div style={{
+      fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase',
+      color: 'var(--dk-faint)', marginBottom: 4,
+      marginTop: top ? 12 : 0,
+      paddingTop: top ? 10 : 0,
+      borderTop: top ? '1px solid var(--dk-border)' : undefined,
+    }}>
+      {children}
     </div>
   );
 }
@@ -177,12 +204,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /**
  * A body, as much of it as a peek should show.
  *
- * The form's own headings are stripped — an issue filed from a template starts
- * with `### Summary`, and a panel whose first line is the same on every issue
- * has wasted its first line. Images go too: they are shown properly below,
- * and their markdown is a URL nobody can read.
+ * The form's own headings go — an issue filed from a template starts with
+ * `### Summary`, and a panel whose first line is the same on every issue has
+ * wasted its first line. Images go too: they are shown properly below, at a
+ * size you can judge, and their markdown is a URL nobody can read.
+ *
+ * Nothing else is touched. Fences, lists, links and inline code are the shape
+ * of the thing being reported and they are what the renderer is for; cutting
+ * is by length alone, on a line boundary so a fence is never left half-open.
  */
-function plain(markdown: string, max = BODY_MAX): string {
+export function trim(markdown: string, max = BODY_MAX): string {
   const text = markdown
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/<img[^>]*>/gi, '')
@@ -191,5 +222,14 @@ function plain(markdown: string, max = BODY_MAX): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
+  if (text.length <= max) return text;
+
+  const cut = text.slice(0, max);
+  const at = cut.lastIndexOf('\n');
+  const kept = at > max * 0.6 ? cut.slice(0, at) : cut;
+  /* An odd number of fences means the cut landed inside a code block, and an
+     unclosed fence swallows the rest of the panel. Close it. */
+  const fences = (kept.match(/^```/gm) ?? []).length;
+  return `${kept}${fences % 2 ? '\n```' : ''}\n\n…`;
 }
