@@ -13,7 +13,7 @@
  * they drift apart: one gains a heading size, another keeps the old padding,
  * and what should read as one place reads as three.
  */
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Ico, type IcoName } from './GhIcons';
 
 /**
@@ -108,17 +108,25 @@ export function CopyWord({ text, label = 'copy' }: { text: string; label?: strin
  * redraws itself as a different kind of box reads as a different kind of
  * screen.
  */
-export function GhNote({ title, icon = 'lock', tone, children }: {
+export function GhNote({ title, icon = 'lock', tone, style, children }: {
   title?: string;
   icon?: IcoName;
   tone?: 'warn' | 'error';
+  /** The mock draws one note at the foot of a screen; a dialog stacks them. */
+  style?: CSSProperties;
   children: ReactNode;
 }) {
   const colour = tone === 'error' ? 'var(--dk-red)'
     : tone === 'warn' ? 'var(--dk-amber)'
     : undefined;
   return (
-    <div className="note" style={colour ? { borderColor: `color-mix(in srgb, ${colour} 45%, transparent)` } : undefined}>
+    <div
+      className="note"
+      style={{
+        ...(colour ? { borderColor: `color-mix(in srgb, ${colour} 45%, transparent)` } : null),
+        ...style,
+      }}
+    >
       <Ico name={tone ? 'warn' : icon} style={colour ? { color: colour } : undefined} />
       <div>
         {title && <b>{title}.</b>}{title ? ' ' : ''}{children}

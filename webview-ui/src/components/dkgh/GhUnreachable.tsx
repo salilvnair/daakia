@@ -15,11 +15,10 @@
  * one command they can read. We show it; they run it.
  */
 import { useEffect, useState } from 'react';
-import { ButtonView, CalloutView, CodeBlockView, EmptyStateView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
 import { useToastStore } from '../../store/toast-store';
-import { RefreshIcon, CheckIcon, CloseIcon, CopyIcon, TerminalIcon, WarningTriangleIcon } from '../../icons';
-import { ACCENT } from './types';
+import { Ico } from './GhIcons';
+import { GhActions, GhButton, GhCommand, GhEmpty, GhLede, GhNote, GhPrimary } from './GhShell';
 
 interface Step { command: string; ok: boolean; output: string; ms: number }
 export interface Reachability {
@@ -75,117 +74,91 @@ export function GhUnreachable({ account, data, running, onRetry, onBack }: {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto px-6 py-8 flex flex-col items-center" style={{ maxWidth: 640 }}>
-        <EmptyStateView
-          variant="medallion"
-          accentColor="var(--color-error)"
-          icon={<WarningTriangleIcon size={26} />}
-          title="gh cannot reach github.com"
-          message={
-            'The binary is fine and you are signed in. '
-            + (data?.timedOut
-              ? 'The request timed out rather than being refused, which on a corporate machine almost always means a proxy.'
-              : 'The request did not get through.')
-          }
-          compact
-        />
+    <GhEmpty icon="warn" title="gh cannot reach github.com">
+      <GhLede>
+        The binary is fine and you are signed in.{' '}
+        {data?.timedOut
+          ? 'The request timed out rather than being refused, which on a corporate machine almost always means a proxy.'
+          : 'The request did not get through.'}
+      </GhLede>
 
+      <div className="opts">
         {/* What we tried — verbatim, because a verdict without a transcript is not one */}
-        <div className="w-full mt-4 rounded-lg border overflow-hidden"
-             style={{ borderColor: 'var(--color-surface-border)', background: 'var(--color-panel)' }}>
-          <div className="px-3 py-1.5 text-[9.5px] font-bold uppercase tracking-wider"
-               style={{ color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-surface-border)' }}>
-            What we tried
-          </div>
+        <div className="opt">
+          <div className="fl">What we tried</div>
           {(data?.steps ?? []).map(s => (
-            <div key={s.command} className="px-3 py-2 flex flex-col gap-1"
-                 style={{ borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 55%, transparent)' }}>
+            <div key={s.command} className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                {s.ok
-                  ? <CheckIcon size={11} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
-                  : <CloseIcon size={11} style={{ color: 'var(--color-error)', flexShrink: 0 }} />}
-                <code className="text-[10.5px]" style={{ color: 'var(--color-text-primary)' }}>
-                  $ {s.command}
-                </code>
-                <span className="flex-1" />
-                <span className="text-[9.5px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
+                <Ico name={s.ok ? 'check' : 'x'}
+                     style={{ color: s.ok ? 'var(--dk-green)' : 'var(--dk-red)', flexShrink: 0 }} />
+                <code>$ {s.command}</code>
+                <span className="sp" style={{ flex: 1 }} />
+                <span className="n" style={{ fontFamily: 'var(--mono)', fontSize: 11.4,
+                                             color: 'var(--dk-faint)' }}>
                   {s.ms}ms
                 </span>
               </div>
               {s.output && (
-                <pre className="text-[10px] m-0 whitespace-pre-wrap"
-                     style={{ color: s.ok ? 'var(--color-text-muted)' : 'var(--color-error)',
-                              overflowWrap: 'anywhere' }}>
+                <pre className="code" style={{ color: s.ok ? 'var(--dk-faint)' : 'var(--dk-red)' }}>
                   {s.output}
                 </pre>
               )}
             </div>
           ))}
-          {running && (
-            <div className="px-3 py-2 text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
-              running…
-            </div>
-          )}
+          {running && <div className="sub">running…</div>}
         </div>
 
         {/* Most likely: a proxy */}
-        <div className="w-full mt-3 flex flex-col gap-2">
-          <div className="text-[9.5px] font-bold uppercase tracking-wider"
-               style={{ color: 'var(--color-text-muted)' }}>
+        <div className="opt pick">
+          <div className="oh">
+            <Ico name="term" style={{ color: 'var(--dk-gh)' }} />
             Most likely: a proxy
           </div>
-          <CodeBlockView
-            code={`gh config set http_proxy ${data?.envProxy ?? 'http://proxy.example.internal:8080'}`}
-            language="bash" fill showCopyButton accentColor={ACCENT}
+          <GhCommand
+            prompt="$"
+            text={`gh config set http_proxy ${data?.envProxy ?? 'http://proxy.example.internal:8080'}`}
           />
-          {data?.envProxy ? (
-            <CalloutView variant="warning" title="A proxy is set in your environment"
-                         style={{ margin: 0 }}>
-              <span className="font-mono">{data.envProxy}</span> — but gh is not using it. The
-              editor's extension host does not inherit your shell profile, so a proxy exported
-              in <code>.bashrc</code> or <code>.zshrc</code> never reaches it. The command above
-              writes it into gh's own config, where it will be read every time.
-            </CalloutView>
-          ) : (
-            <CalloutView variant="info" title="No proxy in this environment" style={{ margin: 0 }}>
-              If your network needs one, the command above is where it goes. Replace the address
-              with whatever your organisation uses.
-            </CalloutView>
-          )}
-          <CalloutView variant="info" title="Or a blocked host" style={{ margin: 0 }}>
-            Some networks allow <code>github.com</code> and block <code>api.github.com</code>.
-            dkgh only uses the API, so that configuration looks like a total outage from here
-            even though the website loads.
-          </CalloutView>
-          <CalloutView variant="tip" title="dkgh does not configure your proxy for you"
-                       style={{ margin: 0 }}>
-            Writing a proxy address into your gh config changes a tool you use outside Daakia.
-            It is one command and you can read it, so it is yours to run.
-          </CalloutView>
-        </div>
-
-        <div className="flex gap-2 justify-center flex-wrap mt-4">
-          <ButtonView size="md" variant="primary" accentColor={ACCENT}
-                      iconLeft={<RefreshIcon size={12} />} onClick={onRetry}>
-            {running ? 'Trying…' : 'Try again'}
-          </ButtonView>
-          <ButtonView size="md" accentColor="var(--color-text-muted)"
-                      iconLeft={<CopyIcon size={12} />} onClick={copy}>
-            Copy the diagnostics
-          </ButtonView>
-          <ButtonView size="md" accentColor="var(--color-text-muted)"
-                      iconLeft={<TerminalIcon size={12} />}
-                      onClick={() => postMsg({ type: 'terminal:open' })}>
-            Open a terminal here
-          </ButtonView>
-          {onBack && (
-            <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onBack}>
-              Back
-            </ButtonView>
-          )}
+          <div className="sub">
+            {data?.envProxy ? (
+              <>
+                <code>{data.envProxy}</code> is set in your environment — but gh is not using
+                it. The editor&rsquo;s extension host does not inherit your shell profile, so a
+                proxy exported in <code>.bashrc</code> or <code>.zshrc</code> never reaches it.
+                The command above writes it into gh&rsquo;s own config, where it will be read
+                every time.
+              </>
+            ) : (
+              <>
+                There is no proxy in this environment. If your network needs one, the command
+                above is where it goes — replace the address with whatever your organisation
+                uses.
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      <GhNote title="Or a blocked host" icon="warn">
+        Some networks allow <code>github.com</code> and block <code>api.github.com</code>.
+        dkgh only uses the API, so that configuration looks like a total outage from here
+        even though the website loads.
+      </GhNote>
+
+      <GhNote title="dkgh does not configure your proxy for you">
+        Writing a proxy address into your gh config changes a tool you use outside Daakia.
+        It is one command and you can read it, so it is yours to run.
+      </GhNote>
+
+      <GhActions>
+        <GhPrimary icon="refresh" onClick={onRetry}>
+          {running ? 'Trying…' : 'Try again'}
+        </GhPrimary>
+        <GhButton icon="copy" onClick={copy}>Copy the diagnostics</GhButton>
+        <GhButton icon="term" onClick={() => postMsg({ type: 'terminal:open' })}>
+          Open a terminal here
+        </GhButton>
+        {onBack && <GhButton onClick={onBack}>Back</GhButton>}
+      </GhActions>
+    </GhEmpty>
   );
 }

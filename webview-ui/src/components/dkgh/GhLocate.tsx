@@ -12,13 +12,10 @@
  * not a preference.
  */
 import { useEffect, useState } from 'react';
-import {
-  ModalView, ButtonView, TextInputView, CalloutView, SkeletonView,
-} from '@salilvnair/dui';
+import { ModalView, SkeletonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import {
-  CheckIcon, CloseIcon, SearchIcon, FolderOpenIcon, TerminalIcon,
-} from '../../icons';
+import { Ico, type IcoName } from './GhIcons';
+import { Dk, GhNote } from './GhShell';
 import { ACCENT } from './types';
 
 interface Found { path: string; version?: string }
@@ -93,17 +90,18 @@ export function GhLocate({ open, envOverride, onClose }: {
       size="md"
       headerColor={ACCENT}
       footerRight={
-        <>
-          <ButtonView size="md" accentColor="var(--color-text-muted)" onClick={onClose}>
-            Cancel
-          </ButtonView>
-          <ButtonView size="md" variant="primary" accentColor={ACCENT}
-                      disabled={!path.trim() || checking} onClick={use}>
-            {checking ? "Checking…" : "Use this gh"}
-          </ButtonView>
-        </>
+        <Dk>
+          <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+            <button type="button" className="btn" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn go"
+                    disabled={!path.trim() || checking} onClick={use}>
+              {checking ? 'Checking…' : 'Use this gh'}
+            </button>
+          </span>
+        </Dk>
       }
     >
+      <Dk>
       <div className="flex flex-col gap-3" style={{ minWidth: 420 }}>
 
         {/*
@@ -112,53 +110,44 @@ export function GhLocate({ open, envOverride, onClose }: {
           save successfully and change nothing.
         */}
         {envOverride && (
-          <CalloutView variant="warning" title="DAAKIA_GH is set" style={{ margin: 0 }}>
+          <GhNote title="DAAKIA_GH is set" tone="warn" style={{ margin: 0 }}>
             It outranks this field for the life of this window. Saving here still works —
             it takes effect next time you launch without the variable.
-            <span className="font-mono block mt-1" style={{ color: 'var(--color-text-muted)' }}>
-              {envOverride}
-            </span>
-          </CalloutView>
+            <div style={{ marginTop: 4 }}><code>{envOverride}</code></div>
+          </GhNote>
         )}
 
-        <div>
-          <label className="text-[11px] font-medium block mb-1.5"
-                 style={{ color: 'var(--color-text-secondary)' }}>
-            Path to the executable
-          </label>
+        <div className="fieldrow">
+          <label className="fl" htmlFor="dkgh-locate-path">Path to the executable</label>
           <div className="flex gap-2">
-            <TextInputView
+            <input
+              id="dkgh-locate-path"
+              className="inp mono"
               value={path}
               onChange={e => { setPath(e.target.value); setChecked(null); }}
               placeholder={navigator.platform.startsWith('Win')
                 ? 'C:\\tools\\gh_2.63.2\\bin\\gh.exe'
                 : '/opt/gh_2.63.2/bin/gh'}
-              size="md"
-              accentColor={ACCENT}
-              style={{ flex: 1, fontFamily: 'monospace' }}
+              style={{ flex: 1 }}
             />
-            <ButtonView size="md" accentColor="var(--color-text-muted)"
-                        iconLeft={<FolderOpenIcon size={12} />}
-                        onClick={() => { setPickerNote(''); postMsg({ type: 'dkgh:browseGh' }); }}>
-              Browse
-            </ButtonView>
+            <button type="button" className="btn"
+                    onClick={() => { setPickerNote(''); postMsg({ type: 'dkgh:browseGh' }); }}>
+              <Ico name="repo" />Browse
+            </button>
           </div>
           {pickerNote && (
-            <div className="text-[10px] mt-1.5" style={{ color: 'var(--color-warning)' }}>
-              {pickerNote}
-            </div>
+            <div className="sub" style={{ color: 'var(--dk-amber)' }}>{pickerNote}</div>
           )}
         </div>
 
         {/* Search common locations */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <ButtonView size="sm" variant="ghost" accentColor={ACCENT}
-                        iconLeft={<SearchIcon size={11} />}
-                        onClick={() => { setFound(null); postMsg({ type: 'dkgh:findGh' }); }}>
-              Search common locations
-            </ButtonView>
-            <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+            <button type="button" className="btn"
+                    onClick={() => { setFound(null); postMsg({ type: 'dkgh:findGh' }); }}>
+              <Ico name="search" />Search common locations
+            </button>
+            <span className="sub">
               {searching ? 'looking…' : 'C:\\tools, Programs, ~/bin, /opt'}
             </span>
           </div>
@@ -172,37 +161,25 @@ export function GhLocate({ open, envOverride, onClose }: {
 
           {found !== null && !searching && (
             found.length === 0 ? (
-              <div className="text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
+              <div className="sub">
                 Nothing in the usual places. If you know where it is, type or browse to it —
                 a portable archive often unpacks somewhere only you remember.
               </div>
             ) : (
-              <div className="flex flex-col rounded-lg border overflow-hidden"
-                   style={{ borderColor: 'var(--color-surface-border)' }}>
+              <div className="opt" style={{ gap: 2, padding: 4 }}>
                 {found.map(f => (
                   <button
                     key={f.path}
                     type="button"
+                    className="fct"
                     onClick={() => { setPath(f.path); setChecked(null); }}
-                    className="flex items-center gap-2 px-2.5 py-1.5 text-left cursor-pointer"
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      borderTop: '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
-                    }}
                   >
-                    <CheckIcon size={11} style={{ color: 'var(--color-success)', flexShrink: 0 }} />
-                    <span className="text-[10.5px] font-mono truncate"
-                          style={{ color: 'var(--color-text-primary)' }}>
+                    <Ico name="check" style={{ color: 'var(--dk-green)', flexShrink: 0 }} />
+                    <span className="truncate"
+                          style={{ fontFamily: 'var(--mono)', color: 'var(--dk-text)' }}>
                       {f.path}
                     </span>
-                    <span className="flex-1" />
-                    {f.version && (
-                      <span className="text-[10px] font-mono whitespace-nowrap"
-                            style={{ color: 'var(--color-text-muted)' }}>
-                        {f.version}
-                      </span>
-                    )}
+                    {f.version && <span className="n">{f.version}</span>}
                   </button>
                 ))}
               </div>
@@ -212,12 +189,8 @@ export function GhLocate({ open, envOverride, onClose }: {
 
         {/* What was actually established about this path */}
         {(checking || checked) && (
-          <div className="rounded-lg border p-2.5 flex flex-col gap-1.5"
-               style={{ borderColor: 'var(--color-surface-border)', background: 'var(--color-panel)' }}>
-            <div className="text-[9.5px] font-bold uppercase tracking-wider"
-                 style={{ color: 'var(--color-text-muted)' }}>
-              {checking ? 'Checking' : 'Checked'}
-            </div>
+          <div className="opt">
+            <div className="fl">{checking ? 'Checking' : 'Checked'}</div>
             {checking ? (
               <div className="flex flex-col gap-1.5 animate-pulse">
                 <SkeletonView variant="block" width="64%" height={11} />
@@ -247,28 +220,30 @@ export function GhLocate({ open, envOverride, onClose }: {
           that looks honoured while a different binary runs is a question nobody
           can answer.
         */}
-        <CalloutView variant="info" title="Three sources, first one wins outright"
-                     style={{ margin: 0 }}>
+        <GhNote title="Three sources, first one wins outright" icon="term" style={{ margin: 0 }}>
           <code>DAAKIA_GH</code> beats this field, which beats <code>PATH</code> and the usual
           install locations. The environment goes first because it is the temporary override.
           A named path never falls back: named and broken is an error worth reporting, not a
           reason to quietly run something else. Stored per machine, never synced.
-        </CalloutView>
+        </GhNote>
 
       </div>
+      </Dk>
     </ModalView>
   );
 }
 
+/** One thing that was established about the path, and how it went. */
 function Line({ ok, bad, neutral, children }: {
   ok?: boolean; bad?: boolean; neutral?: boolean; children: React.ReactNode;
 }) {
-  const color = ok ? 'var(--color-success)' : bad ? 'var(--color-error)' : 'var(--color-text-muted)';
-  const Icon = ok ? CheckIcon : bad ? CloseIcon : TerminalIcon;
+  const colour = ok ? 'var(--dk-green)' : bad ? 'var(--dk-red)' : 'var(--dk-faint)';
+  const icon: IcoName = ok ? 'check' : bad ? 'x' : 'term';
   return (
-    <div className="flex items-start gap-2 text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
-      <Icon size={11} style={{ color, flexShrink: 0, marginTop: 2 }} />
-      <span style={neutral ? { color: 'var(--color-text-muted)' } : undefined}>{children}</span>
+    <div className="flex items-start gap-2"
+         style={{ fontSize: 13.2, lineHeight: 1.5, color: 'var(--dk-muted)' }}>
+      <Ico name={icon} style={{ color: colour, flexShrink: 0, marginTop: 2 }} />
+      <span style={neutral ? { color: 'var(--dk-faint)' } : undefined}>{children}</span>
     </div>
   );
 }

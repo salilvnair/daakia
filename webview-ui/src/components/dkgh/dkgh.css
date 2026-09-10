@@ -1700,7 +1700,46 @@
   rule has no bottom margin and two of them ended up welded together.
 */
 .dkgh .empty .note + .note { margin-top: 9.6px; }
-.dkgh .empty code {
+/*
+  The mock's own `code` rule is drawn against the wiki page's `--ink`, which
+  does not exist here. It is the same rule in dkgh's tokens, and it is not
+  confined to the empty states: a dialog quotes a path or a command too.
+*/
+.dkgh code {
   font-family: var(--mono); font-size: .92em; padding: 1px 4.8px; border-radius: 3.6px;
   background: var(--dk-raised); color: var(--dk-text);
 }
+
+/*
+  `.sub` is the mock's small grey line. It draws it only inside an `.opt`, so
+  that is where the rule sits — but the line itself is not about option cards,
+  and every screen that wants one outside a card was getting body text.
+*/
+.dkgh .sub { font-size: 14.4px; color: var(--dk-faint); line-height: 1.5; }
+
+/*
+  The mock's `.inp` is a `<div>` with a fake placeholder inside it, because a
+  mock never types. A real one is an `<input>`, which arrives with the
+  browser's font and its own focus ring, and `.inp.focus` — a class a mock can
+  hand-apply — has to become the real `:focus`.
+*/
+.dkgh input.inp, .dkgh textarea.inp {
+  width: 100%; font-family: inherit; outline: none;
+  transition: border-color 110ms ease, box-shadow 110ms ease;
+}
+.dkgh textarea.inp { resize: vertical; line-height: 1.6; }
+.dkgh input.inp.mono, .dkgh textarea.inp.mono { font-family: var(--mono); }
+.dkgh input.inp::placeholder, .dkgh textarea.inp::placeholder { color: var(--dk-faint); }
+.dkgh input.inp:focus, .dkgh textarea.inp:focus {
+  border-color: var(--dk-gh);
+  box-shadow: 0 0 0 4.3px color-mix(in srgb, var(--dk-gh) 16%, transparent);
+}
+
+/*
+  A row of paths, of held items, of anything the reader picks from: the mock's
+  own filter row, borrowed. Outside the filter panel it needs the hover it
+  never had there, because there it is a checkbox and here it is a button.
+*/
+.dkgh .opt .fct { padding: 7.2px 12px; border-radius: 7.2px; width: 100%; text-align: left; }
+.dkgh .opt button.fct { background: transparent; border: none; font-family: inherit; color: inherit; }
+.dkgh .opt button.fct:hover { background: var(--dk-hover); color: var(--dk-text); }
