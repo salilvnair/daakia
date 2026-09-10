@@ -1056,6 +1056,22 @@
 .dkgh .compose .right { overflow-y: auto; }
 
 /*
+  ── Why nothing inside this tab could scroll ──
+
+  `.dkgh` is a flex item, and a flex item's `min-height` defaults to `auto`,
+  which means *never shrink below your own content*. So the root grew to the
+  full height of the board — a thousand-odd pixels of facets — and the host
+  clipped it. Every box inside was then sized against a container that was
+  already too tall, so no scroll container ever discovered it was short on room:
+  the panel simply ran off the bottom of the tab and the last two facets could
+  not be reached at all. One declaration, and the whole tab is bounded again.
+
+  The same `auto` applies to the split's own panes, which are flex items too.
+*/
+.dkgh { min-height: 0; }
+.dkgh .split > * { min-height: 0; }
+
+/*
   The board's split fills the panel and scrolls inside it, same reason.
 
   The child selectors here used to be `>`, which was wrong twice over: the split
@@ -1155,11 +1171,13 @@
   above; here, a segmented strip recessed into the row, the same shape the rest
   of the app uses for a filter like this.
 
-  **Two colours, doing two jobs.** The accent marks the view you are in, in the
-  badge and in the label, because that is the same thing the tab above is
-  saying. Hover is blue — a different hue entirely, so *what the pointer is over*
-  can never be mistaken for *what is selected*. A hover that borrows the
-  selected colour makes every pass of the mouse look like a click that landed.
+  **Two colours, doing two jobs.** The segment itself is the accent — the same
+  accent hovered and selected, so the strip reads as one control rather than as
+  two competing highlights, and the difference between the two states is weight
+  and fill rather than hue. The count is blue throughout: it is the number the
+  row exists for, it never changes colour under the pointer, and being a
+  different hue from everything around it is what makes it findable at a glance
+  across five segments.
 */
 .dkgh .viewbar {
   gap: 12px;
@@ -1178,23 +1196,19 @@
   transition: color 110ms ease, background 110ms ease;
 }
 .dkgh .viewbar .vs:hover {
-  color: var(--dk-blue);
-  background: color-mix(in srgb, var(--dk-blue) 15%, transparent);
-}
-.dkgh .viewbar .vs:hover .cnt {
-  color: var(--dk-blue);
-  background: color-mix(in srgb, var(--dk-blue) 22%, transparent);
+  color: var(--dk-gh);
+  background: color-mix(in srgb, var(--dk-gh) 14%, transparent);
 }
 .dkgh .viewbar .vs.on {
   color: var(--dk-gh); font-weight: 600;
-  background: color-mix(in srgb, var(--dk-gh) 16%, transparent);
+  background: color-mix(in srgb, var(--dk-gh) 20%, transparent);
 }
 .dkgh .viewbar .vs .cnt {
   font-family: var(--mono); font-size: 10.8px; line-height: 1.7;
   padding: 0 7.2px; border-radius: 999px;
-  color: var(--dk-gh); background: color-mix(in srgb, var(--dk-gh) 18%, transparent);
+  color: var(--dk-blue); background: color-mix(in srgb, var(--dk-blue) 18%, transparent);
 }
-.dkgh .viewbar .vs.on .cnt { background: color-mix(in srgb, var(--dk-gh) 30%, transparent); }
+.dkgh .viewbar .vs.on .cnt { background: color-mix(in srgb, var(--dk-blue) 28%, transparent); }
 .dkgh .viewbar .vs .dot {
   width: 6px; height: 6px; border-radius: 50%; background: var(--dk-amber); flex-shrink: 0;
 }
@@ -1220,8 +1234,8 @@
   transition: color 110ms ease, background 110ms ease;
 }
 .dkgh .viewbar .vgear:hover {
-  color: var(--dk-blue);
-  background: color-mix(in srgb, var(--dk-blue) 15%, transparent);
+  color: var(--dk-gh);
+  background: color-mix(in srgb, var(--dk-gh) 14%, transparent);
 }
 .dkgh .viewbar .vgear svg { width: 16.8px; height: 16.8px; }
 
@@ -1267,10 +1281,22 @@
   So the hover is inset to the panel's own gutter and rounded — the same
   highlight, given an edge to stop at.
 */
+/*
+  The gutter moves to the section, so a row and its heading are the same box.
+
+  It was margin on the row, which read fine until you noticed the numbers: a
+  heading's count and its rows' counts both sit at `margin-left: auto`, so they
+  land in one column only if both boxes end at the same x. They did not — and
+  worse, several of these rows carry an inline `width: 100%`, which with a
+  margin resolves to *wider than the space available*, so the panel was quietly
+  overflowing sideways and every row count was pushed out past its heading's.
+
+  Giving `.facet` the padding fixes both at once: one containing block, both
+  boxes filling it exactly, `100%` meaning what it says.
+*/
+.dkgh .facet { padding: 0 7.2px; }
+.dkgh .facet .fh { padding-left: 7.2px; padding-right: 7.2px; }
 .dkgh .fct {
-  /* 6 of margin plus 6 of padding is the mock's own 14.4px gutter, split in two
-     so the highlight starts inside it. */
-  margin: 0 7.2px;
   padding-left: 7.2px;
   padding-right: 7.2px;
   border-radius: 6px;
@@ -1353,3 +1379,56 @@
 .dkgh .fct .only .v:hover { background: color-mix(in srgb, var(--dk-gh) 20%, transparent); }
 .dkgh .fct .only .v:last-child { color: var(--dk-red); }
 .dkgh .fct .only .v:last-child:hover { background: color-mix(in srgb, var(--dk-red) 20%, transparent); }
+
+/*
+  The metadata pane's pick rows, under the pointer.
+
+  Everywhere else in the tab a hover is the panel's own grey, because those rows
+  sit in a rail you are scanning. These are the opposite: a short list you opened
+  on purpose, to press one thing in. So the hover is the accent itself, half
+  transparent — enough that the row you are about to commit to is unmistakable
+  across a pane of nine sections, and still dark enough behind white text to
+  read.
+*/
+.dkgh .compose .right button.fct:hover {
+  background: color-mix(in srgb, var(--dk-gh) 55%, transparent);
+  color: #fff;
+}
+.dkgh .compose .right button.fct:hover .bx { border-color: rgba(255, 255, 255, .6); }
+
+/*
+  The keyboard sheet's keys.
+
+  `KbdView` writes its metrics inline, so a stylesheet cannot reach them without
+  saying so. The size prop only goes so far and these have to read as keys —
+  something with a face you could press — beside 15.6px prose, which is the whole
+  point of the sheet.
+*/
+.dkgh .dkkeys kbd {
+  min-width: 36px !important;
+  height: 31.2px !important;
+  padding: 0 12px !important;
+  font-size: 14.4px !important;
+  border-radius: 8.4px !important;
+}
+
+/*
+  A scrollbar you can see.
+
+  The panel scrolls, and until you know that, a facet list that ends at Author
+  looks like a facet list that has no Dates in it. The overlay bar this webview
+  draws by default appears for a moment on a wheel event and is invisible the
+  rest of the time, which is exactly no use to somebody wondering whether there
+  is more. So it is always there, sized to the gutter already reserved for it,
+  and it darkens under the pointer.
+*/
+.dkgh ::-webkit-scrollbar { width: 10.8px; height: 10.8px; }
+.dkgh ::-webkit-scrollbar-track { background: transparent; }
+.dkgh ::-webkit-scrollbar-thumb {
+  background: var(--dk-border);
+  border-radius: 999px;
+  border: 2.4px solid transparent;
+  background-clip: content-box;
+}
+.dkgh ::-webkit-scrollbar-thumb:hover { background: var(--dk-muted); background-clip: content-box; }
+.dkgh ::-webkit-scrollbar-corner { background: transparent; }

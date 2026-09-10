@@ -127,7 +127,7 @@ export function GhKeys({ onClose }: { onClose: () => void }) {
           </span>
           <span className="flex-1" />
           <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-            press <KbdView keys="Esc" size="xs" /> to close
+            press <KbdView keys="Esc" size="md" /> to close
           </span>
         </div>
 
@@ -137,8 +137,8 @@ export function GhKeys({ onClose }: { onClose: () => void }) {
           the bottom of the first column with its keys at the top of the second.
         */}
         <div
-          className="p-4 overflow-y-auto"
-          style={{ columnCount: 2, columnGap: 28 }}
+          className="p-5 overflow-y-auto"
+          style={{ columnCount: 2, columnGap: 32 }}
         >
           {KEY_GROUPS.map(g => (
             <section key={g.title} style={{ breakInside: 'avoid', marginBottom: 18 }}>
@@ -180,18 +180,23 @@ export function GhKeys({ onClose }: { onClose: () => void }) {
 function Row({ binding }: { binding: Binding }) {
   const { keys, joiner, does } = binding;
   return (
-    <div className="flex items-baseline gap-2 py-[3px]">
-      <span className="text-[12.5px]" style={{ color: 'var(--color-text-secondary)' }}>
+    <div className="flex items-center gap-2.5 py-[5px]">
+      <span className="text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
         {does}
       </span>
       <span
         className="flex-1"
         style={{ borderBottom: '1px dotted var(--color-surface-border)', minWidth: 8 }}
       />
-      <span className="flex items-center gap-1 shrink-0">
+      {/*
+        Real keys, at the size a key is. `xs` chips beside 13px prose read as
+        footnote markers rather than as something you press — and this sheet is
+        read by exactly one kind of person: somebody looking for a key to press.
+      */}
+      <span className="dkkeys flex items-center gap-1.5 shrink-0">
         {joiner === '+'
-          ? <KbdView keys={keys} size="xs" />
-          : keys.map(k => <KbdView key={k} keys={k} size="xs" />)}
+          ? <KbdView keys={keys} size="lg" />
+          : keys.map(k => <KbdView key={k} keys={k} size="lg" />)}
       </span>
     </div>
   );
