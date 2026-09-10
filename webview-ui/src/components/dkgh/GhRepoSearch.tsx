@@ -19,16 +19,12 @@
  * they cannot file.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ButtonView, BadgeChipView, TogglePillView, SearchFieldView, TableSkeletonView,
-  EmptyStateView,
-} from '@salilvnair/dui';
+import { TableSkeletonView } from '@salilvnair/dui';
 import { postMsg } from '../../vscode';
-import {
-  RepoIcon, LockIcon, SearchIcon, ChevronLeftIcon, CheckCircleIcon,
-} from '../../icons';
+import { Ico } from './GhIcons';
+import { GhActions, GhButton, GhEmpty, GhLede, GhPrimary } from './GhShell';
 import { sinceIso } from './format';
-import { ACCENT, activeAccount, type GhEnv, type RepoSummary } from './types';
+import { activeAccount, type GhEnv, type RepoSummary } from './types';
 
 /** `owner/name`, and nothing that would make gh reinterpret it as a URL or path. */
 const VALID = /^[^/\s]+\/[^/\s]+$/;
@@ -119,70 +115,62 @@ export function GhRepoSearch({ env, query, onQueryChange, onPick, onBack }: {
 
       {/* Where you are, and the way back */}
       <div className="flex items-center gap-2 px-4 pt-3 pb-1 flex-shrink-0">
-        <ButtonView size="sm" variant="ghost" accentColor="var(--color-text-muted)"
-                    iconLeft={<ChevronLeftIcon size={12} />} onClick={onBack}>
-          Back
-        </ButtonView>
-        <span className="text-[12px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
+        <button type="button" className="btn" onClick={onBack}>Back</button>
+        <span style={{ fontSize: 14.4, fontWeight: 500, color: 'var(--dk-text)' }}>
           Search your repositories
         </span>
-        <span className="flex-1" />
-        <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-          searching as {me || 'this account'}
-        </span>
+        <span className="sp" style={{ flex: 1 }} />
+        <span className="sub">searching as {me || 'this account'}</span>
       </div>
 
       {/* The term, and what narrows it */}
       <div className="flex items-center gap-[7px] px-4 py-2 flex-wrap flex-shrink-0"
-           style={{ borderBottom: '1px solid var(--color-surface-border)' }}>
-        <div className="flex-1" style={{ minWidth: 200 }}>
-          <SearchFieldView
+           style={{ borderBottom: '1px solid var(--dk-border)' }}>
+        {/* The filter rail's own search box, which is the box this tab uses
+            everywhere else somebody types to narrow a list. */}
+        <div className="panelsearch flex-1" style={{ margin: 0, minWidth: 200 }}>
+          <Ico name="search" />
+          <input
+            autoFocus
             value={query}
-            onChange={onQueryChange}
-            onClear={() => onQueryChange('')}
+            onChange={e => onQueryChange(e.target.value)}
             /* Enter takes an exact owner/name straight through — typing a
                repository you already know and waiting for a search is a step
                nobody wants. */
-            onSearch={v => { if (VALID.test(v.trim())) onPick(v.trim()); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && VALID.test(query.trim())) onPick(query.trim());
+              if (e.key === 'Escape') onQueryChange('');
+            }}
             placeholder="Name, or owner/name"
-            size="sm"
-            accentColor={ACCENT}
-            width="100%"
-            autoFocus
-            trailing={searching
-              ? <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>…</span>
-              : undefined}
           />
+          {searching && <span className="n">…</span>}
         </div>
-        <TogglePillView accentColor={ACCENT} active={!owner} onClick={() => setOwner('')}>
+        <button type="button" className={`pill${owner ? '' : ' on'}`} onClick={() => setOwner('')}>
           All orgs
-        </TogglePillView>
+        </button>
         {owners.map(([o, n]) => (
-          <TogglePillView key={o} accentColor={ACCENT} active={owner === o} count={n}
-                          onClick={() => setOwner(owner === o ? '' : o)}>
-            {o === me ? 'Mine' : o}
-          </TogglePillView>
+          <button key={o} type="button" className={`pill${owner === o ? ' on' : ''}`}
+                  onClick={() => setOwner(owner === o ? '' : o)}>
+            {o === me ? 'Mine' : o}<b>{n}</b>
+          </button>
         ))}
-        <TogglePillView accentColor={ACCENT} active={archived}
-                        title="Archived repositories can be read, never written to"
-                        onClick={() => setArchived(a => !a)}>
+        <button type="button" className={`pill${archived ? ' on' : ''}`}
+                title="Archived repositories can be read, never written to"
+                onClick={() => setArchived(a => !a)}>
           Include archived
-        </TogglePillView>
+        </button>
       </div>
 
       {/* The results */}
       <div className="flex-1 overflow-y-auto min-w-0 px-4 py-3">
         {query.trim().length < MIN_QUERY ? (
-          <EmptyStateView
-            variant="medallion"
-            accentColor={ACCENT}
-            icon={<SearchIcon size={22} />}
-            title="Type at least two letters"
-            message={'Every repository this account can reach is searched, including private '
-              + 'ones and every organisation you belong to. An exact owner/name goes straight '
-              + 'through on Enter.'}
-            compact
-          />
+          <GhEmpty icon="search" title="Type at least two letters">
+            <GhLede>
+              Every repository this account can reach is searched, including private ones and
+              every organisation you belong to. An exact owner/name goes straight through on
+              Enter.
+            </GhLede>
+          </GhEmpty>
         ) : searching && !results ? (
           <TableSkeletonView
             rows={4}
@@ -193,47 +181,40 @@ export function GhRepoSearch({ env, query, onQueryChange, onPick, onBack }: {
             ]}
           />
         ) : error ? (
-          <EmptyStateView
-            variant="medallion"
-            accentColor="var(--color-error)"
-            icon={<SearchIcon size={22} />}
-            title="gh could not run the search"
-            message={error}
-            compact
-          />
+          <GhEmpty icon="warn" title="gh could not run the search">
+            <GhLede>{error}</GhLede>
+          </GhEmpty>
         ) : shown.length === 0 ? (
-          <EmptyStateView
-            variant="medallion"
-            accentColor={ACCENT}
-            icon={<SearchIcon size={22} />}
-            title="Nothing this account can see matches"
-            message={owner
-              ? `No repository under ${owner} matches "${query.trim()}". Clear the org filter to see the rest.`
-              : `Nothing named like "${query.trim()}" is visible to ${me || 'this account'}.`
-                + (archived ? '' : ' Archived repositories are excluded — include them to widen it.')}
-            action={exact
-              ? { label: `Use ${query.trim()} anyway`, onClick: () => onPick(query.trim()) }
-              : owner
-                ? { label: 'All orgs', onClick: () => setOwner('') }
-                : undefined}
-            compact
-          />
+          <GhEmpty icon="search" title="Nothing this account can see matches">
+            <GhLede>
+              {owner
+                ? `No repository under ${owner} matches "${query.trim()}". Clear the org filter to see the rest.`
+                : `Nothing named like "${query.trim()}" is visible to ${me || 'this account'}.`
+                  + (archived ? '' : ' Archived repositories are excluded — include them to widen it.')}
+            </GhLede>
+            {(exact || owner) && (
+              <GhActions>
+                {exact
+                  ? <GhPrimary onClick={() => onPick(query.trim())}>
+                      Use {query.trim()} anyway
+                    </GhPrimary>
+                  : <GhButton onClick={() => setOwner('')}>All orgs</GhButton>}
+              </GhActions>
+            )}
+          </GhEmpty>
         ) : (
           <ResultTable rows={shown} term={query.trim()} onPick={onPick} />
         )}
       </div>
 
       {/* What actually ran */}
-      <div className="flex items-center gap-2 px-4 py-2 text-[10px] flex-shrink-0 min-w-0"
-           style={{
-             borderTop: '1px solid var(--color-surface-border)',
-             color: 'var(--color-text-muted)',
-           }}>
-        <code className="truncate" style={{ fontFamily: 'var(--font-mono, monospace)' }}>
+      <div className="flex items-center gap-2 px-4 py-2 sub flex-shrink-0 min-w-0"
+           style={{ borderTop: '1px solid var(--dk-border)' }}>
+        <code className="truncate">
           {commands[0] ?? 'gh repo list'}
           {commands.length > 1 ? `  ·  and ${commands.length - 1} more` : ''}
         </code>
-        <span className="flex-1" />
+        <span className="sp" style={{ flex: 1 }} />
         {results !== null && (
           <span className="whitespace-nowrap">
             {shown.length}{shown.length !== matched ? ` of ${matched}` : ''} shown
@@ -256,17 +237,16 @@ function ResultTable({ rows, term, onPick }: {
   term: string;
   onPick: (repo: string) => void;
 }) {
-  const cols = '1fr 74px 88px 78px 62px';
+  const cols = '1fr 88px 92px 82px 62px';
   return (
     <div className="rounded-lg border overflow-hidden"
-         style={{ borderColor: 'var(--color-surface-border)' }}>
-      <div className="grid items-center px-3 py-1.5 text-[9.5px] font-bold uppercase tracking-[.06em]"
+         style={{ borderColor: 'var(--dk-border)' }}>
+      <div className="grid items-center px-3 py-1.5 fl"
            style={{
              gridTemplateColumns: cols,
              gap: 10,
-             color: 'var(--color-text-muted)',
-             background: 'var(--color-panel)',
-             borderBottom: '1px solid var(--color-surface-border)',
+             background: 'var(--dk-panel)',
+             borderBottom: '1px solid var(--dk-border)',
            }}>
         <span>Repository</span>
         <span className="text-right">Open issues</span>
@@ -281,36 +261,32 @@ function ResultTable({ rows, term, onPick }: {
                gridTemplateColumns: cols,
                gap: 10,
                borderTop: i === 0 ? 'none'
-                 : '1px solid color-mix(in srgb, var(--color-surface-border) 60%, transparent)',
+                 : '1px solid color-mix(in srgb, var(--dk-border) 60%, transparent)',
              }}>
           <span className="flex items-center gap-1.5 min-w-0">
-            {r.isPrivate
-              ? <LockIcon size={11} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-              : <RepoIcon size={11} style={{ color: ACCENT, flexShrink: 0 }} />}
-            <span className="text-[11px] font-mono truncate"
-                  style={{ color: 'var(--color-text-primary)' }}>
+            <Ico name={r.isPrivate ? 'lock' : 'repo'}
+                 style={{ color: r.isPrivate ? 'var(--dk-faint)' : 'var(--dk-gh)',
+                          flexShrink: 0 }} />
+            <span className="truncate"
+                  style={{ fontFamily: 'var(--mono)', fontSize: 12.6, color: 'var(--dk-text)' }}>
               <Match text={r.nameWithOwner} term={term} />
             </span>
-            {r.isPrivate && (
-              <BadgeChipView tone="var(--color-text-muted)" size="xs">private</BadgeChipView>
-            )}
-            {r.isArchived && (
-              <BadgeChipView tone="var(--color-text-muted)" size="xs">archived</BadgeChipView>
-            )}
+            {r.isPrivate && <span className="chip">private</span>}
+            {r.isArchived && <span className="chip c-stale">archived</span>}
           </span>
-          <span className="text-[11px] font-mono text-right"
-                style={{ color: 'var(--color-text-secondary)' }}>
+          <span className="text-right"
+                style={{ fontFamily: 'var(--mono)', fontSize: 12.6, color: 'var(--dk-muted)' }}>
             {r.openIssues}
           </span>
           <span>
             {(r.templates ?? 0) > 0
-              ? <BadgeChipView tone={ACCENT} size="xs">
+              ? <span className="chip c-gh">
                   {r.templates} form{r.templates === 1 ? '' : 's'}
-                </BadgeChipView>
-              : <BadgeChipView tone="var(--color-text-muted)" size="xs">none</BadgeChipView>}
+                </span>
+              : <span className="chip">none</span>}
           </span>
-          <span className="text-[10px] font-mono text-right whitespace-nowrap"
-                style={{ color: 'var(--color-text-muted)' }}>
+          <span className="text-right whitespace-nowrap"
+                style={{ fontFamily: 'var(--mono)', fontSize: 11.4, color: 'var(--dk-faint)' }}>
             {sinceIso(r.pushedAt)}
           </span>
           <span className="flex justify-end">
@@ -321,19 +297,20 @@ function ResultTable({ rows, term, onPick }: {
                 Reading an archived repository's issues is legitimate — the
                 composer is what cannot work — so the row still opens a board.
               */
-              <ButtonView size="sm" variant="ghost" accentColor="var(--color-text-muted)"
-                          title="Archived — its issues can be read, but nothing can be filed"
-                          onClick={() => onPick(r.nameWithOwner)}>
+              <button type="button" className="btn" style={{ padding: '2px 8px' }}
+                      title="Archived — its issues can be read, but nothing can be filed"
+                      onClick={() => onPick(r.nameWithOwner)}>
                 Read only
-              </ButtonView>
+              </button>
             ) : (
-              <ButtonView size="sm"
-                          variant={(r.templates ?? 0) > 0 ? 'primary' : 'secondary'}
-                          accentColor={ACCENT}
-                          iconLeft={(r.templates ?? 0) > 0 ? <CheckCircleIcon size={11} /> : undefined}
-                          onClick={() => onPick(r.nameWithOwner)}>
+              <button
+                type="button"
+                className={(r.templates ?? 0) > 0 ? 'btn go' : 'btn'}
+                style={{ padding: '2px 10px' }}
+                onClick={() => onPick(r.nameWithOwner)}
+              >
                 Use
-              </ButtonView>
+              </button>
             )}
           </span>
         </div>
@@ -352,7 +329,7 @@ function Match({ text, term }: { text: string; term?: string }) {
     <>
       {text.slice(0, at)}
       <span style={{
-        background: `color-mix(in srgb, ${ACCENT} 26%, transparent)`,
+        background: 'color-mix(in srgb, var(--dk-gh) 26%, transparent)',
         borderRadius: 2,
         padding: '0 1px',
       }}>

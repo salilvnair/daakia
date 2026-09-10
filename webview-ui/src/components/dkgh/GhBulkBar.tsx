@@ -21,11 +21,9 @@
  * are different issues entirely.
  */
 import { useEffect, useState } from 'react';
-import { Ico } from './GhIcons';
-import { ButtonView, CheckboxView } from '@salilvnair/dui';
-import { UsersIcon, TagIcon, LayersIcon, CheckCircleIcon } from '../../icons';
+import { Ico, type IcoName } from './GhIcons';
 import type { EditRequest } from './edit-flow';
-import { ACCENT, type RepoMeta } from './types';
+import type { RepoMeta } from './types';
 
 export function GhBulkBar({
   repo, selected, total, meta, autoOpen, onAutoOpened, onSelectAll, onClear, onPropose,
@@ -50,22 +48,27 @@ export function GhBulkBar({
 }) {
   return (
     <div className="flex items-center gap-2 px-4 py-1.5 flex-wrap flex-shrink-0"
-         style={{ background: `color-mix(in srgb, ${ACCENT} 8%, var(--color-panel))` }}>
-      <CheckboxView checked accentColor={ACCENT} size="sm" onChange={onClear} />
-      <span className="text-[11px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
+         style={{ background: 'color-mix(in srgb, var(--dk-gh) 8%, var(--dk-panel))' }}>
+      {/* The filter panel's own tick, so a selection reads the same
+          everywhere on the board. */}
+      <span className="fct on" style={{ padding: 0, background: 'transparent', cursor: 'pointer' }}
+            onClick={onClear}>
+        <span className="bx"><Ico name="check" /></span>
+      </span>
+      <span style={{ fontSize: 13.2, fontWeight: 500, color: 'var(--dk-text)' }}>
         {selected.length} selected
       </span>
-      <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+      <span className="sub">
         of {total} · <Link onClick={onSelectAll}>select all</Link>
         {' · '}
         <Link onClick={onClear}>clear</Link>
       </span>
-      <span className="flex-1" />
+      <span className="sp" style={{ flex: 1 }} />
       <Picker
         label="Assign"
         auto={autoOpen === 'assign'}
         onAuto={onAutoOpened}
-        icon={<UsersIcon size={11} />}
+        icon="person"
         options={(meta?.assignees ?? []).map(a => ({ value: a, avatar: true }))}
         empty="Nobody on this repository can be assigned — or listing them needs a permission this account lacks."
         onPick={v => onPropose({ repo, numbers: selected, addAssignees: [v] })}
@@ -74,7 +77,7 @@ export function GhBulkBar({
         label="Label"
         auto={autoOpen === 'label'}
         onAuto={onAutoOpened}
-        icon={<TagIcon size={11} />}
+        icon="tag"
         /*
           The colour and the description are the repository's own, straight off
           `gh label list` — a label list without them is nine grey words, and
@@ -94,26 +97,25 @@ export function GhBulkBar({
         label="Milestone"
         auto={autoOpen === 'milestone'}
         onAuto={onAutoOpened}
-        icon={<LayersIcon size={11} />}
+        icon="milestone"
         options={(meta?.milestones ?? []).map(m => ({ value: m.title }))}
         empty="This repository has no open milestones."
         onPick={v => onPropose({ repo, numbers: selected, milestone: v })}
       />
-      <ButtonView size="sm" accentColor="var(--color-success)"
-                  iconLeft={<CheckCircleIcon size={11} />}
-                  onClick={() => onPropose({
-                    repo, numbers: selected, state: 'close', closeReason: 'completed',
-                  })}>
-        Close
-      </ButtonView>
+      <button type="button" className="btn ok"
+              onClick={() => onPropose({
+                repo, numbers: selected, state: 'close', closeReason: 'completed',
+              })}>
+        <Ico name="closed" />Close
+      </button>
     </div>
   );
 }
 
+/** A verb inside a sentence. The mock's own inline link. */
 function Link({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="cursor-pointer"
-            style={{ background: 'none', border: 'none', color: ACCENT, padding: 0 }}>
+    <button type="button" onClick={onClick} className="textlink" onMouseDown={e => e.preventDefault()}>
       {children}
     </button>
   );
@@ -146,7 +148,7 @@ export interface PickOption {
  */
 function Picker({ label, icon, options, empty, auto, onAuto, onPick }: {
   label: string;
-  icon: React.ReactNode;
+  icon: IcoName;
   options: PickOption[];
   empty: string;
   auto?: boolean;
@@ -171,20 +173,21 @@ function Picker({ label, icon, options, empty, auto, onAuto, onPick }: {
 
   return (
     <span style={{ position: 'relative' }}>
-      <ButtonView size="sm" accentColor={ACCENT} iconLeft={icon}
-                  onClick={() => { setOpen(o => !o); setFilter(''); }}>
-        {label}
-      </ButtonView>
+      <button type="button" className="btn"
+              onClick={() => { setOpen(o => !o); setFilter(''); }}>
+        <Ico name={icon} />{label}
+      </button>
       {open && (
         <>
           <span className="fixed inset-0" style={{ zIndex: 20 }} onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-1 rounded-lg border flex flex-col"
+          <div className="absolute right-0 mt-1 flex flex-col"
                style={{
                  zIndex: 21,
                  width: 268,
                  maxHeight: 300,
-                 borderColor: 'var(--color-surface-border)',
-                 background: 'var(--color-surface)',
+                 borderRadius: 9.6,
+                 border: '1px solid var(--dk-border)',
+                 background: 'var(--dk-surface)',
                  boxShadow: '0 10px 28px rgba(0,0,0,.45)',
                  overflow: 'hidden',
                  paddingBottom: 4,
@@ -211,11 +214,9 @@ function Picker({ label, icon, options, empty, auto, onAuto, onPick }: {
             )}
             <div className="overflow-y-auto flex flex-col py-1">
               {options.length === 0 ? (
-                <span className="px-2.5 py-2 text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
-                  {empty}
-                </span>
+                <span className="sub" style={{ padding: '8px 10px' }}>{empty}</span>
               ) : shown.length === 0 ? (
-                <span className="px-2.5 py-2 text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
+                <span className="sub" style={{ padding: '8px 10px' }}>
                   Nothing matches &ldquo;{filter}&rdquo;.
                 </span>
               ) : shown.map(o => (
@@ -232,30 +233,26 @@ function Picker({ label, icon, options, empty, auto, onAuto, onPick }: {
                         width: 10, height: 10, marginTop: 3, background: o.colour,
                         /* A label the repository set to near-black or near-white
                            still has to be visible on this surface. */
-                        boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-text-primary) 25%, transparent)',
+                        boxShadow: '0 0 0 1px color-mix(in srgb, var(--dk-text) 25%, transparent)',
                       }}
                     />
                   )}
                   {o.avatar && (
                     <span className="shrink-0 rounded-full grid place-items-center"
                           style={{
-                            width: 16, height: 16, marginTop: 0, fontSize: 9, fontWeight: 700,
-                            color: ACCENT,
-                            background: `color-mix(in srgb, ${ACCENT} 20%, transparent)`,
+                            width: 16, height: 16, marginTop: 0, fontSize: 10.8, fontWeight: 700,
+                            color: 'var(--dk-gh)',
+                            background: 'color-mix(in srgb, var(--dk-gh) 20%, transparent)',
                           }}>
                       {o.value[0]?.toUpperCase()}
                     </span>
                   )}
                   <span className="min-w-0 flex flex-col">
-                    <span className="text-[11.5px] truncate"
-                          style={{ color: 'var(--color-text-primary)' }}>
+                    <span className="truncate" style={{ color: 'var(--dk-text)' }}>
                       {o.value}
                     </span>
                     {o.note && (
-                      <span className="text-[10px]"
-                            style={{ color: 'var(--color-text-muted)', lineHeight: 1.4 }}>
-                        {o.note}
-                      </span>
+                      <span className="sub" style={{ lineHeight: 1.4 }}>{o.note}</span>
                     )}
                   </span>
                 </button>
