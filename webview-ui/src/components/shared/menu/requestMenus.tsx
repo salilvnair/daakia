@@ -21,8 +21,27 @@ import { MENU, copyText, sep, type Surface } from './SurfaceMenu';
 
 const SZ = 13;
 
+/**
+ * Protocols a cURL command can express.
+ *
+ * gRPC is a binary protocol over HTTP/2 with a generated stub on the other
+ * end, and a WebSocket is a connection rather than a request — cURL says
+ * nothing useful about either. Offering the item anyway would hand somebody a
+ * command that looks runnable and is not, which is worse than not offering it.
+ */
+function speaksCurl(protocol?: string): boolean {
+  return !protocol || ['rest', 'graphql', 'soap', 'mcp', 'ai'].includes(protocol);
+}
+
 /** One row of a key-value table, in the shape every protocol stores them. */
-export interface KvRow { key: string; value: string; enabled?: boolean; description?: string }
+export interface KvRow {
+  /** The tables are keyed by it, so a row made here has to carry one. */
+  id?: string;
+  key: string;
+  value: string;
+  enabled?: boolean;
+  description?: string;
+}
 
 /**
  * Which field on a request tab each `data-table` mark names.
@@ -38,12 +57,19 @@ export const MENU_TABLES = {
   variables: 'variables',
   formData: 'bodyFormData',
   urlEncoded: 'bodyUrlEncoded',
+  /* gRPC's metadata is headers by another name and its own field. */
+  metadata: 'grpcMetadata',
 } as const;
 
 export type MenuTable = typeof MENU_TABLES[keyof typeof MENU_TABLES];
 
 /** What a panel has to hand the menu for the shared items to work. */
 export interface RequestMenuCtx {
+  /**
+   * Which protocol the tab is, because not every verb here means something in
+   * all of them — see `speaksCurl`.
+   */
+  protocol?: string;
   method: string;
   url: string;
   headers: KvRow[];
@@ -85,7 +111,7 @@ function urlItems(ctx: RequestMenuCtx): ContextMenuItem[] {
       disabled: !ctx.url.trim(),
       onClick: () => copyText(ctx.url),
     },
-    {
+    ...(speaksCurl(ctx.protocol) ? [{
       id: 'copy-curl',
       label: 'Copy as a cURL command',
       description: 'Method, headers, and body — the request as somebody else can run it',
@@ -93,7 +119,7 @@ function urlItems(ctx: RequestMenuCtx): ContextMenuItem[] {
       iconColor: MENU.copy,
       disabled: !ctx.url.trim(),
       onClick: () => copyText(toCurl(ctx)),
-    },
+    }] : []),
     {
       id: 'paste-url',
       label: 'Paste over it',
@@ -138,7 +164,10 @@ function kvItems(table: string, label: string, ctx: RequestMenuCtx): ContextMenu
       label: `Add a row`,
       icon: <PlusIcon size={SZ} />,
       iconColor: MENU.make,
-      onClick: () => ctx.setRows(table, [...rows, { key: '', value: '', enabled: true }]),
+      onClick: () => ctx.setRows(table, [
+        ...rows,
+        { id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true },
+      ]),
     },
     sep('s1'),
     {
@@ -246,14 +275,14 @@ function bodyItems(ctx: RequestMenuCtx): ContextMenuItem[] {
 function panelItems(ctx: RequestMenuCtx): ContextMenuItem[] | undefined {
   if (!ctx.url.trim()) return undefined;
   return [
-    {
+    ...(speaksCurl(ctx.protocol) ? [{
       id: 'copy-curl',
       label: 'Copy as a cURL command',
       icon: <TerminalIcon size={SZ} />,
       iconColor: MENU.copy,
       disabled: !ctx.url.trim(),
       onClick: () => copyText(toCurl(ctx)),
-    },
+    }] : []),
     {
       id: 'copy-url',
       label: 'Copy the URL',

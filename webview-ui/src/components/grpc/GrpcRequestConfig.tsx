@@ -160,7 +160,8 @@ export function GrpcRequestConfig() {
                 }}
               />
             )}
-            <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-3">
+            <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-3"
+                 data-menu="kv" data-table="metadata" data-label="the metadata">
               <KeyValueTableView
                 rows={activeTab.grpcMetadata || [{ id: crypto.randomUUID(), key: '', value: '', description: '', enabled: true }]}
                 onChange={handleMetadataChange}

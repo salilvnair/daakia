@@ -141,6 +141,7 @@ export function UrlBar() {
     sees a right-click up here. See `shared/menu/SurfaceMenu`.
   */
   const menu = useSurfaceMenu(surface => requestMenuItems(surface, {
+    protocol: tab.protocol,
     method: tab.method,
     url: tab.url,
     headers: tab.headers as KvRow[],

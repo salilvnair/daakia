@@ -201,6 +201,7 @@ export default function App() {
     browser's own menu where it belongs.
   */
   const appMenu = useSurfaceMenu(surface => requestMenuItems(surface, {
+    protocol: activeTab?.protocol,
     method: activeTab?.method ?? 'GET',
     url: activeTab?.url ?? '',
     headers: (activeTab?.headers ?? []) as MenuKvRow[],
@@ -213,7 +214,11 @@ export default function App() {
     */
     rowsOf: name => {
       const field = MENU_TABLES[name as keyof typeof MENU_TABLES];
-      return field && activeTab ? (activeTab[field] as MenuKvRow[]) : undefined;
+      /* `?? []` because a table nobody has typed in yet is empty rather than
+         missing — gRPC metadata is undefined until the first row — and a menu
+         that refuses to open on an empty table is a menu you cannot use to add
+         the first row to it. */
+      return field && activeTab ? ((activeTab[field] as MenuKvRow[]) ?? []) : undefined;
     },
     setRows: (name, rows) => {
       const field = MENU_TABLES[name as keyof typeof MENU_TABLES];

@@ -210,7 +210,8 @@ export function SoapRequestConfig() {
         )}
 
         {activeSubTab === 'headers' && (
-          <div className="h-full flex flex-col overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden"
+               data-menu="kv" data-table="headers" data-label="the headers">
             <KeyValueTableView
               rows={activeTab.headers || []}
               onChange={handleHeadersChange}

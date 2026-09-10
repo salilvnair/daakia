@@ -275,7 +275,8 @@ export function GraphQLEditor() {
         )}
 
         {activeSubTab === 'headers' && (
-          <div className="h-full flex flex-col overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden"
+               data-menu="kv" data-table="headers" data-label="the headers">
             {/* Headers — ditto same as REST HeadersTab: KVT with toolbarExtra sparkle + headless AiHeaderSuggest */}
             <KeyValueTableView
               rows={activeTab.headers}

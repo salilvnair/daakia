@@ -141,7 +141,7 @@ export function McpUrlBar() {
         {/* STDIO: command input — shrinks down to minWidth; past that the bar scrolls
             horizontally instead of squeezing/overlapping. */}
         {transport === 'stdio' && (
-          <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
+          <div className="flex-1 min-w-0" style={{ minWidth: 160 }} data-menu="url">
             <HighlightedInputView
               value={command}
               onChange={handleCommandChange}

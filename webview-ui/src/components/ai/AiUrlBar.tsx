@@ -233,7 +233,7 @@ export function AiUrlBar() {
       {/* URL input — non-copilot providers only. Shrinks down to minWidth; past that the
           bar scrolls horizontally instead of squeezing/overlapping. */}
       {hasUrlField && (
-        <div className="flex-1 min-w-0" style={{ minWidth: 160 }}>
+        <div className="flex-1 min-w-0" style={{ minWidth: 160 }} data-menu="url">
           <HighlightedInputView
             value={url}
             onChange={handleUrlChange}

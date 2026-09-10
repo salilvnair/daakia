@@ -174,7 +174,7 @@ export function SoapUrlBar() {
 
         {/* Version (1.1 / 1.2) + Endpoint URL — unified DUI component. Shrinks down to
             minWidth; past that the bar scrolls horizontally instead of squeezing/overlapping. */}
-        <div className="flex-[2] min-w-0" style={{ minWidth: 140 }}>
+        <div className="flex-[2] min-w-0" style={{ minWidth: 140 }} data-menu="url">
           <SelectTextInputView
             selectOptions={SOAP_VERSION_OPTIONS}
             selectValue={soapVersion}
