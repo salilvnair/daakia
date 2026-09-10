@@ -71,6 +71,7 @@ import { GhReview } from './GhReview';
 import { GhIssue } from './GhIssue';
 import { GhExport } from './GhExport';
 import { GhInsights } from './GhInsights';
+import { GhRepository } from './GhRepository';
 import { Ico, type IcoName } from './GhIcons';
 import {
   assembleBody, discardDraft, emptyDraft, type Draft,
@@ -98,7 +99,7 @@ const SECTIONS: { id: string; label: string; icon: IcoName; disabled?: boolean }
   { id: 'board', label: 'Board', icon: 'board' },
   { id: 'new', label: 'New issue', icon: 'plus' },
   { id: 'insights', label: 'Insights', icon: 'chart' },
-  { id: 'repository', label: 'Repository', icon: 'repo', disabled: true },
+  { id: 'repository', label: 'Repository', icon: 'repo' },
 ];
 
 /** The views the mock lays out, with the two that are built marked. */
@@ -870,7 +871,24 @@ export function GhBoard({ repo, onChangeRepo, onContext, env, onOpenAccount, fro
         the board's own chrome, and a filter row above a form is a filter row
         filtering nothing.
       */}
-      {section === 'insights' ? (
+      {section === 'repository' ? (
+        <GhRepository
+          repo={repo}
+          data={data ?? undefined}
+          meta={meta}
+          issues={all}
+          onRefresh={refresh}
+          onChangeRepo={onChangeRepo}
+          /*
+            17D — the unmapped count is a link to the rows behind it, which is
+            the only way to find out why a heading stopped parsing.
+          */
+          onExplain={dimension => {
+            setFilter(f => only(f, dimension, ''));
+            setSection('board');
+          }}
+        />
+      ) : section === 'insights' ? (
         <GhInsights
           issues={filtered}
           dimensions={data?.dimensions ?? []}
