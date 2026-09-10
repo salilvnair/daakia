@@ -682,6 +682,27 @@
 .dkgh .pick-row:hover span { color: #fff !important; }
 
 /*
+  The two accent hovers, on a light ground.
+
+  Both of these put white text on the accent at about half strength, which is
+  the right weight over the dark panel: #DE7356 at 55% over #1e1e1e is still
+  dark enough to read white off. Over white it is not — #c0543a at 55% over
+  #ffffff composites to a pale salmon, and white on it measures 2.2:1, which is
+  a row you can see highlight and cannot read.
+
+  The wash goes solid rather than the text going dark, because the point of
+  these two hovers is that the row you are about to commit to is unmistakable
+  across a pane of nine sections. Solid #c0543a under white is 4.6:1 and keeps
+  that.
+*/
+[data-theme="light"] .dkgh .pick-row:hover,
+.vscode-light .dkgh .pick-row:hover,
+[data-theme="light"] .dkgh .compose .right button.fct:hover,
+.vscode-light .dkgh .compose .right button.fct:hover {
+  background: var(--dk-gh);
+}
+
+/*
   ── The first-run screens, made pressable ──
 
   The mock draws these as spans, so the platform tabs and every `copy` in a
